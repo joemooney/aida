@@ -20696,13 +20696,16 @@ impl eframe::App for RequirementsApp {
             }
 
             // Handle navigation (delta-based or jump-based) based on focused list
+            // Skip requirements list navigation when in Timeline view (Timeline has its own navigation)
+            let in_timeline_view = self.current_view == View::Timeline;
+
             // Get the appropriate filtered indices and current selection based on focus
             let (filtered_indices, current_selection) = match self.focused_list {
                 FocusedList::List1 => (self.get_filtered_indices(), self.selected_idx),
                 FocusedList::List2 => (self.get_split_filtered_indices(), self.split_selected_idx),
             };
 
-            if !filtered_indices.is_empty() {
+            if !in_timeline_view && !filtered_indices.is_empty() {
                 let new_selection = if jump_to_start {
                     // Jump to first item
                     Some(filtered_indices[0])
