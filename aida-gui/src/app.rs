@@ -935,6 +935,8 @@ impl KeyContext {
 pub enum KeyAction {
     NavigateUp,
     NavigateDown,
+    NavigateUpVim,      // 'k' key - vim-style up
+    NavigateDownVim,    // 'j' key - vim-style down
     Edit,
     ToggleExpand,
     Save,
@@ -945,13 +947,25 @@ pub enum KeyAction {
     NewRequirement,
     NewSiblingRequirement,
     NewChildRequirement,
+    // Quick change actions
+    OpenOwnerPicker,    // 'o' - fuzzy finder for owner
+    OpenStatusPicker,   // 's' - status picker (existing, now formal)
+    OpenPriorityPicker, // 'p' - priority picker (existing, now formal)
+    AddComment,         // 'c' - add comment
+    ToggleLinksPanel,   // 'L' - show/toggle links
+    // Deletion actions
+    DeleteWithConfirm,  // 'd' - delete with confirmation
+    DeleteImmediate,    // 'D' - delete immediately
+    ArchiveToggle,      // 'a' - archive/unarchive
 }
 
 impl KeyAction {
     fn label(&self) -> &'static str {
         match self {
-            KeyAction::NavigateUp => "Navigate Up",
-            KeyAction::NavigateDown => "Navigate Down",
+            KeyAction::NavigateUp => "Navigate Up (Arrow)",
+            KeyAction::NavigateDown => "Navigate Down (Arrow)",
+            KeyAction::NavigateUpVim => "Navigate Up (k)",
+            KeyAction::NavigateDownVim => "Navigate Down (j)",
             KeyAction::Edit => "Edit Requirement",
             KeyAction::ToggleExpand => "Toggle Expand/Collapse",
             KeyAction::Save => "Save",
@@ -962,6 +976,14 @@ impl KeyAction {
             KeyAction::NewRequirement => "New Requirement (Smart)",
             KeyAction::NewSiblingRequirement => "New Sibling Requirement",
             KeyAction::NewChildRequirement => "New Child Requirement",
+            KeyAction::OpenOwnerPicker => "Open Owner Picker",
+            KeyAction::OpenStatusPicker => "Open Status Picker",
+            KeyAction::OpenPriorityPicker => "Open Priority Picker",
+            KeyAction::AddComment => "Add Comment",
+            KeyAction::ToggleLinksPanel => "Toggle Links Panel",
+            KeyAction::DeleteWithConfirm => "Delete (with confirm)",
+            KeyAction::DeleteImmediate => "Delete (immediate)",
+            KeyAction::ArchiveToggle => "Archive/Unarchive",
         }
     }
 
@@ -970,6 +992,8 @@ impl KeyAction {
         match self {
             KeyAction::NavigateUp => KeyContext::RequirementsList,
             KeyAction::NavigateDown => KeyContext::RequirementsList,
+            KeyAction::NavigateUpVim => KeyContext::RequirementsList,
+            KeyAction::NavigateDownVim => KeyContext::RequirementsList,
             KeyAction::Edit => KeyContext::RequirementsList,
             KeyAction::ToggleExpand => KeyContext::RequirementsList,
             KeyAction::Save => KeyContext::Form,
@@ -980,6 +1004,14 @@ impl KeyAction {
             KeyAction::NewRequirement => KeyContext::Global,
             KeyAction::NewSiblingRequirement => KeyContext::RequirementsList,
             KeyAction::NewChildRequirement => KeyContext::RequirementsList,
+            KeyAction::OpenOwnerPicker => KeyContext::RequirementsList,
+            KeyAction::OpenStatusPicker => KeyContext::RequirementsList,
+            KeyAction::OpenPriorityPicker => KeyContext::RequirementsList,
+            KeyAction::AddComment => KeyContext::RequirementsList,
+            KeyAction::ToggleLinksPanel => KeyContext::RequirementsList,
+            KeyAction::DeleteWithConfirm => KeyContext::RequirementsList,
+            KeyAction::DeleteImmediate => KeyContext::RequirementsList,
+            KeyAction::ArchiveToggle => KeyContext::RequirementsList,
         }
     }
 
@@ -987,6 +1019,8 @@ impl KeyAction {
         &[
             KeyAction::NavigateUp,
             KeyAction::NavigateDown,
+            KeyAction::NavigateUpVim,
+            KeyAction::NavigateDownVim,
             KeyAction::Edit,
             KeyAction::ToggleExpand,
             KeyAction::Save,
@@ -997,6 +1031,14 @@ impl KeyAction {
             KeyAction::NewRequirement,
             KeyAction::NewSiblingRequirement,
             KeyAction::NewChildRequirement,
+            KeyAction::OpenOwnerPicker,
+            KeyAction::OpenStatusPicker,
+            KeyAction::OpenPriorityPicker,
+            KeyAction::AddComment,
+            KeyAction::ToggleLinksPanel,
+            KeyAction::DeleteWithConfirm,
+            KeyAction::DeleteImmediate,
+            KeyAction::ArchiveToggle,
         ]
     }
 }
@@ -1284,6 +1326,53 @@ impl Default for KeyBindings {
             KeyAction::NewChildRequirement,
             KeyBinding::new(egui::Key::N, KeyAction::NewChildRequirement.default_context())
                 .with_shift(),
+        );
+        // Vim-style navigation: 'j' for down, 'k' for up
+        bindings.insert(
+            KeyAction::NavigateDownVim,
+            KeyBinding::new(egui::Key::J, KeyAction::NavigateDownVim.default_context()),
+        );
+        bindings.insert(
+            KeyAction::NavigateUpVim,
+            KeyBinding::new(egui::Key::K, KeyAction::NavigateUpVim.default_context()),
+        );
+        // Quick change actions
+        bindings.insert(
+            KeyAction::OpenOwnerPicker,
+            KeyBinding::new(egui::Key::O, KeyAction::OpenOwnerPicker.default_context()),
+        );
+        bindings.insert(
+            KeyAction::OpenStatusPicker,
+            KeyBinding::new(egui::Key::S, KeyAction::OpenStatusPicker.default_context()),
+        );
+        bindings.insert(
+            KeyAction::OpenPriorityPicker,
+            KeyBinding::new(egui::Key::P, KeyAction::OpenPriorityPicker.default_context()),
+        );
+        bindings.insert(
+            KeyAction::AddComment,
+            KeyBinding::new(egui::Key::C, KeyAction::AddComment.default_context()),
+        );
+        // 'L' (Shift+L) for toggle links panel
+        bindings.insert(
+            KeyAction::ToggleLinksPanel,
+            KeyBinding::new(egui::Key::L, KeyAction::ToggleLinksPanel.default_context())
+                .with_shift(),
+        );
+        // Deletion actions
+        bindings.insert(
+            KeyAction::DeleteWithConfirm,
+            KeyBinding::new(egui::Key::D, KeyAction::DeleteWithConfirm.default_context()),
+        );
+        // 'D' (Shift+D) for immediate delete
+        bindings.insert(
+            KeyAction::DeleteImmediate,
+            KeyBinding::new(egui::Key::D, KeyAction::DeleteImmediate.default_context())
+                .with_shift(),
+        );
+        bindings.insert(
+            KeyAction::ArchiveToggle,
+            KeyBinding::new(egui::Key::A, KeyAction::ArchiveToggle.default_context()),
         );
         Self { bindings }
     }
@@ -1759,6 +1848,7 @@ enum FilterTab {
 enum QuickChangeField {
     Status,
     Priority,
+    Owner,
 }
 
 /// AI action types - what kind of AI analysis to perform
@@ -2347,11 +2437,15 @@ pub struct RequirementsApp {
     show_layout_menu: bool,      // Whether to show the layout selection menu
     layout_button_rect: Option<egui::Rect>,  // Position of layout button for popup menu
 
-    // Quick change popup (triggered by keyboard shortcuts in list view: 's' for status, 'p' for priority)
+    // Quick change popup (triggered by keyboard shortcuts in list view: 's' for status, 'p' for priority, 'o' for owner)
     quick_change_field: Option<QuickChangeField>, // Which field is being changed (None = popup closed)
     quick_change_selected: usize,                 // Currently highlighted option index in popup
     quick_change_target_id: Option<Uuid>,         // Requirement being modified
     quick_change_consumed_action: bool,           // True if popup consumed a key this frame (prevents pass-through)
+    quick_change_owner_search: String,            // Search text for owner fuzzy finder
+
+    // Delete confirmation state
+    pending_delete_confirm: Option<usize>,        // Index of requirement awaiting delete confirmation
 
     // Split panel (second requirements list) - used in split layouts
     split_perspective: Perspective,
@@ -2846,6 +2940,8 @@ impl RequirementsApp {
             quick_change_selected: 0,
             quick_change_target_id: None,
             quick_change_consumed_action: false,
+            quick_change_owner_search: String::new(),
+            pending_delete_confirm: None,
             split_perspective: Perspective::default(),
             split_perspective_direction: PerspectiveDirection::default(),
             split_filter_text: String::new(),
@@ -13728,12 +13824,18 @@ impl RequirementsApp {
         }
     }
 
-    /// Show quick change popup for status or priority (triggered by 's'/'p' key in list view)
+    /// Show quick change popup for status, priority, or owner (triggered by 's'/'p'/'o' key in list view)
     fn show_quick_change_popup(&mut self, ctx: &egui::Context) {
         let field = match self.quick_change_field {
             Some(f) => f,
             None => return,
         };
+
+        // Owner field uses a different UI with fuzzy search
+        if field == QuickChangeField::Owner {
+            self.show_owner_picker_popup(ctx);
+            return;
+        }
 
         // Get the target requirement to determine its type
         let target_req = self.quick_change_target_id
@@ -13768,6 +13870,7 @@ impl RequirementsApp {
                     ]);
                 ("Change Priority", priorities)
             }
+            QuickChangeField::Owner => unreachable!(),
         };
         let num_options = options.len();
 
@@ -13784,15 +13887,15 @@ impl RequirementsApp {
             if i.key_pressed(egui::Key::Enter) {
                 apply_change = true;
             }
-            // Up/Down to navigate
-            if i.key_pressed(egui::Key::ArrowUp) {
+            // Up/Down or j/k to navigate
+            if i.key_pressed(egui::Key::ArrowUp) || i.key_pressed(egui::Key::K) {
                 if self.quick_change_selected > 0 {
                     self.quick_change_selected -= 1;
                 } else {
                     self.quick_change_selected = num_options - 1; // Wrap to bottom
                 }
             }
-            if i.key_pressed(egui::Key::ArrowDown) {
+            if i.key_pressed(egui::Key::ArrowDown) || i.key_pressed(egui::Key::J) {
                 if self.quick_change_selected < num_options - 1 {
                     self.quick_change_selected += 1;
                 } else {
@@ -13828,6 +13931,7 @@ impl RequirementsApp {
         let popup_id = match field {
             QuickChangeField::Status => "quick_change_status_popup",
             QuickChangeField::Priority => "quick_change_priority_popup",
+            QuickChangeField::Owner => unreachable!(),
         };
 
         egui::Area::new(egui::Id::new(popup_id))
@@ -13857,7 +13961,7 @@ impl RequirementsApp {
 
                         ui.separator();
                         ui.horizontal(|ui| {
-                            ui.small("↑↓ Navigate  Enter Select  Esc Cancel");
+                            ui.small("↑↓/jk Navigate  Enter Select  Esc Cancel");
                         });
                     });
             });
@@ -13871,6 +13975,188 @@ impl RequirementsApp {
                     self.quick_change_target_id = None;
                     self.quick_change_consumed_action = true;
                 }
+            }
+        }
+    }
+
+    /// Show owner picker popup with fuzzy search (triggered by 'o' key in list view)
+    fn show_owner_picker_popup(&mut self, ctx: &egui::Context) {
+        // Collect all unique owners from requirements + users
+        let mut all_owners: Vec<String> = self.store.users.iter()
+            .filter(|u| !u.archived)
+            .map(|u| u.handle.clone())
+            .collect();
+
+        // Add any owners that aren't users
+        for req in &self.store.requirements {
+            if !req.owner.is_empty() && !all_owners.contains(&req.owner) {
+                all_owners.push(req.owner.clone());
+            }
+        }
+        all_owners.sort();
+
+        // Filter based on search text
+        let search_lower = self.quick_change_owner_search.to_lowercase();
+        let filtered_owners: Vec<&String> = if search_lower.is_empty() {
+            all_owners.iter().collect()
+        } else {
+            all_owners.iter()
+                .filter(|o| o.to_lowercase().contains(&search_lower))
+                .collect()
+        };
+
+        let num_options = filtered_owners.len();
+
+        // Handle keyboard input for the popup
+        let mut close_popup = false;
+        let mut apply_change = false;
+
+        ctx.input(|i| {
+            // Escape to close
+            if i.key_pressed(egui::Key::Escape) {
+                close_popup = true;
+            }
+            // Enter to apply (if we have options)
+            if i.key_pressed(egui::Key::Enter) && num_options > 0 {
+                apply_change = true;
+            }
+            // Up/Down to navigate
+            if i.key_pressed(egui::Key::ArrowUp) {
+                if self.quick_change_selected > 0 {
+                    self.quick_change_selected -= 1;
+                } else if num_options > 0 {
+                    self.quick_change_selected = num_options - 1; // Wrap to bottom
+                }
+            }
+            if i.key_pressed(egui::Key::ArrowDown) {
+                if num_options > 0 {
+                    if self.quick_change_selected < num_options - 1 {
+                        self.quick_change_selected += 1;
+                    } else {
+                        self.quick_change_selected = 0; // Wrap to top
+                    }
+                }
+            }
+        });
+
+        if close_popup {
+            self.quick_change_field = None;
+            self.quick_change_target_id = None;
+            self.quick_change_owner_search.clear();
+            self.quick_change_consumed_action = true;
+            return;
+        }
+
+        // Apply the change
+        if apply_change {
+            if let Some(owner) = filtered_owners.get(self.quick_change_selected) {
+                self.apply_owner_change((*owner).clone());
+            }
+            self.quick_change_field = None;
+            self.quick_change_target_id = None;
+            self.quick_change_owner_search.clear();
+            self.quick_change_consumed_action = true;
+            return;
+        }
+
+        // Ensure selected index is valid after filtering
+        if self.quick_change_selected >= num_options && num_options > 0 {
+            self.quick_change_selected = num_options - 1;
+        }
+
+        // Center the popup on screen
+        let screen_rect = ctx.screen_rect();
+        let popup_size = egui::vec2(250.0, 220.0);
+        let popup_pos = egui::pos2(
+            (screen_rect.width() - popup_size.x) / 2.0,
+            (screen_rect.height() - popup_size.y) / 2.0,
+        );
+
+        egui::Area::new(egui::Id::new("quick_change_owner_popup"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(popup_pos)
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style())
+                    .inner_margin(8.0)
+                    .show(ui, |ui| {
+                        ui.set_min_width(popup_size.x - 16.0);
+                        ui.label(egui::RichText::new("Assign Owner").strong());
+                        ui.separator();
+
+                        // Search input
+                        let response = ui.add(
+                            egui::TextEdit::singleline(&mut self.quick_change_owner_search)
+                                .hint_text("Type to search...")
+                                .desired_width(ui.available_width())
+                        );
+                        // Auto-focus the search field
+                        response.request_focus();
+
+                        ui.separator();
+
+                        // Scrollable list of owners
+                        egui::ScrollArea::vertical()
+                            .max_height(120.0)
+                            .show(ui, |ui| {
+                                if filtered_owners.is_empty() {
+                                    ui.weak("No matching owners");
+                                } else {
+                                    for (idx, owner) in filtered_owners.iter().enumerate() {
+                                        let is_selected = idx == self.quick_change_selected;
+                                        let response = ui.selectable_label(is_selected, *owner);
+                                        if response.clicked() {
+                                            self.apply_owner_change((*owner).clone());
+                                            self.quick_change_field = None;
+                                            self.quick_change_target_id = None;
+                                            self.quick_change_owner_search.clear();
+                                            self.quick_change_consumed_action = true;
+                                        }
+                                    }
+                                }
+                            });
+
+                        ui.separator();
+                        ui.horizontal(|ui| {
+                            ui.small("↑↓ Navigate  Enter Select  Esc Cancel");
+                        });
+                    });
+            });
+
+        // Close on click outside
+        if ctx.input(|i| i.pointer.any_click()) {
+            let popup_rect = egui::Rect::from_min_size(popup_pos, popup_size);
+            if let Some(pos) = ctx.input(|i| i.pointer.interact_pos()) {
+                if !popup_rect.contains(pos) {
+                    self.quick_change_field = None;
+                    self.quick_change_target_id = None;
+                    self.quick_change_owner_search.clear();
+                    self.quick_change_consumed_action = true;
+                }
+            }
+        }
+    }
+
+    /// Apply owner change to the selected requirement
+    fn apply_owner_change(&mut self, new_owner: String) {
+        let Some(target_id) = self.quick_change_target_id else { return };
+        let Some(req) = self.store.requirements.iter_mut().find(|r| r.id == target_id) else { return };
+
+        let old_owner = req.owner.clone();
+        if old_owner != new_owner {
+            req.owner = new_owner.clone();
+            req.modified_at = chrono::Utc::now();
+            req.history.push(aida_core::models::HistoryEntry {
+                id: uuid::Uuid::new_v4(),
+                author: self.user_settings.name.clone(),
+                timestamp: chrono::Utc::now(),
+                changes: vec![aida_core::models::FieldChange {
+                    field_name: "owner".to_string(),
+                    old_value: old_owner,
+                    new_value: new_owner,
+                }],
+            });
+            if let Err(e) = self.storage.save(&self.store) {
+                eprintln!("Failed to save after owner change: {}", e);
             }
         }
     }
@@ -13958,6 +14244,10 @@ impl RequirementsApp {
                         eprintln!("Failed to save after priority change: {}", e);
                     }
                 }
+            }
+            QuickChangeField::Owner => {
+                // Owner is handled separately via apply_owner_change
+                // This branch should never be reached
             }
         }
     }
@@ -18184,6 +18474,81 @@ fn main() {
             });
     }
 
+    /// Show delete requirement confirmation dialog (triggered by 'd' key)
+    fn show_delete_requirement_confirmation_dialog(&mut self, ctx: &egui::Context) {
+        let idx = match self.pending_delete_confirm {
+            Some(i) => i,
+            None => return,
+        };
+
+        // Get the requirement info for display
+        let req_info = self.store.requirements.get(idx).map(|r| {
+            let spec_id = r.spec_id.clone().unwrap_or_else(|| format!("#{}", r.id.to_string().get(..8).unwrap_or("?")));
+            let title = if r.title.len() > 40 {
+                format!("{}...", &r.title.chars().take(40).collect::<String>())
+            } else {
+                r.title.clone()
+            };
+            (spec_id, title)
+        });
+
+        let Some((spec_id, title)) = req_info else {
+            self.pending_delete_confirm = None;
+            return;
+        };
+
+        // Handle keyboard shortcuts
+        let mut do_delete = false;
+        let mut do_cancel = false;
+        ctx.input(|i| {
+            if i.key_pressed(egui::Key::Escape) || i.key_pressed(egui::Key::N) {
+                do_cancel = true;
+            }
+            if i.key_pressed(egui::Key::Enter) || i.key_pressed(egui::Key::Y) {
+                do_delete = true;
+            }
+        });
+
+        if do_cancel {
+            self.pending_delete_confirm = None;
+            return;
+        }
+
+        if do_delete {
+            self.delete_requirement(idx);
+            self.pending_delete_confirm = None;
+            return;
+        }
+
+        egui::Window::new("⚠ Delete Requirement")
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+            .show(ctx, |ui| {
+                ui.set_min_width(350.0);
+
+                ui.label(format!("Delete {} \"{}\"?", spec_id, title));
+                ui.add_space(5.0);
+                ui.label(egui::RichText::new("This action cannot be undone.").weak());
+
+                ui.add_space(10.0);
+
+                ui.horizontal(|ui| {
+                    if ui.button("🗑 Delete (y)").clicked() {
+                        self.delete_requirement(idx);
+                        self.pending_delete_confirm = None;
+                    }
+
+                    if ui.button("Cancel (n)").clicked() {
+                        self.pending_delete_confirm = None;
+                    }
+                });
+
+                ui.add_space(5.0);
+                ui.small("Press Y to confirm, N or Esc to cancel");
+            });
+    }
+
     /// Show view settings dialog for List 1
     fn show_filter_dialog_list1(&mut self, ctx: &egui::Context) {
         if !self.show_filter_dialog_list1 {
@@ -19180,21 +19545,30 @@ impl eframe::App for RequirementsApp {
             );
 
             // Check navigation keybindings (context-aware)
-            // Block list navigation when status popup is open
-            if !self.quick_change_field.is_some()
-                && self.user_settings.keybindings.is_pressed(
+            // Block list navigation when status popup is open or delete confirm is pending
+            let can_navigate = self.quick_change_field.is_none() && self.pending_delete_confirm.is_none();
+            if can_navigate
+                && (self.user_settings.keybindings.is_pressed(
                     KeyAction::NavigateDown,
                     ctx,
                     self.current_key_context,
-                )
+                ) || self.user_settings.keybindings.is_pressed(
+                    KeyAction::NavigateDownVim,
+                    ctx,
+                    self.current_key_context,
+                ))
             {
                 nav_delta = 1;
-            } else if !self.quick_change_field.is_some()
-                && self.user_settings.keybindings.is_pressed(
+            } else if can_navigate
+                && (self.user_settings.keybindings.is_pressed(
                     KeyAction::NavigateUp,
                     ctx,
                     self.current_key_context,
-                )
+                ) || self.user_settings.keybindings.is_pressed(
+                    KeyAction::NavigateUpVim,
+                    ctx,
+                    self.current_key_context,
+                ))
             {
                 nav_delta = -1;
             }
@@ -19264,19 +19638,21 @@ impl eframe::App for RequirementsApp {
                 self.pending_save = true;
             }
 
-            // 's' key to open status popup (only in list/detail view, not in edit/add mode, without modifiers)
-            // 'p' key to open priority popup (same conditions)
+            // Quick change popups and other list-context hotkeys
+            // (only in list/detail view, not in edit/add mode)
             let not_in_form = !matches!(self.current_view, View::Add | View::Edit);
             let no_popup_open = self.quick_change_field.is_none();
-            if nav_context_active && no_popup_open && not_in_form {
-                // Check for 's' key (status)
-                let s_pressed = ctx.input(|i| {
-                    i.key_pressed(egui::Key::S) && !i.modifiers.ctrl && !i.modifiers.alt && !i.modifiers.shift
-                });
-                if s_pressed {
+            let no_delete_confirm = self.pending_delete_confirm.is_none();
+
+            if nav_context_active && no_popup_open && not_in_form && no_delete_confirm {
+                // 's' key to open status popup
+                if self.user_settings.keybindings.is_pressed(
+                    KeyAction::OpenStatusPicker,
+                    ctx,
+                    self.current_key_context,
+                ) {
                     if let Some(idx) = self.selected_idx {
                         if let Some(req) = self.store.requirements.get(idx) {
-                            // Find the current status index
                             let statuses = [
                                 RequirementStatus::Draft,
                                 RequirementStatus::Approved,
@@ -19290,14 +19666,14 @@ impl eframe::App for RequirementsApp {
                         }
                     }
                 }
-                // Check for 'p' key (priority)
-                let p_pressed = ctx.input(|i| {
-                    i.key_pressed(egui::Key::P) && !i.modifiers.ctrl && !i.modifiers.alt && !i.modifiers.shift
-                });
-                if p_pressed {
+                // 'p' key to open priority popup
+                else if self.user_settings.keybindings.is_pressed(
+                    KeyAction::OpenPriorityPicker,
+                    ctx,
+                    self.current_key_context,
+                ) {
                     if let Some(idx) = self.selected_idx {
                         if let Some(req) = self.store.requirements.get(idx) {
-                            // Find the current priority index
                             let priorities = [
                                 RequirementPriority::High,
                                 RequirementPriority::Medium,
@@ -19308,6 +19684,78 @@ impl eframe::App for RequirementsApp {
                             self.quick_change_target_id = Some(req.id);
                             self.quick_change_field = Some(QuickChangeField::Priority);
                         }
+                    }
+                }
+                // 'o' key to open owner picker (fuzzy finder)
+                else if self.user_settings.keybindings.is_pressed(
+                    KeyAction::OpenOwnerPicker,
+                    ctx,
+                    self.current_key_context,
+                ) {
+                    if let Some(idx) = self.selected_idx {
+                        if let Some(req) = self.store.requirements.get(idx) {
+                            self.quick_change_owner_search.clear();
+                            self.quick_change_selected = 0;
+                            self.quick_change_target_id = Some(req.id);
+                            self.quick_change_field = Some(QuickChangeField::Owner);
+                        }
+                    }
+                }
+                // 'c' key to add comment
+                else if self.user_settings.keybindings.is_pressed(
+                    KeyAction::AddComment,
+                    ctx,
+                    self.current_key_context,
+                ) {
+                    if self.selected_idx.is_some() {
+                        self.show_add_comment = true;
+                        self.comment_content.clear();
+                        self.reply_to_comment = None;
+                    }
+                }
+                // 'L' (Shift+L) to toggle links panel
+                else if self.user_settings.keybindings.is_pressed(
+                    KeyAction::ToggleLinksPanel,
+                    ctx,
+                    self.current_key_context,
+                ) {
+                    if self.selected_idx.is_some() {
+                        // Toggle to Links tab in detail view
+                        if self.active_tab == DetailTab::Links {
+                            self.active_tab = DetailTab::Description;
+                        } else {
+                            self.active_tab = DetailTab::Links;
+                        }
+                    }
+                }
+                // 'd' key to delete with confirmation
+                else if self.user_settings.keybindings.is_pressed(
+                    KeyAction::DeleteWithConfirm,
+                    ctx,
+                    self.current_key_context,
+                ) {
+                    if let Some(idx) = self.selected_idx {
+                        self.pending_delete_confirm = Some(idx);
+                    }
+                }
+                // 'D' (Shift+D) to delete immediately
+                else if self.user_settings.keybindings.is_pressed(
+                    KeyAction::DeleteImmediate,
+                    ctx,
+                    self.current_key_context,
+                ) {
+                    if let Some(idx) = self.selected_idx {
+                        self.delete_requirement(idx);
+                    }
+                }
+                // 'a' key to archive/unarchive
+                else if self.user_settings.keybindings.is_pressed(
+                    KeyAction::ArchiveToggle,
+                    ctx,
+                    self.current_key_context,
+                ) {
+                    if let Some(idx) = self.selected_idx {
+                        self.toggle_archive(idx);
                     }
                 }
             }
@@ -19912,6 +20360,9 @@ impl eframe::App for RequirementsApp {
 
         // Show delete preset confirmation dialog
         self.show_delete_preset_confirmation_dialog(ctx);
+
+        // Show delete requirement confirmation dialog
+        self.show_delete_requirement_confirmation_dialog(ctx);
 
         // Show clone requirement dialog
         self.show_clone_requirement_dialog(ctx);

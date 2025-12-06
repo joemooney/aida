@@ -5888,7 +5888,7 @@ requirements:
   spec_id: AI-0133
   prefix_override: AI
   title: AI integration
-  description: |-
+  description: |
     AI integration
     I want to integrate AI and probably claude code into this application. The first baby step would be to have in the
       Actions dropdown an AI subdropdown menu with actions we can take. Consider if we should evaluate the current requirement, perhaps we provide
@@ -5897,13 +5897,31 @@ requirements:
       fast, and nimble without a lot os fluff and primarily driven by the keyboard in preference to the mouse. we want to move fast, iterating
       frequently with the goal of this becoming self-referential whereby we are able to start feeding back into claude code requirements that
       improve the application itself. Perhaps you should review requirements.yaml itself for inspiration.
+
+
+      AI Evaluate Requirement
+      - Performs a holistic quality assessment of the requirement
+      - Returns a quality score (1-10) and structured feedback
+      - Identifies issues with severity levels (critical, major, minor)
+      - Lists strengths and suggested improvements
+      - Considers: clarity, completeness, testability, consistency, feasibility
+      - Doesn't rewrite anything - it's an analysis/audit tool
+
+      AI Improve Description
+      - Specifically focuses on rewriting the description text
+      - Uses completed requirements as examples of well-written ones
+      - Generates a concrete improved version of the description
+      - Provides rationale for the changes made
+      - Action-oriented - you get a new description you can use directly
+
+      In short: Evaluate tells you what's wrong and gives a score, Improve actually rewrites the description for you.
   status: Draft
   priority: Medium
   owner: ''
   feature: 63-Uncategorized
   created_at: 2025-11-30T05:30:18.498861915Z
   created_by: Unknown User
-  modified_at: 2025-11-30T18:32:26.692488667Z
+  modified_at: 2025-12-06T18:39:50.594083370Z
   req_type: Functional
   dependencies: []
   tags: []
@@ -5935,6 +5953,47 @@ requirements:
     - field_name: spec_id
       old_value: FR-0132
       new_value: AI-0133
+  - id: ce772cc4-b102-4337-bd51-f2a6f9f8ae4e
+    author: Joe Mooney
+    timestamp: 2025-12-06T18:39:50.594082353Z
+    changes:
+    - field_name: description
+      old_value: |-
+        AI integration
+        I want to integrate AI and probably claude code into this application. The first baby step would be to have in the
+          Actions dropdown an AI subdropdown menu with actions we can take. Consider if we should evaluate the current requirement, perhaps we provide
+          the entire database as context (for the moment) and it can discern whether the requirement is well written, suggest updates, consider
+          duplicates, whether references or other relationships should be created etc. Our goal is to make this application like an editor which is
+          fast, and nimble without a lot os fluff and primarily driven by the keyboard in preference to the mouse. we want to move fast, iterating
+          frequently with the goal of this becoming self-referential whereby we are able to start feeding back into claude code requirements that
+          improve the application itself. Perhaps you should review requirements.yaml itself for inspiration.
+      new_value: |
+        AI integration
+        I want to integrate AI and probably claude code into this application. The first baby step would be to have in the
+          Actions dropdown an AI subdropdown menu with actions we can take. Consider if we should evaluate the current requirement, perhaps we provide
+          the entire database as context (for the moment) and it can discern whether the requirement is well written, suggest updates, consider
+          duplicates, whether references or other relationships should be created etc. Our goal is to make this application like an editor which is
+          fast, and nimble without a lot os fluff and primarily driven by the keyboard in preference to the mouse. we want to move fast, iterating
+          frequently with the goal of this becoming self-referential whereby we are able to start feeding back into claude code requirements that
+          improve the application itself. Perhaps you should review requirements.yaml itself for inspiration.
+
+
+          AI Evaluate Requirement
+          - Performs a holistic quality assessment of the requirement
+          - Returns a quality score (1-10) and structured feedback
+          - Identifies issues with severity levels (critical, major, minor)
+          - Lists strengths and suggested improvements
+          - Considers: clarity, completeness, testability, consistency, feasibility
+          - Doesn't rewrite anything - it's an analysis/audit tool
+
+          AI Improve Description
+          - Specifically focuses on rewriting the description text
+          - Uses completed requirements as examples of well-written ones
+          - Generates a concrete improved version of the description
+          - Provides rationale for the changes made
+          - Action-oriented - you get a new description you can use directly
+
+          In short: Evaluate tells you what's wrong and gives a score, Improve actually rewrites the description for you.
 - id: 4de3b4f0-b157-4d50-8549-e98153d2324d
   spec_id: FR-0134
   title: AI Requirement Evaluation
@@ -8143,7 +8202,7 @@ requirements:
   status: Draft
   priority: Medium
   owner: ''
-  feature: Uncategorized
+  feature: 111-Uncategorized
   created_at: 2025-12-06T18:18:44.025626762Z
   created_by: Joe Mooney
   modified_at: 2025-12-06T18:18:44.025626762Z
@@ -8165,7 +8224,7 @@ requirements:
   status: Draft
   priority: Medium
   owner: ''
-  feature: Uncategorized
+  feature: 111-Uncategorized
   created_at: 2025-12-06T18:21:49.495465339Z
   created_by: Joe Mooney
   modified_at: 2025-12-06T18:21:49.495465339Z
@@ -8179,17 +8238,38 @@ requirements:
     created_by: Joe Mooney
 - id: 8591ed43-630d-45ca-968e-889d7ed1f00a
   spec_id: SPEC-198
-  title: help hotkey '?' in reqlist (Clone)
+  title: hotkeys in reqlist
   description: |-
-    help hotkey '?' in reqlist
+    Support keyboard hotkeys in the requirement list view when focused:
 
-    This will show list of hotkeys and keyboard bindings available
-  status: Draft
+    **Navigation:**
+    - j - move selection down
+    - k - move selection up
+    - Enter - open selected requirement in edit mode
+
+    **Creation:**
+    - n - create new sibling requirement
+    - N - create new child requirement
+
+    **Editing:**
+    - o - open fuzzy finder to assign owner
+    - p - open priority picker
+    - s - open status picker
+    - c - add comment to selected requirement
+    - L - show/toggle links panel
+
+    **Deletion:**
+    - d - delete with confirmation dialog
+    - D - delete immediately (no confirmation)
+    - a - archive selected requirement
+
+    Visual selection indicator should follow keyboard navigation.
+  status: Completed
   priority: Medium
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-12-06T18:23:18.455973951Z
-  modified_at: 2025-12-06T18:23:18.455994574Z
+  modified_at: 2025-12-06T18:35:41.957316871Z
   req_type: Functional
   dependencies: []
   tags: []
@@ -8201,6 +8281,115 @@ requirements:
     - field_name: cloned_from
       old_value: ''
       new_value: FR-0182
+  - id: 298f0219-b796-4898-a7ac-c2968bc23db5
+    author: Joe Mooney
+    timestamp: 2025-12-06T18:28:41.689225031Z
+    changes:
+    - field_name: title
+      old_value: help hotkey '?' in reqlist (Clone)
+      new_value: hotkeys in reqlist
+    - field_name: description
+      old_value: |-
+        help hotkey '?' in reqlist
+
+        This will show list of hotkeys and keyboard bindings available
+      new_value: "Support hotkeys in reqlist\n\nj - down\nk - up\nn - new sibling\nN - new child\no - owner (fuzzy find) \np - priority\ns - status\nd - delete with confirm\nD - delete without confirm\na  - archive\nEnter - edit\nL - show links\nc - comment\n\n\n"
+  - id: 2a7e9001-043b-4360-a356-48b8bde9bc4d
+    author: Joe Mooney
+    timestamp: 2025-12-06T18:34:50.589958331Z
+    changes:
+    - field_name: description
+      old_value: "Support hotkeys in reqlist\n\nj - down\nk - up\nn - new sibling\nN - new child\no - owner (fuzzy find) \np - priority\ns - status\nd - delete with confirm\nD - delete without confirm\na  - archive\nEnter - edit\nL - show links\nc - comment\n\n\n"
+      new_value: |-
+        Support keyboard hotkeys in the requirement list view when focused:
+
+        **Navigation:**
+        - j - move selection down
+        - k - move selection up
+        - Enter - open selected requirement in edit mode
+
+        **Creation:**
+        - n - create new sibling requirement
+        - N - create new child requirement
+
+        **Editing:**
+        - o - open fuzzy finder to assign owner
+        - p - open priority picker
+        - s - open status picker
+        - c - add comment to selected requirement
+        - L - show/toggle links panel
+
+        **Deletion:**
+        - d - delete with confirmation dialog
+        - D - delete immediately (no confirmation)
+        - a - archive selected requirement
+
+        Visual selection indicator should follow keyboard navigation.
+  - id: 1ee82de9-6e01-4795-9652-2b4c8fa11f26
+    author: Joe Mooney
+    timestamp: 2025-12-06T18:35:41.957325233Z
+    changes:
+    - field_name: status
+      old_value: Draft
+      new_value: Approved
+  ai_evaluation:
+    evaluation:
+      quality_score: 6
+      issues:
+      - type: incomplete
+        severity: medium
+        text: No specification of what 'reqlist' refers to - is this a specific view, component, or mode?
+        suggestion: Clarify which UI context this applies to (e.g., 'requirement list view in the main application')
+      - type: ambiguous
+        severity: medium
+        text: The 'o - owner (fuzzy find)' hotkey behavior is unclear - does it open a fuzzy finder to assign owner, or filter by owner?
+        suggestion: 'Specify: ''o - open fuzzy finder to assign/change requirement owner'''
+      - type: incomplete
+        severity: low
+        text: No specification of whether hotkeys should work globally or only when list is focused
+        suggestion: 'Add: ''Hotkeys active when requirement list has focus'''
+      - type: incomplete
+        severity: low
+        text: Missing behavior for 'p - priority' and 's - status' - do these cycle through values, open a picker, or something else?
+        suggestion: 'Specify the interaction pattern: ''p - open priority picker'' or ''p - cycle through priority levels'''
+      - type: incomplete
+        severity: low
+        text: No mention of visual feedback or focus indicators when navigating with j/k
+        suggestion: 'Consider adding: ''Visual selection indicator follows keyboard navigation'''
+      strengths:
+      - Clear vim-style keybinding conventions (j/k for navigation) which is intuitive for developers
+      - Good use of shift-modifier convention (n/N, d/D) for related but distinct actions
+      - Comprehensive coverage of common requirement operations
+      - Related requirement FR-0182 already addresses help hotkey, showing systematic planning
+      suggested_improvements:
+        description: |-
+          Support keyboard hotkeys in the requirement list view when focused:
+
+          **Navigation:**
+          - j - move selection down
+          - k - move selection up
+          - Enter - open selected requirement in edit mode
+
+          **Creation:**
+          - n - create new sibling requirement
+          - N - create new child requirement
+
+          **Editing:**
+          - o - open fuzzy finder to assign owner
+          - p - open priority picker
+          - s - open status picker
+          - c - add comment to selected requirement
+          - L - show/toggle links panel
+
+          **Deletion:**
+          - d - delete with confirmation dialog
+          - D - delete immediately (no confirmation)
+          - a - archive selected requirement
+
+          Visual selection indicator should follow keyboard navigation.
+        rationale: Restructured for clarity by grouping related hotkeys, explicitly stating interaction patterns (picker vs cycle), and clarifying the context (requirement list view when focused). This makes implementation unambiguous and improves testability.
+    evaluated_at: 2025-12-06T18:33:12.620359470Z
+    content_hash: 75f6d10ee37a5b85
 users:
 - id: 150164ef-32ed-4d61-8cec-e887ac78cfd7
   spec_id: $USER-001
@@ -8292,7 +8481,7 @@ id_config:
     prefix: SPIKE
     description: Research or investigation task to reduce uncertainty or explore technical approaches
 features: []
-next_feature_number: 111
+next_feature_number: 112
 next_spec_number: 199
 prefix_counters: {}
 relationship_definitions:
