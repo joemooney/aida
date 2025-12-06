@@ -9336,6 +9336,10 @@ impl RequirementsApp {
                 .unwrap_or_else(|| "new".to_string());
 
             self.message = Some((format!("Cloned as {}", new_spec_id), false));
+
+            // Open the cloned requirement in edit mode
+            self.load_form_from_requirement(new_idx);
+            self.pending_view_change = Some(View::Edit);
         }
     }
 

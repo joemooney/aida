@@ -4498,6 +4498,10 @@ requirements:
     target_id: 0a1ab189-cf84-41d9-a3d0-3e91a671b75a
     created_at: 2025-12-02T05:49:33.252795445Z
     created_by: Joe Mooney
+  - rel_type: Child
+    target_id: e07d2bc4-cef6-4276-8145-3b8566d3efc8
+    created_at: 2025-12-06T18:21:49.549116819Z
+    created_by: Joe Mooney
   history:
   - id: bb9d63f0-d0e9-4a12-aee7-aefb1048ea88
     author: Joe Mooney
@@ -8090,6 +8094,11 @@ requirements:
   req_type: Functional
   dependencies: []
   tags: []
+  relationships:
+  - rel_type: Child
+    target_id: d1055784-d8db-4f21-83a8-4121a7e3f25e
+    created_at: 2025-12-06T18:18:47.825260501Z
+    created_by: Joe Mooney
 - id: 7e3b996c-1cb5-48f5-bc6e-bae5057c6ab5
   spec_id: FR-0194
   title: Exclude Folder type from KanBan view
@@ -8124,6 +8133,74 @@ requirements:
   - rel_type: References
     target_id: 055530de-326d-4362-aab1-639239f363e5
     created_at: 2025-12-06T17:53:41.659003440Z
+- id: d1055784-d8db-4f21-83a8-4121a7e3f25e
+  spec_id: FR-0196
+  title: Basline view - see req details
+  description: |-
+    Basline view - see req details
+
+    In the baseline view ability to see req details.
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: Uncategorized
+  created_at: 2025-12-06T18:18:44.025626762Z
+  created_by: Joe Mooney
+  modified_at: 2025-12-06T18:18:44.025626762Z
+  req_type: Functional
+  dependencies: []
+  tags: []
+  relationships:
+  - rel_type: Parent
+    target_id: d58f045f-b729-4a7f-b2f0-04d6353a7af7
+    created_at: 2025-12-06T18:18:47.825260501Z
+    created_by: Joe Mooney
+- id: e07d2bc4-cef6-4276-8145-3b8566d3efc8
+  spec_id: FR-0197
+  title: upon clear search reposition to center selected...
+  description: |-
+    upon clear search reposition to center selected req
+
+    When we clear the search, the selected req is often not visible in the reqlist. we should recenter the reqlist so that it is in the center of the visible list of reqs shown.
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: Uncategorized
+  created_at: 2025-12-06T18:21:49.495465339Z
+  created_by: Joe Mooney
+  modified_at: 2025-12-06T18:21:49.495465339Z
+  req_type: Functional
+  dependencies: []
+  tags: []
+  relationships:
+  - rel_type: Parent
+    target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
+    created_at: 2025-12-06T18:21:49.549116819Z
+    created_by: Joe Mooney
+- id: 8591ed43-630d-45ca-968e-889d7ed1f00a
+  spec_id: SPEC-198
+  title: help hotkey '?' in reqlist (Clone)
+  description: |-
+    help hotkey '?' in reqlist
+
+    This will show list of hotkeys and keyboard bindings available
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 97-Uncategorized
+  created_at: 2025-12-06T18:23:18.455973951Z
+  modified_at: 2025-12-06T18:23:18.455994574Z
+  req_type: Functional
+  dependencies: []
+  tags: []
+  history:
+  - id: ef448e7f-b785-4891-94a1-537d5f82e2d7
+    author: Joe Mooney
+    timestamp: 2025-12-06T18:23:18.455993537Z
+    changes:
+    - field_name: cloned_from
+      old_value: ''
+      new_value: FR-0182
 users:
 - id: 150164ef-32ed-4d61-8cec-e887ac78cfd7
   spec_id: $USER-001
@@ -8216,7 +8293,7 @@ id_config:
     description: Research or investigation task to reduce uncertainty or explore technical approaches
 features: []
 next_feature_number: 111
-next_spec_number: 196
+next_spec_number: 199
 prefix_counters: {}
 relationship_definitions:
 - name: parent
