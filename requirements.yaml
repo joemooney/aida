@@ -8257,94 +8257,13 @@ requirements:
 - id: 8591ed43-630d-45ca-968e-889d7ed1f00a
   spec_id: SPEC-198
   title: hotkeys in reqlist
-  description: |
-    Support keyboard hotkeys in the requirement list view when focused:
-
-    **Navigation:**
-    - j - move selection down
-    - k - move selection up
-    - Enter - open selected requirement in edit mode
-
-    **Creation:**
-    - n - create new sibling requirement
-    - N - create new child requirement
-
-    **Editing:**
-    - o - open fuzzy finder to assign owner
-    - p - open priority picker
-    - s - open status picker
-    - c - add comment to selected requirement
-    - L - show/toggle links panel
-
-    **Deletion:**
-    - d - delete with confirmation dialog
-    - D - delete immediately (no confirmation)
-    - a - archive selected requirement
-
-    Visual selection indicator should follow keyboard navigation.
-
-
-      Navigation
-
-      - g g - jump to first requirement (vim: go to top)
-      - G - jump to last requirement (vim: go to bottom)
-      - Ctrl+d / Ctrl+u - page down/up (half-page scroll in vim)
-      - z z - center selected item in view
-      - / - focus search box (vim: search)
-      - n / N - next/prev search result (if search is active)
-
-      Tree Operations
-
-      - z o - expand node (vim: open fold)
-      - z c - collapse node (vim: close fold)
-      - z a - toggle expand/collapse (vim: toggle fold)
-      - z M - collapse all
-      - z R - expand all
-
-      Editing
-
-      - i - edit selected requirement (vim: insert mode)
-      - y y - copy/yank requirement (for clone)
-      - p - paste/clone yanked requirement
-      - d d - delete with confirmation
-      - u - undo last change (if undo is implemented)
-      - r - rename/quick edit title inline
-
-      Selection/Marks
-
-      - m - mark/bookmark requirement
-      - ' - jump to marked requirement
-      - v - enter visual/multi-select mode (select range)
-
-      Views
-
-      - 1-9 - quick switch to view presets
-      - Tab - cycle between list panels (in split view)
-      - Ctrl+w w - switch focus between panels
-      - Ctrl+w h/j/k/l - move focus left/down/up/right
-
-      Quick Actions (current ones are good)
-
-      - s - status (already implemented)
-      - p - priority (already implemented)
-      - o - owner (already implemented)
-      - c - comment (already implemented)
-      - t - edit tags
-      - f - assign to feature
-
-      Which would you like me to implement?
-
-      The easiest wins would be:
-      1. gg/G for jump to top/bottom
-      2. / to focus search
-      3. za/zo/zc for fold operations
-      4. i as alias for Enter (edit)
+  description: "Support keyboard hotkeys in the requirement list view when focused:\n\n**Navigation:**\n- j - move selection down\n- k - move selection up\n- Enter - open selected requirement in edit mode\n\n**Creation:**\n- n - create new sibling requirement\n- N - create new child requirement\n\n**Editing:**\n- o - open fuzzy finder to assign owner\n- p - open priority picker\n- s - open status picker\n- c - add comment to selected requirement\n- L - show/toggle links panel\n\n**Deletion:**\n- d - delete with confirmation dialog\n- D - delete immediately (no confirmation)\n- a - archive selected requirement\n\nVisual selection indicator should follow keyboard navigation.\n\n\n  Navigation\n\n  - g g - jump to first requirement (vim: go to top)\n  - G - jump to last requirement (vim: go to bottom)\n  - Ctrl+d / Ctrl+u - page down/up (half-page scroll in vim)\n  - z z - center selected item in view\n  - / - focus search box (vim: search)\n  - n / N - next/prev search result (if search is active)\n\n  Tree Operations\n\nUpon 'z' unless open a dialog showing these options and if the use presses the second letter perform the action (esc to exit, any other letter is ignored or error) maybe if the user presses the two letter combe quickly we dont bother to show the pop-up menu of subchoices \n  - z o - expand node (vim: open fold)\n  - z c - collapse node (vim: close fold)\n  - z a - toggle expand/collapse (vim: toggle fold)\n  - z M - collapse all\n  - z R - expand all\n\n  Editing\n\n  - i - edit selected requirement (vim: insert mode)\n  - y y - copy/yank requirement (for clone)\n  - p - paste/clone yanked requirement\n  - d d - delete with confirmation\n  - u - undo last change (if undo is implemented)\n  - r - rename/quick edit title inline\n\n  Selection/Marks\n\n  - m - mark/bookmark requirement\n  - ' - jump to marked requirement\n  - v - enter visual/multi-select mode (select range)\n\n  Views\n\n  - 1-9 - quick switch to view presets\n  - Tab - cycle between list panels (in split view)\n  - Ctrl+w w - switch focus between panels\n  - Ctrl+w h/j/k/l - move focus left/down/up/right\n\n  Quick Actions (current ones are good)\n\n  - s - status (already implemented)\n  - p - priority (already implemented)\n  - o - owner (already implemented)\n  - c - comment (already implemented)\n  - t - edit tags\n  - f - assign to feature\n\n  Which would you like me to implement?\n\n  The easiest wins would be:\n  1. gg/G for jump to top/bottom\n  2. / to focus search\n  3. za/zo/zc for fold operations\n  4. i as alias for Enter (edit)\n"
   status: Completed
   priority: Medium
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-12-06T18:23:18.455973951Z
-  modified_at: 2025-12-06T19:10:13.731641289Z
+  modified_at: 2025-12-06T19:45:51.219555191Z
   req_type: Functional
   dependencies: []
   tags: []
@@ -8519,6 +8438,94 @@ requirements:
           2. / to focus search
           3. za/zo/zc for fold operations
           4. i as alias for Enter (edit)
+  - id: 1844735d-d134-48f2-a96a-dd2bc91120b9
+    author: Joe Mooney
+    timestamp: 2025-12-06T19:45:51.219554087Z
+    changes:
+    - field_name: description
+      old_value: |
+        Support keyboard hotkeys in the requirement list view when focused:
+
+        **Navigation:**
+        - j - move selection down
+        - k - move selection up
+        - Enter - open selected requirement in edit mode
+
+        **Creation:**
+        - n - create new sibling requirement
+        - N - create new child requirement
+
+        **Editing:**
+        - o - open fuzzy finder to assign owner
+        - p - open priority picker
+        - s - open status picker
+        - c - add comment to selected requirement
+        - L - show/toggle links panel
+
+        **Deletion:**
+        - d - delete with confirmation dialog
+        - D - delete immediately (no confirmation)
+        - a - archive selected requirement
+
+        Visual selection indicator should follow keyboard navigation.
+
+
+          Navigation
+
+          - g g - jump to first requirement (vim: go to top)
+          - G - jump to last requirement (vim: go to bottom)
+          - Ctrl+d / Ctrl+u - page down/up (half-page scroll in vim)
+          - z z - center selected item in view
+          - / - focus search box (vim: search)
+          - n / N - next/prev search result (if search is active)
+
+          Tree Operations
+
+          - z o - expand node (vim: open fold)
+          - z c - collapse node (vim: close fold)
+          - z a - toggle expand/collapse (vim: toggle fold)
+          - z M - collapse all
+          - z R - expand all
+
+          Editing
+
+          - i - edit selected requirement (vim: insert mode)
+          - y y - copy/yank requirement (for clone)
+          - p - paste/clone yanked requirement
+          - d d - delete with confirmation
+          - u - undo last change (if undo is implemented)
+          - r - rename/quick edit title inline
+
+          Selection/Marks
+
+          - m - mark/bookmark requirement
+          - ' - jump to marked requirement
+          - v - enter visual/multi-select mode (select range)
+
+          Views
+
+          - 1-9 - quick switch to view presets
+          - Tab - cycle between list panels (in split view)
+          - Ctrl+w w - switch focus between panels
+          - Ctrl+w h/j/k/l - move focus left/down/up/right
+
+          Quick Actions (current ones are good)
+
+          - s - status (already implemented)
+          - p - priority (already implemented)
+          - o - owner (already implemented)
+          - c - comment (already implemented)
+          - t - edit tags
+          - f - assign to feature
+
+          Which would you like me to implement?
+
+          The easiest wins would be:
+          1. gg/G for jump to top/bottom
+          2. / to focus search
+          3. za/zo/zc for fold operations
+          4. i as alias for Enter (edit)
+      new_value: "Support keyboard hotkeys in the requirement list view when focused:\n\n**Navigation:**\n- j - move selection down\n- k - move selection up\n- Enter - open selected requirement in edit mode\n\n**Creation:**\n- n - create new sibling requirement\n- N - create new child requirement\n\n**Editing:**\n- o - open fuzzy finder to assign owner\n- p - open priority picker\n- s - open status picker\n- c - add comment to selected requirement\n- L - show/toggle links panel\n\n**Deletion:**\n- d - delete with confirmation dialog\n- D - delete immediately (no confirmation)\n- a - archive selected requirement\n\nVisual selection indicator should follow keyboard navigation.\n\n\n  Navigation\n\n  - g g - jump to first requirement (vim: go to top)\n  - G - jump to last requirement (vim: go to bottom)\n  - Ctrl+d / Ctrl+u - page down/up (half-page scroll in vim)\n  - z z - center selected item in view\n  - / - focus search box (vim: search)\n  - n / N - next/prev search result (if search is active)\n\n  Tree Operations\n\nUpon 'z' unless open a dialog showing these options and if the use presses the second letter perform the action (esc to exit, any other letter is ignored or error) maybe if the user presses the two letter combe quickly we dont bother to show the pop-up menu of subchoices \n  - z o - expand node (vim: open fold)\n  - z c - collapse node (vim: close fold)\n  - z a - toggle expand/collapse (vim: toggle fold)\n  - z M - collapse all\n  - z R - expand all\n\n  Editing\n\n  - i - edit selected requirement (vim: insert mode)\n  - y y - copy/yank requirement (for clone)\n  - p - paste/clone yanked requirement\n  - d d - delete with confirmation\n  - u - undo last change (if undo is implemented)\n  - r - rename/quick edit title inline\n\n  Selection/Marks\n\n  - m - mark/bookmark requirement\n  - ' - jump to marked requirement\n  - v - enter visual/multi-select mode (select range)\n\n  Views\n\n  - 1-9 - quick switch to view presets\n  - Tab - cycle between list panels (in split view)\n  - Ctrl+w w - switch focus between panels\n  - Ctrl+w h/j/k/l - move focus left/down/up/right\n\n  Quick Actions (current ones are good)\n\n  - s - status (already implemented)\n  - p - priority (already implemented)\n  - o - owner (already implemented)\n  - c - comment (already implemented)\n  - t - edit tags\n  - f - assign to feature\n\n  Which would you like me to implement?\n\n  The easiest wins would be:\n  1. gg/G for jump to top/bottom\n  2. / to focus search\n  3. za/zo/zc for fold operations\n  4. i as alias for Enter (edit)\n"
   ai_evaluation:
     evaluation:
       quality_score: 6
@@ -8847,8 +8854,8 @@ reaction_definitions:
   description: Mark as important/attention needed
   built_in: true
 meta_counters:
-  $TEAM: 4
   $USER: 6
+  $TEAM: 4
 type_definitions:
 - name: Functional
   display_name: Functional
