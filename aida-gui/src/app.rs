@@ -2731,6 +2731,8 @@ pub struct RequirementsApp {
     timeline_filter_author: String,                                  // Filter by author
     timeline_filter_field: String,                                   // Filter by field name (e.g., "status")
     timeline_selected_event_idx: Option<usize>,                     // Currently selected event
+    timeline_suppress_hover: bool,                                   // Suppress hover highlight after click/keyboard nav
+    timeline_last_mouse_pos: Option<egui::Pos2>,                    // Track mouse position to detect movement
 }
 
 /// A timeline event representing a change to a requirement
@@ -3269,6 +3271,8 @@ impl RequirementsApp {
             timeline_filter_author: String::new(),
             timeline_filter_field: String::new(),
             timeline_selected_event_idx: None,
+            timeline_suppress_hover: false,
+            timeline_last_mouse_pos: None,
         }
     }
 
@@ -9558,6 +9562,16 @@ impl RequirementsApp {
 
     /// Show the Timeline view
     fn show_timeline_view(&mut self, ui: &mut egui::Ui) {
+        // Check if mouse has moved - if so, re-enable hover highlighting
+        let current_mouse_pos = ui.ctx().input(|i| i.pointer.hover_pos());
+        if let (Some(current), Some(last)) = (current_mouse_pos, self.timeline_last_mouse_pos) {
+            // Check if mouse moved more than a small threshold (to ignore sub-pixel jitter)
+            if (current - last).length() > 2.0 {
+                self.timeline_suppress_hover = false;
+            }
+        }
+        self.timeline_last_mouse_pos = current_mouse_pos;
+
         // Header with controls
         ui.horizontal(|ui| {
             ui.heading("📅 Timeline");
@@ -9661,6 +9675,8 @@ impl RequirementsApp {
         // Track state changes that need to happen after the UI render
         let mut new_selected_idx: Option<usize> = None;
         let mut navigate_to_req: Option<(usize, View)> = None;
+        let mut should_suppress_hover = false;
+        let suppress_hover = self.timeline_suppress_hover;
 
         // Timeline display - two columns: list on left, detail on right
         ui.columns(2, |columns| {
@@ -9688,26 +9704,35 @@ impl RequirementsApp {
                             current_date = Some(event_date);
                         }
 
-                        // Event row
+                        // Event row - custom rendering to support hover suppression
                         let selected = selected_event_idx == Some(idx);
-                        let response = ui.selectable_label(
-                            selected,
-                            format!(
-                                "{} {} {} - {} by {}",
-                                event.timestamp.format("%H:%M"),
-                                event.event_type.icon(),
-                                event.event_type.label(),
-                                if event.spec_id.is_empty() {
-                                    event.req_title.clone()
-                                } else {
-                                    format!("{} ({})", event.spec_id, truncate_string(&event.req_title, 30))
-                                },
-                                event.author
-                            ),
+                        let label_text = format!(
+                            "{} {} {} - {} by {}",
+                            event.timestamp.format("%H:%M"),
+                            event.event_type.icon(),
+                            event.event_type.label(),
+                            if event.spec_id.is_empty() {
+                                event.req_title.clone()
+                            } else {
+                                format!("{} ({})", event.spec_id, truncate_string(&event.req_title, 30))
+                            },
+                            event.author
                         );
+
+                        // Use custom selectable with hover suppression
+                        let response = if suppress_hover {
+                            // When hover is suppressed, use selectable_value which only highlights when selected
+                            let mut dummy = selected;
+                            let resp = ui.selectable_value(&mut dummy, true, &label_text);
+                            // selectable_value returns response; if selected changed we ignore it
+                            resp
+                        } else {
+                            ui.selectable_label(selected, &label_text)
+                        };
 
                         if response.clicked() {
                             new_selected_idx = Some(idx);
+                            should_suppress_hover = true;
                         }
 
                         // Double-click to navigate to requirement
@@ -9814,6 +9839,9 @@ impl RequirementsApp {
         // Apply state changes after UI render
         if let Some(idx) = new_selected_idx {
             self.timeline_selected_event_idx = Some(idx);
+        }
+        if should_suppress_hover {
+            self.timeline_suppress_hover = true;
         }
         if let Some((req_idx, view)) = navigate_to_req {
             self.selected_idx = Some(req_idx);
@@ -20854,6 +20882,8 @@ impl eframe::App for RequirementsApp {
 
                     if let Some(idx) = new_idx {
                         self.timeline_selected_event_idx = Some(idx);
+                        // Suppress hover highlight when using keyboard navigation
+                        self.timeline_suppress_hover = true;
                     }
 
                     // Handle Enter key to navigate to requirement
