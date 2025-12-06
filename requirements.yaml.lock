@@ -1,1 +1,9 @@
-sessions: {}
+sessions:
+  24572-fee0ebfd-d5c3-428f-9af3-30ab93b49bfc:
+    session_id: 24572-fee0ebfd-d5c3-428f-9af3-30ab93b49bfc
+    user_name: Joe Mooney
+    hostname: imac
+    pid: 24572
+    started_at: 2025-12-06T18:57:55.700963472Z
+    last_heartbeat: 2025-12-06T19:00:45.777749473Z
+    editing_requirement: null
