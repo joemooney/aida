@@ -20481,8 +20481,10 @@ impl eframe::App for RequirementsApp {
 
             // Check navigation keybindings (context-aware)
             // Block list navigation when status popup is open or delete confirm is pending
+            // Also skip for Timeline view - it has its own navigation handling
             let can_navigate = self.quick_change_field.is_none() && self.pending_delete_confirm.is_none();
-            if can_navigate
+            let in_timeline = self.current_view == View::Timeline;
+            if !in_timeline && can_navigate
                 && (self.user_settings.keybindings.is_pressed(
                     KeyAction::NavigateDown,
                     ctx,
@@ -20494,7 +20496,7 @@ impl eframe::App for RequirementsApp {
                 ))
             {
                 nav_delta = 1;
-            } else if can_navigate
+            } else if !in_timeline && can_navigate
                 && (self.user_settings.keybindings.is_pressed(
                     KeyAction::NavigateUp,
                     ctx,
@@ -20509,7 +20511,8 @@ impl eframe::App for RequirementsApp {
             }
 
             // Page Up/Down, Home/End, and Mouse Wheel (only when not in text input)
-            if nav_context_active {
+            // Skip for Timeline view - it has its own handling
+            if nav_context_active && !in_timeline {
                 ctx.input(|i| {
                     // Page Up/Down
                     if i.key_pressed(egui::Key::PageDown) {
@@ -20696,16 +20699,14 @@ impl eframe::App for RequirementsApp {
             }
 
             // Handle navigation (delta-based or jump-based) based on focused list
-            // Skip requirements list navigation when in Timeline view (Timeline has its own navigation)
-            let in_timeline_view = self.current_view == View::Timeline;
-
             // Get the appropriate filtered indices and current selection based on focus
             let (filtered_indices, current_selection) = match self.focused_list {
                 FocusedList::List1 => (self.get_filtered_indices(), self.selected_idx),
                 FocusedList::List2 => (self.get_split_filtered_indices(), self.split_selected_idx),
             };
 
-            if !in_timeline_view && !filtered_indices.is_empty() {
+            // Skip requirements list navigation when in Timeline view (Timeline has its own navigation)
+            if !in_timeline && !filtered_indices.is_empty() {
                 let new_selection = if jump_to_start {
                     // Jump to first item
                     Some(filtered_indices[0])
