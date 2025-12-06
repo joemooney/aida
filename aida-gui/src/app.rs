@@ -9744,8 +9744,11 @@ impl RequirementsApp {
                     }
                 });
 
-            // Right column: Event detail
-            columns[1].vertical(|ui| {
+            // Right column: Event detail with scroll support
+            egui::ScrollArea::both()
+                .id_salt("timeline_detail")
+                .auto_shrink([false, false])
+                .show(&mut columns[1], |ui| {
                 if let Some(event) = &selected_event {
                     ui.heading(format!("{} {}", event.event_type.icon(), event.event_type.label()));
                     ui.add_space(10.0);
