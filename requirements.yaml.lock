@@ -1,1 +1,9 @@
-sessions: {}
+sessions:
+  34164-43ebfdda-9a1b-4765-80cf-cde9db354084:
+    session_id: 34164-43ebfdda-9a1b-4765-80cf-cde9db354084
+    user_name: Joe Mooney
+    hostname: imac
+    pid: 34164
+    started_at: 2025-12-06T20:06:07.806631545Z
+    last_heartbeat: 2025-12-06T20:10:32.995311585Z
+    editing_requirement: null

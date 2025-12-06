@@ -1992,8 +1992,8 @@ impl SearchMode {
 
     fn icon(&self) -> &'static str {
         match self {
-            SearchMode::Highlight => "🔦", // flashlight for highlight
-            SearchMode::Filter => "🔽", // filter funnel
+            SearchMode::Highlight => "☀", // sun for highlight (show all, highlight matches)
+            SearchMode::Filter => "⧗",   // hourglass/filter for filter (show only matches)
         }
     }
 }
@@ -12510,11 +12510,13 @@ impl RequirementsApp {
             }
         }
 
-        // Search mode toggle button - always visible
-        let mode_btn = ui.button(self.user_settings.search_mode.icon())
+        // Search mode toggle button - always visible with label for clarity
+        let mode_icon = self.user_settings.search_mode.icon();
+        let mode_label = self.user_settings.search_mode.label();
+        let mode_btn = ui.button(format!("{} {}", mode_icon, if compact { "" } else { mode_label }))
             .on_hover_text(format!(
-                "Mode: {} (click to toggle)",
-                self.user_settings.search_mode.label()
+                "Search Mode: {}\nClick to toggle between Highlight (show all, highlight matches) and Filter (show only matches)",
+                mode_label
             ));
         if mode_btn.clicked() {
             self.user_settings.search_mode = match self.user_settings.search_mode {
