@@ -957,6 +957,11 @@ pub enum KeyAction {
     DeleteWithConfirm,  // 'd' - delete with confirmation
     DeleteImmediate,    // 'D' - delete immediately
     ArchiveToggle,      // 'a' - archive/unarchive
+    // Search navigation
+    NextSearchMatch,    // 'n' - next search match
+    PrevSearchMatch,    // 'N' - previous search match
+    ClearSearch,        // Esc - clear search
+    SwitchToFilterMode, // '/' - switch search to filter mode
 }
 
 impl KeyAction {
@@ -984,6 +989,10 @@ impl KeyAction {
             KeyAction::DeleteWithConfirm => "Delete (with confirm)",
             KeyAction::DeleteImmediate => "Delete (immediate)",
             KeyAction::ArchiveToggle => "Archive/Unarchive",
+            KeyAction::NextSearchMatch => "Next Search Match",
+            KeyAction::PrevSearchMatch => "Previous Search Match",
+            KeyAction::ClearSearch => "Clear Search",
+            KeyAction::SwitchToFilterMode => "Switch to Filter Mode",
         }
     }
 
@@ -1012,6 +1021,10 @@ impl KeyAction {
             KeyAction::DeleteWithConfirm => KeyContext::RequirementsList,
             KeyAction::DeleteImmediate => KeyContext::RequirementsList,
             KeyAction::ArchiveToggle => KeyContext::RequirementsList,
+            KeyAction::NextSearchMatch => KeyContext::RequirementsList,
+            KeyAction::PrevSearchMatch => KeyContext::RequirementsList,
+            KeyAction::ClearSearch => KeyContext::RequirementsList,
+            KeyAction::SwitchToFilterMode => KeyContext::RequirementsList,
         }
     }
 
@@ -1039,6 +1052,10 @@ impl KeyAction {
             KeyAction::DeleteWithConfirm,
             KeyAction::DeleteImmediate,
             KeyAction::ArchiveToggle,
+            KeyAction::NextSearchMatch,
+            KeyAction::PrevSearchMatch,
+            KeyAction::ClearSearch,
+            KeyAction::SwitchToFilterMode,
         ]
     }
 }
@@ -1374,6 +1391,26 @@ impl Default for KeyBindings {
             KeyAction::ArchiveToggle,
             KeyBinding::new(egui::Key::A, KeyAction::ArchiveToggle.default_context()),
         );
+        // Search navigation: n/N for next/prev match (vim-style)
+        bindings.insert(
+            KeyAction::NextSearchMatch,
+            KeyBinding::new(egui::Key::N, KeyAction::NextSearchMatch.default_context()),
+        );
+        bindings.insert(
+            KeyAction::PrevSearchMatch,
+            KeyBinding::new(egui::Key::N, KeyAction::PrevSearchMatch.default_context())
+                .with_shift(),
+        );
+        // Esc to clear search
+        bindings.insert(
+            KeyAction::ClearSearch,
+            KeyBinding::new(egui::Key::Escape, KeyAction::ClearSearch.default_context()),
+        );
+        // '/' to switch to filter mode (vim-style search)
+        bindings.insert(
+            KeyAction::SwitchToFilterMode,
+            KeyBinding::new(egui::Key::Slash, KeyAction::SwitchToFilterMode.default_context()),
+        );
         Self { bindings }
     }
 }
@@ -1563,6 +1600,12 @@ pub struct UserSettings {
     /// KanBan card click action for opening detail modal
     #[serde(default)]
     pub kanban_click_action: KanBanClickAction,
+    /// Search behavior mode (highlight vs filter)
+    #[serde(default)]
+    pub search_mode: SearchMode,
+    /// Whether search navigation wraps around
+    #[serde(default = "default_wrap_search")]
+    pub wrap_search: bool,
 }
 
 fn default_font_size() -> f32 {
@@ -1571,6 +1614,10 @@ fn default_font_size() -> f32 {
 
 fn default_ui_heading_level() -> u8 {
     5 // H5 by default
+}
+
+fn default_wrap_search() -> bool {
+    true // Wrap search by default
 }
 
 impl Default for UserSettings {
@@ -1590,6 +1637,8 @@ impl Default for UserSettings {
             status_icons: StatusIconConfig::default(),
             priority_icons: PriorityIconConfig::default(),
             kanban_click_action: KanBanClickAction::default(),
+            search_mode: SearchMode::default(),
+            wrap_search: default_wrap_search(),
         }
     }
 }
@@ -1919,6 +1968,32 @@ impl AiResult {
                 action.name()
             ),
             details: None,
+        }
+    }
+}
+
+/// Search behavior mode
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum SearchMode {
+    /// Highlight matching requirements but show all (default)
+    #[default]
+    Highlight,
+    /// Filter to show only matching requirements (current behavior)
+    Filter,
+}
+
+impl SearchMode {
+    fn label(&self) -> &'static str {
+        match self {
+            SearchMode::Highlight => "Highlight",
+            SearchMode::Filter => "Filter",
+        }
+    }
+
+    fn icon(&self) -> &'static str {
+        match self {
+            SearchMode::Highlight => "🔦", // flashlight for highlight
+            SearchMode::Filter => "🔽", // filter funnel
         }
     }
 }
@@ -2280,6 +2355,8 @@ pub struct RequirementsApp {
     selected_idx: Option<usize>,
     filter_text: String,
     search_scope: SearchScope,
+    search_match_indices: Vec<usize>,      // Indices of requirements matching current search
+    search_current_match: Option<usize>,   // Current position in search_match_indices
     active_tab: DetailTab,
 
     // Form state
@@ -2822,6 +2899,8 @@ impl RequirementsApp {
             selected_idx: None,
             filter_text: String::new(),
             search_scope: SearchScope::all(),
+            search_match_indices: Vec::new(),
+            search_current_match: None,
             active_tab: DetailTab::Description,
             form_title: String::new(),
             form_description: String::new(),
@@ -10933,6 +11012,137 @@ impl RequirementsApp {
         false
     }
 
+    /// Check if a requirement matches the current search text
+    fn matches_search(&self, req: &Requirement) -> bool {
+        if self.filter_text.is_empty() || self.search_scope.is_none() {
+            return false;
+        }
+
+        let search = self.filter_text.to_lowercase();
+
+        // Check title if enabled
+        if self.search_scope.title && req.title.to_lowercase().contains(&search) {
+            return true;
+        }
+
+        // Check description if enabled
+        if self.search_scope.description && req.description.to_lowercase().contains(&search) {
+            return true;
+        }
+
+        // Check spec_id if enabled
+        if self.search_scope.spec_id {
+            if let Some(ref spec_id) = req.spec_id {
+                if spec_id.to_lowercase().contains(&search) {
+                    return true;
+                }
+            }
+        }
+
+        // Check comments if enabled
+        if self.search_scope.comments {
+            if self.search_comments_recursive(&req.comments, &search) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    /// Update search match indices based on current search text
+    fn update_search_matches(&mut self) {
+        self.search_match_indices.clear();
+        self.search_current_match = None;
+
+        if self.filter_text.is_empty() || self.search_scope.is_none() {
+            return;
+        }
+
+        // Collect indices of all matching requirements
+        for (idx, req) in self.store.requirements.iter().enumerate() {
+            // Skip archived if not showing them
+            if req.archived && !self.show_archived {
+                continue;
+            }
+            if self.matches_search(req) {
+                self.search_match_indices.push(idx);
+            }
+        }
+
+        // Jump to first match if any
+        if !self.search_match_indices.is_empty() {
+            self.search_current_match = Some(0);
+            self.selected_idx = Some(self.search_match_indices[0]);
+            self.scroll_to_requirement = Some(self.store.requirements[self.search_match_indices[0]].id);
+        }
+    }
+
+    /// Navigate to the next search match
+    fn next_search_match(&mut self) {
+        if self.search_match_indices.is_empty() {
+            return;
+        }
+
+        let wrap = self.user_settings.wrap_search;
+        let current = self.search_current_match.unwrap_or(0);
+        let next = if current + 1 < self.search_match_indices.len() {
+            current + 1
+        } else if wrap {
+            0 // Wrap to beginning
+        } else {
+            current // Stay at last match
+        };
+
+        self.search_current_match = Some(next);
+        let req_idx = self.search_match_indices[next];
+        self.selected_idx = Some(req_idx);
+        self.scroll_to_requirement = Some(self.store.requirements[req_idx].id);
+    }
+
+    /// Navigate to the previous search match
+    fn prev_search_match(&mut self) {
+        if self.search_match_indices.is_empty() {
+            return;
+        }
+
+        let wrap = self.user_settings.wrap_search;
+        let current = self.search_current_match.unwrap_or(0);
+        let prev = if current > 0 {
+            current - 1
+        } else if wrap {
+            self.search_match_indices.len() - 1 // Wrap to end
+        } else {
+            0 // Stay at first match
+        };
+
+        self.search_current_match = Some(prev);
+        let req_idx = self.search_match_indices[prev];
+        self.selected_idx = Some(req_idx);
+        self.scroll_to_requirement = Some(self.store.requirements[req_idx].id);
+    }
+
+    /// Clear search and return to normal view
+    fn clear_search(&mut self) {
+        self.filter_text.clear();
+        self.search_match_indices.clear();
+        self.search_current_match = None;
+    }
+
+    /// Check if a requirement at the given index is the current search match
+    fn is_current_search_match(&self, idx: usize) -> bool {
+        if let Some(current) = self.search_current_match {
+            if let Some(&match_idx) = self.search_match_indices.get(current) {
+                return match_idx == idx;
+            }
+        }
+        false
+    }
+
+    /// Check if a requirement at the given index is any search match
+    fn is_search_match(&self, idx: usize) -> bool {
+        self.search_match_indices.contains(&idx)
+    }
+
     /// Check if a requirement passes the current filters
     /// `is_root` indicates whether this is a root-level requirement (true) or a child (false)
     fn passes_filters(&self, req: &Requirement, is_root: bool) -> bool {
@@ -10941,6 +11151,17 @@ impl RequirementsApp {
         let has_search_text = !self.filter_text.is_empty() && !self.search_scope.is_none();
 
         if has_search_text {
+            // In Highlight mode, show all requirements (just highlight matches)
+            // In Filter mode, only show matching requirements
+            if self.user_settings.search_mode == SearchMode::Highlight {
+                // Still respect archive filter even in highlight mode
+                if req.archived && !self.show_archived {
+                    return false;
+                }
+                return true; // Show all requirements in highlight mode
+            }
+
+            // Filter mode: only show matching requirements
             let search = self.filter_text.to_lowercase();
             let mut found = false;
 
@@ -11448,17 +11669,60 @@ impl RequirementsApp {
                 ui.separator();
 
                 // Search bar
+                let prev_filter_text = self.filter_text.clone();
                 ui.horizontal(|ui| {
                     ui.label("🔍");
-                    ui.add(
+                    let response = ui.add(
                         egui::TextEdit::singleline(&mut self.filter_text)
                             .hint_text("Search (case-insensitive)...")
                             .desired_width(150.0),
                     );
+
+                    // Check if search text changed
+                    if self.filter_text != prev_filter_text {
+                        self.update_search_matches();
+                    }
+
                     // Clear button
                     if !self.filter_text.is_empty() {
-                        if ui.small_button("✕").on_hover_text("Clear search").clicked() {
-                            self.filter_text.clear();
+                        if ui.small_button("✕").on_hover_text("Clear search (Esc)").clicked() {
+                            self.clear_search();
+                        }
+
+                        // Search mode toggle button
+                        let mode_btn = ui.button(self.user_settings.search_mode.icon())
+                            .on_hover_text(format!(
+                                "Mode: {} (click to toggle)\n/ to switch to filter mode",
+                                self.user_settings.search_mode.label()
+                            ));
+                        if mode_btn.clicked() {
+                            self.user_settings.search_mode = match self.user_settings.search_mode {
+                                SearchMode::Highlight => SearchMode::Filter,
+                                SearchMode::Filter => SearchMode::Highlight,
+                            };
+                            let _ = self.user_settings.save();
+                        }
+
+                        // Match count and navigation (only in highlight mode with matches)
+                        if self.user_settings.search_mode == SearchMode::Highlight {
+                            let match_count = self.search_match_indices.len();
+                            let current = self.search_current_match.map(|c| c + 1).unwrap_or(0);
+                            ui.label(format!("{}/{}", current, match_count));
+
+                            // Previous/Next buttons
+                            if ui.small_button("▲").on_hover_text("Previous match (N)").clicked() {
+                                self.prev_search_match();
+                            }
+                            if ui.small_button("▼").on_hover_text("Next match (n)").clicked() {
+                                self.next_search_match();
+                            }
+                        }
+                    }
+
+                    // Handle Enter in search field to go to next match
+                    if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                        if self.user_settings.search_mode == SearchMode::Highlight {
+                            self.next_search_match();
                         }
                     }
 
@@ -12288,6 +12552,33 @@ impl RequirementsApp {
     }
 
     fn show_filter_controls(&mut self, ui: &mut egui::Ui) {
+        // Search options section
+        ui.label("Search Options:");
+        ui.horizontal_wrapped(|ui| {
+            // Search mode toggle
+            let mode_label = format!("Mode: {}", self.user_settings.search_mode.label());
+            if ui.button(&mode_label)
+                .on_hover_text("Toggle between Highlight (shows all, highlights matches) and Filter (shows only matches)")
+                .clicked()
+            {
+                self.user_settings.search_mode = match self.user_settings.search_mode {
+                    SearchMode::Highlight => SearchMode::Filter,
+                    SearchMode::Filter => SearchMode::Highlight,
+                };
+                let _ = self.user_settings.save();
+            }
+
+            ui.separator();
+
+            // Wrap search option
+            if ui.checkbox(&mut self.user_settings.wrap_search, "Wrap").changed() {
+                let _ = self.user_settings.save();
+            }
+            ui.label("").on_hover_text("When navigating matches, wrap from last to first (or first to last)");
+        });
+
+        ui.add_space(4.0);
+
         // Search scope section
         ui.label("Search In:");
         ui.horizontal_wrapped(|ui| {
@@ -12713,6 +13004,12 @@ impl RequirementsApp {
         let should_scroll_to = self.scroll_to_requirement == Some(req_id);
         let show_status_icons = self.user_settings.show_status_icons;
 
+        // Check if this requirement matches the search (for highlight mode)
+        let is_search_match = self.is_search_match(idx);
+        let is_current_match = self.is_current_search_match(idx);
+        let has_active_search = !self.filter_text.is_empty()
+            && self.user_settings.search_mode == SearchMode::Highlight;
+
         let indent_space = indent as f32 * 20.0;
 
         ui.horizontal(|ui| {
@@ -12725,7 +13022,7 @@ impl RequirementsApp {
                 format!("{} - {}", spec_id.as_deref().unwrap_or("N/A"), title)
             };
 
-            // Visual feedback for drag/drop state
+            // Visual feedback for drag/drop state and search matches
             let (bg_color, stroke) = if is_drop_target && can_drag {
                 (
                     egui::Color32::from_rgba_unmultiplied(100, 200, 100, 60),
@@ -12736,8 +13033,26 @@ impl RequirementsApp {
                     egui::Color32::from_rgba_unmultiplied(100, 100, 200, 60),
                     egui::Stroke::new(2.0, egui::Color32::LIGHT_BLUE),
                 )
+            } else if selected && is_current_match && has_active_search {
+                // Selected + current search match: bright highlight
+                (
+                    egui::Color32::from_rgba_unmultiplied(255, 200, 50, 100),
+                    egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 180, 0)),
+                )
             } else if selected {
                 (ui.visuals().selection.bg_fill, egui::Stroke::NONE)
+            } else if is_current_match && has_active_search {
+                // Current search match (not selected): orange highlight
+                (
+                    egui::Color32::from_rgba_unmultiplied(255, 180, 50, 80),
+                    egui::Stroke::new(1.5, egui::Color32::from_rgb(255, 150, 0)),
+                )
+            } else if is_search_match && has_active_search {
+                // Other search matches: subtle yellow highlight
+                (
+                    egui::Color32::from_rgba_unmultiplied(255, 255, 100, 40),
+                    egui::Stroke::NONE,
+                )
             } else {
                 (egui::Color32::TRANSPARENT, egui::Stroke::NONE)
             };
@@ -19542,26 +19857,71 @@ impl eframe::App for RequirementsApp {
             self.pending_view_change = Some(View::Add);
         }
 
-        // Check for new sibling requirement keybinding ('n' in reqlist)
-        if self.user_settings.keybindings.is_pressed(
-            KeyAction::NewSiblingRequirement,
-            ctx,
-            self.current_key_context,
-        ) && !self.show_settings_dialog
-        {
-            self.clear_form_for_sibling();
-            self.pending_view_change = Some(View::Add);
+        // Search navigation keys - only active when there's an active search in highlight mode
+        let has_active_search = !self.filter_text.is_empty()
+            && self.user_settings.search_mode == SearchMode::Highlight;
+
+        if has_active_search {
+            // 'n' for next search match (takes priority over new sibling when search is active)
+            if self.user_settings.keybindings.is_pressed(
+                KeyAction::NextSearchMatch,
+                ctx,
+                self.current_key_context,
+            ) {
+                self.next_search_match();
+            }
+            // 'N' for previous search match (takes priority over new child when search is active)
+            else if self.user_settings.keybindings.is_pressed(
+                KeyAction::PrevSearchMatch,
+                ctx,
+                self.current_key_context,
+            ) {
+                self.prev_search_match();
+            }
+        } else {
+            // When no search is active, 'n' creates new sibling requirement
+            if self.user_settings.keybindings.is_pressed(
+                KeyAction::NewSiblingRequirement,
+                ctx,
+                self.current_key_context,
+            ) && !self.show_settings_dialog
+            {
+                self.clear_form_for_sibling();
+                self.pending_view_change = Some(View::Add);
+            }
+
+            // 'N'/Shift+N creates new child requirement
+            if self.user_settings.keybindings.is_pressed(
+                KeyAction::NewChildRequirement,
+                ctx,
+                self.current_key_context,
+            ) && !self.show_settings_dialog
+            {
+                self.clear_form_for_child();
+                self.pending_view_change = Some(View::Add);
+            }
         }
 
-        // Check for new child requirement keybinding ('N'/Shift+N in reqlist)
+        // Escape to clear search (always active when there's search text)
+        if !self.filter_text.is_empty()
+            && self.user_settings.keybindings.is_pressed(
+                KeyAction::ClearSearch,
+                ctx,
+                self.current_key_context,
+            )
+        {
+            self.clear_search();
+        }
+
+        // '/' to switch to filter mode (vim-style)
         if self.user_settings.keybindings.is_pressed(
-            KeyAction::NewChildRequirement,
+            KeyAction::SwitchToFilterMode,
             ctx,
             self.current_key_context,
-        ) && !self.show_settings_dialog
+        ) && !self.filter_text.is_empty()
         {
-            self.clear_form_for_child();
-            self.pending_view_change = Some(View::Add);
+            self.user_settings.search_mode = SearchMode::Filter;
+            let _ = self.user_settings.save();
         }
 
         // Also handle Ctrl+= as alternate zoom in (common on keyboards)

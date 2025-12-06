@@ -1,0 +1,9 @@
+sessions:
+  28204-1f303e0c-f50a-4f74-a810-ff75d806bf93:
+    session_id: 28204-1f303e0c-f50a-4f74-a810-ff75d806bf93
+    user_name: Joe Mooney
+    hostname: imac
+    pid: 28204
+    started_at: 2025-12-06T19:21:28.611872796Z
+    last_heartbeat: 2025-12-06T19:35:53.832082040Z
+    editing_requirement: null
