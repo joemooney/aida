@@ -3818,12 +3818,29 @@ impl RequirementsApp {
         self.form_priority = RequirementPriority::Medium;
         self.form_type = RequirementType::Functional;
         self.form_owner.clear();
-        self.form_feature = String::from("Uncategorized");
+        self.form_feature = self.get_uncategorized_feature();
         self.form_tags.clear();
         self.form_prefix.clear();
         self.show_description_preview = false;
         self.form_title_auto_synced = true;
         self.form_last_description.clear();
+    }
+
+    /// Get the existing "Uncategorized" feature name (with number prefix if it exists)
+    /// This ensures we reuse the same Uncategorized feature instead of creating new ones
+    fn get_uncategorized_feature(&self) -> String {
+        // Look for an existing feature that ends with "Uncategorized" (with number prefix)
+        for req in &self.store.requirements {
+            if req.feature.ends_with("-Uncategorized") || req.feature == "Uncategorized" {
+                // Return the first matching feature (prefer numbered ones)
+                if req.feature.contains('-') {
+                    return req.feature.clone();
+                }
+            }
+        }
+        // No existing Uncategorized feature found, use the base name
+        // (migration will add a number on next load, but at least they'll all share it)
+        String::from("Uncategorized")
     }
 
     fn load_form_from_requirement(&mut self, idx: usize) {

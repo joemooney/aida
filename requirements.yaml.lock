@@ -1,9 +1,0 @@
-sessions:
-  25758-8ce94321-83ac-431e-a92c-6ec86e05df1c:
-    session_id: 25758-8ce94321-83ac-431e-a92c-6ec86e05df1c
-    user_name: Joe Mooney
-    hostname: imac
-    pid: 25758
-    started_at: 2025-12-06T19:02:21.185709694Z
-    last_heartbeat: 2025-12-06T19:03:56.195820502Z
-    editing_requirement: null
