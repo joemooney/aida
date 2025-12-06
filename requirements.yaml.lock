@@ -1,9 +1,1 @@
-sessions:
-  32415-a75f54bd-d3b3-4047-8b01-38176b36a8ae:
-    session_id: 32415-a75f54bd-d3b3-4047-8b01-38176b36a8ae
-    user_name: Joe Mooney
-    hostname: imac
-    pid: 32415
-    started_at: 2025-12-06T19:52:48.950283859Z
-    last_heartbeat: 2025-12-06T19:57:03.427688962Z
-    editing_requirement: null
+sessions: {}

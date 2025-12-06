@@ -12503,39 +12503,39 @@ impl RequirementsApp {
             self.update_search_matches();
         }
 
-        // Clear button
+        // Clear button (only when there's text)
         if !self.filter_text.is_empty() {
             if ui.small_button("✕").on_hover_text("Clear search (Esc)").clicked() {
                 self.clear_search();
             }
+        }
 
-            // Search mode toggle button
-            let mode_btn = ui.button(self.user_settings.search_mode.icon())
-                .on_hover_text(format!(
-                    "Mode: {} (click to toggle)\n/ to switch to filter mode",
-                    self.user_settings.search_mode.label()
-                ));
-            if mode_btn.clicked() {
-                self.user_settings.search_mode = match self.user_settings.search_mode {
-                    SearchMode::Highlight => SearchMode::Filter,
-                    SearchMode::Filter => SearchMode::Highlight,
-                };
-                let _ = self.user_settings.save();
+        // Search mode toggle button - always visible
+        let mode_btn = ui.button(self.user_settings.search_mode.icon())
+            .on_hover_text(format!(
+                "Mode: {} (click to toggle)",
+                self.user_settings.search_mode.label()
+            ));
+        if mode_btn.clicked() {
+            self.user_settings.search_mode = match self.user_settings.search_mode {
+                SearchMode::Highlight => SearchMode::Filter,
+                SearchMode::Filter => SearchMode::Highlight,
+            };
+            let _ = self.user_settings.save();
+        }
+
+        // Match count and navigation (only in highlight mode with active search)
+        if !self.filter_text.is_empty() && self.user_settings.search_mode == SearchMode::Highlight {
+            let match_count = self.search_match_indices.len();
+            let current = self.search_current_match.map(|c| c + 1).unwrap_or(0);
+            ui.label(format!("{}/{}", current, match_count));
+
+            // Previous/Next buttons
+            if ui.small_button("▲").on_hover_text("Previous match (N)").clicked() {
+                self.prev_search_match();
             }
-
-            // Match count and navigation (only in highlight mode with matches)
-            if self.user_settings.search_mode == SearchMode::Highlight {
-                let match_count = self.search_match_indices.len();
-                let current = self.search_current_match.map(|c| c + 1).unwrap_or(0);
-                ui.label(format!("{}/{}", current, match_count));
-
-                // Previous/Next buttons
-                if ui.small_button("▲").on_hover_text("Previous match (N)").clicked() {
-                    self.prev_search_match();
-                }
-                if ui.small_button("▼").on_hover_text("Next match (n)").clicked() {
-                    self.next_search_match();
-                }
+            if ui.small_button("▼").on_hover_text("Next match (n)").clicked() {
+                self.next_search_match();
             }
         }
 
