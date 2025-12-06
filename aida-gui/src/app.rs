@@ -2732,7 +2732,7 @@ pub struct RequirementsApp {
     timeline_filter_field: String,                                   // Filter by field name (e.g., "status")
     timeline_selected_event_idx: Option<usize>,                     // Currently selected event
     timeline_suppress_hover: bool,                                   // Suppress hover highlight after click/keyboard nav
-    timeline_last_mouse_pos: Option<egui::Pos2>,                    // Track mouse position to detect movement
+    timeline_suppress_hover_pos: Option<egui::Pos2>,                // Mouse position when hover was suppressed
 }
 
 /// A timeline event representing a change to a requirement
@@ -3272,7 +3272,7 @@ impl RequirementsApp {
             timeline_filter_field: String::new(),
             timeline_selected_event_idx: None,
             timeline_suppress_hover: false,
-            timeline_last_mouse_pos: None,
+            timeline_suppress_hover_pos: None,
         }
     }
 
@@ -9562,15 +9562,20 @@ impl RequirementsApp {
 
     /// Show the Timeline view
     fn show_timeline_view(&mut self, ui: &mut egui::Ui) {
-        // Check if mouse has moved - if so, re-enable hover highlighting
-        let current_mouse_pos = ui.ctx().input(|i| i.pointer.hover_pos());
-        if let (Some(current), Some(last)) = (current_mouse_pos, self.timeline_last_mouse_pos) {
-            // Check if mouse moved more than a small threshold (to ignore sub-pixel jitter)
-            if (current - last).length() > 2.0 {
-                self.timeline_suppress_hover = false;
+        // Check if mouse has moved significantly from suppression point - if so, re-enable hover
+        // We compare against the position where hover was suppressed, not the last frame position,
+        // to avoid re-enabling hover due to small mouse movements during click actions
+        if self.timeline_suppress_hover {
+            if let Some(current) = ui.ctx().input(|i| i.pointer.hover_pos()) {
+                if let Some(suppress_pos) = self.timeline_suppress_hover_pos {
+                    // Require significant movement (15px) from the suppression point to re-enable hover
+                    if (current - suppress_pos).length() > 15.0 {
+                        self.timeline_suppress_hover = false;
+                        self.timeline_suppress_hover_pos = None;
+                    }
+                }
             }
         }
-        self.timeline_last_mouse_pos = current_mouse_pos;
 
         // Header with controls
         ui.horizontal(|ui| {
@@ -9675,7 +9680,7 @@ impl RequirementsApp {
         // Track state changes that need to happen after the UI render
         let mut new_selected_idx: Option<usize> = None;
         let mut navigate_to_req: Option<(usize, View)> = None;
-        let mut should_suppress_hover = false;
+        let mut suppress_hover_pos: Option<egui::Pos2> = None;
         let suppress_hover = self.timeline_suppress_hover;
 
         // Timeline display - two columns: list on left, detail on right
@@ -9732,7 +9737,8 @@ impl RequirementsApp {
 
                         if response.clicked() {
                             new_selected_idx = Some(idx);
-                            should_suppress_hover = true;
+                            // Capture mouse position for hover suppression
+                            suppress_hover_pos = ui.ctx().input(|i| i.pointer.hover_pos());
                         }
 
                         // Double-click to navigate to requirement
@@ -9843,8 +9849,9 @@ impl RequirementsApp {
         if let Some(idx) = new_selected_idx {
             self.timeline_selected_event_idx = Some(idx);
         }
-        if should_suppress_hover {
+        if let Some(pos) = suppress_hover_pos {
             self.timeline_suppress_hover = true;
+            self.timeline_suppress_hover_pos = Some(pos);
         }
         if let Some((req_idx, view)) = navigate_to_req {
             self.selected_idx = Some(req_idx);
@@ -20887,6 +20894,7 @@ impl eframe::App for RequirementsApp {
                         self.timeline_selected_event_idx = Some(idx);
                         // Suppress hover highlight when using keyboard navigation
                         self.timeline_suppress_hover = true;
+                        self.timeline_suppress_hover_pos = ctx.input(|i| i.pointer.hover_pos());
                     }
 
                     // Handle Enter key to navigate to requirement
