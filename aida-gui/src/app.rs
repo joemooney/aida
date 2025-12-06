@@ -341,6 +341,15 @@ fn constrained_modal_size(ctx: &egui::Context, desired_width: f32, desired_heigh
     )
 }
 
+/// Truncate a string to a maximum length, adding "..." if truncated
+fn truncate_string(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max_len.saturating_sub(3)])
+    }
+}
+
 /// Serializable color wrapper for themes
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct ThemeColor {
@@ -2039,6 +2048,7 @@ enum View {
     OrgChart,  // Organization chart view for teams
     KanBan,    // KanBan board view
     Baselines, // Baseline management view
+    Timeline,  // Timeline view showing requirement changes over time
 }
 
 /// Layout mode defines the panel arrangement (cycles through 5 predefined layouts)
@@ -2714,6 +2724,67 @@ pub struct RequirementsApp {
     clone_include_history: bool,
     clone_include_urls: bool,
     clone_include_custom_fields: bool,
+
+    // Timeline view state
+    timeline_selected_date: Option<chrono::DateTime<chrono::Utc>>,  // Currently selected point in timeline
+    timeline_events: Vec<TimelineEvent>,                            // Cached timeline events
+    timeline_filter_author: String,                                  // Filter by author
+    timeline_filter_field: String,                                   // Filter by field name (e.g., "status")
+    timeline_selected_event_idx: Option<usize>,                     // Currently selected event
+}
+
+/// A timeline event representing a change to a requirement
+#[derive(Clone, Debug)]
+struct TimelineEvent {
+    /// When the event occurred
+    timestamp: chrono::DateTime<chrono::Utc>,
+    /// Type of event (Created, Modified, Comment, etc.)
+    event_type: TimelineEventType,
+    /// ID of the requirement this event belongs to
+    req_id: Uuid,
+    /// Spec ID of the requirement (for display)
+    spec_id: String,
+    /// Title of the requirement at time of event
+    req_title: String,
+    /// Author of the change
+    author: String,
+    /// Description of what changed
+    description: String,
+    /// Field changes (for modification events)
+    changes: Vec<aida_core::FieldChange>,
+}
+
+/// Types of timeline events
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum TimelineEventType {
+    /// Requirement was created
+    Created,
+    /// Requirement was modified
+    Modified,
+    /// Comment was added
+    CommentAdded,
+    /// Baseline was created
+    BaselineCreated,
+}
+
+impl TimelineEventType {
+    fn icon(&self) -> &'static str {
+        match self {
+            TimelineEventType::Created => "✨",
+            TimelineEventType::Modified => "✏️",
+            TimelineEventType::CommentAdded => "💬",
+            TimelineEventType::BaselineCreated => "🏷",
+        }
+    }
+
+    fn label(&self) -> &'static str {
+        match self {
+            TimelineEventType::Created => "Created",
+            TimelineEventType::Modified => "Modified",
+            TimelineEventType::CommentAdded => "Comment",
+            TimelineEventType::BaselineCreated => "Baseline",
+        }
+    }
 }
 
 /// Result from background AI evaluation thread
@@ -3191,6 +3262,13 @@ impl RequirementsApp {
             clone_include_history: false,
             clone_include_urls: true,
             clone_include_custom_fields: true,
+
+            // Timeline view state
+            timeline_selected_date: None,
+            timeline_events: Vec::new(),
+            timeline_filter_author: String::new(),
+            timeline_filter_field: String::new(),
+            timeline_selected_event_idx: None,
         }
     }
 
@@ -4407,6 +4485,11 @@ impl RequirementsApp {
                     ui.separator();
                     if ui.button("🏷 Baselines").clicked() {
                         self.pending_view_change = Some(View::Baselines);
+                        ui.close_menu();
+                    }
+                    if ui.button("📅 Timeline").clicked() {
+                        self.pending_view_change = Some(View::Timeline);
+                        self.rebuild_timeline_events();
                         ui.close_menu();
                     }
                 });
@@ -9333,6 +9416,411 @@ impl RequirementsApp {
         }
     }
 
+    // =========================================================================
+    // Timeline View
+    // =========================================================================
+
+    /// Rebuild the cached timeline events from all requirements
+    fn rebuild_timeline_events(&mut self) {
+        let mut events: Vec<TimelineEvent> = Vec::new();
+
+        // Collect events from all requirements
+        for req in &self.store.requirements {
+            let spec_id = req.spec_id.clone().unwrap_or_else(|| "N/A".to_string());
+            let req_title = req.title.clone();
+
+            // Add creation event
+            events.push(TimelineEvent {
+                timestamp: req.created_at,
+                event_type: TimelineEventType::Created,
+                req_id: req.id,
+                spec_id: spec_id.clone(),
+                req_title: req_title.clone(),
+                author: req.created_by.clone().unwrap_or_else(|| "Unknown".to_string()),
+                description: format!("Created requirement: {}", req_title),
+                changes: Vec::new(),
+            });
+
+            // Add history entries as modification events
+            for history in &req.history {
+                let description = if history.changes.len() == 1 {
+                    format!(
+                        "Changed {}: {} → {}",
+                        history.changes[0].field_name,
+                        history.changes[0].old_value,
+                        history.changes[0].new_value
+                    )
+                } else {
+                    format!("Modified {} fields", history.changes.len())
+                };
+
+                events.push(TimelineEvent {
+                    timestamp: history.timestamp,
+                    event_type: TimelineEventType::Modified,
+                    req_id: req.id,
+                    spec_id: spec_id.clone(),
+                    req_title: req_title.clone(),
+                    author: history.author.clone(),
+                    description,
+                    changes: history.changes.clone(),
+                });
+            }
+
+            // Add comment events (recursively)
+            Self::collect_comment_events(
+                &req.comments,
+                req.id,
+                &spec_id,
+                &req_title,
+                &mut events,
+            );
+        }
+
+        // Add baseline creation events
+        for baseline in &self.store.baselines {
+            events.push(TimelineEvent {
+                timestamp: baseline.created_at,
+                event_type: TimelineEventType::BaselineCreated,
+                req_id: Uuid::nil(), // Not associated with a specific requirement
+                spec_id: String::new(),
+                req_title: baseline.name.clone(),
+                author: baseline.created_by.clone(),
+                description: format!(
+                    "Baseline created: {} ({} requirements)",
+                    baseline.name,
+                    baseline.requirements.len()
+                ),
+                changes: Vec::new(),
+            });
+        }
+
+        // Sort by timestamp (newest first)
+        events.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+
+        self.timeline_events = events;
+        self.timeline_selected_event_idx = None;
+    }
+
+    /// Helper to recursively collect comment events
+    fn collect_comment_events(
+        comments: &[aida_core::Comment],
+        req_id: Uuid,
+        spec_id: &str,
+        req_title: &str,
+        events: &mut Vec<TimelineEvent>,
+    ) {
+        for comment in comments {
+            events.push(TimelineEvent {
+                timestamp: comment.created_at,
+                event_type: TimelineEventType::CommentAdded,
+                req_id,
+                spec_id: spec_id.to_string(),
+                req_title: req_title.to_string(),
+                author: comment.author.clone(),
+                description: if comment.content.len() > 80 {
+                    format!("{}...", &comment.content[..80])
+                } else {
+                    comment.content.clone()
+                },
+                changes: Vec::new(),
+            });
+
+            // Recursively collect replies
+            Self::collect_comment_events(&comment.replies, req_id, spec_id, req_title, events);
+        }
+    }
+
+    /// Get filtered timeline events based on current filters
+    fn get_filtered_timeline_events(&self) -> Vec<&TimelineEvent> {
+        self.timeline_events
+            .iter()
+            .filter(|e| {
+                // Filter by author
+                if !self.timeline_filter_author.is_empty() {
+                    if !e.author.to_lowercase().contains(&self.timeline_filter_author.to_lowercase()) {
+                        return false;
+                    }
+                }
+                // Filter by field name (for modifications)
+                if !self.timeline_filter_field.is_empty() {
+                    if e.event_type != TimelineEventType::Modified {
+                        return false;
+                    }
+                    let filter_lower = self.timeline_filter_field.to_lowercase();
+                    if !e.changes.iter().any(|c| c.field_name.to_lowercase().contains(&filter_lower)) {
+                        return false;
+                    }
+                }
+                true
+            })
+            .collect()
+    }
+
+    /// Show the Timeline view
+    fn show_timeline_view(&mut self, ui: &mut egui::Ui) {
+        // Header with controls
+        ui.horizontal(|ui| {
+            ui.heading("📅 Timeline");
+
+            ui.separator();
+
+            if ui.button("🔄 Refresh").clicked() {
+                self.rebuild_timeline_events();
+            }
+
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button("📋 Back to List").clicked() {
+                    self.pending_view_change = Some(View::List);
+                }
+            });
+        });
+
+        ui.separator();
+
+        // Filters row
+        ui.horizontal(|ui| {
+            ui.label("Filter by:");
+
+            ui.label("Author:");
+            let author_response = ui.add(
+                egui::TextEdit::singleline(&mut self.timeline_filter_author)
+                    .hint_text("any")
+                    .desired_width(100.0),
+            );
+
+            ui.separator();
+
+            ui.label("Field:");
+            let field_response = ui.add(
+                egui::TextEdit::singleline(&mut self.timeline_filter_field)
+                    .hint_text("any (e.g., status)")
+                    .desired_width(120.0),
+            );
+
+            if !self.timeline_filter_author.is_empty() || !self.timeline_filter_field.is_empty() {
+                if ui.button("✕ Clear").clicked() {
+                    self.timeline_filter_author.clear();
+                    self.timeline_filter_field.clear();
+                }
+            }
+
+            ui.separator();
+
+            let filtered = self.get_filtered_timeline_events();
+            ui.label(format!("{} events", filtered.len()));
+        });
+
+        ui.separator();
+
+        // Get filtered events - clone to avoid borrow issues with closures
+        let filtered_events: Vec<TimelineEvent> = self.get_filtered_timeline_events()
+            .into_iter()
+            .cloned()
+            .collect();
+        let no_events = self.timeline_events.is_empty();
+
+        if filtered_events.is_empty() {
+            ui.centered_and_justified(|ui| {
+                ui.vertical_centered(|ui| {
+                    ui.add_space(50.0);
+                    if no_events {
+                        ui.label(
+                            egui::RichText::new("No timeline events yet")
+                                .size(16.0)
+                                .color(egui::Color32::GRAY),
+                        );
+                        ui.add_space(10.0);
+                        ui.label("Timeline shows all changes to requirements over time.");
+                        ui.label("Create or modify requirements to see events here.");
+                    } else {
+                        ui.label(
+                            egui::RichText::new("No events match the current filters")
+                                .size(16.0)
+                                .color(egui::Color32::GRAY),
+                        );
+                    }
+                });
+            });
+            return;
+        }
+
+        // Pre-compute the selected event before entering closures
+        let selected_event_idx = self.timeline_selected_event_idx;
+        let selected_event: Option<TimelineEvent> = selected_event_idx
+            .and_then(|idx| filtered_events.get(idx).cloned());
+
+        // Pre-compute requirement index lookup for navigation
+        let req_positions: std::collections::HashMap<Uuid, usize> = self
+            .store
+            .requirements
+            .iter()
+            .enumerate()
+            .map(|(idx, r)| (r.id, idx))
+            .collect();
+
+        // Track state changes that need to happen after the UI render
+        let mut new_selected_idx: Option<usize> = None;
+        let mut navigate_to_req: Option<(usize, View)> = None;
+
+        // Timeline display - two columns: list on left, detail on right
+        ui.columns(2, |columns| {
+            // Left column: Event list
+            egui::ScrollArea::vertical()
+                .id_salt("timeline_events")
+                .auto_shrink([false, false])
+                .show(&mut columns[0], |ui| {
+                    let mut current_date: Option<chrono::NaiveDate> = None;
+
+                    for (idx, event) in filtered_events.iter().enumerate() {
+                        let event_date = event.timestamp.date_naive();
+
+                        // Show date header when date changes
+                        if current_date != Some(event_date) {
+                            if current_date.is_some() {
+                                ui.add_space(10.0);
+                            }
+                            ui.label(
+                                egui::RichText::new(event_date.format("%A, %B %d, %Y").to_string())
+                                    .strong()
+                                    .color(egui::Color32::from_rgb(100, 150, 200)),
+                            );
+                            ui.separator();
+                            current_date = Some(event_date);
+                        }
+
+                        // Event row
+                        let selected = selected_event_idx == Some(idx);
+                        let response = ui.selectable_label(
+                            selected,
+                            format!(
+                                "{} {} {} - {} by {}",
+                                event.timestamp.format("%H:%M"),
+                                event.event_type.icon(),
+                                event.event_type.label(),
+                                if event.spec_id.is_empty() {
+                                    event.req_title.clone()
+                                } else {
+                                    format!("{} ({})", event.spec_id, truncate_string(&event.req_title, 30))
+                                },
+                                event.author
+                            ),
+                        );
+
+                        if response.clicked() {
+                            new_selected_idx = Some(idx);
+                        }
+
+                        // Double-click to navigate to requirement
+                        if response.double_clicked() && !event.req_id.is_nil() {
+                            if let Some(&req_idx) = req_positions.get(&event.req_id) {
+                                navigate_to_req = Some((req_idx, View::List));
+                            }
+                        }
+                    }
+                });
+
+            // Right column: Event detail
+            columns[1].vertical(|ui| {
+                if let Some(event) = &selected_event {
+                    ui.heading(format!("{} {}", event.event_type.icon(), event.event_type.label()));
+                    ui.add_space(10.0);
+
+                    // Track if we need to navigate via link click
+                    let mut link_navigate_req: Option<Uuid> = None;
+
+                    egui::Grid::new("event_detail_grid")
+                        .num_columns(2)
+                        .spacing([20.0, 8.0])
+                        .show(ui, |ui| {
+                            ui.label("Time:");
+                            ui.label(event.timestamp.format("%Y-%m-%d %H:%M:%S").to_string());
+                            ui.end_row();
+
+                            ui.label("Author:");
+                            ui.label(&event.author);
+                            ui.end_row();
+
+                            if !event.spec_id.is_empty() {
+                                ui.label("Requirement:");
+                                if ui.link(&event.spec_id).clicked() {
+                                    link_navigate_req = Some(event.req_id);
+                                }
+                                ui.end_row();
+
+                                ui.label("Title:");
+                                ui.label(&event.req_title);
+                                ui.end_row();
+                            }
+                        });
+
+                    // Handle link navigation
+                    if let Some(req_id) = link_navigate_req {
+                        if let Some(&req_idx) = req_positions.get(&req_id) {
+                            navigate_to_req = Some((req_idx, View::List));
+                        }
+                    }
+
+                    ui.add_space(15.0);
+                    ui.separator();
+                    ui.add_space(10.0);
+
+                    // Show changes for modification events
+                    if event.event_type == TimelineEventType::Modified && !event.changes.is_empty() {
+                        ui.label(egui::RichText::new("Changes:").strong());
+                        ui.add_space(5.0);
+
+                        for change in &event.changes {
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    egui::RichText::new(&change.field_name)
+                                        .monospace()
+                                        .color(egui::Color32::from_rgb(150, 150, 200)),
+                                );
+                            });
+
+                            ui.horizontal(|ui| {
+                                ui.add_space(20.0);
+                                ui.label(
+                                    egui::RichText::new(&change.old_value)
+                                        .strikethrough()
+                                        .color(egui::Color32::from_rgb(200, 100, 100)),
+                                );
+                                ui.label("→");
+                                ui.label(
+                                    egui::RichText::new(&change.new_value)
+                                        .color(egui::Color32::from_rgb(100, 200, 100)),
+                                );
+                            });
+
+                            ui.add_space(5.0);
+                        }
+                    } else {
+                        // Show description for other event types
+                        ui.label(egui::RichText::new("Description:").strong());
+                        ui.add_space(5.0);
+                        ui.label(&event.description);
+                    }
+                } else {
+                    ui.centered_and_justified(|ui| {
+                        ui.label(
+                            egui::RichText::new("Select an event to see details")
+                                .color(egui::Color32::GRAY),
+                        );
+                    });
+                }
+            });
+        });
+
+        // Apply state changes after UI render
+        if let Some(idx) = new_selected_idx {
+            self.timeline_selected_event_idx = Some(idx);
+        }
+        if let Some((req_idx, view)) = navigate_to_req {
+            self.selected_idx = Some(req_idx);
+            self.pending_view_change = Some(view);
+        }
+    }
+
     /// Show the clone requirement dialog
     fn show_clone_requirement_dialog(&mut self, ctx: &egui::Context) {
         if !self.show_clone_dialog {
@@ -13002,9 +13490,8 @@ impl RequirementsApp {
         let should_scroll_to = self.scroll_to_requirement == Some(req_id);
         let show_status_icons = self.user_settings.show_status_icons;
 
-        // Check if this requirement matches the search
-        // has_search_text: true if there's text in the search box (regardless of mode)
-        // is_highlight_mode: true if we're in Highlight mode (show all, highlight matches)
+        // Check if this requirement matches the search (for highlight mode only)
+        // In Filter mode, all visible items are matches, so no highlighting needed
         let has_search_text = !self.filter_text.is_empty();
         let is_highlight_mode = self.user_settings.search_mode == SearchMode::Highlight;
 
@@ -13015,8 +13502,8 @@ impl RequirementsApp {
             false
         };
 
-        // Current match works in both modes (for n/N navigation feedback)
-        let is_current_match = has_search_text && self.is_current_search_match(idx);
+        // Only show current match highlighting in Highlight mode
+        let is_current_match = has_search_text && is_highlight_mode && self.is_current_search_match(idx);
 
         let indent_space = indent as f32 * 20.0;
 
@@ -13556,6 +14043,18 @@ impl RequirementsApp {
         let should_scroll_to = self.scroll_to_requirement == Some(req_id);
         let show_status_icons = self.user_settings.show_status_icons;
 
+        // Check if this requirement matches the search (for highlight mode only)
+        // In Filter mode, all visible items are matches, so no highlighting needed
+        let has_search_text = !self.filter_text.is_empty();
+        let is_highlight_mode = self.user_settings.search_mode == SearchMode::Highlight;
+        let is_search_match = if has_search_text && is_highlight_mode {
+            self.matches_search(req)
+        } else {
+            false
+        };
+        // Only show current match highlighting in Highlight mode
+        let is_current_match = has_search_text && is_highlight_mode && self.is_current_search_match(idx);
+
         // Build the label with optional status icon
         let label = if show_status_icons {
             format!("{} {} - {}", icon, spec_id.as_deref().unwrap_or("N/A"), title)
@@ -13563,7 +14062,7 @@ impl RequirementsApp {
             format!("{} - {}", spec_id.as_deref().unwrap_or("N/A"), title)
         };
 
-        // Visual feedback for drag/drop state
+        // Visual feedback for drag/drop state and search matches
         let (bg_color, stroke) = if is_drop_target {
             (
                 egui::Color32::from_rgba_unmultiplied(100, 200, 100, 60),
@@ -13574,8 +14073,26 @@ impl RequirementsApp {
                 egui::Color32::from_rgba_unmultiplied(100, 100, 200, 60),
                 egui::Stroke::new(2.0, egui::Color32::LIGHT_BLUE),
             )
+        } else if selected && is_current_match {
+            // Selected + current search match: bright orange highlight
+            (
+                egui::Color32::from_rgba_unmultiplied(255, 180, 0, 180),
+                egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 150, 0)),
+            )
         } else if selected {
             (ui.visuals().selection.bg_fill, egui::Stroke::NONE)
+        } else if is_current_match {
+            // Current search match (not selected): bright orange highlight
+            (
+                egui::Color32::from_rgba_unmultiplied(255, 180, 0, 150),
+                egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 150, 0)),
+            )
+        } else if is_search_match {
+            // Other search matches (Highlight mode only): visible yellow highlight
+            (
+                egui::Color32::from_rgba_unmultiplied(255, 255, 0, 100),
+                egui::Stroke::new(1.0, egui::Color32::from_rgb(200, 200, 0)),
+            )
         } else {
             (egui::Color32::TRANSPARENT, egui::Stroke::NONE)
         };
@@ -19780,6 +20297,7 @@ impl eframe::App for RequirementsApp {
                 View::OrgChart => KeyContext::RequirementsList, // Use same context for org chart
                 View::KanBan => KeyContext::RequirementsList,   // Use same context for kanban
                 View::Baselines => KeyContext::RequirementsList, // Use same context for baselines
+                View::Timeline => KeyContext::RequirementsList, // Use same context for timeline
             }
         };
 
@@ -20513,6 +21031,11 @@ impl eframe::App for RequirementsApp {
 
             // Create baseline dialog
             self.show_create_baseline_dialog(ctx);
+        } else if self.current_view == View::Timeline {
+            // Timeline view showing requirement changes over time
+            egui::CentralPanel::default().show(ctx, |ui| {
+                self.show_timeline_view(ui);
+            });
         } else {
             // In List/Detail view, use layout mode
             match self.layout_mode {

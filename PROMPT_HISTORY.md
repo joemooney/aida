@@ -1151,3 +1151,85 @@ A chronological record of development sessions and changes made to the Requireme
   - test_conflict_resolution_keep_disk - KeepDisk reloads disk version
   - test_get_requirement_timestamps - verifies timestamp tracking
 - **Status**: FR-0153 marked as Completed
+
+
+---
+
+## Session 8: Timeline View and External Integration Architecture (2025-12-06)
+
+### Search Highlighting Fix
+- **Prompt**: "in filter mode I don't think it makes sense to highlight any reqs in yellow/orange"
+- **Actions**:
+  - Modified `show_draggable_requirement()` and `show_draggable_requirement_inline()` in app.rs
+  - Changed `is_current_match` to only apply highlighting in Highlight mode, not Filter mode
+  - In Filter mode, all visible items are already search matches, so highlighting is redundant
+
+### Timeline View Implementation
+- **Prompt**: "I wonder if we could have a timeline view where I can go back and forward to see requirements changes over time"
+- **Actions**:
+  - Added `Timeline` variant to the `View` enum
+  - Created `TimelineEvent` struct with fields:
+    - `timestamp`: When the event occurred
+    - `event_type`: Created, Modified, CommentAdded, BaselineCreated
+    - `req_id`: UUID of related requirement
+    - `spec_id`: Human-readable requirement ID
+    - `req_title`: Requirement title
+    - `author`: Who made the change
+    - `description`: Event description
+    - `changes`: Vec<FieldChange> for modification details
+  - Created `TimelineEventType` enum with display methods `icon()` and `label()`
+  - Added state fields to RequirementsApp:
+    - `timeline_selected_date`, `timeline_events`
+    - `timeline_filter_author`, `timeline_filter_field`
+    - `timeline_selected_event_idx`
+  - Implemented `rebuild_timeline_events()`:
+    - Collects events from requirement creation, history entries, comments, and baselines
+    - Sorts events chronologically (newest first)
+  - Implemented `collect_comment_events()` helper for recursive comment tree traversal
+  - Implemented `get_filtered_timeline_events()` for author/field filtering
+  - Implemented `show_timeline_view()`:
+    - Two-column layout: event list on left, detail on right
+    - Date grouping with headers
+    - Event selection with single-click
+    - Navigation to requirement with double-click or spec_id link
+    - Shows field changes with old→new value display for modifications
+  - Added `truncate_string()` helper function
+  - Added Timeline to View menu
+- **Technical Fixes**:
+  - Fixed `req.created_by` type mismatch (Option<String> vs String) using `unwrap_or_else`
+  - Fixed Rust borrow checker issues by pre-computing data before closures
+  - Extracted state mutations to after closure execution using mutable variables
+
+### External Integration Architecture Document
+- **Prompt**: "consider gitlab integration and write a architecture document on how we could accomplish that, also consider github and jira"
+- **Actions**:
+  - Created `/docs/EXTERNAL_INTEGRATION_ARCHITECTURE.md`
+  - Designed Integration Manager component for coordinating all connectors
+  - Defined `IssueConnector` trait with methods:
+    - `test_connection()`, `fetch_issues()`, `fetch_issue()`
+    - `create_issue()`, `update_issue()`
+    - `fetch_comments()`, `add_comment()`
+    - `webhook_config()`, `handle_webhook()`
+  - Designed platform-specific connectors:
+    - GitLabConnector: Project path, milestones, labels, merge requests
+    - GitHubConnector: Owner/repo, milestones, labels, pull requests
+    - JiraConnector: Project key, issue types, statuses, sprints, transitions
+  - Created ExternalLinkStore for tracking requirement-to-issue relationships
+  - Defined field mapping layer for translating between platforms
+  - Documented synchronization processes:
+    - Initial import workflow
+    - Polling-based continuous sync
+    - Webhook-based real-time sync
+  - Outlined conflict resolution strategies:
+    - AidaWins, ExternalWins, LastWriteWins, ManualResolve
+  - Defined configuration storage in requirements.yaml
+  - Addressed security considerations:
+    - Credential storage via system keyring
+    - Webhook signature validation
+    - API rate limiting
+  - Proposed 4-phase implementation roadmap:
+    - Phase 1: Read-only import
+    - Phase 2: Bidirectional sync
+    - Phase 3: Real-time sync via webhooks
+    - Phase 4: Extended features (GitHub, Jira, custom fields)
+  - Described GUI and CLI integration points
