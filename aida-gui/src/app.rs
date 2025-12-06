@@ -13150,10 +13150,11 @@ impl RequirementsApp {
     }
 
     fn show_tree_list(&mut self, ui: &mut egui::Ui) {
-        // When there's active search text, show a flat list of all matching results
+        // When there's active search text in FILTER mode, show a flat list of all matching results
         // This ensures search finds ALL matching requirements regardless of tree hierarchy
+        // In HIGHLIGHT mode, keep the current tree view and just highlight matches
         let has_search_text = !self.filter_text.is_empty() && !self.search_scope.is_none();
-        if has_search_text {
+        if has_search_text && self.user_settings.search_mode == SearchMode::Filter {
             self.show_flat_list(ui);
             return;
         }

@@ -1,12 +1,9 @@
 sessions:
-  31298-83f529cb-112b-4c98-885d-a1f11ca22171:
-    session_id: 31298-83f529cb-112b-4c98-885d-a1f11ca22171
+  32415-a75f54bd-d3b3-4047-8b01-38176b36a8ae:
+    session_id: 32415-a75f54bd-d3b3-4047-8b01-38176b36a8ae
     user_name: Joe Mooney
     hostname: imac
-    pid: 31298
-    started_at: 2025-12-06T19:46:08.259275595Z
-    last_heartbeat: 2025-12-06T19:51:58.153584188Z
-    editing_requirement:
-      requirement_id: 8591ed43-630d-45ca-968e-889d7ed1f00a
-      spec_id: SPEC-198
-      started_at: 2025-12-06T19:48:03.125193397Z
+    pid: 32415
+    started_at: 2025-12-06T19:52:48.950283859Z
+    last_heartbeat: 2025-12-06T19:57:03.427688962Z
+    editing_requirement: null
