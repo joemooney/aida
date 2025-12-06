@@ -9818,6 +9818,11 @@ impl RequirementsApp {
         if let Some((req_idx, view)) = navigate_to_req {
             self.selected_idx = Some(req_idx);
             self.pending_view_change = Some(view);
+            // Center the requirement in the list when navigating from Timeline
+            self.scroll_to_center = true;
+            if let Some(req) = self.store.requirements.get(req_idx) {
+                self.scroll_to_requirement = Some(req.id);
+            }
         }
     }
 
@@ -20764,6 +20769,102 @@ impl eframe::App for RequirementsApp {
                                         self.selected_idx = Some(new_sel);
                                         self.scroll_to_requirement = Some(req.id);
                                         self.pending_view_change = Some(View::Detail);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Handle keyboard navigation in Timeline view
+            if self.current_view == View::Timeline && nav_context_active {
+                let filtered_events = self.get_filtered_timeline_events();
+                let event_count = filtered_events.len();
+
+                if event_count > 0 {
+                    let mut timeline_nav_delta: i32 = 0;
+                    let mut timeline_jump_start = false;
+                    let mut timeline_jump_end = false;
+                    let mut timeline_navigate_to_req = false;
+
+                    // Check navigation keys
+                    if can_navigate
+                        && (self.user_settings.keybindings.is_pressed(
+                            KeyAction::NavigateDown,
+                            ctx,
+                            self.current_key_context,
+                        ) || self.user_settings.keybindings.is_pressed(
+                            KeyAction::NavigateDownVim,
+                            ctx,
+                            self.current_key_context,
+                        ))
+                    {
+                        timeline_nav_delta = 1;
+                    } else if can_navigate
+                        && (self.user_settings.keybindings.is_pressed(
+                            KeyAction::NavigateUp,
+                            ctx,
+                            self.current_key_context,
+                        ) || self.user_settings.keybindings.is_pressed(
+                            KeyAction::NavigateUpVim,
+                            ctx,
+                            self.current_key_context,
+                        ))
+                    {
+                        timeline_nav_delta = -1;
+                    }
+
+                    // Page Up/Down, Home/End
+                    ctx.input(|i| {
+                        if i.key_pressed(egui::Key::PageDown) {
+                            timeline_nav_delta = 10;
+                        } else if i.key_pressed(egui::Key::PageUp) {
+                            timeline_nav_delta = -10;
+                        }
+                        if i.key_pressed(egui::Key::Home) {
+                            timeline_jump_start = true;
+                        } else if i.key_pressed(egui::Key::End) {
+                            timeline_jump_end = true;
+                        }
+                        // Enter key to navigate to the selected event's requirement
+                        if i.key_pressed(egui::Key::Enter) {
+                            timeline_navigate_to_req = true;
+                        }
+                    });
+
+                    // Apply navigation
+                    let new_idx = if timeline_jump_start {
+                        Some(0)
+                    } else if timeline_jump_end {
+                        Some(event_count - 1)
+                    } else if timeline_nav_delta != 0 {
+                        let current = self.timeline_selected_event_idx.unwrap_or(0) as i32;
+                        let new_pos = (current + timeline_nav_delta)
+                            .max(0)
+                            .min(event_count as i32 - 1) as usize;
+                        Some(new_pos)
+                    } else {
+                        None
+                    };
+
+                    if let Some(idx) = new_idx {
+                        self.timeline_selected_event_idx = Some(idx);
+                    }
+
+                    // Handle Enter key to navigate to requirement
+                    if timeline_navigate_to_req {
+                        if let Some(event_idx) = self.timeline_selected_event_idx {
+                            let filtered = self.get_filtered_timeline_events();
+                            if let Some(event) = filtered.get(event_idx) {
+                                if !event.req_id.is_nil() {
+                                    if let Some(req_idx) = self.store.requirements.iter().position(|r| r.id == event.req_id) {
+                                        self.selected_idx = Some(req_idx);
+                                        self.pending_view_change = Some(View::List);
+                                        self.scroll_to_center = true;
+                                        if let Some(req) = self.store.requirements.get(req_idx) {
+                                            self.scroll_to_requirement = Some(req.id);
+                                        }
                                     }
                                 }
                             }
