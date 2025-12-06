@@ -1,9 +1,9 @@
 sessions:
-  24572-fee0ebfd-d5c3-428f-9af3-30ab93b49bfc:
-    session_id: 24572-fee0ebfd-d5c3-428f-9af3-30ab93b49bfc
+  25758-8ce94321-83ac-431e-a92c-6ec86e05df1c:
+    session_id: 25758-8ce94321-83ac-431e-a92c-6ec86e05df1c
     user_name: Joe Mooney
     hostname: imac
-    pid: 24572
-    started_at: 2025-12-06T18:57:55.700963472Z
-    last_heartbeat: 2025-12-06T19:00:45.777749473Z
+    pid: 25758
+    started_at: 2025-12-06T19:02:21.185709694Z
+    last_heartbeat: 2025-12-06T19:03:56.195820502Z
     editing_requirement: null

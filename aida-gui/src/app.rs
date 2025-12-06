@@ -1706,6 +1706,17 @@ impl UserSettings {
             Self::default()
         };
 
+        // Migrate keybindings: ensure all KeyAction variants have bindings
+        // This handles new actions added in updates - they get their default binding
+        let default_bindings = KeyBindings::default();
+        for action in KeyAction::all() {
+            if !settings.keybindings.bindings.contains_key(action) {
+                if let Some(binding) = default_bindings.bindings.get(action) {
+                    settings.keybindings.bindings.insert(*action, binding.clone());
+                }
+            }
+        }
+
         // For new users, try to get name/email from git config and environment
         if settings.name.is_empty() || settings.email.is_empty() {
             Self::populate_from_git_and_env(&mut settings);
