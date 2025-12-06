@@ -1992,8 +1992,8 @@ impl SearchMode {
 
     fn icon(&self) -> &'static str {
         match self {
-            SearchMode::Highlight => "*", // asterisk for highlight (show all, highlight matches)
-            SearchMode::Filter => "F",    // F for filter (show only matches)
+            SearchMode::Highlight => "☀", // sun for highlight (show all, highlight matches)
+            SearchMode::Filter => "⋈",    // bowtie for filter (show only matches)
         }
     }
 }
@@ -13002,16 +13002,21 @@ impl RequirementsApp {
         let should_scroll_to = self.scroll_to_requirement == Some(req_id);
         let show_status_icons = self.user_settings.show_status_icons;
 
-        // Check if this requirement matches the search (for highlight mode)
-        // Use matches_search directly for more reliable highlighting
-        let has_active_search = !self.filter_text.is_empty()
-            && self.user_settings.search_mode == SearchMode::Highlight;
-        let is_search_match = if has_active_search {
+        // Check if this requirement matches the search
+        // has_search_text: true if there's text in the search box (regardless of mode)
+        // is_highlight_mode: true if we're in Highlight mode (show all, highlight matches)
+        let has_search_text = !self.filter_text.is_empty();
+        let is_highlight_mode = self.user_settings.search_mode == SearchMode::Highlight;
+
+        // In Highlight mode, check if this requirement matches the search
+        let is_search_match = if has_search_text && is_highlight_mode {
             self.matches_search(req)
         } else {
             false
         };
-        let is_current_match = self.is_current_search_match(idx);
+
+        // Current match works in both modes (for n/N navigation feedback)
+        let is_current_match = has_search_text && self.is_current_search_match(idx);
 
         let indent_space = indent as f32 * 20.0;
 
@@ -13036,7 +13041,7 @@ impl RequirementsApp {
                     egui::Color32::from_rgba_unmultiplied(100, 100, 200, 60),
                     egui::Stroke::new(2.0, egui::Color32::LIGHT_BLUE),
                 )
-            } else if selected && is_current_match && has_active_search {
+            } else if selected && is_current_match {
                 // Selected + current search match: bright orange highlight
                 (
                     egui::Color32::from_rgba_unmultiplied(255, 180, 0, 180),
@@ -13044,14 +13049,14 @@ impl RequirementsApp {
                 )
             } else if selected {
                 (ui.visuals().selection.bg_fill, egui::Stroke::NONE)
-            } else if is_current_match && has_active_search {
+            } else if is_current_match {
                 // Current search match (not selected): bright orange highlight
                 (
                     egui::Color32::from_rgba_unmultiplied(255, 180, 0, 150),
                     egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 150, 0)),
                 )
-            } else if is_search_match && has_active_search {
-                // Other search matches: visible yellow highlight
+            } else if is_search_match {
+                // Other search matches (Highlight mode only): visible yellow highlight
                 (
                     egui::Color32::from_rgba_unmultiplied(255, 255, 0, 100),
                     egui::Stroke::new(1.0, egui::Color32::from_rgb(200, 200, 0)),
