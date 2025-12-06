@@ -1,12 +1,1 @@
-sessions:
-  17166-9ceef7b8-6a97-4868-9832-e7fdf68af4a0:
-    session_id: 17166-9ceef7b8-6a97-4868-9832-e7fdf68af4a0
-    user_name: Joe Mooney
-    hostname: imac
-    pid: 17166
-    started_at: 2025-12-06T18:03:54.102692389Z
-    last_heartbeat: 2025-12-06T18:11:14.032690231Z
-    editing_requirement:
-      requirement_id: 2be34e0c-327c-497f-bd9e-fc981531b664
-      spec_id: FR-0189
-      started_at: 2025-12-06T18:09:19.019597115Z
+sessions: {}

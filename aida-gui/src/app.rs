@@ -8800,14 +8800,21 @@ impl RequirementsApp {
             return;
         }
 
+        // Use full available width
+        let available_width = ui.available_width();
+        ui.set_min_width(available_width);
+
         // Baselines table
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |ui| {
+                ui.set_min_width(available_width - 20.0);
+
                 egui::Grid::new("baselines_grid")
                     .num_columns(6)
                     .spacing([20.0, 8.0])
                     .striped(true)
+                    .min_col_width(80.0)
                     .show(ui, |ui| {
                         // Header
                         ui.strong("Name");
@@ -8897,10 +8904,16 @@ impl RequirementsApp {
                             ui.label(format!("{} requirements in this baseline:", baseline.requirements.len()));
                             ui.add_space(5.0);
 
+                            // Use remaining height for requirements list
+                            let remaining_height = ui.available_height() - 20.0;
+                            let scroll_height = remaining_height.max(100.0);
+
                             egui::ScrollArea::vertical()
                                 .id_salt("baseline_reqs_scroll")
-                                .max_height(300.0)
+                                .max_height(scroll_height)
+                                .auto_shrink([false, false])
                                 .show(ui, |ui| {
+                                    ui.set_min_width(available_width - 40.0);
                                     for snapshot in &baseline.requirements {
                                         ui.horizontal(|ui| {
                                             if let Some(ref spec_id) = snapshot.spec_id {
