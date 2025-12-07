@@ -1,0 +1,420 @@
+/* AIDA Documentation Styles with Dark Mode Support */
+
+:root {
+    /* Light mode colors */
+    --bg-primary: #ffffff;
+    --bg-secondary: #f8f9fa;
+    --bg-code: #f4f4f4;
+    --bg-table-header: #e9ecef;
+    --bg-table-stripe: #f8f9fa;
+    --text-primary: #212529;
+    --text-secondary: #6c757d;
+    --text-code: #d63384;
+    --border-color: #dee2e6;
+    --link-color: #0d6efd;
+    --link-hover: #0a58ca;
+    --accent-color: #0d6efd;
+    --shadow-color: rgba(0, 0, 0, 0.1);
+    --nav-bg: #f8f9fa;
+    --nav-border: #e9ecef;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-primary: #1a1a2e;
+        --bg-secondary: #16213e;
+        --bg-code: #0f0f23;
+        --bg-table-header: #0f3460;
+        --bg-table-stripe: #1a1a2e;
+        --text-primary: #e4e4e7;
+        --text-secondary: #a1a1aa;
+        --text-code: #f472b6;
+        --border-color: #3f3f46;
+        --link-color: #60a5fa;
+        --link-hover: #93c5fd;
+        --accent-color: #60a5fa;
+        --shadow-color: rgba(0, 0, 0, 0.3);
+        --nav-bg: #16213e;
+        --nav-border: #0f3460;
+    }
+}
+
+/* Force dark mode with class */
+.dark-mode {
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #16213e;
+    --bg-code: #0f0f23;
+    --bg-table-header: #0f3460;
+    --bg-table-stripe: #1a1a2e;
+    --text-primary: #e4e4e7;
+    --text-secondary: #a1a1aa;
+    --text-code: #f472b6;
+    --border-color: #3f3f46;
+    --link-color: #60a5fa;
+    --link-hover: #93c5fd;
+    --accent-color: #60a5fa;
+    --shadow-color: rgba(0, 0, 0, 0.3);
+    --nav-bg: #16213e;
+    --nav-border: #0f3460;
+}
+
+/* Force light mode with class */
+.light-mode {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f8f9fa;
+    --bg-code: #f4f4f4;
+    --bg-table-header: #e9ecef;
+    --bg-table-stripe: #f8f9fa;
+    --text-primary: #212529;
+    --text-secondary: #6c757d;
+    --text-code: #d63384;
+    --border-color: #dee2e6;
+    --link-color: #0d6efd;
+    --link-hover: #0a58ca;
+    --accent-color: #0d6efd;
+    --shadow-color: rgba(0, 0, 0, 0.1);
+    --nav-bg: #f8f9fa;
+    --nav-border: #e9ecef;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.6;
+    color: var(--text-primary);
+    background-color: var(--bg-primary);
+    margin: 0;
+    padding: 0;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Main container */
+.container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+/* Navigation header */
+.nav-header {
+    position: sticky;
+    top: 0;
+    background-color: var(--nav-bg);
+    border-bottom: 1px solid var(--nav-border);
+    padding: 1rem 2rem;
+    z-index: 1000;
+    box-shadow: 0 2px 4px var(--shadow-color);
+}
+
+.nav-content {
+    max-width: 900px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.nav-links {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.nav-links a {
+    color: var(--link-color);
+    text-decoration: none;
+    font-weight: 500;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+}
+
+.nav-links a:hover {
+    background-color: var(--bg-secondary);
+    color: var(--link-hover);
+}
+
+.nav-links a.active {
+    background-color: var(--accent-color);
+    color: white;
+}
+
+/* Theme toggle button */
+.theme-toggle {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s ease;
+}
+
+.theme-toggle:hover {
+    background-color: var(--accent-color);
+    color: white;
+    border-color: var(--accent-color);
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+    color: var(--text-primary);
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+h1 {
+    font-size: 2.5rem;
+    border-bottom: 3px solid var(--accent-color);
+    padding-bottom: 0.5rem;
+    margin-top: 0;
+}
+
+h2 {
+    font-size: 1.75rem;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.3rem;
+}
+
+h3 {
+    font-size: 1.4rem;
+}
+
+h4 {
+    font-size: 1.2rem;
+}
+
+p {
+    margin-bottom: 1rem;
+}
+
+/* Links */
+a {
+    color: var(--link-color);
+    text-decoration: none;
+}
+
+a:hover {
+    color: var(--link-hover);
+    text-decoration: underline;
+}
+
+/* Code */
+code {
+    font-family: "SF Mono", "Consolas", "Monaco", "Andale Mono", monospace;
+    font-size: 0.9em;
+    background-color: var(--bg-code);
+    color: var(--text-code);
+    padding: 0.2em 0.4em;
+    border-radius: 4px;
+}
+
+pre {
+    background-color: var(--bg-code);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1rem;
+    overflow-x: auto;
+    margin: 1rem 0;
+}
+
+pre code {
+    background-color: transparent;
+    padding: 0;
+    color: var(--text-primary);
+}
+
+/* Tables */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.95rem;
+}
+
+th, td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border: 1px solid var(--border-color);
+}
+
+th {
+    background-color: var(--bg-table-header);
+    font-weight: 600;
+}
+
+tr:nth-child(even) {
+    background-color: var(--bg-table-stripe);
+}
+
+/* Lists */
+ul, ol {
+    margin-bottom: 1rem;
+    padding-left: 2rem;
+}
+
+li {
+    margin-bottom: 0.5rem;
+}
+
+/* Blockquotes */
+blockquote {
+    border-left: 4px solid var(--accent-color);
+    margin: 1rem 0;
+    padding: 0.5rem 1rem;
+    background-color: var(--bg-secondary);
+    color: var(--text-secondary);
+}
+
+/* Horizontal rule */
+hr {
+    border: none;
+    border-top: 1px solid var(--border-color);
+    margin: 2rem 0;
+}
+
+/* Related docs box */
+.related-docs {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1rem 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.related-docs strong {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+}
+
+.related-docs ul {
+    margin: 0;
+    padding-left: 1.5rem;
+}
+
+.related-docs li {
+    margin-bottom: 0.25rem;
+}
+
+/* Table of contents */
+.toc {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.toc h2 {
+    margin-top: 0;
+    border-bottom: none;
+    font-size: 1.25rem;
+}
+
+.toc ul {
+    margin-bottom: 0;
+}
+
+.toc li {
+    margin-bottom: 0.4rem;
+}
+
+.toc a {
+    color: var(--link-color);
+}
+
+/* Footer */
+.footer {
+    margin-top: 3rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-style: italic;
+    font-size: 0.9rem;
+}
+
+/* Keyboard shortcuts */
+kbd {
+    display: inline-block;
+    padding: 0.2em 0.5em;
+    font-family: "SF Mono", "Consolas", "Monaco", monospace;
+    font-size: 0.85em;
+    color: var(--text-primary);
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    box-shadow: inset 0 -1px 0 var(--border-color);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .container {
+        padding: 1rem;
+    }
+
+    .nav-header {
+        padding: 0.75rem 1rem;
+    }
+
+    .nav-content {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    h1 {
+        font-size: 2rem;
+    }
+
+    h2 {
+        font-size: 1.5rem;
+    }
+
+    table {
+        font-size: 0.85rem;
+    }
+
+    th, td {
+        padding: 0.5rem;
+    }
+
+    pre {
+        padding: 0.75rem;
+    }
+}
+
+/* Print styles */
+@media print {
+    .nav-header,
+    .theme-toggle {
+        display: none;
+    }
+
+    body {
+        background: white;
+        color: black;
+    }
+
+    a {
+        color: #0066cc;
+    }
+
+    pre, code {
+        background-color: #f5f5f5;
+    }
+}

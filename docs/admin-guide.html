@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIDA Administrator's Guide</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <nav class="nav-header">
+        <div class="nav-content">
+            <div class="nav-links">
+                <a href="user-guide.html">User Guide</a>
+                <a href="DEVELOPER_GUIDE.html">Developer's Guide</a>
+                <a href="admin-guide.html" class="active">Admin Guide</a>
+            </div>
+            <button class="theme-toggle" onclick="toggleTheme()">
+                <span class="theme-icon"><</span>
+                <span class="theme-text">Dark</span>
+            </button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h1>AIDA Administrator's Guide</h1>
+
+        <p>This guide covers administrative topics including project configuration, storage backends, database schema, migration procedures, and multi-user deployment.</p>
+
+        <div class="related-docs">
+            <strong>Related Documentation:</strong>
+            <ul>
+                <li><a href="user-guide.html">User Guide</a> - End-user documentation for using AIDA</li>
+                <li><a href="DEVELOPER_GUIDE.html">Developer's Guide</a> - For developers maintaining and extending AIDA</li>
+            </ul>
+        </div>
+
+        <div class="toc">
+            <h2>Table of Contents</h2>
+            <ul>
+                <li><a href="#project-configuration">Project Configuration</a></li>
+                <li><a href="#storage-backends">Storage Backends</a></li>
+                <li><a href="#database-schema">Database Schema</a></li>
+                <li><a href="#migration-between-backends">Migration Between Backends</a></li>
+                <li><a href="#multi-user-control">Multi-User Control</a></li>
+                <li><a href="#backup-and-recovery">Backup and Recovery</a></li>
+                <li><a href="#performance-tuning">Performance Tuning</a></li>
+                <li><a href="#troubleshooting">Troubleshooting</a></li>
+            </ul>
+        </div>
+
+        <hr>
+
+        <h2 id="project-configuration">Project Configuration</h2>
+
+        <h3>Project Settings Overview</h3>
+        <p>Project settings are stored within the requirements database file and control how the system behaves. These settings can be configured through the GUI (Settings &gt; Admin) or by directly editing the YAML file.</p>
+
+        <h3>ID Configuration</h3>
+        <p>The ID configuration controls how requirement identifiers (SPEC-IDs) are generated.</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Setting</th>
+                    <th>Options</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>ID Format</strong></td>
+                    <td>SingleLevel, TwoLevel</td>
+                    <td>Determines ID structure</td>
+                </tr>
+                <tr>
+                    <td><strong>Numbering Strategy</strong></td>
+                    <td>GlobalSequential, PerPrefix, PerFeatureType</td>
+                    <td>How numbers are assigned</td>
+                </tr>
+                <tr>
+                    <td><strong>Digits</strong></td>
+                    <td>1-6</td>
+                    <td>Number of digits in numeric portion</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h4>ID Format Options:</h4>
+        <ul>
+            <li><strong>SingleLevel</strong> (<code>PREFIX-NNN</code>): Simple format like <code>AUTH-001</code>, <code>FR-002</code></li>
+            <li><strong>TwoLevel</strong> (<code>FEATURE-TYPE-NNN</code>): Extended format like <code>AUTH-FR-001</code>, <code>PAY-NFR-001</code></li>
+        </ul>
+
+        <h4>Numbering Strategy Options:</h4>
+        <ul>
+            <li><strong>GlobalSequential</strong>: Single counter for all requirements (AUTH-001, FR-002, SEC-003)</li>
+            <li><strong>PerPrefix</strong>: Each prefix maintains its own counter (AUTH-001, FR-001, SEC-001)</li>
+            <li><strong>PerFeatureType</strong>: Each feature+type combination has its own counter (Two Level only)</li>
+        </ul>
+
+        <h3>Feature Configuration</h3>
+        <p>Features organize requirements into logical groups. Each feature has:</p>
+        <ul>
+            <li><strong>Number</strong>: Auto-assigned sequential number (e.g., "1", "2", "3")</li>
+            <li><strong>Name</strong>: Human-readable name (e.g., "Authentication", "User-Management")</li>
+            <li><strong>Prefix</strong>: Optional ID prefix for requirements in this feature</li>
+        </ul>
+        <p>Features are stored in the <code>features</code> array in the requirements file.</p>
+
+        <h3>Type Definitions</h3>
+        <p>Custom requirement types allow defining type-specific workflows. Each type definition includes:</p>
+        <pre><code>type_definitions:
+  - name: "ChangeRequest"
+    display_name: "Change Request"
+    description: "Tracks change requests"
+    prefix: "CR"
+    statuses:
+      - Draft
+      - Submitted
+      - Under Review
+      - Approved
+      - Rejected
+      - In Progress
+      - Implemented
+      - Verified
+      - Closed
+    custom_fields:
+      - name: "impact"
+        display_name: "Impact"
+        field_type: "Select"
+        options: ["Low", "Medium", "High"]
+        required: true</code></pre>
+
+        <h3>Relationship Definitions</h3>
+        <p>Custom relationship types can be defined with constraints:</p>
+        <pre><code>relationship_definitions:
+  - name: "blocks"
+    display_name: "Blocks"
+    description: "This requirement blocks another"
+    inverse: "blocked_by"
+    cardinality: "n:n"
+    source_types: []  # Empty means all types allowed
+    target_types: []
+    color: "#ff6b6b"</code></pre>
+
+        <h3>Prefix Management</h3>
+        <p>Control which ID prefixes are allowed in the project:</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Setting</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>allowed_prefixes</strong></td>
+                    <td>List of permitted prefix strings</td>
+                </tr>
+                <tr>
+                    <td><strong>restrict_prefixes</strong></td>
+                    <td>When true, only allowed prefixes can be used</td>
+                </tr>
+            </tbody>
+        </table>
+        <p>This enables administrators to enforce naming conventions across the team.</p>
+
+        <hr>
+
+        <h2 id="storage-backends">Storage Backends</h2>
+        <p>The system supports two storage backends, each with different characteristics suited to different use cases.</p>
+
+        <h3>YAML Backend (Default)</h3>
+        <p><strong>File Extension:</strong> <code>.yaml</code> or <code>.yml</code></p>
+
+        <h4>Characteristics:</h4>
+        <ul>
+            <li>Human-readable plain text format</li>
+            <li>Version control friendly (Git-compatible)</li>
+            <li>Easy manual editing and inspection</li>
+            <li>Entire database loaded into memory on access</li>
+            <li>Best for small to medium projects (&lt; 1000 requirements)</li>
+        </ul>
+
+        <h4>File Structure:</h4>
+        <pre><code>name: "my-project"
+title: "My Project Requirements"
+description: "Project description"
+next_spec_number: 100
+next_feature_number: 5
+features:
+  - { number: 1, name: "Authentication", prefix: "AUTH" }
+id_config:
+  format: "SingleLevel"
+  numbering: "GlobalSequential"
+  digits: 3
+requirements:
+  - id: "uuid-here"
+    spec_id: "AUTH-001"
+    title: "User Login"
+    # ... other fields
+users:
+  - id: "uuid-here"
+    spec_id: "$USER-001"
+    name: "John Doe"
+    # ... other fields</code></pre>
+
+        <h4>Advantages:</h4>
+        <ul>
+            <li>Easy backup (just copy the file)</li>
+            <li>Works with text editors</li>
+            <li>Git diff shows meaningful changes</li>
+            <li>No additional dependencies</li>
+        </ul>
+
+        <h4>Disadvantages:</h4>
+        <ul>
+            <li>Slower for large datasets</li>
+            <li>Entire file rewritten on each save</li>
+            <li>Potential for merge conflicts with concurrent edits</li>
+        </ul>
+
+        <h3>SQLite Backend</h3>
+        <p><strong>File Extension:</strong> <code>.db</code>, <code>.sqlite</code>, or <code>.sqlite3</code></p>
+
+        <h4>Characteristics:</h4>
+        <ul>
+            <li>Binary database format</li>
+            <li>Efficient single-record CRUD operations</li>
+            <li>WAL (Write-Ahead Logging) mode for concurrent access</li>
+            <li>Better performance for large projects (1000+ requirements)</li>
+            <li>Complex fields stored as JSON within SQLite</li>
+        </ul>
+
+        <h4>Advantages:</h4>
+        <ul>
+            <li>Fast random access to individual records</li>
+            <li>Better concurrent access handling</li>
+            <li>Efficient for large datasets</li>
+            <li>ACID transaction support</li>
+        </ul>
+
+        <h4>Disadvantages:</h4>
+        <ul>
+            <li>Not human-readable</li>
+            <li>Git diffs not meaningful</li>
+            <li>Requires SQLite tools for direct inspection</li>
+        </ul>
+
+        <h3>Choosing a Backend</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Use Case</th>
+                    <th>Recommended Backend</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Version control with Git</td>
+                    <td>YAML</td>
+                </tr>
+                <tr>
+                    <td>Small team (1-5 people)</td>
+                    <td>YAML</td>
+                </tr>
+                <tr>
+                    <td>Large requirements set (1000+)</td>
+                    <td>SQLite</td>
+                </tr>
+                <tr>
+                    <td>Frequent concurrent access</td>
+                    <td>SQLite</td>
+                </tr>
+                <tr>
+                    <td>Manual file editing needed</td>
+                    <td>YAML</td>
+                </tr>
+                <tr>
+                    <td>Integration with other tools</td>
+                    <td>YAML or JSON export</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>Backend Auto-Detection</h3>
+        <p>The system automatically detects the backend type based on file extension:</p>
+        <ul>
+            <li><code>.yaml</code>, <code>.yml</code> ’ YAML backend</li>
+            <li><code>.db</code>, <code>.sqlite</code>, <code>.sqlite3</code> ’ SQLite backend</li>
+        </ul>
+
+        <hr>
+
+        <h2 id="database-schema">Database Schema</h2>
+
+        <h3>YAML Schema</h3>
+        <p>The YAML schema is self-describing. Key top-level fields:</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Field</th>
+                    <th>Type</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>name</code></td>
+                    <td>String</td>
+                    <td>Project internal name</td>
+                </tr>
+                <tr>
+                    <td><code>title</code></td>
+                    <td>String</td>
+                    <td>Display title</td>
+                </tr>
+                <tr>
+                    <td><code>description</code></td>
+                    <td>String</td>
+                    <td>Project description</td>
+                </tr>
+                <tr>
+                    <td><code>requirements</code></td>
+                    <td>Array</td>
+                    <td>List of requirement objects</td>
+                </tr>
+                <tr>
+                    <td><code>users</code></td>
+                    <td>Array</td>
+                    <td>List of user objects</td>
+                </tr>
+                <tr>
+                    <td><code>features</code></td>
+                    <td>Array</td>
+                    <td>Feature definitions</td>
+                </tr>
+                <tr>
+                    <td><code>id_config</code></td>
+                    <td>Object</td>
+                    <td>ID generation configuration</td>
+                </tr>
+                <tr>
+                    <td><code>type_definitions</code></td>
+                    <td>Array</td>
+                    <td>Custom type definitions</td>
+                </tr>
+                <tr>
+                    <td><code>relationship_definitions</code></td>
+                    <td>Array</td>
+                    <td>Custom relationship types</td>
+                </tr>
+                <tr>
+                    <td><code>next_spec_number</code></td>
+                    <td>Integer</td>
+                    <td>Next auto-increment number</td>
+                </tr>
+                <tr>
+                    <td><code>next_feature_number</code></td>
+                    <td>Integer</td>
+                    <td>Next feature number</td>
+                </tr>
+                <tr>
+                    <td><code>prefix_counters</code></td>
+                    <td>Object</td>
+                    <td>Per-prefix counters (when using PerPrefix numbering)</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3>SQLite Schema</h3>
+        <p>The SQLite database uses the following tables:</p>
+
+        <h4>schema_version</h4>
+        <p>Tracks database schema version for migrations.</p>
+        <pre><code>CREATE TABLE schema_version (
+    version INTEGER NOT NULL
+);
+
+-- Current version: 1</code></pre>
+
+        <h4>requirements</h4>
+        <p>Stores all requirements.</p>
+        <pre><code>CREATE TABLE requirements (
+    id TEXT PRIMARY KEY NOT NULL,          -- UUID
+    spec_id TEXT,                          -- Human-readable ID (SPEC-001)
+    prefix_override TEXT,                  -- Custom prefix override
+    title TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'Draft',
+    priority TEXT NOT NULL DEFAULT 'Medium',
+    owner TEXT NOT NULL DEFAULT '',
+    feature TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,              -- ISO 8601 timestamp
+    created_by TEXT,                       -- User UUID reference
+    modified_at TEXT NOT NULL,             -- ISO 8601 timestamp
+    req_type TEXT NOT NULL DEFAULT 'Functional',
+    dependencies TEXT NOT NULL DEFAULT '[]',    -- JSON array of UUIDs
+    tags TEXT NOT NULL DEFAULT '[]',            -- JSON array of strings
+    relationships TEXT NOT NULL DEFAULT '[]',   -- JSON array of relationship objects
+    comments TEXT NOT NULL DEFAULT '[]',        -- JSON array of comment objects
+    history TEXT NOT NULL DEFAULT '[]',         -- JSON array of history entries
+    archived INTEGER NOT NULL DEFAULT 0,        -- Boolean (0/1)
+    custom_status TEXT,                         -- Custom status for custom types
+    custom_fields TEXT NOT NULL DEFAULT '{}',   -- JSON object of custom field values
+    urls TEXT NOT NULL DEFAULT '[]'             -- JSON array of URL objects
+);
+
+-- Indexes for common queries
+CREATE INDEX idx_requirements_spec_id ON requirements(spec_id);
+CREATE INDEX idx_requirements_feature ON requirements(feature);
+CREATE INDEX idx_requirements_status ON requirements(status);
+CREATE INDEX idx_requirements_archived ON requirements(archived);</code></pre>
+
+        <h4>users</h4>
+        <p>Stores user accounts.</p>
+        <pre><code>CREATE TABLE users (
+    id TEXT PRIMARY KEY NOT NULL,          -- UUID
+    spec_id TEXT,                          -- Human-readable ID ($USER-001)
+    name TEXT NOT NULL,
+    email TEXT NOT NULL DEFAULT '',
+    handle TEXT NOT NULL,                  -- @mention handle
+    created_at TEXT NOT NULL,              -- ISO 8601 timestamp
+    archived INTEGER NOT NULL DEFAULT 0    -- Boolean (0/1)
+);
+
+CREATE INDEX idx_users_handle ON users(handle);</code></pre>
+
+        <h4>metadata</h4>
+        <p>Single-row table for project configuration.</p>
+        <pre><code>CREATE TABLE metadata (
+    id INTEGER PRIMARY KEY CHECK (id = 1), -- Always 1 (single row)
+    name TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL DEFAULT '',
+    id_config TEXT NOT NULL DEFAULT '{}',              -- JSON object
+    features TEXT NOT NULL DEFAULT '[]',               -- JSON array
+    next_feature_number INTEGER NOT NULL DEFAULT 1,
+    next_spec_number INTEGER NOT NULL DEFAULT 1,
+    prefix_counters TEXT NOT NULL DEFAULT '{}',        -- JSON object
+    relationship_definitions TEXT NOT NULL DEFAULT '[]', -- JSON array
+    reaction_definitions TEXT NOT NULL DEFAULT '[]',     -- JSON array
+    meta_counters TEXT NOT NULL DEFAULT '{}',            -- JSON object
+    type_definitions TEXT NOT NULL DEFAULT '[]',         -- JSON array
+    allowed_prefixes TEXT NOT NULL DEFAULT '[]',         -- JSON array
+    restrict_prefixes INTEGER NOT NULL DEFAULT 0         -- Boolean (0/1)
+);</code></pre>
+
+        <h3>Schema Versioning</h3>
+        <p>The SQLite backend includes schema version tracking for future migrations:</p>
+        <ol>
+            <li>On database creation, <code>schema_version</code> is set to the current version</li>
+            <li>On load, the version is checked</li>
+            <li>If older, migration scripts would be applied (future feature)</li>
+        </ol>
+
+        <hr>
+
+        <h2 id="migration-between-backends">Migration Between Backends</h2>
+
+        <h3>YAML to SQLite Migration</h3>
+        <p>Convert a YAML database to SQLite for better performance:</p>
+
+        <h4>CLI Command:</h4>
+        <pre><code># Future CLI support planned
+# aida migrate --from requirements.yaml --to requirements.db</code></pre>
+
+        <h4>Programmatic Migration:</h4>
+        <pre><code>use aida_core::db::{migrate_yaml_to_sqlite};
+
+let count = migrate_yaml_to_sqlite(
+    "requirements.yaml",
+    "requirements.db"
+)?;
+println!("Migrated {} requirements", count);</code></pre>
+
+        <h4>Steps:</h4>
+        <ol>
+            <li>Back up your YAML file</li>
+            <li>Run migration</li>
+            <li>Update your project registry to point to the new .db file</li>
+            <li>Verify data integrity</li>
+            <li>Keep YAML backup until confident</li>
+        </ol>
+
+        <h3>SQLite to YAML Migration</h3>
+        <p>Convert SQLite back to YAML (e.g., for version control):</p>
+
+        <h4>Programmatic Migration:</h4>
+        <pre><code>use aida_core::db::{migrate_sqlite_to_yaml};
+
+let count = migrate_sqlite_to_yaml(
+    "requirements.db",
+    "requirements.yaml"
+)?;
+println!("Exported {} requirements", count);</code></pre>
+
+        <h3>JSON Import/Export</h3>
+        <p>JSON format provides interoperability with other systems:</p>
+
+        <h4>Export to JSON:</h4>
+        <pre><code>use aida_core::db::{export_to_json};
+use aida_core::models::RequirementsStore;
+
+let store = backend.load()?;
+export_to_json(&store, "backup.json")?;</code></pre>
+
+        <h4>Import from JSON:</h4>
+        <pre><code>use aida_core::db::{import_from_json};
+
+let store = import_from_json("backup.json")?;
+backend.save(&store)?;</code></pre>
+
+        <h3>Migration Best Practices</h3>
+        <ol>
+            <li><strong>Always backup first</strong> - Copy original file before migration</li>
+            <li><strong>Verify counts</strong> - Check requirement counts match after migration</li>
+            <li><strong>Spot check data</strong> - Manually verify a few requirements</li>
+            <li><strong>Test workflows</strong> - Ensure add/edit/delete work with new backend</li>
+            <li><strong>Update registry</strong> - Point to new file location if changed</li>
+        </ol>
+
+        <hr>
+
+        <h2 id="multi-user-control">Multi-User Control</h2>
+
+        <h3>File-Based Locking (YAML)</h3>
+        <p>The YAML backend uses file-based locking to prevent concurrent write conflicts:</p>
+        <ul>
+            <li>Read operations: Shared access allowed</li>
+            <li>Write operations: Exclusive lock acquired</li>
+            <li>Lock timeout: Configurable (default varies by operation)</li>
+        </ul>
+
+        <h4>Limitations:</h4>
+        <ul>
+            <li>Locking only works on the same filesystem</li>
+            <li>Network filesystems may not support locking reliably</li>
+            <li>Consider SQLite for true multi-user scenarios</li>
+        </ul>
+
+        <h3>SQLite Concurrent Access</h3>
+        <p>SQLite with WAL mode provides better concurrent access:</p>
+        <ul>
+            <li>Multiple readers allowed simultaneously</li>
+            <li>Single writer at a time (others queue)</li>
+            <li>WAL mode enables concurrent reads during writes</li>
+            <li>Automatic conflict handling</li>
+        </ul>
+
+        <h4>Configuration:</h4>
+        <p>SQLite is automatically configured with:</p>
+        <ul>
+            <li>WAL mode enabled</li>
+            <li>Foreign keys enforced</li>
+            <li>Busy timeout for lock waiting</li>
+        </ul>
+
+        <h3>User Management</h3>
+        <p>Users are managed within the requirements database:</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Field</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>id</code></td>
+                    <td>Internal UUID</td>
+                </tr>
+                <tr>
+                    <td><code>spec_id</code></td>
+                    <td>Human-readable ID ($USER-001)</td>
+                </tr>
+                <tr>
+                    <td><code>name</code></td>
+                    <td>Full name</td>
+                </tr>
+                <tr>
+                    <td><code>email</code></td>
+                    <td>Email address</td>
+                </tr>
+                <tr>
+                    <td><code>handle</code></td>
+                    <td>@mention handle</td>
+                </tr>
+                <tr>
+                    <td><code>archived</code></td>
+                    <td>Soft-delete flag</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h4>User-Requirement Relationships:</h4>
+        <ul>
+            <li><code>created_by</code> - Who created the requirement</li>
+            <li><code>assigned_to</code> - Who is responsible</li>
+            <li><code>tested_by</code> - Who verified</li>
+            <li><code>closed_by</code> - Who closed/completed</li>
+        </ul>
+
+        <h3>Access Control Considerations</h3>
+        <p>The system does not currently implement access control. For teams requiring permissions:</p>
+        <ol>
+            <li><strong>File system permissions</strong> - Use OS-level file permissions</li>
+            <li><strong>Repository access</strong> - Control via Git repository permissions</li>
+            <li><strong>Network deployment</strong> - Consider a web-based wrapper with authentication</li>
+        </ol>
+
+        <hr>
+
+        <h2 id="backup-and-recovery">Backup and Recovery</h2>
+
+        <h3>YAML Backup</h3>
+        <pre><code># Simple file copy
+cp requirements.yaml requirements.yaml.backup
+
+# Timestamped backup
+cp requirements.yaml "requirements.$(date +%Y%m%d_%H%M%S).yaml"
+
+# Git-based backup (recommended)
+git add requirements.yaml
+git commit -m "Backup requirements"
+git push</code></pre>
+
+        <h3>SQLite Backup</h3>
+        <pre><code># File copy (ensure no writes in progress)
+cp requirements.db requirements.db.backup
+
+# SQLite backup command (safer)
+sqlite3 requirements.db ".backup 'requirements.backup.db'"
+
+# Export to JSON for portable backup
+# Use export_to_json function</code></pre>
+
+        <h3>Recovery Procedures</h3>
+
+        <h4>From YAML backup:</h4>
+        <ol>
+            <li>Stop any running applications</li>
+            <li>Copy backup file to original location</li>
+            <li>Restart applications</li>
+        </ol>
+
+        <h4>From SQLite backup:</h4>
+        <ol>
+            <li>Stop any running applications</li>
+            <li>Copy backup file to original location</li>
+            <li>Restart applications</li>
+        </ol>
+
+        <h4>From JSON export:</h4>
+        <ol>
+            <li>Create new database file</li>
+            <li>Use <code>import_from_json</code> to restore</li>
+            <li>Update registry if needed</li>
+        </ol>
+
+        <h3>Automated Backup Script</h3>
+        <pre><code>#!/bin/bash
+# backup-aida.sh
+
+BACKUP_DIR="$HOME/aida-backups"
+SOURCE="$HOME/project/requirements.yaml"
+DATE=$(date +%Y%m%d_%H%M%S)
+
+mkdir -p "$BACKUP_DIR"
+cp "$SOURCE" "$BACKUP_DIR/requirements.$DATE.yaml"
+
+# Keep last 30 backups
+cd "$BACKUP_DIR"
+ls -t | tail -n +31 | xargs -r rm</code></pre>
+
+        <hr>
+
+        <h2 id="performance-tuning">Performance Tuning</h2>
+
+        <h3>YAML Backend Optimization</h3>
+        <ul>
+            <li><strong>Keep file size reasonable</strong> - Consider SQLite for 500+ requirements</li>
+            <li><strong>Use features</strong> - Logical grouping improves perceived performance</li>
+            <li><strong>Archive old requirements</strong> - Move completed/rejected to archive</li>
+        </ul>
+
+        <h3>SQLite Backend Optimization</h3>
+        <ul>
+            <li><strong>Indexes are pre-configured</strong> - No manual tuning needed</li>
+            <li><strong>WAL mode</strong> - Already enabled for best concurrent performance</li>
+            <li><strong>Vacuum periodically</strong> - Reclaim space after many deletions:
+                <pre><code>sqlite3 requirements.db "VACUUM;"</code></pre>
+            </li>
+        </ul>
+
+        <h3>General Tips</h3>
+        <ol>
+            <li><strong>Use filters</strong> - Reduce displayed requirements to improve GUI responsiveness</li>
+            <li><strong>Archive liberally</strong> - Hide completed requirements from active views</li>
+            <li><strong>Split large projects</strong> - Consider separate databases for distinct subsystems</li>
+            <li><strong>Regular cleanup</strong> - Delete orphaned relationships and unused features</li>
+        </ol>
+
+        <hr>
+
+        <h2 id="troubleshooting">Troubleshooting</h2>
+
+        <h3>Common Issues</h3>
+
+        <h4>"Database is locked"</h4>
+        <ul>
+            <li><strong>Cause:</strong> Another process has exclusive access</li>
+            <li><strong>Solution:</strong> Close other applications using the file, or wait and retry</li>
+        </ul>
+
+        <h4>"Failed to parse YAML"</h4>
+        <ul>
+            <li><strong>Cause:</strong> Malformed YAML syntax</li>
+            <li><strong>Solution:</strong> Use a YAML validator, restore from backup</li>
+        </ul>
+
+        <h4>"Schema version mismatch"</h4>
+        <ul>
+            <li><strong>Cause:</strong> Database created with newer software version</li>
+            <li><strong>Solution:</strong> Update software or migrate database</li>
+        </ul>
+
+        <h4>"Corrupt SQLite database"</h4>
+        <ul>
+            <li><strong>Cause:</strong> Incomplete write, hardware failure</li>
+            <li><strong>Solution:</strong> Restore from backup, run <code>sqlite3 db.db "PRAGMA integrity_check;"</code></li>
+        </ul>
+
+        <h3>Diagnostic Commands</h3>
+        <pre><code># Check YAML syntax
+python3 -c "import yaml; yaml.safe_load(open('requirements.yaml'))"
+
+# Check SQLite integrity
+sqlite3 requirements.db "PRAGMA integrity_check;"
+
+# View SQLite schema
+sqlite3 requirements.db ".schema"
+
+# Count requirements in SQLite
+sqlite3 requirements.db "SELECT COUNT(*) FROM requirements;"
+
+# View metadata in SQLite
+sqlite3 requirements.db "SELECT * FROM metadata;"</code></pre>
+
+        <h3>Recovery from Corruption</h3>
+
+        <h4>YAML corruption:</h4>
+        <ol>
+            <li>Restore from Git history: <code>git checkout HEAD~1 -- requirements.yaml</code></li>
+            <li>Or restore from backup file</li>
+            <li>Use JSON export if available</li>
+        </ol>
+
+        <h4>SQLite corruption:</h4>
+        <ol>
+            <li>Try: <code>sqlite3 corrupt.db ".recover" | sqlite3 recovered.db</code></li>
+            <li>Or restore from backup</li>
+            <li>Use JSON export if available</li>
+        </ol>
+
+        <h3>Getting Help</h3>
+        <ul>
+            <li>Check logs for error messages</li>
+            <li>Verify file permissions</li>
+            <li>Test with a fresh database file</li>
+            <li>Report issues at the project repository</li>
+        </ul>
+
+        <hr>
+
+        <h2>Appendix: Environment Variables</h2>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Variable</th>
+                    <th>Description</th>
+                    <th>Default</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>AIDA_DB_NAME</code></td>
+                    <td>Default project name from registry</td>
+                    <td>(none)</td>
+                </tr>
+                <tr>
+                    <td><code>AIDA_FEATURE</code></td>
+                    <td>Default feature for new requirements</td>
+                    <td>"Uncategorized"</td>
+                </tr>
+                <tr>
+                    <td><code>AIDA_REGISTRY_PATH</code></td>
+                    <td>Custom registry file location</td>
+                    <td><code>~/.aida.config</code></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>Appendix: Registry File Format</h2>
+        <p>The multi-project registry (<code>~/.aida.config</code>) uses YAML format:</p>
+        <pre><code>default: "my-project"
+projects:
+  - name: "my-project"
+    path: "/home/user/projects/myproject/requirements.yaml"
+    description: "Main project requirements"
+  - name: "backend"
+    path: "/home/user/projects/backend/requirements.db"
+    description: "Backend service requirements"</code></pre>
+
+        <hr>
+
+        <p class="footer"><em>Last updated: December 2025 | AIDA v0.1.0</em></p>
+    </div>
+
+    <script>
+        // Theme toggle functionality
+        function toggleTheme() {
+            const body = document.body;
+            const themeIcon = document.querySelector('.theme-icon');
+            const themeText = document.querySelector('.theme-text');
+
+            if (body.classList.contains('dark-mode')) {
+                body.classList.remove('dark-mode');
+                body.classList.add('light-mode');
+                themeIcon.textContent = '<';
+                themeText.textContent = 'Dark';
+                localStorage.setItem('theme', 'light');
+            } else {
+                body.classList.remove('light-mode');
+                body.classList.add('dark-mode');
+                themeIcon.textContent = ' ';
+                themeText.textContent = 'Light';
+                localStorage.setItem('theme', 'dark');
+            }
+        }
+
+        // Apply saved theme on page load
+        (function() {
+            const savedTheme = localStorage.getItem('theme');
+            const themeIcon = document.querySelector('.theme-icon');
+            const themeText = document.querySelector('.theme-text');
+
+            if (savedTheme === 'dark') {
+                document.body.classList.add('dark-mode');
+                themeIcon.textContent = ' ';
+                themeText.textContent = 'Light';
+            } else if (savedTheme === 'light') {
+                document.body.classList.add('light-mode');
+                themeIcon.textContent = '<';
+                themeText.textContent = 'Dark';
+            }
+            // If no saved theme, system preference will apply via CSS media query
+        })();
+    </script>
+</body>
+</html>
