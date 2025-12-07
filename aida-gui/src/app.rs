@@ -479,6 +479,8 @@ pub struct CustomTheme {
     // === Text Colors ===
     /// Primary text color (None = use widget defaults)
     pub text_color: Option<ThemeColor>,
+    /// Weak/dim text color (for completed/inactive items)
+    pub weak_text_color: Option<ThemeColor>,
     /// Hyperlink color
     pub hyperlink_color: ThemeColor,
     /// Warning text color
@@ -581,6 +583,7 @@ impl CustomTheme {
             faint_bg: ThemeColor::new(5, 5, 5),
             // Text
             text_color: None,
+            weak_text_color: None, // Uses egui default when None
             hyperlink_color: ThemeColor::new(90, 170, 255),
             warn_fg: ThemeColor::new(255, 143, 0),
             error_fg: ThemeColor::new(255, 0, 0),
@@ -632,6 +635,7 @@ impl CustomTheme {
             faint_bg: ThemeColor::new(245, 245, 245),
             // Text
             text_color: None,
+            weak_text_color: None, // Uses egui default when None
             hyperlink_color: ThemeColor::new(0, 102, 204),
             warn_fg: ThemeColor::new(255, 100, 0),
             error_fg: ThemeColor::new(220, 0, 0),
@@ -976,6 +980,15 @@ impl Theme {
         match self {
             Theme::Custom(t) => t.title_bar_font_size,
             _ => 1.0, // Default size
+        }
+    }
+
+    /// Get the weak/dim text color for this theme (for completed/inactive items)
+    /// Returns None to use egui's default weak_text_color()
+    fn weak_text_color(&self) -> Option<egui::Color32> {
+        match self {
+            Theme::Custom(t) => t.weak_text_color.map(|c| c.to_egui()),
+            _ => None,
         }
     }
 }
@@ -11657,6 +11670,28 @@ impl RequirementsApp {
                     ui.end_row();
                 }
 
+                ui.label("Dim/Weak Text Color:");
+                ui.horizontal(|ui| {
+                    let mut has_weak = theme.weak_text_color.is_some();
+                    if ui.checkbox(&mut has_weak, "").changed() {
+                        if has_weak {
+                            theme.weak_text_color = Some(ThemeColor::new(120, 120, 120));
+                        } else {
+                            theme.weak_text_color = None;
+                        }
+                    }
+                    if let Some(ref mut color) = theme.weak_text_color {
+                        color_picker_widget(ui, color);
+                    } else {
+                        ui.label("(default)");
+                    }
+                });
+                ui.end_row();
+
+                ui.label("");
+                ui.small("Used for completed/rejected items");
+                ui.end_row();
+
                 ui.label("Hyperlink Color:");
                 color_picker_widget(ui, &mut theme.hyperlink_color);
                 ui.end_row();
@@ -14426,11 +14461,17 @@ impl RequirementsApp {
 
             // Paint text
             let text_pos = rect.min + egui::vec2(4.0, 2.0);
+            // Use theme editor's weak color if editing, otherwise user settings
+            let weak_color = if self.show_theme_editor {
+                self.theme_editor_theme.weak_text_color.map(|c| c.to_egui())
+            } else {
+                self.user_settings.theme.weak_text_color()
+            }.unwrap_or_else(|| ui.visuals().weak_text_color());
             let text_color = if selected {
                 ui.visuals().selection.stroke.color
             } else if is_inactive {
                 // Grey out completed/rejected items
-                ui.visuals().weak_text_color()
+                weak_color
             } else {
                 ui.visuals().text_color()
             };
@@ -14960,14 +15001,20 @@ impl RequirementsApp {
 
         // Paint text - dimmed items use a lighter/greyed color
         let text_pos = rect.min + egui::vec2(4.0, 2.0);
+        // Use theme editor's weak color if editing, otherwise user settings
+        let weak_color = if self.show_theme_editor {
+            self.theme_editor_theme.weak_text_color.map(|c| c.to_egui())
+        } else {
+            self.user_settings.theme.weak_text_color()
+        }.unwrap_or_else(|| ui.visuals().weak_text_color());
         let text_color = if dimmed {
             // Greyed out for non-matching ancestors
-            egui::Color32::from_gray(140)
+            weak_color
         } else if selected {
             ui.visuals().selection.stroke.color
         } else if is_inactive {
             // Grey out completed/rejected items
-            ui.visuals().weak_text_color()
+            weak_color
         } else {
             ui.visuals().text_color()
         };
