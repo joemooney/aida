@@ -11308,7 +11308,7 @@ impl RequirementsApp {
                 egui::TextEdit::multiline(&mut self.store.ai_prompts.global_context)
                     .desired_width(ui.available_width() - 20.0)
                     .desired_rows(4)
-                    .hint_text("Example: This is a medical device project following FDA regulations. Requirements should be traceable to risk analyses..."),
+                    .hint_text("Example: This is a software-defined radio project. Requirements should reference RF specifications, signal processing constraints, and real-time performance targets..."),
             );
             if response.changed() {
                 self.save();
