@@ -773,6 +773,8 @@ pub enum Theme {
     Dark,
     /// Light theme
     Light,
+    /// Vibrant Light - colorful light theme with modern accents
+    VibrantLight,
     /// High contrast dark
     HighContrastDark,
     /// Solarized dark
@@ -788,6 +790,7 @@ impl Theme {
         match self {
             Theme::Dark => "Dark".to_string(),
             Theme::Light => "Light".to_string(),
+            Theme::VibrantLight => "Vibrant Light".to_string(),
             Theme::HighContrastDark => "High Contrast Dark".to_string(),
             Theme::SolarizedDark => "Solarized Dark".to_string(),
             Theme::Nord => "Nord".to_string(),
@@ -798,7 +801,8 @@ impl Theme {
     fn next(&self) -> Theme {
         match self {
             Theme::Dark => Theme::Light,
-            Theme::Light => Theme::HighContrastDark,
+            Theme::Light => Theme::VibrantLight,
+            Theme::VibrantLight => Theme::HighContrastDark,
             Theme::HighContrastDark => Theme::SolarizedDark,
             Theme::SolarizedDark => Theme::Nord,
             Theme::Nord => Theme::Dark,
@@ -813,6 +817,55 @@ impl Theme {
             }
             Theme::Light => {
                 ctx.set_visuals(egui::Visuals::light());
+            }
+            Theme::VibrantLight => {
+                let mut visuals = egui::Visuals::light();
+
+                // Vibrant, colorful accent colors
+                let accent_primary = egui::Color32::from_rgb(99, 102, 241);   // Indigo/purple
+                let accent_hover = egui::Color32::from_rgb(129, 140, 248);    // Lighter indigo
+                let accent_active = egui::Color32::from_rgb(79, 70, 229);     // Deeper indigo
+                let selection_bg = egui::Color32::from_rgb(199, 210, 254);    // Light indigo
+                let hyperlink = egui::Color32::from_rgb(37, 99, 235);         // Bright blue
+
+                // Warm off-white backgrounds with subtle color
+                let bg_main = egui::Color32::from_rgb(250, 250, 252);         // Slightly cool white
+                let bg_panel = egui::Color32::from_rgb(245, 245, 250);        // Subtle lavender tint
+                let bg_widget = egui::Color32::from_rgb(240, 240, 248);       // Light lavender
+
+                // Text colors with good contrast
+                let text_primary = egui::Color32::from_rgb(30, 30, 60);       // Dark blue-gray
+                let text_muted = egui::Color32::from_rgb(100, 100, 130);      // Muted blue-gray
+
+                // Apply the colors
+                visuals.override_text_color = Some(text_primary);
+                visuals.widgets.noninteractive.bg_fill = bg_panel;
+                visuals.widgets.noninteractive.fg_stroke.color = text_muted;
+                visuals.widgets.inactive.bg_fill = bg_widget;
+                visuals.widgets.inactive.fg_stroke.color = text_primary;
+                visuals.widgets.hovered.bg_fill = accent_hover;
+                visuals.widgets.hovered.fg_stroke.color = egui::Color32::WHITE;
+                visuals.widgets.active.bg_fill = accent_active;
+                visuals.widgets.active.fg_stroke.color = egui::Color32::WHITE;
+                visuals.widgets.open.bg_fill = accent_primary;
+                visuals.widgets.open.fg_stroke.color = egui::Color32::WHITE;
+                visuals.selection.bg_fill = selection_bg;
+                visuals.selection.stroke.color = accent_primary;
+                visuals.hyperlink_color = hyperlink;
+                visuals.extreme_bg_color = bg_main;
+                visuals.faint_bg_color = bg_panel;
+                visuals.window_fill = bg_main;
+                visuals.panel_fill = bg_panel;
+
+                // Colorful window shadow
+                visuals.window_shadow = egui::epaint::Shadow {
+                    offset: egui::vec2(0.0, 4.0),
+                    blur: 12.0,
+                    spread: 0.0,
+                    color: egui::Color32::from_rgba_unmultiplied(99, 102, 241, 25),
+                };
+
+                ctx.set_visuals(visuals);
             }
             Theme::HighContrastDark => {
                 let mut visuals = egui::Visuals::dark();
@@ -901,6 +954,7 @@ impl Theme {
         match self {
             Theme::Custom(t) => t.title_bar_bg.to_egui(),
             Theme::Light => egui::Color32::from_rgb(220, 220, 225),
+            Theme::VibrantLight => egui::Color32::from_rgb(230, 230, 248), // Lavender tint
             // Dark themes
             Theme::Dark => egui::Color32::from_rgb(45, 45, 50),
             Theme::HighContrastDark => egui::Color32::from_rgb(35, 35, 40),
