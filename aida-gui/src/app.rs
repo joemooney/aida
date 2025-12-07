@@ -3719,6 +3719,56 @@ impl RequirementsApp {
         }
     }
 
+    /// Open a specific project file in a new window
+    fn open_project_in_new_window(file_path: String) {
+        let exe_path = std::env::current_exe().ok();
+
+        // Detect if we're running from a cargo target directory
+        let is_cargo_run = exe_path
+            .as_ref()
+            .map(|p| {
+                let path_str = p.to_string_lossy();
+                path_str.contains("/target/debug/") || path_str.contains("/target/release/")
+            })
+            .unwrap_or(false);
+
+        if is_cargo_run {
+            // Running via cargo - use cargo run
+            let bin_name = exe_path
+                .as_ref()
+                .and_then(|p| p.file_name())
+                .and_then(|n| n.to_str())
+                .unwrap_or("aida-gui");
+
+            let is_release = exe_path
+                .as_ref()
+                .map(|p| p.to_string_lossy().contains("/target/release/"))
+                .unwrap_or(false);
+
+            let mut cmd = std::process::Command::new("cargo");
+            cmd.arg("run").arg("--bin").arg(bin_name);
+
+            if is_release {
+                cmd.arg("--release");
+            }
+
+            // Pass the file path
+            cmd.arg("--").arg("--file").arg(&file_path);
+
+            // Spawn the new process detached
+            let _ = cmd.spawn();
+        } else if let Some(exe) = exe_path {
+            // Direct executable - just launch it
+            let mut cmd = std::process::Command::new(&exe);
+
+            // Pass the file path
+            cmd.arg("--file").arg(&file_path);
+
+            // Spawn the new process detached
+            let _ = cmd.spawn();
+        }
+    }
+
     fn reload(&mut self) {
         match self.storage.load() {
             Ok(store) => {
@@ -4523,6 +4573,18 @@ impl RequirementsApp {
                     if ui.button("📁 Switch Project...").clicked() {
                         self.load_available_projects();
                         self.show_switch_project_dialog = true;
+                        ui.close_menu();
+                    }
+                    if ui.button("📂 Open Project...").clicked() {
+                        // Open a file dialog to select a project file
+                        if let Some(path) = rfd::FileDialog::new()
+                            .add_filter("YAML Files", &["yaml", "yml"])
+                            .add_filter("All Files", &["*"])
+                            .set_title("Open Project")
+                            .pick_file()
+                        {
+                            Self::open_project_in_new_window(path.to_string_lossy().to_string());
+                        }
                         ui.close_menu();
                     }
                     if ui.button("➕ New Project...").clicked() {
