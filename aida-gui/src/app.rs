@@ -2528,6 +2528,9 @@ pub struct RequirementsApp {
     search_scope: SearchScope,
     search_match_indices: Vec<usize>,      // Indices of requirements matching current search
     search_current_match: Option<usize>,   // Current position in search_match_indices
+    search_focus_requested: bool,          // Request focus on search textbox next frame
+    search_history: Vec<String>,           // History of previous searches
+    search_history_idx: Option<usize>,     // Current position when navigating history
     active_tab: DetailTab,
 
     // Form state
@@ -3151,6 +3154,9 @@ impl RequirementsApp {
             search_scope: SearchScope::all(),
             search_match_indices: Vec::new(),
             search_current_match: None,
+            search_focus_requested: false,
+            search_history: Vec::new(),
+            search_history_idx: None,
             active_tab: DetailTab::Description,
             form_title: String::new(),
             form_description: String::new(),
@@ -5331,7 +5337,7 @@ impl RequirementsApp {
                     }
 
                     if !preview.overwrites.is_empty() {
-                        ui.colored_label(egui::Color32::from_rgb(255, 180, 100), "⚠ Files to overwrite:");
+                        ui.colored_label(egui::Color32::from_rgb(180, 160, 100), "⚠ Files to overwrite:"); // Muted gold
                         for file in &preview.overwrites {
                             ui.label(format!("   • {}", file.display()));
                         }
@@ -5346,7 +5352,7 @@ impl RequirementsApp {
                             for artifact in &preview.artifacts {
                                 ui.horizontal(|ui| {
                                     if artifact.exists {
-                                        ui.colored_label(egui::Color32::from_rgb(255, 180, 100), "⚠");
+                                        ui.colored_label(egui::Color32::from_rgb(180, 160, 100), "⚠"); // Muted gold
                                     } else {
                                         ui.colored_label(egui::Color32::from_rgb(100, 200, 100), "✓");
                                     }
@@ -5443,7 +5449,7 @@ impl RequirementsApp {
                 ui.heading("Save Conflict");
                 ui.add_space(5.0);
                 ui.colored_label(
-                    egui::Color32::from_rgb(255, 180, 100),
+                    egui::Color32::from_rgb(180, 160, 100), // Muted gold for warnings
                     format!(
                         "Requirement {} was modified externally while you were editing it.",
                         conflict.spec_id
@@ -5482,7 +5488,7 @@ impl RequirementsApp {
                                         ui.end_row();
 
                                         ui.colored_label(
-                                            egui::Color32::from_rgb(255, 150, 100),
+                                            egui::Color32::from_rgb(180, 160, 100), // Muted gold
                                             "External change:",
                                         );
                                         ui.add(
@@ -6327,7 +6333,7 @@ impl RequirementsApp {
         // If we're capturing a key, show instructions
         if let Some(action) = self.capturing_key_for {
             ui.colored_label(
-                egui::Color32::YELLOW,
+                egui::Color32::from_rgb(100, 180, 220), // Soft blue for prompts
                 format!("Press a key for '{}' (Escape to cancel)", action.label()),
             );
             ui.add_space(5.0);
@@ -6467,7 +6473,7 @@ impl RequirementsApp {
 
                         // Highlight if we're capturing for this action
                         if self.capturing_key_for == Some(action) {
-                            ui.colored_label(egui::Color32::YELLOW, "...");
+                            ui.colored_label(egui::Color32::from_rgb(100, 180, 220), "...");
                         } else {
                             ui.monospace(&binding_display);
                         }
@@ -6624,7 +6630,7 @@ impl RequirementsApp {
             }
 
             if let Some(warning) = &validation.warning {
-                ui.colored_label(egui::Color32::YELLOW, format!("ℹ {}", warning));
+                ui.colored_label(egui::Color32::from_rgb(180, 160, 100), format!("ℹ {}", warning)); // Muted gold for info
                 ui.add_space(5.0);
             }
 
@@ -13970,11 +13976,52 @@ impl RequirementsApp {
         let prev_filter_text = self.filter_text.clone();
 
         ui.label("🔍");
-        let response = ui.add(
+        let mut response = ui.add(
             egui::TextEdit::singleline(&mut self.filter_text)
-                .hint_text(if compact { "Search..." } else { "Search (case-insensitive)..." })
+                .hint_text(if compact { "Search... (↑↓ history)" } else { "Search (↑↓ history, case-insensitive)..." })
                 .desired_width(desired_width),
         );
+
+        // Handle focus request from '/' hotkey
+        if self.search_focus_requested {
+            response.request_focus();
+            self.search_focus_requested = false;
+        }
+
+        // Handle Up/Down arrow for search history when focused
+        if response.has_focus() && !self.search_history.is_empty() {
+            let up_pressed = ui.input(|i| i.key_pressed(egui::Key::ArrowUp));
+            let down_pressed = ui.input(|i| i.key_pressed(egui::Key::ArrowDown));
+
+            if up_pressed {
+                // Navigate backwards in history
+                match self.search_history_idx {
+                    None => {
+                        // Start from most recent
+                        self.search_history_idx = Some(self.search_history.len() - 1);
+                    }
+                    Some(idx) if idx > 0 => {
+                        self.search_history_idx = Some(idx - 1);
+                    }
+                    _ => {}
+                }
+                if let Some(idx) = self.search_history_idx {
+                    self.filter_text = self.search_history[idx].clone();
+                }
+            } else if down_pressed {
+                // Navigate forwards in history
+                if let Some(idx) = self.search_history_idx {
+                    if idx + 1 < self.search_history.len() {
+                        self.search_history_idx = Some(idx + 1);
+                        self.filter_text = self.search_history[idx + 1].clone();
+                    } else {
+                        // Past end of history - clear
+                        self.search_history_idx = None;
+                        self.filter_text.clear();
+                    }
+                }
+            }
+        }
 
         // Check if search text changed
         if self.filter_text != prev_filter_text {
@@ -14521,24 +14568,24 @@ impl RequirementsApp {
                     egui::Stroke::new(2.0, egui::Color32::LIGHT_BLUE),
                 )
             } else if selected && is_current_match {
-                // Selected + current search match: bright orange highlight
+                // Selected + current search match: teal highlight
                 (
-                    egui::Color32::from_rgba_unmultiplied(255, 180, 0, 180),
-                    egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 150, 0)),
+                    egui::Color32::from_rgba_unmultiplied(0, 180, 180, 180),
+                    egui::Stroke::new(2.0, egui::Color32::from_rgb(0, 150, 150)),
                 )
             } else if selected {
                 (ui.visuals().selection.bg_fill, egui::Stroke::NONE)
             } else if is_current_match {
-                // Current search match (not selected): bright orange highlight
+                // Current search match (not selected): teal highlight
                 (
-                    egui::Color32::from_rgba_unmultiplied(255, 180, 0, 150),
-                    egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 150, 0)),
+                    egui::Color32::from_rgba_unmultiplied(0, 180, 180, 150),
+                    egui::Stroke::new(2.0, egui::Color32::from_rgb(0, 150, 150)),
                 )
             } else if is_search_match {
-                // Other search matches (Highlight mode only): visible yellow highlight
+                // Other search matches (Highlight mode only): muted cyan highlight
                 (
-                    egui::Color32::from_rgba_unmultiplied(255, 255, 0, 100),
-                    egui::Stroke::new(1.0, egui::Color32::from_rgb(200, 200, 0)),
+                    egui::Color32::from_rgba_unmultiplied(100, 200, 200, 80),
+                    egui::Stroke::new(1.0, egui::Color32::from_rgb(80, 160, 160)),
                 )
             } else {
                 (egui::Color32::TRANSPARENT, egui::Stroke::NONE)
@@ -15072,24 +15119,24 @@ impl RequirementsApp {
                 egui::Stroke::new(2.0, egui::Color32::LIGHT_BLUE),
             )
         } else if selected && is_current_match {
-            // Selected + current search match: bright orange highlight
+            // Selected + current search match: teal highlight
             (
-                egui::Color32::from_rgba_unmultiplied(255, 180, 0, 180),
-                egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 150, 0)),
+                egui::Color32::from_rgba_unmultiplied(0, 180, 180, 180),
+                egui::Stroke::new(2.0, egui::Color32::from_rgb(0, 150, 150)),
             )
         } else if selected {
             (ui.visuals().selection.bg_fill, egui::Stroke::NONE)
         } else if is_current_match {
-            // Current search match (not selected): bright orange highlight
+            // Current search match (not selected): teal highlight
             (
-                egui::Color32::from_rgba_unmultiplied(255, 180, 0, 150),
-                egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 150, 0)),
+                egui::Color32::from_rgba_unmultiplied(0, 180, 180, 150),
+                egui::Stroke::new(2.0, egui::Color32::from_rgb(0, 150, 150)),
             )
         } else if is_search_match {
-            // Other search matches (Highlight mode only): visible yellow highlight
+            // Other search matches (Highlight mode only): muted cyan highlight
             (
-                egui::Color32::from_rgba_unmultiplied(255, 255, 0, 100),
-                egui::Stroke::new(1.0, egui::Color32::from_rgb(200, 200, 0)),
+                egui::Color32::from_rgba_unmultiplied(100, 200, 200, 80),
+                egui::Stroke::new(1.0, egui::Color32::from_rgb(80, 160, 160)),
             )
         } else {
             (egui::Color32::TRANSPARENT, egui::Stroke::NONE)
@@ -17269,7 +17316,7 @@ impl RequirementsApp {
                 ui.horizontal(|ui| {
                     ui.label(
                         egui::RichText::new("⚠️ Evaluation may be outdated")
-                            .color(egui::Color32::from_rgb(255, 165, 0)),
+                            .color(egui::Color32::from_rgb(180, 160, 100)), // Muted gold
                     );
                     ui.label("- requirement has been modified since last evaluation");
                 });
@@ -17348,9 +17395,9 @@ impl RequirementsApp {
                                     // Severity indicator
                                     let severity_color = match issue.severity.to_lowercase().as_str()
                                     {
-                                        "high" | "critical" => egui::Color32::from_rgb(244, 67, 54),
-                                        "medium" => egui::Color32::from_rgb(255, 152, 0),
-                                        _ => egui::Color32::from_rgb(255, 235, 59),
+                                        "high" | "critical" => egui::Color32::from_rgb(220, 80, 80), // Muted red
+                                        "medium" => egui::Color32::from_rgb(180, 160, 100), // Muted gold
+                                        _ => egui::Color32::from_rgb(140, 180, 140), // Muted green for low
                                     };
                                     ui.label(
                                         egui::RichText::new(&issue.severity)
@@ -20694,7 +20741,7 @@ fn main() {
 
                 ui.add_space(10.0);
                 ui.colored_label(
-                    egui::Color32::YELLOW,
+                    egui::Color32::from_rgb(180, 160, 100), // Muted gold for warnings
                     "This action cannot be undone. Make sure to backup your requirements file first."
                 );
 
@@ -20776,7 +20823,7 @@ fn main() {
 
                 if name_exists {
                     ui.colored_label(
-                        egui::Color32::YELLOW,
+                        egui::Color32::from_rgb(180, 160, 100), // Muted gold for warnings
                         "⚠ This will overwrite existing preset",
                     );
                 }
@@ -20868,7 +20915,7 @@ fn main() {
 
                 if name_exists {
                     ui.colored_label(
-                        egui::Color32::YELLOW,
+                        egui::Color32::from_rgb(180, 160, 100), // Muted gold for warnings
                         "⚠ This will overwrite existing preset",
                     );
                 }
@@ -22220,15 +22267,26 @@ impl eframe::App for RequirementsApp {
             self.clear_search();
         }
 
-        // '/' to switch to filter mode (vim-style)
+        // '/' to focus search box and clear it (vim-style)
         if self.user_settings.keybindings.is_pressed(
             KeyAction::SwitchToFilterMode,
             ctx,
             self.current_key_context,
-        ) && !self.filter_text.is_empty()
-        {
-            self.user_settings.search_mode = SearchMode::Filter;
-            let _ = self.user_settings.save();
+        ) {
+            // Save current search to history before clearing (if not empty and not duplicate)
+            if !self.filter_text.is_empty() {
+                let search = self.filter_text.clone();
+                if self.search_history.last() != Some(&search) {
+                    self.search_history.push(search);
+                    // Keep history limited to 50 entries
+                    if self.search_history.len() > 50 {
+                        self.search_history.remove(0);
+                    }
+                }
+            }
+            self.filter_text.clear();
+            self.search_history_idx = None;
+            self.search_focus_requested = true;
         }
 
         // Also handle Ctrl+= as alternate zoom in (common on keyboards)
