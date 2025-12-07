@@ -13,8 +13,6 @@ requirements:
   created_at: 2025-11-25T19:45:25.234562378Z
   modified_at: 2025-11-26T22:38:19.239036799Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 2fd609e9-d194-47a3-adbd-417f6306190c
@@ -37,8 +35,6 @@ requirements:
   created_at: 2025-11-25T19:47:01.146320499Z
   modified_at: 2025-11-25T19:47:01.146320499Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 043639ed-7c12-4d99-acc2-587a38b0d25d
@@ -57,8 +53,6 @@ requirements:
   created_at: 2025-11-25T19:48:24.400247266Z
   modified_at: 2025-11-25T19:48:24.400247266Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Child
     target_id: 59d3cc0b-25a5-4076-8966-94b8ef4e36b1
@@ -75,8 +69,6 @@ requirements:
   created_at: 2025-11-25T21:06:58.790215612Z
   modified_at: 2025-12-03T05:12:53.994424997Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 848840ae-7005-4fab-b478-163f9139359e
@@ -97,8 +89,6 @@ requirements:
   created_at: 2025-11-25T21:10:21.360247533Z
   modified_at: 2025-12-03T05:16:11.594002812Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 2fd609e9-d194-47a3-adbd-417f6306190c
@@ -113,8 +103,6 @@ requirements:
   created_at: 2025-11-25T21:14:25.964300983Z
   modified_at: 2025-11-29T02:28:14.174447534Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 6da186f2-cae3-4b75-bc46-d487ced9e96b
@@ -142,8 +130,6 @@ requirements:
   created_at: 2025-11-25T21:16:56.190236240Z
   modified_at: 2025-11-26T00:57:38.868416164Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 848840ae-7005-4fab-b478-163f9139359e
@@ -179,8 +165,6 @@ requirements:
   created_at: 2025-11-25T21:19:10.021746590Z
   modified_at: 2025-11-27T01:21:12.488861139Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 848840ae-7005-4fab-b478-163f9139359e
@@ -227,8 +211,6 @@ requirements:
   created_at: 2025-11-25T21:30:08.455035192Z
   modified_at: 2025-11-26T22:58:17.270717049Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Child
     target_id: 61b19487-4000-4b67-87f0-5fd554bfebfa
@@ -254,8 +236,6 @@ requirements:
   created_at: 2025-11-25T22:36:17.393702816Z
   modified_at: 2025-11-26T04:26:38.748992425Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: fa1eaffc-7c05-4d09-95a0-d5e61e9b8529
@@ -276,13 +256,15 @@ requirements:
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-11-25T22:42:42.983254022Z
-  modified_at: 2025-11-27T01:18:01.406518210Z
+  modified_at: 2025-12-07T03:04:39.974213149Z
   req_type: ChangeRequest
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
+  - rel_type: !Custom sprint_assignment
+    target_id: 75cd3a04-28e1-466b-aec8-a5ee9a855473
+    created_at: 2025-12-07T03:04:39.974211874Z
+    created_by: Joe Mooney
   comments:
   - id: 5c445d24-4481-45fe-a8ad-23a3e2eff543
     author: '@joe'
@@ -331,6 +313,13 @@ requirements:
     - field_name: status
       old_value: Draft
       new_value: Completed
+  - id: f8708058-ad40-49e1-a30b-1aadaeb9c00c
+    author: Joe Mooney
+    timestamp: 2025-12-07T03:04:39.974222278Z
+    changes:
+    - field_name: sprint_assignment
+      old_value: ''
+      new_value: REQ-0207
 - id: 87b1dacb-6c52-4f19-b6f8-a5bf41de3529
   spec_id: FR-0013
   title: 'Change/configure window title '
@@ -342,8 +331,6 @@ requirements:
   created_at: 2025-11-25T22:48:26.624041526Z
   modified_at: 2025-11-25T22:48:26.624041526Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
@@ -376,8 +363,6 @@ requirements:
   created_at: 2025-11-25T23:02:47.788464927Z
   modified_at: 2025-11-29T17:30:04.008722318Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
@@ -455,8 +440,6 @@ requirements:
   created_at: 2025-11-25T23:03:34.032116653Z
   modified_at: 2025-11-29T00:49:25.126367254Z
   req_type: ChangeRequest
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 61b19487-4000-4b67-87f0-5fd554bfebfa
@@ -524,8 +507,6 @@ requirements:
   created_at: 2025-11-25T23:51:23.542112733Z
   modified_at: 2025-12-03T05:49:10.216375591Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Child
     target_id: 39824b9c-6ff0-49b9-988d-6819978e547b
@@ -537,6 +518,10 @@ requirements:
     target_id: b8621169-8a34-4001-a2e8-936229497c62
   - rel_type: Child
     target_id: 85868242-14f2-4e4a-beba-5103c271ce32
+  - rel_type: Child
+    target_id: 75cd3a04-28e1-466b-aec8-a5ee9a855473
+    created_at: 2025-12-07T02:35:07.588146353Z
+    created_by: Joe Mooney
   history:
   - id: bc863c32-e57c-469a-84d1-39b682469d24
     author: '@joe'
@@ -576,8 +561,6 @@ requirements:
   created_at: 2025-11-26T00:42:10.981736725Z
   modified_at: 2025-11-29T04:44:09.507107255Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
@@ -625,8 +608,6 @@ requirements:
   created_at: 2025-11-26T00:44:24.763195784Z
   modified_at: 2025-11-26T00:44:24.763195784Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 4c3bb89e-2d41-4841-b2ff-881bb67fee99
@@ -641,8 +622,6 @@ requirements:
   created_at: 2025-11-26T00:49:32.639633273Z
   modified_at: 2025-11-26T00:55:10.811330075Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 85868242-14f2-4e4a-beba-5103c271ce32
@@ -688,7 +667,6 @@ requirements:
   created_at: 2025-11-26T01:11:45.857312446Z
   modified_at: 2025-12-07T00:08:14.140810551Z
   req_type: Functional
-  dependencies: []
   tags:
   - comments
   relationships:
@@ -713,8 +691,6 @@ requirements:
   created_at: 2025-11-26T01:15:26.926247061Z
   modified_at: 2025-11-28T17:52:22.918798500Z
   req_type: ChangeRequest
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
@@ -735,16 +711,14 @@ requirements:
 - id: 967615c7-1128-4f6d-a02e-b13917942460
   spec_id: FR-0022
   title: search textbox should expand as panel is widened
-  description: ''
-  status: Draft
+  description: search textbox should expand as panel is widened to expand
+  status: Rejected
   priority: Medium
   owner: ''
   feature: 13-STYLE
   created_at: 2025-11-26T01:18:30.246370231Z
-  modified_at: 2025-11-30T01:57:39.198513640Z
+  modified_at: 2025-12-07T02:46:12.869688631Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
@@ -763,6 +737,16 @@ requirements:
     - field_name: status
       old_value: Approved
       new_value: Draft
+  - id: 815820f8-daed-447e-904a-188a4dd460f8
+    author: Joe Mooney
+    timestamp: 2025-12-07T02:46:12.869687970Z
+    changes:
+    - field_name: description
+      old_value: ''
+      new_value: search textbox should expand as panel is widened to expand
+    - field_name: status
+      old_value: Draft
+      new_value: Rejected
 - id: d8fbfd6f-47a7-4f93-94d2-1dc3009e79b0
   spec_id: FR-0023
   title: describe default requirement types
@@ -774,8 +758,6 @@ requirements:
   created_at: 2025-11-26T04:28:47.348005694Z
   modified_at: 2025-12-06T19:58:00.324913817Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
@@ -832,8 +814,6 @@ requirements:
   created_at: 2025-11-26T05:59:43.548438869Z
   modified_at: 2025-11-28T04:03:57.307620846Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 04cff76c-978d-4e3a-845a-1d6f6b885cea
@@ -879,8 +859,6 @@ requirements:
   created_at: 2025-11-26T22:15:57.031832023Z
   modified_at: 2025-11-26T22:15:57.031832023Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 5a8cda55-badf-48c6-82c9-b9ea53f3f69f
@@ -896,8 +874,6 @@ requirements:
   created_at: 2025-11-26T22:56:44.024845680Z
   modified_at: 2025-11-29T02:27:36.644412019Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Child
     target_id: f1a64c4d-3086-4010-be4e-3eaf6bc3df5d
@@ -947,6 +923,42 @@ requirements:
     target_id: 0aefc969-49e7-4825-9118-ba20f778636c
     created_at: 2025-11-29T16:53:29.853418314Z
     created_by: '@joe'
+  - rel_type: Child
+    target_id: 49b91b7d-77d3-4717-af8a-921ab4e05685
+    created_at: 2025-12-07T03:09:56.950673286Z
+    created_by: Joe Mooney
+  - rel_type: Child
+    target_id: 3ae5cfd3-1913-4b54-8f60-3efe7ab3ffb0
+    created_at: 2025-12-07T03:10:16.982674660Z
+    created_by: Joe Mooney
+  - rel_type: Child
+    target_id: 17098630-b92b-4194-ae1f-e7e901e73a35
+    created_at: 2025-12-07T03:11:01.189836174Z
+    created_by: Joe Mooney
+  - rel_type: Child
+    target_id: d1e58dd4-fd26-437a-8856-2cf0d4f2adda
+    created_at: 2025-12-07T03:11:20.548542186Z
+    created_by: Joe Mooney
+  - rel_type: Child
+    target_id: 79bae700-7db9-42a1-8cc6-d183dbc0496b
+    created_at: 2025-12-07T03:11:35.983235142Z
+    created_by: Joe Mooney
+  - rel_type: Child
+    target_id: b2a8f599-fc75-405f-acd0-abac37016c10
+    created_at: 2025-12-07T03:11:52.881768485Z
+    created_by: Joe Mooney
+  - rel_type: Child
+    target_id: 321080c4-4748-4b33-a9f0-7a33598ea925
+    created_at: 2025-12-07T03:12:10.521150888Z
+    created_by: Joe Mooney
+  - rel_type: Child
+    target_id: 15b6ccbc-e175-4b0c-a936-72359ef07e22
+    created_at: 2025-12-07T03:12:28.913711884Z
+    created_by: Joe Mooney
+  - rel_type: Child
+    target_id: cca4777a-91d8-4030-a690-82a034c745d2
+    created_at: 2025-12-07T03:12:45.182840867Z
+    created_by: Joe Mooney
   history:
   - id: e2ba3669-855e-4b99-9b7f-30300da178c5
     author: '@joe'
@@ -981,8 +993,6 @@ requirements:
   created_at: 2025-11-26T23:02:51.508668144Z
   modified_at: 2025-11-26T23:02:51.508668144Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Child
     target_id: 02a28ce8-28aa-4e56-88e3-ae29813a3fe0
@@ -1006,8 +1016,6 @@ requirements:
   created_at: 2025-11-26T23:04:21.820329556Z
   modified_at: 2025-12-03T05:51:25.286507586Z
   req_type: Folder
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Child
     target_id: 2fd609e9-d194-47a3-adbd-417f6306190c
@@ -1033,8 +1041,6 @@ requirements:
   created_at: 2025-11-26T23:08:24.143381728Z
   modified_at: 2025-11-26T23:08:34.439346889Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 617353d0-7006-4a3c-92ba-49e5218386e2
@@ -1066,8 +1072,6 @@ requirements:
   created_at: 2025-11-27T00:54:01.866964924Z
   modified_at: 2025-12-07T01:12:31.587444335Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 848840ae-7005-4fab-b478-163f9139359e
@@ -1118,8 +1122,6 @@ requirements:
   created_at: 2025-11-27T01:23:00.651993728Z
   modified_at: 2025-11-27T21:20:59.098122052Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Child
     target_id: 055530de-326d-4362-aab1-639239f363e5
@@ -1173,8 +1175,6 @@ requirements:
   created_at: 2025-11-27T01:40:55.651758804Z
   modified_at: 2025-11-27T06:35:03.495147287Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 2fd609e9-d194-47a3-adbd-417f6306190c
@@ -1273,8 +1273,6 @@ requirements:
   created_at: 2025-11-27T03:25:22.148185263Z
   modified_at: 2025-11-27T03:36:59.734206504Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: bb81e51e-dd32-48ef-9806-cf26a09643f5
@@ -1312,8 +1310,6 @@ requirements:
   created_at: 2025-11-27T03:34:26.856630403Z
   modified_at: 2025-11-27T03:43:57.001206332Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: bb81e51e-dd32-48ef-9806-cf26a09643f5
@@ -1337,8 +1333,6 @@ requirements:
   created_at: 2025-11-27T03:36:41.058576375Z
   modified_at: 2025-11-28T20:10:41.815586505Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Child
     target_id: 67a6162d-a44c-4cf5-8756-6b6cb8808928
@@ -1415,8 +1409,6 @@ requirements:
   created_at: 2025-11-27T04:10:22.591989434Z
   modified_at: 2025-11-27T04:22:15.626866171Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Child
     target_id: c818f849-7ccc-4710-890a-7b2d87df16da
@@ -1506,8 +1498,6 @@ requirements:
   created_at: 2025-11-27T04:27:55.860215514Z
   modified_at: 2025-11-27T06:10:37.379910156Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 4c3bb89e-2d41-4841-b2ff-881bb67fee99
@@ -1569,8 +1559,6 @@ requirements:
   created_at: 2025-11-27T04:32:01.625353327Z
   modified_at: 2025-11-27T05:34:48.047724849Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 67a6162d-a44c-4cf5-8756-6b6cb8808928
@@ -1600,8 +1588,6 @@ requirements:
   created_at: 2025-11-27T05:38:12.026793995Z
   modified_at: 2025-11-30T01:51:01.389495396Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
@@ -1686,8 +1672,6 @@ requirements:
   created_at: 2025-11-27T06:10:17.050094053Z
   modified_at: 2025-11-28T17:58:48.845516016Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
@@ -1802,8 +1786,6 @@ requirements:
   created_at: 2025-11-27T06:16:17.007809398Z
   modified_at: 2025-11-30T02:11:12.487402381Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
@@ -2457,8 +2439,6 @@ requirements:
   created_at: 2025-11-27T06:18:35.852016323Z
   modified_at: 2025-11-27T06:18:35.852016323Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
@@ -2543,8 +2523,6 @@ requirements:
   created_at: 2025-11-27T06:28:15.111308891Z
   modified_at: 2025-11-27T06:41:28.386481785Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
@@ -2784,8 +2762,6 @@ requirements:
   created_at: 2025-11-27T06:40:51.828689546Z
   modified_at: 2025-11-27T06:40:51.828689546Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
@@ -2800,8 +2776,6 @@ requirements:
   created_at: 2025-11-27T06:59:28.942923410Z
   modified_at: 2025-11-27T06:59:28.942923410Z
   req_type: ChangeRequest
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 78670bb5-090f-45a1-a022-dfcac4c11dd0
@@ -2827,8 +2801,6 @@ requirements:
   created_at: 2025-11-27T16:50:11.501316511Z
   modified_at: 2025-11-27T17:03:31.753686370Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 5738b675-4fa8-4f10-94a8-e6d16c418c35
@@ -2869,8 +2841,6 @@ requirements:
   created_at: 2025-11-27T16:56:06.315250924Z
   modified_at: 2025-11-27T16:56:06.315250924Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 5738b675-4fa8-4f10-94a8-e6d16c418c35
@@ -2897,8 +2867,6 @@ requirements:
   created_at: 2025-11-27T17:02:58.915305926Z
   modified_at: 2025-12-06T19:06:39.455567941Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: ae4d77e5-55a4-4a56-97d1-a030d922a04d
@@ -2962,8 +2930,6 @@ requirements:
   created_at: 2025-11-27T17:07:50.165704716Z
   modified_at: 2025-11-27T21:25:49.821925065Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
@@ -3006,8 +2972,6 @@ requirements:
   created_at: 2025-11-27T17:21:11.683638399Z
   modified_at: 2025-11-29T00:33:16.299815072Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
@@ -3069,8 +3033,6 @@ requirements:
   created_at: 2025-11-27T17:26:03.149592683Z
   modified_at: 2025-11-28T01:12:27.991469398Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: ae4d77e5-55a4-4a56-97d1-a030d922a04d
@@ -3166,8 +3128,6 @@ requirements:
   created_at: 2025-11-27T17:39:30.783500080Z
   modified_at: 2025-12-06T19:06:19.390641802Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
@@ -3205,8 +3165,6 @@ requirements:
   created_at: 2025-11-27T20:55:50.580655527Z
   modified_at: 2025-11-27T20:55:50.580655527Z
   req_type: Functional
-  dependencies: []
-  tags: []
   urls:
   - id: b69fefd6-d4bd-4187-8802-2b904abf4b1b
     url: https://github.com/joemooney/aida
@@ -3225,8 +3183,6 @@ requirements:
   created_at: 2025-11-27T21:11:24.651889295Z
   modified_at: 2025-11-27T21:11:24.651889295Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 5a8cda55-badf-48c6-82c9-b9ea53f3f69f
@@ -3241,8 +3197,6 @@ requirements:
   created_at: 2025-11-27T21:12:46.994199510Z
   modified_at: 2025-11-27T21:12:46.994199510Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 5a8cda55-badf-48c6-82c9-b9ea53f3f69f
@@ -3258,8 +3212,6 @@ requirements:
   created_at: 2025-11-27T21:19:17.305675907Z
   modified_at: 2025-11-27T22:41:31.241402248Z
   req_type: Functional
-  dependencies: []
-  tags: []
   history:
   - id: 6cde17cc-8e96-4a47-ac2c-ccb7fbb18223
     author: '@joe'
@@ -3282,8 +3234,6 @@ requirements:
   created_at: 2025-11-27T21:52:57.577445007Z
   modified_at: 2025-11-27T21:52:57.577445007Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 617353d0-7006-4a3c-92ba-49e5218386e2
@@ -3304,8 +3254,6 @@ requirements:
   created_at: 2025-11-27T21:54:16.298495675Z
   modified_at: 2025-11-27T21:55:18.829529030Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Child
     target_id: 5d7fd7b2-a29e-439b-8212-0f9f6be0d468
@@ -3354,8 +3302,6 @@ requirements:
   created_at: 2025-11-27T22:29:31.052887770Z
   modified_at: 2025-11-29T19:45:28.298966411Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: bb81e51e-dd32-48ef-9806-cf26a09643f5
@@ -3463,8 +3409,6 @@ requirements:
   created_at: 2025-11-27T22:43:13.013552057Z
   modified_at: 2025-11-27T22:43:13.013552057Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Child
     target_id: c4f0e8c6-c59f-4926-8d02-2bb569a5a2da
@@ -3479,8 +3423,6 @@ requirements:
   created_at: 2025-11-27T22:45:01.777700151Z
   modified_at: 2025-11-27T22:45:01.777700151Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 0b904a04-4422-4767-a7b6-28b9a721a1b9
@@ -3495,8 +3437,6 @@ requirements:
   created_at: 2025-11-27T22:57:07.853710181Z
   modified_at: 2025-11-27T22:57:07.853710181Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: cb0cb997-723e-4605-a306-1c1b2296e121
@@ -3531,8 +3471,6 @@ requirements:
   created_at: 2025-11-27T23:08:44.110738408Z
   modified_at: 2025-11-28T20:10:04.516909006Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 65b0251d-7cc2-4d66-9115-bd5c1f221a60
@@ -3652,8 +3590,6 @@ requirements:
   created_at: 2025-11-28T03:47:02.328158796Z
   modified_at: 2025-11-29T19:45:19.932360701Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: bb81e51e-dd32-48ef-9806-cf26a09643f5
@@ -3684,8 +3620,6 @@ requirements:
   created_at: 2025-11-28T03:47:19.429481884Z
   modified_at: 2025-11-29T19:45:06.769085999Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: bb81e51e-dd32-48ef-9806-cf26a09643f5
@@ -3719,8 +3653,6 @@ requirements:
   created_at: 2025-11-28T03:52:10.460760188Z
   modified_at: 2025-11-28T03:52:20.665666710Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 5a8cda55-badf-48c6-82c9-b9ea53f3f69f
@@ -3792,8 +3724,6 @@ requirements:
   created_at: 2025-11-28T05:52:20.673612400Z
   modified_at: 2025-11-28T05:52:20.673612400Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: bb81e51e-dd32-48ef-9806-cf26a09643f5
@@ -3818,8 +3748,6 @@ requirements:
   created_at: 2025-11-28T18:19:53.122343216Z
   modified_at: 2025-11-28T18:19:53.122343216Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
@@ -3835,8 +3763,6 @@ requirements:
   created_at: 2025-11-28T20:09:08.123728063Z
   modified_at: 2025-11-28T20:09:56.102148636Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Child
     target_id: 97aa0bdd-cecf-464a-9670-eb31965ce497
@@ -3883,8 +3809,6 @@ requirements:
   created_at: 2025-11-28T20:26:36.277550974Z
   modified_at: 2025-11-28T20:26:36.277550974Z
   req_type: Functional
-  dependencies: []
-  tags: []
 - id: 97431bfb-8b24-4990-aa9f-6c8a4a643dd1
   spec_id: FR-0088
   title: JSON database format support
@@ -3896,8 +3820,6 @@ requirements:
   created_at: 2025-11-28T20:46:17.282468579Z
   modified_at: 2025-11-28T20:46:17.282468579Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: bb81e51e-dd32-48ef-9806-cf26a09643f5
@@ -3912,8 +3834,6 @@ requirements:
   created_at: 2025-11-28T20:47:24.654758521Z
   modified_at: 2025-11-28T20:47:24.654758521Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: bb81e51e-dd32-48ef-9806-cf26a09643f5
@@ -3930,8 +3850,6 @@ requirements:
   created_at: 2025-11-28T21:59:56.082585533Z
   modified_at: 2025-11-28T21:59:56.082585533Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
@@ -3968,8 +3886,6 @@ requirements:
   created_at: 2025-11-29T00:18:02.434052743Z
   modified_at: 2025-11-29T00:22:00.336719658Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 4c3bb89e-2d41-4841-b2ff-881bb67fee99
@@ -4018,8 +3934,6 @@ requirements:
   created_at: 2025-11-29T00:32:45.333241402Z
   modified_at: 2025-11-30T06:46:39.167748172Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 5a09caba-1c81-4c8c-bc18-48f677c205b4
@@ -4055,8 +3969,6 @@ requirements:
   created_at: 2025-11-29T00:48:20.890058174Z
   modified_at: 2025-11-29T00:48:20.890058174Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 4c3bb89e-2d41-4841-b2ff-881bb67fee99
@@ -4086,8 +3998,6 @@ requirements:
   created_at: 2025-11-29T00:54:09.458183354Z
   modified_at: 2025-11-30T06:47:14.668449351Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
@@ -4130,8 +4040,6 @@ requirements:
   created_by: '@joe'
   modified_at: 2025-11-29T01:10:31.344832Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
@@ -4178,8 +4086,6 @@ requirements:
   created_by: '@joe'
   modified_at: 2025-11-29T01:44:54.911565255Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 01cb13e7-36e9-4dc1-900c-46d22087db4e
@@ -4199,8 +4105,6 @@ requirements:
   created_by: '@joe'
   modified_at: 2025-11-29T01:51:21.249079253Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 9aec2046-225d-40e4-aadf-609045e8ab45
@@ -4218,8 +4122,6 @@ requirements:
   created_by: '@joe'
   modified_at: 2025-11-29T04:42:35.799379972Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
@@ -4285,8 +4187,6 @@ requirements:
   created_by: '@joe'
   modified_at: 2025-11-29T17:11:05.691277298Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: ae4d77e5-55a4-4a56-97d1-a030d922a04d
@@ -4421,8 +4321,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-12-02T06:45:09.029836775Z
   req_type: Folder
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Child
     target_id: 3ef749b7-b220-41f8-9a1d-1545d0c43a7f
@@ -4567,8 +4465,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T02:25:02.949321235Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -4594,8 +4490,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-29T19:27:58.262496482Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -4613,8 +4507,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T00:34:02.932497101Z
   req_type: Spike
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -4646,8 +4538,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-12-02T03:34:27.605246586Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -4701,8 +4591,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-29T19:47:50.198455813Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -4720,8 +4608,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-29T19:48:09.264581852Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -4742,8 +4628,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-12-02T03:56:39.944964766Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -4807,8 +4691,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T02:24:47.150874757Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -4953,8 +4835,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T01:35:27.760190178Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -4980,8 +4860,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-29T21:31:29.234371177Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -4999,8 +4877,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T00:30:06.437085439Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -5036,8 +4912,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T01:37:04.122708035Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -5063,8 +4937,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T02:14:08.718888840Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -5098,8 +4970,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T00:48:18.230561982Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Child
     target_id: aff88f3f-4270-4257-a9ad-a928884856e4
@@ -5126,8 +4996,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T00:50:26.964229062Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: ee208aa7-e2c7-4847-a165-3da91acf4456
@@ -5145,8 +5013,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T00:51:29.195454903Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Child
     target_id: 30f5ffc6-4153-4e30-ae08-9df3bb2e1baa
@@ -5173,8 +5039,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T02:40:10.775981331Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -5263,8 +5127,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T02:52:10.912200202Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -5666,8 +5528,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T01:26:32.128521510Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -5702,8 +5562,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T01:25:06.024019614Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -5723,8 +5581,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T01:34:30.555708742Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -5742,8 +5598,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T01:47:43.888109098Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 85b741f2-043d-4504-b4c7-670ebe664b47
@@ -5775,8 +5629,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T20:30:28.364209774Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -5846,8 +5698,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T19:34:25.402389533Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -5883,8 +5733,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T02:37:05.343112799Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 85b741f2-043d-4504-b4c7-670ebe664b47
@@ -5919,8 +5767,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T05:21:30.635827807Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -5965,8 +5811,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-12-06T18:39:50.594083370Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Child
     target_id: 4de3b4f0-b157-4d50-8549-e98153d2324d
@@ -6087,8 +5931,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T18:33:00.589966154Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 9e9ea9a2-0734-44b8-b911-f76f5aabc4ac
@@ -6129,8 +5971,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T18:36:27.790663022Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -6169,8 +6009,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T18:51:57.653655859Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -6220,8 +6058,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T18:41:47.754459652Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -6239,8 +6075,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T19:13:47.414957940Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 4de3b4f0-b157-4d50-8549-e98153d2324d
@@ -6269,8 +6103,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T18:58:47.347645927Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -6288,8 +6120,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T19:13:07.115000174Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -6348,8 +6178,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T20:24:36.162473421Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 9e9ea9a2-0734-44b8-b911-f76f5aabc4ac
@@ -6468,8 +6296,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T19:21:48.409793438Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -6508,8 +6334,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T19:39:37.373409767Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 4de3b4f0-b157-4d50-8549-e98153d2324d
@@ -6527,8 +6351,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-12-01T06:30:10.557992968Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 631c854b-cc3c-4bac-bb37-087f2ed5ce72
@@ -6554,8 +6376,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T20:33:27.308613097Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 9e9ea9a2-0734-44b8-b911-f76f5aabc4ac
@@ -6587,8 +6407,6 @@ requirements:
   created_at: 2025-11-30T20:34:15.691110691Z
   modified_at: 2025-11-30T20:37:06.471462342Z
   req_type: Functional
-  dependencies: []
-  tags: []
   history:
   - id: f3ff0ef1-54d8-46b3-a697-d4c37914717c
     author: Unknown User
@@ -6659,8 +6477,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T22:17:36.822832980Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 4de3b4f0-b157-4d50-8549-e98153d2324d
@@ -6705,8 +6521,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-11-30T23:45:00Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 4de3b4f0-b157-4d50-8549-e98153d2324d
@@ -6732,8 +6546,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-12-01T06:22:03.494468318Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 4de3b4f0-b157-4d50-8549-e98153d2324d
@@ -6792,8 +6604,6 @@ requirements:
   created_at: 2025-12-01T06:26:36.658642835Z
   modified_at: 2025-12-01T06:26:36.658642835Z
   req_type: Functional
-  dependencies: []
-  tags: []
 - id: 09c341cb-66ab-497e-8bae-f6029d26e1ed
   spec_id: SR-0151
   title: Inline Code Traceability Comments
@@ -6828,8 +6638,6 @@ requirements:
   created_at: 2025-12-01T06:27:09.025805737Z
   modified_at: 2025-12-01T06:27:09.025805737Z
   req_type: System
-  dependencies: []
-  tags: []
 - id: 57e4297c-c8f7-4d48-8f1b-66fd7de5789d
   spec_id: FR-0152
   title: AI scaffhold project with skills during new pro...
@@ -6883,8 +6691,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-12-01T06:43:22.867874603Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 9e9ea9a2-0734-44b8-b911-f76f5aabc4ac
@@ -6981,8 +6787,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-12-01T07:00:05.851700635Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: bb81e51e-dd32-48ef-9806-cf26a09643f5
@@ -7066,8 +6870,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-12-01T15:20:55.158696623Z
   req_type: Task
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 9af27c34-8a93-4285-9ae6-2448a6bcddde
@@ -7085,8 +6887,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-12-02T01:42:13.794806722Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Child
     target_id: 52b74820-383c-4197-a28d-ceb848a4bc02
@@ -7107,8 +6907,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-12-02T01:50:03.460324841Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: bb81e51e-dd32-48ef-9806-cf26a09643f5
@@ -7126,8 +6924,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-12-02T01:51:11.525491266Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 44c3a73f-f643-4833-8398-4e0738b31d08
@@ -7168,8 +6964,6 @@ requirements:
   created_at: 2025-12-02T03:07:26.880567660Z
   modified_at: 2025-12-02T03:07:26.880567660Z
   req_type: Functional
-  dependencies: []
-  tags: []
 - id: 83560219-ec6d-4512-b45f-686d7ec4da94
   spec_id: FR-0160
   title: Collaborative session tracking with heartbeat
@@ -7221,8 +7015,6 @@ requirements:
   created_at: 2025-12-02T03:08:18.298836311Z
   modified_at: 2025-12-02T03:08:18.298836311Z
   req_type: Functional
-  dependencies: []
-  tags: []
 - id: a29ad02a-9f63-4b1a-b7d0-89d7d33b35f1
   spec_id: FR-0161
   title: Icon editor wraps items in 4-column grid layout
@@ -7234,8 +7026,6 @@ requirements:
   created_at: 2025-12-02T03:30:57.336895595Z
   modified_at: 2025-12-02T03:30:57.336895595Z
   req_type: Functional
-  dependencies: []
-  tags: []
 - id: 394d69b4-8503-4247-b329-4ce6f6a92a83
   spec_id: FR-0162
   title: Skills related requirements
@@ -7248,8 +7038,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-12-02T03:31:15.832402271Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 9e9ea9a2-0734-44b8-b911-f76f5aabc4ac
@@ -7267,8 +7055,6 @@ requirements:
   created_by: Unknown User
   modified_at: 2025-12-02T03:32:09.873396891Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -7285,8 +7071,6 @@ requirements:
   created_at: 2025-12-02T03:40:09.411039075Z
   modified_at: 2025-12-02T03:40:09.411039075Z
   req_type: Functional
-  dependencies: []
-  tags: []
 - id: 88956181-fbef-46f5-b7a2-a06114192b96
   spec_id: FR-0166
   title: Settings/AI has Prompts and Skills subtabs
@@ -7298,8 +7082,6 @@ requirements:
   created_at: 2025-12-02T03:47:45.717447494Z
   modified_at: 2025-12-02T03:47:45.717447494Z
   req_type: Functional
-  dependencies: []
-  tags: []
 - id: 926862dc-af4e-4740-9b1b-9c6dee23a23b
   spec_id: FR-0167
   title: Auto-populate user settings from git config and environment
@@ -7311,8 +7093,6 @@ requirements:
   created_at: 2025-12-02T03:58:27.536662755Z
   modified_at: 2025-12-02T03:58:27.536662755Z
   req_type: Functional
-  dependencies: []
-  tags: []
 - id: 6e872298-1951-4290-a1e4-3d3303151a45
   spec_id: FR-0168
   title: Scaffolding generates AIDA-aware CLAUDE.md with /aida-capture skill
@@ -7324,8 +7104,6 @@ requirements:
   created_at: 2025-12-02T04:15:51.551465521Z
   modified_at: 2025-12-02T04:15:51.551465521Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Child
     target_id: 58f1be6d-b5c8-4304-b453-e495a13cadd5
@@ -7373,8 +7151,6 @@ requirements:
   created_by: Joe Mooney
   modified_at: 2025-12-02T04:26:33.915926180Z
   req_type: Task
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 6e872298-1951-4290-a1e4-3d3303151a45
@@ -7399,8 +7175,6 @@ requirements:
   created_at: 2025-12-02T04:38:29.129973252Z
   modified_at: 2025-12-02T04:38:29.129973252Z
   req_type: Functional
-  dependencies: []
-  tags: []
 - id: 7fd252be-0736-4b40-b0ab-6e484d6e3b4b
   spec_id: FR-0171
   title: Drag requirement in Requirements List - scroll ...
@@ -7416,8 +7190,6 @@ requirements:
   created_by: Joe Mooney
   modified_at: 2025-12-02T05:52:03.999904662Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -7474,8 +7246,6 @@ requirements:
   created_at: 2025-12-02T05:53:26.997634796Z
   modified_at: 2025-12-02T05:53:26.997634796Z
   req_type: Task
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 62ea913d-8f31-4349-b043-5fe49b102671
@@ -7513,8 +7283,6 @@ requirements:
   created_at: 2025-12-02T05:55:48.902548211Z
   modified_at: 2025-12-02T05:55:48.902548211Z
   req_type: Functional
-  dependencies: []
-  tags: []
 - id: 99be661c-ffa8-4105-8271-8912e7bcbff1
   spec_id: IMPL-0174
   prefix_override: IMPL
@@ -7551,8 +7319,6 @@ requirements:
   created_at: 2025-12-02T06:00:20.249140108Z
   modified_at: 2025-12-02T06:00:20.249140108Z
   req_type: Task
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: a3af45a9-1b1c-4d4f-91c6-905955c0d9ab
@@ -7593,8 +7359,6 @@ requirements:
   created_at: 2025-12-02T06:09:28.437117418Z
   modified_at: 2025-12-02T06:09:28.437117418Z
   req_type: Functional
-  dependencies: []
-  tags: []
 - id: ba535047-8a69-437a-93ff-c46c961b4623
   spec_id: FR-0176
   prefix_override: FR
@@ -7627,8 +7391,6 @@ requirements:
   created_at: 2025-12-02T06:09:39.427662965Z
   modified_at: 2025-12-02T06:09:39.427662965Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 5cd0934b-a782-40f3-bd96-0a26403db404
@@ -7663,8 +7425,6 @@ requirements:
   created_at: 2025-12-02T06:09:48.027816148Z
   modified_at: 2025-12-02T06:09:48.027816148Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 5cd0934b-a782-40f3-bd96-0a26403db404
@@ -7699,8 +7459,6 @@ requirements:
   created_at: 2025-12-02T06:09:57.261079727Z
   modified_at: 2025-12-02T06:09:57.261079727Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 5cd0934b-a782-40f3-bd96-0a26403db404
@@ -7742,8 +7500,6 @@ requirements:
   created_at: 2025-12-02T06:10:08.633649817Z
   modified_at: 2025-12-02T06:10:08.633649817Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 5cd0934b-a782-40f3-bd96-0a26403db404
@@ -7780,8 +7536,6 @@ requirements:
   created_at: 2025-12-02T06:10:18.775681757Z
   modified_at: 2025-12-02T06:10:18.775681757Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 5cd0934b-a782-40f3-bd96-0a26403db404
@@ -7801,8 +7555,6 @@ requirements:
   created_by: Joe Mooney
   modified_at: 2025-12-02T06:10:36.692817661Z
   req_type: Functional
-  dependencies: []
-  tags: []
 - id: e66dc8e9-b9f4-4c08-b053-fd55762d1d49
   spec_id: IMPL-0181
   prefix_override: IMPL
@@ -7815,8 +7567,6 @@ requirements:
   created_at: 2025-12-02T06:14:57.664505229Z
   modified_at: 2025-12-02T06:14:57.664505229Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 5cd0934b-a782-40f3-bd96-0a26403db404
@@ -7836,8 +7586,6 @@ requirements:
   created_by: Joe Mooney
   modified_at: 2025-12-02T06:15:44.786101039Z
   req_type: Functional
-  dependencies: []
-  tags: []
 - id: 75215088-ffef-4e83-9f90-3ab2cc766422
   spec_id: FR-0183
   prefix_override: FR
@@ -7869,8 +7617,6 @@ requirements:
   created_at: 2025-12-02T06:20:45.623601337Z
   modified_at: 2025-12-02T06:20:45.623601337Z
   req_type: Functional
-  dependencies: []
-  tags: []
 - id: b6911b4c-a0d4-46ee-b87d-c94de49fcd57
   spec_id: FR-0184
   title: Team Management Support
@@ -7889,8 +7635,6 @@ requirements:
   created_at: 2025-12-03T02:49:45.680926022Z
   modified_at: 2025-12-03T03:12:02.036396402Z
   req_type: Functional
-  dependencies: []
-  tags: []
   history:
   - id: 9c5c73f3-9b74-4b2f-8be3-3fc82d065153
     author: Joe Mooney
@@ -7923,8 +7667,6 @@ requirements:
   created_at: 2025-12-03T02:50:36.494058788Z
   modified_at: 2025-12-03T03:12:10.137507342Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: b6911b4c-a0d4-46ee-b87d-c94de49fcd57
@@ -7957,8 +7699,6 @@ requirements:
   created_at: 2025-12-03T02:51:11.475316094Z
   modified_at: 2025-12-03T03:12:15.303315533Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: b6911b4c-a0d4-46ee-b87d-c94de49fcd57
@@ -7998,8 +7738,6 @@ requirements:
   created_at: 2025-12-03T02:51:46.995533652Z
   modified_at: 2025-12-03T03:12:31.434229310Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: b6911b4c-a0d4-46ee-b87d-c94de49fcd57
@@ -8050,8 +7788,6 @@ requirements:
   created_at: 2025-12-03T03:39:44.483752321Z
   modified_at: 2025-12-03T03:39:44.483752321Z
   req_type: Functional
-  dependencies: []
-  tags: []
 - id: 2be34e0c-327c-497f-bd9e-fc981531b664
   spec_id: FR-0189
   title: Work Queue View
@@ -8064,8 +7800,6 @@ requirements:
   created_by: Joe Mooney
   modified_at: 2025-12-06T18:11:39.544289133Z
   req_type: Functional
-  dependencies: []
-  tags: []
   history:
   - id: 104098c7-45a5-4bb3-8bba-7ee9778595e3
     author: Joe Mooney
@@ -8106,8 +7840,6 @@ requirements:
   created_at: 2025-12-03T04:01:58.094706048Z
   modified_at: 2025-12-03T04:01:58.094706048Z
   req_type: Functional
-  dependencies: []
-  tags: []
 - id: 7d5f9637-5f9e-4c3c-9706-669341c466f4
   spec_id: FR-0191
   title: KanBan View Support
@@ -8150,8 +7882,6 @@ requirements:
   created_at: 2025-12-03T04:25:55.427939897Z
   modified_at: 2025-12-03T04:25:55.427939897Z
   req_type: Functional
-  dependencies: []
-  tags: []
 - id: db0675e8-bcc8-47c8-aa7c-a0f4e78a2458
   spec_id: FR-0192
   title: Clear button on search boxes
@@ -8163,8 +7893,6 @@ requirements:
   created_at: 2025-12-06T17:52:58.059454223Z
   modified_at: 2025-12-06T17:52:58.059454223Z
   req_type: Functional
-  dependencies: []
-  tags: []
 - id: d58f045f-b729-4a7f-b2f0-04d6353a7af7
   spec_id: FR-0193
   title: Baselines - Requirements Versioning and Snapshots
@@ -8184,8 +7912,6 @@ requirements:
   created_at: 2025-12-06T17:53:07.426320148Z
   modified_at: 2025-12-06T17:53:07.426320148Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Child
     target_id: d1055784-d8db-4f21-83a8-4121a7e3f25e
@@ -8202,8 +7928,6 @@ requirements:
   created_at: 2025-12-06T17:53:13.302638222Z
   modified_at: 2025-12-06T17:53:13.302638222Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7d5f9637-5f9e-4c3c-9706-669341c466f4
@@ -8219,8 +7943,6 @@ requirements:
   created_at: 2025-12-06T17:53:35.659273979Z
   modified_at: 2025-12-06T17:53:35.659273979Z
   req_type: Bug
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: References
     target_id: 055530de-326d-4362-aab1-639239f363e5
@@ -8240,8 +7962,6 @@ requirements:
   created_by: Joe Mooney
   modified_at: 2025-12-06T18:18:44.025626762Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: d58f045f-b729-4a7f-b2f0-04d6353a7af7
@@ -8262,8 +7982,6 @@ requirements:
   created_by: Joe Mooney
   modified_at: 2025-12-06T18:21:49.495465339Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -8280,8 +7998,6 @@ requirements:
   created_at: 2025-12-06T18:23:18.455973951Z
   modified_at: 2025-12-07T01:17:24.549589809Z
   req_type: Functional
-  dependencies: []
-  tags: []
   history:
   - id: ef448e7f-b785-4891-94a1-537d5f82e2d7
     author: Joe Mooney
@@ -8635,8 +8351,6 @@ requirements:
   created_by: Joe Mooney
   modified_at: 2025-12-06T19:12:57.523344290Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
@@ -8653,8 +8367,6 @@ requirements:
   created_at: 2025-12-07T00:30:50.638970208Z
   modified_at: 2025-12-07T00:30:50.638970208Z
   req_type: Functional
-  dependencies: []
-  tags: []
 - id: 06ea740d-af61-4124-9943-f19f278e0606
   spec_id: FR-0201
   title: Sprint Requirement Type
@@ -8666,8 +8378,6 @@ requirements:
   created_at: 2025-12-07T00:30:59.548639777Z
   modified_at: 2025-12-07T00:30:59.548639777Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 365d927b-09e5-45e3-8f4e-881ad3c47143
@@ -8683,8 +8393,6 @@ requirements:
   created_at: 2025-12-07T00:31:07.852208646Z
   modified_at: 2025-12-07T00:31:07.852208646Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 365d927b-09e5-45e3-8f4e-881ad3c47143
@@ -8700,8 +8408,6 @@ requirements:
   created_at: 2025-12-07T00:31:15.135616660Z
   modified_at: 2025-12-07T00:31:15.135616660Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 365d927b-09e5-45e3-8f4e-881ad3c47143
@@ -8717,8 +8423,6 @@ requirements:
   created_at: 2025-12-07T00:31:23.228862025Z
   modified_at: 2025-12-07T00:31:23.228862025Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 365d927b-09e5-45e3-8f4e-881ad3c47143
@@ -8736,8 +8440,6 @@ requirements:
   created_by: Joe Mooney
   modified_at: 2025-12-07T00:54:03.523732114Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 44c3a73f-f643-4833-8398-4e0738b31d08
@@ -8759,12 +8461,198 @@ requirements:
   created_by: Joe Mooney
   modified_at: 2025-12-07T00:54:17.958043260Z
   req_type: Functional
-  dependencies: []
-  tags: []
   relationships:
   - rel_type: Parent
     target_id: 52b74820-383c-4197-a28d-ceb848a4bc02
     created_at: 2025-12-07T00:54:18.010391699Z
+    created_by: Joe Mooney
+- id: 75cd3a04-28e1-466b-aec8-a5ee9a855473
+  spec_id: REQ-0207
+  title: Initial Sprint support and misc features
+  description: Initial Sprint support and misc features
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 97-Uncategorized
+  created_at: 2025-12-07T02:35:07.537957762Z
+  created_by: Joe Mooney
+  modified_at: 2025-12-07T02:35:07.537957762Z
+  req_type: Sprint
+  relationships:
+  - rel_type: Parent
+    target_id: 848840ae-7005-4fab-b478-163f9139359e
+    created_at: 2025-12-07T02:35:07.588146353Z
+    created_by: Joe Mooney
+  - rel_type: !Custom sprint_contains
+    target_id: f1a64c4d-3086-4010-be4e-3eaf6bc3df5d
+    created_at: 2025-12-07T03:04:39.974224583Z
+    created_by: Joe Mooney
+- id: 49b91b7d-77d3-4717-af8a-921ab4e05685
+  spec_id: EPIC-0208
+  title: Epic123
+  description: Epic123
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 97-Uncategorized
+  created_at: 2025-12-07T03:09:56.897038048Z
+  created_by: Joe Mooney
+  modified_at: 2025-12-07T03:09:56.897038048Z
+  req_type: Epic
+  relationships:
+  - rel_type: Parent
+    target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
+    created_at: 2025-12-07T03:09:56.950673286Z
+    created_by: Joe Mooney
+- id: 3ae5cfd3-1913-4b54-8f60-3efe7ab3ffb0
+  spec_id: SPIKE-0209
+  title: Spike 123
+  description: Spike 123
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 97-Uncategorized
+  created_at: 2025-12-07T03:10:16.930920425Z
+  created_by: Joe Mooney
+  modified_at: 2025-12-07T03:10:44.830742981Z
+  req_type: Spike
+  relationships:
+  - rel_type: Parent
+    target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
+    created_at: 2025-12-07T03:10:16.982674660Z
+    created_by: Joe Mooney
+  history:
+  - id: edcdec7a-6f00-4c97-869c-2030fff51fce
+    author: Joe Mooney
+    timestamp: 2025-12-07T03:10:44.830741261Z
+    changes:
+    - field_name: title
+      old_value: Sprint 123
+      new_value: Spike 123
+    - field_name: description
+      old_value: Sprint 123
+      new_value: Spike 123
+  custom_status: Planned
+- id: 17098630-b92b-4194-ae1f-e7e901e73a35
+  spec_id: REQ-0210
+  title: Sprint 123
+  description: Sprint 123
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 97-Uncategorized
+  created_at: 2025-12-07T03:11:01.158857231Z
+  created_by: Joe Mooney
+  modified_at: 2025-12-07T03:11:01.158857231Z
+  req_type: Sprint
+  relationships:
+  - rel_type: Parent
+    target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
+    created_at: 2025-12-07T03:11:01.189836174Z
+    created_by: Joe Mooney
+- id: d1e58dd4-fd26-437a-8856-2cf0d4f2adda
+  spec_id: REQ-0211
+  title: Bug 123
+  description: Bug 123
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 97-Uncategorized
+  created_at: 2025-12-07T03:11:20.497063986Z
+  created_by: Joe Mooney
+  modified_at: 2025-12-07T03:11:20.497063986Z
+  req_type: Bug
+  relationships:
+  - rel_type: Parent
+    target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
+    created_at: 2025-12-07T03:11:20.548542186Z
+    created_by: Joe Mooney
+  custom_status: New
+- id: 79bae700-7db9-42a1-8cc6-d183dbc0496b
+  spec_id: REQ-0212
+  title: Task 123
+  description: Task 123
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 97-Uncategorized
+  created_at: 2025-12-07T03:11:35.931406917Z
+  created_by: Joe Mooney
+  modified_at: 2025-12-07T03:11:35.931406917Z
+  req_type: Task
+  relationships:
+  - rel_type: Parent
+    target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
+    created_at: 2025-12-07T03:11:35.983235142Z
+    created_by: Joe Mooney
+  custom_status: To Do
+- id: b2a8f599-fc75-405f-acd0-abac37016c10
+  spec_id: REQ-0213
+  title: Story 123
+  description: Story 123
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 97-Uncategorized
+  created_at: 2025-12-07T03:11:52.857309310Z
+  created_by: Joe Mooney
+  modified_at: 2025-12-07T03:11:52.857309310Z
+  req_type: Story
+  relationships:
+  - rel_type: Parent
+    target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
+    created_at: 2025-12-07T03:11:52.881768485Z
+    created_by: Joe Mooney
+- id: 321080c4-4748-4b33-a9f0-7a33598ea925
+  spec_id: CR-0214
+  title: Change request 123
+  description: Change request 123
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 97-Uncategorized
+  created_at: 2025-12-07T03:12:10.464705855Z
+  created_by: Joe Mooney
+  modified_at: 2025-12-07T03:12:10.464705855Z
+  req_type: ChangeRequest
+  relationships:
+  - rel_type: Parent
+    target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
+    created_at: 2025-12-07T03:12:10.521150888Z
+    created_by: Joe Mooney
+- id: 15b6ccbc-e175-4b0c-a936-72359ef07e22
+  spec_id: UR-0215
+  title: User Req 123
+  description: User Req 123
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 97-Uncategorized
+  created_at: 2025-12-07T03:12:28.864303700Z
+  created_by: Joe Mooney
+  modified_at: 2025-12-07T03:12:28.864303700Z
+  req_type: User
+  relationships:
+  - rel_type: Parent
+    target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
+    created_at: 2025-12-07T03:12:28.913711884Z
+    created_by: Joe Mooney
+- id: cca4777a-91d8-4030-a690-82a034c745d2
+  spec_id: REQ-0216
+  title: Folder 123
+  description: Folder 123
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 97-Uncategorized
+  created_at: 2025-12-07T03:12:45.129986533Z
+  created_by: Joe Mooney
+  modified_at: 2025-12-07T03:12:45.129986533Z
+  req_type: Folder
+  relationships:
+  - rel_type: Parent
+    target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
+    created_at: 2025-12-07T03:12:45.182840867Z
     created_by: Joe Mooney
 users:
 - id: 150164ef-32ed-4d61-8cec-e887ac78cfd7
@@ -8858,7 +8746,7 @@ id_config:
     description: Research or investigation task to reduce uncertainty or explore technical approaches
 features: []
 next_feature_number: 118
-next_spec_number: 207
+next_spec_number: 217
 prefix_counters: {}
 relationship_definitions:
 - name: parent

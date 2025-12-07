@@ -10267,10 +10267,12 @@ impl RequirementsApp {
                         })
                     });
 
-                    // Handle drop zone for sprint header
+                    // Handle drop zone for sprint header - use pointer position for reliable detection
                     if is_dragging {
-                        if header_response.response.hovered() {
-                            self.planning_drag_target_sprint = Some(Some(*sprint_id));
+                        if let Some(pointer_pos) = ui.input(|i| i.pointer.hover_pos()) {
+                            if header_response.response.rect.contains(pointer_pos) {
+                                self.planning_drag_target_sprint = Some(Some(*sprint_id));
+                            }
                         }
                     }
 
@@ -10295,8 +10297,11 @@ impl RequirementsApp {
                                                 egui::Color32::GRAY
                                             }),
                                     );
-                                    if empty_response.hovered() {
-                                        self.planning_drag_target_sprint = Some(Some(*sprint_id));
+                                    // Use pointer position for reliable drop detection
+                                    if let Some(pointer_pos) = ui.input(|i| i.pointer.hover_pos()) {
+                                        if empty_response.rect.contains(pointer_pos) {
+                                            self.planning_drag_target_sprint = Some(Some(*sprint_id));
+                                        }
                                     }
                                 } else {
                                     ui.label(
@@ -10352,10 +10357,12 @@ impl RequirementsApp {
                     })
                 });
 
-                // Handle drop zone for backlog header
+                // Handle drop zone for backlog header - use pointer position for reliable detection
                 if is_dragging {
-                    if backlog_header_response.response.hovered() {
-                        self.planning_drag_target_sprint = Some(None);
+                    if let Some(pointer_pos) = ui.input(|i| i.pointer.hover_pos()) {
+                        if backlog_header_response.response.rect.contains(pointer_pos) {
+                            self.planning_drag_target_sprint = Some(None);
+                        }
                     }
                 }
 
@@ -10373,8 +10380,11 @@ impl RequirementsApp {
                                             egui::Color32::GRAY
                                         }),
                                 );
-                                if empty_response.hovered() {
-                                    self.planning_drag_target_sprint = Some(None);
+                                // Use pointer position for reliable drop detection
+                                if let Some(pointer_pos) = ui.input(|i| i.pointer.hover_pos()) {
+                                    if empty_response.rect.contains(pointer_pos) {
+                                        self.planning_drag_target_sprint = Some(None);
+                                    }
                                 }
                             } else {
                                 ui.label(
@@ -10537,25 +10547,14 @@ impl RequirementsApp {
             }
         }
 
-        // Handle drop - check if drag stopped and we have a target
-        if response.drag_stopped() && self.planning_drag_source == Some(item_id) {
-            if let Some(target) = self.planning_drag_target_sprint.take() {
-                let username = self.user_settings.display_name();
-                match target {
-                    None => {
-                        // Move to backlog
-                        self.store.remove_from_sprint(item_id, &username);
-                    }
-                    Some(sprint_id) => {
-                        // Move to sprint (only if different from current)
-                        if current_sprint != Some(sprint_id) {
-                            self.store.assign_to_sprint(item_id, sprint_id, &username);
-                        }
-                    }
+        // Handle drop zone detection for this item - if dragging and hovering over this item,
+        // set the target to this item's current sprint (or backlog if None)
+        if self.planning_drag_source.is_some() && self.planning_drag_source != Some(item_id) {
+            if let Some(pointer_pos) = ui.input(|i| i.pointer.hover_pos()) {
+                if rect.contains(pointer_pos) {
+                    self.planning_drag_target_sprint = Some(current_sprint);
                 }
-                self.save();
             }
-            self.planning_drag_source = None;
         }
 
         // Context menu for sprint assignment
@@ -22278,6 +22277,34 @@ impl eframe::App for RequirementsApp {
             }
             self.drag_source = None;
             self.drop_target = None;
+        }
+
+        // Handle Sprint Planning drag release globally
+        if released && self.planning_drag_source.is_some() {
+            if let Some(source_id) = self.planning_drag_source.take() {
+                if let Some(target) = self.planning_drag_target_sprint.take() {
+                    let username = self.user_settings.display_name();
+                    // Get current sprint of the item
+                    let current_sprint = self.store.get_requirement_sprint(&source_id)
+                        .map(|r| r.id);
+
+                    match target {
+                        None => {
+                            // Move to backlog
+                            self.store.remove_from_sprint(source_id, &username);
+                            self.save();
+                        }
+                        Some(sprint_id) => {
+                            // Move to sprint (only if different from current)
+                            if current_sprint != Some(sprint_id) {
+                                self.store.assign_to_sprint(source_id, sprint_id, &username);
+                                self.save();
+                            }
+                        }
+                    }
+                }
+            }
+            self.planning_drag_target_sprint = None;
         }
 
         // Clear drag state if mouse is not pressed (safety cleanup)
