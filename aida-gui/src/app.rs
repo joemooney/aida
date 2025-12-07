@@ -2907,6 +2907,10 @@ struct TextSelection {
 
 impl RequirementsApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        Self::new_with_file(cc, None)
+    }
+
+    pub fn new_with_file(cc: &eframe::CreationContext<'_>, file_path: Option<String>) -> Self {
         // Configure fonts with better Unicode support
         Self::configure_fonts(&cc.egui_ctx);
 
@@ -2948,8 +2952,13 @@ impl RequirementsApp {
             cc.egui_ctx.set_style(style);
         }
 
-        let requirements_path = determine_requirements_path(None)
-            .unwrap_or_else(|_| std::path::PathBuf::from("requirements.yaml"));
+        // Use provided file path, or determine from environment/current directory
+        let requirements_path = if let Some(fp) = file_path {
+            std::path::PathBuf::from(fp)
+        } else {
+            determine_requirements_path(None)
+                .unwrap_or_else(|_| std::path::PathBuf::from("requirements.yaml"))
+        };
 
         let storage = Storage::new(&requirements_path);
         let store = match storage.load() {
