@@ -1171,6 +1171,7 @@ impl KeyAction {
             KeyAction::NewSiblingRequirement,
             KeyAction::NewChildRequirement,
             KeyAction::OpenOwnerPicker,
+            KeyAction::OpenFeaturePicker,
             KeyAction::OpenStatusPicker,
             KeyAction::OpenPriorityPicker,
             KeyAction::OpenSprintPicker,
@@ -22327,8 +22328,10 @@ impl eframe::App for RequirementsApp {
                     ctx,
                     self.current_key_context,
                 ) {
+                    eprintln!("DEBUG: 'f' handler triggered! selected_idx={:?}", self.selected_idx);
                     if let Some(idx) = self.selected_idx {
                         if let Some(req) = self.store.requirements.get(idx) {
+                            eprintln!("DEBUG: Opening feature picker for req: {:?}", req.spec_id);
                             self.quick_change_feature_search.clear();
                             self.quick_change_selected = 0;
                             self.quick_change_target_id = Some(req.id);
