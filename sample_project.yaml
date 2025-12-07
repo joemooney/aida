@@ -2,9 +2,7 @@ name: E-Commerce Platform
 title: Online Shopping Platform
 description: A modern e-commerce platform with user authentication, product catalog, shopping cart, and checkout features.
 requirements:
-# ============================================
-# SPRINTS
-# ============================================
+# Sprints
 - id: 11111111-1111-1111-1111-111111111101
   spec_id: SPRINT-0001
   title: Sprint 1 - User Authentication
@@ -18,22 +16,12 @@ requirements:
   created_by: '@sarah'
   modified_at: 2024-11-15T17:00:00Z
   req_type: Sprint
-  tags: [foundation, security]
-  relationships: []
   custom_fields:
     sprint_number: "1"
     start_date: "2024-11-01"
     end_date: "2024-11-15"
     sprint_goal: "Implement core user authentication"
     velocity: "21"
-  history:
-  - id: a0000001-0001-0001-0001-000000000001
-    author: '@sarah'
-    timestamp: 2024-11-15T17:00:00Z
-    changes:
-    - field_name: status
-      old_value: In Progress
-      new_value: Completed
 
 - id: 11111111-1111-1111-1111-111111111102
   spec_id: SPRINT-0002
@@ -48,8 +36,6 @@ requirements:
   created_by: '@sarah'
   modified_at: 2024-11-29T17:00:00Z
   req_type: Sprint
-  tags: [catalog, search]
-  relationships: []
   custom_fields:
     sprint_number: "2"
     start_date: "2024-11-16"
@@ -70,8 +56,6 @@ requirements:
   created_by: '@sarah'
   modified_at: 2024-12-05T10:00:00Z
   req_type: Sprint
-  tags: [cart, checkout]
-  relationships: []
   custom_fields:
     sprint_number: "3"
     start_date: "2024-11-30"
@@ -79,900 +63,178 @@ requirements:
     sprint_goal: "Implement shopping cart and begin checkout"
     velocity: "24"
 
-- id: 11111111-1111-1111-1111-111111111104
-  spec_id: SPRINT-0004
-  title: Sprint 4 - Payment Integration
-  description: Upcoming sprint for payment processing and order management.
-  status: Draft
-  priority: Medium
-  owner: '@sarah'
-  feature: 1-Sprints
-  created_at: 2024-12-01T09:00:00Z
-  created_by: '@sarah'
-  modified_at: 2024-12-01T09:00:00Z
-  req_type: Sprint
-  tags: [payments, orders]
-  relationships: []
-  custom_fields:
-    sprint_number: "4"
-    start_date: "2024-12-14"
-    end_date: "2024-12-27"
-    sprint_goal: "Integrate payment gateway and order management"
-    velocity: "21"
-
-# ============================================
-# EPICS
-# ============================================
+# Epics
 - id: 22222222-2222-2222-2222-222222222201
   spec_id: EPIC-0001
-  title: User Management
-  description: |-
-    Complete user management system including:
-    - Registration and login
-    - Profile management
-    - Password recovery
-    - OAuth integration
-  status: Approved
-  priority: Critical
-  owner: '@emily'
-  feature: 2-UserManagement
-  created_at: 2024-10-15T10:00:00Z
+  title: User Management Epic
+  description: Complete user management including authentication, registration, and profile management.
+  status: Completed
+  priority: High
+  owner: '@sarah'
+  feature: 2-Epics
+  created_at: 2024-10-01T09:00:00Z
   created_by: '@sarah'
-  modified_at: 2024-11-20T14:00:00Z
+  modified_at: 2024-11-15T17:00:00Z
   req_type: Epic
-  tags: [users, auth, security]
-  relationships: []
 
 - id: 22222222-2222-2222-2222-222222222202
   spec_id: EPIC-0002
-  title: Product Catalog System
-  description: |-
-    Product catalog with:
-    - Category management
-    - Product search and filtering
-    - Inventory tracking
-    - Product reviews and ratings
+  title: Product Catalog Epic
+  description: Product browsing, search, and filtering capabilities.
   status: Approved
-  priority: Critical
+  priority: High
   owner: '@mike'
-  feature: 3-ProductCatalog
-  created_at: 2024-10-15T11:00:00Z
+  feature: 2-Epics
+  created_at: 2024-10-01T09:00:00Z
   created_by: '@sarah'
-  modified_at: 2024-11-25T10:00:00Z
+  modified_at: 2024-11-29T17:00:00Z
   req_type: Epic
-  tags: [products, catalog, search]
-  relationships: []
 
 - id: 22222222-2222-2222-2222-222222222203
   spec_id: EPIC-0003
-  title: Shopping & Checkout
-  description: |-
-    Shopping cart and checkout experience:
-    - Add/remove items
-    - Cart persistence
-    - Checkout flow
-    - Order confirmation
-  status: Draft
-  priority: Critical
-  owner: '@alex'
-  feature: 4-Shopping
-  created_at: 2024-10-15T12:00:00Z
-  created_by: '@sarah'
-  modified_at: 2024-12-01T09:00:00Z
-  req_type: Epic
-  tags: [cart, checkout, orders]
-  relationships: []
-
-- id: 22222222-2222-2222-2222-222222222204
-  spec_id: EPIC-0004
-  title: Payment Processing
-  description: |-
-    Payment integration:
-    - Multiple payment methods
-    - Stripe integration
-    - PayPal support
-    - Refund handling
-  status: Draft
+  title: Shopping & Checkout Epic
+  description: Shopping cart, checkout flow, and order placement.
+  status: Approved
   priority: High
-  owner: '@sarah'
-  feature: 5-Payments
-  created_at: 2024-10-16T10:00:00Z
+  owner: '@emily'
+  feature: 2-Epics
+  created_at: 2024-10-01T09:00:00Z
   created_by: '@sarah'
-  modified_at: 2024-10-16T10:00:00Z
+  modified_at: 2024-12-05T10:00:00Z
   req_type: Epic
-  tags: [payments, stripe, paypal]
-  relationships: []
 
-# ============================================
-# STORIES - User Management (Sprint 1 - Completed)
-# ============================================
+# Stories
 - id: 33333333-3333-3333-3333-333333333301
   spec_id: STORY-0001
-  title: User Registration
-  description: |-
-    As a new user, I want to register an account so that I can make purchases.
-
-    ## Acceptance Criteria
-    - Email validation
-    - Password strength requirements
-    - Email verification flow
-    - Welcome email sent
+  title: User Registration Flow
+  description: As a new user, I want to register an account so that I can access the platform.
   status: Completed
-  priority: Critical
-  owner: '@emily'
-  feature: 2-UserManagement
-  created_at: 2024-10-20T10:00:00Z
-  created_by: '@emily'
-  modified_at: 2024-11-10T16:00:00Z
+  priority: High
+  owner: '@sarah'
+  feature: 3-Stories
+  created_at: 2024-11-01T10:00:00Z
+  created_by: '@sarah'
+  modified_at: 2024-11-10T17:00:00Z
   req_type: Story
-  tags: [auth, registration]
   relationships:
   - rel_type: Parent
     target_id: 22222222-2222-2222-2222-222222222201
-  - rel_type:
-      Custom: sprint_assignment
-    target_id: 11111111-1111-1111-1111-111111111101
-    created_at: 2024-11-01T09:00:00Z
-    created_by: '@sarah'
 
 - id: 33333333-3333-3333-3333-333333333302
   spec_id: STORY-0002
-  title: User Login
-  description: |-
-    As a registered user, I want to log in to my account securely.
-
-    ## Acceptance Criteria
-    - Email/password login
-    - Remember me option
-    - Failed attempt lockout
-    - Session management
+  title: User Login with Email
+  description: As a registered user, I want to log in with my email and password.
   status: Completed
-  priority: Critical
-  owner: '@emily'
-  feature: 2-UserManagement
-  created_at: 2024-10-20T11:00:00Z
-  created_by: '@emily'
-  modified_at: 2024-11-12T14:00:00Z
+  priority: High
+  owner: '@sarah'
+  feature: 3-Stories
+  created_at: 2024-11-02T10:00:00Z
+  created_by: '@sarah'
+  modified_at: 2024-11-12T17:00:00Z
   req_type: Story
-  tags: [auth, login]
   relationships:
   - rel_type: Parent
     target_id: 22222222-2222-2222-2222-222222222201
-  - rel_type:
-      Custom: sprint_assignment
-    target_id: 11111111-1111-1111-1111-111111111101
-    created_at: 2024-11-01T09:00:00Z
-    created_by: '@sarah'
 
 - id: 33333333-3333-3333-3333-333333333303
   spec_id: STORY-0003
-  title: Password Recovery
-  description: |-
-    As a user who forgot my password, I want to reset it securely.
-
-    ## Acceptance Criteria
-    - Forgot password link
-    - Email verification
-    - Secure reset token
-    - Password update confirmation
+  title: Product Search
+  description: As a customer, I want to search for products by name or description.
   status: Completed
   priority: High
-  owner: '@emily'
-  feature: 2-UserManagement
-  created_at: 2024-10-21T09:00:00Z
-  created_by: '@emily'
-  modified_at: 2024-11-14T11:00:00Z
+  owner: '@mike'
+  feature: 3-Stories
+  created_at: 2024-11-16T10:00:00Z
+  created_by: '@mike'
+  modified_at: 2024-11-25T17:00:00Z
   req_type: Story
-  tags: [auth, password]
   relationships:
   - rel_type: Parent
-    target_id: 22222222-2222-2222-2222-222222222201
-  - rel_type:
-      Custom: sprint_assignment
-    target_id: 11111111-1111-1111-1111-111111111101
-    created_at: 2024-11-01T09:00:00Z
-    created_by: '@sarah'
+    target_id: 22222222-2222-2222-2222-222222222202
 
 - id: 33333333-3333-3333-3333-333333333304
   spec_id: STORY-0004
-  title: User Profile Management
-  description: |-
-    As a user, I want to manage my profile information.
-
-    ## Acceptance Criteria
-    - Edit name and contact info
-    - Upload profile picture
-    - Manage addresses
-    - Email preferences
+  title: Add to Cart
+  description: As a customer, I want to add products to my shopping cart.
   status: Draft
   custom_status: In Progress
-  priority: Medium
+  priority: High
   owner: '@emily'
-  feature: 2-UserManagement
-  created_at: 2024-10-22T10:00:00Z
+  feature: 3-Stories
+  created_at: 2024-11-30T10:00:00Z
   created_by: '@emily'
-  modified_at: 2024-12-01T09:00:00Z
+  modified_at: 2024-12-05T10:00:00Z
   req_type: Story
-  tags: [profile, settings]
   relationships:
   - rel_type: Parent
-    target_id: 22222222-2222-2222-2222-222222222201
+    target_id: 22222222-2222-2222-2222-222222222203
 
-# ============================================
-# STORIES - Product Catalog (Sprint 2 - Completed)
-# ============================================
 - id: 33333333-3333-3333-3333-333333333305
   spec_id: STORY-0005
-  title: Product Listing Page
-  description: |-
-    As a shopper, I want to browse products by category.
-
-    ## Acceptance Criteria
-    - Grid/List view toggle
-    - Pagination
-    - Basic product info display
-    - Quick add to cart
-  status: Completed
-  priority: Critical
-  owner: '@mike'
-  feature: 3-ProductCatalog
-  created_at: 2024-10-25T10:00:00Z
-  created_by: '@mike'
-  modified_at: 2024-11-20T15:00:00Z
-  req_type: Story
-  tags: [products, catalog]
-  relationships:
-  - rel_type: Parent
-    target_id: 22222222-2222-2222-2222-222222222202
-  - rel_type:
-      Custom: sprint_assignment
-    target_id: 11111111-1111-1111-1111-111111111102
-    created_at: 2024-11-16T09:00:00Z
-    created_by: '@sarah'
-
-- id: 33333333-3333-3333-3333-333333333306
-  spec_id: STORY-0006
-  title: Product Search
-  description: |-
-    As a shopper, I want to search for products by name or description.
-
-    ## Acceptance Criteria
-    - Full-text search
-    - Search suggestions
-    - Search history
-    - No results handling
-  status: Completed
-  priority: Critical
-  owner: '@mike'
-  feature: 3-ProductCatalog
-  created_at: 2024-10-25T11:00:00Z
-  created_by: '@mike'
-  modified_at: 2024-11-22T14:00:00Z
-  req_type: Story
-  tags: [search, products]
-  relationships:
-  - rel_type: Parent
-    target_id: 22222222-2222-2222-2222-222222222202
-  - rel_type:
-      Custom: sprint_assignment
-    target_id: 11111111-1111-1111-1111-111111111102
-    created_at: 2024-11-16T09:00:00Z
-    created_by: '@sarah'
-
-- id: 33333333-3333-3333-3333-333333333307
-  spec_id: STORY-0007
-  title: Product Filtering
-  description: |-
-    As a shopper, I want to filter products by various attributes.
-
-    ## Acceptance Criteria
-    - Filter by price range
-    - Filter by category
-    - Filter by brand
-    - Filter by rating
-    - Multiple filters combined
-  status: Completed
-  priority: High
-  owner: '@mike'
-  feature: 3-ProductCatalog
-  created_at: 2024-10-26T09:00:00Z
-  created_by: '@mike'
-  modified_at: 2024-11-25T16:00:00Z
-  req_type: Story
-  tags: [search, filters]
-  relationships:
-  - rel_type: Parent
-    target_id: 22222222-2222-2222-2222-222222222202
-  - rel_type:
-      Custom: sprint_assignment
-    target_id: 11111111-1111-1111-1111-111111111102
-    created_at: 2024-11-16T09:00:00Z
-    created_by: '@sarah'
-
-- id: 33333333-3333-3333-3333-333333333308
-  spec_id: STORY-0008
-  title: Product Detail Page
-  description: |-
-    As a shopper, I want to view detailed product information.
-
-    ## Acceptance Criteria
-    - Multiple product images
-    - Product description
-    - Specifications table
-    - Related products
-    - Add to cart with quantity
-  status: Completed
-  priority: Critical
-  owner: '@mike'
-  feature: 3-ProductCatalog
-  created_at: 2024-10-26T10:00:00Z
-  created_by: '@mike'
-  modified_at: 2024-11-28T11:00:00Z
-  req_type: Story
-  tags: [products, details]
-  relationships:
-  - rel_type: Parent
-    target_id: 22222222-2222-2222-2222-222222222202
-  - rel_type:
-      Custom: sprint_assignment
-    target_id: 11111111-1111-1111-1111-111111111102
-    created_at: 2024-11-16T09:00:00Z
-    created_by: '@sarah'
-
-# ============================================
-# STORIES - Shopping Cart (Sprint 3 - Current)
-# ============================================
-- id: 33333333-3333-3333-3333-333333333309
-  spec_id: STORY-0009
-  title: Add to Cart
-  description: |-
-    As a shopper, I want to add products to my shopping cart.
-
-    ## Acceptance Criteria
-    - Add button on product cards
-    - Quantity selection
-    - Cart badge update
-    - Success notification
-  status: Draft
-  custom_status: In Progress
-  priority: Critical
-  owner: '@alex'
-  feature: 4-Shopping
-  created_at: 2024-10-28T10:00:00Z
-  created_by: '@alex'
-  modified_at: 2024-12-03T14:00:00Z
-  req_type: Story
-  tags: [cart, shopping]
-  relationships:
-  - rel_type: Parent
-    target_id: 22222222-2222-2222-2222-222222222203
-  - rel_type:
-      Custom: sprint_assignment
-    target_id: 11111111-1111-1111-1111-111111111103
-    created_at: 2024-11-30T09:00:00Z
-    created_by: '@sarah'
-  comments:
-  - id: c0000001-0001-0001-0001-000000000001
-    author: '@alex'
-    content: Started implementation. Working on cart state management.
-    created_at: 2024-12-02T10:00:00Z
-    modified_at: 2024-12-02T10:00:00Z
-  - id: c0000001-0001-0001-0001-000000000002
-    author: '@sarah'
-    content: Looking good! Remember to add animation for the cart badge.
-    created_at: 2024-12-02T15:00:00Z
-    modified_at: 2024-12-02T15:00:00Z
-
-- id: 33333333-3333-3333-3333-333333333310
-  spec_id: STORY-0010
-  title: Cart Management
-  description: |-
-    As a shopper, I want to manage items in my cart.
-
-    ## Acceptance Criteria
-    - View cart contents
-    - Update quantities
-    - Remove items
-    - Clear entire cart
-    - Show subtotal
-  status: Draft
-  custom_status: In Progress
-  priority: Critical
-  owner: '@alex'
-  feature: 4-Shopping
-  created_at: 2024-10-28T11:00:00Z
-  created_by: '@alex'
-  modified_at: 2024-12-04T09:00:00Z
-  req_type: Story
-  tags: [cart, management]
-  relationships:
-  - rel_type: Parent
-    target_id: 22222222-2222-2222-2222-222222222203
-  - rel_type:
-      Custom: sprint_assignment
-    target_id: 11111111-1111-1111-1111-111111111103
-    created_at: 2024-11-30T09:00:00Z
-    created_by: '@sarah'
-
-- id: 33333333-3333-3333-3333-333333333311
-  spec_id: STORY-0011
-  title: Cart Persistence
-  description: |-
-    As a shopper, I want my cart to persist across sessions.
-
-    ## Acceptance Criteria
-    - Cart saved for logged-in users
-    - Guest cart via localStorage
-    - Merge carts on login
-    - Handle out-of-stock items
-  status: Draft
-  priority: High
-  owner: '@alex'
-  feature: 4-Shopping
-  created_at: 2024-10-29T10:00:00Z
-  created_by: '@alex'
-  modified_at: 2024-10-29T10:00:00Z
-  req_type: Story
-  tags: [cart, persistence]
-  relationships:
-  - rel_type: Parent
-    target_id: 22222222-2222-2222-2222-222222222203
-  - rel_type:
-      Custom: sprint_assignment
-    target_id: 11111111-1111-1111-1111-111111111103
-    created_at: 2024-11-30T09:00:00Z
-    created_by: '@sarah'
-
-- id: 33333333-3333-3333-3333-333333333312
-  spec_id: STORY-0012
-  title: Checkout Flow - Address
-  description: |-
-    As a shopper, I want to enter my shipping address during checkout.
-
-    ## Acceptance Criteria
-    - Address form validation
-    - Save address option
-    - Use saved addresses
-    - Address autocomplete
-  status: Draft
-  priority: Critical
-  owner: '@alex'
-  feature: 4-Shopping
-  created_at: 2024-10-30T10:00:00Z
-  created_by: '@alex'
-  modified_at: 2024-10-30T10:00:00Z
-  req_type: Story
-  tags: [checkout, address]
-  relationships:
-  - rel_type: Parent
-    target_id: 22222222-2222-2222-2222-222222222203
-  - rel_type:
-      Custom: sprint_assignment
-    target_id: 11111111-1111-1111-1111-111111111103
-    created_at: 2024-11-30T09:00:00Z
-    created_by: '@sarah'
-
-# ============================================
-# STORIES - Payment (Sprint 4 - Upcoming / Backlog)
-# ============================================
-- id: 33333333-3333-3333-3333-333333333313
-  spec_id: STORY-0013
-  title: Credit Card Payment
-  description: |-
-    As a shopper, I want to pay with my credit card.
-
-    ## Acceptance Criteria
-    - Stripe integration
-    - Card validation
-    - 3D Secure support
-    - Save card option
-  status: Draft
-  priority: Critical
-  owner: '@sarah'
-  feature: 5-Payments
-  created_at: 2024-11-01T10:00:00Z
-  created_by: '@sarah'
-  modified_at: 2024-11-01T10:00:00Z
-  req_type: Story
-  tags: [payments, stripe]
-  relationships:
-  - rel_type: Parent
-    target_id: 22222222-2222-2222-2222-222222222204
-  - rel_type:
-      Custom: sprint_assignment
-    target_id: 11111111-1111-1111-1111-111111111104
-    created_at: 2024-12-01T09:00:00Z
-    created_by: '@sarah'
-
-- id: 33333333-3333-3333-3333-333333333314
-  spec_id: STORY-0014
-  title: PayPal Integration
-  description: |-
-    As a shopper, I want to pay using PayPal.
-
-    ## Acceptance Criteria
-    - PayPal button
-    - Express checkout
-    - Handle PayPal errors
-  status: Draft
-  priority: High
-  owner: '@sarah'
-  feature: 5-Payments
-  created_at: 2024-11-01T11:00:00Z
-  created_by: '@sarah'
-  modified_at: 2024-11-01T11:00:00Z
-  req_type: Story
-  tags: [payments, paypal]
-  relationships:
-  - rel_type: Parent
-    target_id: 22222222-2222-2222-2222-222222222204
-  - rel_type:
-      Custom: sprint_assignment
-    target_id: 11111111-1111-1111-1111-111111111104
-    created_at: 2024-12-01T09:00:00Z
-    created_by: '@sarah'
-
-# ============================================
-# BACKLOG STORIES (Not yet assigned to Sprint)
-# ============================================
-- id: 33333333-3333-3333-3333-333333333315
-  spec_id: STORY-0015
-  title: Product Reviews
-  description: |-
-    As a shopper, I want to read and write product reviews.
-
-    ## Acceptance Criteria
-    - Star rating (1-5)
-    - Written review
-    - Review moderation
-    - Helpful votes
+  title: View Cart Summary
+  description: As a customer, I want to view my cart with all items and total price.
   status: Draft
   priority: Medium
-  owner: '@mike'
-  feature: 3-ProductCatalog
-  created_at: 2024-11-05T10:00:00Z
-  created_by: '@mike'
-  modified_at: 2024-11-05T10:00:00Z
-  req_type: Story
-  tags: [reviews, ratings]
-  relationships:
-  - rel_type: Parent
-    target_id: 22222222-2222-2222-2222-222222222202
-
-- id: 33333333-3333-3333-3333-333333333316
-  spec_id: STORY-0016
-  title: Wishlist
-  description: |-
-    As a shopper, I want to save products to a wishlist.
-
-    ## Acceptance Criteria
-    - Add/remove from wishlist
-    - Share wishlist
-    - Move to cart
-    - Stock notifications
-  status: Draft
-  priority: Low
   owner: '@emily'
-  feature: 2-UserManagement
-  created_at: 2024-11-06T10:00:00Z
+  feature: 3-Stories
+  created_at: 2024-11-30T11:00:00Z
   created_by: '@emily'
-  modified_at: 2024-11-06T10:00:00Z
+  modified_at: 2024-12-01T10:00:00Z
   req_type: Story
-  tags: [wishlist, favorites]
-  relationships:
-  - rel_type: Parent
-    target_id: 22222222-2222-2222-2222-222222222201
-
-- id: 33333333-3333-3333-3333-333333333317
-  spec_id: STORY-0017
-  title: Order History
-  description: |-
-    As a user, I want to view my past orders.
-
-    ## Acceptance Criteria
-    - List of orders
-    - Order details
-    - Reorder functionality
-    - Download invoice
-  status: Draft
-  priority: Medium
-  owner: '@alex'
-  feature: 4-Shopping
-  created_at: 2024-11-07T10:00:00Z
-  created_by: '@alex'
-  modified_at: 2024-11-07T10:00:00Z
-  req_type: Story
-  tags: [orders, history]
   relationships:
   - rel_type: Parent
     target_id: 22222222-2222-2222-2222-222222222203
 
-# ============================================
-# TASKS (Sprint 3)
-# ============================================
+# Tasks
 - id: 44444444-4444-4444-4444-444444444401
   spec_id: TASK-0001
-  title: Design cart state management
-  description: Design Redux/Context structure for cart state including items, quantities, and pricing calculations.
+  title: Setup Database Schema
+  description: Create the database tables for users, products, and orders.
   status: Completed
   priority: High
   owner: '@alex'
-  feature: 4-Shopping
-  created_at: 2024-11-30T10:00:00Z
+  feature: 4-Tasks
+  created_at: 2024-11-01T09:00:00Z
   created_by: '@alex'
-  modified_at: 2024-12-02T16:00:00Z
+  modified_at: 2024-11-03T17:00:00Z
   req_type: Task
-  tags: [technical, architecture]
-  relationships:
-  - rel_type: Parent
-    target_id: 33333333-3333-3333-3333-333333333309
-  - rel_type:
-      Custom: sprint_assignment
-    target_id: 11111111-1111-1111-1111-111111111103
-    created_at: 2024-11-30T10:00:00Z
-    created_by: '@sarah'
 
 - id: 44444444-4444-4444-4444-444444444402
   spec_id: TASK-0002
-  title: Implement CartContext provider
-  description: Create React context and hooks for cart state management.
-  status: Draft
-  custom_status: In Progress
-  priority: High
-  owner: '@alex'
-  feature: 4-Shopping
-  created_at: 2024-11-30T11:00:00Z
-  created_by: '@alex'
-  modified_at: 2024-12-04T10:00:00Z
-  req_type: Task
-  tags: [technical, frontend]
-  relationships:
-  - rel_type: Parent
-    target_id: 33333333-3333-3333-3333-333333333309
-  - rel_type:
-      Custom: sprint_assignment
-    target_id: 11111111-1111-1111-1111-111111111103
-    created_at: 2024-11-30T11:00:00Z
-    created_by: '@sarah'
-
-- id: 44444444-4444-4444-4444-444444444403
-  spec_id: TASK-0003
-  title: Create AddToCart component
-  description: Reusable button component with quantity selector and cart animation.
-  status: Draft
-  priority: Medium
-  owner: '@alex'
-  feature: 4-Shopping
-  created_at: 2024-11-30T12:00:00Z
-  created_by: '@alex'
-  modified_at: 2024-11-30T12:00:00Z
-  req_type: Task
-  tags: [technical, frontend]
-  relationships:
-  - rel_type: Parent
-    target_id: 33333333-3333-3333-3333-333333333309
-  - rel_type:
-      Custom: sprint_assignment
-    target_id: 11111111-1111-1111-1111-111111111103
-    created_at: 2024-11-30T12:00:00Z
-    created_by: '@sarah'
-
-# ============================================
-# BUGS
-# ============================================
-- id: 55555555-5555-5555-5555-555555555501
-  spec_id: BUG-0001
-  title: Search results not clearing on category change
-  description: |-
-    When switching categories, previous search results persist causing confusion.
-
-    ## Steps to Reproduce
-    1. Search for "blue shirt"
-    2. Switch to Electronics category
-    3. Observe stale results
-
-    ## Expected
-    Search should clear or rerun on category change.
-  status: Draft
+  title: Implement Product API Endpoints
+  description: Create REST API endpoints for product CRUD operations.
+  status: Completed
   priority: High
   owner: '@mike'
-  feature: 3-ProductCatalog
-  created_at: 2024-11-25T14:00:00Z
-  created_by: '@qa_team'
-  modified_at: 2024-11-25T14:00:00Z
-  req_type: Bug
-  tags: [search, bug]
-  relationships:
-  - rel_type:
-      Custom: sprint_assignment
-    target_id: 11111111-1111-1111-1111-111111111103
-    created_at: 2024-11-30T09:00:00Z
-    created_by: '@sarah'
+  feature: 4-Tasks
+  created_at: 2024-11-16T10:00:00Z
+  created_by: '@mike'
+  modified_at: 2024-11-20T17:00:00Z
+  req_type: Task
 
-- id: 55555555-5555-5555-5555-555555555502
-  spec_id: BUG-0002
+# Bugs
+- id: 55555555-5555-5555-5555-555555555501
+  spec_id: BUG-0001
   title: Login session expires too quickly
-  description: |-
-    Users are being logged out after 15 minutes of inactivity. Should be 30 minutes.
-
-    ## Environment
-    All browsers, production environment
-  status: Completed
-  priority: Medium
-  owner: '@emily'
-  feature: 2-UserManagement
-  created_at: 2024-11-20T10:00:00Z
-  created_by: '@qa_team'
-  modified_at: 2024-11-22T16:00:00Z
-  req_type: Bug
-  tags: [auth, session, bug]
-  relationships:
-  - rel_type:
-      Custom: sprint_assignment
-    target_id: 11111111-1111-1111-1111-111111111102
-    created_at: 2024-11-16T09:00:00Z
-    created_by: '@sarah'
-
-# ============================================
-# SPIKES
-# ============================================
-- id: 66666666-6666-6666-6666-666666666601
-  spec_id: SPIKE-0001
-  title: Evaluate payment gateway options
-  description: |-
-    Research and compare payment gateway options:
-    - Stripe
-    - PayPal
-    - Square
-    - Braintree
-
-    Evaluate based on fees, features, and integration complexity.
+  description: Users are being logged out after 5 minutes of inactivity instead of 30 minutes.
   status: Completed
   priority: High
   owner: '@sarah'
-  feature: 5-Payments
-  created_at: 2024-10-20T10:00:00Z
-  created_by: '@sarah'
-  modified_at: 2024-10-28T15:00:00Z
-  req_type: Spike
-  tags: [research, payments]
-  relationships: []
-  comments:
-  - id: c0000002-0002-0002-0002-000000000001
-    author: '@sarah'
-    content: Recommendation is to use Stripe as primary with PayPal as alternative. See confluence doc for full analysis.
-    created_at: 2024-10-28T15:00:00Z
-    modified_at: 2024-10-28T15:00:00Z
+  feature: 5-Bugs
+  created_at: 2024-11-14T14:00:00Z
+  created_by: '@qa_team'
+  modified_at: 2024-11-15T10:00:00Z
+  req_type: Bug
 
-# ============================================
-# USERS
-# ============================================
-users:
-- id: u0000001-0001-0001-0001-000000000001
-  spec_id: $USER-001
-  name: Sarah Chen
-  email: sarah.chen@example.com
-  handle: sarah
-  created_at: 2024-10-01T09:00:00Z
-- id: u0000001-0001-0001-0001-000000000002
-  spec_id: $USER-002
-  name: Mike Johnson
-  email: mike.johnson@example.com
-  handle: mike
-  created_at: 2024-10-01T09:00:00Z
-- id: u0000001-0001-0001-0001-000000000003
-  spec_id: $USER-003
-  name: Emily Davis
-  email: emily.davis@example.com
-  handle: emily
-  created_at: 2024-10-01T09:00:00Z
-- id: u0000001-0001-0001-0001-000000000004
-  spec_id: $USER-004
-  name: Alex Rivera
-  email: alex.rivera@example.com
-  handle: alex
-  created_at: 2024-10-01T09:00:00Z
-- id: u0000001-0001-0001-0001-000000000005
-  spec_id: $USER-005
-  name: QA Team
-  email: qa@example.com
-  handle: qa_team
-  created_at: 2024-10-01T09:00:00Z
-
-# ============================================
-# TEAMS
-# ============================================
-teams:
-- id: t0000001-0001-0001-0001-000000000001
-  spec_id: $TEAM-001
-  name: Frontend Team
-  description: Responsible for user interface and experience
-  member_ids:
-  - u0000001-0001-0001-0001-000000000003
-  - u0000001-0001-0001-0001-000000000004
-  created_at: 2024-10-01T09:00:00Z
-  modified_at: 2024-10-01T09:00:00Z
-- id: t0000001-0001-0001-0001-000000000002
-  spec_id: $TEAM-002
-  name: Backend Team
-  description: API and database development
-  member_ids:
-  - u0000001-0001-0001-0001-000000000002
-  created_at: 2024-10-01T09:00:00Z
-  modified_at: 2024-10-01T09:00:00Z
-- id: t0000001-0001-0001-0001-000000000003
-  spec_id: $TEAM-003
-  name: Product Team
-  description: Product management and strategy
-  parent_team_id: null
-  member_ids:
-  - u0000001-0001-0001-0001-000000000001
-  created_at: 2024-10-01T09:00:00Z
-  modified_at: 2024-10-01T09:00:00Z
-
-# ============================================
-# CONFIGURATION
-# ============================================
-id_config:
-  format: SingleLevel
-  numbering: Global
-  digits: 4
-  requirement_types:
-  - name: Functional
-    prefix: FR
-    description: Functional requirements
-  - name: Non-Functional
-    prefix: NFR
-    description: Non-functional requirements
-  - name: Story
-    prefix: STORY
-    description: User stories
-  - name: Task
-    prefix: TASK
-    description: Development tasks
-  - name: Bug
-    prefix: BUG
-    description: Bug reports
-  - name: Epic
-    prefix: EPIC
-    description: Large feature groups
-  - name: Sprint
-    prefix: SPRINT
-    description: Time-boxed iterations
-  - name: Spike
-    prefix: SPIKE
-    description: Research and investigation tasks
-
-features:
-- number: 1
-  name: 1-Sprints
-  description: Sprint planning containers
-- number: 2
-  name: 2-UserManagement
-  description: User authentication and profile features
-- number: 3
-  name: 3-ProductCatalog
-  description: Product browsing and search
-- number: 4
-  name: 4-Shopping
-  description: Cart and checkout functionality
-- number: 5
-  name: 5-Payments
-  description: Payment processing
-
-next_feature_number: 6
-next_spec_number: 20
-prefix_counters: {}
-relationship_definitions: []
-reaction_definitions: []
-meta_counters:
-  SPRINT: 5
-  EPIC: 5
-  STORY: 18
-  TASK: 4
-  BUG: 3
-  SPIKE: 2
-type_definitions: []
-allowed_prefixes: []
-restrict_prefixes: false
-baselines: []
+- id: 55555555-5555-5555-5555-555555555502
+  spec_id: BUG-0002
+  title: Search returns no results for partial matches
+  description: Searching for "phone" does not return "smartphone" products.
+  status: Draft
+  priority: Medium
+  owner: '@mike'
+  feature: 5-Bugs
+  created_at: 2024-11-28T11:00:00Z
+  created_by: '@qa_team'
+  modified_at: 2024-11-28T11:00:00Z
+  req_type: Bug

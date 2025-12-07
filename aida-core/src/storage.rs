@@ -402,6 +402,10 @@ impl Storage {
 
         // Parse the YAML content
         let mut store: crate::models::RequirementsStore = serde_yaml::from_reader(reader)
+            .map_err(|e| {
+                eprintln!("YAML parse error details: {}", e);
+                e
+            })
             .with_context(|| format!("Failed to parse YAML from {:?}", self.file_path))?;
 
         // Migrate existing features to numbered format if needed

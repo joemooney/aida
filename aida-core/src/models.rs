@@ -2000,9 +2000,11 @@ pub struct Requirement {
     pub req_type: RequirementType,
 
     /// IDs of requirements this requirement depends on
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dependencies: Vec<Uuid>,
 
     /// Tags for categorizing the requirement
+    #[serde(default, skip_serializing_if = "HashSet::is_empty")]
     pub tags: HashSet<String>,
 
     /// Relationships to other requirements
