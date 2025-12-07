@@ -16375,6 +16375,9 @@ impl RequirementsApp {
 
                                 // Quick Actions dropdown menu
                                 ui.menu_button("⚡ Actions", |ui| {
+                                    // Make menu wide enough so AI submenu doesn't occlude Clone/Archive/Delete
+                                    ui.set_min_width(200.0);
+
                                     // Priority submenu
                                     ui.menu_button("Priority", |ui| {
                                         let priorities = [
