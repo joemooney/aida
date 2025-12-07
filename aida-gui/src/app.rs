@@ -16099,7 +16099,7 @@ impl RequirementsApp {
 
         // Center the popup on screen
         let screen_rect = ctx.screen_rect();
-        let popup_size = egui::vec2(250.0, 220.0);
+        let popup_size = egui::vec2(300.0, 400.0);
         let popup_pos = egui::pos2(
             (screen_rect.width() - popup_size.x) / 2.0,
             (screen_rect.height() - popup_size.y) / 2.0,
@@ -16128,8 +16128,10 @@ impl RequirementsApp {
                         ui.separator();
 
                         // Scrollable list of features
+                        let scroll_id = egui::Id::new("feature_picker_scroll");
                         egui::ScrollArea::vertical()
-                            .max_height(120.0)
+                            .id_salt(scroll_id)
+                            .max_height(300.0)
                             .show(ui, |ui| {
                                 if filtered_features.is_empty() {
                                     ui.weak("No matching features");
@@ -16137,6 +16139,12 @@ impl RequirementsApp {
                                     for (idx, feature) in filtered_features.iter().enumerate() {
                                         let is_selected = idx == self.quick_change_selected;
                                         let response = ui.selectable_label(is_selected, *feature);
+
+                                        // Scroll to the selected item when navigating
+                                        if is_selected {
+                                            response.scroll_to_me(Some(egui::Align::Center));
+                                        }
+
                                         if response.clicked() {
                                             self.apply_feature_change((*feature).clone());
                                             self.quick_change_field = None;
