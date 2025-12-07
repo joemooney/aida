@@ -15930,13 +15930,14 @@ impl RequirementsApp {
         }
 
         // Define view options with their shortcut keys
+        // Kanban is at end so 'k' (vim up) wraps to it from Requirements
         let view_options: Vec<(char, &str, View)> = vec![
             ('r', "Requirements", View::List),
-            ('k', "Kanban", View::KanBan),
             ('t', "Timeline", View::Timeline),
             ('b', "Baselines", View::Baselines),
             ('o', "Org Chart", View::OrgChart),
             ('s', "Sprint Planning", View::Planning),
+            ('k', "Kanban", View::KanBan),
         ];
         let num_options = view_options.len();
 
@@ -15963,7 +15964,8 @@ impl RequirementsApp {
             if i.key_pressed(egui::Key::Enter) {
                 confirm = true;
             }
-            // Check for shortcut keys (only letters that aren't navigation)
+            // Check for shortcut keys (letters that select directly)
+            // Note: 'k' is vim-up navigation, but from Requirements it wraps to Kanban at bottom
             if i.key_pressed(egui::Key::R) {
                 selected_view = Some(View::List);
             } else if i.key_pressed(egui::Key::T) {
@@ -15975,7 +15977,6 @@ impl RequirementsApp {
             } else if i.key_pressed(egui::Key::S) {
                 selected_view = Some(View::Planning);
             }
-            // Note: 'k' is used for navigation (vim up), so Kanban is only via arrow+Enter or click
         });
 
         if close_popup {
