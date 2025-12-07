@@ -1097,6 +1097,8 @@ pub enum KeyAction {
     PrevSearchMatch,    // 'N' - previous search match
     ClearSearch,        // Esc - clear search
     SwitchToFilterMode, // '/' - switch search to filter mode
+    // View navigation
+    OpenViewPicker,     // 'v' - open view picker (two-key sequence: v + k/t/b/o/r/s)
 }
 
 impl KeyAction {
@@ -1130,6 +1132,7 @@ impl KeyAction {
             KeyAction::PrevSearchMatch => "Previous Search Match",
             KeyAction::ClearSearch => "Clear Search",
             KeyAction::SwitchToFilterMode => "Switch to Filter Mode",
+            KeyAction::OpenViewPicker => "Open View Picker",
         }
     }
 
@@ -1164,6 +1167,7 @@ impl KeyAction {
             KeyAction::PrevSearchMatch => KeyContext::RequirementsList,
             KeyAction::ClearSearch => KeyContext::RequirementsList,
             KeyAction::SwitchToFilterMode => KeyContext::Global,
+            KeyAction::OpenViewPicker => KeyContext::Global,
         }
     }
 
@@ -1197,6 +1201,7 @@ impl KeyAction {
             KeyAction::PrevSearchMatch,
             KeyAction::ClearSearch,
             KeyAction::SwitchToFilterMode,
+            KeyAction::OpenViewPicker,
         ]
     }
 }
@@ -1561,6 +1566,11 @@ impl Default for KeyBindings {
         bindings.insert(
             KeyAction::SwitchToFilterMode,
             KeyBinding::new(egui::Key::Slash, KeyAction::SwitchToFilterMode.default_context()),
+        );
+        // 'v' to open view picker
+        bindings.insert(
+            KeyAction::OpenViewPicker,
+            KeyBinding::new(egui::Key::V, KeyAction::OpenViewPicker.default_context()),
         );
         Self { bindings }
     }
@@ -2711,6 +2721,9 @@ pub struct RequirementsApp {
     // Delete confirmation state
     pending_delete_confirm: Option<usize>,        // Index of requirement awaiting delete confirmation
 
+    // View picker popup (triggered by 'v' key - shows list of views with keyboard shortcuts)
+    show_view_picker: bool,
+
     // Split panel (second requirements list) - used in split layouts
     split_perspective: Perspective,
     split_perspective_direction: PerspectiveDirection,
@@ -3293,6 +3306,7 @@ impl RequirementsApp {
             quick_change_owner_search: String::new(),
             quick_change_feature_search: String::new(),
             pending_delete_confirm: None,
+            show_view_picker: false,
             split_perspective: Perspective::default(),
             split_perspective_direction: PerspectiveDirection::default(),
             split_filter_text: String::new(),
@@ -15890,6 +15904,117 @@ impl RequirementsApp {
         }
     }
 
+    /// Show view picker popup (triggered by 'v' key - two-key sequence)
+    /// Allows quick view switching with keyboard shortcuts:
+    /// v k - Kanban, v t - Timeline, v b - Baselines, v o - Org Chart, v r - Requirements, v s - Sprint Planning
+    fn show_view_picker_popup(&mut self, ctx: &egui::Context) {
+        if !self.show_view_picker {
+            return;
+        }
+
+        // Define view options with their shortcut keys
+        let view_options: Vec<(char, &str, View)> = vec![
+            ('r', "Requirements", View::List),
+            ('k', "Kanban", View::KanBan),
+            ('t', "Timeline", View::Timeline),
+            ('b', "Baselines", View::Baselines),
+            ('o', "Org Chart", View::OrgChart),
+            ('s', "Sprint Planning", View::Planning),
+        ];
+
+        // Handle keyboard input for the popup
+        let mut close_popup = false;
+        let mut selected_view: Option<View> = None;
+
+        ctx.input(|i| {
+            // Escape or 'v' again to close
+            if i.key_pressed(egui::Key::Escape) || i.key_pressed(egui::Key::V) {
+                close_popup = true;
+            }
+            // Check for shortcut keys
+            if i.key_pressed(egui::Key::R) {
+                selected_view = Some(View::List);
+            } else if i.key_pressed(egui::Key::K) {
+                selected_view = Some(View::KanBan);
+            } else if i.key_pressed(egui::Key::T) {
+                selected_view = Some(View::Timeline);
+            } else if i.key_pressed(egui::Key::B) {
+                selected_view = Some(View::Baselines);
+            } else if i.key_pressed(egui::Key::O) {
+                selected_view = Some(View::OrgChart);
+            } else if i.key_pressed(egui::Key::S) {
+                selected_view = Some(View::Planning);
+            }
+        });
+
+        if close_popup {
+            self.show_view_picker = false;
+            return;
+        }
+
+        if let Some(view) = selected_view {
+            self.pending_view_change = Some(view);
+            self.show_view_picker = false;
+            return;
+        }
+
+        // Center the popup on screen
+        let screen_rect = ctx.screen_rect();
+        let popup_size = egui::vec2(200.0, 180.0);
+        let popup_pos = egui::pos2(
+            (screen_rect.width() - popup_size.x) / 2.0,
+            (screen_rect.height() - popup_size.y) / 2.0,
+        );
+
+        egui::Area::new(egui::Id::new("view_picker_popup"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(popup_pos)
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style())
+                    .inner_margin(8.0)
+                    .show(ui, |ui| {
+                        ui.set_min_width(popup_size.x - 16.0);
+                        ui.label(egui::RichText::new("Switch View").strong());
+                        ui.separator();
+
+                        for (key, label, view) in &view_options {
+                            let is_current = match (&self.current_view, view) {
+                                (View::List, View::List) => true,
+                                (View::Detail, View::List) => true, // Detail is part of List view
+                                (View::KanBan, View::KanBan) => true,
+                                (View::Timeline, View::Timeline) => true,
+                                (View::Baselines, View::Baselines) => true,
+                                (View::OrgChart, View::OrgChart) => true,
+                                (View::Planning, View::Planning) => true,
+                                _ => false,
+                            };
+
+                            let text = format!("  {}  {}", key, label);
+                            let response = ui.selectable_label(is_current, &text);
+                            if response.clicked() {
+                                self.pending_view_change = Some(view.clone());
+                                self.show_view_picker = false;
+                            }
+                        }
+
+                        ui.separator();
+                        ui.horizontal(|ui| {
+                            ui.small("Press key or click • Esc/v Cancel");
+                        });
+                    });
+            });
+
+        // Close on click outside
+        if ctx.input(|i| i.pointer.any_click()) {
+            let popup_rect = egui::Rect::from_min_size(popup_pos, popup_size);
+            if let Some(pos) = ctx.input(|i| i.pointer.interact_pos()) {
+                if !popup_rect.contains(pos) {
+                    self.show_view_picker = false;
+                }
+            }
+        }
+    }
+
     /// Show owner picker popup with fuzzy search (triggered by 'o' key in list view)
     fn show_owner_picker_popup(&mut self, ctx: &egui::Context) {
         // Collect all unique owners from requirements + users
@@ -22293,6 +22418,21 @@ impl eframe::App for RequirementsApp {
             self.search_focus_requested = true;
         }
 
+        // 'v' to open view picker (two-key sequence)
+        // Only trigger when not in a text input and no popup is open
+        if !text_input_focused
+            && !self.show_settings_dialog
+            && !self.show_view_picker
+            && self.quick_change_field.is_none()
+            && self.user_settings.keybindings.is_pressed(
+                KeyAction::OpenViewPicker,
+                ctx,
+                self.current_key_context,
+            )
+        {
+            self.show_view_picker = true;
+        }
+
         // Also handle Ctrl+= as alternate zoom in (common on keyboards)
         ctx.input(|i| {
             let ctrl = i.modifiers.ctrl || i.modifiers.mac_cmd;
@@ -23381,6 +23521,9 @@ impl eframe::App for RequirementsApp {
 
         // Show quick change popup (triggered by 's' for status, 'p' for priority)
         self.show_quick_change_popup(ctx);
+
+        // Show view picker popup (triggered by 'v' key)
+        self.show_view_picker_popup(ctx);
 
         // Show project dialogs
         self.show_switch_project_dialog(ctx);
