@@ -72,4 +72,4 @@ Review session and capture missed requirements:
 - Identify implemented work not yet in requirements database
 - Prompt to add missing requirements or update statuses
 - Use at end of conversational sessions as a safety net
-
+- a goal for this project is to make aida very much like an editor like Vim. We want to maximize the use of the keyboard. Key combinations where the first key (e.g. 's') shows a menu and the second key chooses from that menu are preferred since they are an excellent way to help new users get used to the key combos without immediate action.

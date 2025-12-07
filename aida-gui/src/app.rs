@@ -1099,6 +1099,8 @@ pub enum KeyAction {
     SwitchToFilterMode, // '/' - switch search to filter mode
     // View navigation
     OpenViewPicker,     // 'v' - open view picker (two-key sequence: v + k/t/b/o/r/s)
+    // Help
+    ShowKeyboardHelp,   // '?' - show keyboard shortcuts help
 }
 
 impl KeyAction {
@@ -1133,6 +1135,7 @@ impl KeyAction {
             KeyAction::ClearSearch => "Clear Search",
             KeyAction::SwitchToFilterMode => "Switch to Filter Mode",
             KeyAction::OpenViewPicker => "Open View Picker",
+            KeyAction::ShowKeyboardHelp => "Show Keyboard Help",
         }
     }
 
@@ -1168,6 +1171,7 @@ impl KeyAction {
             KeyAction::ClearSearch => KeyContext::RequirementsList,
             KeyAction::SwitchToFilterMode => KeyContext::Global,
             KeyAction::OpenViewPicker => KeyContext::Global,
+            KeyAction::ShowKeyboardHelp => KeyContext::Global,
         }
     }
 
@@ -1202,6 +1206,7 @@ impl KeyAction {
             KeyAction::ClearSearch,
             KeyAction::SwitchToFilterMode,
             KeyAction::OpenViewPicker,
+            KeyAction::ShowKeyboardHelp,
         ]
     }
 }
@@ -1571,6 +1576,12 @@ impl Default for KeyBindings {
         bindings.insert(
             KeyAction::OpenViewPicker,
             KeyBinding::new(egui::Key::V, KeyAction::OpenViewPicker.default_context()),
+        );
+        // '?' (Shift+/) to show keyboard help
+        bindings.insert(
+            KeyAction::ShowKeyboardHelp,
+            KeyBinding::new(egui::Key::Slash, KeyAction::ShowKeyboardHelp.default_context())
+                .with_shift(),
         );
         Self { bindings }
     }
@@ -2724,6 +2735,9 @@ pub struct RequirementsApp {
     // View picker popup (triggered by 'v' key - shows list of views with keyboard shortcuts)
     show_view_picker: bool,
 
+    // Keyboard shortcuts help popup (triggered by '?' key)
+    show_keyboard_help: bool,
+
     // Split panel (second requirements list) - used in split layouts
     split_perspective: Perspective,
     split_perspective_direction: PerspectiveDirection,
@@ -3307,6 +3321,7 @@ impl RequirementsApp {
             quick_change_feature_search: String::new(),
             pending_delete_confirm: None,
             show_view_picker: false,
+            show_keyboard_help: false,
             split_perspective: Perspective::default(),
             split_perspective_direction: PerspectiveDirection::default(),
             split_filter_text: String::new(),
@@ -16015,6 +16030,156 @@ impl RequirementsApp {
         }
     }
 
+    /// Show keyboard shortcuts help popup (triggered by '?' key)
+    fn show_keyboard_help_popup(&mut self, ctx: &egui::Context) {
+        if !self.show_keyboard_help {
+            return;
+        }
+
+        // Handle keyboard input for the popup
+        let mut close_popup = false;
+
+        ctx.input(|i| {
+            // Escape, '?', or any key to close
+            if i.key_pressed(egui::Key::Escape)
+                || (i.modifiers.shift && i.key_pressed(egui::Key::Slash))
+                || i.key_pressed(egui::Key::Space)
+                || i.key_pressed(egui::Key::Enter)
+            {
+                close_popup = true;
+            }
+        });
+
+        if close_popup {
+            self.show_keyboard_help = false;
+            return;
+        }
+
+        // Center the popup on screen - make it larger for all the shortcuts
+        let screen_rect = ctx.screen_rect();
+        let popup_size = egui::vec2(500.0, 550.0);
+        let popup_pos = egui::pos2(
+            (screen_rect.width() - popup_size.x) / 2.0,
+            (screen_rect.height() - popup_size.y) / 2.0,
+        );
+
+        egui::Area::new(egui::Id::new("keyboard_help_popup"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(popup_pos)
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style())
+                    .inner_margin(12.0)
+                    .show(ui, |ui| {
+                        ui.set_min_width(popup_size.x - 24.0);
+                        ui.set_max_height(popup_size.y - 24.0);
+
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("Keyboard Shortcuts").strong().size(16.0));
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                ui.small("Press Esc or ? to close");
+                            });
+                        });
+                        ui.separator();
+
+                        egui::ScrollArea::vertical()
+                            .max_height(popup_size.y - 80.0)
+                            .show(ui, |ui| {
+                                // Helper to show a shortcut row
+                                let show_shortcut = |ui: &mut egui::Ui, key: &str, desc: &str| {
+                                    ui.horizontal(|ui| {
+                                        ui.label(egui::RichText::new(format!("{:>12}", key)).monospace().strong());
+                                        ui.label(desc);
+                                    });
+                                };
+
+                                // Navigation section
+                                ui.label(egui::RichText::new("Navigation").strong());
+                                ui.add_space(4.0);
+                                show_shortcut(ui, "j / ↓", "Move down in list");
+                                show_shortcut(ui, "k / ↑", "Move up in list");
+                                show_shortcut(ui, "Enter / e", "Edit selected requirement");
+                                show_shortcut(ui, "Space", "Toggle expand/collapse");
+                                ui.add_space(8.0);
+
+                                // Views section (two-key sequences)
+                                ui.label(egui::RichText::new("Views").strong());
+                                ui.small("Press v then:");
+                                ui.add_space(4.0);
+                                show_shortcut(ui, "v r", "Requirements list");
+                                show_shortcut(ui, "v k", "Kanban board");
+                                show_shortcut(ui, "v t", "Timeline");
+                                show_shortcut(ui, "v b", "Baselines");
+                                show_shortcut(ui, "v o", "Org Chart");
+                                show_shortcut(ui, "v s", "Sprint Planning");
+                                ui.add_space(8.0);
+
+                                // Quick actions section
+                                ui.label(egui::RichText::new("Quick Actions").strong());
+                                ui.small("Opens picker for selected item:");
+                                ui.add_space(4.0);
+                                show_shortcut(ui, "s", "Change status");
+                                show_shortcut(ui, "p", "Change priority");
+                                show_shortcut(ui, "o", "Change owner");
+                                show_shortcut(ui, "f", "Assign to feature");
+                                show_shortcut(ui, "S", "Assign to sprint");
+                                ui.add_space(8.0);
+
+                                // Create section
+                                ui.label(egui::RichText::new("Create").strong());
+                                ui.add_space(4.0);
+                                show_shortcut(ui, "Ctrl+N", "New requirement (smart parent)");
+                                show_shortcut(ui, "n", "New sibling requirement");
+                                show_shortcut(ui, "N", "New child requirement");
+                                show_shortcut(ui, "c", "Add comment");
+                                ui.add_space(8.0);
+
+                                // Actions section
+                                ui.label(egui::RichText::new("Actions").strong());
+                                ui.add_space(4.0);
+                                show_shortcut(ui, "d", "Delete (with confirm)");
+                                show_shortcut(ui, "D", "Delete immediately");
+                                show_shortcut(ui, "a", "Archive/unarchive");
+                                show_shortcut(ui, "L", "Toggle links panel");
+                                ui.add_space(8.0);
+
+                                // Search section
+                                ui.label(egui::RichText::new("Search").strong());
+                                ui.add_space(4.0);
+                                show_shortcut(ui, "/", "Focus search box");
+                                show_shortcut(ui, "n", "Next search match (when searching)");
+                                show_shortcut(ui, "N", "Previous search match (when searching)");
+                                show_shortcut(ui, "Esc", "Clear search");
+                                ui.add_space(8.0);
+
+                                // Zoom section
+                                ui.label(egui::RichText::new("Zoom & Display").strong());
+                                ui.add_space(4.0);
+                                show_shortcut(ui, "Ctrl++", "Zoom in");
+                                show_shortcut(ui, "Ctrl+-", "Zoom out");
+                                show_shortcut(ui, "Ctrl+0", "Reset zoom");
+                                show_shortcut(ui, "Ctrl+wheel", "Zoom with mouse");
+                                show_shortcut(ui, "t", "Cycle theme");
+                                ui.add_space(8.0);
+
+                                // Help section
+                                ui.label(egui::RichText::new("Help").strong());
+                                ui.add_space(4.0);
+                                show_shortcut(ui, "?", "Show this help");
+                            });
+                    });
+            });
+
+        // Close on click outside
+        if ctx.input(|i| i.pointer.any_click()) {
+            let popup_rect = egui::Rect::from_min_size(popup_pos, popup_size);
+            if let Some(pos) = ctx.input(|i| i.pointer.interact_pos()) {
+                if !popup_rect.contains(pos) {
+                    self.show_keyboard_help = false;
+                }
+            }
+        }
+    }
+
     /// Show owner picker popup with fuzzy search (triggered by 'o' key in list view)
     fn show_owner_picker_popup(&mut self, ctx: &egui::Context) {
         // Collect all unique owners from requirements + users
@@ -22433,6 +22598,22 @@ impl eframe::App for RequirementsApp {
             self.show_view_picker = true;
         }
 
+        // '?' to show keyboard shortcuts help
+        // Only trigger when not in a text input and no popup is open
+        if !text_input_focused
+            && !self.show_settings_dialog
+            && !self.show_view_picker
+            && !self.show_keyboard_help
+            && self.quick_change_field.is_none()
+            && self.user_settings.keybindings.is_pressed(
+                KeyAction::ShowKeyboardHelp,
+                ctx,
+                self.current_key_context,
+            )
+        {
+            self.show_keyboard_help = true;
+        }
+
         // Also handle Ctrl+= as alternate zoom in (common on keyboards)
         ctx.input(|i| {
             let ctrl = i.modifiers.ctrl || i.modifiers.mac_cmd;
@@ -23524,6 +23705,9 @@ impl eframe::App for RequirementsApp {
 
         // Show view picker popup (triggered by 'v' key)
         self.show_view_picker_popup(ctx);
+
+        // Show keyboard shortcuts help popup (triggered by '?' key)
+        self.show_keyboard_help_popup(ctx);
 
         // Show project dialogs
         self.show_switch_project_dialog(ctx);
