@@ -22558,10 +22558,9 @@ impl eframe::App for RequirementsApp {
         }
 
         // '/' to focus search box and clear it (vim-style)
-        // Check key directly - only block if actually in a text edit (not just wants_keyboard_input)
+        // Only block in form views (Add/Edit) or settings dialog where text input is expected
         let slash_pressed = ctx.input(|i| i.key_pressed(egui::Key::Slash) && !i.modifiers.shift);
-        let in_text_edit = ctx.memory(|m| m.focused().is_some()) && text_input_focused;
-        if !in_text_edit
+        if !in_form_view
             && !self.show_settings_dialog
             && slash_pressed
         {
@@ -22582,10 +22581,9 @@ impl eframe::App for RequirementsApp {
         }
 
         // 'v' to open view picker (two-key sequence)
-        // Only trigger when not in a text input and no popup is open
-        // Check key directly - only block if actually in a text edit (not just wants_keyboard_input)
+        // Only block in form views (Add/Edit) or settings dialog where text input is expected
         let v_pressed = ctx.input(|i| i.key_pressed(egui::Key::V) && !i.modifiers.ctrl && !i.modifiers.alt);
-        if !in_text_edit
+        if !in_form_view
             && !self.show_settings_dialog
             && !self.show_view_picker
             && self.quick_change_field.is_none()
@@ -22595,10 +22593,9 @@ impl eframe::App for RequirementsApp {
         }
 
         // '?' to show keyboard shortcuts help
-        // Only trigger when not in a text input and no popup is open
-        // Check key directly - only block if actually in a text edit (not just wants_keyboard_input)
+        // Only block in form views (Add/Edit) or settings dialog where text input is expected
         let question_pressed = ctx.input(|i| i.key_pressed(egui::Key::Slash) && i.modifiers.shift);
-        if !in_text_edit
+        if !in_form_view
             && !self.show_settings_dialog
             && !self.show_view_picker
             && !self.show_keyboard_help
