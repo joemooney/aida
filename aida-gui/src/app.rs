@@ -10023,6 +10023,44 @@ impl RequirementsApp {
         }
     }
 
+    /// Get a flat list of all planning items in display order (sprints items first, then backlog)
+    /// Returns a list of (item_id, in_sprint) tuples
+    fn get_planning_items_list(&self) -> Vec<Uuid> {
+        let mut items = Vec::new();
+
+        // Get sprints (filtered by show_completed setting)
+        let sprints: Vec<Uuid> = self.store
+            .get_sprints()
+            .into_iter()
+            .filter(|s| {
+                let status = s.effective_status();
+                self.planning_show_completed_sprints
+                    || (status != "Completed" && status != "Archived")
+            })
+            .map(|s| s.id)
+            .collect();
+
+        // Add items from each non-collapsed sprint
+        for sprint_id in &sprints {
+            if !self.planning_collapsed_sprints.contains(sprint_id) {
+                let sprint_items = self.store.get_sprint_items(sprint_id);
+                for item in sprint_items {
+                    items.push(item.id);
+                }
+            }
+        }
+
+        // Add backlog items if not collapsed
+        if !self.planning_collapsed_sprints.contains(&Uuid::nil()) {
+            let backlog = self.store.get_backlog();
+            for item in backlog {
+                items.push(item.id);
+            }
+        }
+
+        items
+    }
+
     /// Show the Sprint Planning view
     fn show_planning_view(&mut self, ui: &mut egui::Ui) {
         // Header with controls
@@ -10262,11 +10300,12 @@ impl RequirementsApp {
             };
 
             if ui.selectable_label(is_selected, label).clicked() {
+                // Just select the item - don't switch views (consistent with Timeline)
+                // Use Enter key or double-click to navigate to Detail view
                 self.planning_selected_item = Some(item_id);
-                // Navigate to the requirement
+                // Also update selected_idx for consistency with detail panel
                 if let Some(idx) = self.store.requirements.iter().position(|r| r.id == item_id) {
                     self.selected_idx = Some(idx);
-                    self.pending_view_change = Some(View::Detail);
                 }
             }
         });
@@ -20980,10 +21019,11 @@ impl eframe::App for RequirementsApp {
 
             // Check navigation keybindings (context-aware)
             // Block list navigation when status popup is open or delete confirm is pending
-            // Also skip for Timeline view - it has its own navigation handling
+            // Also skip for Timeline and Planning views - they have their own navigation handling
             let can_navigate = self.quick_change_field.is_none() && self.pending_delete_confirm.is_none();
             let in_timeline = self.current_view == View::Timeline;
-            if !in_timeline && can_navigate
+            let in_planning = self.current_view == View::Planning;
+            if !in_timeline && !in_planning && can_navigate
                 && (self.user_settings.keybindings.is_pressed(
                     KeyAction::NavigateDown,
                     ctx,
@@ -20995,7 +21035,7 @@ impl eframe::App for RequirementsApp {
                 ))
             {
                 nav_delta = 1;
-            } else if !in_timeline && can_navigate
+            } else if !in_timeline && !in_planning && can_navigate
                 && (self.user_settings.keybindings.is_pressed(
                     KeyAction::NavigateUp,
                     ctx,
@@ -21010,8 +21050,8 @@ impl eframe::App for RequirementsApp {
             }
 
             // Page Up/Down, Home/End, and Mouse Wheel (only when not in text input)
-            // Skip for Timeline view - it has its own handling
-            if nav_context_active && !in_timeline {
+            // Skip for Timeline and Planning views - they have their own handling
+            if nav_context_active && !in_timeline && !in_planning {
                 ctx.input(|i| {
                     // Page Up/Down
                     if i.key_pressed(egui::Key::PageDown) {
@@ -21204,8 +21244,8 @@ impl eframe::App for RequirementsApp {
                 FocusedList::List2 => (self.get_split_filtered_indices(), self.split_selected_idx),
             };
 
-            // Skip requirements list navigation when in Timeline view (Timeline has its own navigation)
-            if !in_timeline && !filtered_indices.is_empty() {
+            // Skip requirements list navigation when in Timeline or Planning view (they have their own navigation)
+            if !in_timeline && !in_planning && !filtered_indices.is_empty() {
                 let new_selection = if jump_to_start {
                     // Jump to first item
                     Some(filtered_indices[0])
@@ -21373,6 +21413,103 @@ impl eframe::App for RequirementsApp {
                                         }
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Handle keyboard navigation in Planning view
+            if self.current_view == View::Planning && nav_context_active {
+                let planning_items = self.get_planning_items_list();
+                let item_count = planning_items.len();
+
+                if item_count > 0 {
+                    let mut planning_nav_delta: i32 = 0;
+                    let mut planning_jump_start = false;
+                    let mut planning_jump_end = false;
+                    let mut planning_navigate_to_detail = false;
+
+                    // Check navigation keys
+                    if can_navigate
+                        && (self.user_settings.keybindings.is_pressed(
+                            KeyAction::NavigateDown,
+                            ctx,
+                            self.current_key_context,
+                        ) || self.user_settings.keybindings.is_pressed(
+                            KeyAction::NavigateDownVim,
+                            ctx,
+                            self.current_key_context,
+                        ))
+                    {
+                        planning_nav_delta = 1;
+                    } else if can_navigate
+                        && (self.user_settings.keybindings.is_pressed(
+                            KeyAction::NavigateUp,
+                            ctx,
+                            self.current_key_context,
+                        ) || self.user_settings.keybindings.is_pressed(
+                            KeyAction::NavigateUpVim,
+                            ctx,
+                            self.current_key_context,
+                        ))
+                    {
+                        planning_nav_delta = -1;
+                    }
+
+                    // Page Up/Down, Home/End
+                    ctx.input(|i| {
+                        if i.key_pressed(egui::Key::PageDown) {
+                            planning_nav_delta = 10;
+                        } else if i.key_pressed(egui::Key::PageUp) {
+                            planning_nav_delta = -10;
+                        }
+                        if i.key_pressed(egui::Key::Home) {
+                            planning_jump_start = true;
+                        } else if i.key_pressed(egui::Key::End) {
+                            planning_jump_end = true;
+                        }
+                        // Enter key to navigate to the selected item's detail view
+                        if i.key_pressed(egui::Key::Enter) {
+                            planning_navigate_to_detail = true;
+                        }
+                    });
+
+                    // Find current position based on planning_selected_item
+                    let current_pos = self.planning_selected_item
+                        .and_then(|id| planning_items.iter().position(|&item_id| item_id == id));
+
+                    // Apply navigation
+                    let new_idx = if planning_jump_start {
+                        Some(0)
+                    } else if planning_jump_end {
+                        Some(item_count - 1)
+                    } else if planning_nav_delta != 0 {
+                        let current = current_pos.unwrap_or(0) as i32;
+                        let new_pos = (current + planning_nav_delta)
+                            .max(0)
+                            .min(item_count as i32 - 1) as usize;
+                        Some(new_pos)
+                    } else {
+                        None
+                    };
+
+                    if let Some(idx) = new_idx {
+                        if let Some(&item_id) = planning_items.get(idx) {
+                            self.planning_selected_item = Some(item_id);
+                            // Also update selected_idx for consistency
+                            if let Some(req_idx) = self.store.requirements.iter().position(|r| r.id == item_id) {
+                                self.selected_idx = Some(req_idx);
+                            }
+                        }
+                    }
+
+                    // Handle Enter key to navigate to detail view
+                    if planning_navigate_to_detail {
+                        if let Some(item_id) = self.planning_selected_item {
+                            if let Some(req_idx) = self.store.requirements.iter().position(|r| r.id == item_id) {
+                                self.selected_idx = Some(req_idx);
+                                self.pending_view_change = Some(View::Detail);
                             }
                         }
                     }
