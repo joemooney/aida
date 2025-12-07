@@ -15942,8 +15942,8 @@ impl RequirementsApp {
         let mut selected_view: Option<View> = None;
 
         ctx.input(|i| {
-            // Escape or 'v' again to close
-            if i.key_pressed(egui::Key::Escape) || i.key_pressed(egui::Key::V) {
+            // Escape to close (note: 'v' key_pressed is consumed in same frame that opens popup)
+            if i.key_pressed(egui::Key::Escape) {
                 close_popup = true;
             }
             // Check for shortcut keys
@@ -16040,9 +16040,9 @@ impl RequirementsApp {
         let mut close_popup = false;
 
         ctx.input(|i| {
-            // Escape, '?', or any key to close
+            // Escape, Space, or Enter to close
+            // Note: '?' (Shift+Slash) key_pressed is consumed in same frame that opens popup
             if i.key_pressed(egui::Key::Escape)
-                || (i.modifiers.shift && i.key_pressed(egui::Key::Slash))
                 || i.key_pressed(egui::Key::Space)
                 || i.key_pressed(egui::Key::Enter)
             {
@@ -22582,11 +22582,13 @@ impl eframe::App for RequirementsApp {
 
         // 'v' to open view picker (two-key sequence)
         // Only block in form views (Add/Edit) or settings dialog where text input is expected
-        let v_pressed = ctx.input(|i| i.key_pressed(egui::Key::V) && !i.modifiers.ctrl && !i.modifiers.alt);
+        let v_pressed = ctx.input(|i| i.key_pressed(egui::Key::V) && !i.modifiers.ctrl && !i.modifiers.alt && !i.modifiers.shift);
         if !in_form_view
-            && !self.show_settings_dialog
+            && !in_settings
             && !self.show_view_picker
+            && !self.show_keyboard_help
             && self.quick_change_field.is_none()
+            && self.pending_delete_confirm.is_none()
             && v_pressed
         {
             self.show_view_picker = true;
@@ -22596,10 +22598,11 @@ impl eframe::App for RequirementsApp {
         // Only block in form views (Add/Edit) or settings dialog where text input is expected
         let question_pressed = ctx.input(|i| i.key_pressed(egui::Key::Slash) && i.modifiers.shift);
         if !in_form_view
-            && !self.show_settings_dialog
+            && !in_settings
             && !self.show_view_picker
             && !self.show_keyboard_help
             && self.quick_change_field.is_none()
+            && self.pending_delete_confirm.is_none()
             && question_pressed
         {
             self.show_keyboard_help = true;

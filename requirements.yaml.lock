@@ -1,9 +1,1 @@
-sessions:
-  171256-abfa1192-359a-406a-bb54-89cfc65b815a:
-    session_id: 171256-abfa1192-359a-406a-bb54-89cfc65b815a
-    user_name: joe
-    hostname: imac
-    pid: 171256
-    started_at: 2025-12-07T19:45:48.748168313Z
-    last_heartbeat: 2025-12-07T19:47:59.454099805Z
-    editing_requirement: null
+sessions: {}
