@@ -10407,7 +10407,7 @@ impl RequirementsApp {
         title: &str,
         status: &str,
         item_type: &RequirementType,
-        _current_sprint: Option<Uuid>,
+        current_sprint: Option<Uuid>,
     ) {
         let type_icon = match item_type {
             RequirementType::Functional => "📋",
@@ -10435,56 +10435,110 @@ impl RequirementsApp {
         };
 
         let is_selected = self.planning_selected_item == Some(item_id);
-        let is_being_dragged = self.planning_drag_source == Some(item_id);
+        let is_drag_source = self.planning_drag_source == Some(item_id);
 
-        // Make the item draggable
-        let item_widget_id = egui::Id::new(("planning_item", item_id));
-        let response = ui.scope(|ui| {
-            // Reduce opacity if being dragged
-            if is_being_dragged {
-                ui.style_mut().visuals.widgets.noninteractive.fg_stroke.color =
-                    ui.style().visuals.widgets.noninteractive.fg_stroke.color.gamma_multiply(0.5);
-            }
+        // Build the label text
+        let label_text = format!("{} {} {}: {}", type_icon, "●", spec_id, title);
 
-            ui.horizontal(|ui| {
-                // Drag handle
-                let handle = ui.label("⠿");
-                if handle.hovered() {
-                    ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
-                }
+        // Calculate visual styling
+        let (bg_color, stroke) = if is_drag_source {
+            (
+                egui::Color32::from_rgba_unmultiplied(100, 100, 200, 60),
+                egui::Stroke::new(2.0, egui::Color32::LIGHT_BLUE),
+            )
+        } else if is_selected {
+            (ui.visuals().selection.bg_fill, egui::Stroke::NONE)
+        } else {
+            (egui::Color32::TRANSPARENT, egui::Stroke::NONE)
+        };
 
-                ui.label(type_icon);
-                ui.colored_label(status_color, "●");
+        // Use allocate_exact_size with click_and_drag sense for proper drag support
+        let available_width = ui.available_width() - 8.0;
+        let text = egui::WidgetText::from(&label_text);
+        let galley = text.into_galley(
+            ui,
+            Some(egui::TextWrapMode::Truncate),
+            available_width.max(50.0),
+            egui::TextStyle::Body,
+        );
+        let desired_size = egui::vec2(available_width.max(50.0), galley.size().y) + egui::vec2(8.0, 4.0);
 
-                let label_text = format!("{}: {}", spec_id, title);
-                let label = if is_selected {
-                    egui::RichText::new(&label_text).strong()
-                } else {
-                    egui::RichText::new(&label_text)
-                };
+        let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click_and_drag());
 
-                if ui.selectable_label(is_selected, label).clicked() {
-                    // Just select the item - don't switch views (consistent with Timeline)
-                    // Use Enter key or double-click to navigate to Detail view
-                    self.planning_selected_item = Some(item_id);
-                    // Also update selected_idx for consistency with detail panel
-                    if let Some(idx) = self.store.requirements.iter().position(|r| r.id == item_id) {
-                        self.selected_idx = Some(idx);
-                    }
-                }
-            })
-        });
-
-        // Handle drag detection on the whole row
-        let response = response.response;
-        if response.dragged() {
-            self.planning_drag_source = Some(item_id);
-            ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+        // Paint background
+        if bg_color != egui::Color32::TRANSPARENT {
+            ui.painter().rect_filled(rect, 2.0, bg_color);
+        }
+        if stroke != egui::Stroke::NONE {
+            ui.painter().rect_stroke(rect, 2.0, stroke);
         }
 
-        // When drag ends (mouse released)
+        // Paint text with appropriate color
+        let text_pos = rect.min + egui::vec2(4.0, 2.0);
+        let text_color = if is_selected {
+            ui.visuals().selection.stroke.color
+        } else {
+            ui.visuals().text_color()
+        };
+
+        // Paint status dot separately with color
+        let status_text = format!("{} ", type_icon);
+        let status_galley = egui::WidgetText::from(&status_text).into_galley(
+            ui,
+            Some(egui::TextWrapMode::Truncate),
+            50.0,
+            egui::TextStyle::Body,
+        );
+        ui.painter().galley(text_pos, status_galley, text_color);
+
+        // Paint the rest
+        let rest_pos = text_pos + egui::vec2(20.0, 0.0);
+        let dot_galley = egui::WidgetText::from("● ").into_galley(
+            ui,
+            Some(egui::TextWrapMode::Truncate),
+            20.0,
+            egui::TextStyle::Body,
+        );
+        ui.painter().galley(rest_pos, dot_galley, status_color);
+
+        let label_pos = rest_pos + egui::vec2(18.0, 0.0);
+        let label_galley = egui::WidgetText::from(format!("{}: {}", spec_id, title)).into_galley(
+            ui,
+            Some(egui::TextWrapMode::Truncate),
+            (available_width - 50.0).max(50.0),
+            egui::TextStyle::Body,
+        );
+        ui.painter().galley(label_pos, label_galley, text_color);
+
+        // Handle click for selection
+        if response.clicked() {
+            self.planning_selected_item = Some(item_id);
+            if let Some(idx) = self.store.requirements.iter().position(|r| r.id == item_id) {
+                self.selected_idx = Some(idx);
+            }
+        }
+
+        // Handle drag start
+        if response.drag_started() {
+            self.planning_drag_source = Some(item_id);
+        }
+
+        // Show drag indicator while dragging
+        if is_drag_source && ui.input(|i| i.pointer.is_decidedly_dragging()) {
+            if let Some(pos) = ui.input(|i| i.pointer.hover_pos()) {
+                egui::Area::new(egui::Id::new("planning_drag_indicator"))
+                    .fixed_pos(pos + egui::vec2(10.0, 10.0))
+                    .order(egui::Order::Tooltip)
+                    .show(ui.ctx(), |ui| {
+                        egui::Frame::popup(ui.style()).show(ui, |ui| {
+                            ui.label(format!("📎 {}", spec_id));
+                        });
+                    });
+            }
+        }
+
+        // Handle drop - check if drag stopped and we have a target
         if response.drag_stopped() && self.planning_drag_source == Some(item_id) {
-            // Check if we have a target
             if let Some(target) = self.planning_drag_target_sprint.take() {
                 let username = self.user_settings.display_name();
                 match target {
@@ -10493,21 +10547,16 @@ impl RequirementsApp {
                         self.store.remove_from_sprint(item_id, &username);
                     }
                     Some(sprint_id) => {
-                        // Move to sprint
-                        self.store.assign_to_sprint(item_id, sprint_id, &username);
+                        // Move to sprint (only if different from current)
+                        if current_sprint != Some(sprint_id) {
+                            self.store.assign_to_sprint(item_id, sprint_id, &username);
+                        }
                     }
                 }
                 self.save();
             }
             self.planning_drag_source = None;
         }
-
-        // Also clear drag if mouse is released anywhere
-        ui.input(|i| {
-            if !i.pointer.any_down() && self.planning_drag_source.is_some() {
-                self.planning_drag_source = None;
-            }
-        });
 
         // Context menu for sprint assignment
         response.context_menu(|ui| {
@@ -22206,17 +22255,17 @@ impl eframe::App for RequirementsApp {
                 self.show_timeline_view(ui);
             });
         } else if self.current_view == View::Planning {
-            // Sprint planning view with detail panel on left
+            // Sprint planning view with planning on left, detail panel on right (consistent with List view)
             egui::CentralPanel::default().show(ctx, |ui| {
                 ui.columns(2, |columns| {
-                    // Left column - Detail panel (for selected item)
+                    // Left column - Planning view (sprints and backlog)
                     columns[0].vertical(|ui| {
-                        self.show_planning_detail_panel(ui);
+                        self.show_planning_view(ui);
                     });
 
-                    // Right column - Planning view (sprints and backlog)
+                    // Right column - Detail panel (for selected item)
                     columns[1].vertical(|ui| {
-                        self.show_planning_view(ui);
+                        self.show_planning_detail_panel(ui);
                     });
                 });
             });

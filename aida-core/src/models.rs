@@ -1114,6 +1114,13 @@ fn default_requirement_types() -> Vec<RequirementTypeDefinition> {
             "CR",
             "Change requests for modifications to existing functionality",
         ),
+        RequirementTypeDefinition::new("Bug", "BUG", "Bug reports and defects"),
+        RequirementTypeDefinition::new("Epic", "EPIC", "Large features spanning multiple stories"),
+        RequirementTypeDefinition::new("Story", "STORY", "User stories for agile development"),
+        RequirementTypeDefinition::new("Task", "TASK", "Individual work items"),
+        RequirementTypeDefinition::new("Spike", "SPIKE", "Research and investigation tasks"),
+        RequirementTypeDefinition::new("Sprint", "SPRINT", "Sprint planning containers"),
+        RequirementTypeDefinition::new("Folder", "FOLDER", "Organizational folders"),
     ]
 }
 
