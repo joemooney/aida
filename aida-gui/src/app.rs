@@ -1419,7 +1419,7 @@ fn string_to_key(s: &str) -> Option<egui::Key> {
 }
 
 /// Collection of key bindings
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct KeyBindings {
     pub bindings: HashMap<KeyAction, KeyBinding>,
 }
@@ -1597,7 +1597,7 @@ impl KeyBindings {
 
 /// Icon configuration for status indicators
 /// Maps status keywords to display icons
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct StatusIconConfig {
     /// Map of status keyword (lowercase) to icon string
     pub icons: std::collections::HashMap<String, String>,
@@ -1651,7 +1651,7 @@ impl StatusIconConfig {
 }
 
 /// Icon configuration for priority indicators
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PriorityIconConfig {
     /// Map of priority keyword (lowercase) to icon string
     pub icons: std::collections::HashMap<String, String>,
@@ -2024,6 +2024,22 @@ enum SettingsTab {
     Members, // Replaced Users with Members (contains Users and Teams sub-tabs)
     Database,
     AiPrompts,
+}
+
+impl SettingsTab {
+    /// Returns true if this tab needs Save/Cancel buttons
+    /// (vs tabs that have immediate persistence or nested save/cancel)
+    fn needs_save_cancel(&self) -> bool {
+        matches!(
+            self,
+            SettingsTab::User
+                | SettingsTab::Appearance
+                | SettingsTab::Keybindings
+                | SettingsTab::IDs
+                | SettingsTab::AiPrompts
+                | SettingsTab::Database
+        )
+    }
 }
 
 #[derive(Default, PartialEq, Clone, Copy)]
@@ -2558,6 +2574,7 @@ pub struct RequirementsApp {
     // Settings
     user_settings: UserSettings,
     show_settings_dialog: bool,
+    show_settings_close_confirm: bool, // Show save/discard/cancel dialog when closing with unsaved changes
     settings_tab: SettingsTab,
     ids_subtab: IdsSubTab,
     ai_subtab: AiSubTab,
@@ -3170,6 +3187,7 @@ impl RequirementsApp {
             current_font_size: initial_font_size,
             user_settings,
             show_settings_dialog: false,
+            show_settings_close_confirm: false,
             settings_tab: SettingsTab::default(),
             ids_subtab: IdsSubTab::default(),
             ai_subtab: AiSubTab::default(),
@@ -5546,14 +5564,51 @@ impl RequirementsApp {
         }
     }
 
+    /// Check if there are unsaved changes in settings tabs that need save/cancel
+    fn has_unsaved_settings_changes(&self) -> bool {
+        // User tab
+        let user_dirty = self.settings_form_name != self.user_settings.name
+            || self.settings_form_email != self.user_settings.email
+            || self.settings_form_handle != self.user_settings.handle;
+
+        // Appearance tab (compare against original values, not current live preview)
+        let appearance_dirty = self.settings_form_theme != self.original_appearance_theme
+            || self.settings_form_font_size != self.original_appearance_font_size
+            || self.settings_form_ui_heading_level != self.original_appearance_ui_heading_level
+            || self.settings_form_show_status_icons != self.original_appearance_show_status_icons
+            || self.settings_form_status_icons != self.original_appearance_status_icons
+            || self.settings_form_priority_icons != self.original_appearance_priority_icons;
+
+        // Keys tab
+        let keys_dirty = self.settings_form_keybindings != self.user_settings.keybindings;
+
+        // IDs tab
+        let ids_dirty = self.settings_form_id_format != self.store.id_config.format
+            || self.settings_form_numbering != self.store.id_config.numbering
+            || self.settings_form_digits != self.store.id_config.digits;
+
+        // AI and Db tabs - these apply changes immediately in the current implementation
+        // so they're not considered "dirty" for this check
+
+        user_dirty || appearance_dirty || keys_dirty || ids_dirty
+    }
+
     fn show_settings_dialog(&mut self, ctx: &egui::Context) {
         if !self.show_settings_dialog {
+            return;
+        }
+
+        // Show confirmation dialog if pending
+        if self.show_settings_close_confirm {
+            self.show_settings_close_confirm_dialog(ctx);
             return;
         }
 
         let max_size = modal_max_size(ctx);
         // Constrain Settings window width to be reasonable - max 800px or 90% of screen
         let settings_max_width = 800.0_f32.min(max_size.x * 0.9);
+
+        let mut close_requested = false;
 
         egui::Window::new("⚙ Settings")
             .collapsible(false)
@@ -5563,7 +5618,19 @@ impl RequirementsApp {
             .max_height(max_size.y)
             .scroll([false, true]) // Enable vertical scrolling for the whole window
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .title_bar(false) // Custom title bar for close button
             .show(ctx, |ui| {
+                // Custom title bar with close button
+                ui.horizontal(|ui| {
+                    ui.heading("⚙ Settings");
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.button("✕").on_hover_text("Close").clicked() {
+                            close_requested = true;
+                        }
+                    });
+                });
+                ui.separator();
+
                 // Constrain content width to prevent overflow
                 ui.set_max_width(settings_max_width - 30.0);
                 // Tabs
@@ -5633,81 +5700,136 @@ impl RequirementsApp {
                     }
                 }
 
+                // Only show Save/Cancel for tabs that need them
+                if self.settings_tab.needs_save_cancel() {
+                    ui.add_space(15.0);
+                    ui.separator();
+                    ui.add_space(10.0);
+
+                    ui.horizontal(|ui| {
+                        if ui.button("💾 Save").clicked() {
+                            self.save_settings();
+                            self.show_settings_dialog = false;
+                        }
+
+                        if ui.button("❌ Cancel").clicked() {
+                            self.revert_settings_changes();
+                            self.show_settings_dialog = false;
+                        }
+                    });
+                }
+            });
+
+        // Handle close request (from 'x' button)
+        if close_requested {
+            if self.has_unsaved_settings_changes() {
+                // Show confirmation dialog
+                self.show_settings_close_confirm = true;
+            } else {
+                // No unsaved changes, just close (but still revert live preview)
+                self.revert_settings_changes();
+                self.show_settings_dialog = false;
+            }
+        }
+    }
+
+    /// Save all settings from form fields to user_settings and store
+    fn save_settings(&mut self) {
+        // Update user settings from form
+        self.user_settings.name = self.settings_form_name.clone();
+        self.user_settings.email = self.settings_form_email.clone();
+        self.user_settings.handle = self.settings_form_handle.clone();
+        self.user_settings.base_font_size = self.settings_form_font_size;
+        self.user_settings.ui_heading_level = self.settings_form_ui_heading_level;
+        self.user_settings.preferred_perspective = self.settings_form_perspective.clone();
+        self.user_settings.theme = self.settings_form_theme.clone();
+        self.user_settings.keybindings = self.settings_form_keybindings.clone();
+        self.user_settings.show_status_icons = self.settings_form_show_status_icons;
+        self.user_settings.status_icons = self.settings_form_status_icons.clone();
+        self.user_settings.priority_icons = self.settings_form_priority_icons.clone();
+
+        // Update project settings (stored in requirements file)
+        self.store.id_config.format = self.settings_form_id_format.clone();
+        self.store.id_config.numbering = self.settings_form_numbering.clone();
+        self.store.id_config.digits = self.settings_form_digits;
+
+        // Apply the new base font size as current
+        self.current_font_size = self.settings_form_font_size;
+
+        // Apply the new preferred perspective
+        self.perspective = self.settings_form_perspective.clone();
+
+        // Update original values so they match saved state
+        self.original_appearance_theme = self.settings_form_theme.clone();
+        self.original_appearance_font_size = self.settings_form_font_size;
+        self.original_appearance_ui_heading_level = self.settings_form_ui_heading_level;
+        self.original_appearance_show_status_icons = self.settings_form_show_status_icons;
+        self.original_appearance_status_icons = self.settings_form_status_icons.clone();
+        self.original_appearance_priority_icons = self.settings_form_priority_icons.clone();
+
+        // Save user settings to file
+        let mut save_success = true;
+        match self.user_settings.save() {
+            Ok(()) => {}
+            Err(e) => {
+                self.message = Some((format!("Failed to save user settings: {}", e), true));
+                save_success = false;
+            }
+        }
+
+        // Save project settings (requirements store) to file
+        if save_success {
+            match self.storage.save(&self.store) {
+                Ok(()) => {
+                    self.message = Some(("Settings saved successfully".to_string(), false));
+                }
+                Err(e) => {
+                    self.message = Some((
+                        format!("Failed to save project settings: {}", e),
+                        true,
+                    ));
+                }
+            }
+        }
+    }
+
+    /// Revert settings changes (cancel/discard)
+    fn revert_settings_changes(&mut self) {
+        // Revert appearance settings to original values (live preview cleanup)
+        self.user_settings.theme = self.original_appearance_theme.clone();
+        self.user_settings.base_font_size = self.original_appearance_font_size;
+        self.current_font_size = self.original_appearance_font_size;
+        self.user_settings.ui_heading_level = self.original_appearance_ui_heading_level;
+        self.user_settings.show_status_icons = self.original_appearance_show_status_icons;
+        self.user_settings.status_icons = self.original_appearance_status_icons.clone();
+        self.user_settings.priority_icons = self.original_appearance_priority_icons.clone();
+    }
+
+    /// Show confirmation dialog when closing settings with unsaved changes
+    fn show_settings_close_confirm_dialog(&mut self, ctx: &egui::Context) {
+        egui::Window::new("Unsaved Changes")
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                ui.label("You have unsaved changes. What would you like to do?");
                 ui.add_space(15.0);
-                ui.separator();
-                ui.add_space(10.0);
 
                 ui.horizontal(|ui| {
                     if ui.button("💾 Save").clicked() {
-                        // Update user settings from form
-                        self.user_settings.name = self.settings_form_name.clone();
-                        self.user_settings.email = self.settings_form_email.clone();
-                        self.user_settings.handle = self.settings_form_handle.clone();
-                        self.user_settings.base_font_size = self.settings_form_font_size;
-                        self.user_settings.ui_heading_level = self.settings_form_ui_heading_level;
-                        self.user_settings.preferred_perspective =
-                            self.settings_form_perspective.clone();
-                        self.user_settings.theme = self.settings_form_theme.clone();
-                        self.user_settings.keybindings = self.settings_form_keybindings.clone();
-                        self.user_settings.show_status_icons =
-                            self.settings_form_show_status_icons;
-                        self.user_settings.status_icons =
-                            self.settings_form_status_icons.clone();
-                        self.user_settings.priority_icons =
-                            self.settings_form_priority_icons.clone();
-
-                        // Update project settings (stored in requirements file)
-                        self.store.id_config.format = self.settings_form_id_format.clone();
-                        self.store.id_config.numbering = self.settings_form_numbering.clone();
-                        self.store.id_config.digits = self.settings_form_digits;
-
-                        // Apply the new base font size as current
-                        self.current_font_size = self.settings_form_font_size;
-
-                        // Apply the new preferred perspective
-                        self.perspective = self.settings_form_perspective.clone();
-
-                        // Theme will be applied on next frame via update()
-
-                        // Save user settings to file
-                        let mut save_success = true;
-                        match self.user_settings.save() {
-                            Ok(()) => {}
-                            Err(e) => {
-                                self.message =
-                                    Some((format!("Failed to save user settings: {}", e), true));
-                                save_success = false;
-                            }
-                        }
-
-                        // Save project settings (requirements store) to file
-                        if save_success {
-                            match self.storage.save(&self.store) {
-                                Ok(()) => {
-                                    self.message =
-                                        Some(("Settings saved successfully".to_string(), false));
-                                }
-                                Err(e) => {
-                                    self.message = Some((
-                                        format!("Failed to save project settings: {}", e),
-                                        true,
-                                    ));
-                                }
-                            }
-                        }
+                        self.save_settings();
+                        self.show_settings_close_confirm = false;
                         self.show_settings_dialog = false;
                     }
 
-                    if ui.button("❌ Cancel").clicked() {
-                        // Revert appearance settings to original values (live preview cleanup)
-                        self.user_settings.theme = self.original_appearance_theme.clone();
-                        self.user_settings.base_font_size = self.original_appearance_font_size;
-                        self.current_font_size = self.original_appearance_font_size;
-                        self.user_settings.ui_heading_level = self.original_appearance_ui_heading_level;
-                        self.user_settings.show_status_icons = self.original_appearance_show_status_icons;
-                        self.user_settings.status_icons = self.original_appearance_status_icons.clone();
-                        self.user_settings.priority_icons = self.original_appearance_priority_icons.clone();
+                    if ui.button("🗑 Discard").clicked() {
+                        self.revert_settings_changes();
+                        self.show_settings_close_confirm = false;
                         self.show_settings_dialog = false;
+                    }
+
+                    if ui.button("← Back").clicked() {
+                        self.show_settings_close_confirm = false;
                     }
                 });
             });
