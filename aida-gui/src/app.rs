@@ -1071,6 +1071,7 @@ pub enum KeyAction {
     OpenOwnerPicker,    // 'o' - fuzzy finder for owner
     OpenStatusPicker,   // 's' - status picker (existing, now formal)
     OpenPriorityPicker, // 'p' - priority picker (existing, now formal)
+    OpenSprintPicker,   // 'S' (shift+s) - sprint assignment picker
     AddComment,         // 'c' - add comment
     ToggleLinksPanel,   // 'L' - show/toggle links
     // Deletion actions
@@ -1104,6 +1105,7 @@ impl KeyAction {
             KeyAction::OpenOwnerPicker => "Open Owner Picker",
             KeyAction::OpenStatusPicker => "Open Status Picker",
             KeyAction::OpenPriorityPicker => "Open Priority Picker",
+            KeyAction::OpenSprintPicker => "Assign to Sprint",
             KeyAction::AddComment => "Add Comment",
             KeyAction::ToggleLinksPanel => "Toggle Links Panel",
             KeyAction::DeleteWithConfirm => "Delete (with confirm)",
@@ -1136,6 +1138,7 @@ impl KeyAction {
             KeyAction::OpenOwnerPicker => KeyContext::RequirementsList,
             KeyAction::OpenStatusPicker => KeyContext::RequirementsList,
             KeyAction::OpenPriorityPicker => KeyContext::RequirementsList,
+            KeyAction::OpenSprintPicker => KeyContext::RequirementsList,
             KeyAction::AddComment => KeyContext::RequirementsList,
             KeyAction::ToggleLinksPanel => KeyContext::RequirementsList,
             KeyAction::DeleteWithConfirm => KeyContext::RequirementsList,
@@ -1167,6 +1170,7 @@ impl KeyAction {
             KeyAction::OpenOwnerPicker,
             KeyAction::OpenStatusPicker,
             KeyAction::OpenPriorityPicker,
+            KeyAction::OpenSprintPicker,
             KeyAction::AddComment,
             KeyAction::ToggleLinksPanel,
             KeyAction::DeleteWithConfirm,
@@ -1485,6 +1489,12 @@ impl Default for KeyBindings {
         bindings.insert(
             KeyAction::OpenPriorityPicker,
             KeyBinding::new(egui::Key::P, KeyAction::OpenPriorityPicker.default_context()),
+        );
+        // 'S' (Shift+S) for sprint assignment picker
+        bindings.insert(
+            KeyAction::OpenSprintPicker,
+            KeyBinding::new(egui::Key::S, KeyAction::OpenSprintPicker.default_context())
+                .with_shift(),
         );
         bindings.insert(
             KeyAction::AddComment,
@@ -2029,6 +2039,7 @@ enum QuickChangeField {
     Status,
     Priority,
     Owner,
+    Sprint,
 }
 
 /// AI action types - what kind of AI analysis to perform
@@ -10197,47 +10208,71 @@ impl RequirementsApp {
             .id_salt("planning_view")
             .auto_shrink([false, false])
             .show(ui, |ui| {
+                // Check if we're currently dragging
+                let is_dragging = self.planning_drag_source.is_some();
+
                 // Render each Sprint section
                 for (sprint_id, spec_id, title, status, goal) in &sprints {
                     let is_collapsed = self.planning_collapsed_sprints.contains(sprint_id);
+                    let is_drop_target = self.planning_drag_target_sprint == Some(Some(*sprint_id));
 
-                    // Sprint header
-                    ui.horizontal(|ui| {
-                        let collapse_icon = if is_collapsed { "▶" } else { "▼" };
-                        if ui.button(collapse_icon).clicked() {
-                            if is_collapsed {
-                                self.planning_collapsed_sprints.remove(sprint_id);
-                            } else {
-                                self.planning_collapsed_sprints.insert(*sprint_id);
+                    // Sprint header - make it a drop zone
+                    let header_response = ui.scope(|ui| {
+                        // Highlight if this is the current drop target
+                        if is_drop_target && is_dragging {
+                            ui.visuals_mut().widgets.noninteractive.bg_fill =
+                                egui::Color32::from_rgba_unmultiplied(59, 130, 246, 50);
+                        }
+
+                        ui.horizontal(|ui| {
+                            let collapse_icon = if is_collapsed { "▶" } else { "▼" };
+                            if ui.button(collapse_icon).clicked() {
+                                if is_collapsed {
+                                    self.planning_collapsed_sprints.remove(sprint_id);
+                                } else {
+                                    self.planning_collapsed_sprints.insert(*sprint_id);
+                                }
                             }
-                        }
 
-                        // Status indicator color
-                        let status_color = match status.as_str() {
-                            "Draft" => egui::Color32::from_rgb(156, 163, 175),
-                            "In Progress" => egui::Color32::from_rgb(59, 130, 246),
-                            "Completed" => egui::Color32::from_rgb(34, 197, 94),
-                            "Archived" => egui::Color32::from_rgb(107, 114, 128),
-                            _ => egui::Color32::GRAY,
-                        };
+                            // Status indicator color
+                            let status_color = match status.as_str() {
+                                "Draft" => egui::Color32::from_rgb(156, 163, 175),
+                                "In Progress" => egui::Color32::from_rgb(59, 130, 246),
+                                "Completed" => egui::Color32::from_rgb(34, 197, 94),
+                                "Archived" => egui::Color32::from_rgb(107, 114, 128),
+                                _ => egui::Color32::GRAY,
+                            };
 
-                        ui.colored_label(status_color, "●");
+                            ui.colored_label(status_color, "●");
 
-                        let header_text = format!("{} - {}", spec_id, title);
-                        ui.strong(&header_text);
+                            let header_text = format!("{} - {}", spec_id, title);
+                            ui.strong(&header_text);
 
-                        if !goal.is_empty() {
-                            ui.label(format!("({})", goal));
-                        }
+                            if !goal.is_empty() {
+                                ui.label(format!("({})", goal));
+                            }
 
-                        // Sprint item count
-                        let sprint_items: Vec<_> = self.store
-                            .get_sprint_items(sprint_id)
-                            .into_iter()
-                            .map(|r| (r.id, r.spec_id.clone().unwrap_or_default(), r.title.clone(), r.effective_status(), r.req_type.clone()))
-                            .collect();
-                        ui.label(format!("[{} items]", sprint_items.len()));
+                            // Sprint item count
+                            let sprint_items: Vec<_> = self.store
+                                .get_sprint_items(sprint_id)
+                                .into_iter()
+                                .map(|r| (r.id, r.spec_id.clone().unwrap_or_default(), r.title.clone(), r.effective_status(), r.req_type.clone()))
+                                .collect();
+                            ui.label(format!("[{} items]", sprint_items.len()));
+
+                            // Show drop indicator when dragging
+                            if is_dragging && is_drop_target {
+                                ui.label(egui::RichText::new("⬅ Drop here").color(egui::Color32::from_rgb(59, 130, 246)));
+                            }
+                        })
                     });
+
+                    // Handle drop zone for sprint header
+                    if is_dragging {
+                        if header_response.response.hovered() {
+                            self.planning_drag_target_sprint = Some(Some(*sprint_id));
+                        }
+                    }
 
                     if !is_collapsed {
                         // Get items for this sprint
@@ -10249,11 +10284,27 @@ impl RequirementsApp {
 
                         ui.indent(format!("sprint_{}", sprint_id), |ui| {
                             if sprint_items.is_empty() {
-                                ui.label(
-                                    egui::RichText::new("No items assigned to this Sprint")
-                                        .italics()
-                                        .color(egui::Color32::GRAY),
-                                );
+                                // Show drop zone indicator when empty and dragging
+                                if is_dragging {
+                                    let empty_response = ui.label(
+                                        egui::RichText::new("Drop item here to add to this Sprint")
+                                            .italics()
+                                            .color(if is_drop_target {
+                                                egui::Color32::from_rgb(59, 130, 246)
+                                            } else {
+                                                egui::Color32::GRAY
+                                            }),
+                                    );
+                                    if empty_response.hovered() {
+                                        self.planning_drag_target_sprint = Some(Some(*sprint_id));
+                                    }
+                                } else {
+                                    ui.label(
+                                        egui::RichText::new("No items assigned to this Sprint")
+                                            .italics()
+                                            .color(egui::Color32::GRAY),
+                                    );
+                                }
                             } else {
                                 for (item_id, item_spec_id, item_title, item_status, item_type) in &sprint_items {
                                     self.render_planning_item(ui, *item_id, item_spec_id, item_title, item_status, item_type, Some(*sprint_id));
@@ -10270,36 +10321,79 @@ impl RequirementsApp {
                 ui.add_space(10.0);
 
                 let backlog_collapsed = self.planning_collapsed_sprints.contains(&Uuid::nil());
+                let is_backlog_drop_target = self.planning_drag_target_sprint == Some(None);
 
-                ui.horizontal(|ui| {
-                    let collapse_icon = if backlog_collapsed { "▶" } else { "▼" };
-                    if ui.button(collapse_icon).clicked() {
-                        if backlog_collapsed {
-                            self.planning_collapsed_sprints.remove(&Uuid::nil());
-                        } else {
-                            self.planning_collapsed_sprints.insert(Uuid::nil());
-                        }
+                // Backlog header - make it a drop zone
+                let backlog_header_response = ui.scope(|ui| {
+                    // Highlight if this is the current drop target
+                    if is_backlog_drop_target && is_dragging {
+                        ui.visuals_mut().widgets.noninteractive.bg_fill =
+                            egui::Color32::from_rgba_unmultiplied(245, 158, 11, 50);
                     }
 
-                    ui.colored_label(egui::Color32::from_rgb(245, 158, 11), "●");
-                    ui.strong("Backlog");
-                    ui.label(format!("[{} items]", backlog_items.len()));
+                    ui.horizontal(|ui| {
+                        let collapse_icon = if backlog_collapsed { "▶" } else { "▼" };
+                        if ui.button(collapse_icon).clicked() {
+                            if backlog_collapsed {
+                                self.planning_collapsed_sprints.remove(&Uuid::nil());
+                            } else {
+                                self.planning_collapsed_sprints.insert(Uuid::nil());
+                            }
+                        }
+
+                        ui.colored_label(egui::Color32::from_rgb(245, 158, 11), "●");
+                        ui.strong("Backlog");
+                        ui.label(format!("[{} items]", backlog_items.len()));
+
+                        // Show drop indicator when dragging
+                        if is_dragging && is_backlog_drop_target {
+                            ui.label(egui::RichText::new("⬅ Drop here").color(egui::Color32::from_rgb(245, 158, 11)));
+                        }
+                    })
                 });
+
+                // Handle drop zone for backlog header
+                if is_dragging {
+                    if backlog_header_response.response.hovered() {
+                        self.planning_drag_target_sprint = Some(None);
+                    }
+                }
 
                 if !backlog_collapsed {
                     ui.indent("backlog", |ui| {
                         if backlog_items.is_empty() {
-                            ui.label(
-                                egui::RichText::new("All items are assigned to Sprints")
-                                    .italics()
-                                    .color(egui::Color32::GRAY),
-                            );
+                            // Show drop zone indicator when empty and dragging
+                            if is_dragging {
+                                let empty_response = ui.label(
+                                    egui::RichText::new("Drop item here to move to Backlog")
+                                        .italics()
+                                        .color(if is_backlog_drop_target {
+                                            egui::Color32::from_rgb(245, 158, 11)
+                                        } else {
+                                            egui::Color32::GRAY
+                                        }),
+                                );
+                                if empty_response.hovered() {
+                                    self.planning_drag_target_sprint = Some(None);
+                                }
+                            } else {
+                                ui.label(
+                                    egui::RichText::new("All items are assigned to Sprints")
+                                        .italics()
+                                        .color(egui::Color32::GRAY),
+                                );
+                            }
                         } else {
                             for (item_id, item_spec_id, item_title, item_status, item_type) in &backlog_items {
                                 self.render_planning_item(ui, *item_id, item_spec_id, item_title, item_status, item_type, None);
                             }
                         }
                     });
+                }
+
+                // Clear drop target if not hovering over any drop zone
+                if is_dragging && !ui.ui_contains_pointer() {
+                    self.planning_drag_target_sprint = None;
                 }
             });
     }
@@ -10341,31 +10435,82 @@ impl RequirementsApp {
         };
 
         let is_selected = self.planning_selected_item == Some(item_id);
+        let is_being_dragged = self.planning_drag_source == Some(item_id);
 
-        let response = ui.horizontal(|ui| {
-            ui.label(type_icon);
-            ui.colored_label(status_color, "●");
+        // Make the item draggable
+        let item_widget_id = egui::Id::new(("planning_item", item_id));
+        let response = ui.scope(|ui| {
+            // Reduce opacity if being dragged
+            if is_being_dragged {
+                ui.style_mut().visuals.widgets.noninteractive.fg_stroke.color =
+                    ui.style().visuals.widgets.noninteractive.fg_stroke.color.gamma_multiply(0.5);
+            }
 
-            let label_text = format!("{}: {}", spec_id, title);
-            let label = if is_selected {
-                egui::RichText::new(&label_text).strong()
-            } else {
-                egui::RichText::new(&label_text)
-            };
-
-            if ui.selectable_label(is_selected, label).clicked() {
-                // Just select the item - don't switch views (consistent with Timeline)
-                // Use Enter key or double-click to navigate to Detail view
-                self.planning_selected_item = Some(item_id);
-                // Also update selected_idx for consistency with detail panel
-                if let Some(idx) = self.store.requirements.iter().position(|r| r.id == item_id) {
-                    self.selected_idx = Some(idx);
+            ui.horizontal(|ui| {
+                // Drag handle
+                let handle = ui.label("⠿");
+                if handle.hovered() {
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
                 }
+
+                ui.label(type_icon);
+                ui.colored_label(status_color, "●");
+
+                let label_text = format!("{}: {}", spec_id, title);
+                let label = if is_selected {
+                    egui::RichText::new(&label_text).strong()
+                } else {
+                    egui::RichText::new(&label_text)
+                };
+
+                if ui.selectable_label(is_selected, label).clicked() {
+                    // Just select the item - don't switch views (consistent with Timeline)
+                    // Use Enter key or double-click to navigate to Detail view
+                    self.planning_selected_item = Some(item_id);
+                    // Also update selected_idx for consistency with detail panel
+                    if let Some(idx) = self.store.requirements.iter().position(|r| r.id == item_id) {
+                        self.selected_idx = Some(idx);
+                    }
+                }
+            })
+        });
+
+        // Handle drag detection on the whole row
+        let response = response.response;
+        if response.dragged() {
+            self.planning_drag_source = Some(item_id);
+            ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+        }
+
+        // When drag ends (mouse released)
+        if response.drag_stopped() && self.planning_drag_source == Some(item_id) {
+            // Check if we have a target
+            if let Some(target) = self.planning_drag_target_sprint.take() {
+                let username = self.user_settings.display_name();
+                match target {
+                    None => {
+                        // Move to backlog
+                        self.store.remove_from_sprint(item_id, &username);
+                    }
+                    Some(sprint_id) => {
+                        // Move to sprint
+                        self.store.assign_to_sprint(item_id, sprint_id, &username);
+                    }
+                }
+                self.save();
+            }
+            self.planning_drag_source = None;
+        }
+
+        // Also clear drag if mouse is released anywhere
+        ui.input(|i| {
+            if !i.pointer.any_down() && self.planning_drag_source.is_some() {
+                self.planning_drag_source = None;
             }
         });
 
         // Context menu for sprint assignment
-        response.response.context_menu(|ui| {
+        response.context_menu(|ui| {
             ui.menu_button("🏃 Assign to Sprint...", |ui| {
                 // Get available sprints
                 let sprints: Vec<_> = self.store.get_sprints()
@@ -10408,6 +10553,41 @@ impl RequirementsApp {
                 ui.close_menu();
             }
         });
+    }
+
+    /// Show the detail panel for the Planning view (left side)
+    fn show_planning_detail_panel(&mut self, ui: &mut egui::Ui) {
+        // Get the selected item from planning_selected_item
+        let selected_id = self.planning_selected_item;
+
+        // Find the requirement index for the selected item
+        let selected_req_idx = selected_id.and_then(|id| {
+            self.store.requirements.iter().position(|r| r.id == id)
+        });
+
+        // Sync with selected_idx for consistency
+        if let Some(idx) = selected_req_idx {
+            if self.selected_idx != Some(idx) {
+                self.selected_idx = Some(idx);
+            }
+        }
+
+        ui.heading("Details");
+        ui.separator();
+
+        if selected_req_idx.is_none() {
+            ui.centered_and_justified(|ui| {
+                ui.label(
+                    egui::RichText::new("Select an item to view details")
+                        .italics()
+                        .color(egui::Color32::GRAY),
+                );
+            });
+            return;
+        }
+
+        // Use the existing detail view internal, but in non-stacked mode
+        self.show_detail_view_internal(ui, false, false);
     }
 
     /// Show the clone requirement dialog
@@ -15268,6 +15448,12 @@ impl RequirementsApp {
             return;
         }
 
+        // Sprint field uses its own popup with sprint list
+        if field == QuickChangeField::Sprint {
+            self.show_sprint_picker_popup(ctx);
+            return;
+        }
+
         // Get the target requirement to determine its type
         let target_req = self.quick_change_target_id
             .and_then(|id| self.store.requirements.iter().find(|r| r.id == id));
@@ -15302,6 +15488,7 @@ impl RequirementsApp {
                 ("Change Priority", priorities)
             }
             QuickChangeField::Owner => unreachable!(),
+            QuickChangeField::Sprint => unreachable!(), // Handled separately via show_sprint_picker_popup
         };
         let num_options = options.len();
 
@@ -15363,6 +15550,7 @@ impl RequirementsApp {
             QuickChangeField::Status => "quick_change_status_popup",
             QuickChangeField::Priority => "quick_change_priority_popup",
             QuickChangeField::Owner => unreachable!(),
+            QuickChangeField::Sprint => unreachable!(), // Handled separately
         };
 
         egui::Area::new(egui::Id::new(popup_id))
@@ -15567,6 +15755,168 @@ impl RequirementsApp {
         }
     }
 
+    /// Show sprint picker popup for assigning requirement to sprint
+    fn show_sprint_picker_popup(&mut self, ctx: &egui::Context) {
+        // Get available sprints (active only)
+        let sprints: Vec<(Uuid, String, String)> = self.store.get_sprints()
+            .into_iter()
+            .filter(|s| {
+                let status = s.effective_status();
+                status != "Completed" && status != "Archived"
+            })
+            .map(|s| (s.id, s.spec_id.clone().unwrap_or_default(), s.title.clone()))
+            .collect();
+
+        // Include "Backlog" as first option (None = remove from sprint)
+        let num_options = sprints.len() + 1; // +1 for Backlog option
+
+        // Handle keyboard input for the popup
+        let mut close_popup = false;
+        let mut apply_change = false;
+
+        ctx.input(|i| {
+            // Escape to close
+            if i.key_pressed(egui::Key::Escape) {
+                close_popup = true;
+            }
+            // Enter to apply (if we have options)
+            if i.key_pressed(egui::Key::Enter) && num_options > 0 {
+                apply_change = true;
+            }
+            // Up/Down to navigate
+            if i.key_pressed(egui::Key::ArrowUp) || i.key_pressed(egui::Key::K) {
+                if self.quick_change_selected > 0 {
+                    self.quick_change_selected -= 1;
+                } else if num_options > 0 {
+                    self.quick_change_selected = num_options - 1; // Wrap to bottom
+                }
+            }
+            if i.key_pressed(egui::Key::ArrowDown) || i.key_pressed(egui::Key::J) {
+                if num_options > 0 {
+                    if self.quick_change_selected < num_options - 1 {
+                        self.quick_change_selected += 1;
+                    } else {
+                        self.quick_change_selected = 0; // Wrap to top
+                    }
+                }
+            }
+        });
+
+        if close_popup {
+            self.quick_change_field = None;
+            self.quick_change_target_id = None;
+            self.quick_change_consumed_action = true;
+            return;
+        }
+
+        // Apply the change
+        if apply_change {
+            if self.quick_change_selected == 0 {
+                // Move to Backlog (remove from sprint)
+                if let Some(target_id) = self.quick_change_target_id {
+                    let username = self.user_settings.display_name();
+                    self.store.remove_from_sprint(target_id, &username);
+                    self.save();
+                }
+            } else if let Some((sprint_id, _, _)) = sprints.get(self.quick_change_selected - 1) {
+                // Assign to selected sprint
+                if let Some(target_id) = self.quick_change_target_id {
+                    let username = self.user_settings.display_name();
+                    self.store.assign_to_sprint(target_id, *sprint_id, &username);
+                    self.save();
+                }
+            }
+            self.quick_change_field = None;
+            self.quick_change_target_id = None;
+            self.quick_change_consumed_action = true;
+            return;
+        }
+
+        // Ensure selected index is valid
+        if self.quick_change_selected >= num_options && num_options > 0 {
+            self.quick_change_selected = num_options - 1;
+        }
+
+        // Center the popup on screen
+        let screen_rect = ctx.screen_rect();
+        let popup_size = egui::vec2(280.0, 220.0);
+        let popup_pos = egui::pos2(
+            (screen_rect.width() - popup_size.x) / 2.0,
+            (screen_rect.height() - popup_size.y) / 2.0,
+        );
+
+        egui::Area::new(egui::Id::new("quick_change_sprint_popup"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(popup_pos)
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style())
+                    .inner_margin(8.0)
+                    .show(ui, |ui| {
+                        ui.set_min_width(popup_size.x - 16.0);
+
+                        ui.heading("🏃 Assign to Sprint");
+                        ui.separator();
+
+                        // Scrollable list of sprints
+                        egui::ScrollArea::vertical()
+                            .max_height(140.0)
+                            .show(ui, |ui| {
+                                // Backlog option first
+                                let is_selected = self.quick_change_selected == 0;
+                                let response = ui.selectable_label(is_selected, "📦 Backlog (no sprint)");
+                                if response.clicked() {
+                                    if let Some(target_id) = self.quick_change_target_id {
+                                        let username = self.user_settings.display_name();
+                                        self.store.remove_from_sprint(target_id, &username);
+                                        self.save();
+                                    }
+                                    self.quick_change_field = None;
+                                    self.quick_change_target_id = None;
+                                    self.quick_change_consumed_action = true;
+                                }
+
+                                // Sprint options
+                                if sprints.is_empty() {
+                                    ui.weak("No active sprints available");
+                                } else {
+                                    for (idx, (sprint_id, spec_id, title)) in sprints.iter().enumerate() {
+                                        let is_selected = idx + 1 == self.quick_change_selected;
+                                        let label = format!("{}: {}", spec_id, title);
+                                        let response = ui.selectable_label(is_selected, label);
+                                        if response.clicked() {
+                                            if let Some(target_id) = self.quick_change_target_id {
+                                                let username = self.user_settings.display_name();
+                                                self.store.assign_to_sprint(target_id, *sprint_id, &username);
+                                                self.save();
+                                            }
+                                            self.quick_change_field = None;
+                                            self.quick_change_target_id = None;
+                                            self.quick_change_consumed_action = true;
+                                        }
+                                    }
+                                }
+                            });
+
+                        ui.separator();
+                        ui.horizontal(|ui| {
+                            ui.small("↑↓/jk Navigate  Enter Select  Esc Cancel");
+                        });
+                    });
+            });
+
+        // Close on click outside
+        if ctx.input(|i| i.pointer.any_click()) {
+            let popup_rect = egui::Rect::from_min_size(popup_pos, popup_size);
+            if let Some(pos) = ctx.input(|i| i.pointer.interact_pos()) {
+                if !popup_rect.contains(pos) {
+                    self.quick_change_field = None;
+                    self.quick_change_target_id = None;
+                    self.quick_change_consumed_action = true;
+                }
+            }
+        }
+    }
+
     /// Apply owner change to the selected requirement
     fn apply_owner_change(&mut self, new_owner: String) {
         let Some(target_id) = self.quick_change_target_id else { return };
@@ -15678,6 +16028,10 @@ impl RequirementsApp {
             }
             QuickChangeField::Owner => {
                 // Owner is handled separately via apply_owner_change
+                // This branch should never be reached
+            }
+            QuickChangeField::Sprint => {
+                // Sprint is handled separately via show_sprint_picker_popup
                 // This branch should never be reached
             }
         }
@@ -21232,6 +21586,23 @@ impl eframe::App for RequirementsApp {
                         }
                     }
                 }
+                // 'S' (Shift+S) key to open sprint picker
+                else if self.user_settings.keybindings.is_pressed(
+                    KeyAction::OpenSprintPicker,
+                    ctx,
+                    self.current_key_context,
+                ) {
+                    if let Some(idx) = self.selected_idx {
+                        if let Some(req) = self.store.requirements.get(idx) {
+                            // Don't open sprint picker for Sprint type requirements
+                            if req.req_type != RequirementType::Sprint {
+                                self.quick_change_selected = 0;
+                                self.quick_change_target_id = Some(req.id);
+                                self.quick_change_field = Some(QuickChangeField::Sprint);
+                            }
+                        }
+                    }
+                }
                 // 'c' key to add comment
                 else if self.user_settings.keybindings.is_pressed(
                     KeyAction::AddComment,
@@ -21835,9 +22206,19 @@ impl eframe::App for RequirementsApp {
                 self.show_timeline_view(ui);
             });
         } else if self.current_view == View::Planning {
-            // Sprint planning view
+            // Sprint planning view with detail panel on left
             egui::CentralPanel::default().show(ctx, |ui| {
-                self.show_planning_view(ui);
+                ui.columns(2, |columns| {
+                    // Left column - Detail panel (for selected item)
+                    columns[0].vertical(|ui| {
+                        self.show_planning_detail_panel(ui);
+                    });
+
+                    // Right column - Planning view (sprints and backlog)
+                    columns[1].vertical(|ui| {
+                        self.show_planning_view(ui);
+                    });
+                });
             });
         } else {
             // In List/Detail view, use layout mode
