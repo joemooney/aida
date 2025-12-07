@@ -1,9 +1,12 @@
 sessions:
-  126255-1ba0fab6-a723-4ec1-b056-3c6d401d7017:
-    session_id: 126255-1ba0fab6-a723-4ec1-b056-3c6d401d7017
-    user_name: Joe Mooney
+  167429-ebff92ce-39bb-433d-85b6-99fc1df4f60b:
+    session_id: 167429-ebff92ce-39bb-433d-85b6-99fc1df4f60b
+    user_name: joe
     hostname: imac
-    pid: 126255
-    started_at: 2025-12-07T03:43:03.810662984Z
-    last_heartbeat: 2025-12-07T03:50:52.880575760Z
-    editing_requirement: null
+    pid: 167429
+    started_at: 2025-12-07T19:23:10.613176860Z
+    last_heartbeat: 2025-12-07T19:27:01.658399752Z
+    editing_requirement:
+      requirement_id: 8591ed43-630d-45ca-968e-889d7ed1f00a
+      spec_id: SPEC-198
+      started_at: 2025-12-07T19:24:36.649415340Z

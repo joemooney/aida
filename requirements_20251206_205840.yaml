@@ -11,15 +11,11 @@ requirements:
   owner: ''
   feature: 1-REQ
   created_at: 2025-11-25T19:45:25.234562378Z
-  modified_at: 2025-12-07T17:02:44.462006980Z
+  modified_at: 2025-11-26T22:38:19.239036799Z
   req_type: Functional
   relationships:
   - rel_type: Parent
     target_id: 2fd609e9-d194-47a3-adbd-417f6306190c
-  - rel_type: !Custom sprint_assignment
-    target_id: 404b7457-67a2-4376-a0d3-9c5ea1547951
-    created_at: 2025-12-07T17:02:44.462006633Z
-    created_by: Joe Mooney
   history:
   - id: eb0f853e-6465-4a10-b0b2-72090bde5303
     author: '@joe'
@@ -28,13 +24,6 @@ requirements:
     - field_name: description
       old_value: When we transition a feature we want the owner to be assigned based on state
       new_value: "When we transition a feature we want the owner to be assigned based on state\n\n*this is bold*\n\n_italic_\n\n# Head 1\n\nasdfasdf\n\n## Head2 \n\nasdfasdf"
-  - id: f5cd8788-c08e-4084-a045-ffbda78a4a61
-    author: Joe Mooney
-    timestamp: 2025-12-07T17:02:44.462009384Z
-    changes:
-    - field_name: sprint_assignment
-      old_value: ''
-      new_value: REQ-0219
 - id: 59d3cc0b-25a5-4076-8966-94b8ef4e36b1
   spec_id: FR-0002
   title: Add child requirement button
@@ -78,29 +67,17 @@ requirements:
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-11-25T21:06:58.790215612Z
-  modified_at: 2025-12-07T04:03:40.616577279Z
+  modified_at: 2025-12-03T05:12:53.994424997Z
   req_type: Functional
   relationships:
   - rel_type: Parent
     target_id: 848840ae-7005-4fab-b478-163f9139359e
-  - rel_type: !Custom sprint_assignment
-    target_id: 75cd3a04-28e1-466b-aec8-a5ee9a855473
-    created_at: 2025-12-07T04:03:40.616576177Z
-    created_by: Joe Mooney
   comments:
   - id: 356349e8-c3a9-4238-b13a-4b475b0e3477
     author: '@joe'
     content: comment box should be full width
     created_at: 2025-11-26T06:01:59.059006625Z
     modified_at: 2025-11-26T06:01:59.059006625Z
-  history:
-  - id: 24346a24-c17d-47b2-89e0-8c1e7636024f
-    author: Joe Mooney
-    timestamp: 2025-12-07T04:03:40.616586877Z
-    changes:
-    - field_name: sprint_assignment
-      old_value: ''
-      new_value: REQ-0207
 - id: eed922f2-03d7-49c6-9c13-31dda6880c27
   spec_id: FR-0006
   title: maintain list of users
@@ -124,17 +101,13 @@ requirements:
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-11-25T21:14:25.964300983Z
-  modified_at: 2025-12-07T04:04:35.591843703Z
+  modified_at: 2025-11-29T02:28:14.174447534Z
   req_type: Functional
   relationships:
   - rel_type: Parent
     target_id: 6da186f2-cae3-4b75-bc46-d487ced9e96b
     created_at: 2025-11-29T19:00:58.295750011Z
     created_by: Unknown User
-  - rel_type: !Custom sprint_assignment
-    target_id: 17098630-b92b-4194-ae1f-e7e901e73a35
-    created_at: 2025-12-07T04:04:35.591842619Z
-    created_by: Joe Mooney
   history:
   - id: 1709885b-510a-43d3-84e2-b740c8cfaa6a
     author: '@joe'
@@ -146,13 +119,6 @@ requirements:
     - field_name: status
       old_value: Draft
       new_value: Completed
-  - id: fc906db6-6246-41e6-8179-777c8f0d6e13
-    author: Joe Mooney
-    timestamp: 2025-12-07T04:04:35.591855716Z
-    changes:
-    - field_name: sprint_assignment
-      old_value: ''
-      new_value: REQ-0210
 - id: 39824b9c-6ff0-49b9-988d-6819978e547b
   spec_id: FR-0008
   title: comments should be displayed nested
@@ -195,17 +161,13 @@ requirements:
   status: Draft
   priority: Medium
   owner: ''
-  feature: 100-Teams
+  feature: 97-Uncategorized
   created_at: 2025-11-25T21:19:10.021746590Z
-  modified_at: 2025-12-07T05:31:01.045962135Z
+  modified_at: 2025-11-27T01:21:12.488861139Z
   req_type: Functional
   relationships:
   - rel_type: Parent
     target_id: 848840ae-7005-4fab-b478-163f9139359e
-  - rel_type: !Custom sprint_assignment
-    target_id: 17098630-b92b-4194-ae1f-e7e901e73a35
-    created_at: 2025-12-07T04:03:51.016694034Z
-    created_by: Joe Mooney
   history:
   - id: c9f9b9aa-d4fd-468b-b91f-b0004096c0f8
     author: '@joe'
@@ -237,20 +199,6 @@ requirements:
             - Edit existing reactions (emoji, label, description)
             - Delete custom reactions (built-in ones can't be deleted)
             - Reset to defaults
-  - id: feb58a81-bc90-49e1-8d12-4795e1feb26f
-    author: Joe Mooney
-    timestamp: 2025-12-07T04:03:51.016705047Z
-    changes:
-    - field_name: sprint_assignment
-      old_value: ''
-      new_value: REQ-0210
-  - id: 42cac48c-4d06-436d-bc34-346485a9283a
-    author: Joe Mooney
-    timestamp: 2025-12-07T05:31:01.045964667Z
-    changes:
-    - field_name: feature
-      old_value: 97-Uncategorized
-      new_value: 100-Teams
 - id: 04cff76c-978d-4e3a-845a-1d6f6b885cea
   spec_id: CHANGEREQUESTS-0029
   prefix_override: CHANGEREQUESTS
@@ -280,13 +228,13 @@ requirements:
 - id: 055530de-326d-4362-aab1-639239f363e5
   spec_id: FR-0011
   title: Arrow keys should move between requirements in the list
-  description: The arrow keys should work for the same the different panels where we have lists and behave intuitively.
+  description: The arrow keys should work for the different panels and behave intuitively.
   status: Draft
   priority: Medium
   owner: ''
   feature: 14-NAV
   created_at: 2025-11-25T22:36:17.393702816Z
-  modified_at: 2025-12-07T17:03:22.896561760Z
+  modified_at: 2025-11-26T04:26:38.748992425Z
   req_type: Functional
   relationships:
   - rel_type: Parent
@@ -299,13 +247,6 @@ requirements:
     - field_name: feature
       old_value: 97-Uncategorized
       new_value: NAV
-  - id: 5323a115-692c-47e6-866c-e71b5d386023
-    author: Joe Mooney
-    timestamp: 2025-12-07T17:03:22.896561399Z
-    changes:
-    - field_name: description
-      old_value: The arrow keys should work for the different panels and behave intuitively.
-      new_value: The arrow keys should work for the same the different panels where we have lists and behave intuitively.
 - id: f1a64c4d-3086-4010-be4e-3eaf6bc3df5d
   spec_id: CR-0012
   title: broken expand/collapse
@@ -420,15 +361,11 @@ requirements:
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-11-25T23:02:47.788464927Z
-  modified_at: 2025-12-07T04:04:08.516000091Z
+  modified_at: 2025-11-29T17:30:04.008722318Z
   req_type: Functional
   relationships:
   - rel_type: Parent
     target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
-  - rel_type: !Custom sprint_assignment
-    target_id: 17098630-b92b-4194-ae1f-e7e901e73a35
-    created_at: 2025-12-07T04:04:08.515999062Z
-    created_by: Joe Mooney
   history:
   - id: a1120c13-53c7-4f22-995c-18992c665b72
     author: '@joe'
@@ -475,13 +412,6 @@ requirements:
     - field_name: priority
       old_value: Medium
       new_value: High
-  - id: 9ec88fc6-9de1-4401-ba69-d60e7ac11ed0
-    author: Joe Mooney
-    timestamp: 2025-12-07T04:04:08.516009730Z
-    changes:
-    - field_name: sprint_assignment
-      old_value: ''
-      new_value: REQ-0210
 - id: b9c26c5d-ab38-4e9b-a493-8f4a84f88019
   spec_id: CR-0015
   title: add created by
@@ -575,7 +505,7 @@ requirements:
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-11-25T23:51:23.542112733Z
-  modified_at: 2025-12-07T17:00:49.761865253Z
+  modified_at: 2025-12-03T05:49:10.216375591Z
   req_type: Functional
   relationships:
   - rel_type: Child
@@ -591,18 +521,6 @@ requirements:
   - rel_type: Child
     target_id: 75cd3a04-28e1-466b-aec8-a5ee9a855473
     created_at: 2025-12-07T02:35:07.588146353Z
-    created_by: Joe Mooney
-  - rel_type: Child
-    target_id: a309fe3f-1463-4ac9-9272-270615959eaf
-    created_at: 2025-12-07T05:56:15.206912518Z
-    created_by: Joe Mooney
-  - rel_type: !Custom sprint_assignment
-    target_id: 75cd3a04-28e1-466b-aec8-a5ee9a855473
-    created_at: 2025-12-07T17:00:49.761864750Z
-    created_by: Joe Mooney
-  - rel_type: Child
-    target_id: 404b7457-67a2-4376-a0d3-9c5ea1547951
-    created_at: 2025-12-07T17:02:15.931002043Z
     created_by: Joe Mooney
   history:
   - id: bc863c32-e57c-469a-84d1-39b682469d24
@@ -632,13 +550,6 @@ requirements:
     - field_name: spec_id
       old_value: OMMENTS-0026
       new_value: COMMENTS-0027
-  - id: a340fdb9-7f1f-4764-ac42-b324513f585a
-    author: Joe Mooney
-    timestamp: 2025-12-07T17:00:49.761867587Z
-    changes:
-    - field_name: sprint_assignment
-      old_value: ''
-      new_value: REQ-0207
 - id: 6da186f2-cae3-4b75-bc46-d487ced9e96b
   spec_id: FR-0017
   title: In Links tab, double click on link to jump to requirement
@@ -701,25 +612,21 @@ requirements:
   - rel_type: Parent
     target_id: 4c3bb89e-2d41-4841-b2ff-881bb67fee99
 - id: 2a82a590-b200-42ad-843a-456db9d55359
-  spec_id: FR-0217
+  spec_id: FR-0019
   title: Archive state
   description: 'Add a button to allow archiving a requirement. Achived requirements should not show up unless we explicitly Filter to include Archive. '
   status: Draft
   priority: Medium
   owner: ''
-  feature: 112-Uncategorized
+  feature: 97-Uncategorized
   created_at: 2025-11-26T00:49:32.639633273Z
-  modified_at: 2025-12-07T19:09:40.233607747Z
+  modified_at: 2025-11-26T00:55:10.811330075Z
   req_type: Functional
   relationships:
   - rel_type: Parent
     target_id: 85868242-14f2-4e4a-beba-5103c271ce32
     created_at: 2025-11-29T04:24:33.736632341Z
     created_by: '@joe'
-  - rel_type: !Custom sprint_assignment
-    target_id: 75cd3a04-28e1-466b-aec8-a5ee9a855473
-    created_at: 2025-12-07T04:03:59.049387060Z
-    created_by: Joe Mooney
   history:
   - id: 80aedc3c-6687-40b1-a420-955ce9032237
     author: '@joe'
@@ -749,31 +656,6 @@ requirements:
     - field_name: archived
       old_value: 'true'
       new_value: 'false'
-  - id: 5763b0bf-e2e5-44ca-8d99-29067e3ef33b
-    author: Joe Mooney
-    timestamp: 2025-12-07T04:03:59.049397507Z
-    changes:
-    - field_name: sprint_assignment
-      old_value: ''
-      new_value: REQ-0207
-  - id: cc7f56aa-7413-4a42-87f8-6fce997a2509
-    author: Joe Mooney
-    timestamp: 2025-12-07T04:07:42.344225505Z
-    changes:
-    - field_name: feature
-      old_value: 97-Uncategorized
-      new_value: 112-Uncategorized
-    - field_name: spec_id
-      old_value: FR-0019
-      new_value: FR-0217
-  - id: 93303db1-ef3b-4c12-a0e2-da9bfc531d60
-    author: joe
-    timestamp: 2025-12-07T19:09:40.233607471Z
-    changes:
-    - field_name: archived
-      old_value: 'false'
-      new_value: 'true'
-  archived: true
 - id: 0f47519b-83fa-4e45-9e64-44ae833033a8
   spec_id: FR-0020
   title: Indented relies to comments
@@ -781,9 +663,9 @@ requirements:
   status: Draft
   priority: Medium
   owner: ''
-  feature: 100-Teams
+  feature: 97-Uncategorized
   created_at: 2025-11-26T01:11:45.857312446Z
-  modified_at: 2025-12-07T05:28:45.393437083Z
+  modified_at: 2025-12-07T00:08:14.140810551Z
   req_type: Functional
   tags:
   - comments
@@ -798,13 +680,6 @@ requirements:
     - field_name: tags
       old_value: ''
       new_value: comments
-  - id: c3b3200c-a921-4541-ab24-db0891b8427e
-    author: Joe Mooney
-    timestamp: 2025-12-07T05:28:45.393444171Z
-    changes:
-    - field_name: feature
-      old_value: 97-Uncategorized
-      new_value: 100-Teams
 - id: 07f7e655-742d-44c9-ba9d-c77762ae7090
   spec_id: CR-0078
   title: scroll wheel should not change selected requirement
@@ -812,9 +687,9 @@ requirements:
   status: Draft
   priority: Medium
   owner: ''
-  feature: 112-Uncategorized
+  feature: 97-Uncategorized
   created_at: 2025-11-26T01:15:26.926247061Z
-  modified_at: 2025-12-07T05:38:37.790393683Z
+  modified_at: 2025-11-28T17:52:22.918798500Z
   req_type: ChangeRequest
   relationships:
   - rel_type: Parent
@@ -833,13 +708,6 @@ requirements:
     - field_name: spec_id
       old_value: FR-0021
       new_value: CR-0078
-  - id: 69eb2f9a-cedf-4597-a8e0-c74ebbed4b4e
-    author: Joe Mooney
-    timestamp: 2025-12-07T05:38:37.790400214Z
-    changes:
-    - field_name: feature
-      old_value: 97-Uncategorized
-      new_value: 112-Uncategorized
 - id: 967615c7-1128-4f6d-a02e-b13917942460
   spec_id: FR-0022
   title: search textbox should expand as panel is widened
@@ -1257,18 +1125,6 @@ requirements:
   relationships:
   - rel_type: Child
     target_id: 055530de-326d-4362-aab1-639239f363e5
-  - rel_type: Child
-    target_id: 332b3215-b99b-43c2-8bef-a7b2bd664dd7
-    created_at: 2025-12-07T17:04:12.563981644Z
-    created_by: Joe Mooney
-  - rel_type: Child
-    target_id: 89d09ac1-adec-4fb3-9f43-77a113aec074
-    created_at: 2025-12-07T17:05:37.229974111Z
-    created_by: Joe Mooney
-  - rel_type: Child
-    target_id: f5bd306f-ea72-45c4-a26e-8fcf57e7ad85
-    created_at: 2025-12-07T17:07:06.363012125Z
-    created_by: Joe Mooney
   history:
   - id: 7c9e1863-b8fe-4de3-aff1-f959da34fe07
     author: '@joe'
@@ -4643,13 +4499,13 @@ requirements:
   spec_id: REQ-0116
   title: Bug prefix not being used
   description: 'Bug prefix not being used, it is using REQ. Same for Epic/Story/Task/Spike use those as prefixes for those types. '
-  status: Completed
+  status: Draft
   priority: Medium
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-11-29T19:28:54.366446721Z
   created_by: Unknown User
-  modified_at: 2025-12-07T17:08:41.963041864Z
+  modified_at: 2025-11-30T00:34:02.932497101Z
   req_type: Spike
   relationships:
   - rel_type: Parent
@@ -4670,13 +4526,6 @@ requirements:
     - field_name: spec_id
       old_value: REQ-0105
       new_value: REQ-0116
-  - id: b9fdec36-4472-4c77-b238-999679bd3cc9
-    author: Joe Mooney
-    timestamp: 2025-12-07T17:08:41.963044181Z
-    changes:
-    - field_name: status
-      old_value: Draft
-      new_value: Completed
 - id: bae7da90-3781-4a92-927f-69e31a008422
   spec_id: FR-0106
   title: Add - select parent heuristically
@@ -8525,22 +8374,14 @@ requirements:
   status: Draft
   priority: High
   owner: ''
-  feature: 112-Uncategorized
+  feature: 114-Uncategorized
   created_at: 2025-12-07T00:30:59.548639777Z
-  modified_at: 2025-12-07T05:31:41.478230369Z
+  modified_at: 2025-12-07T00:30:59.548639777Z
   req_type: Functional
   relationships:
   - rel_type: Parent
     target_id: 365d927b-09e5-45e3-8f4e-881ad3c47143
     created_at: 2025-12-07T00:30:59.548670270Z
-  history:
-  - id: 87e62085-cf7d-4ffa-a546-dfcdea99a5e7
-    author: Joe Mooney
-    timestamp: 2025-12-07T05:31:41.478233214Z
-    changes:
-    - field_name: feature
-      old_value: 114-Uncategorized
-      new_value: 112-Uncategorized
 - id: 9f1bc1d0-602b-42c4-aae3-bc72bf7e6a4e
   spec_id: FR-0202
   title: SprintAssignment Relationship
@@ -8548,22 +8389,14 @@ requirements:
   status: Draft
   priority: High
   owner: ''
-  feature: 10-COMMENTS
+  feature: 115-Uncategorized
   created_at: 2025-12-07T00:31:07.852208646Z
-  modified_at: 2025-12-07T05:34:03.043886118Z
+  modified_at: 2025-12-07T00:31:07.852208646Z
   req_type: Functional
   relationships:
   - rel_type: Parent
     target_id: 365d927b-09e5-45e3-8f4e-881ad3c47143
     created_at: 2025-12-07T00:31:07.852243805Z
-  history:
-  - id: 9eb05722-8bf5-4f34-81a3-5574a76aa5f1
-    author: Joe Mooney
-    timestamp: 2025-12-07T05:34:03.043888907Z
-    changes:
-    - field_name: feature
-      old_value: 115-Uncategorized
-      new_value: 10-COMMENTS
 - id: 746091ca-0bc1-49e0-b2e3-12b174447f20
   spec_id: FR-0203
   title: Planning View
@@ -8571,22 +8404,14 @@ requirements:
   status: Draft
   priority: High
   owner: ''
-  feature: 1-REQ
+  feature: 116-Uncategorized
   created_at: 2025-12-07T00:31:15.135616660Z
-  modified_at: 2025-12-07T05:36:45.479761324Z
+  modified_at: 2025-12-07T00:31:15.135616660Z
   req_type: Functional
   relationships:
   - rel_type: Parent
     target_id: 365d927b-09e5-45e3-8f4e-881ad3c47143
     created_at: 2025-12-07T00:31:15.135648527Z
-  history:
-  - id: e06b1c42-ce97-4e29-b210-b72fba762f0a
-    author: Joe Mooney
-    timestamp: 2025-12-07T05:36:45.479763989Z
-    changes:
-    - field_name: feature
-      old_value: 116-Uncategorized
-      new_value: 1-REQ
 - id: 0f650017-d81f-4212-b009-ef147c512ffa
   spec_id: FR-0204
   title: Sprint CLI Commands
@@ -8662,18 +8487,6 @@ requirements:
     target_id: f1a64c4d-3086-4010-be4e-3eaf6bc3df5d
     created_at: 2025-12-07T03:04:39.974224583Z
     created_by: Joe Mooney
-  - rel_type: !Custom sprint_contains
-    target_id: b8621169-8a34-4001-a2e8-936229497c62
-    created_at: 2025-12-07T04:03:40.616589576Z
-    created_by: Joe Mooney
-  - rel_type: !Custom sprint_contains
-    target_id: 2a82a590-b200-42ad-843a-456db9d55359
-    created_at: 2025-12-07T04:03:59.049401177Z
-    created_by: Joe Mooney
-  - rel_type: !Custom sprint_contains
-    target_id: 848840ae-7005-4fab-b478-163f9139359e
-    created_at: 2025-12-07T17:00:49.761868107Z
-    created_by: Joe Mooney
 - id: 49b91b7d-77d3-4717-af8a-921ab4e05685
   spec_id: EPIC-0208
   title: Epic123
@@ -8723,46 +8536,20 @@ requirements:
 - id: 17098630-b92b-4194-ae1f-e7e901e73a35
   spec_id: REQ-0210
   title: Sprint 123
-  description: |-
-    Sprint 123
-
-    ID should now be sprint?
+  description: Sprint 123
   status: Draft
   priority: Medium
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-12-07T03:11:01.158857231Z
   created_by: Joe Mooney
-  modified_at: 2025-12-07T04:12:11.186155204Z
+  modified_at: 2025-12-07T03:11:01.158857231Z
   req_type: Sprint
   relationships:
   - rel_type: Parent
     target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
     created_at: 2025-12-07T03:11:01.189836174Z
     created_by: Joe Mooney
-  - rel_type: !Custom sprint_contains
-    target_id: d0f16bc7-788b-4d6c-ac49-3a48fc678e50
-    created_at: 2025-12-07T04:03:51.016707275Z
-    created_by: Joe Mooney
-  - rel_type: !Custom sprint_contains
-    target_id: da7e6650-4dd3-43ac-8804-55dfb58f3cb5
-    created_at: 2025-12-07T04:04:08.516012539Z
-    created_by: Joe Mooney
-  - rel_type: !Custom sprint_contains
-    target_id: 93c22e3a-bb6c-4933-9c35-d9b8fd9173c5
-    created_at: 2025-12-07T04:04:35.591858287Z
-    created_by: Joe Mooney
-  history:
-  - id: 76257f47-4fe7-424d-8855-cd667d732416
-    author: Joe Mooney
-    timestamp: 2025-12-07T04:12:11.186153896Z
-    changes:
-    - field_name: description
-      old_value: Sprint 123
-      new_value: |-
-        Sprint 123
-
-        ID should now be sprint?
 - id: d1e58dd4-fd26-437a-8856-2cf0d4f2adda
   spec_id: REQ-0211
   title: Bug 123
@@ -8917,209 +8704,6 @@ requirements:
     target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
     created_at: 2025-12-07T03:12:45.182840867Z
     created_by: Joe Mooney
-- id: a309fe3f-1463-4ac9-9272-270615959eaf
-  spec_id: FR-0219
-  title: Org Chart Display
-  description: "Org Chart Display\n\nthe org chart should detail the numbers of req in different states per team and by individual and any other useful information that you think suited.\nThere could be a summary and an expansion per person listing all the assignments, perhaps by sprint and in backlog. you should be able to click on a requirement and see a popup of the details. \nThere should be an indication of unassigned reqs also and at the top a set of filters similar to the sprint planning. "
-  status: Approved
-  priority: Medium
-  owner: ''
-  feature: 112-Uncategorized
-  created_at: 2025-12-07T05:56:15.172364384Z
-  created_by: Joe Mooney
-  modified_at: 2025-12-07T06:00:47.972463732Z
-  req_type: Functional
-  relationships:
-  - rel_type: Parent
-    target_id: 848840ae-7005-4fab-b478-163f9139359e
-    created_at: 2025-12-07T05:56:15.206912518Z
-    created_by: Joe Mooney
-  history:
-  - id: d71d756c-8455-46bf-93f8-2b7dfac0bdc2
-    author: Joe Mooney
-    timestamp: 2025-12-07T05:58:32.039100713Z
-    changes:
-    - field_name: description
-      old_value: |-
-        Org Chart Display
-
-        the org chart should detail the numbers of req in different states per team and by individual and any other useful information that you think suited.
-      new_value: "Org Chart Display\n\nthe org chart should detail the numbers of req in different states per team and by individual and any other useful information that you think suited.\nThere could be a summary and an expansion per person listing all the assignments, perhaps by sprint and in backlog. you should be able to click on a requirement and see a popup of the details. "
-  - id: ff794c8e-fc46-4127-bbce-8847b6cad689
-    author: Joe Mooney
-    timestamp: 2025-12-07T06:00:47.972463363Z
-    changes:
-    - field_name: description
-      old_value: "Org Chart Display\n\nthe org chart should detail the numbers of req in different states per team and by individual and any other useful information that you think suited.\nThere could be a summary and an expansion per person listing all the assignments, perhaps by sprint and in backlog. you should be able to click on a requirement and see a popup of the details. "
-      new_value: "Org Chart Display\n\nthe org chart should detail the numbers of req in different states per team and by individual and any other useful information that you think suited.\nThere could be a summary and an expansion per person listing all the assignments, perhaps by sprint and in backlog. you should be able to click on a requirement and see a popup of the details. \nThere should be an indication of unassigned reqs also and at the top a set of filters similar to the sprint planning. "
-    - field_name: status
-      old_value: Draft
-      new_value: Approved
-    - field_name: feature
-      old_value: 97-Uncategorized
-      new_value: 112-Uncategorized
-    - field_name: spec_id
-      old_value: FR-0218
-      new_value: FR-0219
-- id: 404b7457-67a2-4376-a0d3-9c5ea1547951
-  spec_id: REQ-0219
-  title: 'Sprint #3 thru 2025-12-07 Friday'
-  description: 'Sprint #3 thru 2025-12-07 Friday'
-  status: Draft
-  priority: Medium
-  owner: ''
-  feature: 97-Uncategorized
-  created_at: 2025-12-07T17:02:15.896382981Z
-  created_by: Joe Mooney
-  modified_at: 2025-12-07T17:02:15.896382981Z
-  req_type: Sprint
-  relationships:
-  - rel_type: Parent
-    target_id: 848840ae-7005-4fab-b478-163f9139359e
-    created_at: 2025-12-07T17:02:15.931002043Z
-    created_by: Joe Mooney
-  - rel_type: !Custom sprint_contains
-    target_id: 37be9566-a051-430b-b47b-1890a395a524
-    created_at: 2025-12-07T17:02:44.462009702Z
-    created_by: Joe Mooney
-  - rel_type: !Custom sprint_contains
-    target_id: 332b3215-b99b-43c2-8bef-a7b2bd664dd7
-    created_at: 2025-12-07T17:04:27.163189692Z
-    created_by: Joe Mooney
-  - rel_type: !Custom sprint_contains
-    target_id: 89d09ac1-adec-4fb3-9f43-77a113aec074
-    created_at: 2025-12-07T17:05:43.129977889Z
-    created_by: Joe Mooney
-  - rel_type: !Custom sprint_contains
-    target_id: f5bd306f-ea72-45c4-a26e-8fcf57e7ad85
-    created_at: 2025-12-07T17:07:16.596803934Z
-    created_by: Joe Mooney
-  - rel_type: !Custom sprint_contains
-    target_id: 8e4988b4-b850-4f46-ac4d-ed3f1bb93003
-    created_at: 2025-12-07T19:22:36.817793368Z
-    created_by: joe
-- id: 332b3215-b99b-43c2-8bef-a7b2bd664dd7
-  spec_id: FR-0220
-  title: New Sprint add should remain in Sprint Planning...
-  description: |-
-    New Sprint add should remain in Sprint Planning Panel
-
-    We should not revert to the req List panel
-  status: Draft
-  priority: Medium
-  owner: ''
-  feature: 97-Uncategorized
-  created_at: 2025-12-07T17:04:12.529801913Z
-  created_by: Joe Mooney
-  modified_at: 2025-12-07T17:04:27.163186512Z
-  req_type: Functional
-  relationships:
-  - rel_type: Parent
-    target_id: fa1eaffc-7c05-4d09-95a0-d5e61e9b8529
-    created_at: 2025-12-07T17:04:12.563981644Z
-    created_by: Joe Mooney
-  - rel_type: !Custom sprint_assignment
-    target_id: 404b7457-67a2-4376-a0d3-9c5ea1547951
-    created_at: 2025-12-07T17:04:27.163186231Z
-    created_by: Joe Mooney
-  history:
-  - id: f38de81f-8098-4059-afec-70280776eb74
-    author: Joe Mooney
-    timestamp: 2025-12-07T17:04:27.163188920Z
-    changes:
-    - field_name: sprint_assignment
-      old_value: ''
-      new_value: REQ-0219
-- id: 89d09ac1-adec-4fb3-9f43-77a113aec074
-  spec_id: FR-0221
-  title: Sprint ordering displayed in dropdown and sprin...
-  description: Sprint ordering displayed in dropdown and sprint planning should be time ordered
-  status: Draft
-  priority: Medium
-  owner: ''
-  feature: 97-Uncategorized
-  created_at: 2025-12-07T17:05:37.196534650Z
-  created_by: Joe Mooney
-  modified_at: 2025-12-07T17:05:43.129974405Z
-  req_type: Functional
-  relationships:
-  - rel_type: Parent
-    target_id: fa1eaffc-7c05-4d09-95a0-d5e61e9b8529
-    created_at: 2025-12-07T17:05:37.229974111Z
-    created_by: Joe Mooney
-  - rel_type: !Custom sprint_assignment
-    target_id: 404b7457-67a2-4376-a0d3-9c5ea1547951
-    created_at: 2025-12-07T17:05:43.129974099Z
-    created_by: Joe Mooney
-  history:
-  - id: b95d55d8-5243-4f62-bd3f-84b2ac6c2ece
-    author: Joe Mooney
-    timestamp: 2025-12-07T17:05:43.129977032Z
-    changes:
-    - field_name: sprint_assignment
-      old_value: ''
-      new_value: REQ-0219
-- id: f5bd306f-ea72-45c4-a26e-8fcf57e7ad85
-  spec_id: FR-0222
-  title: Sprint custom field should be on Add new req
-  description: |-
-    Sprint custom field should be on Add new req
-
-    need a way to add fields to the Add new req panel in the settings configuration
-  status: Draft
-  priority: Medium
-  owner: ''
-  feature: 97-Uncategorized
-  created_at: 2025-12-07T17:07:06.329715633Z
-  created_by: Joe Mooney
-  modified_at: 2025-12-07T17:07:16.596800598Z
-  req_type: Functional
-  relationships:
-  - rel_type: Parent
-    target_id: fa1eaffc-7c05-4d09-95a0-d5e61e9b8529
-    created_at: 2025-12-07T17:07:06.363012125Z
-    created_by: Joe Mooney
-  - rel_type: !Custom sprint_assignment
-    target_id: 404b7457-67a2-4376-a0d3-9c5ea1547951
-    created_at: 2025-12-07T17:07:16.596800281Z
-    created_by: Joe Mooney
-  history:
-  - id: faaee133-d8d9-438d-8d71-90369f8afcd9
-    author: Joe Mooney
-    timestamp: 2025-12-07T17:07:16.596803164Z
-    changes:
-    - field_name: sprint_assignment
-      old_value: ''
-      new_value: REQ-0219
-- id: 8e4988b4-b850-4f46-ac4d-ed3f1bb93003
-  spec_id: FR-0223
-  title: ranking number as an ordering preference for di...
-  description: |-
-    ranking number as an ordering preference for display
-
-    a ranking number or ordinal is a way to order reqs in a way other than priority or status
-    where priority may be set by a manager or team, an ordinal or ranking is a personal ordering that is not such much meta data of the req but of the user. It is a helpful tool to keep an inbox ordered in terms of how you want to sequence activities
-  status: Draft
-  priority: Medium
-  owner: ''
-  feature: 97-Uncategorized
-  created_at: 2025-12-07T19:21:58.984960265Z
-  created_by: joe
-  modified_at: 2025-12-07T19:22:36.817790111Z
-  req_type: Functional
-  relationships:
-  - rel_type: !Custom sprint_assignment
-    target_id: 404b7457-67a2-4376-a0d3-9c5ea1547951
-    created_at: 2025-12-07T19:22:36.817789836Z
-    created_by: joe
-  history:
-  - id: 3175b782-1486-43c9-af60-8f240abb49ed
-    author: joe
-    timestamp: 2025-12-07T19:22:36.817792508Z
-    changes:
-    - field_name: sprint_assignment
-      old_value: ''
-      new_value: REQ-0219
 users:
 - id: 150164ef-32ed-4d61-8cec-e887ac78cfd7
   spec_id: $USER-001
@@ -9151,12 +8735,6 @@ users:
   email: ''
   handle: bill
   created_at: 2025-11-29T02:35:02.366228122Z
-- id: 70c1bc64-9c21-428e-b4e8-d6904b3667d8
-  spec_id: $USER-006
-  name: Sandy Hill
-  email: sandy.hill@mountain.top
-  handle: sandy
-  created_at: 2025-12-07T17:26:06.293971548Z
 teams:
 - id: dc84e4d8-efb6-4843-8f5a-252e682f66ee
   spec_id: $TEAM-001
@@ -9218,7 +8796,7 @@ id_config:
     description: Research or investigation task to reduce uncertainty or explore technical approaches
 features: []
 next_feature_number: 118
-next_spec_number: 224
+next_spec_number: 217
 prefix_counters: {}
 relationship_definitions:
 - name: parent
@@ -9502,14 +9080,9 @@ reaction_definitions:
   label: Important
   description: Mark as important/attention needed
   built_in: true
-- name: boo
-  emoji: '!'
-  label: Boo!
-  description: Scary boo
-  built_in: false
 meta_counters:
   $TEAM: 4
-  $USER: 7
+  $USER: 6
 type_definitions:
 - name: Functional
   display_name: Functional
@@ -9777,7 +9350,6 @@ allowed_prefixes:
 - DETAILVIEW
 - DOC
 - FILTER
-- FOO
 - IMPL
 - INBOX
 - KEYBOARD

@@ -1163,7 +1163,7 @@ impl KeyAction {
             KeyAction::NextSearchMatch => KeyContext::RequirementsList,
             KeyAction::PrevSearchMatch => KeyContext::RequirementsList,
             KeyAction::ClearSearch => KeyContext::RequirementsList,
-            KeyAction::SwitchToFilterMode => KeyContext::RequirementsList,
+            KeyAction::SwitchToFilterMode => KeyContext::Global,
         }
     }
 
@@ -22268,11 +22268,15 @@ impl eframe::App for RequirementsApp {
         }
 
         // '/' to focus search box and clear it (vim-style)
-        if self.user_settings.keybindings.is_pressed(
-            KeyAction::SwitchToFilterMode,
-            ctx,
-            self.current_key_context,
-        ) {
+        // Only trigger when not already in a text input (otherwise '/' would be captured)
+        if !text_input_focused
+            && !self.show_settings_dialog
+            && self.user_settings.keybindings.is_pressed(
+                KeyAction::SwitchToFilterMode,
+                ctx,
+                self.current_key_context,
+            )
+        {
             // Save current search to history before clearing (if not empty and not duplicate)
             if !self.filter_text.is_empty() {
                 let search = self.filter_text.clone();
