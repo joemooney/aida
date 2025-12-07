@@ -1,6 +1,12 @@
-# Requirements Manager Administrator's Guide
+# AIDA Administrator's Guide
 
 This guide covers administrative topics including project configuration, storage backends, database schema, migration procedures, and multi-user deployment.
+
+**Related Documentation:**
+- [User Guide](user-guide.md) - End-user documentation for using AIDA
+- [Developer's Guide](DEVELOPER_GUIDE.md) - For developers maintaining and extending AIDA
+
+---
 
 ## Table of Contents
 
@@ -333,7 +339,7 @@ Convert a YAML database to SQLite for better performance:
 **CLI Command:**
 ```bash
 # Future CLI support planned
-# req migrate --from requirements.yaml --to requirements.db
+# aida migrate --from requirements.yaml --to requirements.db
 ```
 
 **Programmatic Migration:**
@@ -510,9 +516,9 @@ sqlite3 requirements.db ".backup 'requirements.backup.db'"
 
 ```bash
 #!/bin/bash
-# backup-requirements.sh
+# backup-aida.sh
 
-BACKUP_DIR="$HOME/req-backups"
+BACKUP_DIR="$HOME/aida-backups"
 SOURCE="$HOME/project/requirements.yaml"
 DATE=$(date +%Y%m%d_%H%M%S)
 
@@ -616,13 +622,13 @@ sqlite3 requirements.db "SELECT * FROM metadata;"
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `REQ_DB_NAME` | Default project name from registry | (none) |
-| `REQ_FEATURE` | Default feature for new requirements | "Uncategorized" |
-| `REQ_REGISTRY_PATH` | Custom registry file location | `~/.requirements.config` |
+| `AIDA_DB_NAME` | Default project name from registry | (none) |
+| `AIDA_FEATURE` | Default feature for new requirements | "Uncategorized" |
+| `AIDA_REGISTRY_PATH` | Custom registry file location | `~/.aida.config` |
 
 ## Appendix: Registry File Format
 
-The multi-project registry (`~/.requirements.config`) uses YAML format:
+The multi-project registry (`~/.aida.config`) uses YAML format:
 
 ```yaml
 default: "my-project"
@@ -637,4 +643,4 @@ projects:
 
 ---
 
-*Generated for Requirements Manager v0.1.0*
+*Last updated: December 2025 | AIDA v0.1.0*

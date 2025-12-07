@@ -2,6 +2,10 @@
 
 A comprehensive guide for developers maintaining and extending the AIDA (AI Design Assistant) requirements management system.
 
+**Related Documentation:**
+- [User Guide](user-guide.md) - End-user documentation for using AIDA
+- [Administrator's Guide](admin-guide.md) - For project configuration and administration
+
 ## Table of Contents
 
 1. [Project Overview](#1-project-overview)
@@ -1262,5 +1266,5 @@ egui::Frame::none()
 
 ---
 
-*Last Updated: 2024*
+*Last Updated: December 2025*
 *AIDA Version: 0.1.0*

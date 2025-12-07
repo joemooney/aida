@@ -1,6 +1,10 @@
-# Requirements Manager User Guide
+# AIDA User Guide
 
 A professional requirements management system with both CLI and GUI interfaces.
+
+**Related Documentation:**
+- [Developer's Guide](DEVELOPER_GUIDE.md) - For developers maintaining and extending AIDA
+- [Administrator's Guide](admin-guide.md) - For project configuration and administration
 
 ## Table of Contents
 
@@ -27,24 +31,24 @@ cargo build --workspace --release
 ```
 
 This creates two binaries in `target/release/`:
-- `req` - Command-line interface
-- `req-gui` - Graphical user interface
+- `aida` - Command-line interface
+- `aida-gui` - Graphical user interface
 
 ### Quick Start
 
 1. **Create your first requirement:**
    ```bash
-   req add --title "User login" --description "Users can log in with email and password"
+   aida add --title "User login" --description "Users can log in with email and password"
    ```
 
 2. **List all requirements:**
    ```bash
-   req list
+   aida list
    ```
 
 3. **Or launch the GUI:**
    ```bash
-   req-gui
+   aida-gui
    ```
 
 ---
@@ -55,22 +59,22 @@ This creates two binaries in `target/release/`:
 
 | Command | Description |
 |---------|-------------|
-| `req list` | List all requirements |
-| `req add` | Add a new requirement |
-| `req show <ID>` | Show requirement details |
-| `req edit <ID>` | Edit a requirement |
-| `req delete <ID>` | Delete a requirement |
+| `aida list` | List all requirements |
+| `aida add` | Add a new requirement |
+| `aida show <ID>` | Show requirement details |
+| `aida edit <ID>` | Edit a requirement |
+| `aida delete <ID>` | Delete a requirement |
 
 ### Adding Requirements
 
 **Interactive mode:**
 ```bash
-req add --interactive
+aida add --interactive
 ```
 
 **Command line mode:**
 ```bash
-req add --title "Feature name" \
+aida add --title "Feature name" \
         --description "Detailed description" \
         --priority High \
         --status Draft \
@@ -80,7 +84,7 @@ req add --title "Feature name" \
 
 **With custom ID prefix:**
 ```bash
-req add --title "Security audit" \
+aida add --title "Security audit" \
         --prefix SEC \
         --description "Perform security audit"
 ```
@@ -89,29 +93,29 @@ req add --title "Security audit" \
 
 ```bash
 # Filter by status
-req list --status Approved
+aida list --status Approved
 
 # Filter by priority
-req list --priority High
+aida list --priority High
 
 # Filter by feature
-req list --feature "Authentication"
+aida list --feature "Authentication"
 
 # Search by text
-req list --search "login"
+aida list --search "login"
 ```
 
 ### Working with Relationships
 
 ```bash
 # Add a parent-child relationship
-req rel add --from SPEC-001 --to SPEC-002 --type parent
+aida rel add --from SPEC-001 --to SPEC-002 --type parent
 
 # Add bidirectional relationship
-req rel add --from SPEC-001 --to SPEC-002 --type verifies -b
+aida rel add --from SPEC-001 --to SPEC-002 --type verifies -b
 
 # List relationships
-req rel list SPEC-001
+aida rel list SPEC-001
 ```
 
 ### Relationship Definitions
@@ -120,13 +124,13 @@ Manage custom relationship types with constraints:
 
 ```bash
 # List all relationship definitions
-req rel-def list
+aida rel-def list
 
 # Show details for a relationship definition
-req rel-def show parent
+aida rel-def show parent
 
 # Add a custom relationship type
-req rel-def add --name "blocks" \
+aida rel-def add --name "blocks" \
     --display-name "Blocks" \
     --description "This requirement blocks another" \
     --inverse "blocked_by" \
@@ -134,10 +138,10 @@ req rel-def add --name "blocks" \
     --color "#ff6b6b"
 
 # Edit a relationship definition
-req rel-def edit parent --source-types "Functional,System"
+aida rel-def edit parent --source-types "Functional,System"
 
 # Remove a custom relationship definition
-req rel-def remove blocks
+aida rel-def remove blocks
 ```
 
 **Built-in relationship types:**
@@ -152,39 +156,39 @@ req rel-def remove blocks
 
 ```bash
 # List features
-req feature list
+aida feature list
 
 # Rename a feature
-req feature rename "Old Name" "New Name"
+aida feature rename "Old Name" "New Name"
 
 # Move requirements between features
-req feature move SPEC-001 "New Feature"
+aida feature move SPEC-001 "New Feature"
 ```
 
 ### Database Management
 
 ```bash
 # List registered projects
-req db list
+aida db list
 
 # Add a new project
-req db add --name "my-project" --path "/path/to/requirements.yaml"
+aida db add --name "my-project" --path "/path/to/requirements.yaml"
 
 # Set default project
-req db default "my-project"
+aida db default "my-project"
 
 # Remove a project
-req db remove "my-project"
+aida db remove "my-project"
 ```
 
 ### Opening the User Guide
 
 ```bash
 # Open in default browser (light mode)
-req user-guide
+aida user-guide
 
 # Open in dark mode
-req user-guide --dark
+aida user-guide --dark
 ```
 
 ---
@@ -193,7 +197,12 @@ req user-guide --dark
 
 Launch the GUI application:
 ```bash
-req-gui
+aida-gui
+```
+
+Or open a specific requirements file:
+```bash
+aida-gui --file /path/to/requirements.yaml
 ```
 
 ### Main Interface
@@ -543,11 +552,11 @@ Features are automatically numbered:
 
 ### Default Feature
 
-Requirements without a specified feature go to "Uncategorized". Set a default feature using the `REQ_FEATURE` environment variable:
+Requirements without a specified feature go to "Uncategorized". Set a default feature using the `AIDA_FEATURE` environment variable:
 
 ```bash
-export REQ_FEATURE="Authentication"
-req add --title "New auth requirement"  # Automatically uses Authentication
+export AIDA_FEATURE="Authentication"
+aida add --title "New auth requirement"  # Automatically uses Authentication
 ```
 
 ---
@@ -558,15 +567,15 @@ Manage multiple requirement sets using the registry system.
 
 ### Registry Location
 
-Default: `~/.requirements.config`
+Default: `~/.aida.config`
 
-Override with: `REQ_REGISTRY_PATH` environment variable
+Override with: `AIDA_REGISTRY_PATH` environment variable
 
 ### Project Resolution Order
 
 1. Local `requirements.yaml` in current directory
 2. `--project` command line option
-3. `REQ_DB_NAME` environment variable
+3. `AIDA_DB_NAME` environment variable
 4. Single project in registry (if only one exists)
 5. Default project from registry
 6. Interactive prompt
@@ -575,14 +584,14 @@ Override with: `REQ_REGISTRY_PATH` environment variable
 
 ```bash
 # Register projects
-req db add --name "frontend" --path ~/projects/frontend/requirements.yaml
-req db add --name "backend" --path ~/projects/backend/requirements.yaml
+aida db add --name "frontend" --path ~/projects/frontend/requirements.yaml
+aida db add --name "backend" --path ~/projects/backend/requirements.yaml
 
 # Set default
-req db default frontend
+aida db default frontend
 
 # Work with specific project
-req list --project backend
+aida list --project backend
 ```
 
 ---
@@ -629,10 +638,10 @@ When registering a project, simply use the appropriate file extension:
 
 ```bash
 # YAML storage (default)
-req db add --name "my-project" --path ~/project/requirements.yaml
+aida db add --name "my-project" --path ~/project/requirements.yaml
 
 # SQLite storage
-req db add --name "my-project" --path ~/project/requirements.db
+aida db add --name "my-project" --path ~/project/requirements.db
 ```
 
 ### Exporting and Importing
@@ -653,15 +662,31 @@ For detailed information on migration procedures and storage administration, see
 | Shortcut | Action |
 |----------|--------|
 | **Arrow Up/Down** | Navigate requirements list |
+| **j/k** | Navigate requirements list (vim-style) |
 | **Enter** | Edit selected requirement |
 | **Double-click** | Edit requirement |
 | **Space** | Expand/collapse tree node (in tree views) |
+| **e** | Edit selected requirement |
+| **n** | New sibling requirement |
+| **Shift+N** | New child requirement |
+| **f** | Open feature picker |
+| **s** | Open status picker |
+| **p** | Open priority picker |
+| **o** | Open owner picker |
+| **Shift+S** | Open sprint picker |
+| **d** | Delete with confirmation |
+| **Shift+D** | Delete immediately |
+| **a** | Toggle archive status |
+| **c** | Add comment |
+| **Shift+L** | Toggle links panel |
 | **Ctrl+S** | Save (in Add/Edit forms) |
 | **Ctrl+T** | Cycle through themes |
 | **Ctrl+MouseWheel** | Zoom in/out |
 | **Ctrl+Shift++** | Zoom in |
 | **Ctrl+-** | Zoom out |
 | **Ctrl+0** | Reset zoom to base size |
+| **/** | Focus search box (vim-style) |
+| **Escape** | Clear search/close dialogs |
 
 ---
 
@@ -693,8 +718,20 @@ The Keybindings tab shows all customizable keyboard shortcuts. Click "Change" ne
 |--------|-------------|-----------------|
 | Navigate Up | Up Arrow | Requirements List |
 | Navigate Down | Down Arrow | Requirements List |
-| Edit Requirement | Enter | Requirements List |
+| Navigate Up (Vim) | k | Requirements List |
+| Navigate Down (Vim) | j | Requirements List |
+| Edit Requirement | Enter / e | Requirements List |
 | Toggle Expand/Collapse | Space | Requirements List |
+| New Sibling | n | Requirements List |
+| New Child | Shift+N | Requirements List |
+| Open Feature Picker | f | Requirements List |
+| Open Status Picker | s | Requirements List |
+| Open Priority Picker | p | Requirements List |
+| Open Owner Picker | o | Requirements List |
+| Delete with Confirm | d | Requirements List |
+| Delete Immediate | Shift+D | Requirements List |
+| Toggle Archive | a | Requirements List |
+| Add Comment | c | Requirements List |
 | Zoom In | Ctrl+Shift+Plus | Global |
 | Zoom Out | Ctrl+Minus | Global |
 | Reset Zoom | Ctrl+0 | Global |
@@ -717,7 +754,7 @@ You can change the context for any keybinding using the dropdown in the Settings
 - Restrict certain shortcuts to specific views
 - Prevent shortcuts from interfering with text input
 
-User settings are stored in: `~/.requirements_gui_settings.yaml`
+User settings are stored in: `~/.aida_gui_settings.yaml`
 
 ### Project Settings
 
@@ -786,9 +823,9 @@ These relationships can be added through the Links tab when viewing a requiremen
 
 | Variable | Description |
 |----------|-------------|
-| `REQ_DB_NAME` | Default project name |
-| `REQ_FEATURE` | Default feature for new requirements |
-| `REQ_REGISTRY_PATH` | Custom registry file location |
+| `AIDA_DB_NAME` | Default project name |
+| `AIDA_FEATURE` | Default feature for new requirements |
+| `AIDA_REGISTRY_PATH` | Custom registry file location |
 
 ---
 
@@ -810,7 +847,7 @@ These relationships can be added through the Links tab when viewing a requiremen
 
 8. **Custom prefixes for cross-cutting concerns**: Use custom ID prefixes like `SEC-`, `PERF-`, `API-` for requirements that span multiple features
 
-9. **Keyboard shortcuts for efficiency**: Learn the shortcuts (Ctrl+T for themes, arrow keys for navigation) to speed up your workflow
+9. **Keyboard shortcuts for efficiency**: Learn the shortcuts (f for feature, s for status, j/k for navigation) to speed up your workflow
 
 10. **Set your preferred view**: Configure your default perspective in Settings to match how you like to organize requirements
 
@@ -822,7 +859,7 @@ These relationships can be added through the Links tab when viewing a requiremen
 
 **"No requirements file found"**
 - Create a `requirements.yaml` in the current directory, or
-- Register a project with `req db add`
+- Register a project with `aida db add`
 
 **"Failed to save"**
 - Check file permissions
@@ -834,10 +871,10 @@ These relationships can be added through the Links tab when viewing a requiremen
 
 ### Getting Help
 
-- Run `req --help` for CLI help
-- Run `req <command> --help` for command-specific help
-- Open this guide with `req user-guide`
+- Run `aida --help` for CLI help
+- Run `aida <command> --help` for command-specific help
+- Open this guide with `aida user-guide`
 
 ---
 
-*Generated for Requirements Manager v0.1.0*
+*Generated for AIDA v0.1.0*
