@@ -1069,6 +1069,7 @@ pub enum KeyAction {
     NewChildRequirement,
     // Quick change actions
     OpenOwnerPicker,    // 'o' - fuzzy finder for owner
+    OpenFeaturePicker,  // 'f' - fuzzy finder for feature
     OpenStatusPicker,   // 's' - status picker (existing, now formal)
     OpenPriorityPicker, // 'p' - priority picker (existing, now formal)
     OpenSprintPicker,   // 'S' (shift+s) - sprint assignment picker
@@ -1103,6 +1104,7 @@ impl KeyAction {
             KeyAction::NewSiblingRequirement => "New Sibling Requirement",
             KeyAction::NewChildRequirement => "New Child Requirement",
             KeyAction::OpenOwnerPicker => "Open Owner Picker",
+            KeyAction::OpenFeaturePicker => "Open Feature Picker",
             KeyAction::OpenStatusPicker => "Open Status Picker",
             KeyAction::OpenPriorityPicker => "Open Priority Picker",
             KeyAction::OpenSprintPicker => "Assign to Sprint",
@@ -1136,6 +1138,7 @@ impl KeyAction {
             KeyAction::NewSiblingRequirement => KeyContext::RequirementsList,
             KeyAction::NewChildRequirement => KeyContext::RequirementsList,
             KeyAction::OpenOwnerPicker => KeyContext::RequirementsList,
+            KeyAction::OpenFeaturePicker => KeyContext::RequirementsList,
             KeyAction::OpenStatusPicker => KeyContext::RequirementsList,
             KeyAction::OpenPriorityPicker => KeyContext::RequirementsList,
             KeyAction::OpenSprintPicker => KeyContext::RequirementsList,
@@ -1481,6 +1484,10 @@ impl Default for KeyBindings {
         bindings.insert(
             KeyAction::OpenOwnerPicker,
             KeyBinding::new(egui::Key::O, KeyAction::OpenOwnerPicker.default_context()),
+        );
+        bindings.insert(
+            KeyAction::OpenFeaturePicker,
+            KeyBinding::new(egui::Key::F, KeyAction::OpenFeaturePicker.default_context()),
         );
         bindings.insert(
             KeyAction::OpenStatusPicker,
@@ -2040,6 +2047,7 @@ enum QuickChangeField {
     Priority,
     Owner,
     Sprint,
+    Feature,
 }
 
 /// AI action types - what kind of AI analysis to perform
@@ -2664,6 +2672,7 @@ pub struct RequirementsApp {
     quick_change_target_id: Option<Uuid>,         // Requirement being modified
     quick_change_consumed_action: bool,           // True if popup consumed a key this frame (prevents pass-through)
     quick_change_owner_search: String,            // Search text for owner fuzzy finder
+    quick_change_feature_search: String,          // Search text for feature fuzzy finder
 
     // Delete confirmation state
     pending_delete_confirm: Option<usize>,        // Index of requirement awaiting delete confirmation
@@ -2789,6 +2798,7 @@ pub struct RequirementsApp {
     original_form_type: RequirementType,
     original_form_owner: String,
     original_form_feature: String,
+    form_feature_selected_idx: usize,  // Selected index in feature dropdown
     original_form_tags: String,
     original_form_prefix: String,
     original_form_custom_fields: HashMap<String, String>,
@@ -3246,6 +3256,7 @@ impl RequirementsApp {
             quick_change_target_id: None,
             quick_change_consumed_action: false,
             quick_change_owner_search: String::new(),
+            quick_change_feature_search: String::new(),
             pending_delete_confirm: None,
             ai_submenu_hover_start: None,
             split_perspective: Perspective::default(),
@@ -3345,6 +3356,7 @@ impl RequirementsApp {
             original_form_type: RequirementType::Functional,
             original_form_owner: String::new(),
             original_form_feature: String::new(),
+            form_feature_selected_idx: 0,
             original_form_tags: String::new(),
             original_form_prefix: String::new(),
             original_form_custom_fields: HashMap::new(),
@@ -15502,6 +15514,12 @@ impl RequirementsApp {
             return;
         }
 
+        // Feature field uses a different UI with fuzzy search
+        if field == QuickChangeField::Feature {
+            self.show_feature_picker_popup(ctx);
+            return;
+        }
+
         // Get the target requirement to determine its type
         let target_req = self.quick_change_target_id
             .and_then(|id| self.store.requirements.iter().find(|r| r.id == id));
@@ -15537,6 +15555,7 @@ impl RequirementsApp {
             }
             QuickChangeField::Owner => unreachable!(),
             QuickChangeField::Sprint => unreachable!(), // Handled separately via show_sprint_picker_popup
+            QuickChangeField::Feature => unreachable!(), // Handled separately via show_feature_picker_popup
         };
         let num_options = options.len();
 
@@ -15599,6 +15618,7 @@ impl RequirementsApp {
             QuickChangeField::Priority => "quick_change_priority_popup",
             QuickChangeField::Owner => unreachable!(),
             QuickChangeField::Sprint => unreachable!(), // Handled separately
+            QuickChangeField::Feature => unreachable!(), // Handled separately
         };
 
         egui::Area::new(egui::Id::new(popup_id))
@@ -15990,6 +16010,177 @@ impl RequirementsApp {
         }
     }
 
+    /// Show feature picker popup for assigning feature to requirement
+    fn show_feature_picker_popup(&mut self, ctx: &egui::Context) {
+        // Collect all unique features from requirements
+        let all_features = self.get_all_features();
+
+        // Filter based on search text
+        let search_lower = self.quick_change_feature_search.to_lowercase();
+        let filtered_features: Vec<&String> = if search_lower.is_empty() {
+            all_features.iter().collect()
+        } else {
+            all_features.iter()
+                .filter(|f| f.to_lowercase().contains(&search_lower))
+                .collect()
+        };
+
+        let num_options = filtered_features.len();
+
+        // Handle keyboard input for the popup
+        let mut close_popup = false;
+        let mut apply_change = false;
+
+        ctx.input(|i| {
+            // Escape to close
+            if i.key_pressed(egui::Key::Escape) {
+                close_popup = true;
+            }
+            // Enter to apply (if we have options)
+            if i.key_pressed(egui::Key::Enter) && num_options > 0 {
+                apply_change = true;
+            }
+            // Up/Down to navigate
+            if i.key_pressed(egui::Key::ArrowUp) {
+                if self.quick_change_selected > 0 {
+                    self.quick_change_selected -= 1;
+                } else if num_options > 0 {
+                    self.quick_change_selected = num_options - 1; // Wrap to bottom
+                }
+            }
+            if i.key_pressed(egui::Key::ArrowDown) {
+                if num_options > 0 {
+                    if self.quick_change_selected < num_options - 1 {
+                        self.quick_change_selected += 1;
+                    } else {
+                        self.quick_change_selected = 0; // Wrap to top
+                    }
+                }
+            }
+        });
+
+        if close_popup {
+            self.quick_change_field = None;
+            self.quick_change_target_id = None;
+            self.quick_change_feature_search.clear();
+            self.quick_change_consumed_action = true;
+            return;
+        }
+
+        // Apply the change
+        if apply_change {
+            if let Some(feature) = filtered_features.get(self.quick_change_selected) {
+                self.apply_feature_change((*feature).clone());
+            }
+            self.quick_change_field = None;
+            self.quick_change_target_id = None;
+            self.quick_change_feature_search.clear();
+            self.quick_change_consumed_action = true;
+            return;
+        }
+
+        // Ensure selected index is valid after filtering
+        if self.quick_change_selected >= num_options && num_options > 0 {
+            self.quick_change_selected = num_options - 1;
+        }
+
+        // Center the popup on screen
+        let screen_rect = ctx.screen_rect();
+        let popup_size = egui::vec2(250.0, 220.0);
+        let popup_pos = egui::pos2(
+            (screen_rect.width() - popup_size.x) / 2.0,
+            (screen_rect.height() - popup_size.y) / 2.0,
+        );
+
+        egui::Area::new(egui::Id::new("quick_change_feature_popup"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(popup_pos)
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style())
+                    .inner_margin(8.0)
+                    .show(ui, |ui| {
+                        ui.set_min_width(popup_size.x - 16.0);
+                        ui.label(egui::RichText::new("Assign Feature").strong());
+                        ui.separator();
+
+                        // Search input
+                        let response = ui.add(
+                            egui::TextEdit::singleline(&mut self.quick_change_feature_search)
+                                .hint_text("Type to search...")
+                                .desired_width(ui.available_width())
+                        );
+                        // Auto-focus the search field
+                        response.request_focus();
+
+                        ui.separator();
+
+                        // Scrollable list of features
+                        egui::ScrollArea::vertical()
+                            .max_height(120.0)
+                            .show(ui, |ui| {
+                                if filtered_features.is_empty() {
+                                    ui.weak("No matching features");
+                                } else {
+                                    for (idx, feature) in filtered_features.iter().enumerate() {
+                                        let is_selected = idx == self.quick_change_selected;
+                                        let response = ui.selectable_label(is_selected, *feature);
+                                        if response.clicked() {
+                                            self.apply_feature_change((*feature).clone());
+                                            self.quick_change_field = None;
+                                            self.quick_change_target_id = None;
+                                            self.quick_change_feature_search.clear();
+                                            self.quick_change_consumed_action = true;
+                                        }
+                                    }
+                                }
+                            });
+
+                        ui.separator();
+                        ui.horizontal(|ui| {
+                            ui.small("↑↓ Navigate  Enter Select  Esc Cancel");
+                        });
+                    });
+            });
+
+        // Close on click outside
+        if ctx.input(|i| i.pointer.any_click()) {
+            let popup_rect = egui::Rect::from_min_size(popup_pos, popup_size);
+            if let Some(pos) = ctx.input(|i| i.pointer.interact_pos()) {
+                if !popup_rect.contains(pos) {
+                    self.quick_change_field = None;
+                    self.quick_change_target_id = None;
+                    self.quick_change_feature_search.clear();
+                    self.quick_change_consumed_action = true;
+                }
+            }
+        }
+    }
+
+    /// Apply feature change to the selected requirement
+    fn apply_feature_change(&mut self, new_feature: String) {
+        let Some(target_id) = self.quick_change_target_id else { return };
+        let Some(req) = self.store.requirements.iter_mut().find(|r| r.id == target_id) else { return };
+
+        let old_feature = req.feature.clone();
+        if old_feature != new_feature {
+            req.feature = new_feature.clone();
+            req.modified_at = chrono::Utc::now();
+            req.history.push(aida_core::models::HistoryEntry {
+                id: uuid::Uuid::new_v4(),
+                author: self.user_settings.name.clone(),
+                timestamp: chrono::Utc::now(),
+                changes: vec![aida_core::models::FieldChange {
+                    field_name: "feature".to_string(),
+                    old_value: old_feature,
+                    new_value: new_feature,
+                }],
+            });
+            if let Err(e) = self.storage.save(&self.store) {
+                eprintln!("Failed to save after feature change: {}", e);
+            }
+        }
+    }
+
     /// Apply a quick change to the selected requirement
     fn apply_quick_change(&mut self, field: QuickChangeField, selected_idx: usize) {
         let Some(target_id) = self.quick_change_target_id else { return };
@@ -16080,6 +16271,10 @@ impl RequirementsApp {
             }
             QuickChangeField::Sprint => {
                 // Sprint is handled separately via show_sprint_picker_popup
+                // This branch should never be reached
+            }
+            QuickChangeField::Feature => {
+                // Feature is handled separately via show_feature_picker_popup
                 // This branch should never be reached
             }
         }
@@ -18461,7 +18656,92 @@ fn main() {
 
             ui.add_space(16.0);
             ui.label("Feature:");
-            ui.add(egui::TextEdit::singleline(&mut self.form_feature).desired_width(150.0));
+            // Feature dropdown with fuzzy search
+            {
+                let popup_id = ui.make_persistent_id("feature_combo_popup");
+                let feature_edit = ui.add(
+                    egui::TextEdit::singleline(&mut self.form_feature)
+                        .desired_width(150.0)
+                        .hint_text("Type to search...")
+                );
+
+                // Get all features and filter based on current text
+                let all_features = self.get_all_features();
+                let search_lower = self.form_feature.to_lowercase();
+                let filtered: Vec<&String> = if search_lower.is_empty() {
+                    all_features.iter().collect()
+                } else {
+                    all_features.iter()
+                        .filter(|f| f.to_lowercase().contains(&search_lower))
+                        .collect()
+                };
+
+                // Open popup when text field gains focus or user is typing
+                if feature_edit.gained_focus() || (feature_edit.has_focus() && feature_edit.changed()) {
+                    ui.memory_mut(|mem| mem.open_popup(popup_id));
+                    self.form_feature_selected_idx = 0;
+                }
+
+                // Handle keyboard navigation
+                if feature_edit.has_focus() {
+                    let num_options = filtered.len();
+                    ui.input(|i| {
+                        if i.key_pressed(egui::Key::ArrowDown) {
+                            if num_options > 0 && self.form_feature_selected_idx < num_options - 1 {
+                                self.form_feature_selected_idx += 1;
+                            }
+                        }
+                        if i.key_pressed(egui::Key::ArrowUp) {
+                            if self.form_feature_selected_idx > 0 {
+                                self.form_feature_selected_idx -= 1;
+                            }
+                        }
+                    });
+                }
+
+                // Clamp selected index
+                if self.form_feature_selected_idx >= filtered.len() && !filtered.is_empty() {
+                    self.form_feature_selected_idx = filtered.len() - 1;
+                }
+
+                // Show popup with filtered features
+                egui::popup_below_widget(
+                    ui,
+                    popup_id,
+                    &feature_edit,
+                    egui::PopupCloseBehavior::CloseOnClickOutside,
+                    |ui| {
+                        ui.set_min_width(150.0);
+                        egui::ScrollArea::vertical()
+                            .max_height(150.0)
+                            .show(ui, |ui| {
+                                if filtered.is_empty() {
+                                    ui.weak("No matching features");
+                                } else {
+                                    for (idx, feature) in filtered.iter().enumerate() {
+                                        let is_selected = idx == self.form_feature_selected_idx;
+                                        let response = ui.selectable_label(is_selected, *feature);
+                                        if response.clicked() {
+                                            self.form_feature = (*feature).clone();
+                                            ui.memory_mut(|mem| mem.close_popup());
+                                        }
+                                    }
+                                }
+                            });
+                    }
+                );
+
+                // Handle Enter key to select
+                if feature_edit.has_focus() {
+                    ui.input(|i| {
+                        if i.key_pressed(egui::Key::Enter) && !filtered.is_empty() {
+                            if let Some(feature) = filtered.get(self.form_feature_selected_idx) {
+                                self.form_feature = (*feature).clone();
+                            }
+                        }
+                    });
+                }
+            }
 
             ui.add_space(16.0);
             ui.label("Tags:");
@@ -19081,9 +19361,74 @@ fn main() {
                                     ui.end_row();
                                 }
 
-                                // Feature
+                                // Feature with dropdown
                                 ui.label("Feature:");
-                                ui.add(egui::TextEdit::singleline(&mut self.form_feature).desired_width(120.0));
+                                {
+                                    let popup_id = ui.make_persistent_id("feature_combo_popup_2");
+                                    let feature_edit = ui.add(
+                                        egui::TextEdit::singleline(&mut self.form_feature)
+                                            .desired_width(120.0)
+                                            .hint_text("Type to search...")
+                                    );
+
+                                    let all_features = self.get_all_features();
+                                    let search_lower = self.form_feature.to_lowercase();
+                                    let filtered: Vec<&String> = if search_lower.is_empty() {
+                                        all_features.iter().collect()
+                                    } else {
+                                        all_features.iter()
+                                            .filter(|f| f.to_lowercase().contains(&search_lower))
+                                            .collect()
+                                    };
+
+                                    if feature_edit.gained_focus() || (feature_edit.has_focus() && feature_edit.changed()) {
+                                        ui.memory_mut(|mem| mem.open_popup(popup_id));
+                                        self.form_feature_selected_idx = 0;
+                                    }
+
+                                    if feature_edit.has_focus() {
+                                        let num_options = filtered.len();
+                                        ui.input(|i| {
+                                            if i.key_pressed(egui::Key::ArrowDown) && num_options > 0 && self.form_feature_selected_idx < num_options - 1 {
+                                                self.form_feature_selected_idx += 1;
+                                            }
+                                            if i.key_pressed(egui::Key::ArrowUp) && self.form_feature_selected_idx > 0 {
+                                                self.form_feature_selected_idx -= 1;
+                                            }
+                                        });
+                                    }
+
+                                    if self.form_feature_selected_idx >= filtered.len() && !filtered.is_empty() {
+                                        self.form_feature_selected_idx = filtered.len() - 1;
+                                    }
+
+                                    egui::popup_below_widget(ui, popup_id, &feature_edit, egui::PopupCloseBehavior::CloseOnClickOutside, |ui| {
+                                        ui.set_min_width(120.0);
+                                        egui::ScrollArea::vertical().max_height(150.0).show(ui, |ui| {
+                                            if filtered.is_empty() {
+                                                ui.weak("No matching features");
+                                            } else {
+                                                for (idx, feature) in filtered.iter().enumerate() {
+                                                    let is_selected = idx == self.form_feature_selected_idx;
+                                                    if ui.selectable_label(is_selected, *feature).clicked() {
+                                                        self.form_feature = (*feature).clone();
+                                                        ui.memory_mut(|mem| mem.close_popup());
+                                                    }
+                                                }
+                                            }
+                                        });
+                                    });
+
+                                    if feature_edit.has_focus() {
+                                        ui.input(|i| {
+                                            if i.key_pressed(egui::Key::Enter) && !filtered.is_empty() {
+                                                if let Some(feature) = filtered.get(self.form_feature_selected_idx) {
+                                                    self.form_feature = (*feature).clone();
+                                                }
+                                            }
+                                        });
+                                    }
+                                }
                                 ui.end_row();
 
                                 // Owner
@@ -19425,9 +19770,74 @@ fn main() {
                     ui.end_row();
                 }
 
-                // Feature
+                // Feature with dropdown
                 ui.label("Feature:");
-                ui.add(egui::TextEdit::singleline(&mut self.form_feature).desired_width(200.0));
+                {
+                    let popup_id = ui.make_persistent_id("feature_combo_popup_3");
+                    let feature_edit = ui.add(
+                        egui::TextEdit::singleline(&mut self.form_feature)
+                            .desired_width(200.0)
+                            .hint_text("Type to search...")
+                    );
+
+                    let all_features = self.get_all_features();
+                    let search_lower = self.form_feature.to_lowercase();
+                    let filtered: Vec<&String> = if search_lower.is_empty() {
+                        all_features.iter().collect()
+                    } else {
+                        all_features.iter()
+                            .filter(|f| f.to_lowercase().contains(&search_lower))
+                            .collect()
+                    };
+
+                    if feature_edit.gained_focus() || (feature_edit.has_focus() && feature_edit.changed()) {
+                        ui.memory_mut(|mem| mem.open_popup(popup_id));
+                        self.form_feature_selected_idx = 0;
+                    }
+
+                    if feature_edit.has_focus() {
+                        let num_options = filtered.len();
+                        ui.input(|i| {
+                            if i.key_pressed(egui::Key::ArrowDown) && num_options > 0 && self.form_feature_selected_idx < num_options - 1 {
+                                self.form_feature_selected_idx += 1;
+                            }
+                            if i.key_pressed(egui::Key::ArrowUp) && self.form_feature_selected_idx > 0 {
+                                self.form_feature_selected_idx -= 1;
+                            }
+                        });
+                    }
+
+                    if self.form_feature_selected_idx >= filtered.len() && !filtered.is_empty() {
+                        self.form_feature_selected_idx = filtered.len() - 1;
+                    }
+
+                    egui::popup_below_widget(ui, popup_id, &feature_edit, egui::PopupCloseBehavior::CloseOnClickOutside, |ui| {
+                        ui.set_min_width(200.0);
+                        egui::ScrollArea::vertical().max_height(150.0).show(ui, |ui| {
+                            if filtered.is_empty() {
+                                ui.weak("No matching features");
+                            } else {
+                                for (idx, feature) in filtered.iter().enumerate() {
+                                    let is_selected = idx == self.form_feature_selected_idx;
+                                    if ui.selectable_label(is_selected, *feature).clicked() {
+                                        self.form_feature = (*feature).clone();
+                                        ui.memory_mut(|mem| mem.close_popup());
+                                    }
+                                }
+                            }
+                        });
+                    });
+
+                    if feature_edit.has_focus() {
+                        ui.input(|i| {
+                            if i.key_pressed(egui::Key::Enter) && !filtered.is_empty() {
+                                if let Some(feature) = filtered.get(self.form_feature_selected_idx) {
+                                    self.form_feature = (*feature).clone();
+                                }
+                            }
+                        });
+                    }
+                }
                 ui.end_row();
 
                 // Owner
@@ -21852,6 +22262,21 @@ impl eframe::App for RequirementsApp {
                                 self.quick_change_target_id = Some(req.id);
                                 self.quick_change_field = Some(QuickChangeField::Sprint);
                             }
+                        }
+                    }
+                }
+                // 'f' key to open feature picker (fuzzy finder)
+                else if self.user_settings.keybindings.is_pressed(
+                    KeyAction::OpenFeaturePicker,
+                    ctx,
+                    self.current_key_context,
+                ) {
+                    if let Some(idx) = self.selected_idx {
+                        if let Some(req) = self.store.requirements.get(idx) {
+                            self.quick_change_feature_search.clear();
+                            self.quick_change_selected = 0;
+                            self.quick_change_target_id = Some(req.id);
+                            self.quick_change_field = Some(QuickChangeField::Feature);
                         }
                     }
                 }
