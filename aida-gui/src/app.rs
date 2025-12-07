@@ -7,6 +7,7 @@ use aida_core::{
     SessionInfo, Storage, StoredAiEvaluation, UrlLink,
 };
 use eframe::egui;
+use similar::{ChangeTag, TextDiff};
 use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -348,6 +349,62 @@ fn truncate_string(s: &str, max_len: usize) -> String {
     } else {
         format!("{}...", &s[..max_len.saturating_sub(3)])
     }
+}
+
+/// Render an inline word diff between two strings in the UI
+/// Shows deletions in red/strikethrough and insertions in green
+fn render_inline_diff(ui: &mut egui::Ui, old_text: &str, new_text: &str) {
+    let diff = TextDiff::from_words(old_text, new_text);
+
+    let delete_color = egui::Color32::from_rgb(255, 100, 100);
+    let insert_color = egui::Color32::from_rgb(100, 255, 100);
+    let unchanged_color = ui.visuals().text_color();
+
+    // Build a LayoutJob for inline rendering
+    let mut job = egui::text::LayoutJob::default();
+    job.wrap = egui::text::TextWrapping {
+        max_width: ui.available_width(),
+        ..Default::default()
+    };
+
+    for change in diff.iter_all_changes() {
+        let text = change.value();
+        match change.tag() {
+            ChangeTag::Delete => {
+                job.append(
+                    text,
+                    0.0,
+                    egui::TextFormat {
+                        color: delete_color,
+                        strikethrough: egui::Stroke::new(1.0, delete_color),
+                        ..Default::default()
+                    },
+                );
+            }
+            ChangeTag::Insert => {
+                job.append(
+                    text,
+                    0.0,
+                    egui::TextFormat {
+                        color: insert_color,
+                        ..Default::default()
+                    },
+                );
+            }
+            ChangeTag::Equal => {
+                job.append(
+                    text,
+                    0.0,
+                    egui::TextFormat {
+                        color: unchanged_color,
+                        ..Default::default()
+                    },
+                );
+            }
+        }
+    }
+
+    ui.label(job);
 }
 
 /// Serializable color wrapper for themes
@@ -9568,8 +9625,9 @@ impl RequirementsApp {
         if self.timeline_suppress_hover {
             if let Some(current) = ui.ctx().input(|i| i.pointer.hover_pos()) {
                 if let Some(suppress_pos) = self.timeline_suppress_hover_pos {
+                    let dist = (current - suppress_pos).length();
                     // Require significant movement (15px) from the suppression point to re-enable hover
-                    if (current - suppress_pos).length() > 15.0 {
+                    if dist > 15.0 {
                         self.timeline_suppress_hover = false;
                         self.timeline_suppress_hover_pos = None;
                     }
@@ -9726,11 +9784,30 @@ impl RequirementsApp {
 
                         // Use custom selectable with hover suppression
                         let response = if suppress_hover {
-                            // When hover is suppressed, use selectable_value which only highlights when selected
-                            let mut dummy = selected;
-                            let resp = ui.selectable_value(&mut dummy, true, &label_text);
-                            // selectable_value returns response; if selected changed we ignore it
-                            resp
+                            // When hover is suppressed, manually draw the item without hover effect
+                            // Match the sizing of selectable_label exactly
+                            let button_padding = ui.spacing().button_padding;
+                            let text = egui::WidgetText::from(&label_text);
+                            let galley = text.into_galley(ui, Some(egui::TextWrapMode::Extend), f32::INFINITY, egui::TextStyle::Button);
+                            let desired_size = egui::vec2(
+                                ui.available_width(),
+                                (galley.size().y + button_padding.y * 2.0).max(ui.spacing().interact_size.y)
+                            );
+                            let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
+
+                            if ui.is_rect_visible(rect) {
+                                // Only show selection highlight, no hover
+                                if selected {
+                                    let visuals = ui.visuals().selection;
+                                    ui.painter().rect_filled(rect, ui.visuals().widgets.hovered.rounding, visuals.bg_fill);
+                                }
+                                let text_pos = egui::Align2::LEFT_CENTER.anchor_size(
+                                    rect.left_center() + egui::vec2(button_padding.x, 0.0),
+                                    galley.size()
+                                ).min;
+                                ui.painter().galley(text_pos, galley, ui.visuals().text_color());
+                            }
+                            response
                         } else {
                             ui.selectable_label(selected, &label_text)
                         };
@@ -9812,18 +9889,10 @@ impl RequirementsApp {
                                 );
                             });
 
-                            ui.horizontal(|ui| {
+                            ui.horizontal_wrapped(|ui| {
                                 ui.add_space(20.0);
-                                ui.label(
-                                    egui::RichText::new(&change.old_value)
-                                        .strikethrough()
-                                        .color(egui::Color32::from_rgb(200, 100, 100)),
-                                );
-                                ui.label("→");
-                                ui.label(
-                                    egui::RichText::new(&change.new_value)
-                                        .color(egui::Color32::from_rgb(100, 200, 100)),
-                                );
+                                // Use inline word diff for better readability
+                                render_inline_diff(ui, &change.old_value, &change.new_value);
                             });
 
                             ui.add_space(5.0);
