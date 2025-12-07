@@ -2678,9 +2678,6 @@ pub struct RequirementsApp {
     // Delete confirmation state
     pending_delete_confirm: Option<usize>,        // Index of requirement awaiting delete confirmation
 
-    // AI submenu hover delay (200ms before showing to avoid occluding other options)
-    ai_submenu_hover_start: Option<Instant>,      // When mouse started hovering over AI button
-
     // Split panel (second requirements list) - used in split layouts
     split_perspective: Perspective,
     split_perspective_direction: PerspectiveDirection,
@@ -3259,7 +3256,6 @@ impl RequirementsApp {
             quick_change_owner_search: String::new(),
             quick_change_feature_search: String::new(),
             pending_delete_confirm: None,
-            ai_submenu_hover_start: None,
             split_perspective: Perspective::default(),
             split_perspective_direction: PerspectiveDirection::default(),
             split_filter_text: String::new(),
@@ -16422,98 +16418,52 @@ impl RequirementsApp {
 
                                     ui.separator();
 
-                                    // AI Actions submenu with 200ms hover delay
-                                    // This prevents the submenu from immediately occluding Clone/Archive/Delete
+                                    // AI Actions submenu
                                     let req_uuid = req.id;
-                                    let ai_button_id = ui.make_persistent_id("ai_submenu_button");
-                                    let ai_button = ui.add(egui::Button::new("🤖 AI  ▸").min_size(egui::vec2(ui.available_width(), 0.0)));
-
-                                    // Track hover state for delayed submenu
-                                    if ai_button.hovered() {
-                                        if self.ai_submenu_hover_start.is_none() {
-                                            self.ai_submenu_hover_start = Some(Instant::now());
+                                    ui.menu_button("🤖 AI", |ui| {
+                                        if ui.button("📊 Evaluate Requirement  (ae)").clicked() {
+                                            trigger_ai_action = Some(AiAction::Evaluate(req_uuid));
+                                            ui.close_menu();
                                         }
-                                    } else if !ui.ctx().is_context_menu_open() {
-                                        // Only reset if not hovering AND submenu isn't open
-                                        // Check if we're hovering over the submenu area
-                                        let submenu_area_hovered = ui.ctx().memory(|mem| {
-                                            mem.is_popup_open(egui::Id::new("ai_actions_submenu_popup"))
-                                        });
-                                        if !submenu_area_hovered {
-                                            self.ai_submenu_hover_start = None;
+
+                                        if ui.button("🔍 Find Duplicates       (ad)").clicked() {
+                                            trigger_ai_action = Some(AiAction::FindDuplicates(req_uuid));
+                                            ui.close_menu();
                                         }
-                                    }
 
-                                    // Show submenu after 200ms delay OR if clicked
-                                    let hover_duration = self.ai_submenu_hover_start
-                                        .map(|start| start.elapsed().as_millis() >= 200)
-                                        .unwrap_or(false);
+                                        if ui.button("🔗 Suggest Relationships (ar)").clicked() {
+                                            trigger_ai_action = Some(AiAction::SuggestRelationships(req_uuid));
+                                            ui.close_menu();
+                                        }
 
-                                    let show_submenu = ai_button.clicked() || hover_duration;
+                                        ui.separator();
 
-                                    if show_submenu {
-                                        let popup_id = egui::Id::new("ai_actions_submenu_popup");
-                                        let submenu_pos = ai_button.rect.right_top() + egui::vec2(2.0, 0.0);
+                                        if ui.button("✨ Improve Description   (ai)").clicked() {
+                                            trigger_ai_action = Some(AiAction::ImproveDescription(req_uuid));
+                                            ui.close_menu();
+                                        }
 
-                                        egui::Area::new(popup_id)
-                                            .order(egui::Order::Foreground)
-                                            .fixed_pos(submenu_pos)
-                                            .show(ui.ctx(), |ui| {
-                                                egui::Frame::menu(ui.style())
-                                                    .show(ui, |ui| {
-                                                        ui.set_min_width(200.0);
+                                        if ui.button("📝 Generate Children     (ag)").clicked() {
+                                            trigger_ai_action = Some(AiAction::GenerateChildren(req_uuid));
+                                            ui.close_menu();
+                                        }
 
-                                                        if ui.button("📊 Evaluate Requirement  (ae)").clicked() {
-                                                            trigger_ai_action = Some(AiAction::Evaluate(req_uuid));
-                                                            self.ai_submenu_hover_start = None;
-                                                            ui.close_menu();
-                                                        }
+                                        ui.separator();
 
-                                                        if ui.button("🔍 Find Duplicates       (ad)").clicked() {
-                                                            trigger_ai_action = Some(AiAction::FindDuplicates(req_uuid));
-                                                            self.ai_submenu_hover_start = None;
-                                                            ui.close_menu();
-                                                        }
-
-                                                        if ui.button("🔗 Suggest Relationships (ar)").clicked() {
-                                                            trigger_ai_action = Some(AiAction::SuggestRelationships(req_uuid));
-                                                            self.ai_submenu_hover_start = None;
-                                                            ui.close_menu();
-                                                        }
-
-                                                        ui.separator();
-
-                                                        if ui.button("✨ Improve Description   (ai)").clicked() {
-                                                            trigger_ai_action = Some(AiAction::ImproveDescription(req_uuid));
-                                                            self.ai_submenu_hover_start = None;
-                                                            ui.close_menu();
-                                                        }
-
-                                                        if ui.button("📝 Generate Children     (ag)").clicked() {
-                                                            trigger_ai_action = Some(AiAction::GenerateChildren(req_uuid));
-                                                            self.ai_submenu_hover_start = None;
-                                                            ui.close_menu();
-                                                        }
-
-                                                        ui.separator();
-
-                                                        // Copy for Claude Code - only enable if status is Approved
-                                                        let is_approved = req.status == RequirementStatus::Approved;
-                                                        let copy_button = egui::Button::new("📋 Copy for Claude Code");
-                                                        let response = ui.add_enabled(is_approved, copy_button);
-                                                        let response = if !is_approved {
-                                                            response.on_disabled_hover_text("Requirement must be Approved to implement")
-                                                        } else {
-                                                            response
-                                                        };
-                                                        if response.clicked() {
-                                                            copy_for_claude_code_idx = Some(idx);
-                                                            self.ai_submenu_hover_start = None;
-                                                            ui.close_menu();
-                                                        }
-                                                    });
-                                            });
-                                    }
+                                        // Copy for Claude Code - only enable if status is Approved
+                                        let is_approved = req.status == RequirementStatus::Approved;
+                                        let copy_button = egui::Button::new("📋 Copy for Claude Code");
+                                        let response = ui.add_enabled(is_approved, copy_button);
+                                        let response = if !is_approved {
+                                            response.on_disabled_hover_text("Requirement must be Approved to implement")
+                                        } else {
+                                            response
+                                        };
+                                        if response.clicked() {
+                                            copy_for_claude_code_idx = Some(idx);
+                                            ui.close_menu();
+                                        }
+                                    });
 
                                     ui.separator();
 
