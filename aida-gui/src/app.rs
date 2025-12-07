@@ -2734,6 +2734,7 @@ pub struct RequirementsApp {
 
     // View picker popup (triggered by 'v' key - shows list of views with keyboard shortcuts)
     show_view_picker: bool,
+    view_picker_selected: usize,  // Currently selected index in view picker (for arrow navigation)
 
     // Keyboard shortcuts help popup (triggered by '?' key)
     show_keyboard_help: bool,
@@ -3321,6 +3322,7 @@ impl RequirementsApp {
             quick_change_feature_search: String::new(),
             pending_delete_confirm: None,
             show_view_picker: false,
+            view_picker_selected: 0,
             show_keyboard_help: false,
             split_perspective: Perspective::default(),
             split_perspective_direction: PerspectiveDirection::default(),
@@ -15936,21 +15938,34 @@ impl RequirementsApp {
             ('o', "Org Chart", View::OrgChart),
             ('s', "Sprint Planning", View::Planning),
         ];
+        let num_options = view_options.len();
 
         // Handle keyboard input for the popup
         let mut close_popup = false;
         let mut selected_view: Option<View> = None;
+        let mut nav_up = false;
+        let mut nav_down = false;
+        let mut confirm = false;
 
         ctx.input(|i| {
             // Escape to close (note: 'v' key_pressed is consumed in same frame that opens popup)
             if i.key_pressed(egui::Key::Escape) {
                 close_popup = true;
             }
-            // Check for shortcut keys
+            // Arrow key navigation
+            if i.key_pressed(egui::Key::ArrowUp) || i.key_pressed(egui::Key::K) {
+                nav_up = true;
+            }
+            if i.key_pressed(egui::Key::ArrowDown) || i.key_pressed(egui::Key::J) {
+                nav_down = true;
+            }
+            // Enter to confirm selection
+            if i.key_pressed(egui::Key::Enter) {
+                confirm = true;
+            }
+            // Check for shortcut keys (only letters that aren't navigation)
             if i.key_pressed(egui::Key::R) {
                 selected_view = Some(View::List);
-            } else if i.key_pressed(egui::Key::K) {
-                selected_view = Some(View::KanBan);
             } else if i.key_pressed(egui::Key::T) {
                 selected_view = Some(View::Timeline);
             } else if i.key_pressed(egui::Key::B) {
@@ -15960,22 +15975,52 @@ impl RequirementsApp {
             } else if i.key_pressed(egui::Key::S) {
                 selected_view = Some(View::Planning);
             }
+            // Note: 'k' is used for navigation (vim up), so Kanban is only via arrow+Enter or click
         });
 
         if close_popup {
             self.show_view_picker = false;
+            self.view_picker_selected = 0;
             return;
         }
 
+        // Handle arrow navigation
+        if nav_up {
+            if self.view_picker_selected > 0 {
+                self.view_picker_selected -= 1;
+            } else {
+                self.view_picker_selected = num_options - 1; // Wrap to bottom
+            }
+        }
+        if nav_down {
+            if self.view_picker_selected < num_options - 1 {
+                self.view_picker_selected += 1;
+            } else {
+                self.view_picker_selected = 0; // Wrap to top
+            }
+        }
+
+        // Enter confirms the currently selected option
+        if confirm {
+            if let Some((_, _, view)) = view_options.get(self.view_picker_selected) {
+                selected_view = Some(view.clone());
+            }
+        }
+
         if let Some(view) = selected_view {
+            // Special handling for Timeline - need to rebuild events
+            if view == View::Timeline {
+                self.rebuild_timeline_events();
+            }
             self.pending_view_change = Some(view);
             self.show_view_picker = false;
+            self.view_picker_selected = 0;
             return;
         }
 
         // Center the popup on screen
         let screen_rect = ctx.screen_rect();
-        let popup_size = egui::vec2(200.0, 180.0);
+        let popup_size = egui::vec2(220.0, 200.0);
         let popup_pos = egui::pos2(
             (screen_rect.width() - popup_size.x) / 2.0,
             (screen_rect.height() - popup_size.y) / 2.0,
@@ -15992,7 +16037,8 @@ impl RequirementsApp {
                         ui.label(egui::RichText::new("Switch View").strong());
                         ui.separator();
 
-                        for (key, label, view) in &view_options {
+                        for (idx, (key, label, view)) in view_options.iter().enumerate() {
+                            let is_selected = idx == self.view_picker_selected;
                             let is_current = match (&self.current_view, view) {
                                 (View::List, View::List) => true,
                                 (View::Detail, View::List) => true, // Detail is part of List view
@@ -16004,17 +16050,24 @@ impl RequirementsApp {
                                 _ => false,
                             };
 
-                            let text = format!("  {}  {}", key, label);
-                            let response = ui.selectable_label(is_current, &text);
+                            // Show selection highlight and current view marker
+                            let marker = if is_current { "●" } else { " " };
+                            let text = format!("{} {}  {}", marker, key, label);
+                            let response = ui.selectable_label(is_selected, &text);
                             if response.clicked() {
+                                // Special handling for Timeline - need to rebuild events
+                                if *view == View::Timeline {
+                                    self.rebuild_timeline_events();
+                                }
                                 self.pending_view_change = Some(view.clone());
                                 self.show_view_picker = false;
+                                self.view_picker_selected = 0;
                             }
                         }
 
                         ui.separator();
                         ui.horizontal(|ui| {
-                            ui.small("Press key or click • Esc/v Cancel");
+                            ui.small("↑↓/jk nav • Enter/key select • Esc close");
                         });
                     });
             });
@@ -16025,6 +16078,7 @@ impl RequirementsApp {
             if let Some(pos) = ctx.input(|i| i.pointer.interact_pos()) {
                 if !popup_rect.contains(pos) {
                     self.show_view_picker = false;
+                    self.view_picker_selected = 0;
                 }
             }
         }
@@ -22596,7 +22650,11 @@ impl eframe::App for RequirementsApp {
 
         // '?' to show keyboard shortcuts help
         // Only block in form views (Add/Edit) or settings dialog where text input is expected
-        let question_pressed = ctx.input(|i| i.key_pressed(egui::Key::Slash) && i.modifiers.shift);
+        // Check both Shift+/ and for '?' character in text input (different keyboard layouts)
+        let question_pressed = ctx.input(|i| {
+            (i.key_pressed(egui::Key::Slash) && i.modifiers.shift)
+                || i.events.iter().any(|e| matches!(e, egui::Event::Text(t) if t == "?"))
+        });
         if !in_form_view
             && !in_settings
             && !self.show_view_picker
@@ -22767,8 +22825,9 @@ impl eframe::App for RequirementsApp {
             let not_in_form = !matches!(self.current_view, View::Add | View::Edit);
             let no_popup_open = self.quick_change_field.is_none();
             let no_delete_confirm = self.pending_delete_confirm.is_none();
+            let no_view_picker = !self.show_view_picker && !self.show_keyboard_help;
 
-            if nav_context_active && no_popup_open && not_in_form && no_delete_confirm {
+            if nav_context_active && no_popup_open && not_in_form && no_delete_confirm && no_view_picker {
                 // 's' key to open status popup
                 if self.user_settings.keybindings.is_pressed(
                     KeyAction::OpenStatusPicker,

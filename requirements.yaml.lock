@@ -1,1 +1,12 @@
-sessions: {}
+sessions:
+  172718-c77b6013-8c02-43b3-bc25-a20658a5d7b5:
+    session_id: 172718-c77b6013-8c02-43b3-bc25-a20658a5d7b5
+    user_name: joe
+    hostname: imac
+    pid: 172718
+    started_at: 2025-12-07T19:53:47.676172353Z
+    last_heartbeat: 2025-12-07T20:01:48.291200028Z
+    editing_requirement:
+      requirement_id: 8591ed43-630d-45ca-968e-889d7ed1f00a
+      spec_id: SPEC-198
+      started_at: 2025-12-07T19:58:43.267134446Z
