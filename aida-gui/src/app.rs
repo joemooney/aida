@@ -11382,8 +11382,7 @@ impl RequirementsApp {
             return;
         }
 
-        // Apply the working theme so user sees changes live
-        self.theme_editor_theme.apply(ctx);
+        // Theme is applied globally in update() for live preview across entire UI
 
         // Constrained dimensions for theme editor
         let max_size = modal_max_size(ctx);
@@ -21871,8 +21870,13 @@ impl eframe::App for RequirementsApp {
         };
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(title));
 
-        // Apply the selected theme
-        self.user_settings.theme.apply(ctx);
+        // Apply the selected theme (or preview theme if editing)
+        if self.show_theme_editor {
+            // Apply the working theme for live preview across entire UI
+            self.theme_editor_theme.apply(ctx);
+        } else {
+            self.user_settings.theme.apply(ctx);
+        }
 
         // Apply current font size to the context with distinct heading sizes
         let mut style = (*ctx.style()).clone();
