@@ -1061,10 +1061,10 @@ requirements:
   description: ''
   status: Rejected
   priority: Medium
-  owner: ''
+  owner: jane
   feature: 97-Uncategorized
   created_at: 2025-11-27T00:54:01.866964924Z
-  modified_at: 2025-11-28T21:13:54.317884729Z
+  modified_at: 2025-12-07T01:12:31.587444335Z
   req_type: Functional
   dependencies: []
   tags: []
@@ -1083,6 +1083,13 @@ requirements:
     - field_name: status
       old_value: Draft
       new_value: Rejected
+  - id: 9eed4b99-1fef-45ed-8ad4-d22d8dc187b5
+    author: Joe Mooney
+    timestamp: 2025-12-07T01:12:31.587472770Z
+    changes:
+    - field_name: owner
+      old_value: ''
+      new_value: jane
 - id: fa1eaffc-7c05-4d09-95a0-d5e61e9b8529
   spec_id: KEYBOARD-0063
   prefix_override: KEYBOARD
@@ -7080,6 +7087,11 @@ requirements:
   req_type: Functional
   dependencies: []
   tags: []
+  relationships:
+  - rel_type: Child
+    target_id: 52b74820-383c-4197-a28d-ceb848a4bc02
+    created_at: 2025-12-07T00:54:03.578012804Z
+    created_by: Joe Mooney
 - id: 9802115f-d7ab-465e-a850-d305fc9bd01f
   spec_id: FR-0156
   title: Support disconnected mode
@@ -7102,20 +7114,6 @@ requirements:
     target_id: bb81e51e-dd32-48ef-9806-cf26a09643f5
     created_at: 2025-12-02T01:50:03.460366982Z
     created_by: Unknown User
-- id: 0dbbd399-9c61-4524-8404-08a9b5ea4245
-  spec_id: FR-0157
-  title: testing 111
-  description: testing 111
-  status: Draft
-  priority: Medium
-  owner: ''
-  feature: 97-Uncategorized
-  created_at: 2025-12-02T01:51:10.257562453Z
-  created_by: Unknown User
-  modified_at: 2025-12-02T01:51:10.257562453Z
-  req_type: Functional
-  dependencies: []
-  tags: []
 - id: 913e3985-c014-403f-a7bf-bb321c04c168
   spec_id: FR-0158
   title: testing 222
@@ -8274,13 +8272,13 @@ requirements:
 - id: 8591ed43-630d-45ca-968e-889d7ed1f00a
   spec_id: SPEC-198
   title: hotkeys in reqlist
-  description: "Support keyboard hotkeys in the requirement list view when focused:\n\n**Navigation:**\n- j - move selection down\n- k - move selection up\n- Enter - open selected requirement in edit mode\n\n**Creation:**\n- n - create new sibling requirement\n- N - create new child requirement\n\n**Editing:**\n- o - open fuzzy finder to assign owner\n- p - open priority picker\n- s - open status picker\n- c - add comment to selected requirement\n- L - show/toggle links panel\n\n**Deletion:**\n- d - delete with confirmation dialog\n- D - delete immediately (no confirmation)\n- a - archive selected requirement\n\nVisual selection indicator should follow keyboard navigation.\n\n\n  Navigation\n\n  - g g - jump to first requirement (vim: go to top)\n  - G - jump to last requirement (vim: go to bottom)\n  - Ctrl+d / Ctrl+u - page down/up (half-page scroll in vim)\n  - z z - center selected item in view\n  - / - focus search box (vim: search)\n  - n / N - next/prev search result (if search is active)\n\n  Tree Operations\n\nUpon 'z' unless open a dialog showing these options and if the use presses the second letter perform the action (esc to exit, any other letter is ignored or error) maybe if the user presses the two letter combe quickly we dont bother to show the pop-up menu of subchoices \n  - z o - expand node (vim: open fold)\n  - z c - collapse node (vim: close fold)\n  - z a - toggle expand/collapse (vim: toggle fold)\n  - z M - collapse all\n  - z R - expand all\nalso show\n  - z z - center selected item in view\n\n\n  Editing\n\n  - i - edit selected requirement (vim: insert mode)\n  - y y - copy/yank requirement (for clone)\n  - p - paste/clone yanked requirement\n  - d d - delete with confirmation\n  - u - undo last change (if undo is implemented)\n  - r - rename/quick edit title inline\n\n  Selection/Marks\n\n  - b - mark/bookmark requirement\n  - ' - jump to marked requirement\n  - v - enter visual/multi-select mode (select range)\n\n  Views\n\n  - 1-9 - quick switch to view presets\n  - Tab - cycle between list panels (in split view)\n  - Ctrl+w w - switch focus between panels\n  - Ctrl+w h/j/k/l - move focus left/down/up/right\n\n  Quick Actions (current ones are good)\n\n  - s - status (already implemented)\n  - p - priority (already implemented)\n  - o - owner (already implemented)\n  - c - comment (already implemented)\n  - t - edit tags\n  - f - assign to feature\n\n  Which would you like me to implement?\n\n  The easiest wins would be:\n  1. gg/G for jump to top/bottom\n  2. / to focus search\n  3. za/zo/zc for fold operations\n  4. i as alias for Enter (edit)\n\n '/' is should focus in the search box, '\\' Switch from Highlight to Filter mode."
+  description: "Support keyboard hotkeys in the requirement list view when focused:\n\n**Navigation:**\n- j - move selection down\n- k - move selection up\n- Enter - open selected requirement in edit mode\n\n**Creation:**\n- n - create new sibling requirement\n- N - create new child requirement\n\n**Editing:**\n- o - open fuzzy finder to assign owner\n- p - open priority picker\n- s - open status picker\n- c - add comment to selected requirement\n- L - show/toggle links panel\n\n**Deletion:**\n- d - delete with confirmation dialog\n- D - delete immediately (no confirmation)\n- a - archive selected requirement\n\nVisual selection indicator should follow keyboard navigation.\n\n\n# View\n\n- l - link, \n  - l p - relink to a different parent\n  - l u - link to anternal url\n  - l s  - link to a Sprint\n  - l r - create reference link\n  then show a pop-up with existing links \n then pop-up show a fuzzy find to create a new link\n\n  Navigation\n\n  - g g - jump to first requirement (vim: go to top)\n  - G - jump to last requirement (vim: go to bottom)\n  - Ctrl+d / Ctrl+u - page down/up (half-page scroll in vim)\n  - z z - center selected item in view\n  - / - focus search box (vim: search)\n  - n / N - next/prev search result (if search is active)\n\n  Tree Operations\n\nUpon 'z' unless open a dialog showing these options and if the use presses the second letter perform the action (esc to exit, any other letter is ignored or error) maybe if the user presses the two letter combe quickly we dont bother to show the pop-up menu of subchoices \n  - z o - expand node (vim: open fold)\n  - z c - collapse node (vim: close fold)\n  - z a - toggle expand/collapse (vim: toggle fold)\n  - z M - collapse all\n  - z R - expand all\nalso show\n  - z z - center selected item in view\n\n\n  Editing\n\n  - i - edit selected requirement (vim: insert mode)\n  - y y - copy/yank requirement (for clone)\n  - p - paste/clone yanked requirement\n  - d d - delete with confirmation\n  - u - undo last change (if undo is implemented)\n  - r - rename/quick edit title inline\n\n  Selection/Marks\n\n  - b - mark/bookmark requirement\n  - ' - jump to marked requirement\n  - v - enter visual/multi-select mode (select range)\n\n  Views\n\n  - 1-9 - quick switch to view presets\n  - Tab - cycle between list panels (in split view)\n  - Ctrl+w w - switch focus between panels\n  - Ctrl+w h/j/k/l - move focus left/down/up/right\n\n  Quick Actions (current ones are good)\n\n  - s - status (already implemented)\n  - p - priority (already implemented)\n  - o - owner (already implemented)\n  - c - comment (already implemented)\n  - t - edit tags\n  - f - assign to feature\n\n  Which would you like me to implement?\n\n  The easiest wins would be:\n  1. gg/G for jump to top/bottom\n  2. / to focus search\n  3. za/zo/zc for fold operations\n  4. i as alias for Enter (edit)\n\n '/' is should focus in the search box, '\\' Switch from Highlight to Filter mode."
   status: Completed
   priority: Medium
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-12-06T18:23:18.455973951Z
-  modified_at: 2025-12-06T20:02:07.418299739Z
+  modified_at: 2025-12-07T01:17:24.549589809Z
   req_type: Functional
   dependencies: []
   tags: []
@@ -8557,6 +8555,13 @@ requirements:
     - field_name: description
       old_value: "Support keyboard hotkeys in the requirement list view when focused:\n\n**Navigation:**\n- j - move selection down\n- k - move selection up\n- Enter - open selected requirement in edit mode\n\n**Creation:**\n- n - create new sibling requirement\n- N - create new child requirement\n\n**Editing:**\n- o - open fuzzy finder to assign owner\n- p - open priority picker\n- s - open status picker\n- c - add comment to selected requirement\n- L - show/toggle links panel\n\n**Deletion:**\n- d - delete with confirmation dialog\n- D - delete immediately (no confirmation)\n- a - archive selected requirement\n\nVisual selection indicator should follow keyboard navigation.\n\n\n  Navigation\n\n  - g g - jump to first requirement (vim: go to top)\n  - G - jump to last requirement (vim: go to bottom)\n  - Ctrl+d / Ctrl+u - page down/up (half-page scroll in vim)\n  - z z - center selected item in view\n  - / - focus search box (vim: search)\n  - n / N - next/prev search result (if search is active)\n\n  Tree Operations\n\nUpon 'z' unless open a dialog showing these options and if the use presses the second letter perform the action (esc to exit, any other letter is ignored or error) maybe if the user presses the two letter combe quickly we dont bother to show the pop-up menu of subchoices \n  - z o - expand node (vim: open fold)\n  - z c - collapse node (vim: close fold)\n  - z a - toggle expand/collapse (vim: toggle fold)\n  - z M - collapse all\n  - z R - expand all\nalso show\n  - z z - center selected item in view\n\n\n  Editing\n\n  - i - edit selected requirement (vim: insert mode)\n  - y y - copy/yank requirement (for clone)\n  - p - paste/clone yanked requirement\n  - d d - delete with confirmation\n  - u - undo last change (if undo is implemented)\n  - r - rename/quick edit title inline\n\n  Selection/Marks\n\n  - b - mark/bookmark requirement\n  - ' - jump to marked requirement\n  - v - enter visual/multi-select mode (select range)\n\n  Views\n\n  - 1-9 - quick switch to view presets\n  - Tab - cycle between list panels (in split view)\n  - Ctrl+w w - switch focus between panels\n  - Ctrl+w h/j/k/l - move focus left/down/up/right\n\n  Quick Actions (current ones are good)\n\n  - s - status (already implemented)\n  - p - priority (already implemented)\n  - o - owner (already implemented)\n  - c - comment (already implemented)\n  - t - edit tags\n  - f - assign to feature\n\n  Which would you like me to implement?\n\n  The easiest wins would be:\n  1. gg/G for jump to top/bottom\n  2. / to focus search\n  3. za/zo/zc for fold operations\n  4. i as alias for Enter (edit)\n"
       new_value: "Support keyboard hotkeys in the requirement list view when focused:\n\n**Navigation:**\n- j - move selection down\n- k - move selection up\n- Enter - open selected requirement in edit mode\n\n**Creation:**\n- n - create new sibling requirement\n- N - create new child requirement\n\n**Editing:**\n- o - open fuzzy finder to assign owner\n- p - open priority picker\n- s - open status picker\n- c - add comment to selected requirement\n- L - show/toggle links panel\n\n**Deletion:**\n- d - delete with confirmation dialog\n- D - delete immediately (no confirmation)\n- a - archive selected requirement\n\nVisual selection indicator should follow keyboard navigation.\n\n\n  Navigation\n\n  - g g - jump to first requirement (vim: go to top)\n  - G - jump to last requirement (vim: go to bottom)\n  - Ctrl+d / Ctrl+u - page down/up (half-page scroll in vim)\n  - z z - center selected item in view\n  - / - focus search box (vim: search)\n  - n / N - next/prev search result (if search is active)\n\n  Tree Operations\n\nUpon 'z' unless open a dialog showing these options and if the use presses the second letter perform the action (esc to exit, any other letter is ignored or error) maybe if the user presses the two letter combe quickly we dont bother to show the pop-up menu of subchoices \n  - z o - expand node (vim: open fold)\n  - z c - collapse node (vim: close fold)\n  - z a - toggle expand/collapse (vim: toggle fold)\n  - z M - collapse all\n  - z R - expand all\nalso show\n  - z z - center selected item in view\n\n\n  Editing\n\n  - i - edit selected requirement (vim: insert mode)\n  - y y - copy/yank requirement (for clone)\n  - p - paste/clone yanked requirement\n  - d d - delete with confirmation\n  - u - undo last change (if undo is implemented)\n  - r - rename/quick edit title inline\n\n  Selection/Marks\n\n  - b - mark/bookmark requirement\n  - ' - jump to marked requirement\n  - v - enter visual/multi-select mode (select range)\n\n  Views\n\n  - 1-9 - quick switch to view presets\n  - Tab - cycle between list panels (in split view)\n  - Ctrl+w w - switch focus between panels\n  - Ctrl+w h/j/k/l - move focus left/down/up/right\n\n  Quick Actions (current ones are good)\n\n  - s - status (already implemented)\n  - p - priority (already implemented)\n  - o - owner (already implemented)\n  - c - comment (already implemented)\n  - t - edit tags\n  - f - assign to feature\n\n  Which would you like me to implement?\n\n  The easiest wins would be:\n  1. gg/G for jump to top/bottom\n  2. / to focus search\n  3. za/zo/zc for fold operations\n  4. i as alias for Enter (edit)\n\n '/' is should focus in the search box, '\\' Switch from Highlight to Filter mode."
+  - id: def9fdcb-0bb0-4e6d-82c3-dddd2757f494
+    author: Joe Mooney
+    timestamp: 2025-12-07T01:17:24.549587367Z
+    changes:
+    - field_name: description
+      old_value: "Support keyboard hotkeys in the requirement list view when focused:\n\n**Navigation:**\n- j - move selection down\n- k - move selection up\n- Enter - open selected requirement in edit mode\n\n**Creation:**\n- n - create new sibling requirement\n- N - create new child requirement\n\n**Editing:**\n- o - open fuzzy finder to assign owner\n- p - open priority picker\n- s - open status picker\n- c - add comment to selected requirement\n- L - show/toggle links panel\n\n**Deletion:**\n- d - delete with confirmation dialog\n- D - delete immediately (no confirmation)\n- a - archive selected requirement\n\nVisual selection indicator should follow keyboard navigation.\n\n\n  Navigation\n\n  - g g - jump to first requirement (vim: go to top)\n  - G - jump to last requirement (vim: go to bottom)\n  - Ctrl+d / Ctrl+u - page down/up (half-page scroll in vim)\n  - z z - center selected item in view\n  - / - focus search box (vim: search)\n  - n / N - next/prev search result (if search is active)\n\n  Tree Operations\n\nUpon 'z' unless open a dialog showing these options and if the use presses the second letter perform the action (esc to exit, any other letter is ignored or error) maybe if the user presses the two letter combe quickly we dont bother to show the pop-up menu of subchoices \n  - z o - expand node (vim: open fold)\n  - z c - collapse node (vim: close fold)\n  - z a - toggle expand/collapse (vim: toggle fold)\n  - z M - collapse all\n  - z R - expand all\nalso show\n  - z z - center selected item in view\n\n\n  Editing\n\n  - i - edit selected requirement (vim: insert mode)\n  - y y - copy/yank requirement (for clone)\n  - p - paste/clone yanked requirement\n  - d d - delete with confirmation\n  - u - undo last change (if undo is implemented)\n  - r - rename/quick edit title inline\n\n  Selection/Marks\n\n  - b - mark/bookmark requirement\n  - ' - jump to marked requirement\n  - v - enter visual/multi-select mode (select range)\n\n  Views\n\n  - 1-9 - quick switch to view presets\n  - Tab - cycle between list panels (in split view)\n  - Ctrl+w w - switch focus between panels\n  - Ctrl+w h/j/k/l - move focus left/down/up/right\n\n  Quick Actions (current ones are good)\n\n  - s - status (already implemented)\n  - p - priority (already implemented)\n  - o - owner (already implemented)\n  - c - comment (already implemented)\n  - t - edit tags\n  - f - assign to feature\n\n  Which would you like me to implement?\n\n  The easiest wins would be:\n  1. gg/G for jump to top/bottom\n  2. / to focus search\n  3. za/zo/zc for fold operations\n  4. i as alias for Enter (edit)\n\n '/' is should focus in the search box, '\\' Switch from Highlight to Filter mode."
+      new_value: "Support keyboard hotkeys in the requirement list view when focused:\n\n**Navigation:**\n- j - move selection down\n- k - move selection up\n- Enter - open selected requirement in edit mode\n\n**Creation:**\n- n - create new sibling requirement\n- N - create new child requirement\n\n**Editing:**\n- o - open fuzzy finder to assign owner\n- p - open priority picker\n- s - open status picker\n- c - add comment to selected requirement\n- L - show/toggle links panel\n\n**Deletion:**\n- d - delete with confirmation dialog\n- D - delete immediately (no confirmation)\n- a - archive selected requirement\n\nVisual selection indicator should follow keyboard navigation.\n\n\n# View\n\n- l - link, \n  - l p - relink to a different parent\n  - l u - link to anternal url\n  - l s  - link to a Sprint\n  - l r - create reference link\n  then show a pop-up with existing links \n then pop-up show a fuzzy find to create a new link\n\n  Navigation\n\n  - g g - jump to first requirement (vim: go to top)\n  - G - jump to last requirement (vim: go to bottom)\n  - Ctrl+d / Ctrl+u - page down/up (half-page scroll in vim)\n  - z z - center selected item in view\n  - / - focus search box (vim: search)\n  - n / N - next/prev search result (if search is active)\n\n  Tree Operations\n\nUpon 'z' unless open a dialog showing these options and if the use presses the second letter perform the action (esc to exit, any other letter is ignored or error) maybe if the user presses the two letter combe quickly we dont bother to show the pop-up menu of subchoices \n  - z o - expand node (vim: open fold)\n  - z c - collapse node (vim: close fold)\n  - z a - toggle expand/collapse (vim: toggle fold)\n  - z M - collapse all\n  - z R - expand all\nalso show\n  - z z - center selected item in view\n\n\n  Editing\n\n  - i - edit selected requirement (vim: insert mode)\n  - y y - copy/yank requirement (for clone)\n  - p - paste/clone yanked requirement\n  - d d - delete with confirmation\n  - u - undo last change (if undo is implemented)\n  - r - rename/quick edit title inline\n\n  Selection/Marks\n\n  - b - mark/bookmark requirement\n  - ' - jump to marked requirement\n  - v - enter visual/multi-select mode (select range)\n\n  Views\n\n  - 1-9 - quick switch to view presets\n  - Tab - cycle between list panels (in split view)\n  - Ctrl+w w - switch focus between panels\n  - Ctrl+w h/j/k/l - move focus left/down/up/right\n\n  Quick Actions (current ones are good)\n\n  - s - status (already implemented)\n  - p - priority (already implemented)\n  - o - owner (already implemented)\n  - c - comment (already implemented)\n  - t - edit tags\n  - f - assign to feature\n\n  Which would you like me to implement?\n\n  The easiest wins would be:\n  1. gg/G for jump to top/bottom\n  2. / to focus search\n  3. za/zo/zc for fold operations\n  4. i as alias for Enter (edit)\n\n '/' is should focus in the search box, '\\' Switch from Highlight to Filter mode."
   ai_evaluation:
     evaluation:
       quality_score: 6
@@ -8708,7 +8713,7 @@ requirements:
   status: Draft
   priority: Medium
   owner: ''
-  feature: Uncategorized
+  feature: 117-Uncategorized
   created_at: 2025-12-07T00:31:23.228862025Z
   modified_at: 2025-12-07T00:31:23.228862025Z
   req_type: Functional
@@ -8718,6 +8723,49 @@ requirements:
   - rel_type: Parent
     target_id: 365d927b-09e5-45e3-8f4e-881ad3c47143
     created_at: 2025-12-07T00:31:23.228895255Z
+- id: 52b74820-383c-4197-a28d-ceb848a4bc02
+  spec_id: FR-0205
+  title: testing 333
+  description: |
+    testing 333
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 97-Uncategorized
+  created_at: 2025-12-07T00:54:03.523732114Z
+  created_by: Joe Mooney
+  modified_at: 2025-12-07T00:54:03.523732114Z
+  req_type: Functional
+  dependencies: []
+  tags: []
+  relationships:
+  - rel_type: Parent
+    target_id: 44c3a73f-f643-4833-8398-4e0738b31d08
+    created_at: 2025-12-07T00:54:03.578012804Z
+    created_by: Joe Mooney
+  - rel_type: Child
+    target_id: a917a16a-6c01-4044-87b8-4535d98998bf
+    created_at: 2025-12-07T00:54:18.010391699Z
+    created_by: Joe Mooney
+- id: a917a16a-6c01-4044-87b8-4535d98998bf
+  spec_id: FR-0206
+  title: testing 333aaa
+  description: testing 333aaa
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 97-Uncategorized
+  created_at: 2025-12-07T00:54:17.958043260Z
+  created_by: Joe Mooney
+  modified_at: 2025-12-07T00:54:17.958043260Z
+  req_type: Functional
+  dependencies: []
+  tags: []
+  relationships:
+  - rel_type: Parent
+    target_id: 52b74820-383c-4197-a28d-ceb848a4bc02
+    created_at: 2025-12-07T00:54:18.010391699Z
+    created_by: Joe Mooney
 users:
 - id: 150164ef-32ed-4d61-8cec-e887ac78cfd7
   spec_id: $USER-001
@@ -8809,8 +8857,8 @@ id_config:
     prefix: SPIKE
     description: Research or investigation task to reduce uncertainty or explore technical approaches
 features: []
-next_feature_number: 117
-next_spec_number: 205
+next_feature_number: 118
+next_spec_number: 207
 prefix_counters: {}
 relationship_definitions:
 - name: parent
@@ -8933,6 +8981,135 @@ relationship_definitions:
   target_types: []
   built_in: false
   color: '#ff6b6b'
+  icon: null
+- name: blocked_by
+  display_name: Blocked By
+  description: This requirement is blocked by another
+  inverse: blocks
+  symmetric: false
+  cardinality: ManyToMany
+  source_types: []
+  target_types: []
+  built_in: false
+  color: '#ff6b6b'
+  icon: null
+- name: sprint_assignment
+  display_name: Sprint Assignment
+  description: Assigns a work item to a Sprint
+  inverse: in_sprint
+  symmetric: false
+  cardinality: ManyToOne
+  source_types:
+  - Story
+  - Task
+  - Bug
+  target_types:
+  - Sprint
+  built_in: true
+  color: '#4dabf7'
+  icon: null
+- name: in_sprint
+  display_name: In Sprint
+  description: Items assigned to this Sprint
+  inverse: sprint_assignment
+  symmetric: false
+  cardinality: OneToMany
+  source_types:
+  - Sprint
+  target_types:
+  - Story
+  - Task
+  - Bug
+  built_in: true
+  color: '#4dabf7'
+  icon: null
+- name: assigned_to
+  display_name: Assigned To
+  description: Work item is assigned to a user
+  inverse: assignee_of
+  symmetric: false
+  cardinality: ManyToOne
+  source_types: []
+  target_types: []
+  built_in: true
+  color: '#69db7c'
+  icon: null
+- name: assignee_of
+  display_name: Assignee Of
+  description: User is assigned to work items
+  inverse: assigned_to
+  symmetric: false
+  cardinality: OneToMany
+  source_types: []
+  target_types: []
+  built_in: true
+  color: '#69db7c'
+  icon: null
+- name: tested_by
+  display_name: Tested By
+  description: Work item is tested by a test case
+  inverse: tests
+  symmetric: false
+  cardinality: ManyToMany
+  source_types: []
+  target_types: []
+  built_in: true
+  color: '#a9e34b'
+  icon: null
+- name: tests
+  display_name: Tests
+  description: Test case tests this work item
+  inverse: tested_by
+  symmetric: false
+  cardinality: ManyToMany
+  source_types: []
+  target_types: []
+  built_in: true
+  color: '#a9e34b'
+  icon: null
+- name: closed_by
+  display_name: Closed By
+  description: Work item was closed by a user
+  inverse: closer_of
+  symmetric: false
+  cardinality: ManyToOne
+  source_types: []
+  target_types: []
+  built_in: true
+  color: '#868e96'
+  icon: null
+- name: closer_of
+  display_name: Closer Of
+  description: User closed these work items
+  inverse: closed_by
+  symmetric: false
+  cardinality: OneToMany
+  source_types: []
+  target_types: []
+  built_in: true
+  color: '#868e96'
+  icon: null
+- name: created_by
+  display_name: Created By
+  description: Work item was created by a user
+  inverse: creator_of
+  symmetric: false
+  cardinality: ManyToOne
+  source_types: []
+  target_types: []
+  built_in: true
+  color: '#74c0fc'
+  icon: null
+- name: creator_of
+  display_name: Creator Of
+  description: User created these work items
+  inverse: created_by
+  symmetric: false
+  cardinality: OneToMany
+  source_types: []
+  target_types: []
+  built_in: true
+  color: '#74c0fc'
   icon: null
 reaction_definitions:
 - name: resolved
@@ -9183,6 +9360,49 @@ type_definitions:
     order: 4
   built_in: true
   color: '#ca8a04'
+  stateless: false
+- name: Sprint
+  display_name: Sprint
+  description: Time-boxed iteration for work planning
+  prefix: SPRINT
+  statuses:
+  - Draft
+  - In Progress
+  - Completed
+  - Archived
+  custom_fields:
+  - name: sprint_number
+    label: Sprint Number
+    field_type: number
+    required: false
+    description: Sequential sprint number
+    order: 1
+  - name: start_date
+    label: Start Date
+    field_type: text
+    required: false
+    description: Sprint start date (YYYY-MM-DD)
+    order: 2
+  - name: end_date
+    label: End Date
+    field_type: text
+    required: false
+    description: Sprint end date (YYYY-MM-DD)
+    order: 3
+  - name: sprint_goal
+    label: Sprint Goal
+    field_type: text
+    required: false
+    description: Goal or theme for this sprint
+    order: 4
+  - name: velocity
+    label: Planned Velocity
+    field_type: number
+    required: false
+    description: Planned story points for this sprint
+    order: 5
+  built_in: true
+  color: '#7c3aed'
   stateless: false
 allowed_prefixes:
 - ADDREQ
