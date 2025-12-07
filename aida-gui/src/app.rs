@@ -2106,6 +2106,7 @@ enum View {
     KanBan,    // KanBan board view
     Baselines, // Baseline management view
     Timeline,  // Timeline view showing requirement changes over time
+    Planning,  // Sprint planning view for assigning items to Sprints
 }
 
 /// Layout mode defines the panel arrangement (cycles through 5 predefined layouts)
@@ -2790,6 +2791,13 @@ pub struct RequirementsApp {
     timeline_selected_event_idx: Option<usize>,                     // Currently selected event
     timeline_suppress_hover: bool,                                   // Suppress hover highlight after click/keyboard nav
     timeline_suppress_hover_pos: Option<egui::Pos2>,                // Mouse position when hover was suppressed
+
+    // Planning view state
+    planning_collapsed_sprints: std::collections::HashSet<Uuid>,     // Collapsed sprint sections
+    planning_show_completed_sprints: bool,                           // Show archived/completed sprints
+    planning_selected_item: Option<Uuid>,                            // Currently selected item for details
+    planning_drag_source: Option<Uuid>,                              // Item being dragged
+    planning_drag_target_sprint: Option<Option<Uuid>>,               // Target sprint (None = Backlog)
 }
 
 /// A timeline event representing a change to a requirement
@@ -3330,6 +3338,13 @@ impl RequirementsApp {
             timeline_selected_event_idx: None,
             timeline_suppress_hover: false,
             timeline_suppress_hover_pos: None,
+
+            // Planning view state
+            planning_collapsed_sprints: std::collections::HashSet::new(),
+            planning_show_completed_sprints: false,
+            planning_selected_item: None,
+            planning_drag_source: None,
+            planning_drag_target_sprint: None,
         }
     }
 
@@ -4551,6 +4566,10 @@ impl RequirementsApp {
                     if ui.button("📅 Timeline").clicked() {
                         self.pending_view_change = Some(View::Timeline);
                         self.rebuild_timeline_events();
+                        ui.close_menu();
+                    }
+                    if ui.button("🏃 Sprint Planning").clicked() {
+                        self.pending_view_change = Some(View::Planning);
                         ui.close_menu();
                     }
                 });
@@ -9933,6 +9952,300 @@ impl RequirementsApp {
         }
     }
 
+    /// Show the Sprint Planning view
+    fn show_planning_view(&mut self, ui: &mut egui::Ui) {
+        // Header with controls
+        ui.horizontal(|ui| {
+            ui.heading("🏃 Sprint Planning");
+
+            ui.separator();
+
+            if ui.button("➕ New Sprint").clicked() {
+                // Create a new Sprint requirement
+                self.clear_form();
+                self.form_type = RequirementType::Sprint;
+                self.pending_view_change = Some(View::Add);
+            }
+
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                // Show completed sprints toggle
+                ui.checkbox(&mut self.planning_show_completed_sprints, "Show Completed");
+
+                if ui.button("📋 Back to List").clicked() {
+                    self.pending_view_change = Some(View::List);
+                }
+            });
+        });
+
+        ui.separator();
+
+        // Get sprints and backlog
+        let sprints: Vec<(Uuid, String, String, String, String)> = self.store
+            .get_sprints()
+            .into_iter()
+            .filter_map(|s| {
+                let status = s.effective_status();
+                // Filter out completed/archived unless show_completed is enabled
+                if !self.planning_show_completed_sprints
+                    && (status == "Completed" || status == "Archived") {
+                    return None;
+                }
+                Some((
+                    s.id,
+                    s.spec_id.clone().unwrap_or_default(),
+                    s.title.clone(),
+                    status,
+                    s.custom_fields.get("sprint_goal").cloned().unwrap_or_default(),
+                ))
+            })
+            .collect();
+
+        let backlog_items: Vec<(Uuid, String, String, String, RequirementType)> = self.store
+            .get_backlog()
+            .into_iter()
+            .map(|r| (r.id, r.spec_id.clone().unwrap_or_default(), r.title.clone(), r.effective_status(), r.req_type.clone()))
+            .collect();
+
+        // Check if we have any content
+        if sprints.is_empty() && backlog_items.is_empty() {
+            ui.centered_and_justified(|ui| {
+                ui.vertical_centered(|ui| {
+                    ui.add_space(50.0);
+                    ui.label(
+                        egui::RichText::new("No sprints or backlog items")
+                            .size(16.0)
+                            .color(egui::Color32::GRAY),
+                    );
+                    ui.add_space(10.0);
+                    ui.label("Create a Sprint to start planning work.");
+                    ui.add_space(10.0);
+                    if ui.button("➕ Create Sprint").clicked() {
+                        self.clear_form();
+                        self.form_type = RequirementType::Sprint;
+                        self.pending_view_change = Some(View::Add);
+                    }
+                });
+            });
+            return;
+        }
+
+        // Main content area with scroll
+        egui::ScrollArea::vertical()
+            .id_salt("planning_view")
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                // Render each Sprint section
+                for (sprint_id, spec_id, title, status, goal) in &sprints {
+                    let is_collapsed = self.planning_collapsed_sprints.contains(sprint_id);
+
+                    // Sprint header
+                    ui.horizontal(|ui| {
+                        let collapse_icon = if is_collapsed { "▶" } else { "▼" };
+                        if ui.button(collapse_icon).clicked() {
+                            if is_collapsed {
+                                self.planning_collapsed_sprints.remove(sprint_id);
+                            } else {
+                                self.planning_collapsed_sprints.insert(*sprint_id);
+                            }
+                        }
+
+                        // Status indicator color
+                        let status_color = match status.as_str() {
+                            "Draft" => egui::Color32::from_rgb(156, 163, 175),
+                            "In Progress" => egui::Color32::from_rgb(59, 130, 246),
+                            "Completed" => egui::Color32::from_rgb(34, 197, 94),
+                            "Archived" => egui::Color32::from_rgb(107, 114, 128),
+                            _ => egui::Color32::GRAY,
+                        };
+
+                        ui.colored_label(status_color, "●");
+
+                        let header_text = format!("{} - {}", spec_id, title);
+                        ui.strong(&header_text);
+
+                        if !goal.is_empty() {
+                            ui.label(format!("({})", goal));
+                        }
+
+                        // Sprint item count
+                        let sprint_items: Vec<_> = self.store
+                            .get_sprint_items(sprint_id)
+                            .into_iter()
+                            .map(|r| (r.id, r.spec_id.clone().unwrap_or_default(), r.title.clone(), r.effective_status(), r.req_type.clone()))
+                            .collect();
+                        ui.label(format!("[{} items]", sprint_items.len()));
+                    });
+
+                    if !is_collapsed {
+                        // Get items for this sprint
+                        let sprint_items: Vec<_> = self.store
+                            .get_sprint_items(sprint_id)
+                            .into_iter()
+                            .map(|r| (r.id, r.spec_id.clone().unwrap_or_default(), r.title.clone(), r.effective_status(), r.req_type.clone()))
+                            .collect();
+
+                        ui.indent(format!("sprint_{}", sprint_id), |ui| {
+                            if sprint_items.is_empty() {
+                                ui.label(
+                                    egui::RichText::new("No items assigned to this Sprint")
+                                        .italics()
+                                        .color(egui::Color32::GRAY),
+                                );
+                            } else {
+                                for (item_id, item_spec_id, item_title, item_status, item_type) in &sprint_items {
+                                    self.render_planning_item(ui, *item_id, item_spec_id, item_title, item_status, item_type, Some(*sprint_id));
+                                }
+                            }
+                        });
+                    }
+
+                    ui.add_space(10.0);
+                    ui.separator();
+                }
+
+                // Backlog section
+                ui.add_space(10.0);
+
+                let backlog_collapsed = self.planning_collapsed_sprints.contains(&Uuid::nil());
+
+                ui.horizontal(|ui| {
+                    let collapse_icon = if backlog_collapsed { "▶" } else { "▼" };
+                    if ui.button(collapse_icon).clicked() {
+                        if backlog_collapsed {
+                            self.planning_collapsed_sprints.remove(&Uuid::nil());
+                        } else {
+                            self.planning_collapsed_sprints.insert(Uuid::nil());
+                        }
+                    }
+
+                    ui.colored_label(egui::Color32::from_rgb(245, 158, 11), "●");
+                    ui.strong("Backlog");
+                    ui.label(format!("[{} items]", backlog_items.len()));
+                });
+
+                if !backlog_collapsed {
+                    ui.indent("backlog", |ui| {
+                        if backlog_items.is_empty() {
+                            ui.label(
+                                egui::RichText::new("All items are assigned to Sprints")
+                                    .italics()
+                                    .color(egui::Color32::GRAY),
+                            );
+                        } else {
+                            for (item_id, item_spec_id, item_title, item_status, item_type) in &backlog_items {
+                                self.render_planning_item(ui, *item_id, item_spec_id, item_title, item_status, item_type, None);
+                            }
+                        }
+                    });
+                }
+            });
+    }
+
+    /// Render a single item in the planning view
+    fn render_planning_item(
+        &mut self,
+        ui: &mut egui::Ui,
+        item_id: Uuid,
+        spec_id: &str,
+        title: &str,
+        status: &str,
+        item_type: &RequirementType,
+        _current_sprint: Option<Uuid>,
+    ) {
+        let type_icon = match item_type {
+            RequirementType::Functional => "📋",
+            RequirementType::NonFunctional => "⚙️",
+            RequirementType::System => "🖥️",
+            RequirementType::User => "👤",
+            RequirementType::ChangeRequest => "🔄",
+            RequirementType::Bug => "🐛",
+            RequirementType::Epic => "🎯",
+            RequirementType::Story => "📖",
+            RequirementType::Task => "✅",
+            RequirementType::Spike => "🔬",
+            RequirementType::Sprint => "🏃",
+            RequirementType::Folder => "📁",
+        };
+
+        let status_color = match status {
+            "Draft" => egui::Color32::from_rgb(156, 163, 175),
+            "In Progress" => egui::Color32::from_rgb(59, 130, 246),
+            "Implemented" => egui::Color32::from_rgb(16, 185, 129),
+            "Verified" => egui::Color32::from_rgb(34, 197, 94),
+            "Rejected" => egui::Color32::from_rgb(239, 68, 68),
+            "Completed" => egui::Color32::from_rgb(34, 197, 94),
+            _ => egui::Color32::GRAY,
+        };
+
+        let is_selected = self.planning_selected_item == Some(item_id);
+
+        let response = ui.horizontal(|ui| {
+            ui.label(type_icon);
+            ui.colored_label(status_color, "●");
+
+            let label_text = format!("{}: {}", spec_id, title);
+            let label = if is_selected {
+                egui::RichText::new(&label_text).strong()
+            } else {
+                egui::RichText::new(&label_text)
+            };
+
+            if ui.selectable_label(is_selected, label).clicked() {
+                self.planning_selected_item = Some(item_id);
+                // Navigate to the requirement
+                if let Some(idx) = self.store.requirements.iter().position(|r| r.id == item_id) {
+                    self.selected_idx = Some(idx);
+                    self.pending_view_change = Some(View::Detail);
+                }
+            }
+        });
+
+        // Context menu for sprint assignment
+        response.response.context_menu(|ui| {
+            ui.menu_button("🏃 Assign to Sprint...", |ui| {
+                // Get available sprints
+                let sprints: Vec<_> = self.store.get_sprints()
+                    .into_iter()
+                    .filter(|s| {
+                        let status = s.effective_status();
+                        status != "Completed" && status != "Archived"
+                    })
+                    .map(|s| (s.id, s.spec_id.clone().unwrap_or_default(), s.title.clone()))
+                    .collect();
+
+                if sprints.is_empty() {
+                    ui.label("No active sprints available");
+                } else {
+                    for (sprint_id, sprint_spec_id, sprint_title) in sprints {
+                        if ui.button(format!("{}: {}", sprint_spec_id, sprint_title)).clicked() {
+                            let username = self.user_settings.display_name();
+                            self.store.assign_to_sprint(item_id, sprint_id, &username);
+                            self.save();
+                            ui.close_menu();
+                        }
+                    }
+                }
+            });
+
+            if ui.button("📦 Move to Backlog").clicked() {
+                let username = self.user_settings.display_name();
+                self.store.remove_from_sprint(item_id, &username);
+                self.save();
+                ui.close_menu();
+            }
+
+            ui.separator();
+
+            if ui.button("📋 View Details").clicked() {
+                if let Some(idx) = self.store.requirements.iter().position(|r| r.id == item_id) {
+                    self.selected_idx = Some(idx);
+                    self.pending_view_change = Some(View::Detail);
+                }
+                ui.close_menu();
+            }
+        });
+    }
+
     /// Show the clone requirement dialog
     fn show_clone_requirement_dialog(&mut self, ctx: &egui::Context) {
         if !self.show_clone_dialog {
@@ -13260,6 +13573,7 @@ impl RequirementsApp {
                 (RequirementType::Story, "Story"),
                 (RequirementType::Task, "Task"),
                 (RequirementType::Spike, "Spike"),
+                (RequirementType::Sprint, "Sprint"),
             ];
 
             for (req_type, label) in types {
@@ -13409,6 +13723,7 @@ impl RequirementsApp {
                     (RequirementType::Story, "Story"),
                     (RequirementType::Task, "Task"),
                     (RequirementType::Spike, "Spike"),
+                    (RequirementType::Sprint, "Sprint"),
                 ];
 
                 for (req_type, label) in types {
@@ -17507,6 +17822,7 @@ fn main() {
                     ui.selectable_value(&mut self.form_type, RequirementType::Story, "Story");
                     ui.selectable_value(&mut self.form_type, RequirementType::Task, "Task");
                     ui.selectable_value(&mut self.form_type, RequirementType::Spike, "Spike");
+                    ui.selectable_value(&mut self.form_type, RequirementType::Sprint, "🏃 Sprint");
                     ui.separator();
                     ui.selectable_value(&mut self.form_type, RequirementType::Folder, "📁 Folder");
                 });
@@ -18165,6 +18481,7 @@ fn main() {
                                         ui.selectable_value(&mut self.form_type, RequirementType::Story, "Story");
                                         ui.selectable_value(&mut self.form_type, RequirementType::Task, "Task");
                                         ui.selectable_value(&mut self.form_type, RequirementType::Spike, "Spike");
+                                        ui.selectable_value(&mut self.form_type, RequirementType::Sprint, "🏃 Sprint");
                                         ui.separator();
                                         ui.selectable_value(&mut self.form_type, RequirementType::Folder, "📁 Folder");
                                     });
@@ -18508,6 +18825,7 @@ fn main() {
                         ui.selectable_value(&mut self.form_type, RequirementType::Story, "Story");
                         ui.selectable_value(&mut self.form_type, RequirementType::Task, "Task");
                         ui.selectable_value(&mut self.form_type, RequirementType::Spike, "Spike");
+                        ui.selectable_value(&mut self.form_type, RequirementType::Sprint, "🏃 Sprint");
                         ui.separator();
                         ui.selectable_value(&mut self.form_type, RequirementType::Folder, "📁 Folder");
                     });
@@ -19689,6 +20007,7 @@ fn main() {
                                 (RequirementType::Story, "Story"),
                                 (RequirementType::Task, "Task"),
                                 (RequirementType::Spike, "Spike"),
+                                (RequirementType::Sprint, "Sprint"),
                             ];
 
                             for (req_type, label) in types {
@@ -20006,6 +20325,7 @@ fn main() {
                                 (RequirementType::Story, "Story"),
                                 (RequirementType::Task, "Task"),
                                 (RequirementType::Spike, "Spike"),
+                                (RequirementType::Sprint, "Sprint"),
                             ];
 
                             for (req_type, label) in types {
@@ -20410,6 +20730,7 @@ impl eframe::App for RequirementsApp {
                 View::KanBan => KeyContext::RequirementsList,   // Use same context for kanban
                 View::Baselines => KeyContext::RequirementsList, // Use same context for baselines
                 View::Timeline => KeyContext::RequirementsList, // Use same context for timeline
+                View::Planning => KeyContext::RequirementsList, // Use same context for planning
             }
         };
 
@@ -21250,6 +21571,11 @@ impl eframe::App for RequirementsApp {
             // Timeline view showing requirement changes over time
             egui::CentralPanel::default().show(ctx, |ui| {
                 self.show_timeline_view(ui);
+            });
+        } else if self.current_view == View::Planning {
+            // Sprint planning view
+            egui::CentralPanel::default().show(ctx, |ui| {
+                self.show_planning_view(ui);
             });
         } else {
             // In List/Detail view, use layout mode

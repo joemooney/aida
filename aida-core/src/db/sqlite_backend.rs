@@ -144,6 +144,7 @@ impl SqliteBackend {
             RequirementType::Story => "Story",
             RequirementType::Task => "Task",
             RequirementType::Spike => "Spike",
+            RequirementType::Sprint => "Sprint",
             RequirementType::Folder => "Folder",
         }
     }
@@ -161,6 +162,7 @@ impl SqliteBackend {
             "Story" => RequirementType::Story,
             "Task" => RequirementType::Task,
             "Spike" => RequirementType::Spike,
+            "Sprint" => RequirementType::Sprint,
             "Folder" => RequirementType::Folder,
             _ => RequirementType::Functional,
         }

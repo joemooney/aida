@@ -59,6 +59,7 @@ pub enum RequirementType {
     Story,
     Task,
     Spike,
+    Sprint,  // Time-boxed iteration for work planning
     // Organizational types (stateless)
     Folder,
 }
@@ -76,6 +77,7 @@ impl fmt::Display for RequirementType {
             RequirementType::Story => write!(f, "Story"),
             RequirementType::Task => write!(f, "Task"),
             RequirementType::Spike => write!(f, "Spike"),
+            RequirementType::Sprint => write!(f, "Sprint"),
             RequirementType::Folder => write!(f, "Folder"),
         }
     }
@@ -676,6 +678,37 @@ pub fn default_type_definitions() -> Vec<CustomTypeDefinition> {
                     .with_description("Recommended next steps based on findings")
                     .with_order(4),
             ),
+        // Sprint type for time-boxed iterations
+        CustomTypeDefinition::built_in("Sprint", "Sprint")
+            .with_prefix("SPRINT")
+            .with_description("Time-boxed iteration for work planning")
+            .with_statuses(vec!["Draft", "In Progress", "Completed", "Archived"])
+            .with_color("#7c3aed")
+            .with_field(
+                CustomFieldDefinition::number("sprint_number", "Sprint Number")
+                    .with_description("Sequential sprint number")
+                    .with_order(1),
+            )
+            .with_field(
+                CustomFieldDefinition::text("start_date", "Start Date")
+                    .with_description("Sprint start date (YYYY-MM-DD)")
+                    .with_order(2),
+            )
+            .with_field(
+                CustomFieldDefinition::text("end_date", "End Date")
+                    .with_description("Sprint end date (YYYY-MM-DD)")
+                    .with_order(3),
+            )
+            .with_field(
+                CustomFieldDefinition::text("sprint_goal", "Sprint Goal")
+                    .with_description("Goal or theme for this sprint")
+                    .with_order(4),
+            )
+            .with_field(
+                CustomFieldDefinition::number("velocity", "Planned Velocity")
+                    .with_description("Planned story points for this sprint")
+                    .with_order(5),
+            ),
         // Stateless organizational types
         CustomTypeDefinition::built_in_stateless("Folder", "Folder")
             .with_prefix("FLD")
@@ -924,6 +957,25 @@ impl RelationshipDefinition {
             )
             .with_cardinality(Cardinality::ManyToOne)
             .with_color("#ef4444"),
+            // Sprint planning relationships
+            RelationshipDefinition::built_in(
+                "sprint_assignment",
+                "Assigned to Sprint",
+                "Assigns a requirement to a Sprint for work planning",
+            )
+            .with_inverse("sprint_contains")
+            .with_cardinality(Cardinality::ManyToOne) // Each item in one Sprint at a time
+            .with_target_types(vec!["Sprint".to_string()])
+            .with_color("#7c3aed"),
+            RelationshipDefinition::built_in(
+                "sprint_contains",
+                "Sprint Contains",
+                "Items assigned to this Sprint",
+            )
+            .with_inverse("sprint_assignment")
+            .with_cardinality(Cardinality::OneToMany)
+            .with_source_types(vec!["Sprint".to_string()])
+            .with_color("#7c3aed"),
         ]
     }
 
@@ -2489,6 +2541,7 @@ impl RequirementsStore {
             RequirementType::Story => "Story",
             RequirementType::Task => "Task",
             RequirementType::Spike => "Spike",
+            RequirementType::Sprint => "Sprint",
             RequirementType::Folder => "Folder",
         };
         self.type_definitions.iter().find(|td| td.name == type_name)
@@ -2540,6 +2593,178 @@ impl RequirementsStore {
         self.get_type_definition(req_type)
             .map(|td| td.stateless)
             .unwrap_or(false)
+    }
+
+    // ========================================================================
+    // Sprint Planning Methods
+    // ========================================================================
+
+    /// Get all Sprints, sorted by sprint_number custom field (if available)
+    pub fn get_sprints(&self) -> Vec<&Requirement> {
+        let mut sprints: Vec<&Requirement> = self
+            .requirements
+            .iter()
+            .filter(|r| r.req_type == RequirementType::Sprint)
+            .collect();
+
+        // Sort by sprint_number if available, otherwise by created_at
+        sprints.sort_by(|a, b| {
+            let a_num = a
+                .custom_fields
+                .get("sprint_number")
+                .and_then(|s| s.parse::<i32>().ok())
+                .unwrap_or(i32::MAX);
+            let b_num = b
+                .custom_fields
+                .get("sprint_number")
+                .and_then(|s| s.parse::<i32>().ok())
+                .unwrap_or(i32::MAX);
+            a_num.cmp(&b_num)
+        });
+
+        sprints
+    }
+
+    /// Get items assigned to a specific Sprint via sprint_assignment relationship
+    pub fn get_sprint_items(&self, sprint_id: &Uuid) -> Vec<&Requirement> {
+        self.requirements
+            .iter()
+            .filter(|r| {
+                r.relationships.iter().any(|rel| {
+                    rel.rel_type == RelationshipType::Custom("sprint_assignment".to_string())
+                        && rel.target_id == *sprint_id
+                })
+            })
+            .collect()
+    }
+
+    /// Get the Sprint that a requirement is assigned to (if any)
+    pub fn get_requirement_sprint(&self, req_id: &Uuid) -> Option<&Requirement> {
+        let req = self.get_requirement_by_id(req_id)?;
+        let sprint_rel = req.relationships.iter().find(|rel| {
+            rel.rel_type == RelationshipType::Custom("sprint_assignment".to_string())
+        })?;
+        self.get_requirement_by_id(&sprint_rel.target_id)
+    }
+
+    /// Get backlog items (requirements without Sprint assignment, excluding Sprints and Folders)
+    pub fn get_backlog(&self) -> Vec<&Requirement> {
+        self.requirements
+            .iter()
+            .filter(|r| {
+                // Exclude Sprint and Folder types
+                r.req_type != RequirementType::Sprint
+                    && r.req_type != RequirementType::Folder
+                    // Has no sprint_assignment relationship
+                    && !r.relationships.iter().any(|rel| {
+                        rel.rel_type == RelationshipType::Custom("sprint_assignment".to_string())
+                    })
+            })
+            .collect()
+    }
+
+    /// Assign a requirement to a Sprint
+    /// This removes any existing sprint assignment and creates a new one
+    pub fn assign_to_sprint(&mut self, req_id: Uuid, sprint_id: Uuid, username: &str) {
+        // First, remove any existing sprint assignment
+        if let Some(req) = self.requirements.iter_mut().find(|r| r.id == req_id) {
+            req.relationships.retain(|rel| {
+                rel.rel_type != RelationshipType::Custom("sprint_assignment".to_string())
+            });
+
+            // Add the new sprint assignment
+            req.relationships.push(Relationship {
+                rel_type: RelationshipType::Custom("sprint_assignment".to_string()),
+                target_id: sprint_id,
+                created_at: Some(Utc::now()),
+                created_by: Some(username.to_string()),
+            });
+
+            // Update modified timestamp
+            req.modified_at = Utc::now();
+
+            // Add to history
+            let sprint = self.requirements.iter().find(|r| r.id == sprint_id);
+            let sprint_name = sprint
+                .and_then(|s| s.spec_id.clone())
+                .unwrap_or_else(|| sprint_id.to_string());
+
+            let history_entry = HistoryEntry::new(
+                username.to_string(),
+                vec![FieldChange {
+                    field_name: "sprint_assignment".to_string(),
+                    old_value: String::new(),
+                    new_value: sprint_name,
+                }],
+            );
+
+            if let Some(req) = self.requirements.iter_mut().find(|r| r.id == req_id) {
+                req.history.push(history_entry);
+            }
+        }
+
+        // Also add the inverse relationship (sprint_contains) to the sprint
+        if let Some(sprint) = self.requirements.iter_mut().find(|r| r.id == sprint_id) {
+            // Check if this relationship already exists
+            if !sprint.relationships.iter().any(|rel| {
+                rel.rel_type == RelationshipType::Custom("sprint_contains".to_string())
+                    && rel.target_id == req_id
+            }) {
+                sprint.relationships.push(Relationship {
+                    rel_type: RelationshipType::Custom("sprint_contains".to_string()),
+                    target_id: req_id,
+                    created_at: Some(Utc::now()),
+                    created_by: Some(username.to_string()),
+                });
+            }
+        }
+    }
+
+    /// Remove a requirement from its Sprint assignment
+    pub fn remove_from_sprint(&mut self, req_id: Uuid, username: &str) {
+        // Get the current sprint assignment for history
+        let current_sprint_id = self
+            .requirements
+            .iter()
+            .find(|r| r.id == req_id)
+            .and_then(|req| {
+                req.relationships.iter().find_map(|rel| {
+                    if rel.rel_type == RelationshipType::Custom("sprint_assignment".to_string()) {
+                        Some(rel.target_id)
+                    } else {
+                        None
+                    }
+                })
+            });
+
+        if let Some(sprint_id) = current_sprint_id {
+            // Remove from requirement
+            if let Some(req) = self.requirements.iter_mut().find(|r| r.id == req_id) {
+                req.relationships.retain(|rel| {
+                    rel.rel_type != RelationshipType::Custom("sprint_assignment".to_string())
+                });
+                req.modified_at = Utc::now();
+
+                // Add to history
+                let history_entry = HistoryEntry::new(
+                    username.to_string(),
+                    vec![FieldChange {
+                        field_name: "sprint_assignment".to_string(),
+                        old_value: sprint_id.to_string(),
+                        new_value: String::new(),
+                    }],
+                );
+                req.history.push(history_entry);
+            }
+
+            // Remove inverse relationship from sprint
+            if let Some(sprint) = self.requirements.iter_mut().find(|r| r.id == sprint_id) {
+                sprint.relationships.retain(|rel| {
+                    !(rel.rel_type == RelationshipType::Custom("sprint_contains".to_string())
+                        && rel.target_id == req_id)
+                });
+            }
+        }
     }
 
     /// Gets all unique prefixes currently in use from requirements
@@ -3220,6 +3445,7 @@ impl RequirementsStore {
             RequirementType::Story => "Story",
             RequirementType::Task => "Task",
             RequirementType::Spike => "Spike",
+            RequirementType::Sprint => "Sprint",
             RequirementType::Folder => "Folder",
         };
         self.id_config
@@ -3341,6 +3567,7 @@ impl RequirementsStore {
                     RequirementType::Story => Some("STORY".to_string()),
                     RequirementType::Task => Some("TASK".to_string()),
                     RequirementType::Spike => Some("SPIKE".to_string()),
+                    RequirementType::Sprint => Some("SPRINT".to_string()),
                     RequirementType::Folder => Some("FLD".to_string()),
                 };
                 (i, prefix_override, feature_prefix, type_prefix)
@@ -3514,6 +3741,7 @@ impl RequirementsStore {
                     RequirementType::Story => Some("STORY".to_string()),
                     RequirementType::Task => Some("TASK".to_string()),
                     RequirementType::Spike => Some("SPIKE".to_string()),
+                    RequirementType::Sprint => Some("SPRINT".to_string()),
                     RequirementType::Folder => Some("FLD".to_string()),
                 };
                 (i, prefix_override, feature_prefix, type_prefix)
