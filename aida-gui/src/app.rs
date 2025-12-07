@@ -13470,6 +13470,8 @@ impl RequirementsApp {
                                 self.scroll_to_requirement = Some(req_id);
                                 self.pending_view_change = Some(View::Detail);
                             }
+                            // Clear focus from any text fields to enable hotkeys
+                            ui.ctx().memory_mut(|mem| mem.surrender_focus(egui::Id::NULL));
                         }
                         if response.double_clicked() {
                             // Switch to edit mode on double-click
@@ -13478,6 +13480,8 @@ impl RequirementsApp {
                             self.focused_list = FocusedList::List2;
                             self.load_form_from_requirement(idx);
                             self.pending_view_change = Some(View::Edit);
+                            // Clear focus from any text fields to enable hotkeys
+                            ui.ctx().memory_mut(|mem| mem.surrender_focus(egui::Id::NULL));
                         }
                     }
                 }
@@ -13551,6 +13555,8 @@ impl RequirementsApp {
                                 self.scroll_to_requirement = Some(req_id);
                                 self.pending_view_change = Some(View::Detail);
                             }
+                            // Clear focus from any text fields to enable hotkeys
+                            ui.ctx().memory_mut(|mem| mem.surrender_focus(egui::Id::NULL));
                         }
                         if response.double_clicked() {
                             self.split_selected_idx = Some(idx);
@@ -13558,6 +13564,8 @@ impl RequirementsApp {
                             self.focused_list = FocusedList::List2;
                             self.load_form_from_requirement(idx);
                             self.pending_view_change = Some(View::Edit);
+                            // Clear focus from any text fields to enable hotkeys
+                            ui.ctx().memory_mut(|mem| mem.surrender_focus(egui::Id::NULL));
                         }
                     }
                 }
@@ -14978,10 +14986,14 @@ impl RequirementsApp {
                 self.focused_list = FocusedList::List1;
                 self.load_form_from_requirement(idx);
                 self.pending_view_change = Some(View::Edit);
+                // Clear focus from any text fields to enable hotkeys
+                ui.ctx().memory_mut(|mem| mem.surrender_focus(egui::Id::NULL));
             } else if response.clicked() {
                 self.selected_idx = Some(idx);
                 self.focused_list = FocusedList::List1;
                 self.pending_view_change = Some(View::Detail);
+                // Clear focus from any text fields to enable hotkeys
+                ui.ctx().memory_mut(|mem| mem.surrender_focus(egui::Id::NULL));
             }
         }
 
@@ -18659,22 +18671,62 @@ fn main() {
             // Feature dropdown with fuzzy search
             {
                 let popup_id = ui.make_persistent_id("feature_combo_popup");
+                let is_popup_open = ui.memory(|mem| mem.is_popup_open(popup_id));
+
+                // Get all features and filter based on current text
+                let all_features = self.get_all_features();
+                let search_lower = self.form_feature.to_lowercase();
+                let filtered: Vec<String> = if search_lower.is_empty() {
+                    all_features.clone()
+                } else {
+                    all_features.iter()
+                        .filter(|f| f.to_lowercase().contains(&search_lower))
+                        .cloned()
+                        .collect()
+                };
+                let num_options = filtered.len();
+
+                // Handle keyboard BEFORE the TextEdit to consume arrow/enter keys
+                let mut close_and_select = false;
+                if is_popup_open {
+                    ui.ctx().input_mut(|i| {
+                        if i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown) {
+                            if num_options > 0 && self.form_feature_selected_idx < num_options - 1 {
+                                self.form_feature_selected_idx += 1;
+                            } else if num_options > 0 {
+                                self.form_feature_selected_idx = 0; // Wrap to top
+                            }
+                        }
+                        if i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp) {
+                            if self.form_feature_selected_idx > 0 {
+                                self.form_feature_selected_idx -= 1;
+                            } else if num_options > 0 {
+                                self.form_feature_selected_idx = num_options - 1; // Wrap to bottom
+                            }
+                        }
+                        if i.consume_key(egui::Modifiers::NONE, egui::Key::Enter) {
+                            close_and_select = true;
+                        }
+                        if i.consume_key(egui::Modifiers::NONE, egui::Key::Escape) {
+                            // Just close popup, don't select
+                            ui.memory_mut(|mem| mem.close_popup());
+                        }
+                    });
+                }
+
+                // Apply selection if Enter was pressed
+                if close_and_select && !filtered.is_empty() {
+                    if let Some(feature) = filtered.get(self.form_feature_selected_idx) {
+                        self.form_feature = feature.clone();
+                    }
+                    ui.memory_mut(|mem| mem.close_popup());
+                }
+
                 let feature_edit = ui.add(
                     egui::TextEdit::singleline(&mut self.form_feature)
                         .desired_width(150.0)
                         .hint_text("Type to search...")
                 );
-
-                // Get all features and filter based on current text
-                let all_features = self.get_all_features();
-                let search_lower = self.form_feature.to_lowercase();
-                let filtered: Vec<&String> = if search_lower.is_empty() {
-                    all_features.iter().collect()
-                } else {
-                    all_features.iter()
-                        .filter(|f| f.to_lowercase().contains(&search_lower))
-                        .collect()
-                };
 
                 // Open popup when text field gains focus or user is typing
                 if feature_edit.gained_focus() || (feature_edit.has_focus() && feature_edit.changed()) {
@@ -18682,26 +18734,9 @@ fn main() {
                     self.form_feature_selected_idx = 0;
                 }
 
-                // Handle keyboard navigation
-                if feature_edit.has_focus() {
-                    let num_options = filtered.len();
-                    ui.input(|i| {
-                        if i.key_pressed(egui::Key::ArrowDown) {
-                            if num_options > 0 && self.form_feature_selected_idx < num_options - 1 {
-                                self.form_feature_selected_idx += 1;
-                            }
-                        }
-                        if i.key_pressed(egui::Key::ArrowUp) {
-                            if self.form_feature_selected_idx > 0 {
-                                self.form_feature_selected_idx -= 1;
-                            }
-                        }
-                    });
-                }
-
                 // Clamp selected index
-                if self.form_feature_selected_idx >= filtered.len() && !filtered.is_empty() {
-                    self.form_feature_selected_idx = filtered.len() - 1;
+                if self.form_feature_selected_idx >= num_options && num_options > 0 {
+                    self.form_feature_selected_idx = num_options - 1;
                 }
 
                 // Show popup with filtered features
@@ -18720,9 +18755,9 @@ fn main() {
                                 } else {
                                     for (idx, feature) in filtered.iter().enumerate() {
                                         let is_selected = idx == self.form_feature_selected_idx;
-                                        let response = ui.selectable_label(is_selected, *feature);
+                                        let response = ui.selectable_label(is_selected, feature);
                                         if response.clicked() {
-                                            self.form_feature = (*feature).clone();
+                                            self.form_feature = feature.clone();
                                             ui.memory_mut(|mem| mem.close_popup());
                                         }
                                     }
@@ -18730,17 +18765,6 @@ fn main() {
                             });
                     }
                 );
-
-                // Handle Enter key to select
-                if feature_edit.has_focus() {
-                    ui.input(|i| {
-                        if i.key_pressed(egui::Key::Enter) && !filtered.is_empty() {
-                            if let Some(feature) = filtered.get(self.form_feature_selected_idx) {
-                                self.form_feature = (*feature).clone();
-                            }
-                        }
-                    });
-                }
             }
 
             ui.add_space(16.0);
@@ -19365,41 +19389,67 @@ fn main() {
                                 ui.label("Feature:");
                                 {
                                     let popup_id = ui.make_persistent_id("feature_combo_popup_2");
+                                    let is_popup_open = ui.memory(|mem| mem.is_popup_open(popup_id));
+
+                                    let all_features = self.get_all_features();
+                                    let search_lower = self.form_feature.to_lowercase();
+                                    let filtered: Vec<String> = if search_lower.is_empty() {
+                                        all_features.clone()
+                                    } else {
+                                        all_features.iter()
+                                            .filter(|f| f.to_lowercase().contains(&search_lower))
+                                            .cloned()
+                                            .collect()
+                                    };
+                                    let num_options = filtered.len();
+
+                                    // Handle keyboard BEFORE the TextEdit
+                                    let mut close_and_select = false;
+                                    if is_popup_open {
+                                        ui.ctx().input_mut(|i| {
+                                            if i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown) {
+                                                if num_options > 0 && self.form_feature_selected_idx < num_options - 1 {
+                                                    self.form_feature_selected_idx += 1;
+                                                } else if num_options > 0 {
+                                                    self.form_feature_selected_idx = 0;
+                                                }
+                                            }
+                                            if i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp) {
+                                                if self.form_feature_selected_idx > 0 {
+                                                    self.form_feature_selected_idx -= 1;
+                                                } else if num_options > 0 {
+                                                    self.form_feature_selected_idx = num_options - 1;
+                                                }
+                                            }
+                                            if i.consume_key(egui::Modifiers::NONE, egui::Key::Enter) {
+                                                close_and_select = true;
+                                            }
+                                            if i.consume_key(egui::Modifiers::NONE, egui::Key::Escape) {
+                                                ui.memory_mut(|mem| mem.close_popup());
+                                            }
+                                        });
+                                    }
+
+                                    if close_and_select && !filtered.is_empty() {
+                                        if let Some(feature) = filtered.get(self.form_feature_selected_idx) {
+                                            self.form_feature = feature.clone();
+                                        }
+                                        ui.memory_mut(|mem| mem.close_popup());
+                                    }
+
                                     let feature_edit = ui.add(
                                         egui::TextEdit::singleline(&mut self.form_feature)
                                             .desired_width(120.0)
                                             .hint_text("Type to search...")
                                     );
 
-                                    let all_features = self.get_all_features();
-                                    let search_lower = self.form_feature.to_lowercase();
-                                    let filtered: Vec<&String> = if search_lower.is_empty() {
-                                        all_features.iter().collect()
-                                    } else {
-                                        all_features.iter()
-                                            .filter(|f| f.to_lowercase().contains(&search_lower))
-                                            .collect()
-                                    };
-
                                     if feature_edit.gained_focus() || (feature_edit.has_focus() && feature_edit.changed()) {
                                         ui.memory_mut(|mem| mem.open_popup(popup_id));
                                         self.form_feature_selected_idx = 0;
                                     }
 
-                                    if feature_edit.has_focus() {
-                                        let num_options = filtered.len();
-                                        ui.input(|i| {
-                                            if i.key_pressed(egui::Key::ArrowDown) && num_options > 0 && self.form_feature_selected_idx < num_options - 1 {
-                                                self.form_feature_selected_idx += 1;
-                                            }
-                                            if i.key_pressed(egui::Key::ArrowUp) && self.form_feature_selected_idx > 0 {
-                                                self.form_feature_selected_idx -= 1;
-                                            }
-                                        });
-                                    }
-
-                                    if self.form_feature_selected_idx >= filtered.len() && !filtered.is_empty() {
-                                        self.form_feature_selected_idx = filtered.len() - 1;
+                                    if self.form_feature_selected_idx >= num_options && num_options > 0 {
+                                        self.form_feature_selected_idx = num_options - 1;
                                     }
 
                                     egui::popup_below_widget(ui, popup_id, &feature_edit, egui::PopupCloseBehavior::CloseOnClickOutside, |ui| {
@@ -19410,24 +19460,14 @@ fn main() {
                                             } else {
                                                 for (idx, feature) in filtered.iter().enumerate() {
                                                     let is_selected = idx == self.form_feature_selected_idx;
-                                                    if ui.selectable_label(is_selected, *feature).clicked() {
-                                                        self.form_feature = (*feature).clone();
+                                                    if ui.selectable_label(is_selected, feature).clicked() {
+                                                        self.form_feature = feature.clone();
                                                         ui.memory_mut(|mem| mem.close_popup());
                                                     }
                                                 }
                                             }
                                         });
                                     });
-
-                                    if feature_edit.has_focus() {
-                                        ui.input(|i| {
-                                            if i.key_pressed(egui::Key::Enter) && !filtered.is_empty() {
-                                                if let Some(feature) = filtered.get(self.form_feature_selected_idx) {
-                                                    self.form_feature = (*feature).clone();
-                                                }
-                                            }
-                                        });
-                                    }
                                 }
                                 ui.end_row();
 
@@ -19774,41 +19814,67 @@ fn main() {
                 ui.label("Feature:");
                 {
                     let popup_id = ui.make_persistent_id("feature_combo_popup_3");
+                    let is_popup_open = ui.memory(|mem| mem.is_popup_open(popup_id));
+
+                    let all_features = self.get_all_features();
+                    let search_lower = self.form_feature.to_lowercase();
+                    let filtered: Vec<String> = if search_lower.is_empty() {
+                        all_features.clone()
+                    } else {
+                        all_features.iter()
+                            .filter(|f| f.to_lowercase().contains(&search_lower))
+                            .cloned()
+                            .collect()
+                    };
+                    let num_options = filtered.len();
+
+                    // Handle keyboard BEFORE the TextEdit
+                    let mut close_and_select = false;
+                    if is_popup_open {
+                        ui.ctx().input_mut(|i| {
+                            if i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown) {
+                                if num_options > 0 && self.form_feature_selected_idx < num_options - 1 {
+                                    self.form_feature_selected_idx += 1;
+                                } else if num_options > 0 {
+                                    self.form_feature_selected_idx = 0;
+                                }
+                            }
+                            if i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp) {
+                                if self.form_feature_selected_idx > 0 {
+                                    self.form_feature_selected_idx -= 1;
+                                } else if num_options > 0 {
+                                    self.form_feature_selected_idx = num_options - 1;
+                                }
+                            }
+                            if i.consume_key(egui::Modifiers::NONE, egui::Key::Enter) {
+                                close_and_select = true;
+                            }
+                            if i.consume_key(egui::Modifiers::NONE, egui::Key::Escape) {
+                                ui.memory_mut(|mem| mem.close_popup());
+                            }
+                        });
+                    }
+
+                    if close_and_select && !filtered.is_empty() {
+                        if let Some(feature) = filtered.get(self.form_feature_selected_idx) {
+                            self.form_feature = feature.clone();
+                        }
+                        ui.memory_mut(|mem| mem.close_popup());
+                    }
+
                     let feature_edit = ui.add(
                         egui::TextEdit::singleline(&mut self.form_feature)
                             .desired_width(200.0)
                             .hint_text("Type to search...")
                     );
 
-                    let all_features = self.get_all_features();
-                    let search_lower = self.form_feature.to_lowercase();
-                    let filtered: Vec<&String> = if search_lower.is_empty() {
-                        all_features.iter().collect()
-                    } else {
-                        all_features.iter()
-                            .filter(|f| f.to_lowercase().contains(&search_lower))
-                            .collect()
-                    };
-
                     if feature_edit.gained_focus() || (feature_edit.has_focus() && feature_edit.changed()) {
                         ui.memory_mut(|mem| mem.open_popup(popup_id));
                         self.form_feature_selected_idx = 0;
                     }
 
-                    if feature_edit.has_focus() {
-                        let num_options = filtered.len();
-                        ui.input(|i| {
-                            if i.key_pressed(egui::Key::ArrowDown) && num_options > 0 && self.form_feature_selected_idx < num_options - 1 {
-                                self.form_feature_selected_idx += 1;
-                            }
-                            if i.key_pressed(egui::Key::ArrowUp) && self.form_feature_selected_idx > 0 {
-                                self.form_feature_selected_idx -= 1;
-                            }
-                        });
-                    }
-
-                    if self.form_feature_selected_idx >= filtered.len() && !filtered.is_empty() {
-                        self.form_feature_selected_idx = filtered.len() - 1;
+                    if self.form_feature_selected_idx >= num_options && num_options > 0 {
+                        self.form_feature_selected_idx = num_options - 1;
                     }
 
                     egui::popup_below_widget(ui, popup_id, &feature_edit, egui::PopupCloseBehavior::CloseOnClickOutside, |ui| {
@@ -19819,24 +19885,14 @@ fn main() {
                             } else {
                                 for (idx, feature) in filtered.iter().enumerate() {
                                     let is_selected = idx == self.form_feature_selected_idx;
-                                    if ui.selectable_label(is_selected, *feature).clicked() {
-                                        self.form_feature = (*feature).clone();
+                                    if ui.selectable_label(is_selected, feature).clicked() {
+                                        self.form_feature = feature.clone();
                                         ui.memory_mut(|mem| mem.close_popup());
                                     }
                                 }
                             }
                         });
                     });
-
-                    if feature_edit.has_focus() {
-                        ui.input(|i| {
-                            if i.key_pressed(egui::Key::Enter) && !filtered.is_empty() {
-                                if let Some(feature) = filtered.get(self.form_feature_selected_idx) {
-                                    self.form_feature = (*feature).clone();
-                                }
-                            }
-                        });
-                    }
                 }
                 ui.end_row();
 
