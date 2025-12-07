@@ -1,9 +1,1 @@
-sessions:
-  35289-e4148b2b-fb69-4238-ac51-18f0b58e9118:
-    session_id: 35289-e4148b2b-fb69-4238-ac51-18f0b58e9118
-    user_name: Joe Mooney
-    hostname: imac
-    pid: 35289
-    started_at: 2025-12-06T20:11:35.829695715Z
-    last_heartbeat: 2025-12-06T20:18:55.917876095Z
-    editing_requirement: null
+sessions: {}

@@ -686,13 +686,22 @@ requirements:
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-11-26T01:11:45.857312446Z
-  modified_at: 2025-11-26T01:11:45.857312446Z
+  modified_at: 2025-12-07T00:08:14.140810551Z
   req_type: Functional
   dependencies: []
-  tags: []
+  tags:
+  - comments
   relationships:
   - rel_type: Parent
     target_id: 848840ae-7005-4fab-b478-163f9139359e
+  history:
+  - id: f45143c2-df10-4090-842f-f99ec693a5ea
+    author: Joe Mooney
+    timestamp: 2025-12-07T00:08:14.140807740Z
+    changes:
+    - field_name: tags
+      old_value: ''
+      new_value: comments
 - id: 07f7e655-742d-44c9-ba9d-c77762ae7090
   spec_id: CR-0078
   title: scroll wheel should not change selected requirement
@@ -8616,7 +8625,7 @@ requirements:
   status: Approved
   priority: Medium
   owner: ''
-  feature: Uncategorized
+  feature: 112-Uncategorized
   created_at: 2025-12-06T19:12:57.523344290Z
   created_by: Joe Mooney
   modified_at: 2025-12-06T19:12:57.523344290Z
@@ -8628,6 +8637,87 @@ requirements:
     target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
     created_at: 2025-12-06T19:12:57.578866722Z
     created_by: Joe Mooney
+- id: 365d927b-09e5-45e3-8f4e-881ad3c47143
+  spec_id: FR-0200
+  title: Sprint Planning Support
+  description: Enable Sprint-based Agile planning in AIDA. Add Sprint as a requirement type with time-boxing capabilities. Implement SprintAssignment relationship to assign work items to Sprints. Include Planning View for Sprint-organized display with Backlog section for unassigned items.
+  status: Draft
+  priority: High
+  owner: ''
+  feature: 113-Uncategorized
+  created_at: 2025-12-07T00:30:50.638970208Z
+  modified_at: 2025-12-07T00:30:50.638970208Z
+  req_type: Functional
+  dependencies: []
+  tags: []
+- id: 06ea740d-af61-4124-9943-f19f278e0606
+  spec_id: FR-0201
+  title: Sprint Requirement Type
+  description: Add Sprint to RequirementType enum. Sprints are time-boxed iterations that contain work items. Includes custom fields for sprint_number, start_date, end_date, sprint_goal, velocity.
+  status: Draft
+  priority: High
+  owner: ''
+  feature: 114-Uncategorized
+  created_at: 2025-12-07T00:30:59.548639777Z
+  modified_at: 2025-12-07T00:30:59.548639777Z
+  req_type: Functional
+  dependencies: []
+  tags: []
+  relationships:
+  - rel_type: Parent
+    target_id: 365d927b-09e5-45e3-8f4e-881ad3c47143
+    created_at: 2025-12-07T00:30:59.548670270Z
+- id: 9f1bc1d0-602b-42c4-aae3-bc72bf7e6a4e
+  spec_id: FR-0202
+  title: SprintAssignment Relationship
+  description: Add sprint_assignment and sprint_contains built-in relationship types. Allows assigning requirements to Sprints. Many-to-one cardinality (each item in one Sprint at a time). History tracks Sprint moves for carry-over tracking.
+  status: Draft
+  priority: High
+  owner: ''
+  feature: 115-Uncategorized
+  created_at: 2025-12-07T00:31:07.852208646Z
+  modified_at: 2025-12-07T00:31:07.852208646Z
+  req_type: Functional
+  dependencies: []
+  tags: []
+  relationships:
+  - rel_type: Parent
+    target_id: 365d927b-09e5-45e3-8f4e-881ad3c47143
+    created_at: 2025-12-07T00:31:07.852243805Z
+- id: 746091ca-0bc1-49e0-b2e3-12b174447f20
+  spec_id: FR-0203
+  title: Planning View
+  description: New GUI view showing requirements organized by Sprint assignment. Displays Sprints sorted by date with assigned items nested underneath. Includes Backlog section for items without Sprint assignment. Supports drag-and-drop for Sprint assignment.
+  status: Draft
+  priority: High
+  owner: ''
+  feature: 116-Uncategorized
+  created_at: 2025-12-07T00:31:15.135616660Z
+  modified_at: 2025-12-07T00:31:15.135616660Z
+  req_type: Functional
+  dependencies: []
+  tags: []
+  relationships:
+  - rel_type: Parent
+    target_id: 365d927b-09e5-45e3-8f4e-881ad3c47143
+    created_at: 2025-12-07T00:31:15.135648527Z
+- id: 0f650017-d81f-4212-b009-ef147c512ffa
+  spec_id: FR-0204
+  title: Sprint CLI Commands
+  description: 'Add aida sprint subcommand with: assign (assign item to sprint), list (list sprint contents), summary (sprint metrics). Add --no-sprint filter option to list command for viewing backlog.'
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: Uncategorized
+  created_at: 2025-12-07T00:31:23.228862025Z
+  modified_at: 2025-12-07T00:31:23.228862025Z
+  req_type: Functional
+  dependencies: []
+  tags: []
+  relationships:
+  - rel_type: Parent
+    target_id: 365d927b-09e5-45e3-8f4e-881ad3c47143
+    created_at: 2025-12-07T00:31:23.228895255Z
 users:
 - id: 150164ef-32ed-4d61-8cec-e887ac78cfd7
   spec_id: $USER-001
@@ -8719,8 +8809,8 @@ id_config:
     prefix: SPIKE
     description: Research or investigation task to reduce uncertainty or explore technical approaches
 features: []
-next_feature_number: 112
-next_spec_number: 200
+next_feature_number: 117
+next_spec_number: 205
 prefix_counters: {}
 relationship_definitions:
 - name: parent
@@ -8876,8 +8966,8 @@ reaction_definitions:
   description: Mark as important/attention needed
   built_in: true
 meta_counters:
-  $TEAM: 4
   $USER: 6
+  $TEAM: 4
 type_definitions:
 - name: Functional
   display_name: Functional
