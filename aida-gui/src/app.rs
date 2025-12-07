@@ -16374,9 +16374,11 @@ impl RequirementsApp {
                                 }
 
                                 // Quick Actions dropdown menu
-                                // Calculate zoom scale for menu width
+                                // Calculate zoom scale for menu widths
                                 let zoom_scale = self.current_font_size / DEFAULT_FONT_SIZE;
                                 let actions_menu_width = 280.0 * zoom_scale;
+                                let submenu_width = 120.0 * zoom_scale;
+                                let ai_submenu_width = 240.0 * zoom_scale;
                                 ui.menu_button("⚡ Actions", |ui| {
                                     // Make menu wide enough so AI submenu doesn't occlude Clone/Archive/Delete
                                     // Width scales with zoom level
@@ -16384,6 +16386,7 @@ impl RequirementsApp {
 
                                     // Priority submenu
                                     ui.menu_button("Priority", |ui| {
+                                        ui.set_min_width(submenu_width);
                                         let priorities = [
                                             RequirementPriority::High,
                                             RequirementPriority::Medium,
@@ -16404,6 +16407,7 @@ impl RequirementsApp {
 
                                     // Status submenu
                                     ui.menu_button("Status", |ui| {
+                                        ui.set_min_width(submenu_width);
                                         let statuses = [
                                             RequirementStatus::Draft,
                                             RequirementStatus::Approved,
@@ -16428,6 +16432,7 @@ impl RequirementsApp {
                                     // AI Actions submenu
                                     let req_uuid = req.id;
                                     ui.menu_button("🤖 AI", |ui| {
+                                        ui.set_min_width(ai_submenu_width);
                                         if ui.button("📊 Evaluate Requirement  (ae)").clicked() {
                                             trigger_ai_action = Some(AiAction::Evaluate(req_uuid));
                                             ui.close_menu();
