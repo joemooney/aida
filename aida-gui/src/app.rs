@@ -16374,10 +16374,13 @@ impl RequirementsApp {
                                 }
 
                                 // Quick Actions dropdown menu
+                                // Calculate zoom scale for menu width
+                                let zoom_scale = self.current_font_size / DEFAULT_FONT_SIZE;
+                                let actions_menu_width = 280.0 * zoom_scale;
                                 ui.menu_button("⚡ Actions", |ui| {
                                     // Make menu wide enough so AI submenu doesn't occlude Clone/Archive/Delete
-                                    // Needs to be wide enough to accommodate various zoom levels
-                                    ui.set_min_width(280.0);
+                                    // Width scales with zoom level
+                                    ui.set_min_width(actions_menu_width);
 
                                     // Priority submenu
                                     ui.menu_button("Priority", |ui| {
