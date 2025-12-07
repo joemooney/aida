@@ -20557,26 +20557,48 @@ fn main() {
                 ui.heading("Filters");
                 ui.add_space(5.0);
 
-                egui::ScrollArea::vertical()
-                    .max_height(300.0)
-                    .show(ui, |ui| {
-                        // Type filters
-                        ui.label("Type Filters:");
-                        ui.horizontal_wrapped(|ui| {
+                // Collect data needed for popups
+                let features = self.get_all_features();
+                let all_prefixes = self.store.get_all_prefixes();
+                // Filter out type prefixes from ID prefix list
+                let type_prefixes: std::collections::HashSet<String> = self.store.id_config.reserved_prefixes()
+                    .into_iter()
+                    .collect();
+                let prefixes: Vec<String> = all_prefixes
+                    .into_iter()
+                    .filter(|p| !type_prefixes.contains(p))
+                    .collect();
+
+                // Type Filters dropdown
+                ui.horizontal(|ui| {
+                    ui.label("Types:");
+                    let type_count = self.filter_types.len();
+                    let type_label = if type_count == 0 {
+                        "All Types ▼".to_string()
+                    } else {
+                        format!("{} selected ▼", type_count)
+                    };
+                    let type_response = ui.button(&type_label);
+                    let popup_id = ui.make_persistent_id("type_filter_popup");
+                    if type_response.clicked() {
+                        ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+                    }
+                    egui::popup_below_widget(ui, popup_id, &type_response, egui::PopupCloseBehavior::CloseOnClickOutside, |ui| {
+                        ui.set_min_width(150.0);
+                        egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
                             let types = [
-                                (RequirementType::Functional, "FR"),
-                                (RequirementType::NonFunctional, "NFR"),
-                                (RequirementType::System, "SR"),
-                                (RequirementType::User, "UR"),
-                                (RequirementType::ChangeRequest, "CR"),
-                                (RequirementType::Bug, "BUG"),
+                                (RequirementType::Functional, "Functional (FR)"),
+                                (RequirementType::NonFunctional, "Non-Functional (NFR)"),
+                                (RequirementType::System, "System (SR)"),
+                                (RequirementType::User, "User (UR)"),
+                                (RequirementType::ChangeRequest, "Change Request (CR)"),
+                                (RequirementType::Bug, "Bug"),
                                 (RequirementType::Epic, "Epic"),
                                 (RequirementType::Story, "Story"),
                                 (RequirementType::Task, "Task"),
                                 (RequirementType::Spike, "Spike"),
                                 (RequirementType::Sprint, "Sprint"),
                             ];
-
                             for (req_type, label) in types {
                                 let mut checked = self.filter_types.contains(&req_type);
                                 if ui.checkbox(&mut checked, label).changed() {
@@ -20588,51 +20610,177 @@ fn main() {
                                     self.active_preset = None;
                                 }
                             }
-
-                            if ui.small_button("Clear").clicked() {
+                            ui.separator();
+                            if ui.button("Clear All").clicked() {
                                 self.filter_types.clear();
                                 self.active_preset = None;
                             }
                         });
+                    });
+                    if type_count > 0 {
+                        if ui.small_button("✕").on_hover_text("Clear type filters").clicked() {
+                            self.filter_types.clear();
+                            self.active_preset = None;
+                        }
+                    }
+                });
 
-                        ui.add_space(5.0);
-                        ui.label("Feature Filters:");
-                        let features = self.get_all_features();
-                        ui.horizontal_wrapped(|ui| {
-                            for feature in &features {
-                                let mut checked = self.filter_features.contains(feature);
-                                let display_name = if feature.len() > 15 {
-                                    format!("{}...", &feature[..12])
+                // Status Filters dropdown
+                ui.horizontal(|ui| {
+                    ui.label("Status:");
+                    let status_count = self.filter_statuses.len();
+                    let status_label = if status_count == 0 {
+                        "All Statuses ▼".to_string()
+                    } else {
+                        format!("{} selected ▼", status_count)
+                    };
+                    let status_response = ui.button(&status_label);
+                    let popup_id = ui.make_persistent_id("status_filter_popup");
+                    if status_response.clicked() {
+                        ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+                    }
+                    egui::popup_below_widget(ui, popup_id, &status_response, egui::PopupCloseBehavior::CloseOnClickOutside, |ui| {
+                        ui.set_min_width(120.0);
+                        let statuses = [
+                            (RequirementStatus::Draft, "Draft"),
+                            (RequirementStatus::Approved, "Approved"),
+                            (RequirementStatus::Completed, "Completed"),
+                            (RequirementStatus::Rejected, "Rejected"),
+                        ];
+                        for (status, label) in statuses {
+                            let mut checked = self.filter_statuses.contains(&status);
+                            if ui.checkbox(&mut checked, label).changed() {
+                                if checked {
+                                    self.filter_statuses.insert(status);
                                 } else {
-                                    feature.clone()
-                                };
+                                    self.filter_statuses.remove(&status);
+                                }
+                                self.active_preset = None;
+                            }
+                        }
+                        ui.separator();
+                        if ui.button("Clear All").clicked() {
+                            self.filter_statuses.clear();
+                            self.active_preset = None;
+                        }
+                    });
+                    if status_count > 0 {
+                        if ui.small_button("✕").on_hover_text("Clear status filters").clicked() {
+                            self.filter_statuses.clear();
+                            self.active_preset = None;
+                        }
+                    }
+                });
 
-                                if ui
-                                    .checkbox(&mut checked, &display_name)
-                                    .on_hover_text(feature)
-                                    .changed()
-                                {
-                                    if checked {
-                                        self.filter_features.insert(feature.clone());
-                                    } else {
-                                        self.filter_features.remove(feature);
+                // Priority Filters dropdown
+                ui.horizontal(|ui| {
+                    ui.label("Priority:");
+                    let priority_count = self.filter_priorities.len();
+                    let priority_label = if priority_count == 0 {
+                        "All Priorities ▼".to_string()
+                    } else {
+                        format!("{} selected ▼", priority_count)
+                    };
+                    let priority_response = ui.button(&priority_label);
+                    let popup_id = ui.make_persistent_id("priority_filter_popup");
+                    if priority_response.clicked() {
+                        ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+                    }
+                    egui::popup_below_widget(ui, popup_id, &priority_response, egui::PopupCloseBehavior::CloseOnClickOutside, |ui| {
+                        ui.set_min_width(100.0);
+                        let priorities = [
+                            (RequirementPriority::High, "High"),
+                            (RequirementPriority::Medium, "Medium"),
+                            (RequirementPriority::Low, "Low"),
+                        ];
+                        for (priority, label) in priorities {
+                            let mut checked = self.filter_priorities.contains(&priority);
+                            if ui.checkbox(&mut checked, label).changed() {
+                                if checked {
+                                    self.filter_priorities.insert(priority);
+                                } else {
+                                    self.filter_priorities.remove(&priority);
+                                }
+                                self.active_preset = None;
+                            }
+                        }
+                        ui.separator();
+                        if ui.button("Clear All").clicked() {
+                            self.filter_priorities.clear();
+                            self.active_preset = None;
+                        }
+                    });
+                    if priority_count > 0 {
+                        if ui.small_button("✕").on_hover_text("Clear priority filters").clicked() {
+                            self.filter_priorities.clear();
+                            self.active_preset = None;
+                        }
+                    }
+                });
+
+                // Feature Filters dropdown (only if there are features)
+                if !features.is_empty() {
+                    ui.horizontal(|ui| {
+                        ui.label("Features:");
+                        let feature_count = self.filter_features.len();
+                        let feature_label = if feature_count == 0 {
+                            "All Features ▼".to_string()
+                        } else {
+                            format!("{} selected ▼", feature_count)
+                        };
+                        let feature_response = ui.button(&feature_label);
+                        let popup_id = ui.make_persistent_id("feature_filter_popup");
+                        if feature_response.clicked() {
+                            ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+                        }
+                        egui::popup_below_widget(ui, popup_id, &feature_response, egui::PopupCloseBehavior::CloseOnClickOutside, |ui| {
+                            ui.set_min_width(180.0);
+                            egui::ScrollArea::vertical().max_height(250.0).show(ui, |ui| {
+                                for feature in &features {
+                                    let mut checked = self.filter_features.contains(feature);
+                                    if ui.checkbox(&mut checked, feature).changed() {
+                                        if checked {
+                                            self.filter_features.insert(feature.clone());
+                                        } else {
+                                            self.filter_features.remove(feature);
+                                        }
+                                        self.active_preset = None;
                                     }
+                                }
+                                ui.separator();
+                                if ui.button("Clear All").clicked() {
+                                    self.filter_features.clear();
                                     self.active_preset = None;
                                 }
-                            }
-
-                            if ui.small_button("Clear").clicked() {
+                            });
+                        });
+                        if feature_count > 0 {
+                            if ui.small_button("✕").on_hover_text("Clear feature filters").clicked() {
                                 self.filter_features.clear();
                                 self.active_preset = None;
                             }
-                        });
+                        }
+                    });
+                }
 
-                        // Prefix filters
-                        let prefixes = self.store.get_all_prefixes();
-                        if !prefixes.is_empty() {
-                            ui.add_space(5.0);
-                            ui.label("ID Prefix Filters:");
-                            ui.horizontal_wrapped(|ui| {
+                // ID Prefix Filters dropdown (only if there are non-type prefixes)
+                if !prefixes.is_empty() {
+                    ui.horizontal(|ui| {
+                        ui.label("ID Prefixes:");
+                        let prefix_count = self.filter_prefixes.len();
+                        let prefix_label = if prefix_count == 0 {
+                            "All Prefixes ▼".to_string()
+                        } else {
+                            format!("{} selected ▼", prefix_count)
+                        };
+                        let prefix_response = ui.button(&prefix_label);
+                        let popup_id = ui.make_persistent_id("prefix_filter_popup");
+                        if prefix_response.clicked() {
+                            ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+                        }
+                        egui::popup_below_widget(ui, popup_id, &prefix_response, egui::PopupCloseBehavior::CloseOnClickOutside, |ui| {
+                            ui.set_min_width(150.0);
+                            egui::ScrollArea::vertical().max_height(250.0).show(ui, |ui| {
                                 for prefix in &prefixes {
                                     let mut checked = self.filter_prefixes.contains(prefix);
                                     if ui.checkbox(&mut checked, prefix).changed() {
@@ -20644,75 +20792,34 @@ fn main() {
                                         self.active_preset = None;
                                     }
                                 }
-
-                                if ui.small_button("Clear").clicked() {
+                                ui.separator();
+                                if ui.button("Clear All").clicked() {
                                     self.filter_prefixes.clear();
                                     self.active_preset = None;
                                 }
                             });
+                        });
+                        if prefix_count > 0 {
+                            if ui.small_button("✕").on_hover_text("Clear prefix filters").clicked() {
+                                self.filter_prefixes.clear();
+                                self.active_preset = None;
+                            }
                         }
+                    });
+                }
 
-                        // Status filters
-                        ui.add_space(5.0);
-                        ui.label("Status Filters:");
-                        ui.horizontal_wrapped(|ui| {
-                            let statuses = [
-                                (RequirementStatus::Draft, "Draft"),
-                                (RequirementStatus::Approved, "Approved"),
-                                (RequirementStatus::Completed, "Completed"),
-                                (RequirementStatus::Rejected, "Rejected"),
-                            ];
+                ui.add_space(10.0);
+                ui.separator();
 
-                            for (status, label) in statuses {
-                                let mut checked = self.filter_statuses.contains(&status);
-                                if ui.checkbox(&mut checked, label).changed() {
-                                    if checked {
-                                        self.filter_statuses.insert(status);
-                                    } else {
-                                        self.filter_statuses.remove(&status);
-                                    }
-                                    self.active_preset = None;
-                                }
-                            }
-
-                            if ui.small_button("Clear").clicked() {
-                                self.filter_statuses.clear();
-                                self.active_preset = None;
-                            }
-                        });
-
-                        // Priority filters
-                        ui.add_space(5.0);
-                        ui.label("Priority Filters:");
-                        ui.horizontal_wrapped(|ui| {
-                            let priorities = [
-                                (RequirementPriority::High, "High"),
-                                (RequirementPriority::Medium, "Medium"),
-                                (RequirementPriority::Low, "Low"),
-                            ];
-
-                            for (priority, label) in priorities {
-                                let mut checked = self.filter_priorities.contains(&priority);
-                                if ui.checkbox(&mut checked, label).changed() {
-                                    if checked {
-                                        self.filter_priorities.insert(priority);
-                                    } else {
-                                        self.filter_priorities.remove(&priority);
-                                    }
-                                    self.active_preset = None;
-                                }
-                            }
-
-                            if ui.small_button("Clear").clicked() {
-                                self.filter_priorities.clear();
-                                self.active_preset = None;
-                            }
-                        });
-
-                        ui.add_space(10.0);
-                        ui.separator();
+                // Show Archived and Show Parents with visible frames for better visibility
+                egui::Frame::none()
+                    .inner_margin(egui::Margin::symmetric(4.0, 2.0))
+                    .rounding(egui::Rounding::same(3.0))
+                    .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
+                    .show(ui, |ui| {
                         ui.horizontal(|ui| {
                             ui.checkbox(&mut self.show_archived, "Show Archived");
+                            ui.add_space(10.0);
                             ui.checkbox(&mut self.show_filtered_parents, "Show Parents")
                                 .on_hover_text("Show greyed-out parent requirements for filtered items");
                         });
@@ -20875,26 +20982,48 @@ fn main() {
                 ui.heading("Filters");
                 ui.add_space(5.0);
 
-                egui::ScrollArea::vertical()
-                    .max_height(300.0)
-                    .show(ui, |ui| {
-                        // Type filters
-                        ui.label("Type Filters:");
-                        ui.horizontal_wrapped(|ui| {
+                // Collect data needed for popups
+                let features = self.get_all_features();
+                let all_prefixes = self.store.get_all_prefixes();
+                // Filter out type prefixes from ID prefix list
+                let type_prefixes: std::collections::HashSet<String> = self.store.id_config.reserved_prefixes()
+                    .into_iter()
+                    .collect();
+                let prefixes: Vec<String> = all_prefixes
+                    .into_iter()
+                    .filter(|p| !type_prefixes.contains(p))
+                    .collect();
+
+                // Type Filters dropdown
+                ui.horizontal(|ui| {
+                    ui.label("Types:");
+                    let type_count = self.split_filter_types.len();
+                    let type_label = if type_count == 0 {
+                        "All Types ▼".to_string()
+                    } else {
+                        format!("{} selected ▼", type_count)
+                    };
+                    let type_response = ui.button(&type_label);
+                    let popup_id = ui.make_persistent_id("type_filter_popup_list2");
+                    if type_response.clicked() {
+                        ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+                    }
+                    egui::popup_below_widget(ui, popup_id, &type_response, egui::PopupCloseBehavior::CloseOnClickOutside, |ui| {
+                        ui.set_min_width(150.0);
+                        egui::ScrollArea::vertical().max_height(200.0).show(ui, |ui| {
                             let types = [
-                                (RequirementType::Functional, "FR"),
-                                (RequirementType::NonFunctional, "NFR"),
-                                (RequirementType::System, "SR"),
-                                (RequirementType::User, "UR"),
-                                (RequirementType::ChangeRequest, "CR"),
-                                (RequirementType::Bug, "BUG"),
+                                (RequirementType::Functional, "Functional (FR)"),
+                                (RequirementType::NonFunctional, "Non-Functional (NFR)"),
+                                (RequirementType::System, "System (SR)"),
+                                (RequirementType::User, "User (UR)"),
+                                (RequirementType::ChangeRequest, "Change Request (CR)"),
+                                (RequirementType::Bug, "Bug"),
                                 (RequirementType::Epic, "Epic"),
                                 (RequirementType::Story, "Story"),
                                 (RequirementType::Task, "Task"),
                                 (RequirementType::Spike, "Spike"),
                                 (RequirementType::Sprint, "Sprint"),
                             ];
-
                             for (req_type, label) in types {
                                 let mut checked = self.split_filter_types.contains(&req_type);
                                 if ui.checkbox(&mut checked, label).changed() {
@@ -20906,51 +21035,177 @@ fn main() {
                                     self.split_active_preset = None;
                                 }
                             }
-
-                            if ui.small_button("Clear").clicked() {
+                            ui.separator();
+                            if ui.button("Clear All").clicked() {
                                 self.split_filter_types.clear();
                                 self.split_active_preset = None;
                             }
                         });
+                    });
+                    if type_count > 0 {
+                        if ui.small_button("✕").on_hover_text("Clear type filters").clicked() {
+                            self.split_filter_types.clear();
+                            self.split_active_preset = None;
+                        }
+                    }
+                });
 
-                        ui.add_space(5.0);
-                        ui.label("Feature Filters:");
-                        let features = self.get_all_features();
-                        ui.horizontal_wrapped(|ui| {
-                            for feature in &features {
-                                let mut checked = self.split_filter_features.contains(feature);
-                                let display_name = if feature.len() > 15 {
-                                    format!("{}...", &feature[..12])
+                // Status Filters dropdown
+                ui.horizontal(|ui| {
+                    ui.label("Status:");
+                    let status_count = self.split_filter_statuses.len();
+                    let status_label = if status_count == 0 {
+                        "All Statuses ▼".to_string()
+                    } else {
+                        format!("{} selected ▼", status_count)
+                    };
+                    let status_response = ui.button(&status_label);
+                    let popup_id = ui.make_persistent_id("status_filter_popup_list2");
+                    if status_response.clicked() {
+                        ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+                    }
+                    egui::popup_below_widget(ui, popup_id, &status_response, egui::PopupCloseBehavior::CloseOnClickOutside, |ui| {
+                        ui.set_min_width(120.0);
+                        let statuses = [
+                            (RequirementStatus::Draft, "Draft"),
+                            (RequirementStatus::Approved, "Approved"),
+                            (RequirementStatus::Completed, "Completed"),
+                            (RequirementStatus::Rejected, "Rejected"),
+                        ];
+                        for (status, label) in statuses {
+                            let mut checked = self.split_filter_statuses.contains(&status);
+                            if ui.checkbox(&mut checked, label).changed() {
+                                if checked {
+                                    self.split_filter_statuses.insert(status);
                                 } else {
-                                    feature.clone()
-                                };
+                                    self.split_filter_statuses.remove(&status);
+                                }
+                                self.split_active_preset = None;
+                            }
+                        }
+                        ui.separator();
+                        if ui.button("Clear All").clicked() {
+                            self.split_filter_statuses.clear();
+                            self.split_active_preset = None;
+                        }
+                    });
+                    if status_count > 0 {
+                        if ui.small_button("✕").on_hover_text("Clear status filters").clicked() {
+                            self.split_filter_statuses.clear();
+                            self.split_active_preset = None;
+                        }
+                    }
+                });
 
-                                if ui
-                                    .checkbox(&mut checked, &display_name)
-                                    .on_hover_text(feature)
-                                    .changed()
-                                {
-                                    if checked {
-                                        self.split_filter_features.insert(feature.clone());
-                                    } else {
-                                        self.split_filter_features.remove(feature);
+                // Priority Filters dropdown
+                ui.horizontal(|ui| {
+                    ui.label("Priority:");
+                    let priority_count = self.split_filter_priorities.len();
+                    let priority_label = if priority_count == 0 {
+                        "All Priorities ▼".to_string()
+                    } else {
+                        format!("{} selected ▼", priority_count)
+                    };
+                    let priority_response = ui.button(&priority_label);
+                    let popup_id = ui.make_persistent_id("priority_filter_popup_list2");
+                    if priority_response.clicked() {
+                        ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+                    }
+                    egui::popup_below_widget(ui, popup_id, &priority_response, egui::PopupCloseBehavior::CloseOnClickOutside, |ui| {
+                        ui.set_min_width(100.0);
+                        let priorities = [
+                            (RequirementPriority::High, "High"),
+                            (RequirementPriority::Medium, "Medium"),
+                            (RequirementPriority::Low, "Low"),
+                        ];
+                        for (priority, label) in priorities {
+                            let mut checked = self.split_filter_priorities.contains(&priority);
+                            if ui.checkbox(&mut checked, label).changed() {
+                                if checked {
+                                    self.split_filter_priorities.insert(priority);
+                                } else {
+                                    self.split_filter_priorities.remove(&priority);
+                                }
+                                self.split_active_preset = None;
+                            }
+                        }
+                        ui.separator();
+                        if ui.button("Clear All").clicked() {
+                            self.split_filter_priorities.clear();
+                            self.split_active_preset = None;
+                        }
+                    });
+                    if priority_count > 0 {
+                        if ui.small_button("✕").on_hover_text("Clear priority filters").clicked() {
+                            self.split_filter_priorities.clear();
+                            self.split_active_preset = None;
+                        }
+                    }
+                });
+
+                // Feature Filters dropdown (only if there are features)
+                if !features.is_empty() {
+                    ui.horizontal(|ui| {
+                        ui.label("Features:");
+                        let feature_count = self.split_filter_features.len();
+                        let feature_label = if feature_count == 0 {
+                            "All Features ▼".to_string()
+                        } else {
+                            format!("{} selected ▼", feature_count)
+                        };
+                        let feature_response = ui.button(&feature_label);
+                        let popup_id = ui.make_persistent_id("feature_filter_popup_list2");
+                        if feature_response.clicked() {
+                            ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+                        }
+                        egui::popup_below_widget(ui, popup_id, &feature_response, egui::PopupCloseBehavior::CloseOnClickOutside, |ui| {
+                            ui.set_min_width(180.0);
+                            egui::ScrollArea::vertical().max_height(250.0).show(ui, |ui| {
+                                for feature in &features {
+                                    let mut checked = self.split_filter_features.contains(feature);
+                                    if ui.checkbox(&mut checked, feature).changed() {
+                                        if checked {
+                                            self.split_filter_features.insert(feature.clone());
+                                        } else {
+                                            self.split_filter_features.remove(feature);
+                                        }
+                                        self.split_active_preset = None;
                                     }
+                                }
+                                ui.separator();
+                                if ui.button("Clear All").clicked() {
+                                    self.split_filter_features.clear();
                                     self.split_active_preset = None;
                                 }
-                            }
-
-                            if ui.small_button("Clear").clicked() {
+                            });
+                        });
+                        if feature_count > 0 {
+                            if ui.small_button("✕").on_hover_text("Clear feature filters").clicked() {
                                 self.split_filter_features.clear();
                                 self.split_active_preset = None;
                             }
-                        });
+                        }
+                    });
+                }
 
-                        // Prefix filters
-                        let prefixes = self.store.get_all_prefixes();
-                        if !prefixes.is_empty() {
-                            ui.add_space(5.0);
-                            ui.label("ID Prefix Filters:");
-                            ui.horizontal_wrapped(|ui| {
+                // ID Prefix Filters dropdown (only if there are non-type prefixes)
+                if !prefixes.is_empty() {
+                    ui.horizontal(|ui| {
+                        ui.label("ID Prefixes:");
+                        let prefix_count = self.split_filter_prefixes.len();
+                        let prefix_label = if prefix_count == 0 {
+                            "All Prefixes ▼".to_string()
+                        } else {
+                            format!("{} selected ▼", prefix_count)
+                        };
+                        let prefix_response = ui.button(&prefix_label);
+                        let popup_id = ui.make_persistent_id("prefix_filter_popup_list2");
+                        if prefix_response.clicked() {
+                            ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+                        }
+                        egui::popup_below_widget(ui, popup_id, &prefix_response, egui::PopupCloseBehavior::CloseOnClickOutside, |ui| {
+                            ui.set_min_width(150.0);
+                            egui::ScrollArea::vertical().max_height(250.0).show(ui, |ui| {
                                 for prefix in &prefixes {
                                     let mut checked = self.split_filter_prefixes.contains(prefix);
                                     if ui.checkbox(&mut checked, prefix).changed() {
@@ -20962,72 +21217,21 @@ fn main() {
                                         self.split_active_preset = None;
                                     }
                                 }
-
-                                if ui.small_button("Clear").clicked() {
+                                ui.separator();
+                                if ui.button("Clear All").clicked() {
                                     self.split_filter_prefixes.clear();
                                     self.split_active_preset = None;
                                 }
                             });
+                        });
+                        if prefix_count > 0 {
+                            if ui.small_button("✕").on_hover_text("Clear prefix filters").clicked() {
+                                self.split_filter_prefixes.clear();
+                                self.split_active_preset = None;
+                            }
                         }
-
-                        // Status filters
-                        ui.add_space(5.0);
-                        ui.label("Status Filters:");
-                        ui.horizontal_wrapped(|ui| {
-                            let statuses = [
-                                (RequirementStatus::Draft, "Draft"),
-                                (RequirementStatus::Approved, "Approved"),
-                                (RequirementStatus::Completed, "Completed"),
-                                (RequirementStatus::Rejected, "Rejected"),
-                            ];
-
-                            for (status, label) in statuses {
-                                let mut checked = self.split_filter_statuses.contains(&status);
-                                if ui.checkbox(&mut checked, label).changed() {
-                                    if checked {
-                                        self.split_filter_statuses.insert(status);
-                                    } else {
-                                        self.split_filter_statuses.remove(&status);
-                                    }
-                                    self.split_active_preset = None;
-                                }
-                            }
-
-                            if ui.small_button("Clear").clicked() {
-                                self.split_filter_statuses.clear();
-                                self.split_active_preset = None;
-                            }
-                        });
-
-                        // Priority filters
-                        ui.add_space(5.0);
-                        ui.label("Priority Filters:");
-                        ui.horizontal_wrapped(|ui| {
-                            let priorities = [
-                                (RequirementPriority::High, "High"),
-                                (RequirementPriority::Medium, "Medium"),
-                                (RequirementPriority::Low, "Low"),
-                            ];
-
-                            for (priority, label) in priorities {
-                                let mut checked = self.split_filter_priorities.contains(&priority);
-                                if ui.checkbox(&mut checked, label).changed() {
-                                    if checked {
-                                        self.split_filter_priorities.insert(priority);
-                                    } else {
-                                        self.split_filter_priorities.remove(&priority);
-                                    }
-                                    self.split_active_preset = None;
-                                }
-                            }
-
-                            if ui.small_button("Clear").clicked() {
-                                self.split_filter_priorities.clear();
-                                self.split_active_preset = None;
-                            }
-                        });
-
                     });
+                }
 
                 ui.add_space(10.0);
                 ui.separator();
