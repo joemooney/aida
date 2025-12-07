@@ -1,9 +1,1 @@
-sessions:
-  169646-51831f55-b4ce-4e68-ab0c-ada4bc7b33f7:
-    session_id: 169646-51831f55-b4ce-4e68-ab0c-ada4bc7b33f7
-    user_name: joe
-    hostname: imac
-    pid: 169646
-    started_at: 2025-12-07T19:37:19.290039720Z
-    last_heartbeat: 2025-12-07T19:40:24.365205717Z
-    editing_requirement: null
+sessions: {}

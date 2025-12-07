@@ -22558,14 +22558,12 @@ impl eframe::App for RequirementsApp {
         }
 
         // '/' to focus search box and clear it (vim-style)
-        // Only trigger when not already in a text input (otherwise '/' would be captured)
-        if !text_input_focused
+        // Check key directly - only block if actually in a text edit (not just wants_keyboard_input)
+        let slash_pressed = ctx.input(|i| i.key_pressed(egui::Key::Slash) && !i.modifiers.shift);
+        let in_text_edit = ctx.memory(|m| m.focused().is_some()) && text_input_focused;
+        if !in_text_edit
             && !self.show_settings_dialog
-            && self.user_settings.keybindings.is_pressed(
-                KeyAction::SwitchToFilterMode,
-                ctx,
-                self.current_key_context,
-            )
+            && slash_pressed
         {
             // Save current search to history before clearing (if not empty and not duplicate)
             if !self.filter_text.is_empty() {
@@ -22585,31 +22583,27 @@ impl eframe::App for RequirementsApp {
 
         // 'v' to open view picker (two-key sequence)
         // Only trigger when not in a text input and no popup is open
-        if !text_input_focused
+        // Check key directly - only block if actually in a text edit (not just wants_keyboard_input)
+        let v_pressed = ctx.input(|i| i.key_pressed(egui::Key::V) && !i.modifiers.ctrl && !i.modifiers.alt);
+        if !in_text_edit
             && !self.show_settings_dialog
             && !self.show_view_picker
             && self.quick_change_field.is_none()
-            && self.user_settings.keybindings.is_pressed(
-                KeyAction::OpenViewPicker,
-                ctx,
-                self.current_key_context,
-            )
+            && v_pressed
         {
             self.show_view_picker = true;
         }
 
         // '?' to show keyboard shortcuts help
         // Only trigger when not in a text input and no popup is open
-        if !text_input_focused
+        // Check key directly - only block if actually in a text edit (not just wants_keyboard_input)
+        let question_pressed = ctx.input(|i| i.key_pressed(egui::Key::Slash) && i.modifiers.shift);
+        if !in_text_edit
             && !self.show_settings_dialog
             && !self.show_view_picker
             && !self.show_keyboard_help
             && self.quick_change_field.is_none()
-            && self.user_settings.keybindings.is_pressed(
-                KeyAction::ShowKeyboardHelp,
-                ctx,
-                self.current_key_context,
-            )
+            && question_pressed
         {
             self.show_keyboard_help = true;
         }
