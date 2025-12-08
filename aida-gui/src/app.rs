@@ -477,10 +477,12 @@ pub struct CustomTheme {
     pub faint_bg: ThemeColor,
 
     // === Text Colors ===
-    /// Primary text color (None = use widget defaults)
-    pub text_color: Option<ThemeColor>,
+    /// Primary text color
+    #[serde(default = "default_text_color")]
+    pub text_color: ThemeColor,
     /// Weak/dim text color (for completed/inactive items)
-    pub weak_text_color: Option<ThemeColor>,
+    #[serde(default = "default_weak_text_color")]
+    pub weak_text_color: ThemeColor,
     /// Hyperlink color
     pub hyperlink_color: ThemeColor,
     /// Warning text color
@@ -594,6 +596,10 @@ pub struct CustomTheme {
     pub priority_low: ThemeColor,
 }
 
+// Default text colors
+fn default_text_color() -> ThemeColor { ThemeColor::new(220, 220, 220) }        // Light gray for dark themes
+fn default_weak_text_color() -> ThemeColor { ThemeColor::new(140, 140, 140) }   // Dimmer gray
+
 // Default success color (for success messages)
 fn default_success_fg() -> ThemeColor { ThemeColor::new(34, 197, 94) }          // Green
 
@@ -636,8 +642,8 @@ impl CustomTheme {
             extreme_bg: ThemeColor::new(10, 10, 10),
             faint_bg: ThemeColor::new(5, 5, 5),
             // Text
-            text_color: None,
-            weak_text_color: None, // Uses egui default when None
+            text_color: ThemeColor::new(220, 220, 220),
+            weak_text_color: ThemeColor::new(140, 140, 140),
             hyperlink_color: ThemeColor::new(90, 170, 255),
             warn_fg: ThemeColor::new(255, 143, 0),
             error_fg: ThemeColor::new(255, 0, 0),
@@ -701,8 +707,8 @@ impl CustomTheme {
             extreme_bg: ThemeColor::new(255, 255, 255),
             faint_bg: ThemeColor::new(245, 245, 245),
             // Text
-            text_color: None,
-            weak_text_color: None, // Uses egui default when None
+            text_color: ThemeColor::new(30, 30, 30),
+            weak_text_color: ThemeColor::new(120, 120, 120),
             hyperlink_color: ThemeColor::new(0, 102, 204),
             warn_fg: ThemeColor::new(255, 100, 0),
             error_fg: ThemeColor::new(220, 0, 0),
@@ -767,8 +773,8 @@ impl CustomTheme {
             extreme_bg: ThemeColor::new(250, 250, 252),
             faint_bg: ThemeColor::new(245, 245, 250),
             // Text
-            text_color: Some(ThemeColor::new(30, 30, 60)),
-            weak_text_color: Some(ThemeColor::new(100, 100, 130)),
+            text_color: ThemeColor::new(30, 30, 60),
+            weak_text_color: ThemeColor::new(100, 100, 130),
             hyperlink_color: ThemeColor::new(37, 99, 235),
             warn_fg: ThemeColor::new(255, 100, 0),
             error_fg: ThemeColor::new(220, 0, 0),
@@ -833,8 +839,8 @@ impl CustomTheme {
             extreme_bg: ThemeColor::new(236, 239, 244),        // nord6
             faint_bg: ThemeColor::new(229, 233, 240),          // nord5
             // Text - Nord Polar Night
-            text_color: Some(ThemeColor::new(46, 52, 64)),     // nord0
-            weak_text_color: Some(ThemeColor::new(76, 86, 106)), // nord3
+            text_color: ThemeColor::new(46, 52, 64),           // nord0
+            weak_text_color: ThemeColor::new(76, 86, 106),     // nord3
             hyperlink_color: ThemeColor::new(94, 129, 172),    // nord10
             warn_fg: ThemeColor::new(208, 135, 112),           // nord12
             error_fg: ThemeColor::new(191, 97, 106),           // nord11
@@ -917,7 +923,7 @@ impl CustomTheme {
         visuals.faint_bg_color = self.faint_bg.to_egui();
 
         // Text colors
-        visuals.override_text_color = self.text_color.map(|c| c.to_egui());
+        visuals.override_text_color = Some(self.text_color.to_egui());
         visuals.hyperlink_color = self.hyperlink_color.to_egui();
         visuals.warn_fg_color = self.warn_fg.to_egui();
         visuals.error_fg_color = self.error_fg.to_egui();
@@ -1259,11 +1265,15 @@ impl Theme {
     }
 
     /// Get the weak/dim text color for this theme (for completed/inactive items)
-    /// Returns None to use egui's default weak_text_color()
-    fn weak_text_color(&self) -> Option<egui::Color32> {
+    fn weak_text_color(&self) -> egui::Color32 {
         match self {
-            Theme::Custom(t) => t.weak_text_color.map(|c| c.to_egui()),
-            _ => None,
+            Theme::Custom(t) => t.weak_text_color.to_egui(),
+            Theme::Dark | Theme::HighContrastDark | Theme::SolarizedDark | Theme::Nord => {
+                egui::Color32::from_rgb(140, 140, 140)
+            }
+            Theme::Light => egui::Color32::from_rgb(120, 120, 120),
+            Theme::NordLight => egui::Color32::from_rgb(76, 86, 106),
+            Theme::VibrantLight => egui::Color32::from_rgb(100, 100, 130),
         }
     }
 }
@@ -12355,39 +12365,12 @@ impl RequirementsApp {
             .num_columns(2)
             .spacing([20.0, 8.0])
             .show(ui, |ui| {
-                ui.label("Override Text Color:");
-                let mut has_override = theme.text_color.is_some();
-                if ui.checkbox(&mut has_override, "Custom text color").changed() {
-                    if has_override {
-                        theme.text_color = Some(ThemeColor::new(200, 200, 200));
-                    } else {
-                        theme.text_color = None;
-                    }
-                }
+                ui.label("Text Color:");
+                color_picker_widget(ui, &mut theme.text_color);
                 ui.end_row();
 
-                if let Some(ref mut color) = theme.text_color {
-                    ui.label("");
-                    color_picker_widget(ui, color);
-                    ui.end_row();
-                }
-
-                ui.label("Dim/Weak Text Color:");
-                ui.horizontal(|ui| {
-                    let mut has_weak = theme.weak_text_color.is_some();
-                    if ui.checkbox(&mut has_weak, "").changed() {
-                        if has_weak {
-                            theme.weak_text_color = Some(ThemeColor::new(120, 120, 120));
-                        } else {
-                            theme.weak_text_color = None;
-                        }
-                    }
-                    if let Some(ref mut color) = theme.weak_text_color {
-                        color_picker_widget(ui, color);
-                    } else {
-                        ui.label("(default)");
-                    }
-                });
+                ui.label("Dim/Weak Text:");
+                color_picker_widget(ui, &mut theme.weak_text_color);
                 ui.end_row();
 
                 ui.label("");
@@ -15309,10 +15292,10 @@ impl RequirementsApp {
             let text_pos = rect.min + egui::vec2(4.0, 2.0);
             // Use theme editor's weak color if editing, otherwise user settings
             let weak_color = if self.show_theme_editor {
-                self.theme_editor_theme.weak_text_color.map(|c| c.to_egui())
+                self.theme_editor_theme.weak_text_color.to_egui()
             } else {
                 self.user_settings.theme.weak_text_color()
-            }.unwrap_or_else(|| ui.visuals().weak_text_color());
+            };
             let text_color = if selected {
                 ui.visuals().selection.stroke.color
             } else if is_inactive {
@@ -15849,10 +15832,10 @@ impl RequirementsApp {
         let text_pos = rect.min + egui::vec2(4.0, 2.0);
         // Use theme editor's weak color if editing, otherwise user settings
         let weak_color = if self.show_theme_editor {
-            self.theme_editor_theme.weak_text_color.map(|c| c.to_egui())
+            self.theme_editor_theme.weak_text_color.to_egui()
         } else {
             self.user_settings.theme.weak_text_color()
-        }.unwrap_or_else(|| ui.visuals().weak_text_color());
+        };
         let text_color = if dimmed {
             // Greyed out for non-matching ancestors
             weak_color
