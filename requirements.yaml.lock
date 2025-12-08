@@ -1,9 +1,1 @@
-sessions:
-  184879-8420dbb0-c95f-47aa-a579-eecb9c270198:
-    session_id: 184879-8420dbb0-c95f-47aa-a579-eecb9c270198
-    user_name: joe
-    hostname: imac
-    pid: 184879
-    started_at: 2025-12-07T23:31:01.002746829Z
-    last_heartbeat: 2025-12-07T23:33:38.786136105Z
-    editing_requirement: null
+sessions: {}

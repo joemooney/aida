@@ -21,6 +21,7 @@ A comprehensive guide for developers maintaining and extending the AIDA (AI Desi
 11. [Common Development Tasks](#11-common-development-tasks)
 12. [Code Patterns & Conventions](#12-code-patterns--conventions)
 13. [Troubleshooting](#13-troubleshooting)
+14. [Code Traceability & Git Hooks](#14-code-traceability--git-hooks)
 
 ---
 
@@ -64,7 +65,8 @@ aida/
 │       ├── storage.rs         # YAML file I/O
 │       ├── registry.rs        # Multi-project management
 │       ├── project.rs         # Project resolution
-│       └── export.rs          # Export functionality
+│       ├── export.rs          # Export functionality
+│       └── scaffolding.rs     # Claude Code scaffolding & git hooks
 ├── aida-cli/                  # Command-line interface
 │   ├── Cargo.toml
 │   └── src/
@@ -1236,6 +1238,123 @@ egui::Frame::none()
 2. **Use `ScrollArea`** for long lists
 3. **Collapse complex UI** when not visible
 4. **Cache computed values** when possible
+
+---
+
+## 14. Code Traceability & Git Hooks
+
+AIDA supports inline code traceability comments and can generate Git hooks to validate them.
+
+### 14.1 Trace Comment Format
+
+When implementing requirements, add inline trace comments to link code back to requirement IDs:
+
+```rust
+// trace:FR-0042 | ai:claude:high
+fn implement_feature() {
+    // Implementation
+}
+```
+
+**Format:** `// trace:<SPEC-ID> | ai:<tool>:<confidence>`
+
+| Component | Values | Description |
+|-----------|--------|-------------|
+| `SPEC-ID` | FR-0042, SR-0001, etc. | Requirement identifier |
+| `tool` | claude, copilot, chatgpt | AI tool that generated the code |
+| `confidence` | high, med, low | Level of AI contribution |
+
+**Confidence Levels:**
+- `high`: >80% AI-generated code
+- `med`: 40-80% AI with human modifications
+- `low`: <40% AI, mostly human written
+
+**Language-specific comment styles:**
+- Rust/C/JavaScript: `// trace:...`
+- Python/Shell: `# trace:...`
+- HTML: `<!-- trace:... -->`
+
+### 14.2 Git Hooks
+
+AIDA scaffolding can generate Git hooks to validate code traceability.
+
+#### commit-msg Hook
+
+Validates commit messages when committing files with trace comments:
+
+- **Warns** if staged files have trace comments but commit lacks `[AI:tool:conf]` tag
+- **Suggests** adding `Trace: SPEC-ID` for requirements referenced in staged files
+- **Non-blocking** by default (warnings only)
+
+**Suggested commit message format:**
+```
+[AI:claude:high] feat(auth): add JWT refresh endpoint
+
+Trace: FR-0042, FR-0043
+```
+
+#### pre-commit Hook
+
+Validates trace comments before allowing commits:
+
+- **Checks** that all referenced spec IDs exist in the AIDA database
+- **Warns** about orphaned trace comments
+- **Non-blocking** by default
+
+### 14.3 Enabling Git Hooks
+
+Git hooks are generated as part of project scaffolding:
+
+1. Open AIDA GUI
+2. Go to **Settings > AI tab**
+3. Click **"Scaffold Project"**
+4. Enable **"Generate Git Hooks"** checkbox
+5. Optionally enable **"Include pre-commit hook"**
+6. Click **"Apply"**
+
+Or use the `ScaffoldConfig` programmatically:
+
+```rust
+use aida_core::scaffolding::{ScaffoldConfig, Scaffolder};
+
+let config = ScaffoldConfig {
+    generate_git_hooks: true,
+    include_commit_msg_hook: true,
+    include_pre_commit_hook: true,
+    ..Default::default()
+};
+
+let scaffolder = Scaffolder::new(project_root, config);
+let preview = scaffolder.preview(&store);
+scaffolder.apply(&preview)?;
+```
+
+### 14.4 Hook Configuration
+
+The generated hooks are located in `.git/hooks/` and are non-blocking by default. To make them blocking:
+
+**commit-msg:** Edit `.git/hooks/commit-msg` and change `exit 0` to `exit 1` where indicated.
+
+**pre-commit:** Edit `.git/hooks/pre-commit` and uncomment the blocking exit logic.
+
+### 14.5 ScaffoldConfig Options
+
+```rust
+pub struct ScaffoldConfig {
+    // ... other fields ...
+
+    /// Generate git hooks for traceability validation
+    pub generate_git_hooks: bool,        // default: true
+
+    /// Include commit-msg hook for AI attribution validation
+    pub include_commit_msg_hook: bool,   // default: true
+
+    /// Include pre-commit hook for trace comment validation
+    pub include_pre_commit_hook: bool,   // default: false (optional)
+}
+```
+
+**Note:** Git hooks are only generated if a `.git` directory exists in the project root.
 
 ---
 

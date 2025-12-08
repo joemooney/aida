@@ -575,7 +575,7 @@ requirements:
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-11-25T23:51:23.542112733Z
-  modified_at: 2025-12-07T17:00:49.761865253Z
+  modified_at: 2025-12-08T00:06:08.498049497Z
   req_type: Functional
   relationships:
   - rel_type: Child
@@ -596,14 +596,14 @@ requirements:
     target_id: a309fe3f-1463-4ac9-9272-270615959eaf
     created_at: 2025-12-07T05:56:15.206912518Z
     created_by: Joe Mooney
-  - rel_type: !Custom sprint_assignment
-    target_id: 75cd3a04-28e1-466b-aec8-a5ee9a855473
-    created_at: 2025-12-07T17:00:49.761864750Z
-    created_by: Joe Mooney
   - rel_type: Child
     target_id: 404b7457-67a2-4376-a0d3-9c5ea1547951
     created_at: 2025-12-07T17:02:15.931002043Z
     created_by: Joe Mooney
+  - rel_type: !Custom sprint_assignment
+    target_id: 75cd3a04-28e1-466b-aec8-a5ee9a855473
+    created_at: 2025-12-08T00:06:08.498049179Z
+    created_by: joe
   history:
   - id: bc863c32-e57c-469a-84d1-39b682469d24
     author: '@joe'
@@ -635,6 +635,13 @@ requirements:
   - id: a340fdb9-7f1f-4764-ac42-b324513f585a
     author: Joe Mooney
     timestamp: 2025-12-07T17:00:49.761867587Z
+    changes:
+    - field_name: sprint_assignment
+      old_value: ''
+      new_value: REQ-0207
+  - id: e3b110cd-677c-4667-b881-2fdeef205f56
+    author: joe
+    timestamp: 2025-12-08T00:06:08.498051822Z
     changes:
     - field_name: sprint_assignment
       old_value: ''
@@ -1551,7 +1558,7 @@ requirements:
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-11-27T04:10:22.591989434Z
-  modified_at: 2025-11-27T04:22:15.626866171Z
+  modified_at: 2025-12-08T00:04:22.273338311Z
   req_type: Functional
   relationships:
   - rel_type: Child
@@ -3449,10 +3456,10 @@ requirements:
       - If neither is set: "Requirements Manager"
   status: Approved
   priority: Medium
-  owner: ''
+  owner: bill
   feature: 97-Uncategorized
   created_at: 2025-11-27T22:29:31.052887770Z
-  modified_at: 2025-11-29T19:45:28.298966411Z
+  modified_at: 2025-12-08T00:05:50.238597156Z
   req_type: Functional
   relationships:
   - rel_type: Parent
@@ -3549,6 +3556,13 @@ requirements:
     - field_name: status
       old_value: Draft
       new_value: Approved
+  - id: b6653e3d-baec-46ad-9d77-b4445708f08e
+    author: Joe Mooney
+    timestamp: 2025-12-08T00:05:50.238599403Z
+    changes:
+    - field_name: owner
+      old_value: ''
+      new_value: bill
 - id: 0b904a04-4422-4767-a7b6-28b9a721a1b9
   spec_id: MOUSE-0070
   prefix_override: MOUSE
@@ -6710,6 +6724,15 @@ requirements:
     target_id: 4de3b4f0-b157-4d50-8549-e98153d2324d
     created_at: 2025-12-01T06:03:23.444036238Z
     created_by: Unknown User
+  - rel_type: Parent
+    target_id: fe78b68a-197d-496d-a138-cbdf4dc23f42
+    created_at: 2025-12-08T00:37:00.540550037Z
+  - rel_type: Parent
+    target_id: 6c3fce83-3bd1-4946-9644-be6732f0e94a
+    created_at: 2025-12-08T00:37:02.226347717Z
+  - rel_type: Parent
+    target_id: 8c8a33e5-d83c-4218-8493-6d54db64a431
+    created_at: 2025-12-08T00:37:03.674527416Z
   history:
   - id: c7d3c62c-879f-4702-8d43-d3c4a07f3f96
     author: Unknown User
@@ -9159,6 +9182,10 @@ requirements:
     target_id: 5a4d7c64-5fa3-46d9-be91-4fb656fc2fd3
     created_at: 2025-12-07T19:45:45.419077759Z
     created_by: joe
+  - rel_type: Child
+    target_id: 2b1793fb-87e1-4c19-8e9b-419c4ab020c8
+    created_at: 2025-12-08T00:33:39.062074685Z
+    created_by: joe
   history:
   - id: 3175b782-1486-43c9-af60-8f240abb49ed
     author: joe
@@ -9184,6 +9211,161 @@ requirements:
     target_id: 8e4988b4-b850-4f46-ac4d-ed3f1bb93003
     created_at: 2025-12-07T19:45:45.419077759Z
     created_by: joe
+- id: 2b1793fb-87e1-4c19-8e9b-419c4ab020c8
+  spec_id: FR-0225
+  title: When search mode is active and reqs are found a...
+  description: |-
+    When search mode is active and reqs are found arrow keys misbehave
+
+    there is a clash between normal arrow keys up/down and the selected reqs when we are in search mode. maybe the up/down should only be allowed to navigate to matching reqs?
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 97-Uncategorized
+  created_at: 2025-12-08T00:33:39.000717746Z
+  created_by: joe
+  modified_at: 2025-12-08T00:33:39.000717746Z
+  req_type: Functional
+  relationships:
+  - rel_type: Parent
+    target_id: 8e4988b4-b850-4f46-ac4d-ed3f1bb93003
+    created_at: 2025-12-08T00:33:39.062074685Z
+    created_by: joe
+- id: fe78b68a-197d-496d-a138-cbdf4dc23f42
+  spec_id: FR-0226
+  title: Git Hooks for Code Traceability Validation
+  description: |-
+    The system shall generate Git hooks as part of project scaffolding to validate code traceability.
+
+    ### Git Hooks Generated
+
+    #### commit-msg Hook
+    Validates commit messages for AI attribution format:
+    - Warns if commits touch files with trace comments but don't have [AI:tool:conf] tag
+    - Suggests adding trace references for affected requirements
+    - Non-blocking (warnings only, does not reject commits)
+
+    #### pre-commit Hook (Optional)
+    - Validates that new functions/methods in AI-tagged files have trace comments
+    - Checks for orphaned trace comments (referencing non-existent requirements)
+    - Can be configured to be blocking or warning-only
+
+    ### Hook Configuration
+    Hooks should be configurable via .aida/hooks.yaml
+
+    ### Installation
+    - Scaffolder generates hooks in .git/hooks/ directory
+    - Hooks are executable bash scripts
+    - Include AIDA CLI calls to validate against requirements database
+
+    ### Acceptance Criteria
+    - [ ] commit-msg hook generated by scaffolder
+    - [ ] pre-commit hook generated by scaffolder (optional)
+    - [ ] Hooks validate trace comment format
+    - [ ] Hooks query AIDA for requirement existence
+    - [ ] Configuration file controls hook behavior
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 118-Uncategorized
+  created_at: 2025-12-08T00:36:08.972058026Z
+  modified_at: 2025-12-08T00:36:08.972058026Z
+  req_type: Functional
+- id: 6c3fce83-3bd1-4946-9644-be6732f0e94a
+  spec_id: FR-0227
+  title: Code Traceability Query and Reporting
+  description: |-
+    The system shall provide CLI commands to query code traceability information.
+
+    ### Commands
+
+    #### aida trace find <SPEC-ID>
+    Find all code files/locations that implement a given requirement.
+    - Scans source files for trace comments matching the spec ID
+    - Returns file paths and line numbers
+    - Supports glob patterns for file filtering
+
+    #### aida trace list [--file <path>]
+    List all trace comments in the project or a specific file.
+    - Shows spec ID, tool, confidence for each trace
+    - Groups by file or by requirement
+    - Supports JSON output for tooling integration
+
+    #### aida trace validate
+    Validate trace comment integrity:
+    - Check that all referenced spec IDs exist in database
+    - Warn about orphaned traces
+    - Check for duplicate traces
+
+    #### aida trace stats
+    Show traceability statistics:
+    - Total files with traces
+    - Traces per requirement
+    - AI tool distribution (claude, copilot, etc.)
+    - Confidence level distribution
+
+    ### Output Formats
+    - Default: Human-readable table
+    - --json: Machine-parsable JSON
+    - --markdown: Markdown table for documentation
+
+    ### Acceptance Criteria
+    - [ ] aida trace find command implemented
+    - [ ] aida trace list command implemented
+    - [ ] aida trace validate command implemented
+    - [ ] aida trace stats command implemented
+    - [ ] JSON output supported
+    - [ ] Integration with existing aida commands
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 119-Uncategorized
+  created_at: 2025-12-08T00:36:26.661484705Z
+  modified_at: 2025-12-08T00:36:26.661484705Z
+  req_type: Functional
+- id: 8c8a33e5-d83c-4218-8493-6d54db64a431
+  spec_id: FR-0228
+  title: CI/CD Template Generation for Traceability
+  description: |-
+    The system shall generate CI/CD pipeline templates that validate code traceability.
+
+    ### Templates Generated
+
+    #### GitHub Actions (.github/workflows/aida-validate.yml)
+    - Runs on pull requests
+    - Validates trace comments exist for changed files
+    - Comments on PR with traceability report
+    - Optional: Block merge if traces missing
+
+    #### GitLab CI (.gitlab-ci.yml snippet)
+    - Validation job for merge requests
+    - Traceability report as artifact
+
+    ### Validation Rules (Configurable)
+    - require_traces: Require trace comments for new code
+    - require_review: Require reviewed flag on AI code
+    - max_ai_percent: Maximum allowed AI-generated code percentage
+    - orphan_check: Fail on orphaned trace references
+
+    ### Generated Report
+    Pipeline generates a traceability report showing:
+    - Files changed and their trace status
+    - Requirements affected by the PR
+    - AI percentage of changes
+
+    ### Acceptance Criteria
+    - [ ] GitHub Actions template generated by scaffolder
+    - [ ] GitLab CI template generated by scaffolder
+    - [ ] Templates are functional out of the box
+    - [ ] Configuration options documented
+    - [ ] PR comment integration works
+  status: Draft
+  priority: Low
+  owner: ''
+  feature: 120-Uncategorized
+  created_at: 2025-12-08T00:36:37.498405131Z
+  modified_at: 2025-12-08T00:36:37.498405131Z
+  req_type: Functional
 users:
 - id: 150164ef-32ed-4d61-8cec-e887ac78cfd7
   spec_id: $USER-001
@@ -9281,8 +9463,8 @@ id_config:
     prefix: SPIKE
     description: Research or investigation task to reduce uncertainty or explore technical approaches
 features: []
-next_feature_number: 118
-next_spec_number: 225
+next_feature_number: 121
+next_spec_number: 229
 prefix_counters: {}
 relationship_definitions:
 - name: parent
