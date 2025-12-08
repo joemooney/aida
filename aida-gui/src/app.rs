@@ -922,21 +922,24 @@ impl CustomTheme {
         visuals.extreme_bg_color = self.extreme_bg.to_egui();
         visuals.faint_bg_color = self.faint_bg.to_egui();
 
-        // Text colors
-        visuals.override_text_color = Some(self.text_color.to_egui());
+        // Text colors - set through widget fg_stroke instead of override_text_color
+        // This allows weak_text_color to work properly for inactive items
+        visuals.override_text_color = None;
         visuals.hyperlink_color = self.hyperlink_color.to_egui();
         visuals.warn_fg_color = self.warn_fg.to_egui();
         visuals.error_fg_color = self.error_fg.to_egui();
 
-        // Widgets - noninteractive
+        // Widgets - noninteractive (includes labels)
         visuals.widgets.noninteractive.bg_fill = self.widget_bg.to_egui();
         visuals.widgets.noninteractive.fg_stroke =
-            egui::Stroke::new(1.0, self.widget_fg.to_egui());
+            egui::Stroke::new(1.0, self.text_color.to_egui());
 
         // Widgets - interactive states
         visuals.widgets.inactive.bg_fill = self.widget_inactive_bg.to_egui();
         visuals.widgets.inactive.bg_stroke =
             egui::Stroke::new(self.widget_stroke_width, self.widget_stroke_color.to_egui());
+        visuals.widgets.inactive.fg_stroke =
+            egui::Stroke::new(1.0, self.text_color.to_egui());
         visuals.widgets.inactive.rounding = egui::Rounding::same(self.widget_rounding);
 
         visuals.widgets.hovered.bg_fill = self.widget_hovered_bg.to_egui();
@@ -944,6 +947,8 @@ impl CustomTheme {
             self.widget_stroke_width,
             self.widget_hovered_stroke_color.to_egui(),
         );
+        visuals.widgets.hovered.fg_stroke =
+            egui::Stroke::new(1.0, self.text_color.to_egui());
         visuals.widgets.hovered.rounding = egui::Rounding::same(self.widget_rounding);
 
         visuals.widgets.active.bg_fill = self.widget_active_bg.to_egui();
@@ -951,9 +956,13 @@ impl CustomTheme {
             self.widget_stroke_width,
             self.widget_active_stroke_color.to_egui(),
         );
+        visuals.widgets.active.fg_stroke =
+            egui::Stroke::new(1.0, self.text_color.to_egui());
         visuals.widgets.active.rounding = egui::Rounding::same(self.widget_rounding);
 
         visuals.widgets.open.bg_fill = self.widget_open_bg.to_egui();
+        visuals.widgets.open.fg_stroke =
+            egui::Stroke::new(1.0, self.text_color.to_egui());
         visuals.widgets.open.rounding = egui::Rounding::same(self.widget_rounding);
 
         // Selection
