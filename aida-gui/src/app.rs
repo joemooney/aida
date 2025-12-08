@@ -2684,6 +2684,8 @@ pub struct RequirementsApp {
     kanban_drag_card: Option<Uuid>,                 // Card being dragged
     kanban_drop_column: Option<String>,             // Column being hovered for drop
     kanban_detail_modal: Option<usize>,             // Index of requirement to show in detail modal
+    kanban_selected_column: usize,                   // Currently selected column index
+    kanban_selected_card: usize,                     // Currently selected card index within column
 
     filter_types: HashSet<RequirementType>, // Root filter: Empty = show all
     filter_features: HashSet<String>,       // Root filter: Empty = show all
@@ -3286,6 +3288,8 @@ impl RequirementsApp {
             kanban_drag_card: None,
             kanban_drop_column: None,
             kanban_detail_modal: None,
+            kanban_selected_column: 0,
+            kanban_selected_card: 0,
             filter_types: HashSet::new(),
             filter_features: HashSet::new(),
             filter_prefixes: HashSet::new(),
@@ -9045,7 +9049,7 @@ impl RequirementsApp {
     }
 
     /// Render a single KanBan column, returns the column rect for drop detection
-    fn render_kanban_column(&mut self, ui: &mut egui::Ui, column: &KanBanColumn, width: f32, _col_idx: usize) -> egui::Rect {
+    fn render_kanban_column(&mut self, ui: &mut egui::Ui, column: &KanBanColumn, width: f32, col_idx: usize) -> egui::Rect {
         // Get requirements for this column
         let reqs_in_column: Vec<(usize, Uuid, String, String, String)> = self.store.requirements
             .iter()
@@ -9133,8 +9137,8 @@ impl RequirementsApp {
                         .max_height(ui.available_height() - 30.0)
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
-                            for (idx, req_id, spec_id, title, owner) in reqs_in_column {
-                                self.render_kanban_card(ui, idx, &req_id, &spec_id, &title, &owner, &column_value);
+                            for (card_idx, (idx, req_id, spec_id, title, owner)) in reqs_in_column.iter().enumerate() {
+                                self.render_kanban_card(ui, *idx, req_id, spec_id, title, owner, &column_value, col_idx, card_idx);
                             }
 
                             // Drop zone hint when empty
@@ -9173,14 +9177,17 @@ impl RequirementsApp {
         title: &str,
         owner: &str,
         _column_value: &str,
+        col_idx: usize,
+        card_idx: usize,
     ) {
         let is_this_card_dragging = self.kanban_drag_card == Some(*req_id);
         let is_selected = self.selected_idx == Some(idx);
+        let is_keyboard_selected = self.kanban_selected_column == col_idx && self.kanban_selected_card == card_idx;
 
         // Card appearance based on state
         let card_color = if is_this_card_dragging {
             egui::Color32::from_rgb(180, 180, 255) // Purple tint for dragging card
-        } else if is_selected {
+        } else if is_selected || is_keyboard_selected {
             ui.visuals().selection.bg_fill
         } else {
             ui.visuals().widgets.inactive.bg_fill
@@ -9188,6 +9195,8 @@ impl RequirementsApp {
 
         let card_stroke = if is_this_card_dragging {
             egui::Stroke::new(2.0, egui::Color32::from_rgb(100, 100, 200))
+        } else if is_keyboard_selected {
+            egui::Stroke::new(2.0, ui.visuals().selection.stroke.color)
         } else {
             egui::Stroke::new(1.0, ui.visuals().widgets.inactive.bg_stroke.color)
         };
@@ -9233,11 +9242,17 @@ impl RequirementsApp {
         if open_modal {
             self.selected_idx = Some(idx);
             self.kanban_detail_modal = Some(idx);
+            // Sync keyboard selection with mouse click
+            self.kanban_selected_column = col_idx;
+            self.kanban_selected_card = card_idx;
         }
 
         // Single click selects the card (when using right-click for modal)
         if response.clicked() && self.kanban_drag_card.is_none() {
             self.selected_idx = Some(idx);
+            // Sync keyboard selection with mouse click
+            self.kanban_selected_column = col_idx;
+            self.kanban_selected_card = card_idx;
         }
 
         // Double click - open edit view
@@ -9246,6 +9261,9 @@ impl RequirementsApp {
             self.kanban_detail_modal = None; // Close any open modal
             self.load_form_from_requirement(idx);
             self.pending_view_change = Some(View::Edit);
+            // Sync keyboard selection with mouse click
+            self.kanban_selected_column = col_idx;
+            self.kanban_selected_card = card_idx;
         }
 
         // Drag start - begin dragging this card
@@ -9274,6 +9292,144 @@ impl RequirementsApp {
             // Save changes
             if let Err(e) = self.storage.save(&self.store) {
                 eprintln!("Failed to save after KanBan update: {}", e);
+            }
+        }
+    }
+
+    /// Get the cards per column for keyboard navigation
+    /// Returns a Vec of (column_value, Vec of (req_index, req_id))
+    fn get_kanban_cards_by_column(&self) -> Vec<(String, Vec<(usize, Uuid)>)> {
+        let columns = self.get_kanban_columns();
+        columns.iter().map(|column| {
+            let cards: Vec<(usize, Uuid)> = self.store.requirements
+                .iter()
+                .enumerate()
+                .filter(|(_, r)| {
+                    // Filter by archived
+                    if r.archived && !self.show_archived {
+                        return false;
+                    }
+                    // Exclude Folder types
+                    if r.req_type == RequirementType::Folder {
+                        return false;
+                    }
+                    // Filter by type if set
+                    if let Some(ref filter_type) = self.kanban_filter_type {
+                        if &r.req_type != filter_type {
+                            return false;
+                        }
+                    }
+                    // Filter by column value
+                    let value = self.get_kanban_field_value(r);
+                    value == column.value
+                })
+                .map(|(idx, r)| (idx, r.id))
+                .collect();
+            (column.value.clone(), cards)
+        }).collect()
+    }
+
+    /// Handle keyboard navigation in Kanban view
+    fn handle_kanban_keyboard(&mut self, ctx: &egui::Context) {
+        // Don't handle navigation if dragging or if there's a popup open
+        if self.kanban_drag_card.is_some() || self.quick_change_field.is_some() {
+            return;
+        }
+
+        let columns_data = self.get_kanban_cards_by_column();
+        if columns_data.is_empty() {
+            return;
+        }
+
+        // Check for arrow key presses (or vim keys h/j/k/l)
+        let (left, right, up, down, space) = ctx.input(|i| {
+            (
+                i.key_pressed(egui::Key::ArrowLeft) || i.key_pressed(egui::Key::H),
+                i.key_pressed(egui::Key::ArrowRight) || i.key_pressed(egui::Key::L),
+                i.key_pressed(egui::Key::ArrowUp) || i.key_pressed(egui::Key::K),
+                i.key_pressed(egui::Key::ArrowDown) || i.key_pressed(egui::Key::J),
+                i.key_pressed(egui::Key::Space),
+            )
+        });
+
+        // Space toggles the detail modal
+        if space {
+            if self.kanban_detail_modal.is_some() {
+                // Close modal
+                self.kanban_detail_modal = None;
+            } else if let Some(idx) = self.selected_idx {
+                // Open modal for currently selected card
+                self.kanban_detail_modal = Some(idx);
+            }
+            return;
+        }
+
+        // Left/Right changes column
+        if left {
+            if self.kanban_selected_column > 0 {
+                self.kanban_selected_column -= 1;
+            } else {
+                // Wrap to last column
+                self.kanban_selected_column = columns_data.len().saturating_sub(1);
+            }
+            // Clamp card index to new column
+            let cards_in_new_col = columns_data.get(self.kanban_selected_column)
+                .map(|(_, cards)| cards.len())
+                .unwrap_or(0);
+            if cards_in_new_col > 0 {
+                self.kanban_selected_card = self.kanban_selected_card.min(cards_in_new_col - 1);
+            } else {
+                self.kanban_selected_card = 0;
+            }
+            self.update_kanban_selection(&columns_data);
+        } else if right {
+            if self.kanban_selected_column < columns_data.len().saturating_sub(1) {
+                self.kanban_selected_column += 1;
+            } else {
+                // Wrap to first column
+                self.kanban_selected_column = 0;
+            }
+            // Clamp card index to new column
+            let cards_in_new_col = columns_data.get(self.kanban_selected_column)
+                .map(|(_, cards)| cards.len())
+                .unwrap_or(0);
+            if cards_in_new_col > 0 {
+                self.kanban_selected_card = self.kanban_selected_card.min(cards_in_new_col - 1);
+            } else {
+                self.kanban_selected_card = 0;
+            }
+            self.update_kanban_selection(&columns_data);
+        }
+
+        // Up/Down navigates within current column
+        if let Some((_, cards)) = columns_data.get(self.kanban_selected_column) {
+            if !cards.is_empty() {
+                if up {
+                    if self.kanban_selected_card > 0 {
+                        self.kanban_selected_card -= 1;
+                    } else {
+                        // Wrap to bottom
+                        self.kanban_selected_card = cards.len() - 1;
+                    }
+                    self.update_kanban_selection(&columns_data);
+                } else if down {
+                    if self.kanban_selected_card < cards.len() - 1 {
+                        self.kanban_selected_card += 1;
+                    } else {
+                        // Wrap to top
+                        self.kanban_selected_card = 0;
+                    }
+                    self.update_kanban_selection(&columns_data);
+                }
+            }
+        }
+    }
+
+    /// Update selected_idx based on kanban column/card selection
+    fn update_kanban_selection(&mut self, columns_data: &[(String, Vec<(usize, Uuid)>)]) {
+        if let Some((_, cards)) = columns_data.get(self.kanban_selected_column) {
+            if let Some((idx, _)) = cards.get(self.kanban_selected_card) {
+                self.selected_idx = Some(*idx);
             }
         }
     }
@@ -16168,6 +16324,17 @@ impl RequirementsApp {
                                 show_shortcut(ui, "v s", "Sprint Planning");
                                 ui.add_space(8.0);
 
+                                // Kanban section
+                                ui.label(egui::RichText::new("Kanban Board").strong());
+                                ui.add_space(4.0);
+                                show_shortcut(ui, "h / ←", "Move to left column");
+                                show_shortcut(ui, "l / →", "Move to right column");
+                                show_shortcut(ui, "j / ↓", "Move down in column");
+                                show_shortcut(ui, "k / ↑", "Move up in column");
+                                show_shortcut(ui, "Space", "Open/close detail modal");
+                                show_shortcut(ui, "s,p,o,f", "Quick actions in modal");
+                                ui.add_space(8.0);
+
                                 // Quick actions section
                                 ui.label(egui::RichText::new("Quick Actions").strong());
                                 ui.small("Opens picker for selected item:");
@@ -22725,11 +22892,12 @@ impl eframe::App for RequirementsApp {
 
             // Check navigation keybindings (context-aware)
             // Block list navigation when status popup is open or delete confirm is pending
-            // Also skip for Timeline and Planning views - they have their own navigation handling
+            // Also skip for Timeline, Planning, and KanBan views - they have their own navigation handling
             let can_navigate = self.quick_change_field.is_none() && self.pending_delete_confirm.is_none();
             let in_timeline = self.current_view == View::Timeline;
             let in_planning = self.current_view == View::Planning;
-            if !in_timeline && !in_planning && can_navigate
+            let in_kanban = self.current_view == View::KanBan;
+            if !in_timeline && !in_planning && !in_kanban && can_navigate
                 && (self.user_settings.keybindings.is_pressed(
                     KeyAction::NavigateDown,
                     ctx,
@@ -22741,7 +22909,7 @@ impl eframe::App for RequirementsApp {
                 ))
             {
                 nav_delta = 1;
-            } else if !in_timeline && !in_planning && can_navigate
+            } else if !in_timeline && !in_planning && !in_kanban && can_navigate
                 && (self.user_settings.keybindings.is_pressed(
                     KeyAction::NavigateUp,
                     ctx,
@@ -22756,8 +22924,8 @@ impl eframe::App for RequirementsApp {
             }
 
             // Page Up/Down, Home/End, and Mouse Wheel (only when not in text input)
-            // Skip for Timeline and Planning views - they have their own handling
-            if nav_context_active && !in_timeline && !in_planning {
+            // Skip for Timeline, Planning, and KanBan views - they have their own handling
+            if nav_context_active && !in_timeline && !in_planning && !in_kanban {
                 ctx.input(|i| {
                     // Page Up/Down
                     if i.key_pressed(egui::Key::PageDown) {
@@ -22985,8 +23153,8 @@ impl eframe::App for RequirementsApp {
                 FocusedList::List2 => (self.get_split_filtered_indices(), self.split_selected_idx),
             };
 
-            // Skip requirements list navigation when in Timeline or Planning view (they have their own navigation)
-            if !in_timeline && !in_planning && !filtered_indices.is_empty() {
+            // Skip requirements list navigation when in Timeline, Planning, or KanBan view (they have their own navigation)
+            if !in_timeline && !in_planning && !in_kanban && !filtered_indices.is_empty() {
                 let new_selection = if jump_to_start {
                     // Jump to first item
                     Some(filtered_indices[0])
@@ -23533,6 +23701,9 @@ impl eframe::App for RequirementsApp {
             egui::CentralPanel::default().show(ctx, |ui| {
                 self.show_kanban_view(ui);
             });
+
+            // Handle keyboard navigation for Kanban
+            self.handle_kanban_keyboard(ctx);
 
             // KanBan detail modal window
             self.show_kanban_detail_modal(ctx);
