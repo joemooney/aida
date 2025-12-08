@@ -9342,15 +9342,64 @@ impl RequirementsApp {
         }
 
         // Check for arrow key presses (or vim keys h/j/k/l)
-        let (left, right, up, down, space) = ctx.input(|i| {
+        // Also check for Ctrl+H/L to move card to adjacent column
+        let (left, right, up, down, space, ctrl_left, ctrl_right) = ctx.input(|i| {
+            let ctrl = i.modifiers.ctrl || i.modifiers.mac_cmd;
             (
-                i.key_pressed(egui::Key::ArrowLeft) || i.key_pressed(egui::Key::H),
-                i.key_pressed(egui::Key::ArrowRight) || i.key_pressed(egui::Key::L),
+                !ctrl && (i.key_pressed(egui::Key::ArrowLeft) || i.key_pressed(egui::Key::H)),
+                !ctrl && (i.key_pressed(egui::Key::ArrowRight) || i.key_pressed(egui::Key::L)),
                 i.key_pressed(egui::Key::ArrowUp) || i.key_pressed(egui::Key::K),
                 i.key_pressed(egui::Key::ArrowDown) || i.key_pressed(egui::Key::J),
                 i.key_pressed(egui::Key::Space),
+                ctrl && i.key_pressed(egui::Key::H),
+                ctrl && i.key_pressed(egui::Key::L),
             )
         });
+
+        // Ctrl+H/L moves the selected card to the previous/next column
+        if ctrl_left || ctrl_right {
+            if let Some((_, cards)) = columns_data.get(self.kanban_selected_column) {
+                if let Some((_, req_id)) = cards.get(self.kanban_selected_card) {
+                    let target_col_idx = if ctrl_left {
+                        // Move left (don't wrap)
+                        if self.kanban_selected_column > 0 {
+                            Some(self.kanban_selected_column - 1)
+                        } else {
+                            None
+                        }
+                    } else {
+                        // Move right (don't wrap)
+                        if self.kanban_selected_column < columns_data.len() - 1 {
+                            Some(self.kanban_selected_column + 1)
+                        } else {
+                            None
+                        }
+                    };
+
+                    if let Some(new_col_idx) = target_col_idx {
+                        if let Some((target_col_value, _)) = columns_data.get(new_col_idx) {
+                            // Move the card to the new column
+                            self.update_kanban_field(req_id, target_col_value);
+                            // Update selection to follow the card
+                            self.kanban_selected_column = new_col_idx;
+                            // Card will be at the end of the new column, so set card index to 0
+                            // (cards aren't sorted, so just keep at same position or clamp)
+                            self.kanban_selected_card = 0;
+                            // Re-fetch columns after update and find the card
+                            let new_columns = self.get_kanban_cards_by_column();
+                            if let Some((_, new_cards)) = new_columns.get(new_col_idx) {
+                                // Find the card in the new column
+                                if let Some(pos) = new_cards.iter().position(|(_, id)| id == req_id) {
+                                    self.kanban_selected_card = pos;
+                                }
+                            }
+                            self.update_kanban_selection(&new_columns);
+                        }
+                    }
+                }
+            }
+            return;
+        }
 
         // Space toggles the detail modal
         if space {
@@ -16331,6 +16380,8 @@ impl RequirementsApp {
                                 show_shortcut(ui, "l / →", "Move to right column");
                                 show_shortcut(ui, "j / ↓", "Move down in column");
                                 show_shortcut(ui, "k / ↑", "Move up in column");
+                                show_shortcut(ui, "Ctrl+h", "Move card to left column");
+                                show_shortcut(ui, "Ctrl+l", "Move card to right column");
                                 show_shortcut(ui, "Space", "Open/close detail modal");
                                 show_shortcut(ui, "s,p,o,f", "Quick actions in modal");
                                 ui.add_space(8.0);
