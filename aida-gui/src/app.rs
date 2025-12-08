@@ -3054,6 +3054,12 @@ pub struct RequirementsApp {
     ai_subtab: AiSubTab,
     // Skills loaded from .claude/skills/ directory
     loaded_skills: Vec<(String, String)>, // (filename, content)
+    // Skill editor modal
+    show_skill_editor: bool,
+    skill_editor_filename: String,
+    skill_editor_content: String,
+    skill_editor_original_content: String,
+    skill_editor_edit_mode: bool,
     // Prefix rename dialog
     rename_prefix_from: String,
     rename_prefix_to: String,
@@ -3682,6 +3688,11 @@ impl RequirementsApp {
             ids_subtab: IdsSubTab::default(),
             ai_subtab: AiSubTab::default(),
             loaded_skills: Vec::new(),
+            show_skill_editor: false,
+            skill_editor_filename: String::new(),
+            skill_editor_content: String::new(),
+            skill_editor_original_content: String::new(),
+            skill_editor_edit_mode: false,
             rename_prefix_from: String::new(),
             rename_prefix_to: String::new(),
             show_rename_prefix_dialog: false,
@@ -12022,33 +12033,27 @@ impl RequirementsApp {
                 ui.add_space(10.0);
                 ui.label("Use the 'Scaffold Project' button in the Prompts tab to generate skills.");
             } else {
-                // Display each skill
-                for (filename, content) in &self.loaded_skills {
+                // Display each skill - collect data first to avoid borrow issues
+                let skills_data: Vec<(String, String)> = self.loaded_skills.clone();
+                for (filename, content) in skills_data {
                     ui.group(|ui| {
                         ui.horizontal(|ui| {
-                            ui.strong(filename);
+                            ui.strong(&filename);
                             // Extract title from first markdown heading if present
                             if let Some(title_line) = content.lines().find(|l| l.starts_with("# ")) {
                                 ui.label(format!("- {}", title_line.trim_start_matches("# ")));
                             }
-                        });
 
-                        ui.add_space(5.0);
-
-                        // Show skill content in a collapsible section
-                        egui::CollapsingHeader::new("View Content")
-                            .id_salt(filename)
-                            .show(ui, |ui| {
-                                egui::ScrollArea::vertical()
-                                    .id_salt(format!("skill_content_{}", filename))
-                                    .max_height(300.0)
-                                    .show(ui, |ui| {
-                                        // Render as markdown using egui_commonmark
-                                        let mut cache = egui_commonmark::CommonMarkCache::default();
-                                        egui_commonmark::CommonMarkViewer::new()
-                                            .show(ui, &mut cache, content);
-                                    });
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                if ui.button("📝 View/Edit").clicked() {
+                                    self.skill_editor_filename = filename.clone();
+                                    self.skill_editor_content = content.clone();
+                                    self.skill_editor_original_content = content.clone();
+                                    self.skill_editor_edit_mode = false;
+                                    self.show_skill_editor = true;
+                                }
                             });
+                        });
                     });
                     ui.add_space(5.0);
                 }
@@ -12063,6 +12068,122 @@ impl RequirementsApp {
             ui.add_space(5.0);
             ui.label("To generate skills for this project, go to the Prompts tab and click 'Scaffold Project'.");
         });
+    }
+
+    /// Show the skill editor dialog
+    fn show_skill_editor_dialog(&mut self, ctx: &egui::Context) {
+        if !self.show_skill_editor {
+            return;
+        }
+
+        let max_size = modal_max_size(ctx);
+        let editor_width = 800.0_f32.min(max_size.x);
+        let editor_height = 600.0_f32.min(max_size.y);
+
+        let mut should_close = false;
+        let mut should_save = false;
+
+        egui::Window::new(format!("📝 Skill: {}", self.skill_editor_filename))
+            .collapsible(false)
+            .resizable(true)
+            .default_size([editor_width, editor_height])
+            .max_width(max_size.x)
+            .max_height(max_size.y)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                // Toolbar
+                ui.horizontal(|ui| {
+                    if self.skill_editor_edit_mode {
+                        ui.label("📝 Edit Mode");
+                        if ui.button("👁 Preview").clicked() {
+                            self.skill_editor_edit_mode = false;
+                        }
+                    } else {
+                        ui.label("👁 Preview Mode");
+                        if ui.button("📝 Edit").clicked() {
+                            self.skill_editor_edit_mode = true;
+                        }
+                    }
+
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.button("Cancel").clicked() {
+                            // Revert changes
+                            self.skill_editor_content = self.skill_editor_original_content.clone();
+                            should_close = true;
+                        }
+
+                        let has_changes = self.skill_editor_content != self.skill_editor_original_content;
+                        ui.add_enabled_ui(has_changes, |ui| {
+                            if ui.button("💾 Save").clicked() {
+                                should_save = true;
+                            }
+                        });
+                    });
+                });
+
+                ui.separator();
+                ui.add_space(5.0);
+
+                // Content area
+                let content_height = ui.available_height() - 10.0;
+                egui::ScrollArea::vertical()
+                    .id_salt("skill_editor_content")
+                    .max_height(content_height)
+                    .show(ui, |ui| {
+                        if self.skill_editor_edit_mode {
+                            // Edit mode - show text editor
+                            ui.add(
+                                egui::TextEdit::multiline(&mut self.skill_editor_content)
+                                    .desired_width(ui.available_width())
+                                    .desired_rows(30)
+                                    .font(egui::TextStyle::Monospace)
+                                    .code_editor(),
+                            );
+                        } else {
+                            // Preview mode - render markdown
+                            let mut cache = egui_commonmark::CommonMarkCache::default();
+                            egui_commonmark::CommonMarkViewer::new()
+                                .show(ui, &mut cache, &self.skill_editor_content);
+                        }
+                    });
+            });
+
+        // Handle save
+        if should_save {
+            // Get skills directory path
+            let project_dir = self.storage.path().parent()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| std::path::PathBuf::from("."));
+            let skills_dir = project_dir.join(".claude").join("skills");
+            let skill_path = skills_dir.join(&self.skill_editor_filename);
+
+            // Save to file
+            match std::fs::write(&skill_path, &self.skill_editor_content) {
+                Ok(_) => {
+                    // Update the loaded skills cache
+                    if let Some(skill) = self.loaded_skills.iter_mut().find(|(f, _)| f == &self.skill_editor_filename) {
+                        skill.1 = self.skill_editor_content.clone();
+                    }
+                    self.skill_editor_original_content = self.skill_editor_content.clone();
+                    self.toast_message = Some(ToastNotification {
+                        message: "Skill saved successfully".to_string(),
+                        is_success: true,
+                        show_until: std::time::Instant::now() + std::time::Duration::from_secs(3),
+                    });
+                }
+                Err(e) => {
+                    self.toast_message = Some(ToastNotification {
+                        message: format!("Failed to save: {}", e),
+                        is_success: false,
+                        show_until: std::time::Instant::now() + std::time::Duration::from_secs(5),
+                    });
+                }
+            }
+        }
+
+        if should_close {
+            self.show_skill_editor = false;
+        }
     }
 
     /// Show the Prompts subtab
@@ -24586,6 +24707,9 @@ impl eframe::App for RequirementsApp {
 
         // Show icon editor dialog
         self.show_icon_editor_dialog(ctx);
+
+        // Show skill editor dialog
+        self.show_skill_editor_dialog(ctx);
 
         // Show layout menu popup (triggered by long-press on layout button)
         self.show_layout_menu_popup(ctx);
