@@ -2931,6 +2931,9 @@ pub struct RequirementsApp {
     // Toast notification state
     toast_message: Option<ToastNotification>,     // Current toast message to display
 
+    // Theme change indicator
+    theme_change_display: Option<(String, Instant)>,  // (theme name, show until)
+
     // Project scaffolding state (FR-0152)
     show_scaffold_dialog: bool,                   // Whether to show the scaffolding dialog
     scaffold_config: aida_core::ScaffoldConfig,   // Scaffolding configuration
@@ -3497,6 +3500,9 @@ impl RequirementsApp {
 
             // Toast notification state
             toast_message: None,
+
+            // Theme change indicator
+            theme_change_display: None,
 
             // Project scaffolding state (FR-0152)
             show_scaffold_dialog: false,
@@ -4149,6 +4155,8 @@ impl RequirementsApp {
         let built_in_themes = [
             Theme::Dark,
             Theme::Light,
+            Theme::VibrantLight,
+            Theme::NordLight,
             Theme::HighContrastDark,
             Theme::SolarizedDark,
             Theme::Nord,
@@ -4212,6 +4220,12 @@ impl RequirementsApp {
         };
 
         self.user_settings.theme = next_theme;
+
+        // Show theme name briefly in menu bar
+        self.theme_change_display = Some((
+            self.user_settings.theme.label(),
+            Instant::now() + std::time::Duration::from_secs(2),
+        ));
     }
 
     /// Determine parent for new requirement using smart heuristic:
@@ -4949,6 +4963,16 @@ impl RequirementsApp {
                     {
                         Self::open_user_guide();
                     }
+                    // Show theme name briefly after theme change
+                    if let Some((ref theme_name, show_until)) = self.theme_change_display {
+                        if Instant::now() < show_until {
+                            ui.separator();
+                            ui.label(egui::RichText::new(theme_name).italics());
+                        } else {
+                            self.theme_change_display = None;
+                        }
+                    }
+
                     // Show current zoom level
                     ui.label(format!("{}pt", self.current_font_size as i32));
                 });
