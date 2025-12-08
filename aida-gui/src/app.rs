@@ -9844,7 +9844,7 @@ impl RequirementsApp {
         }
 
         // Check for arrow key presses (or vim keys h/j/k/l)
-        // Also check for Ctrl+H/L to move card to adjacent column
+        // Also check for Ctrl+H/L or Ctrl+Left/Right to move card to adjacent column
         let (left, right, up, down, space, ctrl_left, ctrl_right) = ctx.input(|i| {
             let ctrl = i.modifiers.ctrl || i.modifiers.mac_cmd;
             (
@@ -9853,8 +9853,8 @@ impl RequirementsApp {
                 i.key_pressed(egui::Key::ArrowUp) || i.key_pressed(egui::Key::K),
                 i.key_pressed(egui::Key::ArrowDown) || i.key_pressed(egui::Key::J),
                 i.key_pressed(egui::Key::Space),
-                ctrl && i.key_pressed(egui::Key::H),
-                ctrl && i.key_pressed(egui::Key::L),
+                ctrl && (i.key_pressed(egui::Key::H) || i.key_pressed(egui::Key::ArrowLeft)),
+                ctrl && (i.key_pressed(egui::Key::L) || i.key_pressed(egui::Key::ArrowRight)),
             )
         });
 
@@ -16994,8 +16994,8 @@ impl RequirementsApp {
                                 show_shortcut(ui, "l / →", "Move to right column");
                                 show_shortcut(ui, "j / ↓", "Move down in column");
                                 show_shortcut(ui, "k / ↑", "Move up in column");
-                                show_shortcut(ui, "Ctrl+h", "Move card to left column");
-                                show_shortcut(ui, "Ctrl+l", "Move card to right column");
+                                show_shortcut(ui, "Ctrl+h / Ctrl+←", "Move card to left column");
+                                show_shortcut(ui, "Ctrl+l / Ctrl+→", "Move card to right column");
                                 show_shortcut(ui, "Space", "Open/close detail modal");
                                 show_shortcut(ui, "s,p,o,f", "Quick actions in modal");
                                 ui.add_space(8.0);
