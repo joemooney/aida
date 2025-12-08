@@ -1,9 +1,9 @@
 sessions:
-  215149-f7f32d3a-2519-4bf4-9163-6b8e5265e6bc:
-    session_id: 215149-f7f32d3a-2519-4bf4-9163-6b8e5265e6bc
-    user_name: joe
+  217065-9732c5f2-85a8-4dc1-b6d4-1db2027c4233:
+    session_id: 217065-9732c5f2-85a8-4dc1-b6d4-1db2027c4233
+    user_name: Joe Mooney
     hostname: imac
-    pid: 215149
-    started_at: 2025-12-08T03:19:52.837684211Z
-    last_heartbeat: 2025-12-08T03:30:07.923787235Z
+    pid: 217065
+    started_at: 2025-12-08T03:31:13.094763015Z
+    last_heartbeat: 2025-12-08T03:37:33.145606129Z
     editing_requirement: null

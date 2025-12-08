@@ -596,9 +596,9 @@ pub struct CustomTheme {
     pub priority_low: ThemeColor,
 }
 
-// Default text colors
-fn default_text_color() -> ThemeColor { ThemeColor::new(220, 220, 220) }        // Light gray for dark themes
-fn default_weak_text_color() -> ThemeColor { ThemeColor::new(140, 140, 140) }   // Dimmer gray
+// Default text colors (match egui dark defaults)
+fn default_text_color() -> ThemeColor { ThemeColor::new(190, 190, 190) }        // egui dark default
+fn default_weak_text_color() -> ThemeColor { ThemeColor::new(100, 100, 100) }   // dimmer for inactive
 
 // Default success color (for success messages)
 fn default_success_fg() -> ThemeColor { ThemeColor::new(34, 197, 94) }          // Green
@@ -641,9 +641,9 @@ impl CustomTheme {
             panel_fill: ThemeColor::new(27, 27, 27),
             extreme_bg: ThemeColor::new(10, 10, 10),
             faint_bg: ThemeColor::new(5, 5, 5),
-            // Text
-            text_color: ThemeColor::new(220, 220, 220),
-            weak_text_color: ThemeColor::new(140, 140, 140),
+            // Text - match egui dark defaults
+            text_color: ThemeColor::new(190, 190, 190),      // egui dark default
+            weak_text_color: ThemeColor::new(100, 100, 100), // dimmer for inactive
             hyperlink_color: ThemeColor::new(90, 170, 255),
             warn_fg: ThemeColor::new(255, 143, 0),
             error_fg: ThemeColor::new(255, 0, 0),
@@ -1269,7 +1269,7 @@ impl Theme {
         match self {
             Theme::Custom(t) => t.weak_text_color.to_egui(),
             Theme::Dark | Theme::HighContrastDark | Theme::SolarizedDark | Theme::Nord => {
-                egui::Color32::from_rgb(140, 140, 140)
+                egui::Color32::from_rgb(100, 100, 100)
             }
             Theme::Light => egui::Color32::from_rgb(120, 120, 120),
             Theme::NordLight => egui::Color32::from_rgb(76, 86, 106),
