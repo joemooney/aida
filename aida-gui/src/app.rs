@@ -894,6 +894,225 @@ impl CustomTheme {
         }
     }
 
+    fn high_contrast_dark_defaults(name: String) -> Self {
+        Self {
+            name,
+            base: BaseTheme::Dark,
+            // Background - pure black/dark grays
+            window_fill: ThemeColor::new(20, 20, 20),
+            panel_fill: ThemeColor::new(20, 20, 20),
+            extreme_bg: ThemeColor::new(0, 0, 0),
+            faint_bg: ThemeColor::new(10, 10, 10),
+            // Text - pure white for high contrast
+            text_color: ThemeColor::new(255, 255, 255),
+            weak_text_color: ThemeColor::new(160, 160, 160),
+            hyperlink_color: ThemeColor::new(100, 180, 255),
+            warn_fg: ThemeColor::new(255, 200, 0),
+            error_fg: ThemeColor::new(255, 80, 80),
+            success_fg: ThemeColor::new(80, 255, 80),
+            // Widgets
+            widget_bg: ThemeColor::new(20, 20, 20),
+            widget_fg: ThemeColor::new(200, 200, 200),
+            widget_inactive_bg: ThemeColor::new(30, 30, 30),
+            widget_hovered_bg: ThemeColor::new(50, 50, 50),
+            widget_active_bg: ThemeColor::new(60, 60, 60),
+            widget_open_bg: ThemeColor::new(40, 40, 40),
+            // Selection
+            selection_bg: ThemeColor::new(0, 100, 200),
+            selection_fg: ThemeColor::new(255, 255, 255),
+            // Strokes
+            widget_stroke_width: 1.0,
+            widget_stroke_color: ThemeColor::new(80, 80, 80),
+            widget_hovered_stroke_color: ThemeColor::new(150, 150, 150),
+            widget_active_stroke_color: ThemeColor::new(255, 255, 255),
+            // Rounding
+            widget_rounding: 2.0,
+            window_rounding: 6.0,
+            // Shadows
+            window_shadow: true,
+            popup_shadow: true,
+            // Spacing
+            item_spacing: (8.0, 3.0),
+            button_padding: (4.0, 1.0),
+            window_padding: (6.0, 6.0),
+            // Misc
+            dark_mode: true,
+            scroll_bar_width: 8.0,
+            indent: 18.0,
+            title_bar_bg: ThemeColor::new(30, 30, 30),
+            title_bar_text: None,
+            title_bar_font_size: 1.0,
+            // Status colors
+            status_draft: default_status_draft(),
+            status_approved: default_status_approved(),
+            status_in_progress: default_status_in_progress(),
+            status_implemented: default_status_implemented(),
+            status_completed: default_status_completed(),
+            status_rejected: default_status_rejected(),
+            // Priority colors
+            priority_critical: default_priority_critical(),
+            priority_high: default_priority_high(),
+            priority_medium: default_priority_medium(),
+            priority_low: default_priority_low(),
+        }
+    }
+
+    fn solarized_dark_defaults(name: String) -> Self {
+        // Solarized dark colors
+        let base03 = ThemeColor::new(0, 43, 54);
+        let base02 = ThemeColor::new(7, 54, 66);
+        let base01 = ThemeColor::new(88, 110, 117);
+        let base0 = ThemeColor::new(131, 148, 150);
+        let base1 = ThemeColor::new(147, 161, 161);
+        let cyan = ThemeColor::new(42, 161, 152);
+        let yellow = ThemeColor::new(181, 137, 0);
+        let orange = ThemeColor::new(203, 75, 22);
+        let red = ThemeColor::new(220, 50, 47);
+        let green = ThemeColor::new(133, 153, 0);
+        let blue = ThemeColor::new(38, 139, 210);
+
+        Self {
+            name,
+            base: BaseTheme::Dark,
+            // Background
+            window_fill: base03,
+            panel_fill: base03,
+            extreme_bg: base03,
+            faint_bg: base02,
+            // Text
+            text_color: base0,
+            weak_text_color: base01,
+            hyperlink_color: blue,
+            warn_fg: yellow,
+            error_fg: red,
+            success_fg: green,
+            // Widgets
+            widget_bg: base03,
+            widget_fg: base1,
+            widget_inactive_bg: base02,
+            widget_hovered_bg: base01,
+            widget_active_bg: cyan,
+            widget_open_bg: base02,
+            // Selection
+            selection_bg: cyan,
+            selection_fg: ThemeColor::new(255, 255, 255),
+            // Strokes
+            widget_stroke_width: 1.0,
+            widget_stroke_color: base01,
+            widget_hovered_stroke_color: base0,
+            widget_active_stroke_color: base1,
+            // Rounding
+            widget_rounding: 2.0,
+            window_rounding: 6.0,
+            // Shadows
+            window_shadow: true,
+            popup_shadow: true,
+            // Spacing
+            item_spacing: (8.0, 3.0),
+            button_padding: (4.0, 1.0),
+            window_padding: (6.0, 6.0),
+            // Misc
+            dark_mode: true,
+            scroll_bar_width: 8.0,
+            indent: 18.0,
+            title_bar_bg: base02,
+            title_bar_text: None,
+            title_bar_font_size: 1.0,
+            // Status colors - Solarized palette
+            status_draft: base01,
+            status_approved: green,
+            status_in_progress: blue,
+            status_implemented: cyan,
+            status_completed: green,
+            status_rejected: red,
+            // Priority colors - Solarized palette
+            priority_critical: red,
+            priority_high: orange,
+            priority_medium: yellow,
+            priority_low: green,
+        }
+    }
+
+    fn nord_dark_defaults(name: String) -> Self {
+        // Nord colors
+        let nord0 = ThemeColor::new(46, 52, 64);   // Polar Night
+        let nord1 = ThemeColor::new(59, 66, 82);
+        let nord2 = ThemeColor::new(67, 76, 94);
+        let nord3 = ThemeColor::new(76, 86, 106);
+        let nord4 = ThemeColor::new(216, 222, 233); // Snow Storm
+        let nord5 = ThemeColor::new(229, 233, 240);
+        let nord6 = ThemeColor::new(236, 239, 244);
+        let nord7 = ThemeColor::new(143, 188, 187); // Frost (teal)
+        let nord8 = ThemeColor::new(136, 192, 208); // Frost (light blue)
+        let nord9 = ThemeColor::new(129, 161, 193); // Frost (blue)
+        let nord10 = ThemeColor::new(94, 129, 172); // Frost (dark blue)
+        let nord11 = ThemeColor::new(191, 97, 106); // Aurora (red)
+        let nord12 = ThemeColor::new(208, 135, 112); // Aurora (orange)
+        let nord13 = ThemeColor::new(235, 203, 139); // Aurora (yellow)
+        let nord14 = ThemeColor::new(163, 190, 140); // Aurora (green)
+
+        Self {
+            name,
+            base: BaseTheme::Dark,
+            // Background - Polar Night
+            window_fill: nord0,
+            panel_fill: nord0,
+            extreme_bg: nord0,
+            faint_bg: nord1,
+            // Text - Snow Storm
+            text_color: nord4,
+            weak_text_color: nord3,
+            hyperlink_color: nord8,
+            warn_fg: nord12,
+            error_fg: nord11,
+            success_fg: nord14,
+            // Widgets
+            widget_bg: nord0,
+            widget_fg: nord4,
+            widget_inactive_bg: nord1,
+            widget_hovered_bg: nord2,
+            widget_active_bg: nord3,
+            widget_open_bg: nord1,
+            // Selection
+            selection_bg: nord10,
+            selection_fg: ThemeColor::new(255, 255, 255),
+            // Strokes
+            widget_stroke_width: 1.0,
+            widget_stroke_color: nord2,
+            widget_hovered_stroke_color: nord3,
+            widget_active_stroke_color: nord4,
+            // Rounding
+            widget_rounding: 2.0,
+            window_rounding: 6.0,
+            // Shadows
+            window_shadow: true,
+            popup_shadow: true,
+            // Spacing
+            item_spacing: (8.0, 3.0),
+            button_padding: (4.0, 1.0),
+            window_padding: (6.0, 6.0),
+            // Misc
+            dark_mode: true,
+            scroll_bar_width: 8.0,
+            indent: 18.0,
+            title_bar_bg: nord1,
+            title_bar_text: None,
+            title_bar_font_size: 1.0,
+            // Status colors - Nord Aurora palette
+            status_draft: nord3,
+            status_approved: nord14,
+            status_in_progress: nord9,
+            status_implemented: nord7,
+            status_completed: nord14,
+            status_rejected: nord11,
+            // Priority colors - Nord Aurora
+            priority_critical: nord11,
+            priority_high: nord12,
+            priority_medium: nord13,
+            priority_low: nord14,
+        }
+    }
+
     /// Create a CustomTheme from any built-in Theme, capturing its colors
     pub fn from_theme(theme: &Theme, name: String) -> Self {
         match theme {
@@ -901,9 +1120,9 @@ impl CustomTheme {
             Theme::Light => Self::light_defaults(name),
             Theme::VibrantLight => Self::vibrant_light_defaults(name),
             Theme::NordLight => Self::nord_light_defaults(name),
-            Theme::HighContrastDark => Self::dark_defaults(name), // Use dark as base
-            Theme::SolarizedDark => Self::dark_defaults(name),    // Use dark as base
-            Theme::Nord => Self::dark_defaults(name),             // Use dark as base
+            Theme::HighContrastDark => Self::high_contrast_dark_defaults(name),
+            Theme::SolarizedDark => Self::solarized_dark_defaults(name),
+            Theme::Nord => Self::nord_dark_defaults(name),
             Theme::Custom(custom) => (**custom).clone(),
         }
     }
