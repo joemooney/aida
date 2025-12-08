@@ -6482,6 +6482,18 @@ impl RequirementsApp {
                         self.theme_editor_category = ThemeEditorCategory::default();
                         self.show_theme_editor = true;
                     }
+
+                    // Show delete button for custom themes
+                    if let Theme::Custom(custom) = &self.settings_form_theme {
+                        let theme_name = custom.name.clone();
+                        if ui.button("🗑 Delete").on_hover_text("Delete this custom theme").clicked() {
+                            // Remove from saved custom themes
+                            self.user_settings.custom_themes.retain(|t| t.name != theme_name);
+                            // Switch to Dark theme
+                            self.settings_form_theme = Theme::Dark;
+                            self.user_settings.theme = Theme::Dark;
+                        }
+                    }
                 });
                 ui.end_row();
 
