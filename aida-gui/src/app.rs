@@ -1113,6 +1113,79 @@ impl CustomTheme {
         }
     }
 
+    fn docs_dark_defaults(name: String) -> Self {
+        // Docs Dark - dark blue theme inspired by documentation sites
+        let bg_main = ThemeColor::new(26, 26, 46);        // #1a1a2e
+        let bg_code = ThemeColor::new(15, 15, 35);        // #0f0f23
+        let bg_faint = ThemeColor::new(20, 20, 40);
+        let text_primary = ThemeColor::new(228, 228, 231); // #e4e4e7
+        let text_muted = ThemeColor::new(140, 140, 160);
+        let accent = ThemeColor::new(96, 165, 250);        // #60a5fa
+        let accent_hover = ThemeColor::new(120, 180, 255);
+        let accent_active = ThemeColor::new(37, 99, 235);  // #2563eb
+
+        Self {
+            name,
+            base: BaseTheme::Dark,
+            // Background
+            window_fill: bg_main,
+            panel_fill: bg_main,
+            extreme_bg: bg_code,
+            faint_bg: bg_faint,
+            // Text
+            text_color: text_primary,
+            weak_text_color: text_muted,
+            hyperlink_color: accent,
+            warn_fg: ThemeColor::new(250, 176, 5),         // Golden yellow
+            error_fg: ThemeColor::new(248, 113, 113),      // Soft red
+            success_fg: ThemeColor::new(74, 222, 128),     // Soft green
+            // Widgets
+            widget_bg: bg_main,
+            widget_fg: text_muted,
+            widget_inactive_bg: ThemeColor::new(35, 35, 60),
+            widget_hovered_bg: ThemeColor::new(50, 50, 80),
+            widget_active_bg: ThemeColor::new(45, 45, 75),
+            widget_open_bg: ThemeColor::new(35, 35, 60),
+            // Selection
+            selection_bg: ThemeColor::new(37, 99, 160),
+            selection_fg: ThemeColor::new(255, 255, 255),
+            // Strokes
+            widget_stroke_width: 1.0,
+            widget_stroke_color: ThemeColor::new(50, 50, 75),
+            widget_hovered_stroke_color: accent_hover,
+            widget_active_stroke_color: accent_active,
+            // Rounding
+            widget_rounding: 2.0,
+            window_rounding: 6.0,
+            // Shadows
+            window_shadow: true,
+            popup_shadow: true,
+            // Spacing
+            item_spacing: (8.0, 3.0),
+            button_padding: (4.0, 1.0),
+            window_padding: (6.0, 6.0),
+            // Misc
+            dark_mode: true,
+            scroll_bar_width: 8.0,
+            indent: 18.0,
+            title_bar_bg: ThemeColor::new(20, 20, 40),
+            title_bar_text: None,
+            title_bar_font_size: 1.0,
+            // Status colors - blue-themed
+            status_draft: ThemeColor::new(140, 140, 160),
+            status_approved: ThemeColor::new(74, 222, 128),
+            status_in_progress: accent,
+            status_implemented: ThemeColor::new(45, 212, 191),  // Teal
+            status_completed: ThemeColor::new(74, 222, 128),
+            status_rejected: ThemeColor::new(248, 113, 113),
+            // Priority colors
+            priority_critical: ThemeColor::new(239, 68, 68),
+            priority_high: ThemeColor::new(248, 113, 113),
+            priority_medium: ThemeColor::new(250, 176, 5),
+            priority_low: ThemeColor::new(74, 222, 128),
+        }
+    }
+
     /// Create a CustomTheme from any built-in Theme, capturing its colors
     pub fn from_theme(theme: &Theme, name: String) -> Self {
         match theme {
@@ -1123,6 +1196,7 @@ impl CustomTheme {
             Theme::HighContrastDark => Self::high_contrast_dark_defaults(name),
             Theme::SolarizedDark => Self::solarized_dark_defaults(name),
             Theme::Nord => Self::nord_dark_defaults(name),
+            Theme::DocsDark => Self::docs_dark_defaults(name),
             Theme::Custom(custom) => (**custom).clone(),
         }
     }
@@ -1247,6 +1321,8 @@ pub enum Theme {
     Nord,
     /// Nord Light theme
     NordLight,
+    /// Docs Dark - dark blue theme inspired by documentation sites
+    DocsDark,
     /// Custom theme with user-defined colors
     Custom(Box<CustomTheme>),
 }
@@ -1261,6 +1337,7 @@ impl Theme {
             Theme::SolarizedDark => "Solarized Dark".to_string(),
             Theme::Nord => "Nord".to_string(),
             Theme::NordLight => "Nord Light".to_string(),
+            Theme::DocsDark => "Docs Dark".to_string(),
             Theme::Custom(theme) => format!("Custom: {}", theme.name),
         }
     }
@@ -1273,7 +1350,8 @@ impl Theme {
             Theme::NordLight => Theme::HighContrastDark,
             Theme::HighContrastDark => Theme::SolarizedDark,
             Theme::SolarizedDark => Theme::Nord,
-            Theme::Nord => Theme::Dark,
+            Theme::Nord => Theme::DocsDark,
+            Theme::DocsDark => Theme::Dark,
             Theme::Custom(_) => Theme::Dark, // Cycle back to Dark from Custom
         }
     }
@@ -1433,6 +1511,61 @@ impl Theme {
 
                 ctx.set_visuals(visuals);
             }
+            Theme::DocsDark => {
+                let mut visuals = egui::Visuals::dark();
+                // Docs Dark - inspired by documentation site styling
+                // Dark blue backgrounds
+                let bg_main = egui::Color32::from_rgb(26, 26, 46);       // #1a1a2e - main background
+                let bg_panel = egui::Color32::from_rgb(26, 26, 46);      // Same for panels
+                let bg_code = egui::Color32::from_rgb(15, 15, 35);       // #0f0f23 - code/extreme bg
+                let bg_faint = egui::Color32::from_rgb(20, 20, 40);      // Subtle separator
+
+                // Text colors
+                let text_primary = egui::Color32::from_rgb(228, 228, 231);  // #e4e4e7 - main text
+                let text_muted = egui::Color32::from_rgb(140, 140, 160);    // Muted text
+
+                // Accent colors - cyan/blue
+                let accent = egui::Color32::from_rgb(96, 165, 250);      // #60a5fa - hyperlinks/accent
+                let accent_hover = egui::Color32::from_rgb(120, 180, 255); // Lighter on hover
+                let accent_active = egui::Color32::from_rgb(37, 99, 235); // Deeper on active #2563eb
+
+                // Widget backgrounds
+                let widget_inactive = egui::Color32::from_rgb(35, 35, 60);
+                let widget_hovered = egui::Color32::from_rgb(50, 50, 80);
+                let widget_active = egui::Color32::from_rgb(45, 45, 75);
+
+                visuals.override_text_color = Some(text_primary);
+                visuals.widgets.noninteractive.bg_fill = bg_panel;
+                visuals.widgets.noninteractive.fg_stroke.color = text_muted;
+                visuals.widgets.inactive.bg_fill = widget_inactive;
+                visuals.widgets.inactive.fg_stroke.color = text_primary;
+                visuals.widgets.inactive.bg_stroke.color = egui::Color32::from_rgb(50, 50, 75);
+                visuals.widgets.hovered.bg_fill = widget_hovered;
+                visuals.widgets.hovered.fg_stroke.color = egui::Color32::WHITE;
+                visuals.widgets.hovered.bg_stroke.color = accent_hover;
+                visuals.widgets.active.bg_fill = widget_active;
+                visuals.widgets.active.fg_stroke.color = egui::Color32::WHITE;
+                visuals.widgets.active.bg_stroke.color = accent_active;
+                visuals.widgets.open.bg_fill = widget_inactive;
+                visuals.widgets.open.fg_stroke.color = text_primary;
+                visuals.selection.bg_fill = egui::Color32::from_rgb(37, 99, 160);
+                visuals.selection.stroke.color = accent;
+                visuals.hyperlink_color = accent;
+                visuals.extreme_bg_color = bg_code;
+                visuals.faint_bg_color = bg_faint;
+                visuals.window_fill = bg_main;
+                visuals.panel_fill = bg_panel;
+
+                // Blue-tinted shadow
+                visuals.window_shadow = egui::epaint::Shadow {
+                    offset: egui::vec2(0.0, 4.0),
+                    blur: 12.0,
+                    spread: 0.0,
+                    color: egui::Color32::from_rgba_unmultiplied(96, 165, 250, 20),
+                };
+
+                ctx.set_visuals(visuals);
+            }
             Theme::Custom(custom_theme) => {
                 custom_theme.apply(ctx);
             }
@@ -1473,6 +1606,7 @@ impl Theme {
             Theme::HighContrastDark => egui::Color32::from_rgb(35, 35, 40),
             Theme::SolarizedDark => egui::Color32::from_rgb(7, 54, 66), // base02
             Theme::Nord => egui::Color32::from_rgb(59, 66, 82), // nord1
+            Theme::DocsDark => egui::Color32::from_rgb(20, 20, 40), // Dark blue
         }
     }
 
@@ -1502,6 +1636,7 @@ impl Theme {
             Theme::Light => egui::Color32::from_rgb(120, 120, 120),
             Theme::NordLight => egui::Color32::from_rgb(76, 86, 106),
             Theme::VibrantLight => egui::Color32::from_rgb(100, 100, 130),
+            Theme::DocsDark => egui::Color32::from_rgb(140, 140, 160),
         }
     }
 }
