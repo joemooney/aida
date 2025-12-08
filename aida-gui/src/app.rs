@@ -783,8 +783,10 @@ pub enum Theme {
     HighContrastDark,
     /// Solarized dark
     SolarizedDark,
-    /// Nord theme
+    /// Nord theme (dark)
     Nord,
+    /// Nord Light theme
+    NordLight,
     /// Custom theme with user-defined colors
     Custom(Box<CustomTheme>),
 }
@@ -798,6 +800,7 @@ impl Theme {
             Theme::HighContrastDark => "High Contrast Dark".to_string(),
             Theme::SolarizedDark => "Solarized Dark".to_string(),
             Theme::Nord => "Nord".to_string(),
+            Theme::NordLight => "Nord Light".to_string(),
             Theme::Custom(theme) => format!("Custom: {}", theme.name),
         }
     }
@@ -806,7 +809,8 @@ impl Theme {
         match self {
             Theme::Dark => Theme::Light,
             Theme::Light => Theme::VibrantLight,
-            Theme::VibrantLight => Theme::HighContrastDark,
+            Theme::VibrantLight => Theme::NordLight,
+            Theme::NordLight => Theme::HighContrastDark,
             Theme::HighContrastDark => Theme::SolarizedDark,
             Theme::SolarizedDark => Theme::Nord,
             Theme::Nord => Theme::Dark,
@@ -926,6 +930,49 @@ impl Theme {
                 visuals.faint_bg_color = nord1;
                 ctx.set_visuals(visuals);
             }
+            Theme::NordLight => {
+                let mut visuals = egui::Visuals::light();
+                // Nord Snow Storm (light backgrounds)
+                let nord4 = egui::Color32::from_rgb(216, 222, 233); // Lightest
+                let nord5 = egui::Color32::from_rgb(229, 233, 240); // Light
+                let nord6 = egui::Color32::from_rgb(236, 239, 244); // Lightest white
+                // Nord Polar Night (dark text)
+                let nord0 = egui::Color32::from_rgb(46, 52, 64);    // Darkest
+                let nord1 = egui::Color32::from_rgb(59, 66, 82);
+                let nord3 = egui::Color32::from_rgb(76, 86, 106);   // Lighter dark
+                // Nord Frost (accents)
+                let nord9 = egui::Color32::from_rgb(129, 161, 193); // Blue
+                let nord10 = egui::Color32::from_rgb(94, 129, 172); // Dark blue
+
+                visuals.override_text_color = Some(nord0);
+                visuals.widgets.noninteractive.bg_fill = nord6;
+                visuals.widgets.noninteractive.fg_stroke.color = nord3;
+                visuals.widgets.inactive.bg_fill = nord5;
+                visuals.widgets.inactive.fg_stroke.color = nord1;
+                visuals.widgets.hovered.bg_fill = nord4;
+                visuals.widgets.hovered.fg_stroke.color = nord0;
+                visuals.widgets.active.bg_fill = nord9;
+                visuals.widgets.active.fg_stroke.color = egui::Color32::WHITE;
+                visuals.widgets.open.bg_fill = nord10;
+                visuals.widgets.open.fg_stroke.color = egui::Color32::WHITE;
+                visuals.selection.bg_fill = egui::Color32::from_rgb(180, 210, 230); // Light blue selection
+                visuals.selection.stroke.color = nord10;
+                visuals.hyperlink_color = nord10;
+                visuals.extreme_bg_color = nord6;
+                visuals.faint_bg_color = nord5;
+                visuals.window_fill = nord6;
+                visuals.panel_fill = nord5;
+
+                // Subtle shadow
+                visuals.window_shadow = egui::epaint::Shadow {
+                    offset: egui::vec2(0.0, 2.0),
+                    blur: 8.0,
+                    spread: 0.0,
+                    color: egui::Color32::from_rgba_unmultiplied(46, 52, 64, 30),
+                };
+
+                ctx.set_visuals(visuals);
+            }
             Theme::Custom(custom_theme) => {
                 custom_theme.apply(ctx);
             }
@@ -957,8 +1004,10 @@ impl Theme {
     fn title_bar_bg(&self) -> egui::Color32 {
         match self {
             Theme::Custom(t) => t.title_bar_bg.to_egui(),
+            // Light themes
             Theme::Light => egui::Color32::from_rgb(220, 220, 225),
             Theme::VibrantLight => egui::Color32::from_rgb(230, 230, 248), // Lavender tint
+            Theme::NordLight => egui::Color32::from_rgb(216, 222, 233), // nord4
             // Dark themes
             Theme::Dark => egui::Color32::from_rgb(45, 45, 50),
             Theme::HighContrastDark => egui::Color32::from_rgb(35, 35, 40),
