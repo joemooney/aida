@@ -676,6 +676,126 @@ impl CustomTheme {
         }
     }
 
+    /// Create a custom theme from VibrantLight built-in theme
+    fn vibrant_light_defaults(name: String) -> Self {
+        Self {
+            name,
+            base: BaseTheme::Light,
+            // Background - warm off-white with subtle lavender
+            window_fill: ThemeColor::new(250, 250, 252),
+            panel_fill: ThemeColor::new(245, 245, 250),
+            extreme_bg: ThemeColor::new(250, 250, 252),
+            faint_bg: ThemeColor::new(245, 245, 250),
+            // Text
+            text_color: Some(ThemeColor::new(30, 30, 60)),
+            weak_text_color: Some(ThemeColor::new(100, 100, 130)),
+            hyperlink_color: ThemeColor::new(37, 99, 235),
+            warn_fg: ThemeColor::new(255, 100, 0),
+            error_fg: ThemeColor::new(220, 0, 0),
+            // Widgets - noninteractive
+            widget_bg: ThemeColor::new(245, 245, 250),
+            widget_fg: ThemeColor::new(100, 100, 130),
+            // Widgets - interactive (indigo accents)
+            widget_inactive_bg: ThemeColor::new(240, 240, 248),
+            widget_hovered_bg: ThemeColor::new(129, 140, 248),
+            widget_active_bg: ThemeColor::new(79, 70, 229),
+            widget_open_bg: ThemeColor::new(99, 102, 241),
+            // Selection
+            selection_bg: ThemeColor::new(199, 210, 254),
+            selection_fg: ThemeColor::new(99, 102, 241),
+            // Strokes
+            widget_stroke_width: 1.0,
+            widget_stroke_color: ThemeColor::new(180, 180, 200),
+            widget_hovered_stroke_color: ThemeColor::new(99, 102, 241),
+            widget_active_stroke_color: ThemeColor::new(79, 70, 229),
+            // Rounding
+            widget_rounding: 2.0,
+            window_rounding: 6.0,
+            // Shadows
+            window_shadow: true,
+            popup_shadow: true,
+            // Spacing
+            item_spacing: (8.0, 3.0),
+            button_padding: (4.0, 1.0),
+            window_padding: (6.0, 6.0),
+            // Misc
+            dark_mode: false,
+            scroll_bar_width: 8.0,
+            indent: 18.0,
+            // Title bar - lavender tint
+            title_bar_bg: ThemeColor::new(230, 230, 248),
+            title_bar_text: None,
+            title_bar_font_size: 1.0,
+        }
+    }
+
+    /// Create a custom theme from NordLight built-in theme
+    fn nord_light_defaults(name: String) -> Self {
+        Self {
+            name,
+            base: BaseTheme::Light,
+            // Background - Nord Snow Storm
+            window_fill: ThemeColor::new(236, 239, 244),       // nord6
+            panel_fill: ThemeColor::new(229, 233, 240),        // nord5
+            extreme_bg: ThemeColor::new(236, 239, 244),        // nord6
+            faint_bg: ThemeColor::new(229, 233, 240),          // nord5
+            // Text - Nord Polar Night
+            text_color: Some(ThemeColor::new(46, 52, 64)),     // nord0
+            weak_text_color: Some(ThemeColor::new(76, 86, 106)), // nord3
+            hyperlink_color: ThemeColor::new(94, 129, 172),    // nord10
+            warn_fg: ThemeColor::new(208, 135, 112),           // nord12
+            error_fg: ThemeColor::new(191, 97, 106),           // nord11
+            // Widgets - noninteractive
+            widget_bg: ThemeColor::new(236, 239, 244),         // nord6
+            widget_fg: ThemeColor::new(76, 86, 106),           // nord3
+            // Widgets - interactive (Nord Frost accents)
+            widget_inactive_bg: ThemeColor::new(229, 233, 240), // nord5
+            widget_hovered_bg: ThemeColor::new(216, 222, 233), // nord4
+            widget_active_bg: ThemeColor::new(129, 161, 193),  // nord9
+            widget_open_bg: ThemeColor::new(94, 129, 172),     // nord10
+            // Selection
+            selection_bg: ThemeColor::new(180, 210, 230),
+            selection_fg: ThemeColor::new(94, 129, 172),       // nord10
+            // Strokes
+            widget_stroke_width: 1.0,
+            widget_stroke_color: ThemeColor::new(216, 222, 233), // nord4
+            widget_hovered_stroke_color: ThemeColor::new(129, 161, 193), // nord9
+            widget_active_stroke_color: ThemeColor::new(94, 129, 172), // nord10
+            // Rounding
+            widget_rounding: 2.0,
+            window_rounding: 6.0,
+            // Shadows
+            window_shadow: true,
+            popup_shadow: true,
+            // Spacing
+            item_spacing: (8.0, 3.0),
+            button_padding: (4.0, 1.0),
+            window_padding: (6.0, 6.0),
+            // Misc
+            dark_mode: false,
+            scroll_bar_width: 8.0,
+            indent: 18.0,
+            // Title bar - nord4
+            title_bar_bg: ThemeColor::new(216, 222, 233),
+            title_bar_text: None,
+            title_bar_font_size: 1.0,
+        }
+    }
+
+    /// Create a CustomTheme from any built-in Theme, capturing its colors
+    pub fn from_theme(theme: &Theme, name: String) -> Self {
+        match theme {
+            Theme::Dark => Self::dark_defaults(name),
+            Theme::Light => Self::light_defaults(name),
+            Theme::VibrantLight => Self::vibrant_light_defaults(name),
+            Theme::NordLight => Self::nord_light_defaults(name),
+            Theme::HighContrastDark => Self::dark_defaults(name), // Use dark as base
+            Theme::SolarizedDark => Self::dark_defaults(name),    // Use dark as base
+            Theme::Nord => Self::dark_defaults(name),             // Use dark as base
+            Theme::Custom(custom) => (**custom).clone(),
+        }
+    }
+
     /// Apply this custom theme to the egui context
     pub fn apply(&self, ctx: &egui::Context) {
         let mut visuals = if self.dark_mode {
@@ -6058,17 +6178,11 @@ impl RequirementsApp {
                         // Store original theme for Cancel
                         self.theme_editor_original_theme = self.settings_form_theme.clone();
 
-                        // Initialize the theme editor with current theme or create new
-                        self.theme_editor_theme = if let Theme::Custom(ref custom) = self.settings_form_theme {
-                            (**custom).clone()
-                        } else {
-                            // Create a new custom theme based on current theme
-                            let base = match self.settings_form_theme {
-                                Theme::Light | Theme::VibrantLight | Theme::NordLight => BaseTheme::Light,
-                                _ => BaseTheme::Dark,
-                            };
-                            CustomTheme::from_base(base, "My Theme".to_string())
-                        };
+                        // Initialize the theme editor with current theme's actual colors
+                        self.theme_editor_theme = CustomTheme::from_theme(
+                            &self.settings_form_theme,
+                            "My Theme".to_string()
+                        );
                         self.theme_editor_category = ThemeEditorCategory::default();
                         self.show_theme_editor = true;
                     }
