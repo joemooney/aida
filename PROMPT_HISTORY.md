@@ -1233,3 +1233,89 @@ A chronological record of development sessions and changes made to the Requireme
     - Phase 3: Real-time sync via webhooks
     - Phase 4: Extended features (GitHub, Jira, custom fields)
   - Described GUI and CLI integration points
+
+---
+
+## Session 9: Kanban Navigation, Sprint Selection, Git Hooks & Documentation (2025-12-07)
+
+### Kanban Column Navigation
+- **Prompt**: "Have Ctrl+L and Ctrl+H move the req to the next or previous column in the board (do not wrap)"
+- **Actions**:
+  - Modified `handle_kanban_keyboard()` in app.rs
+  - Added Ctrl+L to move selected requirement to next status column
+  - Added Ctrl+H to move selected requirement to previous status column
+  - No wrapping - stays at first/last column when at boundary
+
+### Sprint Selection in Planning View
+- **Prompt**: "In the Sprint Planning view, how about being able to select the sprints themselves so that we can edit, rename etc."
+- **Actions**:
+  - Added `planning_selected_sprint: Option<Uuid>` state field
+  - Made sprint headers clickable in Sprint Planning view
+  - Updated detail panel to show sprint details when sprint is selected
+  - Sprint selection is mutually exclusive with item selection
+
+### Git Hooks for Code Traceability
+- **Prompt**: "Review ~/ai/ai-provenance and import features to AIDA"
+- **Analysis**:
+  - Compared ai-provenance project features with AIDA capabilities
+  - Identified gaps: git hooks, trace query commands, CI/CD templates
+  - ai-provenance has: hierarchical metadata, git notes support, CI/CD templates
+- **Requirements Created**:
+  - FR-0226: Git Hooks for Code Traceability Validation
+  - FR-0227: Code Traceability Query and Reporting
+  - FR-0228: CI/CD Template Generation for Traceability
+  - All linked as children of FR-0149 (Claude AI Configuration Scaffolding)
+- **Implementation** (FR-0226):
+  - Added config fields to `ScaffoldConfig`:
+    - `generate_git_hooks: bool`
+    - `include_commit_msg_hook: bool`
+    - `include_pre_commit_hook: bool`
+  - Added hook preview/generation in `preview()` method
+  - Implemented `generate_commit_msg_hook()`:
+    - Validates SPEC-ID references in commit messages
+    - Non-blocking warnings for invalid references by default
+  - Implemented `generate_pre_commit_hook()`:
+    - Validates trace comments in staged files
+    - Non-blocking warnings for malformed traces by default
+  - Added Unix executable permissions for generated hooks
+  - Only generates hooks if .git directory exists
+
+### Documentation Updates
+- **Actions**:
+  - Added Section 14 "Code Traceability & Git Hooks" to DEVELOPER_GUIDE.md
+  - Documented trace comment format: `// trace:SPEC-ID | ai:tool:confidence`
+  - Documented commit-msg and pre-commit hooks functionality
+  - Added configuration options documentation
+
+### HTML Guide Generation
+- **Prompt**: "please generate the html version of the guides"
+- **Actions**:
+  - Used pandoc to regenerate all three HTML guides:
+    - user-guide.html
+    - admin-guide.html
+    - DEVELOPER_GUIDE.html
+  - Added consistent navigation header with links between guides
+  - Added dark/light mode theme toggle
+  - Styled with embedded CSS for professional appearance
+
+### AIDA Slideshow Creation
+- **Prompt**: "I would like to supplement these guides with a slideshow showcasing the capabilities of AIDA"
+- **Actions**:
+  - Created `/docs/slideshow.html` - comprehensive 16-slide presentation
+  - Slides cover:
+    - Title and Overview
+    - List View, Kanban View, Timeline View, Sprint Planning
+    - Keyboard Navigation, Requirement Types, Relationships
+    - AI Integration, Project Scaffolding, Code Traceability
+    - Themes, CLI Commands, Multi-Project Support, Getting Started
+  - Features:
+    - Dark/light mode theme toggle
+    - Keyboard navigation (arrows, Home, End)
+    - Progress indicator
+    - Responsive layout
+  - Created `/docs/images/` directory for screenshots
+  - Identified 12 screenshots needed:
+    - ss-overview.png, ss-list-view.png, ss-kanban.png
+    - ss-timeline.png, ss-sprint.png, ss-relationships.png
+    - ss-ai-evaluation.png, ss-scaffold.png, ss-themes.png
+    - ss-projects.png, ss-keyboard.png, ss-cli.png
