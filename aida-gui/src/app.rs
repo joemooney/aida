@@ -6064,7 +6064,7 @@ impl RequirementsApp {
                         } else {
                             // Create a new custom theme based on current theme
                             let base = match self.settings_form_theme {
-                                Theme::Light => BaseTheme::Light,
+                                Theme::Light | Theme::VibrantLight | Theme::NordLight => BaseTheme::Light,
                                 _ => BaseTheme::Dark,
                             };
                             CustomTheme::from_base(base, "My Theme".to_string())
