@@ -5283,6 +5283,10 @@ impl RequirementsApp {
                             .on_hover_text("Skill for adding requirements with AI evaluation");
                         ui.checkbox(&mut self.scaffold_config.include_aida_implement_skill, "Include aida-implement skill")
                             .on_hover_text("Skill for implementing requirements with traceability");
+                        ui.checkbox(&mut self.scaffold_config.include_aida_capture_skill, "Include aida-capture skill")
+                            .on_hover_text("Skill for capturing requirements from session review");
+                        ui.checkbox(&mut self.scaffold_config.include_aida_docs_skill, "Include aida-docs skill")
+                            .on_hover_text("Skill for documentation management and generation");
                     });
                 }
 

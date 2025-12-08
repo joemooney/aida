@@ -16,10 +16,10 @@ requirements:
   req_type: Sprint
   custom_status: Completed
   custom_fields:
-    start_date: 2024-11-01
-    velocity: '21'
     sprint_goal: Implement core user authentication
     sprint_number: '1'
+    start_date: 2024-11-01
+    velocity: '21'
     end_date: 2024-11-15
 - id: 11111111-1111-1111-1111-111111111102
   spec_id: SPRINT-0002
@@ -36,9 +36,9 @@ requirements:
   custom_status: Completed
   custom_fields:
     velocity: '26'
-    start_date: 2024-11-16
     sprint_goal: Complete product catalog MVP
     sprint_number: '2'
+    start_date: 2024-11-16
     end_date: 2024-11-29
 - id: 11111111-1111-1111-1111-111111111103
   spec_id: SPRINT-0003
@@ -219,18 +219,6 @@ requirements:
   created_by: '@qa_team'
   modified_at: 2024-11-28T11:00:00Z
   req_type: Bug
-- id: f2a6de02-f355-437e-a387-b910415bbc75
-  spec_id: FR-001
-  title: this is a req
-  description: this is a req
-  status: Draft
-  priority: Medium
-  owner: ''
-  feature: Uncategorized
-  created_at: 2025-12-07T02:10:53.435945559Z
-  created_by: Joe Mooney
-  modified_at: 2025-12-07T02:10:53.435945559Z
-  req_type: Functional
 id_config:
   format: SingleLevel
   numbering: Global

@@ -6240,13 +6240,13 @@ requirements:
   spec_id: FR-0138
   title: Manual evaluation in background
   description: "Manual evaluation \n\nSince manual triggering via Actions → AI → Evaluate is very slow and the gui appears to the o/s to have stopped working, we should run that in\n  the background. It should then update the AI evaluation in the database on its own and maybe we could have a completion notification?\n\nbackground AI evaluation with toast notifications for the AIDA GUI. Here's what was changed:\n\n  Changes Made (aida-gui/src/app.rs)\n\n  1. Added new state fields (lines 2249-2270):\n    - ai_eval_receiver: Option<mpsc::Receiver<BackgroundAiResult>> - Channel to receive background evaluation results\n    - ai_eval_in_progress: Option<(Uuid, String)> - Tracks currently evaluating requirement\n    - toast_message: Option<ToastNotification> - Current toast notification to display\n    - BackgroundAiResult struct - Result from background thread\n    - ToastNotification struct - Toast message with success flag and expiration time\n  2. Modified AI action handler (lines 10697-10743):\n    - Changed AiAction::Evaluate to spawn a background thread instead of blocking\n    - Shows \"Evaluating...\" toast when evaluation starts\n    - Prevents multiple concurrent evaluations\n  3. Added polling logic in update() (lines 15140-15203):\n    - Polls ai_eval_receiver for completed results\n    - On success: Creates StoredAiEvaluation, updates requirement, saves to database, shows success toast with quality score\n    - On error: Shows error toast\n  4. Added toast notification overlay (lines 2977-3037):\n    - show_toast_notification() method displays temporary messages at bottom-center of screen\n    - Green background for success, red for errors\n    - Auto-expires after 3-5 seconds\n    - Called at end of update loop (line 16032)\n\n  Behavior\n\n  When you use Actions → AI → Evaluate:\n  1. GUI immediately shows \"Evaluating [spec_id]...\" toast\n  2. AI evaluation runs in background thread - GUI remains responsive\n  3. When complete, shows \"AI evaluation complete for [spec_id] (Score: X/10)\" toast\n  4. Requirement's ai_evaluation field is automatically updated and saved\n  5. AI Results panel is also updated with detailed results\n\n"
-  status: Draft
+  status: Approved
   priority: Medium
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-11-30T18:56:03.086426200Z
   created_by: Unknown User
-  modified_at: 2025-11-30T19:13:47.414957940Z
+  modified_at: 2025-12-08T00:57:46.294834913Z
   req_type: Functional
   relationships:
   - rel_type: Parent
@@ -6261,6 +6261,13 @@ requirements:
     - field_name: description
       old_value: "Manual evaluation \n\nSince manual triggering via Actions → AI → Evaluate is very slow and the gui appears to the o/s to have stopped working, we should run that in\n  the background. It should then update the AI evaluation in the database on its own and maybe we could have a completion notification?"
       new_value: "Manual evaluation \n\nSince manual triggering via Actions → AI → Evaluate is very slow and the gui appears to the o/s to have stopped working, we should run that in\n  the background. It should then update the AI evaluation in the database on its own and maybe we could have a completion notification?\n\nbackground AI evaluation with toast notifications for the AIDA GUI. Here's what was changed:\n\n  Changes Made (aida-gui/src/app.rs)\n\n  1. Added new state fields (lines 2249-2270):\n    - ai_eval_receiver: Option<mpsc::Receiver<BackgroundAiResult>> - Channel to receive background evaluation results\n    - ai_eval_in_progress: Option<(Uuid, String)> - Tracks currently evaluating requirement\n    - toast_message: Option<ToastNotification> - Current toast notification to display\n    - BackgroundAiResult struct - Result from background thread\n    - ToastNotification struct - Toast message with success flag and expiration time\n  2. Modified AI action handler (lines 10697-10743):\n    - Changed AiAction::Evaluate to spawn a background thread instead of blocking\n    - Shows \"Evaluating...\" toast when evaluation starts\n    - Prevents multiple concurrent evaluations\n  3. Added polling logic in update() (lines 15140-15203):\n    - Polls ai_eval_receiver for completed results\n    - On success: Creates StoredAiEvaluation, updates requirement, saves to database, shows success toast with quality score\n    - On error: Shows error toast\n  4. Added toast notification overlay (lines 2977-3037):\n    - show_toast_notification() method displays temporary messages at bottom-center of screen\n    - Green background for success, red for errors\n    - Auto-expires after 3-5 seconds\n    - Called at end of update loop (line 16032)\n\n  Behavior\n\n  When you use Actions → AI → Evaluate:\n  1. GUI immediately shows \"Evaluating [spec_id]...\" toast\n  2. AI evaluation runs in background thread - GUI remains responsive\n  3. When complete, shows \"AI evaluation complete for [spec_id] (Score: X/10)\" toast\n  4. Requirement's ai_evaluation field is automatically updated and saved\n  5. AI Results panel is also updated with detailed results\n\n"
+  - id: 9239dc75-6110-4340-82a8-7d95c9833983
+    author: Joe Mooney
+    timestamp: 2025-12-08T00:57:46.294840586Z
+    changes:
+    - field_name: status
+      old_value: Draft
+      new_value: Approved
 - id: 5fe84b57-05db-415b-90a5-604f1bf3f9eb
   spec_id: FR-0139
   title: Report Generation
@@ -6499,19 +6506,27 @@ requirements:
         - Adds a HistoryEntry with the field change
         - Saves the store
         - Shows a toast notification
-  status: Draft
+  status: Completed
   priority: Medium
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-11-30T19:39:37.373409767Z
   created_by: Unknown User
-  modified_at: 2025-11-30T19:39:37.373409767Z
+  modified_at: 2025-12-08T00:57:52.564320962Z
   req_type: Functional
   relationships:
   - rel_type: Parent
     target_id: 4de3b4f0-b157-4d50-8549-e98153d2324d
     created_at: 2025-11-30T19:39:37.373448419Z
     created_by: Unknown User
+  history:
+  - id: 027b45bc-3597-4058-b26d-5ee70e650845
+    author: Joe Mooney
+    timestamp: 2025-12-08T00:57:52.564329604Z
+    changes:
+    - field_name: status
+      old_value: Draft
+      new_value: Completed
 - id: 9ea9544f-186c-4aa3-9072-5f3936a60e83
   spec_id: FR-0144
   title: '''o'' for Owner hotkey in reqlist'
@@ -6642,19 +6657,27 @@ requirements:
       2. Add appropriate tests if applicable
       3. Update the requirement status to 'Completed' when done
 
-  status: Draft
+  status: Approved
   priority: Medium
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-11-30T22:17:36.822832980Z
   created_by: Unknown User
-  modified_at: 2025-11-30T22:17:36.822832980Z
+  modified_at: 2025-12-08T00:57:56.598330694Z
   req_type: Functional
   relationships:
   - rel_type: Parent
     target_id: 4de3b4f0-b157-4d50-8549-e98153d2324d
     created_at: 2025-11-30T22:17:36.822862901Z
     created_by: Unknown User
+  history:
+  - id: 4d85cf31-28b9-4828-81cc-fca127ab7845
+    author: Joe Mooney
+    timestamp: 2025-12-08T00:57:56.598340319Z
+    changes:
+    - field_name: status
+      old_value: Draft
+      new_value: Approved
 - id: 382d0b18-bef9-4303-a93d-b2e54d4817d7
   spec_id: FR-0148
   title: AI Find Duplicates
@@ -6724,15 +6747,6 @@ requirements:
     target_id: 4de3b4f0-b157-4d50-8549-e98153d2324d
     created_at: 2025-12-01T06:03:23.444036238Z
     created_by: Unknown User
-  - rel_type: Parent
-    target_id: fe78b68a-197d-496d-a138-cbdf4dc23f42
-    created_at: 2025-12-08T00:37:00.540550037Z
-  - rel_type: Parent
-    target_id: 6c3fce83-3bd1-4946-9644-be6732f0e94a
-    created_at: 2025-12-08T00:37:02.226347717Z
-  - rel_type: Parent
-    target_id: 8c8a33e5-d83c-4218-8493-6d54db64a431
-    created_at: 2025-12-08T00:37:03.674527416Z
   history:
   - id: c7d3c62c-879f-4702-8d43-d3c4a07f3f96
     author: Unknown User
@@ -9194,6 +9208,55 @@ requirements:
     - field_name: sprint_assignment
       old_value: ''
       new_value: REQ-0219
+  ai_evaluation:
+    evaluation:
+      quality_score: 5
+      issues:
+      - type: vague_language
+        severity: medium
+        text: The term 'ranking number' and 'ordinal' are used interchangeably without defining the exact data type or range
+        suggestion: Specify whether this is an integer, float, or relative ordering system, and define any constraints (e.g., 1-999, unique per user, etc.)
+      - type: incomplete
+        severity: high
+        text: No specification of how the ranking interacts with the UI - where is it displayed, how is it edited, what views use it
+        suggestion: 'Add details about: (1) which views display ranking-ordered requirements, (2) how users set/modify rankings, (3) whether rankings are visible to others'
+      - type: missing_criteria
+        severity: medium
+        text: No acceptance criteria defined for what constitutes successful implementation
+        suggestion: 'Add acceptance criteria such as: ''User can assign a numeric rank to any requirement'', ''Requirements can be sorted by rank in list views'', ''Rank persists per user across sessions'''
+      - type: ambiguous
+        severity: low
+        text: Unclear whether ranking is per-user (personal) or can be shared across team members
+        suggestion: 'Clarify scope: ''This ranking is personal and only visible to the user who set it'' or define sharing behavior'
+      - type: incomplete
+        severity: medium
+        text: No specification of default behavior for unranked requirements
+        suggestion: Define what happens to requirements without a rank when sorted by ranking (appear at end? use fallback sort?)
+      strengths:
+      - Good conceptual distinction between organizational priority (team-assigned) and personal ordering (user preference)
+      - Clear use case motivation - ordering an inbox for personal workflow
+      - Appropriately scoped as a user-centric feature rather than system metadata
+      suggested_improvements:
+        description: |-
+          Add a personal ranking number to requirements for user-defined ordering.
+
+          **Purpose:** Allow users to order requirements by personal preference, independent of team-assigned priority or status. This supports personal workflow management (e.g., ordering an inbox by intended work sequence).
+
+          **Behavior:**
+          - Each user can assign an optional numeric rank (integer, 1-9999) to any requirement
+          - Rankings are personal and not visible to other users
+          - Requirements can be sorted by rank in list/Kanban views via a 'Sort by: My Ranking' option
+          - Unranked requirements appear after ranked ones when sorting by rank
+          - Ranking can be set via inline edit or drag-to-reorder in ranked view
+
+          **Acceptance Criteria:**
+          1. User can assign a rank number to a requirement
+          2. User can view requirements sorted by their personal ranking
+          3. Rankings persist across sessions
+          4. Unranked items sort to the bottom of ranked lists
+        rationale: The improved description adds specific behavior details, acceptance criteria, and clarifies the personal/user-scoped nature of the feature, making it implementable and testable
+    evaluated_at: 2025-12-08T01:02:48.786595854Z
+    content_hash: 96a20d49192e13f5
 - id: 5a4d7c64-5fa3-46d9-be91-4fb656fc2fd3
   spec_id: FR-0224
   title: When you Menu/Open Project and that project is ...
@@ -9231,141 +9294,6 @@ requirements:
     target_id: 8e4988b4-b850-4f46-ac4d-ed3f1bb93003
     created_at: 2025-12-08T00:33:39.062074685Z
     created_by: joe
-- id: fe78b68a-197d-496d-a138-cbdf4dc23f42
-  spec_id: FR-0226
-  title: Git Hooks for Code Traceability Validation
-  description: |-
-    The system shall generate Git hooks as part of project scaffolding to validate code traceability.
-
-    ### Git Hooks Generated
-
-    #### commit-msg Hook
-    Validates commit messages for AI attribution format:
-    - Warns if commits touch files with trace comments but don't have [AI:tool:conf] tag
-    - Suggests adding trace references for affected requirements
-    - Non-blocking (warnings only, does not reject commits)
-
-    #### pre-commit Hook (Optional)
-    - Validates that new functions/methods in AI-tagged files have trace comments
-    - Checks for orphaned trace comments (referencing non-existent requirements)
-    - Can be configured to be blocking or warning-only
-
-    ### Hook Configuration
-    Hooks should be configurable via .aida/hooks.yaml
-
-    ### Installation
-    - Scaffolder generates hooks in .git/hooks/ directory
-    - Hooks are executable bash scripts
-    - Include AIDA CLI calls to validate against requirements database
-
-    ### Acceptance Criteria
-    - [ ] commit-msg hook generated by scaffolder
-    - [ ] pre-commit hook generated by scaffolder (optional)
-    - [ ] Hooks validate trace comment format
-    - [ ] Hooks query AIDA for requirement existence
-    - [ ] Configuration file controls hook behavior
-  status: Draft
-  priority: Medium
-  owner: ''
-  feature: 118-Uncategorized
-  created_at: 2025-12-08T00:36:08.972058026Z
-  modified_at: 2025-12-08T00:36:08.972058026Z
-  req_type: Functional
-- id: 6c3fce83-3bd1-4946-9644-be6732f0e94a
-  spec_id: FR-0227
-  title: Code Traceability Query and Reporting
-  description: |-
-    The system shall provide CLI commands to query code traceability information.
-
-    ### Commands
-
-    #### aida trace find <SPEC-ID>
-    Find all code files/locations that implement a given requirement.
-    - Scans source files for trace comments matching the spec ID
-    - Returns file paths and line numbers
-    - Supports glob patterns for file filtering
-
-    #### aida trace list [--file <path>]
-    List all trace comments in the project or a specific file.
-    - Shows spec ID, tool, confidence for each trace
-    - Groups by file or by requirement
-    - Supports JSON output for tooling integration
-
-    #### aida trace validate
-    Validate trace comment integrity:
-    - Check that all referenced spec IDs exist in database
-    - Warn about orphaned traces
-    - Check for duplicate traces
-
-    #### aida trace stats
-    Show traceability statistics:
-    - Total files with traces
-    - Traces per requirement
-    - AI tool distribution (claude, copilot, etc.)
-    - Confidence level distribution
-
-    ### Output Formats
-    - Default: Human-readable table
-    - --json: Machine-parsable JSON
-    - --markdown: Markdown table for documentation
-
-    ### Acceptance Criteria
-    - [ ] aida trace find command implemented
-    - [ ] aida trace list command implemented
-    - [ ] aida trace validate command implemented
-    - [ ] aida trace stats command implemented
-    - [ ] JSON output supported
-    - [ ] Integration with existing aida commands
-  status: Draft
-  priority: Medium
-  owner: ''
-  feature: 119-Uncategorized
-  created_at: 2025-12-08T00:36:26.661484705Z
-  modified_at: 2025-12-08T00:36:26.661484705Z
-  req_type: Functional
-- id: 8c8a33e5-d83c-4218-8493-6d54db64a431
-  spec_id: FR-0228
-  title: CI/CD Template Generation for Traceability
-  description: |-
-    The system shall generate CI/CD pipeline templates that validate code traceability.
-
-    ### Templates Generated
-
-    #### GitHub Actions (.github/workflows/aida-validate.yml)
-    - Runs on pull requests
-    - Validates trace comments exist for changed files
-    - Comments on PR with traceability report
-    - Optional: Block merge if traces missing
-
-    #### GitLab CI (.gitlab-ci.yml snippet)
-    - Validation job for merge requests
-    - Traceability report as artifact
-
-    ### Validation Rules (Configurable)
-    - require_traces: Require trace comments for new code
-    - require_review: Require reviewed flag on AI code
-    - max_ai_percent: Maximum allowed AI-generated code percentage
-    - orphan_check: Fail on orphaned trace references
-
-    ### Generated Report
-    Pipeline generates a traceability report showing:
-    - Files changed and their trace status
-    - Requirements affected by the PR
-    - AI percentage of changes
-
-    ### Acceptance Criteria
-    - [ ] GitHub Actions template generated by scaffolder
-    - [ ] GitLab CI template generated by scaffolder
-    - [ ] Templates are functional out of the box
-    - [ ] Configuration options documented
-    - [ ] PR comment integration works
-  status: Draft
-  priority: Low
-  owner: ''
-  feature: 120-Uncategorized
-  created_at: 2025-12-08T00:36:37.498405131Z
-  modified_at: 2025-12-08T00:36:37.498405131Z
-  req_type: Functional
 users:
 - id: 150164ef-32ed-4d61-8cec-e887ac78cfd7
   spec_id: $USER-001
@@ -9463,8 +9391,8 @@ id_config:
     prefix: SPIKE
     description: Research or investigation task to reduce uncertainty or explore technical approaches
 features: []
-next_feature_number: 121
-next_spec_number: 229
+next_feature_number: 118
+next_spec_number: 226
 prefix_counters: {}
 relationship_definitions:
 - name: parent
@@ -9754,8 +9682,8 @@ reaction_definitions:
   description: Scary boo
   built_in: false
 meta_counters:
-  $TEAM: 4
   $USER: 7
+  $TEAM: 4
 type_definitions:
 - name: Functional
   display_name: Functional
