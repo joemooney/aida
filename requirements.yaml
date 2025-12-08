@@ -9394,6 +9394,44 @@ features: []
 next_feature_number: 118
 next_spec_number: 226
 prefix_counters: {}
+ai_prompts:
+  global_context: |
+    AIDA (AI Design Assistant) is a requirements management system built in Rust with egui.
+
+    Key architectural aspects:
+    - aida-core: Core library with models, storage (YAML/SQLite), AI integration
+    - aida-gui: Desktop GUI application using egui/eframe
+    - aida-cli: Command-line interface
+
+    Requirements should follow software engineering best practices:
+    - Clear, testable acceptance criteria
+    - Appropriate granularity for implementation
+    - Consider keyboard navigation and accessibility
+    - Follow existing patterns in the codebase
+
+    The project uses vim-style keyboard navigation throughout the UI.
+    Requirements are organized by Features and can have Parent/Child, Verifies, and References relationships.
+  evaluation:
+    additional_instructions: |
+      When evaluating AIDA requirements, pay special attention to:
+      1. UI/UX considerations - keyboard shortcuts, accessibility
+      2. Data persistence - YAML and SQLite backend compatibility
+      3. Cross-platform support - Linux, macOS, Windows
+      4. Integration with Claude Code and AI workflows
+  improve:
+    additional_instructions: |
+      When improving AIDA requirement descriptions:
+      - Include keyboard shortcuts if relevant (e.g., "Press 'j' to navigate down")
+      - Reference specific views (List, Kanban, Timeline, Sprint Planning)
+      - Consider both GUI and CLI interfaces
+      - Include acceptance criteria that can be tested
+  generate_children:
+    additional_instructions: |
+      When decomposing AIDA requirements:
+      - Separate GUI from core logic where appropriate
+      - Consider CLI equivalent functionality
+      - Think about keyboard vs mouse interactions
+      - Consider state persistence requirements
 relationship_definitions:
 - name: parent
   display_name: Parent
