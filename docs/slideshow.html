@@ -474,9 +474,8 @@
                                 <li><strong>Flexible Organization</strong> - Features, relationships, custom types</li>
                             </ul>
                         </div>
-                        <div class="screenshot" id="ss-overview">
-                            <span>Screenshot: Main list view</span>
-                            <div class="screenshot-label">[ss-overview.png]</div>
+                        <div class="screenshot has-image" id="ss-overview">
+                            <img src="images/ss-overview.png" alt="AIDA main list view showing requirements with tree hierarchy">
                         </div>
                     </div>
                 </div>
@@ -503,9 +502,8 @@
                                 <strong>Pro tip:</strong> Press <span class="kbd">?</span> anytime to see all keyboard shortcuts!
                             </div>
                         </div>
-                        <div class="screenshot" id="ss-list-view">
-                            <span>Screenshot: List view with tree hierarchy</span>
-                            <div class="screenshot-label">[ss-list-view.png]</div>
+                        <div class="screenshot has-image" id="ss-list-view">
+                            <img src="images/ss-list-view.png" alt="List view with tree hierarchy expanded">
                         </div>
                     </div>
                 </div>
@@ -516,9 +514,8 @@
                 <div class="slide-content">
                     <h2>Kanban Board</h2>
                     <div class="two-column">
-                        <div class="screenshot" id="ss-kanban">
-                            <span>Screenshot: Kanban board view</span>
-                            <div class="screenshot-label">[ss-kanban.png]</div>
+                        <div class="screenshot has-image" id="ss-kanban">
+                            <img src="images/ss-kanban.png" alt="Kanban board view with status columns">
                         </div>
                         <div>
                             <p>Visualize workflow with drag-and-drop cards organized by status, priority, or any field.</p>
@@ -552,9 +549,8 @@
                                 <li><strong>Click to navigate</strong> - Jump to any requirement from timeline</li>
                             </ul>
                         </div>
-                        <div class="screenshot" id="ss-timeline">
-                            <span>Screenshot: Timeline view</span>
-                            <div class="screenshot-label">[ss-timeline.png]</div>
+                        <div class="screenshot has-image" id="ss-timeline">
+                            <img src="images/ss-timeline.png" alt="Timeline view showing requirement changes over time">
                         </div>
                     </div>
                 </div>
@@ -565,9 +561,8 @@
                 <div class="slide-content">
                     <h2>Sprint Planning</h2>
                     <div class="two-column">
-                        <div class="screenshot" id="ss-sprint">
-                            <span>Screenshot: Sprint planning view</span>
-                            <div class="screenshot-label">[ss-sprint.png]</div>
+                        <div class="screenshot has-image" id="ss-sprint">
+                            <img src="images/ss-sprint.png" alt="Sprint planning view with backlog and sprints">
                         </div>
                         <div>
                             <p>Agile sprint management with backlog grooming and sprint assignment.</p>
@@ -712,9 +707,8 @@
                                 <li><strong>References</strong> - Related items</li>
                             </ul>
                         </div>
-                        <div class="screenshot" id="ss-relationships">
-                            <span>Screenshot: Relationship view / tree hierarchy</span>
-                            <div class="screenshot-label">[ss-relationships.png]</div>
+                        <div class="screenshot has-image" id="ss-relationships">
+                            <img src="images/ss-relationships.png" alt="Links tab showing requirement relationships">
                         </div>
                     </div>
                 </div>
@@ -725,9 +719,8 @@
                 <div class="slide-content">
                     <h2>AI-Powered Features</h2>
                     <div class="two-column">
-                        <div class="screenshot" id="ss-ai-evaluation">
-                            <span>Screenshot: AI evaluation panel</span>
-                            <div class="screenshot-label">[ss-ai-evaluation.png]</div>
+                        <div class="screenshot has-image" id="ss-ai-evaluation">
+                            <img src="images/ss-ai-evaluation.png" alt="AI evaluation panel showing quality score and suggestions">
                         </div>
                         <div>
                             <p>Leverage AI to improve requirement quality and streamline development.</p>
@@ -778,9 +771,8 @@
                                 Access scaffolding from <strong>Settings → AI Tab → Scaffold Project</strong>
                             </div>
                         </div>
-                        <div class="screenshot" id="ss-scaffold">
-                            <span>Screenshot: Scaffold dialog</span>
-                            <div class="screenshot-label">[ss-scaffold.png]</div>
+                        <div class="screenshot has-image" id="ss-scaffold">
+                            <img src="images/ss-ai-actions.png" alt="AI Actions menu showing scaffolding and evaluation options">
                         </div>
                     </div>
                 </div>
@@ -835,9 +827,8 @@ fn implement_feature() {
                 <div class="slide-content">
                     <h2>Themes & Customization</h2>
                     <div class="two-column">
-                        <div class="screenshot" id="ss-themes">
-                            <span>Screenshot: Theme settings / comparison</span>
-                            <div class="screenshot-label">[ss-themes.png]</div>
+                        <div class="screenshot has-image" id="ss-themes">
+                            <img src="images/ss-themes-dark.png" alt="Theme editor with customization options">
                         </div>
                         <div>
                             <p>Customize AIDA's appearance to match your preferences.</p>
@@ -886,8 +877,7 @@ aida add --title "New feature" \
     --description "Details..." \
     --type Functional \
     --status Draft</code></pre>
-                        </div>
-                        <div>
+
                             <h3>Advanced Commands</h3>
                             <pre><code># Edit requirement
 aida edit FR-0042 --status completed
@@ -898,15 +888,11 @@ aida rel add --from FR-0001 \
 
 # Add comments
 aida comment add FR-0042 \
-    "Implementation note..."
-
-# Export
-aida export --format markdown</code></pre>
+    "Implementation note..."</code></pre>
                         </div>
-                    </div>
-
-                    <div class="highlight-box" style="margin-top: 2rem;">
-                        <strong>Tip:</strong> Use CLI in CI/CD pipelines to validate requirements or generate reports automatically.
+                        <div class="screenshot has-image" id="ss-cli">
+                            <img src="images/ss-cli.png" alt="CLI output showing aida list command">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -939,9 +925,8 @@ aida project switch my-project
 # List registered projects
 aida project list</code></pre>
                         </div>
-                        <div class="screenshot" id="ss-projects">
-                            <span>Screenshot: Project selector / settings</span>
-                            <div class="screenshot-label">[ss-projects.png]</div>
+                        <div class="screenshot has-image" id="ss-projects">
+                            <img src="images/ss-projects.png" alt="Menu showing project management options">
                         </div>
                     </div>
                 </div>
