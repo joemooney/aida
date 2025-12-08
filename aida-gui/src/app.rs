@@ -2932,6 +2932,7 @@ pub struct RequirementsApp {
     planning_collapsed_sprints: std::collections::HashSet<Uuid>,     // Collapsed sprint sections
     planning_show_completed_sprints: bool,                           // Show archived/completed sprints
     planning_selected_item: Option<Uuid>,                            // Currently selected item for details
+    planning_selected_sprint: Option<Uuid>,                          // Currently selected sprint for details/editing
     planning_drag_source: Option<Uuid>,                              // Item being dragged
     planning_drag_target_sprint: Option<Option<Uuid>>,               // Target sprint (None = Backlog)
 }
@@ -3498,6 +3499,7 @@ impl RequirementsApp {
             planning_collapsed_sprints: std::collections::HashSet::new(),
             planning_show_completed_sprints: false,
             planning_selected_item: None,
+            planning_selected_sprint: None,
             planning_drag_source: None,
             planning_drag_target_sprint: None,
         }
@@ -10601,13 +10603,17 @@ impl RequirementsApp {
                 for (sprint_id, spec_id, title, status, goal) in &sprints {
                     let is_collapsed = self.planning_collapsed_sprints.contains(sprint_id);
                     let is_drop_target = self.planning_drag_target_sprint == Some(Some(*sprint_id));
+                    let is_sprint_selected = self.planning_selected_sprint == Some(*sprint_id);
 
-                    // Sprint header - make it a drop zone
+                    // Sprint header - make it a drop zone and selectable
                     let header_response = ui.scope(|ui| {
-                        // Highlight if this is the current drop target
+                        // Highlight if this is the current drop target or selected
                         if is_drop_target && is_dragging {
                             ui.visuals_mut().widgets.noninteractive.bg_fill =
                                 egui::Color32::from_rgba_unmultiplied(59, 130, 246, 50);
+                        } else if is_sprint_selected {
+                            ui.visuals_mut().widgets.noninteractive.bg_fill =
+                                ui.visuals().selection.bg_fill;
                         }
 
                         ui.horizontal(|ui| {
@@ -10629,10 +10635,26 @@ impl RequirementsApp {
                                 _ => egui::Color32::GRAY,
                             };
 
-                            ui.colored_label(status_color, "●");
+                            ui.colored_label(status_color, "🏃");
 
+                            // Make the header text a clickable label
                             let header_text = format!("{} - {}", spec_id, title);
-                            ui.strong(&header_text);
+                            let header_label = if is_sprint_selected {
+                                egui::RichText::new(&header_text).strong().color(ui.visuals().selection.stroke.color)
+                            } else {
+                                egui::RichText::new(&header_text).strong()
+                            };
+                            let header_click = ui.add(egui::Label::new(header_label).sense(egui::Sense::click()));
+
+                            if header_click.clicked() {
+                                // Select this sprint, clear item selection
+                                self.planning_selected_sprint = Some(*sprint_id);
+                                self.planning_selected_item = None;
+                                // Set selected_idx to the sprint's index for detail panel
+                                if let Some(idx) = self.store.requirements.iter().position(|r| r.id == *sprint_id) {
+                                    self.selected_idx = Some(idx);
+                                }
+                            }
 
                             if !goal.is_empty() {
                                 ui.label(format!("({})", goal));
@@ -10909,6 +10931,7 @@ impl RequirementsApp {
         // Handle click for selection
         if response.clicked() {
             self.planning_selected_item = Some(item_id);
+            self.planning_selected_sprint = None;  // Clear sprint selection when item selected
             if let Some(idx) = self.store.requirements.iter().position(|r| r.id == item_id) {
                 self.selected_idx = Some(idx);
             }
@@ -10991,6 +11014,12 @@ impl RequirementsApp {
 
     /// Show the detail panel for the Planning view (left side)
     fn show_planning_detail_panel(&mut self, ui: &mut egui::Ui) {
+        // Check if a sprint is selected (takes precedence for display)
+        let sprint_id = self.planning_selected_sprint;
+        let sprint_req_idx = sprint_id.and_then(|id| {
+            self.store.requirements.iter().position(|r| r.id == id)
+        });
+
         // Get the selected item from planning_selected_item
         let selected_id = self.planning_selected_item;
 
@@ -10999,8 +11028,11 @@ impl RequirementsApp {
             self.store.requirements.iter().position(|r| r.id == id)
         });
 
+        // Determine which to show - sprint selection takes precedence
+        let display_idx = sprint_req_idx.or(selected_req_idx);
+
         // Sync with selected_idx for consistency
-        if let Some(idx) = selected_req_idx {
+        if let Some(idx) = display_idx {
             if self.selected_idx != Some(idx) {
                 self.selected_idx = Some(idx);
             }
@@ -11009,10 +11041,10 @@ impl RequirementsApp {
         ui.heading("Details");
         ui.separator();
 
-        if selected_req_idx.is_none() {
+        if display_idx.is_none() {
             ui.centered_and_justified(|ui| {
                 ui.label(
-                    egui::RichText::new("Select an item to view details")
+                    egui::RichText::new("Select a sprint or item to view details")
                         .italics()
                         .color(egui::Color32::GRAY),
                 );
