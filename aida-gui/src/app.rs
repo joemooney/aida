@@ -909,7 +909,7 @@ impl CustomTheme {
             hyperlink_color: ThemeColor::new(100, 180, 255),
             warn_fg: ThemeColor::new(255, 200, 0),
             error_fg: ThemeColor::new(255, 80, 80),
-            success_fg: ThemeColor::new(80, 255, 80),
+            success_fg: ThemeColor::new(128, 209, 128),
             // Widgets
             widget_bg: ThemeColor::new(20, 20, 20),
             widget_fg: ThemeColor::new(200, 200, 200),
@@ -979,8 +979,8 @@ impl CustomTheme {
             panel_fill: base03,
             extreme_bg: base03,
             faint_bg: base02,
-            // Text
-            text_color: base0,
+            // Text - slightly lighter than standard solarized for better readability
+            text_color: ThemeColor::new(170, 183, 184),
             weak_text_color: base01,
             hyperlink_color: blue,
             warn_fg: yellow,
