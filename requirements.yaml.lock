@@ -1,1 +1,9 @@
-sessions: {}
+sessions:
+  226865-5a26f779-c214-4a2c-997a-07d230526311:
+    session_id: 226865-5a26f779-c214-4a2c-997a-07d230526311
+    user_name: Joe Mooney
+    hostname: imac
+    pid: 226865
+    started_at: 2025-12-08T04:19:12.436025239Z
+    last_heartbeat: 2025-12-08T04:24:12.482260391Z
+    editing_requirement: null
