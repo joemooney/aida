@@ -1,9 +1,1 @@
-sessions:
-  225313-afe7bea6-f97f-4ca4-8565-2607c9d752a9:
-    session_id: 225313-afe7bea6-f97f-4ca4-8565-2607c9d752a9
-    user_name: Joe Mooney
-    hostname: imac
-    pid: 225313
-    started_at: 2025-12-08T04:11:01.282662042Z
-    last_heartbeat: 2025-12-08T04:12:36.295720659Z
-    editing_requirement: null
+sessions: {}

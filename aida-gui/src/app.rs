@@ -1534,23 +1534,38 @@ impl Theme {
                 let widget_hovered = egui::Color32::from_rgb(50, 50, 80);
                 let widget_active = egui::Color32::from_rgb(45, 45, 75);
 
-                visuals.override_text_color = Some(text_primary);
+                // Don't use override_text_color - set via fg_stroke to allow weak_text_color to work
+                visuals.override_text_color = None;
+                visuals.hyperlink_color = accent;
+
+                // Noninteractive (labels)
                 visuals.widgets.noninteractive.bg_fill = bg_panel;
-                visuals.widgets.noninteractive.fg_stroke.color = text_muted;
+                visuals.widgets.noninteractive.fg_stroke = egui::Stroke::new(1.0, text_primary);
+
+                // Inactive widgets
                 visuals.widgets.inactive.bg_fill = widget_inactive;
-                visuals.widgets.inactive.fg_stroke.color = text_primary;
+                visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, text_primary);
                 visuals.widgets.inactive.bg_stroke.color = egui::Color32::from_rgb(50, 50, 75);
+
+                // Hovered widgets
                 visuals.widgets.hovered.bg_fill = widget_hovered;
-                visuals.widgets.hovered.fg_stroke.color = egui::Color32::WHITE;
+                visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.0, text_primary);
                 visuals.widgets.hovered.bg_stroke.color = accent_hover;
+
+                // Active widgets
                 visuals.widgets.active.bg_fill = widget_active;
-                visuals.widgets.active.fg_stroke.color = egui::Color32::WHITE;
+                visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0, text_primary);
                 visuals.widgets.active.bg_stroke.color = accent_active;
+
+                // Open widgets
                 visuals.widgets.open.bg_fill = widget_inactive;
-                visuals.widgets.open.fg_stroke.color = text_primary;
+                visuals.widgets.open.fg_stroke = egui::Stroke::new(1.0, text_primary);
+
+                // Selection
                 visuals.selection.bg_fill = egui::Color32::from_rgb(37, 99, 160);
                 visuals.selection.stroke.color = accent;
-                visuals.hyperlink_color = accent;
+
+                // Backgrounds
                 visuals.extreme_bg_color = bg_code;
                 visuals.faint_bg_color = bg_faint;
                 visuals.window_fill = bg_main;
