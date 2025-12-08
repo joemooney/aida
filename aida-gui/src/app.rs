@@ -487,6 +487,9 @@ pub struct CustomTheme {
     pub warn_fg: ThemeColor,
     /// Error text color
     pub error_fg: ThemeColor,
+    /// Success text color (for success messages)
+    #[serde(default = "default_success_fg")]
+    pub success_fg: ThemeColor,
 
     // === Widget Colors - Noninteractive ===
     /// Non-interactive widget background
@@ -591,6 +594,9 @@ pub struct CustomTheme {
     pub priority_low: ThemeColor,
 }
 
+// Default success color (for success messages)
+fn default_success_fg() -> ThemeColor { ThemeColor::new(34, 197, 94) }          // Green
+
 // Default status colors
 fn default_status_draft() -> ThemeColor { ThemeColor::new(156, 163, 175) }      // Gray
 fn default_status_approved() -> ThemeColor { ThemeColor::new(76, 175, 80) }     // Green
@@ -635,6 +641,7 @@ impl CustomTheme {
             hyperlink_color: ThemeColor::new(90, 170, 255),
             warn_fg: ThemeColor::new(255, 143, 0),
             error_fg: ThemeColor::new(255, 0, 0),
+            success_fg: ThemeColor::new(34, 197, 94),
             // Widgets - noninteractive
             widget_bg: ThemeColor::new(27, 27, 27),
             widget_fg: ThemeColor::new(140, 140, 140),
@@ -699,6 +706,7 @@ impl CustomTheme {
             hyperlink_color: ThemeColor::new(0, 102, 204),
             warn_fg: ThemeColor::new(255, 100, 0),
             error_fg: ThemeColor::new(220, 0, 0),
+            success_fg: ThemeColor::new(34, 197, 94),
             // Widgets - noninteractive
             widget_bg: ThemeColor::new(248, 248, 248),
             widget_fg: ThemeColor::new(100, 100, 100),
@@ -764,6 +772,7 @@ impl CustomTheme {
             hyperlink_color: ThemeColor::new(37, 99, 235),
             warn_fg: ThemeColor::new(255, 100, 0),
             error_fg: ThemeColor::new(220, 0, 0),
+            success_fg: ThemeColor::new(34, 197, 94),
             // Widgets - noninteractive
             widget_bg: ThemeColor::new(245, 245, 250),
             widget_fg: ThemeColor::new(100, 100, 130),
@@ -829,6 +838,7 @@ impl CustomTheme {
             hyperlink_color: ThemeColor::new(94, 129, 172),    // nord10
             warn_fg: ThemeColor::new(208, 135, 112),           // nord12
             error_fg: ThemeColor::new(191, 97, 106),           // nord11
+            success_fg: ThemeColor::new(163, 190, 140),        // nord14 (green)
             // Widgets - noninteractive
             widget_bg: ThemeColor::new(236, 239, 244),         // nord6
             widget_fg: ThemeColor::new(76, 86, 106),           // nord3
@@ -12395,6 +12405,10 @@ impl RequirementsApp {
                 ui.label("Error Color:");
                 color_picker_widget(ui, &mut theme.error_fg);
                 ui.end_row();
+
+                ui.label("Success Color:");
+                color_picker_widget(ui, &mut theme.success_fg);
+                ui.end_row();
             });
     }
 
@@ -12747,10 +12761,22 @@ impl RequirementsApp {
         ui.separator();
         ui.add_space(5.0);
 
+        // === Links Preview ===
+        ui.strong("Links");
+        ui.add_space(3.0);
+        ui.add(egui::Hyperlink::from_label_and_url(
+            egui::RichText::new("Example hyperlink").color(theme.hyperlink_color.to_egui()),
+            "https://example.com"
+        ));
+
+        ui.add_space(8.0);
+        ui.separator();
+        ui.add_space(5.0);
+
         // === Messages Preview ===
         ui.strong("Messages");
         ui.add_space(3.0);
-        ui.colored_label(theme.status_completed.to_egui(), "Saved successfully");
+        ui.colored_label(theme.success_fg.to_egui(), "Saved successfully");
         ui.colored_label(theme.warn_fg.to_egui(), "Warning: Unsaved changes");
         ui.colored_label(theme.error_fg.to_egui(), "Error: Failed to load");
 
