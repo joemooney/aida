@@ -157,16 +157,45 @@ requirements:
   spec_id: FR-0008
   title: comments should be displayed nested
   description: 'the comment replies are being displayed at the same level of indentation without an obvious indication of it being a reply. '
-  status: Draft
+  status: Completed
   priority: Medium
   owner: ''
   feature: 10-COMMENTS
   created_at: 2025-11-25T21:16:56.190236240Z
-  modified_at: 2025-11-26T00:57:38.868416164Z
+  modified_at: 2025-12-08T02:54:55.125830470Z
   req_type: Functional
   relationships:
   - rel_type: Parent
     target_id: 848840ae-7005-4fab-b478-163f9139359e
+  comments:
+  - id: 0bbf3acb-d745-4eb2-9901-e655f1b5b311
+    author: joe
+    content: my first comment
+    created_at: 2025-12-08T02:53:38.616603245Z
+    modified_at: 2025-12-08T02:53:38.616603245Z
+    replies:
+    - id: 632c4f90-f13e-466e-94ec-6eab42d30baa
+      author: joe
+      content: my reply
+      created_at: 2025-12-08T02:53:49.554423707Z
+      modified_at: 2025-12-08T02:53:49.554423707Z
+      parent_id: 0bbf3acb-d745-4eb2-9901-e655f1b5b311
+  - id: 1bca9cd6-d456-407c-8914-8f67a458a37f
+    author: joe
+    content: my 2nd comment
+    created_at: 2025-12-08T02:54:11.218758471Z
+    modified_at: 2025-12-08T02:54:11.218758471Z
+    replies:
+    - id: 3fff7937-7bc5-409d-8641-03debbb67640
+      author: joe
+      content: my 2nd reply
+      created_at: 2025-12-08T02:54:43.454370715Z
+      modified_at: 2025-12-08T02:54:43.454370715Z
+      parent_id: 1bca9cd6-d456-407c-8914-8f67a458a37f
+    reactions:
+    - reaction: resolved
+      author: joe
+      added_at: 2025-12-08T02:54:20.154068834Z
   history:
   - id: 07363a30-3f77-4f08-a484-bf0aa488c7eb
     author: '@joe'
@@ -175,6 +204,13 @@ requirements:
     - field_name: feature
       old_value: 97-Uncategorized
       new_value: COMMENTS
+  - id: 7a48da40-fa18-4374-b6e8-23e1cbc3c67d
+    author: Joe Mooney
+    timestamp: 2025-12-08T02:54:55.125838578Z
+    changes:
+    - field_name: status
+      old_value: Draft
+      new_value: Completed
 - id: d0f16bc7-788b-4d6c-ac49-3a48fc678e50
   spec_id: FR-0009
   title: comment emoji reactions
@@ -192,12 +228,12 @@ requirements:
         - Edit existing reactions (emoji, label, description)
         - Delete custom reactions (built-in ones can't be deleted)
         - Reset to defaults
-  status: Draft
+  status: Completed
   priority: Medium
   owner: ''
   feature: 100-Teams
   created_at: 2025-11-25T21:19:10.021746590Z
-  modified_at: 2025-12-07T05:31:01.045962135Z
+  modified_at: 2025-12-08T02:55:58.992605763Z
   req_type: Functional
   relationships:
   - rel_type: Parent
@@ -251,6 +287,13 @@ requirements:
     - field_name: feature
       old_value: 97-Uncategorized
       new_value: 100-Teams
+  - id: 42607196-7c7c-4455-b9e7-a732a041e799
+    author: Joe Mooney
+    timestamp: 2025-12-08T02:55:58.992614203Z
+    changes:
+    - field_name: status
+      old_value: Draft
+      new_value: Completed
 - id: 04cff76c-978d-4e3a-845a-1d6f6b885cea
   spec_id: CHANGEREQUESTS-0029
   prefix_override: CHANGEREQUESTS
@@ -8602,12 +8645,12 @@ requirements:
   spec_id: FR-0201
   title: Sprint Requirement Type
   description: Add Sprint to RequirementType enum. Sprints are time-boxed iterations that contain work items. Includes custom fields for sprint_number, start_date, end_date, sprint_goal, velocity.
-  status: Draft
+  status: Completed
   priority: High
   owner: ''
   feature: 112-Uncategorized
   created_at: 2025-12-07T00:30:59.548639777Z
-  modified_at: 2025-12-07T05:31:41.478230369Z
+  modified_at: 2025-12-08T03:00:48.023931039Z
   req_type: Functional
   relationships:
   - rel_type: Parent
@@ -8621,6 +8664,13 @@ requirements:
     - field_name: feature
       old_value: 114-Uncategorized
       new_value: 112-Uncategorized
+  - id: bc1d7a2e-a710-4182-bb44-d155e40d9d8e
+    author: Joe Mooney
+    timestamp: 2025-12-08T03:00:48.023940235Z
+    changes:
+    - field_name: status
+      old_value: Draft
+      new_value: Completed
 - id: 9f1bc1d0-602b-42c4-aae3-bc72bf7e6a4e
   spec_id: FR-0202
   title: SprintAssignment Relationship
@@ -9394,44 +9444,6 @@ features: []
 next_feature_number: 118
 next_spec_number: 226
 prefix_counters: {}
-ai_prompts:
-  global_context: |
-    AIDA (AI Design Assistant) is a requirements management system built in Rust with egui.
-
-    Key architectural aspects:
-    - aida-core: Core library with models, storage (YAML/SQLite), AI integration
-    - aida-gui: Desktop GUI application using egui/eframe
-    - aida-cli: Command-line interface
-
-    Requirements should follow software engineering best practices:
-    - Clear, testable acceptance criteria
-    - Appropriate granularity for implementation
-    - Consider keyboard navigation and accessibility
-    - Follow existing patterns in the codebase
-
-    The project uses vim-style keyboard navigation throughout the UI.
-    Requirements are organized by Features and can have Parent/Child, Verifies, and References relationships.
-  evaluation:
-    additional_instructions: |
-      When evaluating AIDA requirements, pay special attention to:
-      1. UI/UX considerations - keyboard shortcuts, accessibility
-      2. Data persistence - YAML and SQLite backend compatibility
-      3. Cross-platform support - Linux, macOS, Windows
-      4. Integration with Claude Code and AI workflows
-  improve:
-    additional_instructions: |
-      When improving AIDA requirement descriptions:
-      - Include keyboard shortcuts if relevant (e.g., "Press 'j' to navigate down")
-      - Reference specific views (List, Kanban, Timeline, Sprint Planning)
-      - Consider both GUI and CLI interfaces
-      - Include acceptance criteria that can be tested
-  generate_children:
-    additional_instructions: |
-      When decomposing AIDA requirements:
-      - Separate GUI from core logic where appropriate
-      - Consider CLI equivalent functionality
-      - Think about keyboard vs mouse interactions
-      - Consider state persistence requirements
 relationship_definitions:
 - name: parent
   display_name: Parent
@@ -10000,6 +10012,44 @@ allowed_prefixes:
 - REQLIST
 - THEME
 restrict_prefixes: false
+ai_prompts:
+  global_context: |
+    AIDA (AI Design Assistant) is a requirements management system built in Rust with egui.
+
+    Key architectural aspects:
+    - aida-core: Core library with models, storage (YAML/SQLite), AI integration
+    - aida-gui: Desktop GUI application using egui/eframe
+    - aida-cli: Command-line interface
+
+    Requirements should follow software engineering best practices:
+    - Clear, testable acceptance criteria
+    - Appropriate granularity for implementation
+    - Consider keyboard navigation and accessibility
+    - Follow existing patterns in the codebase
+
+    The project uses vim-style keyboard navigation throughout the UI.
+    Requirements are organized by Features and can have Parent/Child, Verifies, and References relationships.
+  evaluation:
+    additional_instructions: |
+      When evaluating AIDA requirements, pay special attention to:
+      1. UI/UX considerations - keyboard shortcuts, accessibility
+      2. Data persistence - YAML and SQLite backend compatibility
+      3. Cross-platform support - Linux, macOS, Windows
+      4. Integration with Claude Code and AI workflows
+  improve:
+    additional_instructions: |
+      When improving AIDA requirement descriptions:
+      - Include keyboard shortcuts if relevant (e.g., "Press 'j' to navigate down")
+      - Reference specific views (List, Kanban, Timeline, Sprint Planning)
+      - Consider both GUI and CLI interfaces
+      - Include acceptance criteria that can be tested
+  generate_children:
+    additional_instructions: |
+      When decomposing AIDA requirements:
+      - Separate GUI from core logic where appropriate
+      - Consider CLI equivalent functionality
+      - Think about keyboard vs mouse interactions
+      - Consider state persistence requirements
 baselines:
 - id: e25400c0-275f-412c-8162-8556032deb7e
   name: Sprint 1 End

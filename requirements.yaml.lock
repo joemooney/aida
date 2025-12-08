@@ -1,1 +1,9 @@
-sessions: {}
+sessions:
+  213278-f36a7e8e-2b19-44ad-bf0d-535182da19e3:
+    session_id: 213278-f36a7e8e-2b19-44ad-bf0d-535182da19e3
+    user_name: joe
+    hostname: imac
+    pid: 213278
+    started_at: 2025-12-08T03:10:22.474892742Z
+    last_heartbeat: 2025-12-08T03:18:52.570181835Z
+    editing_requirement: null

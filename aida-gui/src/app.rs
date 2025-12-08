@@ -555,7 +555,55 @@ pub struct CustomTheme {
     pub title_bar_text: Option<ThemeColor>,
     /// Title bar font size multiplier (1.0 = default heading size)
     pub title_bar_font_size: f32,
+
+    // === Status Colors ===
+    /// Draft status color
+    #[serde(default = "default_status_draft")]
+    pub status_draft: ThemeColor,
+    /// Approved status color
+    #[serde(default = "default_status_approved")]
+    pub status_approved: ThemeColor,
+    /// In Progress status color
+    #[serde(default = "default_status_in_progress")]
+    pub status_in_progress: ThemeColor,
+    /// Implemented status color
+    #[serde(default = "default_status_implemented")]
+    pub status_implemented: ThemeColor,
+    /// Completed status color
+    #[serde(default = "default_status_completed")]
+    pub status_completed: ThemeColor,
+    /// Rejected status color
+    #[serde(default = "default_status_rejected")]
+    pub status_rejected: ThemeColor,
+
+    // === Priority Colors ===
+    /// Critical priority color
+    #[serde(default = "default_priority_critical")]
+    pub priority_critical: ThemeColor,
+    /// High priority color
+    #[serde(default = "default_priority_high")]
+    pub priority_high: ThemeColor,
+    /// Medium priority color
+    #[serde(default = "default_priority_medium")]
+    pub priority_medium: ThemeColor,
+    /// Low priority color
+    #[serde(default = "default_priority_low")]
+    pub priority_low: ThemeColor,
 }
+
+// Default status colors
+fn default_status_draft() -> ThemeColor { ThemeColor::new(156, 163, 175) }      // Gray
+fn default_status_approved() -> ThemeColor { ThemeColor::new(76, 175, 80) }     // Green
+fn default_status_in_progress() -> ThemeColor { ThemeColor::new(59, 130, 246) } // Blue
+fn default_status_implemented() -> ThemeColor { ThemeColor::new(16, 185, 129) } // Teal
+fn default_status_completed() -> ThemeColor { ThemeColor::new(34, 197, 94) }    // Green
+fn default_status_rejected() -> ThemeColor { ThemeColor::new(239, 68, 68) }     // Red
+
+// Default priority colors
+fn default_priority_critical() -> ThemeColor { ThemeColor::new(220, 38, 38) }   // Dark red
+fn default_priority_high() -> ThemeColor { ThemeColor::new(244, 67, 54) }       // Red
+fn default_priority_medium() -> ThemeColor { ThemeColor::new(255, 152, 0) }     // Orange
+fn default_priority_low() -> ThemeColor { ThemeColor::new(76, 175, 80) }        // Green
 
 impl Default for CustomTheme {
     fn default() -> Self {
@@ -621,6 +669,18 @@ impl CustomTheme {
             title_bar_bg: ThemeColor::new(45, 45, 50),
             title_bar_text: None,
             title_bar_font_size: 1.0,
+            // Status colors
+            status_draft: default_status_draft(),
+            status_approved: default_status_approved(),
+            status_in_progress: default_status_in_progress(),
+            status_implemented: default_status_implemented(),
+            status_completed: default_status_completed(),
+            status_rejected: default_status_rejected(),
+            // Priority colors
+            priority_critical: default_priority_critical(),
+            priority_high: default_priority_high(),
+            priority_medium: default_priority_medium(),
+            priority_low: default_priority_low(),
         }
     }
 
@@ -673,6 +733,18 @@ impl CustomTheme {
             title_bar_bg: ThemeColor::new(220, 220, 225),
             title_bar_text: None,
             title_bar_font_size: 1.0,
+            // Status colors
+            status_draft: default_status_draft(),
+            status_approved: default_status_approved(),
+            status_in_progress: default_status_in_progress(),
+            status_implemented: default_status_implemented(),
+            status_completed: default_status_completed(),
+            status_rejected: default_status_rejected(),
+            // Priority colors
+            priority_critical: default_priority_critical(),
+            priority_high: default_priority_high(),
+            priority_medium: default_priority_medium(),
+            priority_low: default_priority_low(),
         }
     }
 
@@ -726,6 +798,18 @@ impl CustomTheme {
             title_bar_bg: ThemeColor::new(230, 230, 248),
             title_bar_text: None,
             title_bar_font_size: 1.0,
+            // Status colors - slightly more vibrant for light theme
+            status_draft: ThemeColor::new(120, 130, 150),
+            status_approved: ThemeColor::new(46, 160, 67),
+            status_in_progress: ThemeColor::new(59, 130, 246),
+            status_implemented: ThemeColor::new(16, 185, 129),
+            status_completed: ThemeColor::new(34, 197, 94),
+            status_rejected: ThemeColor::new(220, 53, 69),
+            // Priority colors
+            priority_critical: ThemeColor::new(200, 30, 30),
+            priority_high: ThemeColor::new(220, 53, 69),
+            priority_medium: ThemeColor::new(230, 126, 34),
+            priority_low: ThemeColor::new(46, 160, 67),
         }
     }
 
@@ -779,6 +863,18 @@ impl CustomTheme {
             title_bar_bg: ThemeColor::new(216, 222, 233),
             title_bar_text: None,
             title_bar_font_size: 1.0,
+            // Status colors - Nord Aurora palette
+            status_draft: ThemeColor::new(76, 86, 106),        // nord3
+            status_approved: ThemeColor::new(163, 190, 140),   // nord14 green
+            status_in_progress: ThemeColor::new(129, 161, 193), // nord9 blue
+            status_implemented: ThemeColor::new(143, 188, 187), // nord7 teal
+            status_completed: ThemeColor::new(163, 190, 140),  // nord14 green
+            status_rejected: ThemeColor::new(191, 97, 106),    // nord11 red
+            // Priority colors - Nord Aurora
+            priority_critical: ThemeColor::new(191, 97, 106),  // nord11
+            priority_high: ThemeColor::new(208, 135, 112),     // nord12
+            priority_medium: ThemeColor::new(235, 203, 139),   // nord13
+            priority_low: ThemeColor::new(163, 190, 140),      // nord14
         }
     }
 
@@ -1172,6 +1268,7 @@ pub enum ThemeEditorCategory {
     Selection,
     Borders,
     Spacing,
+    StatusPriority,
 }
 
 impl ThemeEditorCategory {
@@ -1183,6 +1280,7 @@ impl ThemeEditorCategory {
             ThemeEditorCategory::Selection => "Selection",
             ThemeEditorCategory::Borders => "Borders & Rounding",
             ThemeEditorCategory::Spacing => "Spacing & Layout",
+            ThemeEditorCategory::StatusPriority => "Status & Priority",
         }
     }
 
@@ -1194,6 +1292,7 @@ impl ThemeEditorCategory {
             ThemeEditorCategory::Selection,
             ThemeEditorCategory::Borders,
             ThemeEditorCategory::Spacing,
+            ThemeEditorCategory::StatusPriority,
         ]
     }
 }
@@ -12112,6 +12211,12 @@ impl RequirementsApp {
                                                 ui,
                                             );
                                         }
+                                        ThemeEditorCategory::StatusPriority => {
+                                            Self::show_theme_status_priority(
+                                                &mut self.theme_editor_theme,
+                                                ui,
+                                            );
+                                        }
                                     }
                                 });
                         },
@@ -12463,6 +12568,65 @@ impl RequirementsApp {
             });
     }
 
+    fn show_theme_status_priority(theme: &mut CustomTheme, ui: &mut egui::Ui) {
+        ui.heading("Status Colors");
+        ui.add_space(10.0);
+
+        egui::Grid::new("theme_status_grid")
+            .num_columns(2)
+            .spacing([20.0, 8.0])
+            .show(ui, |ui| {
+                ui.label("Draft:");
+                color_picker_widget(ui, &mut theme.status_draft);
+                ui.end_row();
+
+                ui.label("Approved:");
+                color_picker_widget(ui, &mut theme.status_approved);
+                ui.end_row();
+
+                ui.label("In Progress:");
+                color_picker_widget(ui, &mut theme.status_in_progress);
+                ui.end_row();
+
+                ui.label("Implemented:");
+                color_picker_widget(ui, &mut theme.status_implemented);
+                ui.end_row();
+
+                ui.label("Completed:");
+                color_picker_widget(ui, &mut theme.status_completed);
+                ui.end_row();
+
+                ui.label("Rejected:");
+                color_picker_widget(ui, &mut theme.status_rejected);
+                ui.end_row();
+            });
+
+        ui.add_space(15.0);
+        ui.heading("Priority Colors");
+        ui.add_space(10.0);
+
+        egui::Grid::new("theme_priority_grid")
+            .num_columns(2)
+            .spacing([20.0, 8.0])
+            .show(ui, |ui| {
+                ui.label("Critical:");
+                color_picker_widget(ui, &mut theme.priority_critical);
+                ui.end_row();
+
+                ui.label("High:");
+                color_picker_widget(ui, &mut theme.priority_high);
+                ui.end_row();
+
+                ui.label("Medium:");
+                color_picker_widget(ui, &mut theme.priority_medium);
+                ui.end_row();
+
+                ui.label("Low:");
+                color_picker_widget(ui, &mut theme.priority_low);
+                ui.end_row();
+            });
+    }
+
 
     /// Show a live preview of the theme with AIDA-specific UI examples
     fn show_theme_preview(theme: &CustomTheme, ui: &mut egui::Ui) {
@@ -12525,9 +12689,9 @@ impl RequirementsApp {
                 ui.add_space(2.0);
                 ui.horizontal(|ui| {
                     ui.label("Status:");
-                    ui.colored_label(egui::Color32::from_rgb(76, 175, 80), "Approved");
+                    ui.colored_label(theme.status_approved.to_egui(), "Approved");
                     ui.label("Priority:");
-                    ui.colored_label(egui::Color32::from_rgb(244, 67, 54), "High");
+                    ui.colored_label(theme.priority_high.to_egui(), "High");
                 });
                 ui.add_space(3.0);
                 ui.label("Users must authenticate before accessing the system.");
@@ -12586,9 +12750,37 @@ impl RequirementsApp {
         // === Messages Preview ===
         ui.strong("Messages");
         ui.add_space(3.0);
-        ui.colored_label(egui::Color32::from_rgb(76, 175, 80), "Saved successfully");
+        ui.colored_label(theme.status_completed.to_egui(), "Saved successfully");
         ui.colored_label(theme.warn_fg.to_egui(), "Warning: Unsaved changes");
         ui.colored_label(theme.error_fg.to_egui(), "Error: Failed to load");
+
+        ui.add_space(8.0);
+        ui.separator();
+        ui.add_space(5.0);
+
+        // === Status/Priority Colors Preview ===
+        ui.strong("Status Colors");
+        ui.add_space(3.0);
+        ui.horizontal_wrapped(|ui| {
+            ui.colored_label(theme.status_draft.to_egui(), "Draft");
+            ui.colored_label(theme.status_approved.to_egui(), "Approved");
+            ui.colored_label(theme.status_in_progress.to_egui(), "In Progress");
+        });
+        ui.horizontal_wrapped(|ui| {
+            ui.colored_label(theme.status_implemented.to_egui(), "Implemented");
+            ui.colored_label(theme.status_completed.to_egui(), "Completed");
+            ui.colored_label(theme.status_rejected.to_egui(), "Rejected");
+        });
+
+        ui.add_space(5.0);
+        ui.strong("Priority Colors");
+        ui.add_space(3.0);
+        ui.horizontal(|ui| {
+            ui.colored_label(theme.priority_critical.to_egui(), "Critical");
+            ui.colored_label(theme.priority_high.to_egui(), "High");
+            ui.colored_label(theme.priority_medium.to_egui(), "Medium");
+            ui.colored_label(theme.priority_low.to_egui(), "Low");
+        });
     }
 
     fn show_users_table(&mut self, ui: &mut egui::Ui) {
