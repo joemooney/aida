@@ -1,9 +1,9 @@
 sessions:
-  220490-92a9f85a-6ba0-40dd-a9a0-2c954d513182:
-    session_id: 220490-92a9f85a-6ba0-40dd-a9a0-2c954d513182
+  225313-afe7bea6-f97f-4ca4-8565-2607c9d752a9:
+    session_id: 225313-afe7bea6-f97f-4ca4-8565-2607c9d752a9
     user_name: Joe Mooney
     hostname: imac
-    pid: 220490
-    started_at: 2025-12-08T03:55:50.595728196Z
-    last_heartbeat: 2025-12-08T04:10:06.503012789Z
+    pid: 225313
+    started_at: 2025-12-08T04:11:01.282662042Z
+    last_heartbeat: 2025-12-08T04:12:36.295720659Z
     editing_requirement: null

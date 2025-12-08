@@ -6624,6 +6624,16 @@ impl RequirementsApp {
                             );
                             ui.selectable_value(
                                 &mut self.settings_form_theme,
+                                Theme::VibrantLight,
+                                Theme::VibrantLight.label(),
+                            );
+                            ui.selectable_value(
+                                &mut self.settings_form_theme,
+                                Theme::NordLight,
+                                Theme::NordLight.label(),
+                            );
+                            ui.selectable_value(
+                                &mut self.settings_form_theme,
                                 Theme::HighContrastDark,
                                 Theme::HighContrastDark.label(),
                             );
@@ -6636,6 +6646,11 @@ impl RequirementsApp {
                                 &mut self.settings_form_theme,
                                 Theme::Nord,
                                 Theme::Nord.label(),
+                            );
+                            ui.selectable_value(
+                                &mut self.settings_form_theme,
+                                Theme::DocsDark,
+                                Theme::DocsDark.label(),
                             );
 
                             // Show saved custom themes
