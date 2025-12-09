@@ -142,12 +142,189 @@ impl RemoteStorage {
     }
 
     /// Save the requirements store to the server
-    /// Note: This is a simplified implementation - full save would need bulk updates
-    pub fn save(&self, _store: &RequirementsStore) -> Result<()> {
-        // For now, we just log that save was requested
-        // A full implementation would iterate through changes and send updates
-        eprintln!("WARNING: Remote save not fully implemented - changes may not persist");
-        Ok(())
+    /// This uses batch update to sync all requirements to the server
+    pub fn save(&self, store: &RequirementsStore) -> Result<()> {
+        let mut client_guard = self.client.lock().unwrap();
+        let client = client_guard.as_mut()
+            .ok_or_else(|| anyhow::anyhow!("Not connected to server"))?;
+
+        self.runtime.block_on(async {
+            // Get current server state to determine what needs to be created vs updated
+            let server_store_request = tonic::Request::new(proto::GetStoreRequest {});
+            let server_response = client.get_store(server_store_request).await
+                .context("Failed to get current server state")?;
+            let server_store = server_response.into_inner().store
+                .ok_or_else(|| anyhow::anyhow!("Server returned empty store"))?;
+
+            // Build sets of server requirement IDs for comparison
+            let server_req_ids: std::collections::HashSet<String> = server_store.requirements
+                .iter()
+                .map(|r| r.id.clone())
+                .collect();
+
+            // Separate local requirements into creates and updates
+            let mut to_create = Vec::new();
+            let mut to_update = Vec::new();
+            let local_req_ids: std::collections::HashSet<String> = store.requirements
+                .iter()
+                .map(|r| r.id.to_string())
+                .collect();
+
+            for req in &store.requirements {
+                let req_id = req.id.to_string();
+                if server_req_ids.contains(&req_id) {
+                    to_update.push(req);
+                } else {
+                    to_create.push(req);
+                }
+            }
+
+            // Find requirements to delete (on server but not locally)
+            let to_delete: Vec<String> = server_req_ids
+                .difference(&local_req_ids)
+                .cloned()
+                .collect();
+
+            // Batch create new requirements
+            if !to_create.is_empty() {
+                let create_requests: Vec<proto::CreateRequirementRequest> = to_create
+                    .iter()
+                    .map(|r| requirement_to_create_request(r))
+                    .collect();
+
+                let batch_create = tonic::Request::new(proto::BatchCreateRequirementsRequest {
+                    requirements: create_requests,
+                });
+                client.batch_create_requirements(batch_create).await
+                    .context("Failed to create new requirements on server")?;
+            }
+
+            // Batch update existing requirements
+            if !to_update.is_empty() {
+                let update_requests: Vec<proto::UpdateRequirementRequest> = to_update
+                    .iter()
+                    .map(|r| requirement_to_update_request(r))
+                    .collect();
+
+                let batch_update = tonic::Request::new(proto::BatchUpdateRequirementsRequest {
+                    requirements: update_requests,
+                });
+                client.batch_update_requirements(batch_update).await
+                    .context("Failed to update requirements on server")?;
+            }
+
+            // Batch delete removed requirements
+            if !to_delete.is_empty() {
+                let batch_delete = tonic::Request::new(proto::BatchDeleteRequirementsRequest {
+                    ids: to_delete,
+                });
+                client.batch_delete_requirements(batch_delete).await
+                    .context("Failed to delete requirements on server")?;
+            }
+
+            Ok(())
+        })
+    }
+
+    /// Create a single requirement on the server
+    pub fn create_requirement(&self, req: &aida_core::Requirement) -> Result<aida_core::Requirement> {
+        let mut client_guard = self.client.lock().unwrap();
+        let client = client_guard.as_mut()
+            .ok_or_else(|| anyhow::anyhow!("Not connected to server"))?;
+
+        self.runtime.block_on(async {
+            let request = tonic::Request::new(requirement_to_create_request(req));
+            let response = client.create_requirement(request).await
+                .context("Failed to create requirement on server")?;
+            let created = response.into_inner().requirement
+                .ok_or_else(|| anyhow::anyhow!("Server returned empty requirement"))?;
+            proto_to_requirement(&created)
+                .ok_or_else(|| anyhow::anyhow!("Failed to parse server response"))
+        })
+    }
+
+    /// Update a single requirement on the server
+    pub fn update_requirement(&self, req: &aida_core::Requirement) -> Result<aida_core::Requirement> {
+        let mut client_guard = self.client.lock().unwrap();
+        let client = client_guard.as_mut()
+            .ok_or_else(|| anyhow::anyhow!("Not connected to server"))?;
+
+        self.runtime.block_on(async {
+            let request = tonic::Request::new(requirement_to_update_request(req));
+            let response = client.update_requirement(request).await
+                .context("Failed to update requirement on server")?;
+            let updated = response.into_inner().requirement
+                .ok_or_else(|| anyhow::anyhow!("Server returned empty requirement"))?;
+            proto_to_requirement(&updated)
+                .ok_or_else(|| anyhow::anyhow!("Failed to parse server response"))
+        })
+    }
+
+    /// Delete a requirement on the server
+    pub fn delete_requirement(&self, req_id: &str) -> Result<()> {
+        let mut client_guard = self.client.lock().unwrap();
+        let client = client_guard.as_mut()
+            .ok_or_else(|| anyhow::anyhow!("Not connected to server"))?;
+
+        self.runtime.block_on(async {
+            let request = tonic::Request::new(proto::DeleteRequirementRequest {
+                id: req_id.to_string(),
+            });
+            let response = client.delete_requirement(request).await
+                .context("Failed to delete requirement on server")?;
+            if response.into_inner().success {
+                Ok(())
+            } else {
+                Err(anyhow::anyhow!("Server rejected delete request"))
+            }
+        })
+    }
+
+    /// Add a comment to a requirement on the server
+    pub fn add_comment(&self, req_id: &str, content: &str, author: &str, parent_id: Option<&str>) -> Result<aida_core::Comment> {
+        let mut client_guard = self.client.lock().unwrap();
+        let client = client_guard.as_mut()
+            .ok_or_else(|| anyhow::anyhow!("Not connected to server"))?;
+
+        self.runtime.block_on(async {
+            let request = tonic::Request::new(proto::AddCommentRequest {
+                requirement_id: req_id.to_string(),
+                content: content.to_string(),
+                author: author.to_string(),
+                parent_comment_id: parent_id.unwrap_or("").to_string(),
+            });
+            let response = client.add_comment(request).await
+                .context("Failed to add comment on server")?;
+            let comment = response.into_inner().comment
+                .ok_or_else(|| anyhow::anyhow!("Server returned empty comment"))?;
+            proto_to_comment(&comment)
+                .ok_or_else(|| anyhow::anyhow!("Failed to parse server response"))
+        })
+    }
+
+    /// Add a relationship between requirements on the server
+    pub fn add_relationship(&self, source_id: &str, target_id: &str, rel_type: &aida_core::RelationshipType, created_by: &str) -> Result<()> {
+        let mut client_guard = self.client.lock().unwrap();
+        let client = client_guard.as_mut()
+            .ok_or_else(|| anyhow::anyhow!("Not connected to server"))?;
+
+        self.runtime.block_on(async {
+            let (proto_rel_type, custom_name) = rel_type_to_proto(rel_type);
+            let request = tonic::Request::new(proto::AddRelationshipRequest {
+                source_id: source_id.to_string(),
+                target_id: target_id.to_string(),
+                rel_type: proto_rel_type as i32,
+                custom_type_name: custom_name,
+                created_by: created_by.to_string(),
+            });
+            let response = client.add_relationship(request).await
+                .context("Failed to add relationship on server")?;
+            if response.into_inner().success {
+                Ok(())
+            } else {
+                Err(anyhow::anyhow!("Server rejected relationship"))
+            }
+        })
     }
 
     /// Get server status
@@ -208,6 +385,7 @@ fn proto_to_store(store: &proto::RequirementsStore) -> Result<RequirementsStore>
             handle: u.handle.clone(),
             archived: false,
             created_at: chrono::Utc::now(),
+            version: 0, // Remote doesn't track versions locally
         })
         .collect();
 
@@ -264,6 +442,8 @@ fn proto_to_store(store: &proto::RequirementsStore) -> Result<RequirementsStore>
         restrict_prefixes: false,
         ai_prompts: aida_core::AiPromptConfig::default(),
         baselines: Vec::new(),
+        store_version: 0, // Remote doesn't track store version locally
+        migrated_to: None, // Remote store is never migrated
     })
 }
 
@@ -302,6 +482,7 @@ fn proto_to_requirement(req: &proto::Requirement) -> Option<aida_core::Requireme
         custom_fields: req.custom_fields.clone(),
         urls: req.urls.iter().map(proto_to_url_link).collect(),
         ai_evaluation: None,
+        version: 0, // Remote doesn't track versions locally
     })
 }
 
@@ -428,5 +609,101 @@ fn proto_to_url_link(link: &proto::UrlLink) -> aida_core::UrlLink {
         added_by: link.added_by.clone(),
         last_verified: None,
         last_verified_ok: None,
+    }
+}
+
+// =============================================================================
+// Core to Proto conversion functions (for save operations)
+// =============================================================================
+
+#[cfg(feature = "remote")]
+fn requirement_to_create_request(req: &aida_core::Requirement) -> proto::CreateRequirementRequest {
+    proto::CreateRequirementRequest {
+        title: req.title.clone(),
+        description: req.description.clone(),
+        status: status_to_proto(&req.status) as i32,
+        priority: priority_to_proto(&req.priority) as i32,
+        owner: req.owner.clone(),
+        feature: req.feature.clone(),
+        req_type: req_type_to_proto(&req.req_type) as i32,
+        tags: req.tags.iter().cloned().collect(),
+        prefix_override: req.prefix_override.clone().unwrap_or_default(),
+        created_by: req.created_by.clone().unwrap_or_default(),
+    }
+}
+
+#[cfg(feature = "remote")]
+fn requirement_to_update_request(req: &aida_core::Requirement) -> proto::UpdateRequirementRequest {
+    proto::UpdateRequirementRequest {
+        id: req.id.to_string(),
+        title: Some(req.title.clone()),
+        description: Some(req.description.clone()),
+        status: Some(status_to_proto(&req.status) as i32),
+        priority: Some(priority_to_proto(&req.priority) as i32),
+        owner: Some(req.owner.clone()),
+        feature: Some(req.feature.clone()),
+        req_type: Some(req_type_to_proto(&req.req_type) as i32),
+        tags: req.tags.iter().cloned().collect(),
+        replace_tags: true,
+        archived: Some(req.archived),
+        custom_status: req.custom_status.clone(),
+        custom_priority: req.custom_priority.clone(),
+        custom_fields: req.custom_fields.clone(),
+        replace_custom_fields: true,
+        modified_by: String::new(),
+    }
+}
+
+#[cfg(feature = "remote")]
+fn status_to_proto(status: &aida_core::RequirementStatus) -> proto::RequirementStatus {
+    use aida_core::RequirementStatus::*;
+    match status {
+        Draft => proto::RequirementStatus::Draft,
+        Approved => proto::RequirementStatus::Approved,
+        Completed => proto::RequirementStatus::Completed,
+        Rejected => proto::RequirementStatus::Rejected,
+    }
+}
+
+#[cfg(feature = "remote")]
+fn priority_to_proto(priority: &aida_core::RequirementPriority) -> proto::RequirementPriority {
+    use aida_core::RequirementPriority::*;
+    match priority {
+        High => proto::RequirementPriority::High,
+        Medium => proto::RequirementPriority::Medium,
+        Low => proto::RequirementPriority::Low,
+    }
+}
+
+#[cfg(feature = "remote")]
+fn req_type_to_proto(req_type: &aida_core::RequirementType) -> proto::RequirementType {
+    use aida_core::RequirementType::*;
+    match req_type {
+        Functional => proto::RequirementType::Functional,
+        NonFunctional => proto::RequirementType::NonFunctional,
+        System => proto::RequirementType::System,
+        User => proto::RequirementType::User,
+        ChangeRequest => proto::RequirementType::ChangeRequest,
+        Bug => proto::RequirementType::Bug,
+        Epic => proto::RequirementType::Epic,
+        Story => proto::RequirementType::Story,
+        Task => proto::RequirementType::Task,
+        Spike => proto::RequirementType::Spike,
+        Sprint => proto::RequirementType::Sprint,
+        Folder => proto::RequirementType::Folder,
+    }
+}
+
+#[cfg(feature = "remote")]
+fn rel_type_to_proto(rel_type: &aida_core::RelationshipType) -> (proto::RelationshipType, String) {
+    use aida_core::RelationshipType::*;
+    match rel_type {
+        Parent => (proto::RelationshipType::Parent, String::new()),
+        Child => (proto::RelationshipType::Child, String::new()),
+        Duplicate => (proto::RelationshipType::Duplicate, String::new()),
+        Verifies => (proto::RelationshipType::Verifies, String::new()),
+        VerifiedBy => (proto::RelationshipType::VerifiedBy, String::new()),
+        References => (proto::RelationshipType::References, String::new()),
+        Custom(name) => (proto::RelationshipType::Custom, name.clone()),
     }
 }

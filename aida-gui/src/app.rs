@@ -5063,7 +5063,24 @@ impl RequirementsApp {
 
     // trace:FR-0153 | ai:claude:high
     fn save(&mut self) {
-        // If no requirements were modified, use standard save
+        // Check if we're connected to a remote server
+        #[cfg(feature = "remote")]
+        if let Some(ref remote) = self.remote_client {
+            // Use remote save
+            match remote.save(&self.store) {
+                Ok(()) => {
+                    self.original_timestamps = Storage::get_requirement_timestamps(&self.store);
+                    self.modified_requirement_ids.clear();
+                    self.message = Some(("Saved to server successfully".to_string(), false));
+                }
+                Err(e) => {
+                    self.message = Some((format!("Error saving to server: {}", e), true));
+                }
+            }
+            return;
+        }
+
+        // Local save: If no requirements were modified, use standard save
         if self.modified_requirement_ids.is_empty() {
             if let Err(e) = self.storage.save(&self.store) {
                 self.message = Some((format!("Error saving: {}", e), true));
