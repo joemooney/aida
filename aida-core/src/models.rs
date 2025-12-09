@@ -1815,6 +1815,10 @@ pub struct User {
     /// Whether the user is archived
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub archived: bool,
+
+    /// Version number for optimistic locking (SQLite only)
+    #[serde(skip)]
+    pub version: i64,
 }
 
 impl User {
@@ -1828,6 +1832,7 @@ impl User {
             handle,
             created_at: Utc::now(),
             archived: false,
+            version: 1,
         }
     }
 
@@ -1841,6 +1846,7 @@ impl User {
             handle,
             created_at: Utc::now(),
             archived: false,
+            version: 1,
         }
     }
 
@@ -2052,6 +2058,11 @@ pub struct Requirement {
     /// Automatically populated by background evaluator when requirement changes
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ai_evaluation: Option<StoredAiEvaluation>,
+
+    /// Version number for optimistic locking (SQLite only)
+    /// Incremented on each update, used to detect concurrent modifications
+    #[serde(skip)]
+    pub version: i64,
 }
 
 impl Requirement {
@@ -2087,6 +2098,7 @@ impl Requirement {
             custom_priority: None,
             custom_fields: std::collections::HashMap::new(),
             urls: Vec::new(),
+            version: 1,
             ai_evaluation: None,
         }
     }
@@ -2482,6 +2494,11 @@ pub struct RequirementsStore {
     /// Baselines - named snapshots of requirements at specific points in time
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub baselines: Vec<Baseline>,
+
+    /// Store version for detecting external modifications (SQLite only)
+    /// Incremented on each save, used to detect if store was modified externally
+    #[serde(skip)]
+    pub store_version: i64,
 }
 
 /// Helper function for skip_serializing_if on AiPromptConfig
@@ -2534,6 +2551,7 @@ impl RequirementsStore {
             restrict_prefixes: false,
             ai_prompts: AiPromptConfig::default(),
             baselines: Vec::new(),
+            store_version: 1,
         }
     }
 

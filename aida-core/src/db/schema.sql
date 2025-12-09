@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER NOT NULL
 );
 
-INSERT INTO schema_version (version) VALUES (1);
+INSERT INTO schema_version (version) VALUES (2);
 
 -- Requirements table
 CREATE TABLE IF NOT EXISTS requirements (
@@ -27,8 +27,11 @@ CREATE TABLE IF NOT EXISTS requirements (
     history TEXT NOT NULL DEFAULT '[]',
     archived INTEGER NOT NULL DEFAULT 0,
     custom_status TEXT,
+    custom_priority TEXT,
     custom_fields TEXT NOT NULL DEFAULT '{}',
-    urls TEXT NOT NULL DEFAULT '[]'
+    urls TEXT NOT NULL DEFAULT '[]',
+    ai_evaluation TEXT,
+    version INTEGER NOT NULL DEFAULT 1
 );
 
 -- Index for spec_id lookups
@@ -51,7 +54,8 @@ CREATE TABLE IF NOT EXISTS users (
     email TEXT NOT NULL DEFAULT '',
     handle TEXT NOT NULL,
     created_at TEXT NOT NULL,
-    archived INTEGER NOT NULL DEFAULT 0
+    archived INTEGER NOT NULL DEFAULT 0,
+    version INTEGER NOT NULL DEFAULT 1
 );
 
 -- Index for handle lookups
@@ -73,7 +77,11 @@ CREATE TABLE IF NOT EXISTS metadata (
     meta_counters TEXT NOT NULL DEFAULT '{}',
     type_definitions TEXT NOT NULL DEFAULT '[]',
     allowed_prefixes TEXT NOT NULL DEFAULT '[]',
-    restrict_prefixes INTEGER NOT NULL DEFAULT 0
+    restrict_prefixes INTEGER NOT NULL DEFAULT 0,
+    ai_prompts TEXT NOT NULL DEFAULT '{}',
+    baselines TEXT NOT NULL DEFAULT '[]',
+    teams TEXT NOT NULL DEFAULT '[]',
+    store_version INTEGER NOT NULL DEFAULT 1
 );
 
 -- Insert default metadata row

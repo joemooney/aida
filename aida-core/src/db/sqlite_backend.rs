@@ -20,7 +20,7 @@ use crate::models::{
 use super::traits::{BackendType, DatabaseBackend};
 
 /// Current schema version
-const SCHEMA_VERSION: i32 = 1;
+const SCHEMA_VERSION: i32 = 2;
 
 /// SQLite backend implementation
 pub struct SqliteBackend {
@@ -69,13 +69,47 @@ impl SqliteBackend {
             // Create initial schema
             conn.execute_batch(include_str!("schema.sql"))?;
         } else if current_version < SCHEMA_VERSION {
-            // Future: handle migrations
-            // For now, we just fail if the schema is outdated
-            anyhow::bail!(
-                "Database schema version {} is outdated, expected {}",
-                current_version,
-                SCHEMA_VERSION
-            );
+            // Handle migrations
+            Self::migrate_schema(&conn, current_version)?;
+        }
+
+        Ok(())
+    }
+
+    /// Migrate schema from old version to current
+    fn migrate_schema(conn: &Connection, from_version: i32) -> Result<()> {
+        if from_version < 2 {
+            // Migration from v1 to v2: Add version columns for optimistic locking
+            conn.execute_batch(
+                r#"
+                -- Add version column to requirements for optimistic locking
+                ALTER TABLE requirements ADD COLUMN version INTEGER NOT NULL DEFAULT 1;
+
+                -- Add custom_priority column if missing
+                ALTER TABLE requirements ADD COLUMN custom_priority TEXT;
+
+                -- Add ai_evaluation column if missing
+                ALTER TABLE requirements ADD COLUMN ai_evaluation TEXT;
+
+                -- Add version column to users
+                ALTER TABLE users ADD COLUMN version INTEGER NOT NULL DEFAULT 1;
+
+                -- Add new metadata columns
+                ALTER TABLE metadata ADD COLUMN ai_prompts TEXT NOT NULL DEFAULT '{}';
+                ALTER TABLE metadata ADD COLUMN baselines TEXT NOT NULL DEFAULT '[]';
+                ALTER TABLE metadata ADD COLUMN teams TEXT NOT NULL DEFAULT '[]';
+                ALTER TABLE metadata ADD COLUMN store_version INTEGER NOT NULL DEFAULT 1;
+
+                -- Update schema version
+                UPDATE schema_version SET version = 2;
+                "#,
+            ).unwrap_or_else(|e| {
+                // Some columns may already exist, ignore those errors
+                eprintln!("Note: Some migration columns may already exist: {}", e);
+            });
+
+            // Ensure schema version is updated even if some ALTERs failed
+            let _ = conn.execute("UPDATE schema_version SET version = 2", []);
         }
 
         Ok(())
@@ -174,7 +208,7 @@ impl SqliteBackend {
             "SELECT id, spec_id, prefix_override, title, description, status, priority,
                     owner, feature, created_at, created_by, modified_at, req_type,
                     dependencies, tags, relationships, comments, history, archived,
-                    custom_status, custom_fields, urls
+                    custom_status, custom_priority, custom_fields, urls, ai_evaluation, version
              FROM requirements ORDER BY created_at"
         )?;
 
@@ -199,14 +233,18 @@ impl SqliteBackend {
             let history_json: String = row.get(17)?;
             let archived: bool = row.get(18)?;
             let custom_status: Option<String> = row.get(19)?;
-            let custom_fields_json: String = row.get(20)?;
-            let urls_json: String = row.get(21)?;
+            let custom_priority: Option<String> = row.get(20)?;
+            let custom_fields_json: String = row.get(21)?;
+            let urls_json: String = row.get(22)?;
+            let ai_evaluation_json: Option<String> = row.get(23)?;
+            let version: i64 = row.get(24)?;
 
             Ok((
                 id_str, spec_id, prefix_override, title, description, status_str, priority_str,
                 owner, feature, created_at_str, created_by, modified_at_str, req_type_str,
                 dependencies_json, tags_json, relationships_json, comments_json, history_json,
-                archived, custom_status, custom_fields_json, urls_json
+                archived, custom_status, custom_priority, custom_fields_json, urls_json,
+                ai_evaluation_json, version
             ))
         })?;
 
@@ -216,7 +254,8 @@ impl SqliteBackend {
                 id_str, spec_id, prefix_override, title, description, status_str, priority_str,
                 owner, feature, created_at_str, created_by, modified_at_str, req_type_str,
                 dependencies_json, tags_json, relationships_json, comments_json, history_json,
-                archived, custom_status, custom_fields_json, urls_json
+                archived, custom_status, custom_priority, custom_fields_json, urls_json,
+                ai_evaluation_json, version
             ) = row_result?;
 
             let id = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4());
@@ -236,6 +275,8 @@ impl SqliteBackend {
             let history: Vec<HistoryEntry> = Self::from_json(&history_json).unwrap_or_default();
             let custom_fields: HashMap<String, String> = Self::from_json(&custom_fields_json).unwrap_or_default();
             let urls: Vec<UrlLink> = Self::from_json(&urls_json).unwrap_or_default();
+            let ai_evaluation = ai_evaluation_json
+                .and_then(|json| Self::from_json(&json).ok());
 
             requirements.push(Requirement {
                 id,
@@ -258,10 +299,11 @@ impl SqliteBackend {
                 history,
                 archived,
                 custom_status,
-                custom_priority: None, // TODO: Load from database when column is added
+                custom_priority,
                 custom_fields,
                 urls,
-                ai_evaluation: None, // TODO: Load from database when column is added
+                ai_evaluation,
+                version,
             });
         }
 
@@ -271,7 +313,7 @@ impl SqliteBackend {
     /// Load users from database
     fn load_users(&self, conn: &Connection) -> Result<Vec<User>> {
         let mut stmt = conn.prepare(
-            "SELECT id, spec_id, name, email, handle, created_at, archived FROM users"
+            "SELECT id, spec_id, name, email, handle, created_at, archived, version FROM users"
         )?;
 
         let rows = stmt.query_map([], |row| {
@@ -282,12 +324,13 @@ impl SqliteBackend {
             let handle: String = row.get(4)?;
             let created_at_str: String = row.get(5)?;
             let archived: bool = row.get(6)?;
-            Ok((id_str, spec_id, name, email, handle, created_at_str, archived))
+            let version: i64 = row.get(7)?;
+            Ok((id_str, spec_id, name, email, handle, created_at_str, archived, version))
         })?;
 
         let mut users = Vec::new();
         for row_result in rows {
-            let (id_str, spec_id, name, email, handle, created_at_str, archived) = row_result?;
+            let (id_str, spec_id, name, email, handle, created_at_str, archived, version) = row_result?;
             let id = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4());
             let created_at = chrono::DateTime::parse_from_rfc3339(&created_at_str)
                 .map(|dt| dt.with_timezone(&chrono::Utc))
@@ -301,6 +344,7 @@ impl SqliteBackend {
                 handle,
                 created_at,
                 archived,
+                version,
             });
         }
 
@@ -407,14 +451,19 @@ impl SqliteBackend {
         }
     }
 
-    /// Save a requirement to the database
+    /// Save a requirement to the database (for full store save)
     fn save_requirement(&self, conn: &Connection, req: &Requirement) -> Result<()> {
+        let ai_eval_json = req.ai_evaluation.as_ref()
+            .map(|e| Self::to_json(e))
+            .transpose()?;
+
         conn.execute(
             "INSERT OR REPLACE INTO requirements
              (id, spec_id, prefix_override, title, description, status, priority, owner, feature,
               created_at, created_by, modified_at, req_type, dependencies, tags, relationships,
-              comments, history, archived, custom_status, custom_fields, urls)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
+              comments, history, archived, custom_status, custom_priority, custom_fields, urls,
+              ai_evaluation, version)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)",
             params![
                 req.id.to_string(),
                 req.spec_id,
@@ -436,8 +485,11 @@ impl SqliteBackend {
                 Self::to_json(&req.history)?,
                 req.archived,
                 req.custom_status,
+                req.custom_priority,
                 Self::to_json(&req.custom_fields)?,
                 Self::to_json(&req.urls)?,
+                ai_eval_json,
+                req.version,
             ],
         )?;
         Ok(())
@@ -446,8 +498,8 @@ impl SqliteBackend {
     /// Save a user to the database
     fn save_user(&self, conn: &Connection, user: &User) -> Result<()> {
         conn.execute(
-            "INSERT OR REPLACE INTO users (id, spec_id, name, email, handle, created_at, archived)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT OR REPLACE INTO users (id, spec_id, name, email, handle, created_at, archived, version)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             params![
                 user.id.to_string(),
                 user.spec_id,
@@ -456,6 +508,7 @@ impl SqliteBackend {
                 user.handle,
                 user.created_at.to_rfc3339(),
                 user.archived,
+                user.version,
             ],
         )?;
         Ok(())
@@ -467,8 +520,8 @@ impl SqliteBackend {
             "INSERT OR REPLACE INTO metadata
              (id, name, title, description, id_config, features, next_feature_number, next_spec_number,
               prefix_counters, relationship_definitions, reaction_definitions, meta_counters,
-              type_definitions, allowed_prefixes, restrict_prefixes)
-             VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+              type_definitions, allowed_prefixes, restrict_prefixes, ai_prompts, baselines, teams, store_version)
+             VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
             params![
                 store.name,
                 store.title,
@@ -484,9 +537,45 @@ impl SqliteBackend {
                 Self::to_json(&store.type_definitions)?,
                 Self::to_json(&store.allowed_prefixes)?,
                 store.restrict_prefixes,
+                Self::to_json(&store.ai_prompts)?,
+                Self::to_json(&store.baselines)?,
+                Self::to_json(&store.teams)?,
+                store.store_version,
             ],
         )?;
         Ok(())
+    }
+
+    /// Load store_version from metadata
+    fn load_store_version(&self, conn: &Connection) -> Result<i64> {
+        let version: i64 = conn
+            .query_row("SELECT store_version FROM metadata WHERE id = 1", [], |row| row.get(0))
+            .unwrap_or(1);
+        Ok(version)
+    }
+
+    /// Load ai_prompts from metadata
+    fn load_ai_prompts(&self, conn: &Connection) -> Result<crate::models::AiPromptConfig> {
+        let json: String = conn
+            .query_row("SELECT ai_prompts FROM metadata WHERE id = 1", [], |row| row.get(0))
+            .unwrap_or_else(|_| "{}".to_string());
+        Self::from_json(&json).or_else(|_| Ok(crate::models::AiPromptConfig::default()))
+    }
+
+    /// Load baselines from metadata
+    fn load_baselines(&self, conn: &Connection) -> Result<Vec<crate::models::Baseline>> {
+        let json: String = conn
+            .query_row("SELECT baselines FROM metadata WHERE id = 1", [], |row| row.get(0))
+            .unwrap_or_else(|_| "[]".to_string());
+        Self::from_json(&json)
+    }
+
+    /// Load teams from metadata
+    fn load_teams(&self, conn: &Connection) -> Result<Vec<crate::models::Team>> {
+        let json: String = conn
+            .query_row("SELECT teams FROM metadata WHERE id = 1", [], |row| row.get(0))
+            .unwrap_or_else(|_| "[]".to_string());
+        Self::from_json(&json)
     }
 }
 
@@ -511,6 +600,10 @@ impl DatabaseBackend for SqliteBackend {
         let relationship_definitions = self.load_relationship_definitions(&conn)?;
         let reaction_definitions = self.load_reaction_definitions(&conn)?;
         let (allowed_prefixes, restrict_prefixes) = self.load_allowed_prefixes(&conn)?;
+        let ai_prompts = self.load_ai_prompts(&conn)?;
+        let baselines = self.load_baselines(&conn)?;
+        let teams = self.load_teams(&conn)?;
+        let store_version = self.load_store_version(&conn)?;
 
         Ok(RequirementsStore {
             name,
@@ -518,7 +611,7 @@ impl DatabaseBackend for SqliteBackend {
             description,
             requirements,
             users,
-            teams: Vec::new(), // Teams not yet implemented in SQLite backend
+            teams,
             id_config,
             features,
             next_feature_number,
@@ -530,8 +623,9 @@ impl DatabaseBackend for SqliteBackend {
             type_definitions,
             allowed_prefixes,
             restrict_prefixes,
-            ai_prompts: Default::default(),
-            baselines: Vec::new(), // Baselines not yet implemented in SQLite backend
+            ai_prompts,
+            baselines,
+            store_version,
         })
     }
 
@@ -610,7 +704,7 @@ impl DatabaseBackend for SqliteBackend {
             "SELECT id, spec_id, prefix_override, title, description, status, priority,
                     owner, feature, created_at, created_by, modified_at, req_type,
                     dependencies, tags, relationships, comments, history, archived,
-                    custom_status, custom_fields, urls
+                    custom_status, custom_priority, custom_fields, urls, ai_evaluation, version
              FROM requirements WHERE id = ?1",
             [id.to_string()],
             |row| {
@@ -634,14 +728,18 @@ impl DatabaseBackend for SqliteBackend {
                 let history_json: String = row.get(17)?;
                 let archived: bool = row.get(18)?;
                 let custom_status: Option<String> = row.get(19)?;
-                let custom_fields_json: String = row.get(20)?;
-                let urls_json: String = row.get(21)?;
+                let custom_priority: Option<String> = row.get(20)?;
+                let custom_fields_json: String = row.get(21)?;
+                let urls_json: String = row.get(22)?;
+                let ai_evaluation_json: Option<String> = row.get(23)?;
+                let version: i64 = row.get(24)?;
 
                 Ok((
                     id_str, spec_id, prefix_override, title, description, status_str, priority_str,
                     owner, feature, created_at_str, created_by, modified_at_str, req_type_str,
                     dependencies_json, tags_json, relationships_json, comments_json, history_json,
-                    archived, custom_status, custom_fields_json, urls_json
+                    archived, custom_status, custom_priority, custom_fields_json, urls_json,
+                    ai_evaluation_json, version
                 ))
             }
         ).optional()?;
@@ -651,7 +749,8 @@ impl DatabaseBackend for SqliteBackend {
                 id_str, spec_id, prefix_override, title, description, status_str, priority_str,
                 owner, feature, created_at_str, created_by, modified_at_str, req_type_str,
                 dependencies_json, tags_json, relationships_json, comments_json, history_json,
-                archived, custom_status, custom_fields_json, urls_json
+                archived, custom_status, custom_priority, custom_fields_json, urls_json,
+                ai_evaluation_json, version
             )) => {
                 let id = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4());
                 let status = Self::str_to_status(&status_str);
@@ -670,6 +769,8 @@ impl DatabaseBackend for SqliteBackend {
                 let history: Vec<HistoryEntry> = Self::from_json(&history_json).unwrap_or_default();
                 let custom_fields: HashMap<String, String> = Self::from_json(&custom_fields_json).unwrap_or_default();
                 let urls: Vec<UrlLink> = Self::from_json(&urls_json).unwrap_or_default();
+                let ai_evaluation = ai_evaluation_json
+                    .and_then(|json| Self::from_json(&json).ok());
 
                 Ok(Some(Requirement {
                     id,
@@ -692,10 +793,11 @@ impl DatabaseBackend for SqliteBackend {
                     history,
                     archived,
                     custom_status,
-                    custom_priority: None, // TODO: Load from database when column is added
+                    custom_priority,
                     custom_fields,
                     urls,
-                    ai_evaluation: None, // TODO: Load from database when column is added
+                    ai_evaluation,
+                    version,
                 }))
             }
             None => Ok(None),
@@ -723,7 +825,7 @@ impl DatabaseBackend for SqliteBackend {
         let conn = self.conn.lock().unwrap();
 
         conn.query_row(
-            "SELECT id, spec_id, name, email, handle, created_at, archived FROM users WHERE id = ?1",
+            "SELECT id, spec_id, name, email, handle, created_at, archived, version FROM users WHERE id = ?1",
             [id.to_string()],
             |row| {
                 let id_str: String = row.get(0)?;
@@ -733,6 +835,7 @@ impl DatabaseBackend for SqliteBackend {
                 let handle: String = row.get(4)?;
                 let created_at_str: String = row.get(5)?;
                 let archived: bool = row.get(6)?;
+                let version: i64 = row.get(7)?;
 
                 let id = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4());
                 let created_at = chrono::DateTime::parse_from_rfc3339(&created_at_str)
@@ -747,6 +850,7 @@ impl DatabaseBackend for SqliteBackend {
                     handle,
                     created_at,
                     archived,
+                    version,
                 })
             }
         ).optional().map_err(|e| e.into())
