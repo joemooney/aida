@@ -4982,18 +4982,18 @@ impl RequirementsApp {
                     eprintln!("Warning: Failed to create backup: {}", e);
                 }
 
-                // Switch to the new SQLite database
-                self.storage = aida_core::Storage::new(&sqlite_path);
-                if let Ok(store) = self.storage.load() {
-                    self.store = store;
-                }
-
+                // Note: We cannot switch to SQLite backend in-place because the App
+                // uses the Storage wrapper which is YAML-specific. The user needs to
+                // restart the GUI with the new database file.
                 self.message = Some((
                     format!(
-                        "Migrated {} requirements to SQLite: {}. YAML backed up to {}",
+                        "✓ Migrated {} requirements to SQLite: {}\n\
+                        YAML backed up to: {}\n\n\
+                        Please restart the GUI with:\n  aida-gui --file {}",
                         count,
                         sqlite_path.display(),
-                        backup_path.display()
+                        backup_path.display(),
+                        sqlite_path.display()
                     ),
                     false,
                 ));

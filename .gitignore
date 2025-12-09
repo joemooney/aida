@@ -28,6 +28,9 @@ Thumbs.db
 requirements.yaml
 *.requirements.yaml
 !default_requirements.yaml
+requirements.db
+*.yaml.bak
+*.yaml.lock
 
 # Test files
 test_*.yaml
