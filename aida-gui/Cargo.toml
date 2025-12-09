@@ -30,3 +30,15 @@ arboard = "3"
 rfd = "0.15"
 hostname = "0.4"
 similar = { version = "2", features = ["inline"] }
+
+# gRPC client dependencies (optional)
+tonic = { workspace = true, optional = true }
+prost = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+
+[features]
+default = []
+remote = ["tonic", "prost", "tokio", "tonic-build"]
+
+[build-dependencies]
+tonic-build = { workspace = true, optional = true }

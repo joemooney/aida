@@ -3010,6 +3010,11 @@ impl ViewPreset {
 pub struct RequirementsApp {
     storage: Storage,
     store: RequirementsStore,
+    /// Remote server address (if connected to a server)
+    #[cfg(feature = "remote")]
+    remote_client: Option<crate::remote::StorageBackend>,
+    /// Server address string for display
+    server_addr: Option<String>,
     current_view: View,
     selected_idx: Option<usize>,
     filter_text: String,
@@ -3531,6 +3536,430 @@ impl RequirementsApp {
         Self::new_with_file(cc, None)
     }
 
+    /// Create a new app with configuration for either local file or remote server
+    pub fn new_with_config(
+        cc: &eframe::CreationContext<'_>,
+        file_path: Option<String>,
+        server_addr: Option<String>,
+    ) -> Self {
+        #[cfg(feature = "remote")]
+        {
+            if let Some(ref server) = server_addr {
+                return Self::new_with_server(cc, server);
+            }
+        }
+        #[cfg(not(feature = "remote"))]
+        {
+            if server_addr.is_some() {
+                eprintln!("WARNING: Remote server support is not enabled.");
+                eprintln!("Build with: cargo build -p aida-gui --features remote");
+            }
+        }
+        Self::new_with_file(cc, file_path)
+    }
+
+    /// Create a new app connected to a remote gRPC server
+    #[cfg(feature = "remote")]
+    pub fn new_with_server(cc: &eframe::CreationContext<'_>, server_addr: &str) -> Self {
+        use crate::remote::StorageBackend;
+
+        // Configure fonts with better Unicode support
+        Self::configure_fonts(&cc.egui_ctx);
+
+        // Configure heading styles for markdown rendering
+        {
+            let mut style = (*cc.egui_ctx.style()).clone();
+            let base_size = style
+                .text_styles
+                .get(&egui::TextStyle::Body)
+                .map(|f| f.size)
+                .unwrap_or(14.0);
+
+            style.text_styles.insert(
+                egui::TextStyle::Name("Heading".into()),
+                egui::FontId::new(base_size * 1.8, egui::FontFamily::Proportional),
+            );
+            style.text_styles.insert(
+                egui::TextStyle::Name("Heading2".into()),
+                egui::FontId::new(base_size * 1.5, egui::FontFamily::Proportional),
+            );
+            style.text_styles.insert(
+                egui::TextStyle::Name("Heading3".into()),
+                egui::FontId::new(base_size * 1.25, egui::FontFamily::Proportional),
+            );
+            style.text_styles.insert(
+                egui::TextStyle::Name("Heading4".into()),
+                egui::FontId::new(base_size * 1.1, egui::FontFamily::Proportional),
+            );
+            style.text_styles.insert(
+                egui::TextStyle::Name("Heading5".into()),
+                egui::FontId::new(base_size * 1.0, egui::FontFamily::Proportional),
+            );
+            style.text_styles.insert(
+                egui::TextStyle::Name("Heading6".into()),
+                egui::FontId::new(base_size * 0.9, egui::FontFamily::Proportional),
+            );
+            cc.egui_ctx.set_style(style);
+        }
+
+        // Try to connect to the remote server
+        let remote_backend = match StorageBackend::new_remote(server_addr) {
+            Ok(backend) => backend,
+            Err(e) => {
+                eprintln!("ERROR: Failed to connect to server {}: {}", server_addr, e);
+                eprintln!("Falling back to local storage...");
+                return Self::new_with_file(cc, None);
+            }
+        };
+
+        // Load store from remote
+        let store = match remote_backend.load() {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("ERROR: Failed to load from server {}: {}", server_addr, e);
+                eprintln!("Falling back to local storage...");
+                return Self::new_with_file(cc, None);
+            }
+        };
+
+        // Create a dummy local storage path for compatibility
+        // (some operations still need a path reference)
+        let dummy_path = std::path::PathBuf::from(format!("remote://{}", server_addr));
+        let storage = Storage::new(&dummy_path);
+
+        let user_settings = UserSettings::load();
+
+        // Extract project settings before store is moved
+        let initial_id_format = store.id_config.format.clone();
+        let initial_numbering = store.id_config.numbering.clone();
+        let initial_digits = store.id_config.digits;
+
+        // Capture timestamps for conflict detection
+        let initial_timestamps = Storage::get_requirement_timestamps(&store);
+
+        // Apply saved preferences
+        let initial_font_size = user_settings.base_font_size;
+        let initial_perspective = user_settings.preferred_perspective.clone();
+
+        // Generate unique session ID (no heartbeat for remote)
+        let session_id = format!("{}-{}", std::process::id(), Uuid::new_v4());
+
+        // Create a minimal app with remote backend
+        Self {
+            storage,
+            store,
+            #[cfg(feature = "remote")]
+            remote_client: Some(remote_backend),
+            server_addr: Some(server_addr.to_string()),
+            current_view: View::List,
+            selected_idx: None,
+            filter_text: String::new(),
+            search_scope: SearchScope::all(),
+            search_match_indices: Vec::new(),
+            search_current_match: None,
+            search_focus_requested: false,
+            search_history: Vec::new(),
+            search_history_idx: None,
+            active_tab: DetailTab::Description,
+            form_title: String::new(),
+            form_description: String::new(),
+            form_status: RequirementStatus::Draft,
+            form_status_string: String::from("Draft"),
+            form_custom_fields: HashMap::new(),
+            form_priority: RequirementPriority::Medium,
+            form_priority_string: String::from("Medium"),
+            form_type: RequirementType::Functional,
+            form_owner: String::new(),
+            form_feature: String::from("Uncategorized"),
+            form_tags: String::new(),
+            form_prefix: String::new(),
+            form_parent_id: None,
+            focus_description: false,
+            form_title_auto_synced: true,
+            form_last_description: String::new(),
+            message: Some((format!("Connected to server: {}", server_addr), false)),
+            comment_author: String::new(),
+            comment_content: String::new(),
+            show_add_comment: false,
+            reply_to_comment: None,
+            collapsed_comments: HashMap::new(),
+            edit_comment_id: None,
+            pending_delete: None,
+            pending_view_change: None,
+            pending_save: false,
+            pending_comment_add: None,
+            pending_comment_delete: None,
+            pending_reaction_toggle: None,
+            show_reaction_picker: None,
+            scroll_to_requirement: None,
+            split_scroll_to_requirement: None,
+            current_font_size: initial_font_size,
+            user_settings,
+            show_settings_dialog: false,
+            show_settings_close_confirm: false,
+            settings_tab: SettingsTab::default(),
+            ids_subtab: IdsSubTab::default(),
+            ai_subtab: AiSubTab::default(),
+            loaded_skills: Vec::new(),
+            show_skill_editor: false,
+            skill_editor_filename: String::new(),
+            skill_editor_content: String::new(),
+            skill_editor_original_content: String::new(),
+            skill_editor_edit_mode: false,
+            rename_prefix_from: String::new(),
+            rename_prefix_to: String::new(),
+            show_rename_prefix_dialog: false,
+            settings_form_name: String::new(),
+            settings_form_email: String::new(),
+            settings_form_handle: String::new(),
+            settings_form_font_size: DEFAULT_FONT_SIZE,
+            settings_form_ui_heading_level: default_ui_heading_level(),
+            settings_form_perspective: Perspective::default(),
+            settings_form_theme: Theme::default(),
+            settings_form_keybindings: KeyBindings::default(),
+            capturing_key_for: None,
+            settings_form_show_status_icons: false,
+            settings_form_status_icons: StatusIconConfig::default(),
+            settings_form_priority_icons: PriorityIconConfig::default(),
+            show_icon_editor: false,
+            icon_editor_new_keyword: String::new(),
+            icon_editor_new_icon: String::new(),
+            show_symbol_picker: false,
+            symbol_picker_target: None,
+            original_appearance_theme: Theme::default(),
+            original_appearance_font_size: DEFAULT_FONT_SIZE,
+            original_appearance_ui_heading_level: default_ui_heading_level(),
+            original_appearance_show_status_icons: false,
+            original_appearance_status_icons: StatusIconConfig::default(),
+            original_appearance_priority_icons: PriorityIconConfig::default(),
+            settings_form_id_format: initial_id_format,
+            settings_form_numbering: initial_numbering,
+            settings_form_digits: initial_digits,
+            show_migration_dialog: false,
+            pending_migration: None,
+            show_theme_editor: false,
+            theme_editor_theme: CustomTheme::default(),
+            theme_editor_category: ThemeEditorCategory::default(),
+            theme_editor_original_theme: Theme::default(),
+            show_user_form: false,
+            editing_user_id: None,
+            user_form_name: String::new(),
+            user_form_email: String::new(),
+            user_form_handle: String::new(),
+            show_archived_users: false,
+            members_sub_tab: MembersSubTab::default(),
+            show_team_form: false,
+            editing_team_id: None,
+            team_form_name: String::new(),
+            team_form_description: String::new(),
+            team_form_parent_id: None,
+            show_archived_teams: false,
+            show_team_members_dialog: None,
+            show_recursive_relationships: false,
+            relationship_tree_collapsed: HashMap::new(),
+            perspective: initial_perspective,
+            perspective_direction: PerspectiveDirection::default(),
+            owner_view_mode: OwnerViewMode::default(),
+            kanban_field: KanBanField::default(),
+            kanban_filter_type: None,
+            kanban_wip_limits: HashMap::new(),
+            kanban_drag_card: None,
+            kanban_drop_column: None,
+            kanban_detail_modal: None,
+            kanban_selected_column: 0,
+            kanban_selected_card: 0,
+            filter_types: HashSet::new(),
+            filter_features: HashSet::new(),
+            filter_prefixes: HashSet::new(),
+            filter_statuses: HashSet::new(),
+            filter_priorities: HashSet::new(),
+            child_filter_types: HashSet::new(),
+            child_filter_features: HashSet::new(),
+            child_filter_prefixes: HashSet::new(),
+            child_filter_statuses: HashSet::new(),
+            child_filter_priorities: HashSet::new(),
+            children_same_as_root: true,
+            filter_tab: FilterTab::Root,
+            tree_collapsed: HashMap::new(),
+            show_filter_panel: false,
+            show_archived: false,
+            show_filtered_parents: true,
+            drag_source: None,
+            drop_target: None,
+            pending_relationship: None,
+            pending_apply_ai_description: None,
+            drag_scroll_delta: 0.0,
+            markdown_cache: CommonMarkCache::default(),
+            show_description_preview: false,
+            left_panel_collapsed: false,
+            layout_mode: LayoutMode::ListDetailsSide,
+            layout_button_press_start: None,
+            show_layout_menu: false,
+            layout_button_rect: None,
+            quick_change_field: None,
+            quick_change_selected: 0,
+            quick_change_target_id: None,
+            quick_change_consumed_action: false,
+            quick_change_owner_search: String::new(),
+            quick_change_feature_search: String::new(),
+            pending_delete_confirm: None,
+            show_view_picker: false,
+            view_picker_selected: 0,
+            show_keyboard_help: false,
+            split_perspective: Perspective::default(),
+            split_perspective_direction: PerspectiveDirection::default(),
+            split_filter_text: String::new(),
+            split_filter_types: HashSet::new(),
+            split_filter_features: HashSet::new(),
+            split_filter_prefixes: HashSet::new(),
+            split_filter_statuses: HashSet::new(),
+            split_filter_priorities: HashSet::new(),
+            split_show_filter_panel: false,
+            split_tree_collapsed: HashMap::new(),
+            split_selected_idx: None,
+            split_active_preset: None,
+            focused_list: FocusedList::default(),
+            navigation_locked: false,
+            scroll_to_center: false,
+            show_filter_dialog_list1: false,
+            show_filter_dialog_list2: false,
+            editing_rel_def: None,
+            rel_def_form_name: String::new(),
+            rel_def_form_display_name: String::new(),
+            rel_def_form_description: String::new(),
+            rel_def_form_inverse: String::new(),
+            rel_def_form_symmetric: false,
+            rel_def_form_cardinality: Cardinality::default(),
+            rel_def_form_source_types: String::new(),
+            rel_def_form_target_types: String::new(),
+            rel_def_form_color: String::new(),
+            show_rel_def_form: false,
+            active_preset: None,
+            show_save_preset_dialog: false,
+            show_split_save_preset_dialog: false,
+            preset_name_input: String::new(),
+            show_delete_preset_confirm: None,
+            current_key_context: KeyContext::RequirementsList,
+            editing_reaction_def: None,
+            reaction_def_form_name: String::new(),
+            reaction_def_form_emoji: String::new(),
+            reaction_def_form_label: String::new(),
+            reaction_def_form_description: String::new(),
+            show_reaction_def_form: false,
+            new_prefix_input: String::new(),
+            editing_type_def: None,
+            type_def_form_name: String::new(),
+            type_def_form_display_name: String::new(),
+            type_def_form_description: String::new(),
+            type_def_form_prefix: String::new(),
+            type_def_form_statuses: Vec::new(),
+            type_def_form_priorities: Vec::new(),
+            type_def_form_fields: Vec::new(),
+            show_type_def_form: false,
+            new_status_input: String::new(),
+            new_priority_input: String::new(),
+            editing_field_idx: None,
+            field_form_name: String::new(),
+            field_form_label: String::new(),
+            field_form_type: CustomFieldType::Text,
+            field_form_required: false,
+            field_form_options: String::new(),
+            field_form_default: String::new(),
+            show_field_form: false,
+            show_url_form: false,
+            editing_url_id: None,
+            url_form_url: String::new(),
+            url_form_title: String::new(),
+            url_form_description: String::new(),
+            url_verification_status: None,
+            url_verification_in_progress: false,
+            show_markdown_help: false,
+            show_reference_picker: false,
+            reference_picker_search: String::new(),
+            reference_picker_selected: None,
+            last_text_selection: None,
+            show_new_project_dialog: false,
+            new_project_dir: String::new(),
+            new_project_name: String::new(),
+            new_project_title: String::new(),
+            new_project_description: String::new(),
+            new_project_template: "current".to_string(),
+            new_project_include_users: false,
+            show_switch_project_dialog: false,
+            available_projects: Vec::new(),
+            show_cancel_confirm_dialog: false,
+            original_form_title: String::new(),
+            original_form_description: String::new(),
+            original_form_status_string: String::new(),
+            original_form_priority: RequirementPriority::Medium,
+            original_form_priority_string: String::new(),
+            original_form_type: RequirementType::Functional,
+            original_form_owner: String::new(),
+            original_form_feature: String::new(),
+            form_feature_selected_idx: 0,
+            original_form_tags: String::new(),
+            original_form_prefix: String::new(),
+            original_form_custom_fields: HashMap::new(),
+            ai_client: AiClient::new(),
+            ai_pending_action: None,
+            ai_last_result: None,
+            show_ai_results_panel: false,
+            ai_loading: false,
+            ai_eval_receiver: None,
+            ai_eval_in_progress: None,
+            find_duplicates_receiver: None,
+            find_duplicates_in_progress: None,
+            toast_message: None,
+            theme_change_display: None,
+            show_scaffold_dialog: false,
+            scaffold_config: aida_core::ScaffoldConfig::default(),
+            scaffold_preview: None,
+            scaffold_tech_stack_input: String::new(),
+            original_timestamps: initial_timestamps,
+            modified_requirement_ids: HashSet::new(),
+            show_conflict_dialog: false,
+            current_conflict: None,
+            session_id,
+            heartbeat_sender: None, // No heartbeat for remote
+            last_lock_info: None,
+            other_sessions_warning_shown: false,
+            show_create_baseline_dialog: false,
+            baseline_form_name: String::new(),
+            baseline_form_description: String::new(),
+            selected_baseline_id: None,
+            baseline_compare_source: None,
+            baseline_compare_target: None,
+            show_baseline_comparison: false,
+            show_clone_dialog: false,
+            clone_source_idx: None,
+            clone_include_tags: true,
+            clone_include_relationships: false,
+            clone_include_comments: false,
+            clone_include_history: false,
+            clone_include_urls: true,
+            clone_include_custom_fields: true,
+            show_import_dialog: false,
+            import_validation: None,
+            import_config: aida_core::ImportConfig::default(),
+            import_source_path: None,
+            import_summary: None,
+            import_dialog_phase: ImportDialogPhase::SelectFile,
+            timeline_selected_date: None,
+            timeline_events: Vec::new(),
+            timeline_filter_author: String::new(),
+            timeline_filter_field: String::new(),
+            timeline_selected_event_idx: None,
+            timeline_suppress_hover: false,
+            timeline_suppress_hover_pos: None,
+            planning_collapsed_sprints: std::collections::HashSet::new(),
+            planning_show_completed_sprints: false,
+            planning_selected_item: None,
+            planning_selected_sprint: None,
+            planning_drag_source: None,
+            planning_drag_target_sprint: None,
+        }
+    }
+
     pub fn new_with_file(cc: &eframe::CreationContext<'_>, file_path: Option<String>) -> Self {
         // Configure fonts with better Unicode support
         Self::configure_fonts(&cc.egui_ctx);
@@ -3663,6 +4092,9 @@ impl RequirementsApp {
         Self {
             storage,
             store,
+            #[cfg(feature = "remote")]
+            remote_client: None,
+            server_addr: None,
             current_view: View::List,
             selected_idx: None,
             filter_text: String::new(),
