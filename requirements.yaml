@@ -426,16 +426,24 @@ requirements:
   spec_id: FR-0013
   title: 'Change/configure window title '
   description: This should be part of the configuration file.
-  status: Draft
+  status: Approved
   priority: Medium
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-11-25T22:48:26.624041526Z
-  modified_at: 2025-11-25T22:48:26.624041526Z
+  modified_at: 2025-12-09T04:25:23.789776986Z
   req_type: Functional
   relationships:
   - rel_type: Parent
     target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
+  history:
+  - id: b7ab5519-42bb-4747-926b-adcdc8ed8c50
+    author: Joe Mooney
+    timestamp: 2025-12-09T04:25:23.789785333Z
+    changes:
+    - field_name: status
+      old_value: Draft
+      new_value: Approved
 - id: da7e6650-4dd3-43ac-8804-55dfb58f3cb5
   spec_id: FR-0014
   title: Theme support
@@ -1552,6 +1560,10 @@ requirements:
     target_id: 9802115f-d7ab-465e-a850-d305fc9bd01f
     created_at: 2025-12-02T01:50:03.460366982Z
     created_by: Unknown User
+  - rel_type: Child
+    target_id: 8cfe1327-da2d-49fa-907e-91281dbd4013
+    created_at: 2025-12-09T03:45:33.123323734Z
+    created_by: Joe Mooney
   history:
   - id: c2aa6626-c857-41f9-9851-9306815d33df
     author: '@joe'
@@ -2996,12 +3008,12 @@ requirements:
       - Empty set = show all (no filter applied)
       - Non-empty set = only show requirements matching one of the selected values
       - Filters work independently for root requirements and child requirements
-  status: Draft
+  status: Approved
   priority: Medium
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-11-27T16:50:11.501316511Z
-  modified_at: 2025-11-27T17:03:31.753686370Z
+  modified_at: 2025-12-09T04:26:44.350613724Z
   req_type: Functional
   relationships:
   - rel_type: Parent
@@ -3032,6 +3044,13 @@ requirements:
           - Empty set = show all (no filter applied)
           - Non-empty set = only show requirements matching one of the selected values
           - Filters work independently for root requirements and child requirements
+  - id: 3fdcec9b-b4ad-41b0-ad56-5d4e6a04a4a5
+    author: Joe Mooney
+    timestamp: 2025-12-09T04:26:44.350622407Z
+    changes:
+    - field_name: status
+      old_value: Draft
+      new_value: Approved
 - id: 295e829b-9bb5-4d84-900d-472fd27e0b4b
   spec_id: FR-0053
   title: ability to filter based on user relationship + name
@@ -6790,6 +6809,15 @@ requirements:
     target_id: 4de3b4f0-b157-4d50-8549-e98153d2324d
     created_at: 2025-12-01T06:03:23.444036238Z
     created_by: Unknown User
+  - rel_type: Child
+    target_id: 072854b9-a4cc-4f05-8ebd-2c655de26a7c
+    created_at: 2025-12-09T04:34:02.423916328Z
+  - rel_type: Child
+    target_id: 611bd5c5-0d47-4ea0-93aa-b6676e6830de
+    created_at: 2025-12-09T04:34:03.704802947Z
+  - rel_type: Child
+    target_id: ae784602-a0cf-4d07-94b7-bd0ccd783b7c
+    created_at: 2025-12-09T04:34:05.040106916Z
   history:
   - id: c7d3c62c-879f-4702-8d43-d3c4a07f3f96
     author: Unknown User
@@ -9355,6 +9383,448 @@ requirements:
     target_id: 8e4988b4-b850-4f46-ac4d-ed3f1bb93003
     created_at: 2025-12-08T00:33:39.062074685Z
     created_by: joe
+- id: 259c842f-16e0-45ed-8bde-9a12a82ba88f
+  spec_id: DB-0227
+  prefix_override: DB
+  title: Import database
+  description: |-
+    Import legacy/incompatible requirements database with graceful error recovery
+
+    When importing a requirements.yaml file that contains schema incompatibilities (such as unknown enum variants, deprecated fields, or missing required fields), the system should:
+
+    1. **Detection Phase**: Parse the file and identify all incompatibilities before making changes
+    2. **User Confirmation**: Present a summary of issues found with options:
+       - Skip incompatible records (exclude from import)
+       - Convert to defaults (map unknown types to 'Functional', unknown statuses to 'Draft', etc.)
+       - Abort import
+    3. **Import Execution**: Proceed based on user selection
+    4. **Reporting**: Display import summary showing successful, skipped, and converted records
+    5. **Backup**: Create automatic backup of current database before import
+
+    **Acceptance Criteria**:
+    - [ ] Unknown req_type variants are detected and reported before import
+    - [ ] User can choose skip, convert-to-default, or abort for incompatible records
+    - [ ] Import summary shows count of records: imported, skipped, converted
+    - [ ] Original database is backed up to `requirements.yaml.backup` before import
+    - [ ] Relationships referencing skipped records are also skipped with warning
+    - [ ] Keyboard accessible: 's' to skip, 'c' to convert, 'a' to abort, Enter to confirm
+  status: Approved
+  priority: Medium
+  owner: ''
+  feature: 97-Uncategorized
+  created_at: 2025-12-09T03:33:22.828401443Z
+  created_by: Joe Mooney
+  modified_at: 2025-12-09T03:36:12.851387780Z
+  req_type: Functional
+  history:
+  - id: adf15baa-3e70-4de6-ac4e-03ebf158947c
+    author: Joe Mooney
+    timestamp: 2025-12-09T03:34:52.789509893Z
+    changes:
+    - field_name: description
+      old_value: |-
+        Import database
+
+        The goal is to try to import reqs and relationships from an older version of a requirements.yaml which will not open because of an incompatibility error. Today I had a version of requirements.yaml that had an error about an unknown varialt of a req_type Documentation. We could just skip this req of import it as a generic req_type instead of erroring out and creating an empty store. what are your thoughts?
+      new_value: |-
+        Import legacy/incompatible requirements database with graceful error recovery
+
+        When importing a requirements.yaml file that contains schema incompatibilities (such as unknown enum variants, deprecated fields, or missing required fields), the system should:
+
+        1. **Detection Phase**: Parse the file and identify all incompatibilities before making changes
+        2. **User Confirmation**: Present a summary of issues found with options:
+           - Skip incompatible records (exclude from import)
+           - Convert to defaults (map unknown types to 'Functional', unknown statuses to 'Draft', etc.)
+           - Abort import
+        3. **Import Execution**: Proceed based on user selection
+        4. **Reporting**: Display import summary showing successful, skipped, and converted records
+        5. **Backup**: Create automatic backup of current database before import
+
+        **Acceptance Criteria**:
+        - [ ] Unknown req_type variants are detected and reported before import
+        - [ ] User can choose skip, convert-to-default, or abort for incompatible records
+        - [ ] Import summary shows count of records: imported, skipped, converted
+        - [ ] Original database is backed up to `requirements.yaml.backup` before import
+        - [ ] Relationships referencing skipped records are also skipped with warning
+        - [ ] Keyboard accessible: 's' to skip, 'c' to convert, 'a' to abort, Enter to confirm
+  - id: 4b6d121c-f5d1-42a0-875b-dd0f53289c2f
+    author: Joe Mooney
+    timestamp: 2025-12-09T03:35:11.227019365Z
+    changes:
+    - field_name: status
+      old_value: Draft
+      new_value: Approved
+  - id: 44a9bab8-80be-4f27-bd96-695dc79c4726
+    author: Joe Mooney
+    timestamp: 2025-12-09T03:36:12.851386986Z
+    changes:
+    - field_name: prefix_override
+      old_value: ''
+      new_value: DB
+    - field_name: spec_id
+      old_value: FR-0226
+      new_value: DB-0227
+  ai_evaluation:
+    evaluation:
+      quality_score: 4
+      issues:
+      - type: vague_language
+        severity: high
+        text: The title 'Import database' is too generic and doesn't convey the specific purpose of handling incompatible/legacy database formats
+        suggestion: Rename to 'Import legacy requirements database with graceful error handling' or 'Backward-compatible YAML import with unknown field recovery'
+      - type: incomplete
+        severity: high
+        text: No acceptance criteria defined for what constitutes a successful import
+        suggestion: 'Add specific criteria: e.g., ''Unknown req_type variants should be mapped to a configurable default type'', ''Import should report count of skipped/modified records'', ''User should be prompted to confirm import strategy before proceeding'''
+      - type: ambiguous
+        severity: medium
+        text: The description presents two options (skip vs import as generic) but doesn't specify which approach to implement or if user choice should be provided
+        suggestion: 'Clarify the desired behavior: Should users choose the strategy? Should there be a default with override? Should skipped items be logged for manual review?'
+      - type: incomplete
+        severity: medium
+        text: Missing specification of what other incompatibilities should be handled beyond unknown req_type variants
+        suggestion: 'Define scope: unknown enum variants, missing required fields, deprecated fields, schema version mismatches, relationship type mismatches'
+      - type: missing_criteria
+        severity: medium
+        text: No error reporting or user feedback mechanism specified
+        suggestion: 'Add criteria for import summary dialog showing: successful imports, skipped items with reasons, modified items, and option to export detailed log'
+      - type: incomplete
+        severity: low
+        text: No consideration for backup/rollback if import partially fails
+        suggestion: Specify whether original database should be backed up before import and what happens if import fails midway
+      strengths:
+      - Addresses a real pain point from actual usage experience
+      - Identifies the specific error case that triggered this need (unknown variant Documentation)
+      - Proposes reasonable solution approaches (skip or convert to generic)
+      suggested_improvements:
+        description: |-
+          Import legacy/incompatible requirements database with graceful error recovery
+
+          When importing a requirements.yaml file that contains schema incompatibilities (such as unknown enum variants, deprecated fields, or missing required fields), the system should:
+
+          1. **Detection Phase**: Parse the file and identify all incompatibilities before making changes
+          2. **User Confirmation**: Present a summary of issues found with options:
+             - Skip incompatible records (exclude from import)
+             - Convert to defaults (map unknown types to 'Functional', unknown statuses to 'Draft', etc.)
+             - Abort import
+          3. **Import Execution**: Proceed based on user selection
+          4. **Reporting**: Display import summary showing successful, skipped, and converted records
+          5. **Backup**: Create automatic backup of current database before import
+
+          **Acceptance Criteria**:
+          - [ ] Unknown req_type variants are detected and reported before import
+          - [ ] User can choose skip, convert-to-default, or abort for incompatible records
+          - [ ] Import summary shows count of records: imported, skipped, converted
+          - [ ] Original database is backed up to `requirements.yaml.backup` before import
+          - [ ] Relationships referencing skipped records are also skipped with warning
+          - [ ] Keyboard accessible: 's' to skip, 'c' to convert, 'a' to abort, Enter to confirm
+        rationale: The improved description transforms a problem statement into an actionable requirement with clear phases, user interaction points, and testable acceptance criteria. It maintains the original intent while adding the structure needed for implementation.
+    evaluated_at: 2025-12-09T03:34:03.351049876Z
+    content_hash: dfb37c2a719c3738
+- id: 8cfe1327-da2d-49fa-907e-91281dbd4013
+  spec_id: FR-0227
+  title: Headless server mode
+  description: |-
+    Implement a client-server architecture for AIDA using Protocol Buffers for message definitions and gRPC for communication.
+
+    **Scope:**
+    1. Define protobuf schema for all requirement CRUD operations
+    2. Implement gRPC server exposing requirement management API
+    3. Refactor aida-core to support both direct and remote storage backends
+    4. Update CLI to communicate via gRPC when server URL is configured
+
+    **Out of Scope (please open separate requirements):**
+    - WASM browser client
+    - Multi-user concurrency and locking
+    - Authentication and authorization
+
+    **Acceptance Criteria:**
+    - Server starts on configurable port and accepts gRPC connections
+    - All existing CLI operations work against remote server
+    - Server persists data to configured YAML/SQLite backend
+    - Graceful shutdown with in-flight request completion
+  status: Approved
+  priority: Medium
+  owner: ''
+  feature: 97-Uncategorized
+  created_at: 2025-12-09T03:45:33.056070495Z
+  created_by: Joe Mooney
+  modified_at: 2025-12-09T03:53:56.689924966Z
+  req_type: Functional
+  relationships:
+  - rel_type: Parent
+    target_id: bb81e51e-dd32-48ef-9806-cf26a09643f5
+    created_at: 2025-12-09T03:45:33.123323734Z
+    created_by: Joe Mooney
+  history:
+  - id: b1424ef7-4be9-4eb7-800b-5d98bef2a85e
+    author: Joe Mooney
+    timestamp: 2025-12-09T03:52:51.617947424Z
+    changes:
+    - field_name: description
+      old_value: |-
+        Headless server mode
+
+        It would be nice to run aida in a server mode. This server would handle all the database operations. We could use grpc, websockets and other technologies.
+        One use case is to compile aida for wasm to run on the browser with a websocket server connection. This may also help with multiuser support. It may require taking out a lock on a req while we are editing that could expire or be optimistic. The command line would talk to the server also in this client/server mode. Potentially, even in standalone mode we could spawn a separate server thread. I am thinking that we define a protobuf definition for our messages and operations.
+      new_value: |-
+        Implement a client-server architecture for AIDA using Protocol Buffers for message definitions and gRPC for communication.
+
+        **Scope:**
+        1. Define protobuf schema for all requirement CRUD operations
+        2. Implement gRPC server exposing requirement management API
+        3. Refactor aida-core to support both direct and remote storage backends
+        4. Update CLI to communicate via gRPC when server URL is configured
+
+        **Out of Scope (separate requirements):**
+        - WASM browser client
+        - Multi-user concurrency and locking
+        - Authentication and authorization
+
+        **Acceptance Criteria:**
+        - Server starts on configurable port and accepts gRPC connections
+        - All existing CLI operations work against remote server
+        - Server persists data to configured YAML/SQLite backend
+        - Graceful shutdown with in-flight request completion
+  - id: fab5f3a1-183c-4053-8ccd-65fab114821a
+    author: Joe Mooney
+    timestamp: 2025-12-09T03:53:16.056460128Z
+    changes:
+    - field_name: description
+      old_value: |-
+        Implement a client-server architecture for AIDA using Protocol Buffers for message definitions and gRPC for communication.
+
+        **Scope:**
+        1. Define protobuf schema for all requirement CRUD operations
+        2. Implement gRPC server exposing requirement management API
+        3. Refactor aida-core to support both direct and remote storage backends
+        4. Update CLI to communicate via gRPC when server URL is configured
+
+        **Out of Scope (separate requirements):**
+        - WASM browser client
+        - Multi-user concurrency and locking
+        - Authentication and authorization
+
+        **Acceptance Criteria:**
+        - Server starts on configurable port and accepts gRPC connections
+        - All existing CLI operations work against remote server
+        - Server persists data to configured YAML/SQLite backend
+        - Graceful shutdown with in-flight request completion
+      new_value: |-
+        Implement a client-server architecture for AIDA using Protocol Buffers for message definitions and gRPC for communication.
+
+        **Scope:**
+        1. Define protobuf schema for all requirement CRUD operations
+        2. Implement gRPC server exposing requirement management API
+        3. Refactor aida-core to support both direct and remote storage backends
+        4. Update CLI to communicate via gRPC when server URL is configured
+
+        **Out of Scope (please open separate requirements):**
+        - WASM browser client
+        - Multi-user concurrency and locking
+        - Authentication and authorization
+
+        **Acceptance Criteria:**
+        - Server starts on configurable port and accepts gRPC connections
+        - All existing CLI operations work against remote server
+        - Server persists data to configured YAML/SQLite backend
+        - Graceful shutdown with in-flight request completion
+  - id: ae1b3dd0-8318-4aa4-a8b8-2465af48b352
+    author: Joe Mooney
+    timestamp: 2025-12-09T03:53:56.689933794Z
+    changes:
+    - field_name: status
+      old_value: Draft
+      new_value: Approved
+  ai_evaluation:
+    evaluation:
+      quality_score: 4
+      issues:
+      - type: vague_language
+        severity: high
+        text: 'The requirement mixes multiple distinct features: server mode, WASM browser support, multi-user support, and locking mechanisms'
+        suggestion: 'Split into separate requirements: 1) Core server mode with gRPC/protobuf API, 2) WASM browser client, 3) Multi-user concurrency/locking, 4) CLI client-server communication'
+      - type: missing_criteria
+        severity: high
+        text: No acceptance criteria or success metrics defined for what constitutes a working server mode
+        suggestion: 'Define specific acceptance criteria: supported operations, protocol choice (gRPC vs WebSocket), authentication requirements, latency expectations'
+      - type: ambiguous
+        severity: medium
+        text: Unclear whether this is a requirement for the server, the client, or both - 'even in standalone mode we could spawn a separate server thread' suggests architectural uncertainty
+        suggestion: 'Clarify the deployment model: always client-server vs optional server mode, and define the boundary between client and server responsibilities'
+      - type: incomplete
+        severity: medium
+        text: Locking mechanism is mentioned but not specified - 'could expire or be optimistic' leaves implementation completely undefined
+        suggestion: 'Specify locking strategy: pessimistic vs optimistic, lock timeout duration, conflict resolution approach'
+      - type: untestable
+        severity: medium
+        text: No testable criteria for multi-user scenarios or concurrent editing
+        suggestion: 'Add specific test scenarios: two users editing same requirement, network disconnection handling, conflict resolution verification'
+      - type: incomplete
+        severity: low
+        text: No mention of authentication, authorization, or security considerations for a networked service
+        suggestion: 'Add security requirements: authentication method, authorization model, transport security (TLS)'
+      strengths:
+      - Identifies a real architectural need for scalability and multi-user support
+      - Mentions specific technologies (gRPC, WebSocket, protobuf) showing technical awareness
+      - Considers multiple deployment scenarios (browser, CLI, standalone)
+      - Properly linked to parent Database definition requirement
+      suggested_improvements:
+        description: |-
+          Implement a client-server architecture for AIDA using Protocol Buffers for message definitions and gRPC for communication.
+
+          **Scope:**
+          1. Define protobuf schema for all requirement CRUD operations
+          2. Implement gRPC server exposing requirement management API
+          3. Refactor aida-core to support both direct and remote storage backends
+          4. Update CLI to communicate via gRPC when server URL is configured
+
+          **Out of Scope (separate requirements):**
+          - WASM browser client
+          - Multi-user concurrency and locking
+          - Authentication and authorization
+
+          **Acceptance Criteria:**
+          - Server starts on configurable port and accepts gRPC connections
+          - All existing CLI operations work against remote server
+          - Server persists data to configured YAML/SQLite backend
+          - Graceful shutdown with in-flight request completion
+        rationale: The original requirement is an epic-level feature that should be decomposed. This improvement focuses on the foundational server infrastructure, making it implementable and testable while explicitly deferring related features to child requirements.
+    evaluated_at: 2025-12-09T03:46:21.513934304Z
+    content_hash: 6b58e15bf6910732
+- id: 072854b9-a4cc-4f05-8ebd-2c655de26a7c
+  spec_id: FR-0228
+  title: Git Hooks for Code Traceability Validation
+  description: |-
+    Generate git hooks during project scaffolding to enforce code traceability:
+
+    **commit-msg hook:**
+    - Validates SPEC-ID references in commit messages
+    - Warns if referenced SPEC-ID doesn't exist in database
+    - Non-blocking by default (configurable to block)
+
+    **pre-commit hook:**
+    - Validates trace comments in staged files
+    - Checks format: // trace:SPEC-ID | ai:tool:confidence
+    - Warns on malformed traces
+    - Non-blocking by default (configurable to block)
+
+    **Configuration Options (in ScaffoldConfig):**
+    - generate_git_hooks: bool - whether to generate hooks
+    - include_commit_msg_hook: bool - generate commit-msg hook
+    - include_pre_commit_hook: bool - generate pre-commit hook
+
+    **Acceptance Criteria:**
+    - [x] Hooks only generated if .git directory exists
+    - [x] Hooks have executable permissions (Unix)
+    - [x] Preview shows hook content before generation
+    - [x] Non-blocking warnings by default
+  status: Completed
+  priority: Medium
+  owner: ''
+  feature: 118-Uncategorized
+  created_at: 2025-12-09T04:33:24.924942905Z
+  modified_at: 2025-12-09T04:33:24.924942905Z
+  req_type: Functional
+- id: 611bd5c5-0d47-4ea0-93aa-b6676e6830de
+  spec_id: FR-0229
+  title: Code Traceability Query and Reporting
+  description: |-
+    Provide CLI commands and GUI features to query and report on code traceability:
+
+    **CLI Commands:**
+    - aida trace list - List all trace comments found in codebase
+    - aida trace verify - Verify all trace references point to valid requirements
+    - aida trace report - Generate traceability matrix report
+    - aida trace orphans - Find requirements without any trace references
+
+    **GUI Integration:**
+    - Traceability tab showing linked code locations
+    - Click to open file at trace location
+    - Coverage statistics per requirement
+
+    **Report Formats:**
+    - Markdown traceability matrix
+    - JSON export for CI/CD integration
+    - HTML report with cross-links
+
+    **Acceptance Criteria:**
+    - [ ] Can scan codebase for trace comments
+    - [ ] Can validate trace references
+    - [ ] Can generate traceability reports
+    - [ ] GUI shows linked code locations
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 119-Uncategorized
+  created_at: 2025-12-09T04:33:38.265480085Z
+  modified_at: 2025-12-09T04:33:38.265480085Z
+  req_type: Functional
+- id: ae784602-a0cf-4d07-94b7-bd0ccd783b7c
+  spec_id: FR-0230
+  title: CI/CD Template Generation for Traceability
+  description: |-
+    Generate CI/CD pipeline templates that enforce code traceability:
+
+    **GitHub Actions Templates:**
+    - Traceability check workflow
+    - Validates all PRs include trace comments for changed code
+    - Generates coverage report as PR comment
+    - Fails build if traceability threshold not met
+
+    **GitLab CI Templates:**
+    - Similar functionality for GitLab pipelines
+    - Integration with merge request comments
+
+    **Configuration:**
+    - Minimum coverage threshold (percentage)
+    - Required trace format validation
+    - Exemption patterns (test files, generated code)
+
+    **Template Features:**
+    - Caches aida binary for faster runs
+    - Outputs traceability matrix artifact
+    - Posts summary to PR/MR comments
+
+    **Acceptance Criteria:**
+    - [ ] GitHub Actions workflow template generated
+    - [ ] GitLab CI template generated
+    - [ ] Configurable coverage thresholds
+    - [ ] Exemption patterns supported
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 120-Uncategorized
+  created_at: 2025-12-09T04:33:50.660092185Z
+  modified_at: 2025-12-09T04:33:50.660092185Z
+  req_type: Functional
+- id: b173e02c-5fae-4894-a01b-767f5a29c202
+  spec_id: REQ-0231
+  title: Concurrent Edit Protection
+  description: |-
+    Prevent data loss when GUI and CLI (or server) modify the same requirements.yaml simultaneously.
+
+    **Problem:**
+    When the GUI and CLI/server are both editing requirements.yaml, changes can be overwritten because there's no file locking or version checking between them.
+
+    **Solution Options:**
+    1. **File locking** - Use flock/advisory locks to prevent concurrent writes
+    2. **Optimistic locking** - Track modified_at timestamps, reject stale writes
+    3. **Merge on save** - Detect conflicts and merge non-conflicting changes
+    4. **Watch for changes** - GUI reloads when file changes externally
+
+    **Acceptance Criteria:**
+    - [ ] GUI detects when file has been modified externally
+    - [ ] Warning shown before overwriting external changes
+    - [ ] Option to reload, merge, or overwrite
+    - [ ] Server mode uses proper locking for concurrent clients
+  status: Draft
+  priority: High
+  owner: ''
+  feature: Uncategorized
+  created_at: 2025-12-09T04:34:16.558538542Z
+  modified_at: 2025-12-09T04:34:16.558538542Z
+  req_type: Bug
 users:
 - id: 150164ef-32ed-4d61-8cec-e887ac78cfd7
   spec_id: $USER-001
@@ -9452,8 +9922,8 @@ id_config:
     prefix: SPIKE
     description: Research or investigation task to reduce uncertainty or explore technical approaches
 features: []
-next_feature_number: 118
-next_spec_number: 226
+next_feature_number: 121
+next_spec_number: 232
 prefix_counters: {}
 relationship_definitions:
 - name: parent
@@ -9743,8 +10213,8 @@ reaction_definitions:
   description: Scary boo
   built_in: false
 meta_counters:
-  $USER: 7
   $TEAM: 4
+  $USER: 7
 type_definitions:
 - name: Functional
   display_name: Functional
