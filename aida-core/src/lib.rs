@@ -1,6 +1,7 @@
 pub mod ai;
 pub mod db;
 pub mod export;
+pub mod import;
 pub mod models;
 pub mod project;
 pub mod registry;
@@ -71,4 +72,9 @@ pub use scaffolding::{
 pub use storage::{
     AddResult, ConflictInfo, ConflictResolution, EditLock, FieldConflict, LockFileInfo, SaveResult,
     SessionInfo, Storage, StorageError,
+};
+pub use import::{
+    ImportConfig, ImportIssue, ImportIssueType, ImportMergeMode, ImportSummary, ImportValidation,
+    IssueResolution, RawImportStore, create_backup, execute_import, validate_import_content,
+    validate_import_file,
 };

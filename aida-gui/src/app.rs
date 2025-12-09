@@ -2638,6 +2638,23 @@ impl SearchMode {
     }
 }
 
+// trace:FR-0226 | ai:claude:high
+/// Phase of the import dialog workflow
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+enum ImportDialogPhase {
+    /// Select a file to import
+    #[default]
+    SelectFile,
+    /// Validating the file and showing issues
+    Validation,
+    /// Configuring how to handle issues
+    Configuration,
+    /// Import in progress
+    Importing,
+    /// Import complete - showing summary
+    Summary,
+}
+
 /// What fields to include in text search
 #[derive(Default, PartialEq, Clone, Copy)]
 struct SearchScope {
@@ -3378,6 +3395,14 @@ pub struct RequirementsApp {
     clone_include_urls: bool,
     clone_include_custom_fields: bool,
 
+    // Import database state (FR-0226)
+    show_import_dialog: bool,
+    import_validation: Option<aida_core::ImportValidation>,
+    import_config: aida_core::ImportConfig,
+    import_source_path: Option<std::path::PathBuf>,
+    import_summary: Option<aida_core::ImportSummary>,
+    import_dialog_phase: ImportDialogPhase,
+
     // Timeline view state
     timeline_selected_date: Option<chrono::DateTime<chrono::Utc>>,  // Currently selected point in timeline
     timeline_events: Vec<TimelineEvent>,                            // Cached timeline events
@@ -3952,6 +3977,14 @@ impl RequirementsApp {
             clone_include_history: false,
             clone_include_urls: true,
             clone_include_custom_fields: true,
+
+            // Import database state (FR-0226)
+            show_import_dialog: false,
+            import_validation: None,
+            import_config: aida_core::ImportConfig::default(),
+            import_source_path: None,
+            import_summary: None,
+            import_dialog_phase: ImportDialogPhase::SelectFile,
 
             // Timeline view state
             timeline_selected_date: None,
@@ -5225,6 +5258,13 @@ impl RequirementsApp {
                         self.show_new_project_dialog = true;
                         ui.close_menu();
                     }
+                    ui.separator();
+                    // trace:FR-0226 | ai:claude:high
+                    if ui.button("📥 Import Database...").clicked() {
+                        self.start_import_workflow();
+                        ui.close_menu();
+                    }
+                    ui.separator();
                     if ui.button("🪟 New Window").clicked() {
                         Self::open_new_window();
                         ui.close_menu();
@@ -6094,6 +6134,516 @@ impl RequirementsApp {
         if close_dialog {
             self.show_conflict_dialog = false;
             self.current_conflict = None;
+        }
+    }
+
+    // trace:FR-0226 | ai:claude:high
+    /// Start the import database workflow
+    fn start_import_workflow(&mut self) {
+        self.show_import_dialog = true;
+        self.import_dialog_phase = ImportDialogPhase::SelectFile;
+        self.import_validation = None;
+        self.import_source_path = None;
+        self.import_summary = None;
+        self.import_config = aida_core::ImportConfig::default();
+    }
+
+    // trace:FR-0226 | ai:claude:high
+    /// Show the import database dialog
+    fn show_import_database_dialog(&mut self, ctx: &egui::Context) {
+        if !self.show_import_dialog {
+            return;
+        }
+
+        let mut close_dialog = false;
+        let max_size = modal_max_size(ctx);
+
+        let title = match self.import_dialog_phase {
+            ImportDialogPhase::SelectFile => "📥 Import Database",
+            ImportDialogPhase::Validation => "📋 Import Validation",
+            ImportDialogPhase::Configuration => "⚙ Import Configuration",
+            ImportDialogPhase::Importing => "⏳ Importing...",
+            ImportDialogPhase::Summary => "✅ Import Complete",
+        };
+
+        egui::Window::new(title)
+            .collapsible(false)
+            .resizable(true)
+            .min_width(500.0)
+            .max_width(max_size.x)
+            .max_height(max_size.y)
+            .scroll([false, true])
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                match self.import_dialog_phase {
+                    ImportDialogPhase::SelectFile => {
+                        self.show_import_select_file(ui, &mut close_dialog);
+                    }
+                    ImportDialogPhase::Validation => {
+                        self.show_import_validation(ui, &mut close_dialog);
+                    }
+                    ImportDialogPhase::Configuration => {
+                        self.show_import_configuration(ui, &mut close_dialog);
+                    }
+                    ImportDialogPhase::Importing => {
+                        ui.heading("Import in progress...");
+                        ui.spinner();
+                    }
+                    ImportDialogPhase::Summary => {
+                        self.show_import_summary(ui, &mut close_dialog);
+                    }
+                }
+            });
+
+        if close_dialog {
+            self.show_import_dialog = false;
+            self.import_dialog_phase = ImportDialogPhase::SelectFile;
+        }
+    }
+
+    // trace:FR-0226 | ai:claude:high
+    /// Show the file selection phase of import
+    fn show_import_select_file(&mut self, ui: &mut egui::Ui, close_dialog: &mut bool) {
+        ui.heading("Select Database File");
+        ui.add_space(10.0);
+
+        ui.label("Choose a YAML requirements database file to import.");
+        ui.label("The file will be validated before import to detect any incompatibilities.");
+        ui.add_space(10.0);
+
+        if let Some(ref path) = self.import_source_path {
+            ui.horizontal(|ui| {
+                ui.label("Selected file:");
+                ui.strong(path.display().to_string());
+            });
+            ui.add_space(10.0);
+        }
+
+        ui.horizontal(|ui| {
+            if ui.button("📂 Browse...").clicked() {
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter("YAML Files", &["yaml", "yml"])
+                    .add_filter("All Files", &["*"])
+                    .set_title("Select Requirements Database")
+                    .pick_file()
+                {
+                    self.import_source_path = Some(path);
+                }
+            }
+
+            if self.import_source_path.is_some() {
+                if ui.button("▶ Validate").clicked() {
+                    self.validate_import_file();
+                }
+            }
+        });
+
+        ui.add_space(20.0);
+        ui.separator();
+        ui.add_space(10.0);
+
+        if ui.button("Cancel").clicked() {
+            *close_dialog = true;
+        }
+    }
+
+    // trace:FR-0226 | ai:claude:high
+    /// Validate the selected import file
+    fn validate_import_file(&mut self) {
+        if let Some(ref path) = self.import_source_path {
+            match aida_core::validate_import_file(path) {
+                Ok(validation) => {
+                    self.import_validation = Some(validation);
+                    self.import_dialog_phase = ImportDialogPhase::Validation;
+                }
+                Err(e) => {
+                    self.message = Some((format!("Validation error: {}", e), true));
+                }
+            }
+        }
+    }
+
+    // trace:FR-0226 | ai:claude:high
+    /// Show the validation results phase
+    fn show_import_validation(&mut self, ui: &mut egui::Ui, close_dialog: &mut bool) {
+        let validation = match &self.import_validation {
+            Some(v) => v.clone(),
+            None => {
+                self.import_dialog_phase = ImportDialogPhase::SelectFile;
+                return;
+            }
+        };
+
+        ui.heading("Validation Results");
+        ui.add_space(10.0);
+
+        // Summary stats
+        ui.horizontal(|ui| {
+            ui.label("Total records:");
+            ui.strong(format!("{}", validation.valid_record_count + validation.problematic_record_count));
+        });
+        ui.horizontal(|ui| {
+            ui.label("Valid records:");
+            ui.colored_label(egui::Color32::from_rgb(100, 200, 100), format!("{}", validation.valid_record_count));
+        });
+        if validation.problematic_record_count > 0 {
+            ui.horizontal(|ui| {
+                ui.label("Records with issues:");
+                ui.colored_label(egui::Color32::from_rgb(200, 150, 100), format!("{}", validation.problematic_record_count));
+            });
+        }
+
+        ui.add_space(10.0);
+
+        if validation.has_issues() {
+            ui.heading("Issues Found");
+            ui.add_space(5.0);
+
+            egui::ScrollArea::vertical()
+                .max_height(300.0)
+                .show(ui, |ui| {
+                    for issue in &validation.issues {
+                        ui.group(|ui| {
+                            ui.horizontal(|ui| {
+                                ui.strong(&issue.record_id);
+                                ui.label("-");
+                                ui.label(&issue.record_title);
+                            });
+                            ui.colored_label(
+                                egui::Color32::from_rgb(200, 150, 100),
+                                format!("{}", issue.issue_type),
+                            );
+                            ui.label(&issue.description);
+                            if let Some(ref suggestion) = issue.suggested_conversion {
+                                ui.small(format!("Suggested: {}", suggestion));
+                            }
+                        });
+                        ui.add_space(5.0);
+                    }
+                });
+
+            ui.add_space(10.0);
+            ui.colored_label(
+                egui::Color32::from_rgb(180, 160, 100),
+                "Configure how to handle these issues in the next step.",
+            );
+        } else {
+            ui.colored_label(
+                egui::Color32::from_rgb(100, 200, 100),
+                "No issues found. Ready to import.",
+            );
+        }
+
+        ui.add_space(20.0);
+        ui.separator();
+        ui.add_space(10.0);
+
+        ui.horizontal(|ui| {
+            if ui.button("← Back").clicked() {
+                self.import_dialog_phase = ImportDialogPhase::SelectFile;
+            }
+
+            if validation.can_proceed {
+                if validation.has_issues() {
+                    if ui.button("⚙ Configure Import →").clicked() {
+                        self.import_dialog_phase = ImportDialogPhase::Configuration;
+                    }
+                } else {
+                    if ui.button("▶ Import Now").clicked() {
+                        self.execute_import();
+                    }
+                }
+            }
+
+            if ui.button("Cancel").clicked() {
+                *close_dialog = true;
+            }
+        });
+    }
+
+    // trace:FR-0226 | ai:claude:high
+    /// Show the import configuration phase
+    fn show_import_configuration(&mut self, ui: &mut egui::Ui, close_dialog: &mut bool) {
+        ui.heading("Import Configuration");
+        ui.add_space(10.0);
+
+        ui.label("Configure how to handle incompatible records:");
+        ui.add_space(10.0);
+
+        // Unknown types handling
+        ui.group(|ui| {
+            ui.horizontal(|ui| {
+                ui.strong("Unknown Types:");
+                ui.label(format!("({} found)", self.import_validation.as_ref().map(|v| v.unknown_type_count()).unwrap_or(0)));
+            });
+            ui.horizontal(|ui| {
+                ui.label("Action:");
+                egui::ComboBox::from_id_salt("unknown_type_action")
+                    .selected_text(format!("{}", self.import_config.unknown_type_resolution))
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(
+                            &mut self.import_config.unknown_type_resolution,
+                            aida_core::IssueResolution::Skip,
+                            "Skip (s)",
+                        );
+                        ui.selectable_value(
+                            &mut self.import_config.unknown_type_resolution,
+                            aida_core::IssueResolution::ConvertToDefault,
+                            "Convert (c)",
+                        );
+                        ui.selectable_value(
+                            &mut self.import_config.unknown_type_resolution,
+                            aida_core::IssueResolution::Abort,
+                            "Abort (a)",
+                        );
+                    });
+            });
+        });
+
+        ui.add_space(5.0);
+
+        // Unknown statuses handling
+        ui.group(|ui| {
+            ui.horizontal(|ui| {
+                ui.strong("Unknown Statuses:");
+                ui.label(format!("({} found)", self.import_validation.as_ref().map(|v| v.unknown_status_count()).unwrap_or(0)));
+            });
+            ui.horizontal(|ui| {
+                ui.label("Action:");
+                egui::ComboBox::from_id_salt("unknown_status_action")
+                    .selected_text(format!("{}", self.import_config.unknown_status_resolution))
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(
+                            &mut self.import_config.unknown_status_resolution,
+                            aida_core::IssueResolution::Skip,
+                            "Skip (s)",
+                        );
+                        ui.selectable_value(
+                            &mut self.import_config.unknown_status_resolution,
+                            aida_core::IssueResolution::ConvertToDefault,
+                            "Convert (c)",
+                        );
+                        ui.selectable_value(
+                            &mut self.import_config.unknown_status_resolution,
+                            aida_core::IssueResolution::Abort,
+                            "Abort (a)",
+                        );
+                    });
+            });
+        });
+
+        ui.add_space(10.0);
+
+        // Backup option
+        ui.checkbox(&mut self.import_config.create_backup, "Create backup before import");
+        if self.import_config.create_backup {
+            ui.small("Backup will be saved to requirements.yaml.backup");
+        }
+
+        ui.add_space(20.0);
+
+        // Keyboard shortcuts hint
+        ui.separator();
+        ui.small("Keyboard shortcuts: [s] Skip | [c] Convert | [a] Abort | [Enter] Import");
+        ui.add_space(10.0);
+
+        // Handle keyboard shortcuts
+        let mut action_triggered = false;
+        if ui.input(|i| i.key_pressed(egui::Key::S)) {
+            // Toggle skip for all
+            self.import_config.unknown_type_resolution = aida_core::IssueResolution::Skip;
+            self.import_config.unknown_status_resolution = aida_core::IssueResolution::Skip;
+        }
+        if ui.input(|i| i.key_pressed(egui::Key::C)) {
+            // Toggle convert for all
+            self.import_config.unknown_type_resolution = aida_core::IssueResolution::ConvertToDefault;
+            self.import_config.unknown_status_resolution = aida_core::IssueResolution::ConvertToDefault;
+        }
+        if ui.input(|i| i.key_pressed(egui::Key::A)) {
+            // Set abort
+            self.import_config.unknown_type_resolution = aida_core::IssueResolution::Abort;
+            action_triggered = true;
+            *close_dialog = true;
+            self.message = Some(("Import aborted by user".to_string(), false));
+        }
+        if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+            self.execute_import();
+            action_triggered = true;
+        }
+
+        ui.horizontal(|ui| {
+            if ui.button("← Back").clicked() {
+                self.import_dialog_phase = ImportDialogPhase::Validation;
+            }
+
+            if ui.button("▶ Import").clicked() && !action_triggered {
+                self.execute_import();
+            }
+
+            if ui.button("Cancel").clicked() {
+                *close_dialog = true;
+            }
+        });
+    }
+
+    // trace:FR-0226 | ai:claude:high
+    /// Execute the import operation
+    fn execute_import(&mut self) {
+        let source_path = match &self.import_source_path {
+            Some(p) => p.clone(),
+            None => {
+                self.message = Some(("No source file selected".to_string(), true));
+                return;
+            }
+        };
+
+        let validation = match &self.import_validation {
+            Some(v) => v.clone(),
+            None => {
+                self.message = Some(("Validation not performed".to_string(), true));
+                return;
+            }
+        };
+
+        // Read the source file content
+        let content = match std::fs::read_to_string(&source_path) {
+            Ok(c) => c,
+            Err(e) => {
+                self.message = Some((format!("Failed to read source file: {}", e), true));
+                return;
+            }
+        };
+
+        // Execute import
+        match aida_core::execute_import(
+            &content,
+            self.storage.path(),
+            &self.import_config,
+            &validation,
+        ) {
+            Ok(summary) => {
+                self.import_summary = Some(summary);
+                self.import_dialog_phase = ImportDialogPhase::Summary;
+
+                // Reload the store
+                self.reload();
+            }
+            Err(e) => {
+                self.message = Some((format!("Import failed: {}", e), true));
+                self.import_dialog_phase = ImportDialogPhase::Configuration;
+            }
+        }
+    }
+
+    // trace:FR-0226 | ai:claude:high
+    /// Show the import summary phase
+    fn show_import_summary(&mut self, ui: &mut egui::Ui, close_dialog: &mut bool) {
+        let summary = match &self.import_summary {
+            Some(s) => s.clone(),
+            None => {
+                *close_dialog = true;
+                return;
+            }
+        };
+
+        ui.heading("Import Complete");
+        ui.add_space(10.0);
+
+        // Success indicator
+        if summary.is_clean() {
+            ui.colored_label(
+                egui::Color32::from_rgb(100, 200, 100),
+                "Import completed successfully with no issues.",
+            );
+        } else {
+            ui.colored_label(
+                egui::Color32::from_rgb(200, 180, 100),
+                "Import completed with some records skipped or converted.",
+            );
+        }
+
+        ui.add_space(10.0);
+
+        // Statistics
+        ui.group(|ui| {
+            ui.heading("Summary");
+            ui.add_space(5.0);
+
+            egui::Grid::new("import_summary_grid")
+                .num_columns(2)
+                .spacing([20.0, 5.0])
+                .show(ui, |ui| {
+                    ui.label("Total records:");
+                    ui.strong(format!("{}", summary.total_records));
+                    ui.end_row();
+
+                    ui.label("Imported:");
+                    ui.colored_label(
+                        egui::Color32::from_rgb(100, 200, 100),
+                        format!("{}", summary.imported_count),
+                    );
+                    ui.end_row();
+
+                    if summary.skipped_count > 0 {
+                        ui.label("Skipped:");
+                        ui.colored_label(
+                            egui::Color32::from_rgb(200, 150, 100),
+                            format!("{}", summary.skipped_count),
+                        );
+                        ui.end_row();
+                    }
+
+                    if summary.converted_count > 0 {
+                        ui.label("Converted:");
+                        ui.colored_label(
+                            egui::Color32::from_rgb(180, 180, 100),
+                            format!("{}", summary.converted_count),
+                        );
+                        ui.end_row();
+                    }
+
+                    if summary.relationships_skipped > 0 {
+                        ui.label("Relationships skipped:");
+                        ui.colored_label(
+                            egui::Color32::from_rgb(200, 150, 100),
+                            format!("{}", summary.relationships_skipped),
+                        );
+                        ui.end_row();
+                    }
+
+                    ui.label("Duration:");
+                    ui.label(format!("{}ms", summary.duration_ms));
+                    ui.end_row();
+                });
+        });
+
+        // Backup info
+        if let Some(ref backup_path) = summary.backup_path {
+            if !backup_path.is_empty() {
+                ui.add_space(10.0);
+                ui.horizontal(|ui| {
+                    ui.label("Backup created:");
+                    ui.code(backup_path);
+                });
+            }
+        }
+
+        // Warnings
+        if !summary.warnings.is_empty() {
+            ui.add_space(10.0);
+            ui.collapsing("Warnings", |ui| {
+                for warning in &summary.warnings {
+                    ui.label(format!("• {}", warning));
+                }
+            });
+        }
+
+        ui.add_space(20.0);
+        ui.separator();
+        ui.add_space(10.0);
+
+        if ui.button("Done").clicked() {
+            *close_dialog = true;
         }
     }
 
@@ -24751,6 +25301,9 @@ impl eframe::App for RequirementsApp {
 
         // Show clone requirement dialog
         self.show_clone_requirement_dialog(ctx);
+
+        // Show import database dialog (FR-0226)
+        self.show_import_database_dialog(ctx);
 
         // Show filter dialogs
         self.show_filter_dialog_list1(ctx);
