@@ -2499,6 +2499,12 @@ pub struct RequirementsStore {
     /// Incremented on each save, used to detect if store was modified externally
     #[serde(skip)]
     pub store_version: i64,
+
+    /// Migration marker - if set, indicates this YAML was migrated to another format
+    /// Contains the path to the migrated database (e.g., "requirements.db")
+    /// When this is set, opening the YAML should warn/redirect to the migrated database
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub migrated_to: Option<String>,
 }
 
 /// Helper function for skip_serializing_if on AiPromptConfig
@@ -2552,6 +2558,7 @@ impl RequirementsStore {
             ai_prompts: AiPromptConfig::default(),
             baselines: Vec::new(),
             store_version: 1,
+            migrated_to: None,
         }
     }
 

@@ -12,6 +12,9 @@ use super::traits::DatabaseBackend;
 
 /// Migrates data from a YAML file to a SQLite database
 ///
+/// After successful migration, the YAML file is updated with a `migrated_to` marker
+/// pointing to the SQLite database. This prevents accidentally opening stale YAML data.
+///
 /// # Arguments
 /// * `yaml_path` - Path to the source YAML file
 /// * `sqlite_path` - Path to the destination SQLite database
@@ -22,6 +25,9 @@ pub fn migrate_yaml_to_sqlite<P1: AsRef<Path>, P2: AsRef<Path>>(
     yaml_path: P1,
     sqlite_path: P2,
 ) -> Result<usize> {
+    let yaml_path = yaml_path.as_ref();
+    let sqlite_path = sqlite_path.as_ref();
+
     let yaml_backend = YamlBackend::new(yaml_path);
     let sqlite_backend = SqliteBackend::new(sqlite_path)?;
 
@@ -34,6 +40,13 @@ pub fn migrate_yaml_to_sqlite<P1: AsRef<Path>, P2: AsRef<Path>>(
     // Save to SQLite
     sqlite_backend.save(&store)
         .context("Failed to save to SQLite database")?;
+
+    // Update YAML with migration marker
+    // This prevents accidentally opening the stale YAML after migration
+    let mut marked_store = store;
+    marked_store.migrated_to = Some(sqlite_path.display().to_string());
+    yaml_backend.save(&marked_store)
+        .context("Failed to update YAML with migration marker")?;
 
     Ok(req_count)
 }

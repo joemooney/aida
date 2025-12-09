@@ -4,7 +4,58 @@ use std::path::PathBuf;
 
 use crate::registry::{get_registry_path, Registry};
 
-/// Determines the requirements file path to use based on the available information
+/// Result of checking for migration status
+#[derive(Debug)]
+pub enum MigrationCheck {
+    /// No migration detected, use this path
+    NoMigration(PathBuf),
+    /// YAML was migrated to SQLite, use the SQLite path instead
+    MigratedToSqlite {
+        yaml_path: PathBuf,
+        sqlite_path: PathBuf,
+    },
+    /// SQLite exists alongside YAML but no marker - potential stale data
+    PossibleStaleYaml {
+        yaml_path: PathBuf,
+        sqlite_path: PathBuf,
+    },
+}
+
+/// Check if a YAML file has been migrated to SQLite
+pub fn check_migration_status(yaml_path: &PathBuf) -> MigrationCheck {
+    // Check if corresponding SQLite file exists
+    let sqlite_path = yaml_path.with_extension("db");
+
+    if yaml_path.exists() && sqlite_path.exists() {
+        // Both files exist - check for migration marker in YAML
+        if let Ok(content) = std::fs::read_to_string(yaml_path) {
+            // Quick check for migrated_to field without full parse
+            if content.contains("migrated_to:") {
+                return MigrationCheck::MigratedToSqlite {
+                    yaml_path: yaml_path.clone(),
+                    sqlite_path,
+                };
+            }
+        }
+        // Both exist but no marker - potential stale data situation
+        return MigrationCheck::PossibleStaleYaml {
+            yaml_path: yaml_path.clone(),
+            sqlite_path,
+        };
+    }
+
+    // Only SQLite exists - use it
+    if sqlite_path.exists() && !yaml_path.exists() {
+        return MigrationCheck::NoMigration(sqlite_path);
+    }
+
+    // Default: use the YAML path (or it doesn't exist yet)
+    MigrationCheck::NoMigration(yaml_path.clone())
+}
+
+/// Determines the requirements file path to use based on the available information.
+/// This version does NOT check for migration - use `determine_requirements_path_with_migration_check`
+/// for migration-aware path resolution.
 pub fn determine_requirements_path(project_option: Option<&str>) -> Result<PathBuf> {
     // Check if requirements.yaml exists in current directory - but only if we're not explicitly
     // specifying a project via command line option or environment variable

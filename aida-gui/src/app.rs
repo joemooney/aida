@@ -1,6 +1,7 @@
 use aida_core::{
     ai::AiClient,
-    determine_requirements_path, Cardinality, Comment, ConflictInfo, ConflictResolution,
+    check_migration_status, determine_requirements_path, Cardinality, Comment, ConflictInfo,
+    ConflictResolution, MigrationCheck,
     CustomFieldDefinition, CustomFieldType, DatabaseBackend, EditLock, EvaluationResponse,
     FieldChange, IdFormat, LockFileInfo, NumberingStrategy, RelationshipDefinition,
     RelationshipType, Requirement, RequirementPriority, RequirementStatus, RequirementType,
@@ -24,6 +25,18 @@ enum HeartbeatCommand {
     SetEditLock(Option<EditLock>),
     /// Shutdown the heartbeat thread
     Shutdown,
+}
+
+/// Types of migration warnings (REQ-0231)
+#[derive(Clone, Debug, Default, PartialEq)]
+enum MigrationWarningKind {
+    /// No warning needed
+    #[default]
+    None,
+    /// YAML was migrated to SQLite - should use SQLite instead
+    MigratedToSqlite,
+    /// Both YAML and SQLite exist but no migration marker - possible stale data
+    PossibleStaleYaml,
 }
 
 // =============================================================================
@@ -3424,6 +3437,11 @@ pub struct RequirementsApp {
     planning_selected_sprint: Option<Uuid>,                          // Currently selected sprint for details/editing
     planning_drag_source: Option<Uuid>,                              // Item being dragged
     planning_drag_target_sprint: Option<Option<Uuid>>,               // Target sprint (None = Backlog)
+
+    // Migration warning state (REQ-0231)
+    show_migration_warning: bool,                                    // Show migration warning dialog
+    migration_warning_kind: MigrationWarningKind,                    // Type of migration warning
+    migration_sqlite_path: Option<PathBuf>,                          // Path to SQLite database if relevant
 }
 
 /// A timeline event representing a change to a requirement
@@ -3957,6 +3975,9 @@ impl RequirementsApp {
             planning_selected_sprint: None,
             planning_drag_source: None,
             planning_drag_target_sprint: None,
+            show_migration_warning: false,
+            migration_warning_kind: MigrationWarningKind::None,
+            migration_sqlite_path: None,
         }
     }
 
@@ -4003,12 +4024,40 @@ impl RequirementsApp {
         }
 
         // Use provided file path, or determine from environment/current directory
-        let requirements_path = if let Some(fp) = file_path {
+        let initial_requirements_path = if let Some(fp) = file_path {
             std::path::PathBuf::from(fp)
         } else {
             determine_requirements_path(None)
                 .unwrap_or_else(|_| std::path::PathBuf::from("requirements.yaml"))
         };
+
+        // Check for migration status (REQ-0231)
+        // trace:REQ-0231 | ai:claude:high
+        let (requirements_path, migration_warning_kind, migration_sqlite_path) =
+            match check_migration_status(&initial_requirements_path) {
+                MigrationCheck::NoMigration(path) => {
+                    (path, MigrationWarningKind::None, None)
+                }
+                MigrationCheck::MigratedToSqlite { yaml_path: _, sqlite_path } => {
+                    // YAML was migrated - use SQLite and warn user
+                    eprintln!(
+                        "INFO: YAML file has been migrated to SQLite. Using: {}",
+                        sqlite_path.display()
+                    );
+                    (sqlite_path.clone(), MigrationWarningKind::MigratedToSqlite, Some(sqlite_path))
+                }
+                MigrationCheck::PossibleStaleYaml { yaml_path, sqlite_path } => {
+                    // Both exist without marker - warn about potential stale data
+                    // Default to SQLite as it's likely more current
+                    eprintln!(
+                        "WARNING: Both {} and {} exist. Using SQLite. \
+                        If you need the YAML data, use --file explicitly.",
+                        yaml_path.display(),
+                        sqlite_path.display()
+                    );
+                    (sqlite_path.clone(), MigrationWarningKind::PossibleStaleYaml, Some(sqlite_path))
+                }
+            };
 
         let storage = Storage::new(&requirements_path);
         let store = match storage.load() {
@@ -4434,6 +4483,11 @@ impl RequirementsApp {
             planning_selected_sprint: None,
             planning_drag_source: None,
             planning_drag_target_sprint: None,
+
+            // Migration warning state (REQ-0231)
+            show_migration_warning: migration_warning_kind != MigrationWarningKind::None,
+            migration_warning_kind,
+            migration_sqlite_path,
         }
     }
 
@@ -6674,6 +6728,72 @@ impl RequirementsApp {
         if close_dialog {
             self.show_conflict_dialog = false;
             self.current_conflict = None;
+        }
+    }
+
+    // trace:REQ-0231 | ai:claude:high
+    /// Shows a warning dialog when a YAML file has been migrated to SQLite
+    fn show_migration_warning_dialog(&mut self, ctx: &egui::Context) {
+        if !self.show_migration_warning {
+            return;
+        }
+
+        let mut close_dialog = false;
+        let max_size = modal_max_size(ctx);
+
+        let (title, message, action_label) = match self.migration_warning_kind {
+            MigrationWarningKind::MigratedToSqlite => (
+                "📋 Migrated Database Detected",
+                "This YAML file was previously migrated to SQLite. \
+                The SQLite database is now being used as it contains the most current data.\n\n\
+                The original YAML file has been preserved for backup purposes.",
+                "OK",
+            ),
+            MigrationWarningKind::PossibleStaleYaml => (
+                "⚠ Multiple Database Files Found",
+                "Both a YAML file and SQLite database exist in this location. \
+                The SQLite database is being used as it likely contains more recent data.\n\n\
+                If you need to use the YAML file instead, restart with:\n  \
+                aida-gui --file requirements.yaml",
+                "OK",
+            ),
+            MigrationWarningKind::None => {
+                self.show_migration_warning = false;
+                return;
+            }
+        };
+
+        egui::Window::new(title)
+            .collapsible(false)
+            .resizable(false)
+            .min_width(400.0)
+            .max_width(max_size.x * 0.6)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                ui.add_space(10.0);
+                ui.label(message);
+                ui.add_space(10.0);
+
+                if let Some(ref sqlite_path) = self.migration_sqlite_path {
+                    ui.horizontal(|ui| {
+                        ui.label("Using:");
+                        ui.monospace(sqlite_path.display().to_string());
+                    });
+                    ui.add_space(10.0);
+                }
+
+                ui.separator();
+                ui.add_space(10.0);
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button(action_label).clicked() {
+                        close_dialog = true;
+                    }
+                });
+            });
+
+        if close_dialog {
+            self.show_migration_warning = false;
         }
     }
 
@@ -25867,6 +25987,9 @@ impl eframe::App for RequirementsApp {
 
         // Show conflict resolution dialog (FR-0153)
         self.show_conflict_resolution_dialog(ctx);
+
+        // Show migration warning dialog (REQ-0231)
+        self.show_migration_warning_dialog(ctx);
 
         // Show migration confirmation dialog
         self.show_migration_confirmation_dialog(ctx);

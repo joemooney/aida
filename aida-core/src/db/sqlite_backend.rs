@@ -626,6 +626,7 @@ impl DatabaseBackend for SqliteBackend {
             ai_prompts,
             baselines,
             store_version,
+            migrated_to: None, // SQLite is never a migrated-from source
         })
     }
 

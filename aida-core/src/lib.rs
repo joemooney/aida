@@ -64,7 +64,7 @@ pub use models::{
     META_PREFIX_VIEW,
     META_PREFIX_TEAM,
 };
-pub use project::determine_requirements_path;
+pub use project::{check_migration_status, determine_requirements_path, MigrationCheck};
 pub use registry::{get_config_dir, get_registry_path, get_templates_dir, Registry};
 pub use scaffolding::{
     ProjectType, ScaffoldArtifact, ScaffoldConfig, ScaffoldError, ScaffoldPreview, Scaffolder,
