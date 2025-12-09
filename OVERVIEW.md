@@ -12,15 +12,17 @@ Create a lightweight, file-based requirements management tool that is:
 
 ## Project Structure
 
-This is a Cargo workspace with three crates:
+This is a Cargo workspace with four crates:
 
 ```
-req/
-├── requirements-core/    # Shared library - models, storage, business logic
-├── requirements-cli/     # CLI tool (req binary)
-├── requirements-gui/     # GUI application (req-gui binary, egui-based)
-├── docs/                 # User documentation (markdown + HTML)
-└── helper/               # Helper scripts for documentation generation
+aida/
+├── aida-core/           # Shared library - models, storage, business logic
+├── aida-cli/            # CLI tool (aida binary)
+├── aida-gui/            # GUI application (aida-gui binary, egui-based)
+├── aida-server/         # gRPC server for headless/remote operation
+├── proto/               # Protocol Buffers definitions
+├── docs/                # User documentation (markdown + HTML)
+└── helper/              # Helper scripts for documentation generation
 ```
 
 ## Key Features
@@ -66,6 +68,13 @@ Define connections between requirements:
 - Environment variable support (REQ_DB_NAME, REQ_FEATURE, REQ_REGISTRY_PATH)
 - Project resolution with priority ordering
 
+### Headless Server Mode (FR-0227)
+- **gRPC Server (`aida-server`)**: Headless server exposing full API via gRPC
+- Protocol Buffers schema defining all requirement operations
+- Remote CLI operations via `--server` flag or `AIDA_SERVER` environment variable
+- Server commands: `aida server status`, `aida server list`, `aida server get <ID>`, `aida server ping`
+- Configurable port (default 50051), host, database path, and logging
+
 ### GUI-Specific Features
 - Multiple view perspectives (Flat, Parent/Child, Verification, References)
 - Two-level filtering (Root/Children) for hierarchical views
@@ -81,6 +90,8 @@ Define connections between requirements:
 - **Storage**: YAML (serde_yaml), SQLite (rusqlite)
 - **CLI Framework**: clap
 - **Interactive Prompts**: inquire
+- **gRPC/RPC**: tonic, prost (Protocol Buffers)
+- **Async Runtime**: tokio
 
 ## Data Storage
 
@@ -108,17 +119,25 @@ Requirements are stored using a pluggable backend system:
 cargo build --workspace --release
 
 # CLI usage
-req list                          # List requirements
-req add --interactive             # Add requirement interactively
-req show SPEC-001                 # Show requirement details
-req rel add --from SPEC-001 --to SPEC-002 --type parent  # Add relationship
+aida list                         # List requirements
+aida add --interactive            # Add requirement interactively
+aida show FR-0001                 # Show requirement details
+aida rel add --from FR-0001 --to FR-0002 --type parent  # Add relationship
 
 # GUI usage
-req-gui                           # Launch graphical interface
+aida-gui                          # Launch graphical interface
+
+# Server mode
+aida-server --port 50051          # Start gRPC server
+aida --server localhost:50051 server list  # Remote list
+aida --server localhost:50051 server ping  # Check connectivity
+
+# Build CLI with remote feature
+cargo build -p aida-cli --features remote
 
 # Open user guide
-req user-guide                    # Open in browser (light mode)
-req user-guide --dark             # Open in browser (dark mode)
+aida user-guide                   # Open in browser (light mode)
+aida user-guide --dark            # Open in browser (dark mode)
 ```
 
 ## Documentation
