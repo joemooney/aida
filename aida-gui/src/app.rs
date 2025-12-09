@@ -1,10 +1,10 @@
 use aida_core::{
     ai::AiClient,
-    determine_requirements_path, AddResult, Cardinality, Comment, ConflictInfo, ConflictResolution,
-    CustomFieldDefinition, CustomFieldType, EditLock, EvaluationResponse, FieldChange, IdFormat,
-    LockFileInfo, NumberingStrategy, RelationshipDefinition, RelationshipType, Requirement,
-    RequirementPriority, RequirementStatus, RequirementType, RequirementsStore, SaveResult,
-    SessionInfo, Storage, StoredAiEvaluation, UrlLink,
+    determine_requirements_path, Cardinality, Comment, ConflictInfo, ConflictResolution,
+    CustomFieldDefinition, CustomFieldType, DatabaseBackend, EditLock, EvaluationResponse,
+    FieldChange, IdFormat, LockFileInfo, NumberingStrategy, RelationshipDefinition,
+    RelationshipType, Requirement, RequirementPriority, RequirementStatus, RequirementType,
+    RequirementsStore, SaveResult, SessionInfo, Storage, StoredAiEvaluation, UrlLink,
 };
 use eframe::egui;
 use similar::{ChangeTag, TextDiff};
@@ -4910,6 +4910,103 @@ impl RequirementsApp {
         }
     }
 
+    // trace:REQ-0231 | ai:claude:high
+    /// Export current database to a YAML file
+    fn export_to_yaml(&mut self) {
+        // Generate default filename based on current storage path
+        let default_name = self.storage.path()
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .map(|s| format!("{}.yaml", s))
+            .unwrap_or_else(|| "requirements.yaml".to_string());
+
+        if let Some(path) = rfd::FileDialog::new()
+            .add_filter("YAML files", &["yaml", "yml"])
+            .set_file_name(&default_name)
+            .save_file()
+        {
+            // Use the YamlBackend for export
+            let yaml_backend = aida_core::YamlBackend::new(&path);
+            match yaml_backend.save(&self.store) {
+                Ok(()) => {
+                    self.message = Some((
+                        format!("Exported to: {}", path.display()),
+                        false,
+                    ));
+                }
+                Err(e) => {
+                    self.message = Some((
+                        format!("Failed to export: {}", e),
+                        true,
+                    ));
+                }
+            }
+        }
+    }
+
+    // trace:REQ-0231 | ai:claude:high
+    /// Migrate current YAML database to SQLite for better concurrent access
+    fn migrate_to_sqlite(&mut self) {
+        let current_path = self.storage.path().to_path_buf();
+
+        // Check if already using SQLite
+        if current_path.extension().map(|e| e == "db" || e == "sqlite").unwrap_or(false) {
+            self.message = Some((
+                "Already using SQLite database. No migration needed.".to_string(),
+                false,
+            ));
+            return;
+        }
+
+        // Generate SQLite path from YAML path
+        let sqlite_path = current_path.with_extension("db");
+
+        // Check if SQLite file already exists
+        if sqlite_path.exists() {
+            self.message = Some((
+                format!(
+                    "SQLite database already exists at {}. Please rename or delete it first.",
+                    sqlite_path.display()
+                ),
+                true,
+            ));
+            return;
+        }
+
+        // Perform migration
+        match aida_core::migrate_yaml_to_sqlite(&current_path, &sqlite_path) {
+            Ok(count) => {
+                // Create backup of YAML file
+                let backup_path = current_path.with_extension("yaml.bak");
+                if let Err(e) = std::fs::copy(&current_path, &backup_path) {
+                    eprintln!("Warning: Failed to create backup: {}", e);
+                }
+
+                // Switch to the new SQLite database
+                self.storage = aida_core::Storage::new(&sqlite_path);
+                if let Ok(store) = self.storage.load() {
+                    self.store = store;
+                }
+
+                self.message = Some((
+                    format!(
+                        "Migrated {} requirements to SQLite: {}. YAML backed up to {}",
+                        count,
+                        sqlite_path.display(),
+                        backup_path.display()
+                    ),
+                    false,
+                ));
+            }
+            Err(e) => {
+                self.message = Some((
+                    format!("Migration failed: {}", e),
+                    true,
+                ));
+            }
+        }
+    }
+
     // trace:FR-0153 | ai:claude:high
     fn save(&mut self) {
         // If no requirements were modified, use standard save
@@ -5676,7 +5773,9 @@ impl RequirementsApp {
                     if ui.button("📂 Open Project...").clicked() {
                         // Open a file dialog to select a project file
                         if let Some(path) = rfd::FileDialog::new()
+                            .add_filter("Requirements Files", &["yaml", "yml", "db", "sqlite"])
                             .add_filter("YAML Files", &["yaml", "yml"])
+                            .add_filter("SQLite Files", &["db", "sqlite"])
                             .add_filter("All Files", &["*"])
                             .set_title("Open Project")
                             .pick_file()
@@ -5694,6 +5793,15 @@ impl RequirementsApp {
                     // trace:FR-0226 | ai:claude:high
                     if ui.button("📥 Import Database...").clicked() {
                         self.start_import_workflow();
+                        ui.close_menu();
+                    }
+                    // trace:REQ-0231 | ai:claude:high
+                    if ui.button("📤 Export to YAML...").clicked() {
+                        self.export_to_yaml();
+                        ui.close_menu();
+                    }
+                    if ui.button("🔄 Migrate to SQLite...").clicked() {
+                        self.migrate_to_sqlite();
                         ui.close_menu();
                     }
                     ui.separator();

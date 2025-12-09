@@ -73,6 +73,11 @@ pub use storage::{
     AddResult, ConflictInfo, ConflictResolution, EditLock, FieldConflict, LockFileInfo, SaveResult,
     SessionInfo, Storage, StorageError,
 };
+pub use db::{
+    BackendType, DatabaseBackend, DatabaseConfig, SqliteBackend, UpdateResult, VersionConflict,
+    YamlBackend, create_backend, open_or_create,
+    migrate_yaml_to_sqlite, migrate_sqlite_to_yaml, export_to_json, import_from_json,
+};
 pub use import::{
     ImportConfig, ImportIssue, ImportIssueType, ImportMergeMode, ImportSummary, ImportValidation,
     IssueResolution, RawImportStore, create_backup, execute_import, validate_import_content,

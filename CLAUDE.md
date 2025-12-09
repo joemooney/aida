@@ -9,7 +9,14 @@ AI Design Assistant
 
 This project uses AIDA for requirements tracking. **Do NOT maintain a separate REQUIREMENTS.md file.**
 
-Requirements database: `requirements.yaml`
+Requirements database: `requirements.yaml` (or `requirements.db` for SQLite)
+
+### Database Storage
+AIDA supports both YAML and SQLite backends:
+- **YAML**: Human-readable, git-friendly, good for single-user scenarios
+- **SQLite**: Better for concurrent access (GUI + CLI), optimistic locking
+
+To migrate: `aida db migrate --from yaml --to sqlite`
 
 ### CLI Commands
 ```bash

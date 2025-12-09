@@ -82,6 +82,28 @@ pub enum DbCommand {
         #[clap(long)]
         name: Option<String>,
     },
+
+    /// Migrate database between formats (YAML <-> SQLite)
+    Migrate {
+        /// Source format: "yaml" or "sqlite"
+        #[clap(long)]
+        from: String,
+
+        /// Target format: "yaml" or "sqlite"
+        #[clap(long)]
+        to: String,
+
+        /// Output path (optional, defaults to same name with new extension)
+        #[clap(long, short = 'o')]
+        output: Option<PathBuf>,
+
+        /// Overwrite existing target file
+        #[clap(long)]
+        force: bool,
+    },
+
+    /// Show database statistics and info
+    Info,
 }
 
 #[derive(Subcommand, Debug)]

@@ -1263,6 +1263,93 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
                 println!("{}", requirements_path.display());
             }
         }
+        DbCommand::Migrate { from, to, output, force } => {
+            // trace:REQ-0231 | ai:claude:high
+            let source_ext = match from.to_lowercase().as_str() {
+                "yaml" | "yml" => "yaml",
+                "sqlite" | "db" => "db",
+                _ => {
+                    println!("{} Invalid source format '{}'. Use 'yaml' or 'sqlite'.", "!".red(), from);
+                    return Ok(());
+                }
+            };
+
+            let target_ext = match to.to_lowercase().as_str() {
+                "yaml" | "yml" => "yaml",
+                "sqlite" | "db" => "db",
+                _ => {
+                    println!("{} Invalid target format '{}'. Use 'yaml' or 'sqlite'.", "!".red(), to);
+                    return Ok(());
+                }
+            };
+
+            if source_ext == target_ext {
+                println!("{} Source and target formats are the same.", "!".yellow());
+                return Ok(());
+            }
+
+            // Determine output path
+            let target_path = output.clone().unwrap_or_else(|| {
+                requirements_path.with_extension(target_ext)
+            });
+
+            // Check if target exists
+            if target_path.exists() && !*force {
+                println!(
+                    "{} Target file '{}' already exists. Use --force to overwrite.",
+                    "!".yellow(),
+                    target_path.display()
+                );
+                return Ok(());
+            }
+
+            // Perform migration
+            println!("Migrating from {} to {}...", requirements_path.display(), target_path.display());
+
+            let count = if source_ext == "yaml" {
+                aida_core::migrate_yaml_to_sqlite(requirements_path, &target_path)?
+            } else {
+                aida_core::migrate_sqlite_to_yaml(requirements_path, &target_path)?
+            };
+
+            println!(
+                "{} Successfully migrated {} requirements to '{}'",
+                "✓".green(),
+                count,
+                target_path.display()
+            );
+        }
+        DbCommand::Info => {
+            // trace:REQ-0231 | ai:claude:high
+            use aida_core::{BackendType, create_backend};
+
+            let backend = create_backend(requirements_path, None)?;
+            let store = backend.load()?;
+
+            println!("{}", "Database Information".bold());
+            println!("{}", "─".repeat(40));
+            println!("Path:        {}", requirements_path.display());
+            println!("Backend:     {}", backend.backend_type());
+            println!("Name:        {}", store.name);
+            println!("Title:       {}", store.title);
+            println!("Description: {}", store.description);
+            println!();
+            println!("{}", "Statistics".bold());
+            println!("{}", "─".repeat(40));
+            println!("Requirements: {}", store.requirements.len());
+            println!("Users:        {}", store.users.len());
+            println!("Features:     {}", store.features.len());
+            println!("Baselines:    {}", store.baselines.len());
+
+            if backend.backend_type() == BackendType::Sqlite {
+                println!();
+                println!("{}", "Concurrency Support".bold());
+                println!("{}", "─".repeat(40));
+                println!("Store Version:  {}", store.store_version);
+                println!("WAL Mode:       Enabled (recommended for concurrent access)");
+                println!("Optimistic Locking: Supported");
+            }
+        }
     }
 
     Ok(())

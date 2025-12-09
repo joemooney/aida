@@ -110,6 +110,10 @@ Requirements are stored using a pluggable backend system:
 - WAL mode for better concurrent access
 - Efficient single-record CRUD operations
 - Complex fields (relationships, comments, history) stored as JSON
+- **Optimistic Locking (REQ-0231)**: Per-record version columns prevent concurrent edit conflicts
+  - Each requirement/user has a `version` field incremented on update
+  - Updates with stale versions are rejected with conflict details
+  - Store-level `store_version` for detecting any external modifications
 
 ### Migration & Export
 - Migrate between YAML and SQLite formats
@@ -141,6 +145,11 @@ cargo build -p aida-cli --features remote
 # GUI with remote server
 cargo build -p aida-gui --features remote  # Build GUI with remote support
 aida-gui --server localhost:50051          # Connect to remote server
+
+# Database migration
+aida db info                              # Show database info and statistics
+aida db migrate --from yaml --to sqlite   # Migrate YAML to SQLite
+aida db migrate --from sqlite --to yaml   # Export SQLite back to YAML
 
 # Open user guide
 aida user-guide                   # Open in browser (light mode)
