@@ -809,6 +809,48 @@ impl DatabaseBackend for SqliteBackend {
         self.save_requirement(&conn, requirement)
     }
 
+    fn update_requirement_versioned(&self, requirement: &Requirement) -> Result<super::traits::UpdateResult> {
+        use super::traits::{UpdateResult, VersionConflict};
+
+        let conn = self.conn.lock().unwrap();
+
+        // Get current version from database
+        let current_version: Option<i64> = conn.query_row(
+            "SELECT version FROM requirements WHERE id = ?1",
+            [requirement.id.to_string()],
+            |row| row.get(0),
+        ).optional()?;
+
+        match current_version {
+            Some(db_version) => {
+                // Check for version conflict
+                if db_version != requirement.version {
+                    return Ok(UpdateResult::Conflict(VersionConflict {
+                        id: requirement.id,
+                        expected_version: requirement.version,
+                        current_version: db_version,
+                        display_id: requirement.spec_id.clone().unwrap_or_else(|| requirement.id.to_string()),
+                    }));
+                }
+
+                // Version matches - update with incremented version
+                let mut updated_req = requirement.clone();
+                updated_req.version = db_version + 1;
+                self.save_requirement(&conn, &updated_req)?;
+
+                Ok(UpdateResult::Success)
+            }
+            None => {
+                anyhow::bail!("Requirement not found: {}", requirement.id)
+            }
+        }
+    }
+
+    fn get_store_version(&self) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        self.load_store_version(&conn)
+    }
+
     fn delete_requirement(&self, id: &Uuid) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         let rows_affected = conn.execute(

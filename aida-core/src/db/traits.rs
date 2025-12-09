@@ -8,6 +8,41 @@ use uuid::Uuid;
 
 use crate::models::{Requirement, RequirementsStore, User};
 
+/// Error type for version conflicts during optimistic locking
+#[derive(Debug, Clone)]
+pub struct VersionConflict {
+    /// ID of the conflicting record
+    pub id: Uuid,
+    /// The version the client expected
+    pub expected_version: i64,
+    /// The current version in the database
+    pub current_version: i64,
+    /// Human-readable identifier (spec_id or name)
+    pub display_id: String,
+}
+
+impl std::fmt::Display for VersionConflict {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Version conflict for {}: expected version {}, but current version is {}. \
+             Another user may have modified this record.",
+            self.display_id, self.expected_version, self.current_version
+        )
+    }
+}
+
+impl std::error::Error for VersionConflict {}
+
+/// Result type for optimistic locking operations
+#[derive(Debug)]
+pub enum UpdateResult {
+    /// Update succeeded
+    Success,
+    /// Update failed due to version conflict
+    Conflict(VersionConflict),
+}
+
 /// Types of database backends available
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BackendType {
@@ -146,6 +181,19 @@ pub trait DatabaseBackend: Send + Sync {
         } else {
             anyhow::bail!("Requirement not found: {}", requirement.id)
         }
+    }
+
+    /// Updates a requirement with optimistic locking
+    ///
+    /// This method checks that the requirement's version matches the database version
+    /// before updating. If another process modified the requirement, returns a conflict.
+    ///
+    /// The requirement's version field should contain the version that was loaded.
+    /// On success, the version is incremented in the database.
+    fn update_requirement_versioned(&self, requirement: &Requirement) -> Result<UpdateResult> {
+        // Default implementation doesn't support versioning, just updates
+        self.update_requirement(requirement)?;
+        Ok(UpdateResult::Success)
     }
 
     /// Deletes a requirement by UUID
@@ -326,6 +374,14 @@ pub trait DatabaseBackend: Send + Sync {
     // =========================================================================
     // Utility Operations
     // =========================================================================
+
+    /// Gets the current store version (for detecting external modifications)
+    ///
+    /// This is used for polling to detect if the database has been modified
+    /// by another process since we last loaded it.
+    fn get_store_version(&self) -> Result<i64> {
+        Ok(self.load()?.store_version)
+    }
 
     /// Returns true if the database file exists
     fn exists(&self) -> bool {

@@ -9,7 +9,7 @@ mod yaml_backend;
 mod sqlite_backend;
 mod migration;
 
-pub use traits::{DatabaseBackend, BackendType, DatabaseConfig};
+pub use traits::{DatabaseBackend, BackendType, DatabaseConfig, UpdateResult, VersionConflict};
 pub use yaml_backend::YamlBackend;
 pub use sqlite_backend::SqliteBackend;
 pub use migration::{migrate_yaml_to_sqlite, migrate_sqlite_to_yaml, export_to_json, import_from_json};
