@@ -1319,3 +1319,32 @@ A chronological record of development sessions and changes made to the Requireme
     - ss-timeline.png, ss-sprint.png, ss-relationships.png
     - ss-ai-evaluation.png, ss-scaffold.png, ss-themes.png
     - ss-projects.png, ss-keyboard.png, ss-cli.png
+
+### GUI gRPC Client Support (FR-0227 continued)
+- **Prompt**: "how do I start the client gui to connect to the server backend?" → "yes please implement GUI gRPC client support"
+- **Actions**:
+  - Added gRPC dependencies to aida-gui/Cargo.toml (tonic, prost, tokio as optional)
+  - Created "remote" feature flag for conditional compilation
+  - Created aida-gui/build.rs for proto compilation (client-only)
+  - Created aida-gui/src/remote.rs with:
+    - `StorageBackend` enum (Local/Remote) for transparent backend abstraction
+    - `RemoteStorage` struct with tokio runtime and Arc<Mutex<Client>>
+    - Proto-to-Rust type conversions (RequirementsStore, Requirements, etc.)
+    - `normalize_addr()` for flexible address format handling
+  - Updated aida-gui/src/main.rs:
+    - Added CliArgs struct for argument parsing
+    - Added --server/-s flag for remote server address
+    - Added AIDA_SERVER environment variable support
+    - Added --help/-h and --version/-V flags
+    - Dynamic window title showing connection type
+  - Updated aida-gui/src/app.rs:
+    - Added `remote_client` and `server_addr` fields to RequirementsApp
+    - Created `new_with_config()` method to dispatch to local/remote
+    - Created `new_with_server()` method for remote initialization
+- **Usage**:
+  ```bash
+  cargo build -p aida-gui --features remote  # Build with remote support
+  aida-gui --server localhost:50051          # Connect to remote server
+  AIDA_SERVER=localhost:50051 aida-gui       # Via environment variable
+  ```
+- **Note**: Save operations currently stubbed (read-only client)

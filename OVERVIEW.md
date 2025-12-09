@@ -74,6 +74,9 @@ Define connections between requirements:
 - Remote CLI operations via `--server` flag or `AIDA_SERVER` environment variable
 - Server commands: `aida server status`, `aida server list`, `aida server get <ID>`, `aida server ping`
 - Configurable port (default 50051), host, database path, and logging
+- **GUI Remote Client**: Connect GUI to remote server with `aida-gui --server <addr>`
+  - Requires `--features remote` at build time
+  - StorageBackend abstraction for transparent local/remote switching
 
 ### GUI-Specific Features
 - Multiple view perspectives (Flat, Parent/Child, Verification, References)
@@ -134,6 +137,10 @@ aida --server localhost:50051 server ping  # Check connectivity
 
 # Build CLI with remote feature
 cargo build -p aida-cli --features remote
+
+# GUI with remote server
+cargo build -p aida-gui --features remote  # Build GUI with remote support
+aida-gui --server localhost:50051          # Connect to remote server
 
 # Open user guide
 aida user-guide                   # Open in browser (light mode)
