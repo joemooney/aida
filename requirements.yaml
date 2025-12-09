@@ -9823,10 +9823,10 @@ requirements:
     - [x] Server mode uses proper locking for concurrent clients (WAL mode)
   status: Completed
   priority: High
-  owner: ''
+  owner: joe
   feature: 121-Uncategorized
   created_at: 2025-12-09T04:34:16.558538542Z
-  modified_at: 2025-12-09T15:14:37.613280203Z
+  modified_at: 2025-12-09T15:18:28.938657843Z
   req_type: Bug
   comments:
   - id: 317df708-b309-4ee5-bd22-a877c0651a58
@@ -9834,6 +9834,25 @@ requirements:
     content: 'Implemented via SQLite optimistic locking. Changes: Phase 1-4 completed with version columns, VersionConflict handling, GUI export/migrate menu, CLI db migrate/info commands. Commits: 12a56e0, 1714d44, 65a339e'
     created_at: 2025-12-09T15:14:37.613268681Z
     modified_at: 2025-12-09T15:14:37.613268681Z
+  history:
+  - id: ffb04e30-1bea-4788-a7e4-c5bf8111b920
+    author: CLI
+    timestamp: 2025-12-09T15:18:28.938655957Z
+    changes:
+    - field_name: owner
+      old_value: ''
+      new_value: joe
+- id: 436fc14e-cccb-4dcc-afc2-d50178ffabce
+  spec_id: FR-0232
+  title: Non-Interactive CLI Edit Command
+  description: Add --status, --priority, --type, --owner, --feature, --tags flags to the 'aida edit' command for script and skill automation. When any flag is provided, edit runs non-interactively. Use -i/--interactive to force interactive mode.
+  status: Completed
+  priority: Medium
+  owner: ''
+  feature: Uncategorized
+  created_at: 2025-12-09T15:18:36.889907060Z
+  modified_at: 2025-12-09T15:18:36.889907060Z
+  req_type: Functional
 users:
 - id: 150164ef-32ed-4d61-8cec-e887ac78cfd7
   spec_id: $USER-001
@@ -9932,7 +9951,7 @@ id_config:
     description: Research or investigation task to reduce uncertainty or explore technical approaches
 features: []
 next_feature_number: 122
-next_spec_number: 232
+next_spec_number: 233
 prefix_counters: {}
 relationship_definitions:
 - name: parent

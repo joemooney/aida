@@ -492,6 +492,42 @@ pub enum Command {
     Edit {
         /// The ID of the requirement to edit
         id: String,
+
+        /// New title for the requirement
+        #[clap(long)]
+        title: Option<String>,
+
+        /// New description for the requirement
+        #[clap(long)]
+        description: Option<String>,
+
+        /// New status (draft, approved, completed, rejected)
+        #[clap(long)]
+        status: Option<String>,
+
+        /// New priority (high, medium, low)
+        #[clap(long)]
+        priority: Option<String>,
+
+        /// New type (functional, non-functional, system, user, etc.)
+        #[clap(long)]
+        r#type: Option<String>,
+
+        /// New owner
+        #[clap(long)]
+        owner: Option<String>,
+
+        /// New feature
+        #[clap(long)]
+        feature: Option<String>,
+
+        /// New tags (comma-separated, replaces existing)
+        #[clap(long)]
+        tags: Option<String>,
+
+        /// Use interactive mode (launches editor)
+        #[clap(long, short = 'i')]
+        interactive: bool,
     },
 
     /// Delete a requirement

@@ -89,8 +89,44 @@ fn main() -> Result<()> {
         Command::Show { id } => {
             show_requirement(&storage, id)?;
         }
-        Command::Edit { id } => {
-            edit_requirement(&storage, id)?;
+        Command::Edit {
+            id,
+            title,
+            description,
+            status,
+            priority,
+            r#type,
+            owner,
+            feature,
+            tags,
+            interactive,
+        } => {
+            // If any flags provided, use non-interactive mode; otherwise interactive
+            let has_flags = title.is_some()
+                || description.is_some()
+                || status.is_some()
+                || priority.is_some()
+                || r#type.is_some()
+                || owner.is_some()
+                || feature.is_some()
+                || tags.is_some();
+
+            if *interactive || !has_flags {
+                edit_requirement_interactive(&storage, id)?;
+            } else {
+                edit_requirement_cli(
+                    &storage,
+                    id,
+                    title,
+                    description,
+                    status,
+                    priority,
+                    r#type,
+                    owner,
+                    feature,
+                    tags,
+                )?;
+            }
         }
         Command::Del { id, yes } => {
             delete_requirement(&storage, id, *yes)?;
@@ -546,7 +582,147 @@ fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
     Ok(())
 }
 
-fn edit_requirement(storage: &Storage, id_str: &str) -> Result<()> {
+// trace:REQ-0232 | ai:claude:high
+/// Edit a requirement non-interactively using CLI flags
+fn edit_requirement_cli(
+    storage: &Storage,
+    id_str: &str,
+    title: &Option<String>,
+    description: &Option<String>,
+    status: &Option<String>,
+    priority: &Option<String>,
+    req_type: &Option<String>,
+    owner: &Option<String>,
+    feature: &Option<String>,
+    tags: &Option<String>,
+) -> Result<()> {
+    // Load requirements
+    let store_for_lookup = storage.load()?;
+    let id = parse_requirement_id(id_str, &store_for_lookup)?;
+
+    let mut store = storage.load()?;
+    let req = store
+        .get_requirement_by_id_mut(&id)
+        .context("Requirement not found")?;
+
+    let mut changes: Vec<FieldChange> = Vec::new();
+    let spec_id = req.spec_id.clone().unwrap_or_else(|| req.id.to_string());
+
+    // Update title
+    if let Some(new_title) = title {
+        if !new_title.is_empty() && new_title != &req.title {
+            changes.push(Requirement::field_change("title", req.title.clone(), new_title.clone()));
+            req.title = new_title.clone();
+        }
+    }
+
+    // Update description
+    if let Some(new_desc) = description {
+        if new_desc != &req.description {
+            changes.push(Requirement::field_change("description", req.description.clone(), new_desc.clone()));
+            req.description = new_desc.clone();
+        }
+    }
+
+    // Update status
+    if let Some(status_str) = status {
+        let new_status = match status_str.to_lowercase().as_str() {
+            "draft" => RequirementStatus::Draft,
+            "approved" => RequirementStatus::Approved,
+            "completed" => RequirementStatus::Completed,
+            "rejected" => RequirementStatus::Rejected,
+            _ => anyhow::bail!("Invalid status '{}'. Use: draft, approved, completed, rejected", status_str),
+        };
+        if new_status != req.status {
+            changes.push(Requirement::field_change("status", format!("{:?}", req.status), format!("{:?}", new_status)));
+            req.status = new_status;
+        }
+    }
+
+    // Update priority
+    if let Some(priority_str) = priority {
+        let new_priority = match priority_str.to_lowercase().as_str() {
+            "high" => RequirementPriority::High,
+            "medium" | "med" => RequirementPriority::Medium,
+            "low" => RequirementPriority::Low,
+            _ => anyhow::bail!("Invalid priority '{}'. Use: high, medium, low", priority_str),
+        };
+        if new_priority != req.priority {
+            changes.push(Requirement::field_change("priority", format!("{:?}", req.priority), format!("{:?}", new_priority)));
+            req.priority = new_priority;
+        }
+    }
+
+    // Update type
+    if let Some(type_str) = req_type {
+        let new_type = match type_str.to_lowercase().as_str() {
+            "functional" | "func" => RequirementType::Functional,
+            "non-functional" | "nonfunctional" | "nfr" => RequirementType::NonFunctional,
+            "system" | "sys" => RequirementType::System,
+            "user" => RequirementType::User,
+            "change-request" | "change" | "cr" => RequirementType::ChangeRequest,
+            "bug" => RequirementType::Bug,
+            "epic" => RequirementType::Epic,
+            "story" => RequirementType::Story,
+            "task" => RequirementType::Task,
+            "spike" => RequirementType::Spike,
+            "sprint" => RequirementType::Sprint,
+            "folder" => RequirementType::Folder,
+            _ => anyhow::bail!("Invalid type '{}'. Use: functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder", type_str),
+        };
+        if new_type != req.req_type {
+            changes.push(Requirement::field_change("type", format!("{:?}", req.req_type), format!("{:?}", new_type)));
+            req.req_type = new_type;
+        }
+    }
+
+    // Update owner
+    if let Some(new_owner) = owner {
+        if new_owner != &req.owner {
+            changes.push(Requirement::field_change("owner", req.owner.clone(), new_owner.clone()));
+            req.owner = new_owner.clone();
+        }
+    }
+
+    // Update feature
+    if let Some(new_feature) = feature {
+        if new_feature != &req.feature {
+            changes.push(Requirement::field_change("feature", req.feature.clone(), new_feature.clone()));
+            req.feature = new_feature.clone();
+        }
+    }
+
+    // Update tags
+    if let Some(tags_str) = tags {
+        let new_tags: HashSet<String> = tags_str
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        let old_tags: String = req.tags.iter().cloned().collect::<Vec<_>>().join(", ");
+        let new_tags_str: String = new_tags.iter().cloned().collect::<Vec<_>>().join(", ");
+        if new_tags != req.tags {
+            changes.push(Requirement::field_change("tags", old_tags, new_tags_str));
+            req.tags = new_tags;
+        }
+    }
+
+    if changes.is_empty() {
+        println!("{} No changes made to {}", "!".yellow(), spec_id);
+        return Ok(());
+    }
+
+    // Record changes with CLI as author
+    req.record_change("CLI".to_string(), changes.clone());
+
+    // Save changes
+    storage.save(&store)?;
+    println!("{} Updated {} ({} field(s) changed)", "✓".green(), spec_id, changes.len());
+
+    Ok(())
+}
+
+fn edit_requirement_interactive(storage: &Storage, id_str: &str) -> Result<()> {
     // Load requirements first (needed for SPEC-ID lookup)
     let store_for_lookup = storage.load()?;
 
