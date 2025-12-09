@@ -1,0 +1,33 @@
+[package]
+name = "aida-server"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+description = "gRPC server for AIDA requirements management"
+
+[[bin]]
+name = "aida-server"
+path = "src/main.rs"
+
+[dependencies]
+aida-core = { path = "../aida-core" }
+
+# gRPC dependencies
+tonic = { workspace = true }
+prost = { workspace = true }
+prost-types = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+
+# Other dependencies
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_yaml = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[build-dependencies]
+tonic-build = { workspace = true }

@@ -1,0 +1,403 @@
+// trace:FR-0227 | ai:claude:high
+//! Conversion utilities between protobuf types and aida-core types
+
+use chrono::{DateTime, TimeZone, Utc};
+use uuid::Uuid;
+
+use aida_core::{
+    Comment, CommentReaction, FeatureDefinition, FieldChange, HistoryEntry, IdConfiguration,
+    IdFormat, NumberingStrategy, Relationship, RelationshipType as CoreRelType, Requirement,
+    RequirementPriority as CorePriority, RequirementStatus as CoreStatus,
+    RequirementType as CoreReqType, RequirementsStore, UrlLink, User,
+};
+
+use crate::proto;
+
+// ============================================================================
+// Timestamp conversions
+// ============================================================================
+
+pub fn datetime_to_proto(dt: DateTime<Utc>) -> proto::Timestamp {
+    proto::Timestamp {
+        seconds: dt.timestamp(),
+        nanos: dt.timestamp_subsec_nanos() as i32,
+    }
+}
+
+pub fn proto_to_datetime(ts: Option<proto::Timestamp>) -> DateTime<Utc> {
+    match ts {
+        Some(t) => Utc
+            .timestamp_opt(t.seconds, t.nanos as u32)
+            .single()
+            .unwrap_or_else(Utc::now),
+        None => Utc::now(),
+    }
+}
+
+// ============================================================================
+// Status conversions
+// ============================================================================
+
+pub fn status_to_proto(status: &CoreStatus) -> proto::RequirementStatus {
+    match status {
+        CoreStatus::Draft => proto::RequirementStatus::Draft,
+        CoreStatus::Approved => proto::RequirementStatus::Approved,
+        CoreStatus::Completed => proto::RequirementStatus::Completed,
+        CoreStatus::Rejected => proto::RequirementStatus::Rejected,
+    }
+}
+
+pub fn proto_to_status(status: proto::RequirementStatus) -> CoreStatus {
+    match status {
+        proto::RequirementStatus::Draft => CoreStatus::Draft,
+        proto::RequirementStatus::Approved => CoreStatus::Approved,
+        proto::RequirementStatus::Completed => CoreStatus::Completed,
+        proto::RequirementStatus::Rejected => CoreStatus::Rejected,
+        proto::RequirementStatus::Unspecified => CoreStatus::Draft,
+    }
+}
+
+// ============================================================================
+// Priority conversions
+// ============================================================================
+
+pub fn priority_to_proto(priority: &CorePriority) -> proto::RequirementPriority {
+    match priority {
+        CorePriority::High => proto::RequirementPriority::High,
+        CorePriority::Medium => proto::RequirementPriority::Medium,
+        CorePriority::Low => proto::RequirementPriority::Low,
+    }
+}
+
+pub fn proto_to_priority(priority: proto::RequirementPriority) -> CorePriority {
+    match priority {
+        proto::RequirementPriority::High => CorePriority::High,
+        proto::RequirementPriority::Medium => CorePriority::Medium,
+        proto::RequirementPriority::Low => CorePriority::Low,
+        proto::RequirementPriority::Unspecified => CorePriority::Medium,
+    }
+}
+
+// ============================================================================
+// Type conversions
+// ============================================================================
+
+pub fn req_type_to_proto(req_type: &CoreReqType) -> proto::RequirementType {
+    match req_type {
+        CoreReqType::Functional => proto::RequirementType::Functional,
+        CoreReqType::NonFunctional => proto::RequirementType::NonFunctional,
+        CoreReqType::System => proto::RequirementType::System,
+        CoreReqType::User => proto::RequirementType::User,
+        CoreReqType::ChangeRequest => proto::RequirementType::ChangeRequest,
+        CoreReqType::Bug => proto::RequirementType::Bug,
+        CoreReqType::Epic => proto::RequirementType::Epic,
+        CoreReqType::Story => proto::RequirementType::Story,
+        CoreReqType::Task => proto::RequirementType::Task,
+        CoreReqType::Spike => proto::RequirementType::Spike,
+        CoreReqType::Sprint => proto::RequirementType::Sprint,
+        CoreReqType::Folder => proto::RequirementType::Folder,
+    }
+}
+
+pub fn proto_to_req_type(req_type: proto::RequirementType) -> CoreReqType {
+    match req_type {
+        proto::RequirementType::Functional => CoreReqType::Functional,
+        proto::RequirementType::NonFunctional => CoreReqType::NonFunctional,
+        proto::RequirementType::System => CoreReqType::System,
+        proto::RequirementType::User => CoreReqType::User,
+        proto::RequirementType::ChangeRequest => CoreReqType::ChangeRequest,
+        proto::RequirementType::Bug => CoreReqType::Bug,
+        proto::RequirementType::Epic => CoreReqType::Epic,
+        proto::RequirementType::Story => CoreReqType::Story,
+        proto::RequirementType::Task => CoreReqType::Task,
+        proto::RequirementType::Spike => CoreReqType::Spike,
+        proto::RequirementType::Sprint => CoreReqType::Sprint,
+        proto::RequirementType::Folder => CoreReqType::Folder,
+        proto::RequirementType::Unspecified => CoreReqType::Functional,
+    }
+}
+
+// ============================================================================
+// Relationship type conversions
+// ============================================================================
+
+pub fn rel_type_to_proto(rel_type: &CoreRelType) -> (proto::RelationshipType, String) {
+    match rel_type {
+        CoreRelType::Parent => (proto::RelationshipType::Parent, String::new()),
+        CoreRelType::Child => (proto::RelationshipType::Child, String::new()),
+        CoreRelType::Duplicate => (proto::RelationshipType::Duplicate, String::new()),
+        CoreRelType::Verifies => (proto::RelationshipType::Verifies, String::new()),
+        CoreRelType::VerifiedBy => (proto::RelationshipType::VerifiedBy, String::new()),
+        CoreRelType::References => (proto::RelationshipType::References, String::new()),
+        CoreRelType::Custom(name) => (proto::RelationshipType::Custom, name.clone()),
+    }
+}
+
+pub fn proto_to_rel_type(rel_type: proto::RelationshipType, custom_name: &str) -> CoreRelType {
+    match rel_type {
+        proto::RelationshipType::Parent => CoreRelType::Parent,
+        proto::RelationshipType::Child => CoreRelType::Child,
+        proto::RelationshipType::Duplicate => CoreRelType::Duplicate,
+        proto::RelationshipType::Verifies => CoreRelType::Verifies,
+        proto::RelationshipType::VerifiedBy => CoreRelType::VerifiedBy,
+        proto::RelationshipType::References => CoreRelType::References,
+        proto::RelationshipType::Custom => CoreRelType::Custom(custom_name.to_string()),
+        proto::RelationshipType::Unspecified => CoreRelType::References,
+    }
+}
+
+// ============================================================================
+// Relationship conversions
+// ============================================================================
+
+pub fn relationship_to_proto(rel: &Relationship) -> proto::Relationship {
+    let (rel_type, custom_name) = rel_type_to_proto(&rel.rel_type);
+    proto::Relationship {
+        target_id: rel.target_id.to_string(),
+        target_spec_id: String::new(), // The core Relationship struct doesn't have this field
+        rel_type: rel_type.into(),
+        custom_type_name: custom_name,
+        created_at: rel.created_at.map(datetime_to_proto),
+        created_by: rel.created_by.clone().unwrap_or_default(),
+    }
+}
+
+pub fn proto_to_relationship(rel: &proto::Relationship) -> Option<Relationship> {
+    let target_id = Uuid::parse_str(&rel.target_id).ok()?;
+    let rel_type_enum = proto::RelationshipType::try_from(rel.rel_type).unwrap_or(proto::RelationshipType::Unspecified);
+    Some(Relationship {
+        target_id,
+        rel_type: proto_to_rel_type(rel_type_enum, &rel.custom_type_name),
+        created_at: rel.created_at.clone().map(|t| proto_to_datetime(Some(t))),
+        created_by: if rel.created_by.is_empty() { None } else { Some(rel.created_by.clone()) },
+    })
+}
+
+// ============================================================================
+// Comment conversions
+// ============================================================================
+
+pub fn comment_to_proto(comment: &Comment) -> proto::Comment {
+    proto::Comment {
+        id: comment.id.to_string(),
+        content: comment.content.clone(),
+        author: comment.author.clone(),
+        created_at: Some(datetime_to_proto(comment.created_at)),
+        modified_at: Some(datetime_to_proto(comment.modified_at)),
+        parent_id: comment.parent_id.map(|id| id.to_string()).unwrap_or_default(),
+        reactions: comment.reactions.iter().map(reaction_to_proto).collect(),
+        // Note: replies are nested in the core model but flattened in proto
+    }
+}
+
+pub fn proto_to_comment(comment: &proto::Comment) -> Option<Comment> {
+    let id = Uuid::parse_str(&comment.id).ok()?;
+    Some(Comment {
+        id,
+        content: comment.content.clone(),
+        author: comment.author.clone(),
+        created_at: proto_to_datetime(comment.created_at.clone()),
+        modified_at: proto_to_datetime(comment.modified_at.clone()),
+        parent_id: if comment.parent_id.is_empty() { None } else { Uuid::parse_str(&comment.parent_id).ok() },
+        replies: Vec::new(), // Replies handled separately
+        reactions: comment.reactions.iter().filter_map(proto_to_reaction).collect(),
+    })
+}
+
+// ============================================================================
+// Reaction conversions
+// ============================================================================
+
+pub fn reaction_to_proto(reaction: &CommentReaction) -> proto::CommentReaction {
+    proto::CommentReaction {
+        reaction: reaction.reaction.clone(),
+        author: reaction.author.clone(),
+        added_at: Some(datetime_to_proto(reaction.added_at)),
+    }
+}
+
+pub fn proto_to_reaction(reaction: &proto::CommentReaction) -> Option<CommentReaction> {
+    Some(CommentReaction {
+        reaction: reaction.reaction.clone(),
+        author: reaction.author.clone(),
+        added_at: proto_to_datetime(reaction.added_at.clone()),
+    })
+}
+
+// ============================================================================
+// History entry conversions
+// ============================================================================
+
+pub fn history_to_proto(entry: &HistoryEntry) -> proto::HistoryEntry {
+    proto::HistoryEntry {
+        id: entry.id.to_string(),
+        author: entry.author.clone(),
+        timestamp: Some(datetime_to_proto(entry.timestamp)),
+        changes: entry.changes.iter().map(field_change_to_proto).collect(),
+    }
+}
+
+pub fn field_change_to_proto(change: &FieldChange) -> proto::FieldChange {
+    proto::FieldChange {
+        field_name: change.field_name.clone(),
+        old_value: change.old_value.clone(),
+        new_value: change.new_value.clone(),
+    }
+}
+
+// ============================================================================
+// URL Link conversions
+// ============================================================================
+
+pub fn url_link_to_proto(link: &UrlLink) -> proto::UrlLink {
+    proto::UrlLink {
+        id: link.id.to_string(),
+        url: link.url.clone(),
+        title: link.title.clone(),
+        description: link.description.clone().unwrap_or_default(),
+        added_at: Some(datetime_to_proto(link.added_at)),
+        added_by: link.added_by.clone(),
+    }
+}
+
+pub fn proto_to_url_link(link: &proto::UrlLink) -> UrlLink {
+    UrlLink {
+        id: Uuid::parse_str(&link.id).unwrap_or_else(|_| Uuid::new_v4()),
+        url: link.url.clone(),
+        title: link.title.clone(),
+        description: if link.description.is_empty() { None } else { Some(link.description.clone()) },
+        added_at: proto_to_datetime(link.added_at.clone()),
+        added_by: link.added_by.clone(),
+        last_verified: None,
+        last_verified_ok: None,
+    }
+}
+
+// ============================================================================
+// Requirement conversions
+// ============================================================================
+
+pub fn requirement_to_proto(req: &Requirement) -> proto::Requirement {
+    proto::Requirement {
+        id: req.id.to_string(),
+        spec_id: req.spec_id.clone().unwrap_or_default(),
+        prefix_override: req.prefix_override.clone().unwrap_or_default(),
+        title: req.title.clone(),
+        description: req.description.clone(),
+        status: status_to_proto(&req.status).into(),
+        priority: priority_to_proto(&req.priority).into(),
+        owner: req.owner.clone(),
+        feature: req.feature.clone(),
+        created_at: Some(datetime_to_proto(req.created_at)),
+        created_by: req.created_by.clone().unwrap_or_default(),
+        modified_at: Some(datetime_to_proto(req.modified_at)),
+        req_type: req_type_to_proto(&req.req_type).into(),
+        dependency_ids: req.dependencies.iter().map(|id| id.to_string()).collect(),
+        tags: req.tags.iter().cloned().collect(),
+        relationships: req.relationships.iter().map(relationship_to_proto).collect(),
+        comments: req.comments.iter().map(comment_to_proto).collect(),
+        history: req.history.iter().map(history_to_proto).collect(),
+        archived: req.archived,
+        custom_status: req.custom_status.clone().unwrap_or_default(),
+        custom_priority: req.custom_priority.clone().unwrap_or_default(),
+        custom_fields: req.custom_fields.clone(),
+        urls: req.urls.iter().map(url_link_to_proto).collect(),
+    }
+}
+
+pub fn proto_to_requirement(req: &proto::Requirement) -> Option<Requirement> {
+    let id = Uuid::parse_str(&req.id).ok()?;
+    let status_enum = proto::RequirementStatus::try_from(req.status).unwrap_or(proto::RequirementStatus::Unspecified);
+    let priority_enum = proto::RequirementPriority::try_from(req.priority).unwrap_or(proto::RequirementPriority::Unspecified);
+    let type_enum = proto::RequirementType::try_from(req.req_type).unwrap_or(proto::RequirementType::Unspecified);
+
+    Some(Requirement {
+        id,
+        spec_id: if req.spec_id.is_empty() { None } else { Some(req.spec_id.clone()) },
+        prefix_override: if req.prefix_override.is_empty() { None } else { Some(req.prefix_override.clone()) },
+        title: req.title.clone(),
+        description: req.description.clone(),
+        status: proto_to_status(status_enum),
+        priority: proto_to_priority(priority_enum),
+        owner: req.owner.clone(),
+        feature: req.feature.clone(),
+        created_at: proto_to_datetime(req.created_at.clone()),
+        created_by: if req.created_by.is_empty() { None } else { Some(req.created_by.clone()) },
+        modified_at: proto_to_datetime(req.modified_at.clone()),
+        req_type: proto_to_req_type(type_enum),
+        dependencies: req.dependency_ids.iter().filter_map(|id| Uuid::parse_str(id).ok()).collect(),
+        tags: req.tags.iter().cloned().collect(),
+        relationships: req.relationships.iter().filter_map(proto_to_relationship).collect(),
+        comments: req.comments.iter().filter_map(proto_to_comment).collect(),
+        history: Vec::new(), // History is read-only from server
+        archived: req.archived,
+        custom_status: if req.custom_status.is_empty() { None } else { Some(req.custom_status.clone()) },
+        custom_priority: if req.custom_priority.is_empty() { None } else { Some(req.custom_priority.clone()) },
+        custom_fields: req.custom_fields.clone(),
+        urls: req.urls.iter().map(proto_to_url_link).collect(),
+        ai_evaluation: None, // AI evaluation is not exposed via gRPC
+    })
+}
+
+// ============================================================================
+// Feature definition conversions
+// ============================================================================
+
+pub fn feature_to_proto(feature: &FeatureDefinition) -> proto::FeatureDefinition {
+    proto::FeatureDefinition {
+        name: feature.name.clone(),
+        prefix: feature.prefix.clone(),
+        number: feature.number as i32,
+    }
+}
+
+// ============================================================================
+// User conversions
+// ============================================================================
+
+pub fn user_to_proto(user: &User) -> proto::User {
+    proto::User {
+        id: user.id.to_string(),
+        spec_id: user.spec_id.clone().unwrap_or_default(),
+        name: user.name.clone(),
+        email: user.email.clone(),
+        handle: user.handle.clone(),
+    }
+}
+
+// ============================================================================
+// ID configuration conversions
+// ============================================================================
+
+pub fn id_config_to_proto(config: &IdConfiguration) -> proto::IdConfiguration {
+    proto::IdConfiguration {
+        format: match config.format {
+            IdFormat::SingleLevel => "single_level".to_string(),
+            IdFormat::TwoLevel => "two_level".to_string(),
+        },
+        numbering: match config.numbering {
+            NumberingStrategy::Global => "global".to_string(),
+            NumberingStrategy::PerPrefix => "per_prefix".to_string(),
+            NumberingStrategy::PerFeatureType => "per_feature_type".to_string(),
+        },
+        digits: config.digits as i32,
+    }
+}
+
+// ============================================================================
+// Store conversions
+// ============================================================================
+
+pub fn store_to_proto(store: &RequirementsStore) -> proto::RequirementsStore {
+    proto::RequirementsStore {
+        name: store.name.clone(),
+        title: store.title.clone(),
+        description: store.description.clone(),
+        requirements: store.requirements.iter().map(requirement_to_proto).collect(),
+        users: store.users.iter().map(user_to_proto).collect(),
+        features: store.features.iter().map(feature_to_proto).collect(),
+        id_config: Some(id_config_to_proto(&store.id_config)),
+        next_spec_number: store.next_spec_number as i32,
+        prefix_counters: store.prefix_counters.iter().map(|(k, v)| (k.clone(), *v as i32)).collect(),
+    }
+}

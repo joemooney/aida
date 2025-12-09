@@ -19,3 +19,19 @@ colored = { workspace = true }
 anyhow = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
+
+# gRPC client dependencies (optional)
+tonic = { workspace = true, optional = true }
+prost = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+
+[features]
+default = []
+remote = ["tonic", "prost", "tokio", "tonic-build"]
+
+[build-dependencies]
+tonic-build = { workspace = true, optional = true }
+
+[package.metadata.features]
+# Note: The "remote" feature enables gRPC client functionality
+# Build with: cargo build -p aida-cli --features remote

@@ -12,8 +12,43 @@ pub struct Cli {
     #[clap(long, short = 'p')]
     pub project: Option<String>,
 
+    /// Connect to a remote AIDA server (e.g., "localhost:50051" or "grpc://host:port")
+    /// Can also be set via AIDA_SERVER environment variable
+    #[clap(long, short = 's')]
+    pub server: Option<String>,
+
     #[clap(subcommand)]
     pub command: Command,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum ServerCommand {
+    /// Check server status
+    Status,
+
+    /// List requirements from server
+    List {
+        /// Filter by status
+        #[clap(long)]
+        status: Option<String>,
+
+        /// Filter by feature
+        #[clap(long)]
+        feature: Option<String>,
+
+        /// Limit results
+        #[clap(long, default_value = "100")]
+        limit: i32,
+    },
+
+    /// Get a requirement from server
+    Get {
+        /// Requirement ID (UUID or SPEC-ID)
+        id: String,
+    },
+
+    /// Ping server to check connectivity
+    Ping,
 }
 
 #[derive(Subcommand, Debug)]
@@ -492,4 +527,8 @@ pub enum Command {
         #[clap(long)]
         dark: bool,
     },
+
+    /// Server management commands (requires --server or AIDA_SERVER)
+    #[clap(subcommand)]
+    Server(ServerCommand),
 }

@@ -1,4 +1,6 @@
 mod cli;
+#[cfg(feature = "remote")]
+mod client;
 mod prompts;
 
 use anyhow::{Context, Result};
@@ -15,11 +17,16 @@ use aida_core::{
 
 use crate::cli::{
     Cli, Command, CommentCommand, ConfigCommand, DbCommand, FeatureCommand, RelDefCommand,
-    RelationshipCommand, TypeCommand,
+    RelationshipCommand, ServerCommand, TypeCommand,
 };
 
 fn main() -> Result<()> {
-    let cli = Cli::parse();
+    let mut cli = Cli::parse();
+
+    // Check for AIDA_SERVER environment variable if --server not specified
+    if cli.server.is_none() {
+        cli.server = std::env::var("AIDA_SERVER").ok();
+    }
 
     // Determine which requirements file to use
     let requirements_path = determine_requirements_path(cli.project.as_deref())?;
@@ -115,9 +122,57 @@ fn main() -> Result<()> {
         Command::UserGuide { dark } => {
             open_user_guide(*dark)?;
         }
+        Command::Server(server_cmd) => {
+            handle_server_command(server_cmd, cli.server.as_deref())?;
+        }
     }
 
     Ok(())
+}
+
+fn handle_server_command(cmd: &ServerCommand, server_addr: Option<&str>) -> Result<()> {
+    let server_addr = server_addr.ok_or_else(|| {
+        anyhow::anyhow!(
+            "Server address required. Use --server flag or set AIDA_SERVER environment variable."
+        )
+    })?;
+
+    #[cfg(feature = "remote")]
+    {
+        // Create a tokio runtime for async operations
+        let rt = tokio::runtime::Runtime::new()?;
+
+        match cmd {
+            ServerCommand::Status => {
+                rt.block_on(client::get_server_status(server_addr))?;
+            }
+            ServerCommand::List { status, feature, limit } => {
+                rt.block_on(client::list_requirements(
+                    server_addr,
+                    status.as_deref(),
+                    feature.as_deref(),
+                    *limit,
+                ))?;
+            }
+            ServerCommand::Get { id } => {
+                rt.block_on(client::get_requirement(server_addr, id))?;
+            }
+            ServerCommand::Ping => {
+                rt.block_on(client::ping_server(server_addr))?;
+            }
+        }
+        Ok(())
+    }
+
+    #[cfg(not(feature = "remote"))]
+    {
+        let _ = cmd; // suppress unused warning
+        let _ = server_addr;
+        anyhow::bail!(
+            "Remote server support is not enabled. \
+            Build with: cargo build -p aida-cli --features remote"
+        )
+    }
 }
 
 fn add_requirement_interactive(storage: &Storage) -> Result<()> {

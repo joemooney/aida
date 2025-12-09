@@ -1,0 +1,447 @@
+// trace:FR-0227 | ai:claude:high
+// Protocol Buffer definitions for AIDA gRPC service
+syntax = "proto3";
+
+package aida;
+
+// Timestamp message for date/time fields
+message Timestamp {
+    int64 seconds = 1;
+    int32 nanos = 2;
+}
+
+// Requirement status enum
+enum RequirementStatus {
+    REQUIREMENT_STATUS_UNSPECIFIED = 0;
+    REQUIREMENT_STATUS_DRAFT = 1;
+    REQUIREMENT_STATUS_APPROVED = 2;
+    REQUIREMENT_STATUS_COMPLETED = 3;
+    REQUIREMENT_STATUS_REJECTED = 4;
+}
+
+// Requirement priority enum
+enum RequirementPriority {
+    REQUIREMENT_PRIORITY_UNSPECIFIED = 0;
+    REQUIREMENT_PRIORITY_HIGH = 1;
+    REQUIREMENT_PRIORITY_MEDIUM = 2;
+    REQUIREMENT_PRIORITY_LOW = 3;
+}
+
+// Requirement type enum
+enum RequirementType {
+    REQUIREMENT_TYPE_UNSPECIFIED = 0;
+    REQUIREMENT_TYPE_FUNCTIONAL = 1;
+    REQUIREMENT_TYPE_NON_FUNCTIONAL = 2;
+    REQUIREMENT_TYPE_SYSTEM = 3;
+    REQUIREMENT_TYPE_USER = 4;
+    REQUIREMENT_TYPE_CHANGE_REQUEST = 5;
+    REQUIREMENT_TYPE_BUG = 6;
+    REQUIREMENT_TYPE_EPIC = 7;
+    REQUIREMENT_TYPE_STORY = 8;
+    REQUIREMENT_TYPE_TASK = 9;
+    REQUIREMENT_TYPE_SPIKE = 10;
+    REQUIREMENT_TYPE_SPRINT = 11;
+    REQUIREMENT_TYPE_FOLDER = 12;
+}
+
+// Relationship type enum
+enum RelationshipType {
+    RELATIONSHIP_TYPE_UNSPECIFIED = 0;
+    RELATIONSHIP_TYPE_PARENT = 1;
+    RELATIONSHIP_TYPE_CHILD = 2;
+    RELATIONSHIP_TYPE_DUPLICATE = 3;
+    RELATIONSHIP_TYPE_VERIFIES = 4;
+    RELATIONSHIP_TYPE_VERIFIED_BY = 5;
+    RELATIONSHIP_TYPE_REFERENCES = 6;
+    RELATIONSHIP_TYPE_CUSTOM = 7;
+}
+
+// A relationship between requirements
+message Relationship {
+    string target_id = 1;              // UUID of target requirement
+    string target_spec_id = 2;         // SPEC-ID of target (optional)
+    RelationshipType rel_type = 3;
+    string custom_type_name = 4;       // For RELATIONSHIP_TYPE_CUSTOM
+    Timestamp created_at = 5;
+    string created_by = 6;
+}
+
+// A comment on a requirement
+message Comment {
+    string id = 1;                     // UUID
+    string content = 2;
+    string author = 3;
+    Timestamp created_at = 4;
+    Timestamp modified_at = 5;
+    string parent_id = 6;              // UUID of parent comment (for threads)
+    repeated CommentReaction reactions = 7;
+}
+
+// A reaction on a comment
+message CommentReaction {
+    string reaction = 1;           // The reaction type (e.g., emoji or reaction name)
+    string author = 2;             // Who added this reaction
+    Timestamp added_at = 3;        // When the reaction was added
+}
+
+// A history entry for change tracking
+message HistoryEntry {
+    string id = 1;                     // UUID
+    string author = 2;
+    Timestamp timestamp = 3;
+    repeated FieldChange changes = 4;
+}
+
+// A field change in history
+message FieldChange {
+    string field_name = 1;
+    string old_value = 2;
+    string new_value = 3;
+}
+
+// A URL link attached to a requirement
+message UrlLink {
+    string id = 1;                 // UUID
+    string url = 2;
+    string title = 3;              // Display title/label
+    string description = 4;        // Optional description
+    Timestamp added_at = 5;        // When the link was added
+    string added_by = 6;           // Who added the link
+}
+
+// The main Requirement message
+message Requirement {
+    string id = 1;                           // UUID
+    string spec_id = 2;                      // Human-friendly ID (e.g., "FR-0001")
+    string prefix_override = 3;              // Optional prefix override
+    string title = 4;
+    string description = 5;
+    RequirementStatus status = 6;
+    RequirementPriority priority = 7;
+    string owner = 8;
+    string feature = 9;
+    Timestamp created_at = 10;
+    string created_by = 11;
+    Timestamp modified_at = 12;
+    RequirementType req_type = 13;
+    repeated string dependency_ids = 14;     // UUIDs of dependencies
+    repeated string tags = 15;
+    repeated Relationship relationships = 16;
+    repeated Comment comments = 17;
+    repeated HistoryEntry history = 18;
+    bool archived = 19;
+    string custom_status = 20;               // For types with custom statuses
+    string custom_priority = 21;             // For types with custom priorities
+    map<string, string> custom_fields = 22;
+    repeated UrlLink urls = 23;
+}
+
+// A feature definition
+message FeatureDefinition {
+    string name = 1;
+    string prefix = 2;
+    int32 number = 3;
+}
+
+// ID configuration
+message IdConfiguration {
+    string format = 1;
+    string numbering = 2;
+    int32 digits = 3;
+}
+
+// User definition
+message User {
+    string id = 1;
+    string spec_id = 2;
+    string name = 3;
+    string email = 4;
+    string handle = 5;
+}
+
+// The full requirements store
+message RequirementsStore {
+    string name = 1;
+    string title = 2;
+    string description = 3;
+    repeated Requirement requirements = 4;
+    repeated User users = 5;
+    repeated FeatureDefinition features = 6;
+    IdConfiguration id_config = 7;
+    int32 next_spec_number = 8;
+    map<string, int32> prefix_counters = 9;
+}
+
+// ============================================================================
+// Service Definition
+// ============================================================================
+
+service RequirementsService {
+    // Store operations
+    rpc GetStore(GetStoreRequest) returns (GetStoreResponse);
+    rpc GetStoreMetadata(GetStoreMetadataRequest) returns (GetStoreMetadataResponse);
+
+    // Requirement CRUD
+    rpc ListRequirements(ListRequirementsRequest) returns (ListRequirementsResponse);
+    rpc GetRequirement(GetRequirementRequest) returns (GetRequirementResponse);
+    rpc CreateRequirement(CreateRequirementRequest) returns (CreateRequirementResponse);
+    rpc UpdateRequirement(UpdateRequirementRequest) returns (UpdateRequirementResponse);
+    rpc DeleteRequirement(DeleteRequirementRequest) returns (DeleteRequirementResponse);
+
+    // Batch operations
+    rpc BatchCreateRequirements(BatchCreateRequirementsRequest) returns (BatchCreateRequirementsResponse);
+    rpc BatchUpdateRequirements(BatchUpdateRequirementsRequest) returns (BatchUpdateRequirementsResponse);
+    rpc BatchDeleteRequirements(BatchDeleteRequirementsRequest) returns (BatchDeleteRequirementsResponse);
+
+    // Comment operations
+    rpc AddComment(AddCommentRequest) returns (AddCommentResponse);
+    rpc UpdateComment(UpdateCommentRequest) returns (UpdateCommentResponse);
+    rpc DeleteComment(DeleteCommentRequest) returns (DeleteCommentResponse);
+
+    // Relationship operations
+    rpc AddRelationship(AddRelationshipRequest) returns (AddRelationshipResponse);
+    rpc RemoveRelationship(RemoveRelationshipRequest) returns (RemoveRelationshipResponse);
+
+    // Search and filter
+    rpc SearchRequirements(SearchRequirementsRequest) returns (SearchRequirementsResponse);
+
+    // Server status
+    rpc GetServerStatus(GetServerStatusRequest) returns (GetServerStatusResponse);
+    rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
+}
+
+// ============================================================================
+// Request/Response Messages
+// ============================================================================
+
+// Store operations
+message GetStoreRequest {}
+
+message GetStoreResponse {
+    RequirementsStore store = 1;
+}
+
+message GetStoreMetadataRequest {}
+
+message GetStoreMetadataResponse {
+    string name = 1;
+    string title = 2;
+    string description = 3;
+    int32 requirement_count = 4;
+    int32 user_count = 5;
+    int32 feature_count = 6;
+}
+
+// List requirements
+message ListRequirementsRequest {
+    // Optional filters
+    string status_filter = 1;          // Filter by status
+    string priority_filter = 2;        // Filter by priority
+    string type_filter = 3;            // Filter by type
+    string feature_filter = 4;         // Filter by feature
+    string owner_filter = 5;           // Filter by owner
+    bool include_archived = 6;         // Include archived requirements
+    int32 limit = 7;                   // Max results (0 = all)
+    int32 offset = 8;                  // Pagination offset
+}
+
+message ListRequirementsResponse {
+    repeated Requirement requirements = 1;
+    int32 total_count = 2;             // Total matching (before pagination)
+}
+
+// Get single requirement
+message GetRequirementRequest {
+    string id = 1;                     // UUID or SPEC-ID
+}
+
+message GetRequirementResponse {
+    Requirement requirement = 1;
+}
+
+// Create requirement
+message CreateRequirementRequest {
+    string title = 1;
+    string description = 2;
+    RequirementStatus status = 3;
+    RequirementPriority priority = 4;
+    string owner = 5;
+    string feature = 6;
+    RequirementType req_type = 7;
+    repeated string tags = 8;
+    string prefix_override = 9;
+    string created_by = 10;
+}
+
+message CreateRequirementResponse {
+    Requirement requirement = 1;
+    string spec_id = 2;                // Assigned SPEC-ID
+}
+
+// Update requirement
+message UpdateRequirementRequest {
+    string id = 1;                     // UUID or SPEC-ID
+    // Optional fields - only set fields are updated
+    optional string title = 2;
+    optional string description = 3;
+    optional RequirementStatus status = 4;
+    optional RequirementPriority priority = 5;
+    optional string owner = 6;
+    optional string feature = 7;
+    optional RequirementType req_type = 8;
+    repeated string tags = 9;
+    bool replace_tags = 10;            // If true, replace tags; if false, add to existing
+    optional bool archived = 11;
+    optional string custom_status = 12;
+    optional string custom_priority = 13;
+    map<string, string> custom_fields = 14;
+    bool replace_custom_fields = 15;   // If true, replace; if false, merge
+    string modified_by = 16;           // Author of the change
+}
+
+message UpdateRequirementResponse {
+    Requirement requirement = 1;
+}
+
+// Delete requirement
+message DeleteRequirementRequest {
+    string id = 1;                     // UUID or SPEC-ID
+}
+
+message DeleteRequirementResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+// Batch create
+message BatchCreateRequirementsRequest {
+    repeated CreateRequirementRequest requirements = 1;
+}
+
+message BatchCreateRequirementsResponse {
+    repeated CreateRequirementResponse results = 1;
+    int32 success_count = 2;
+    int32 failure_count = 3;
+}
+
+// Batch update
+message BatchUpdateRequirementsRequest {
+    repeated UpdateRequirementRequest requirements = 1;
+}
+
+message BatchUpdateRequirementsResponse {
+    repeated UpdateRequirementResponse results = 1;
+    int32 success_count = 2;
+    int32 failure_count = 3;
+}
+
+// Batch delete
+message BatchDeleteRequirementsRequest {
+    repeated string ids = 1;           // UUIDs or SPEC-IDs
+}
+
+message BatchDeleteRequirementsResponse {
+    int32 success_count = 1;
+    int32 failure_count = 2;
+    repeated string failed_ids = 3;
+}
+
+// Add comment
+message AddCommentRequest {
+    string requirement_id = 1;         // UUID or SPEC-ID
+    string content = 2;
+    string author = 3;
+    string parent_comment_id = 4;      // Optional, for replies
+}
+
+message AddCommentResponse {
+    Comment comment = 1;
+}
+
+// Update comment
+message UpdateCommentRequest {
+    string requirement_id = 1;
+    string comment_id = 2;
+    string content = 3;
+}
+
+message UpdateCommentResponse {
+    Comment comment = 1;
+}
+
+// Delete comment
+message DeleteCommentRequest {
+    string requirement_id = 1;
+    string comment_id = 2;
+}
+
+message DeleteCommentResponse {
+    bool success = 1;
+}
+
+// Add relationship
+message AddRelationshipRequest {
+    string source_id = 1;              // UUID or SPEC-ID
+    string target_id = 2;              // UUID or SPEC-ID
+    RelationshipType rel_type = 3;
+    string custom_type_name = 4;       // For RELATIONSHIP_TYPE_CUSTOM
+    string created_by = 5;
+}
+
+message AddRelationshipResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+// Remove relationship
+message RemoveRelationshipRequest {
+    string source_id = 1;
+    string target_id = 2;
+    RelationshipType rel_type = 3;
+}
+
+message RemoveRelationshipResponse {
+    bool success = 1;
+}
+
+// Search requirements
+message SearchRequirementsRequest {
+    string query = 1;                  // Text search query
+    bool search_title = 2;
+    bool search_description = 3;
+    bool search_comments = 4;
+    bool search_spec_id = 5;
+    // Additional filters
+    string status_filter = 6;
+    string type_filter = 7;
+    string feature_filter = 8;
+    bool include_archived = 9;
+    int32 limit = 10;
+}
+
+message SearchRequirementsResponse {
+    repeated Requirement requirements = 1;
+    int32 total_matches = 2;
+}
+
+// Server status
+message GetServerStatusRequest {}
+
+message GetServerStatusResponse {
+    string version = 1;
+    string status = 2;                 // "running", "shutting_down"
+    int64 uptime_seconds = 3;
+    int32 active_connections = 4;
+    string storage_backend = 5;        // "yaml", "sqlite"
+    string storage_path = 6;
+}
+
+// Graceful shutdown
+message ShutdownRequest {
+    int32 timeout_seconds = 1;         // Wait for in-flight requests
+}
+
+message ShutdownResponse {
+    bool accepted = 1;
+    string message = 2;
+}
