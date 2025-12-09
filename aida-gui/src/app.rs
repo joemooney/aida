@@ -13009,6 +13009,51 @@ impl RequirementsApp {
             ui.separator();
             ui.add_space(10.0);
 
+            // Storage Backend Section
+            // trace:REQ-0231 | ai:claude:high
+            ui.heading("Storage Backend");
+            ui.add_space(5.0);
+
+            // Detect current backend type
+            let current_path = self.storage.path();
+            let is_sqlite = current_path.extension()
+                .map(|e| e == "db" || e == "sqlite" || e == "sqlite3")
+                .unwrap_or(false);
+            let backend_type = if is_sqlite { "SQLite" } else { "YAML" };
+
+            ui.horizontal(|ui| {
+                ui.label("Current Backend:");
+                ui.strong(backend_type);
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("File:");
+                ui.label(current_path.display().to_string());
+            });
+
+            ui.add_space(10.0);
+
+            if is_sqlite {
+                ui.label("SQLite provides better concurrent access with optimistic locking.");
+                ui.add_space(5.0);
+                if ui.button("📤 Export to YAML...").clicked() {
+                    self.export_to_yaml();
+                }
+                ui.label("Export database to human-readable YAML format.");
+            } else {
+                ui.label("YAML is human-readable but has limited concurrent access support.");
+                ui.add_space(5.0);
+                if ui.button("🔄 Migrate to SQLite...").clicked() {
+                    self.migrate_to_sqlite();
+                }
+                ui.label("Migrate to SQLite for better concurrent access (GUI + CLI).");
+                ui.label("Your YAML file will be backed up automatically.");
+            }
+
+            ui.add_space(15.0);
+            ui.separator();
+            ui.add_space(10.0);
+
             // Statistics Section
             ui.heading("Database Statistics");
             ui.add_space(5.0);
