@@ -4105,13 +4105,14 @@ impl RequirementsApp {
                 MigrationCheck::NoMigration(path) => {
                     (path, MigrationWarningKind::None, None, None)
                 }
-                MigrationCheck::MigratedToSqlite { yaml_path, sqlite_path } => {
-                    // YAML was migrated - use SQLite and warn user
+                MigrationCheck::MigratedToSqlite { yaml_path: _, sqlite_path } => {
+                    // YAML was migrated - use SQLite silently (user already acknowledged)
                     eprintln!(
                         "INFO: YAML file has been migrated to SQLite. Using: {}",
                         sqlite_path.display()
                     );
-                    (sqlite_path.clone(), MigrationWarningKind::MigratedToSqlite, Some(sqlite_path), Some(yaml_path))
+                    // Use None for warning kind - user already said "don't show again"
+                    (sqlite_path.clone(), MigrationWarningKind::None, None, None)
                 }
                 MigrationCheck::PossibleStaleYaml { yaml_path, sqlite_path } => {
                     // Both exist without marker - warn about potential stale data
@@ -22655,9 +22656,16 @@ fn main() {
                         .hint_text("Enter requirement description (Markdown supported)...")
                         .show(ui);
 
-                    // Request focus if we came here via double-click on description
+                    // Request focus and position cursor at end when entering Add/Edit view
                     if self.focus_description {
                         output.response.request_focus();
+                        // Set cursor to end of text
+                        if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), output.response.id) {
+                            let text_len = self.form_description.chars().count();
+                            let ccursor = egui::text::CCursor::new(text_len);
+                            state.cursor.set_char_range(Some(egui::text::CCursorRange::one(ccursor)));
+                            state.store(ui.ctx(), output.response.id);
+                        }
                         self.focus_description = false;
                     }
 
@@ -23126,9 +23134,16 @@ fn main() {
                                 .hint_text("Enter requirement description (Markdown supported)...")
                                 .show(ui);
 
-                            // Request focus if we came here via double-click on description
+                            // Request focus and position cursor at end when entering Add/Edit view
                             if self.focus_description {
                                 output.response.request_focus();
+                                // Set cursor to end of text
+                                if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), output.response.id) {
+                                    let text_len = self.form_description.chars().count();
+                                    let ccursor = egui::text::CCursor::new(text_len);
+                                    state.cursor.set_char_range(Some(egui::text::CCursorRange::one(ccursor)));
+                                    state.store(ui.ctx(), output.response.id);
+                                }
                                 self.focus_description = false;
                             }
 
@@ -23562,9 +23577,16 @@ fn main() {
                         .hint_text("Enter requirement description (Markdown supported)...")
                         .show(ui);
 
-                    // Request focus if we came here via double-click on description
+                    // Request focus and position cursor at end when entering Add/Edit view
                     if self.focus_description {
                         output.response.request_focus();
+                        // Set cursor to end of text
+                        if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), output.response.id) {
+                            let text_len = self.form_description.chars().count();
+                            let ccursor = egui::text::CCursor::new(text_len);
+                            state.cursor.set_char_range(Some(egui::text::CCursorRange::one(ccursor)));
+                            state.store(ui.ctx(), output.response.id);
+                        }
                         self.focus_description = false;
                     }
 
@@ -26374,6 +26396,11 @@ impl eframe::App for RequirementsApp {
                 if let Some(sender) = &self.heartbeat_sender {
                     let _ = sender.send(HeartbeatCommand::SetEditLock(None));
                 }
+            }
+
+            // Focus description field when entering Add or Edit view
+            if matches!(view, View::Add | View::Edit) {
+                self.focus_description = true;
             }
 
             self.current_view = view;
