@@ -27,17 +27,19 @@ pub fn check_migration_status(yaml_path: &PathBuf) -> MigrationCheck {
     let sqlite_path = yaml_path.with_extension("db");
 
     if yaml_path.exists() && sqlite_path.exists() {
-        // Both files exist - check for migration marker in YAML
+        // Both files exist - check for migration marker at the START of YAML file
+        // The marker should be at the beginning, not embedded in nested content
         if let Ok(content) = std::fs::read_to_string(yaml_path) {
-            // Quick check for migrated_to field without full parse
-            if content.contains("migrated_to:") {
+            // Check first few lines for the migration marker (comment + field)
+            let first_lines: String = content.lines().take(5).collect::<Vec<_>>().join("\n");
+            if first_lines.contains("migrated_to:") {
                 return MigrationCheck::MigratedToSqlite {
                     yaml_path: yaml_path.clone(),
                     sqlite_path,
                 };
             }
         }
-        // Both exist but no marker - potential stale data situation
+        // Both exist but no marker at start - potential stale data situation
         return MigrationCheck::PossibleStaleYaml {
             yaml_path: yaml_path.clone(),
             sqlite_path,

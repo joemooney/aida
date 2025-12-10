@@ -1,9 +1,17 @@
 sessions:
-  435494-f935134c-9592-4a51-acde-5a24a04af099:
-    session_id: 435494-f935134c-9592-4a51-acde-5a24a04af099
+  441591-7c47d2a0-9f10-42e7-baef-d82494ca7961:
+    session_id: 441591-7c47d2a0-9f10-42e7-baef-d82494ca7961
     user_name: Joe Mooney
     hostname: imac
-    pid: 435494
-    started_at: 2025-12-10T04:11:10.826795253Z
-    last_heartbeat: 2025-12-10T04:11:55.839681214Z
+    pid: 441591
+    started_at: 2025-12-10T04:48:48.080272442Z
+    last_heartbeat: 2025-12-10T04:52:11.567054848Z
+    editing_requirement: null
+  442934-87b15a07-07af-4273-b592-5bdff140e329:
+    session_id: 442934-87b15a07-07af-4273-b592-5bdff140e329
+    user_name: Joe Mooney
+    hostname: imac
+    pid: 442934
+    started_at: 2025-12-10T04:52:16.393552316Z
+    last_heartbeat: 2025-12-10T04:52:26.395757955Z
     editing_requirement: null

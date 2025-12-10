@@ -7042,7 +7042,10 @@ impl RequirementsApp {
                     if let Some(ref sqlite_path) = self.migration_sqlite_path {
                         // Add migration marker to the YAML file
                         if let Ok(content) = std::fs::read_to_string(yaml_path) {
-                            if !content.contains("migrated_to:") {
+                            // Check first few lines for the marker (not the whole file,
+                            // as it might appear in nested content)
+                            let first_lines: String = content.lines().take(5).collect::<Vec<_>>().join("\n");
+                            if !first_lines.contains("migrated_to:") {
                                 // Add the migrated_to marker at the beginning
                                 let marker = format!(
                                     "# This file is an export. The primary database is: {}\nmigrated_to: {}\n\n",
