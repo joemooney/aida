@@ -1551,10 +1551,9 @@ pub enum KeyAction {
     OpenSprintPicker,   // 'S' (shift+s) - sprint assignment picker
     AddComment,         // 'c' - add comment
     ToggleLinksPanel,   // 'L' - show/toggle links
-    // Deletion actions
-    DeleteWithConfirm,  // 'd' - delete with confirmation
-    DeleteImmediate,    // 'D' - delete immediately
-    ArchiveToggle,      // 'a' - archive/unarchive
+    // Deletion/Archive menu
+    OpenDeleteMenu,     // 'd' - open delete/archive menu (two-key: d+d=delete, d+a=archive)
+    DeleteWithConfirm,  // 'Ctrl+d' - delete with confirmation
     // Search navigation
     NextSearchMatch,    // 'n' - next search match
     PrevSearchMatch,    // 'N' - previous search match
@@ -1590,9 +1589,8 @@ impl KeyAction {
             KeyAction::OpenSprintPicker => "Assign to Sprint",
             KeyAction::AddComment => "Add Comment",
             KeyAction::ToggleLinksPanel => "Toggle Links Panel",
+            KeyAction::OpenDeleteMenu => "Open Delete/Archive Menu",
             KeyAction::DeleteWithConfirm => "Delete (with confirm)",
-            KeyAction::DeleteImmediate => "Delete (immediate)",
-            KeyAction::ArchiveToggle => "Archive/Unarchive",
             KeyAction::NextSearchMatch => "Next Search Match",
             KeyAction::PrevSearchMatch => "Previous Search Match",
             KeyAction::ClearSearch => "Clear Search",
@@ -1626,9 +1624,8 @@ impl KeyAction {
             KeyAction::OpenSprintPicker => KeyContext::RequirementsList,
             KeyAction::AddComment => KeyContext::RequirementsList,
             KeyAction::ToggleLinksPanel => KeyContext::RequirementsList,
+            KeyAction::OpenDeleteMenu => KeyContext::RequirementsList,
             KeyAction::DeleteWithConfirm => KeyContext::RequirementsList,
-            KeyAction::DeleteImmediate => KeyContext::RequirementsList,
-            KeyAction::ArchiveToggle => KeyContext::RequirementsList,
             KeyAction::NextSearchMatch => KeyContext::RequirementsList,
             KeyAction::PrevSearchMatch => KeyContext::RequirementsList,
             KeyAction::ClearSearch => KeyContext::RequirementsList,
@@ -1661,9 +1658,8 @@ impl KeyAction {
             KeyAction::OpenSprintPicker,
             KeyAction::AddComment,
             KeyAction::ToggleLinksPanel,
+            KeyAction::OpenDeleteMenu,
             KeyAction::DeleteWithConfirm,
-            KeyAction::DeleteImmediate,
-            KeyAction::ArchiveToggle,
             KeyAction::NextSearchMatch,
             KeyAction::PrevSearchMatch,
             KeyAction::ClearSearch,
@@ -2007,20 +2003,15 @@ impl Default for KeyBindings {
             KeyBinding::new(egui::Key::L, KeyAction::ToggleLinksPanel.default_context())
                 .with_shift(),
         );
-        // Deletion actions
+        // Delete/Archive menu: 'd' opens menu, Ctrl+D for direct delete
+        bindings.insert(
+            KeyAction::OpenDeleteMenu,
+            KeyBinding::new(egui::Key::D, KeyAction::OpenDeleteMenu.default_context()),
+        );
         bindings.insert(
             KeyAction::DeleteWithConfirm,
-            KeyBinding::new(egui::Key::D, KeyAction::DeleteWithConfirm.default_context()),
-        );
-        // 'D' (Shift+D) for immediate delete
-        bindings.insert(
-            KeyAction::DeleteImmediate,
-            KeyBinding::new(egui::Key::D, KeyAction::DeleteImmediate.default_context())
-                .with_shift(),
-        );
-        bindings.insert(
-            KeyAction::ArchiveToggle,
-            KeyBinding::new(egui::Key::A, KeyAction::ArchiveToggle.default_context()),
+            KeyBinding::new(egui::Key::D, KeyAction::DeleteWithConfirm.default_context())
+                .with_ctrl(),
         );
         // Search navigation: n/N for next/prev match (vim-style)
         bindings.insert(
@@ -3236,6 +3227,10 @@ pub struct RequirementsApp {
     show_view_picker: bool,
     view_picker_selected: usize,  // Currently selected index in view picker (for arrow navigation)
 
+    // Delete/Archive menu popup (triggered by 'd' key - shows delete and archive options)
+    show_delete_menu: bool,
+    delete_menu_selected: usize,  // Currently selected index in delete menu (for arrow navigation)
+
     // Keyboard shortcuts help popup (triggered by '?' key)
     show_keyboard_help: bool,
 
@@ -3830,6 +3825,8 @@ impl RequirementsApp {
             pending_delete_confirm: None,
             show_view_picker: false,
             view_picker_selected: 0,
+            show_delete_menu: false,
+            delete_menu_selected: 0,
             show_keyboard_help: false,
             split_perspective: Perspective::default(),
             split_perspective_direction: PerspectiveDirection::default(),
@@ -4305,6 +4302,8 @@ impl RequirementsApp {
             pending_delete_confirm: None,
             show_view_picker: false,
             view_picker_selected: 0,
+            show_delete_menu: false,
+            delete_menu_selected: 0,
             show_keyboard_help: false,
             split_perspective: Perspective::default(),
             split_perspective_direction: PerspectiveDirection::default(),
@@ -18149,14 +18148,14 @@ impl RequirementsApp {
         }
 
         // Define view options with their shortcut keys
-        // Kanban is at end so 'k' (vim up) wraps to it from Requirements
+        // Kanban uses 'K' (Shift+K) to deconflict with 'k' (vim up navigation)
         let view_options: Vec<(char, &str, View)> = vec![
             ('r', "Requirements", View::List),
             ('t', "Timeline", View::Timeline),
             ('b', "Baselines", View::Baselines),
             ('o', "Org Chart", View::OrgChart),
             ('s', "Sprint Planning", View::Planning),
-            ('k', "Kanban", View::KanBan),
+            ('K', "Kanban", View::KanBan),
         ];
         let num_options = view_options.len();
 
@@ -18184,17 +18183,19 @@ impl RequirementsApp {
                 confirm = true;
             }
             // Check for shortcut keys (letters that select directly)
-            // Note: 'k' is vim-up navigation, but from Requirements it wraps to Kanban at bottom
-            if i.key_pressed(egui::Key::R) {
+            // Shift+K for Kanban to deconflict with 'k' (vim up)
+            if i.key_pressed(egui::Key::R) && !i.modifiers.shift {
                 selected_view = Some(View::List);
-            } else if i.key_pressed(egui::Key::T) {
+            } else if i.key_pressed(egui::Key::T) && !i.modifiers.shift {
                 selected_view = Some(View::Timeline);
-            } else if i.key_pressed(egui::Key::B) {
+            } else if i.key_pressed(egui::Key::B) && !i.modifiers.shift {
                 selected_view = Some(View::Baselines);
-            } else if i.key_pressed(egui::Key::O) {
+            } else if i.key_pressed(egui::Key::O) && !i.modifiers.shift {
                 selected_view = Some(View::OrgChart);
-            } else if i.key_pressed(egui::Key::S) {
+            } else if i.key_pressed(egui::Key::S) && !i.modifiers.shift {
                 selected_view = Some(View::Planning);
+            } else if i.key_pressed(egui::Key::K) && i.modifiers.shift {
+                selected_view = Some(View::KanBan);
             }
         });
 
@@ -18299,6 +18300,165 @@ impl RequirementsApp {
                 if !popup_rect.contains(pos) {
                     self.show_view_picker = false;
                     self.view_picker_selected = 0;
+                }
+            }
+        }
+    }
+
+    /// Show delete/archive menu popup (triggered by 'd' key)
+    fn show_delete_menu_popup(&mut self, ctx: &egui::Context) {
+        if !self.show_delete_menu {
+            return;
+        }
+
+        // Define delete/archive options with their shortcut keys
+        let delete_options: Vec<(char, &str, &str)> = vec![
+            ('d', "Delete", "Delete with confirmation"),
+            ('a', "Archive", "Toggle archive status"),
+        ];
+        let num_options = delete_options.len();
+
+        // Handle keyboard input for the popup
+        let mut close_popup = false;
+        let mut action: Option<&str> = None;
+        let mut nav_up = false;
+        let mut nav_down = false;
+        let mut confirm = false;
+
+        ctx.input(|i| {
+            // Escape to close
+            if i.key_pressed(egui::Key::Escape) {
+                close_popup = true;
+            }
+            // Arrow key navigation
+            if i.key_pressed(egui::Key::ArrowUp) || i.key_pressed(egui::Key::K) {
+                nav_up = true;
+            }
+            if i.key_pressed(egui::Key::ArrowDown) || i.key_pressed(egui::Key::J) {
+                nav_down = true;
+            }
+            // Enter to confirm selection
+            if i.key_pressed(egui::Key::Enter) {
+                confirm = true;
+            }
+            // Shortcut keys for direct selection
+            if i.key_pressed(egui::Key::D) {
+                action = Some("delete");
+            } else if i.key_pressed(egui::Key::A) {
+                action = Some("archive");
+            }
+        });
+
+        if close_popup {
+            self.show_delete_menu = false;
+            self.delete_menu_selected = 0;
+            return;
+        }
+
+        // Handle arrow navigation
+        if nav_up {
+            if self.delete_menu_selected > 0 {
+                self.delete_menu_selected -= 1;
+            } else {
+                self.delete_menu_selected = num_options - 1; // Wrap to bottom
+            }
+        }
+        if nav_down {
+            if self.delete_menu_selected < num_options - 1 {
+                self.delete_menu_selected += 1;
+            } else {
+                self.delete_menu_selected = 0; // Wrap to top
+            }
+        }
+
+        // Enter confirms the currently selected option
+        if confirm {
+            if self.delete_menu_selected == 0 {
+                action = Some("delete");
+            } else if self.delete_menu_selected == 1 {
+                action = Some("archive");
+            }
+        }
+
+        // Handle selected action
+        if let Some(act) = action {
+            match act {
+                "delete" => {
+                    // Get selected requirement index and trigger delete confirmation
+                    if let Some(idx) = self.selected_idx {
+                        // Set pending delete confirmation - this triggers the confirmation dialog
+                        self.pending_delete_confirm = Some(idx);
+                    }
+                }
+                "archive" => {
+                    // Toggle archive status of selected requirement
+                    if let Some(idx) = self.selected_idx {
+                        self.toggle_archive(idx);
+                    }
+                }
+                _ => {}
+            }
+            self.show_delete_menu = false;
+            self.delete_menu_selected = 0;
+            return;
+        }
+
+        // Center the popup on screen
+        let screen_rect = ctx.screen_rect();
+        let popup_size = egui::vec2(220.0, 120.0);
+        let popup_pos = egui::pos2(
+            (screen_rect.width() - popup_size.x) / 2.0,
+            (screen_rect.height() - popup_size.y) / 2.0,
+        );
+
+        egui::Area::new(egui::Id::new("delete_menu_popup"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(popup_pos)
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style())
+                    .inner_margin(8.0)
+                    .show(ui, |ui| {
+                        ui.set_min_width(popup_size.x - 16.0);
+                        ui.label(egui::RichText::new("Delete / Archive").strong());
+                        ui.separator();
+
+                        for (idx, (key, label, description)) in delete_options.iter().enumerate() {
+                            let is_selected = idx == self.delete_menu_selected;
+
+                            // Show selection highlight
+                            let text = format!("{}  {}", key, label);
+                            let response = ui.selectable_label(is_selected, &text);
+                            let was_clicked = response.clicked();
+                            response.on_hover_text(*description);
+                            if was_clicked {
+                                if *label == "Delete" {
+                                    if let Some(sel_idx) = self.selected_idx {
+                                        self.pending_delete_confirm = Some(sel_idx);
+                                    }
+                                } else if *label == "Archive" {
+                                    if let Some(sel_idx) = self.selected_idx {
+                                        self.toggle_archive(sel_idx);
+                                    }
+                                }
+                                self.show_delete_menu = false;
+                                self.delete_menu_selected = 0;
+                            }
+                        }
+
+                        ui.separator();
+                        ui.horizontal(|ui| {
+                            ui.small("↑↓/jk nav • Enter/key select • Esc close");
+                        });
+                    });
+            });
+
+        // Close on click outside
+        if ctx.input(|i| i.pointer.any_click()) {
+            let popup_rect = egui::Rect::from_min_size(popup_pos, popup_size);
+            if let Some(pos) = ctx.input(|i| i.pointer.interact_pos()) {
+                if !popup_rect.contains(pos) {
+                    self.show_delete_menu = false;
+                    self.delete_menu_selected = 0;
                 }
             }
         }
@@ -24846,6 +25006,7 @@ impl eframe::App for RequirementsApp {
             && !in_settings
             && !self.show_view_picker
             && !self.show_keyboard_help
+            && !self.show_delete_menu
             && self.quick_change_field.is_none()
             && self.pending_delete_confirm.is_none()
             && v_pressed
@@ -24864,11 +25025,47 @@ impl eframe::App for RequirementsApp {
             && !in_settings
             && !self.show_view_picker
             && !self.show_keyboard_help
+            && !self.show_delete_menu
             && self.quick_change_field.is_none()
             && self.pending_delete_confirm.is_none()
             && question_pressed
         {
             self.show_keyboard_help = true;
+        }
+
+        // 'd' to open delete/archive menu (two-key sequence)
+        // Only show when a requirement is selected
+        let d_pressed = ctx.input(|i| i.key_pressed(egui::Key::D) && !i.modifiers.ctrl && !i.modifiers.alt && !i.modifiers.shift);
+        if !in_form_view
+            && !in_settings
+            && !self.show_view_picker
+            && !self.show_keyboard_help
+            && !self.show_delete_menu
+            && self.quick_change_field.is_none()
+            && self.pending_delete_confirm.is_none()
+            && self.selected_idx.is_some()
+            && d_pressed
+        {
+            self.show_delete_menu = true;
+        }
+
+        // Ctrl+D for delete with confirmation (direct shortcut)
+        let ctrl_d_pressed = ctx.input(|i| {
+            let ctrl = i.modifiers.ctrl || i.modifiers.mac_cmd;
+            ctrl && i.key_pressed(egui::Key::D) && !i.modifiers.alt && !i.modifiers.shift
+        });
+        if !in_form_view
+            && !in_settings
+            && !self.show_view_picker
+            && !self.show_keyboard_help
+            && !self.show_delete_menu
+            && self.quick_change_field.is_none()
+            && self.pending_delete_confirm.is_none()
+            && ctrl_d_pressed
+        {
+            if let Some(idx) = self.selected_idx {
+                self.pending_delete_confirm = Some(idx);
+            }
         }
 
         // Also handle Ctrl+= as alternate zoom in (common on keyboards)
@@ -25159,26 +25356,6 @@ impl eframe::App for RequirementsApp {
                 ) {
                     if let Some(idx) = self.selected_idx {
                         self.pending_delete_confirm = Some(idx);
-                    }
-                }
-                // 'D' (Shift+D) to delete immediately
-                else if self.user_settings.keybindings.is_pressed(
-                    KeyAction::DeleteImmediate,
-                    ctx,
-                    self.current_key_context,
-                ) {
-                    if let Some(idx) = self.selected_idx {
-                        self.delete_requirement(idx);
-                    }
-                }
-                // 'a' key to archive/unarchive
-                else if self.user_settings.keybindings.is_pressed(
-                    KeyAction::ArchiveToggle,
-                    ctx,
-                    self.current_key_context,
-                ) {
-                    if let Some(idx) = self.selected_idx {
-                        self.toggle_archive(idx);
                     }
                 }
             }
@@ -25970,6 +26147,9 @@ impl eframe::App for RequirementsApp {
 
         // Show view picker popup (triggered by 'v' key)
         self.show_view_picker_popup(ctx);
+
+        // Show delete/archive menu popup (triggered by 'd' key)
+        self.show_delete_menu_popup(ctx);
 
         // Show keyboard shortcuts help popup (triggered by '?' key)
         self.show_keyboard_help_popup(ctx);
