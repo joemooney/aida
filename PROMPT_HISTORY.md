@@ -1348,3 +1348,44 @@ A chronological record of development sessions and changes made to the Requireme
   AIDA_SERVER=localhost:50051 aida-gui       # Via environment variable
   ```
 - **Note**: Save operations currently stubbed (read-only client)
+
+### Tag Picker Popup (FR-0233)
+- **Prompt**: "Implement tag assignment popup with 't' hotkey"
+- **Actions**:
+  - Added `OpenTagPicker` to `KeyAction` enum
+  - Added state fields: `show_tag_picker`, `tag_picker_search`, `tag_picker_selected_tags`, `tag_picker_dropdown_idx`
+  - Created `show_tag_picker_popup()` function with:
+    - Fuzzy search filtering
+    - Multi-select support (Space to toggle)
+    - Enter to apply selected tags
+    - Shows existing tags + available tags from all requirements
+  - Added Tags variant to QuickChangeField enum match statements
+
+### SQLite/YAML Auto-Detection Bug Fix (REQ-0234)
+- **Prompt**: "I got this [Multiple Database Files Found dialog] and then there were no requirements shown when I clicked ok"
+- **Root Cause**: Storage.load() was trying to parse SQLite file as YAML when user selected SQLite
+- **Solution**: Added SQLite auto-detection in Storage class
+- **Implementation**:
+  - Added `is_sqlite` detection in `Storage::load()` and `Storage::save()` based on file extension (.db, .sqlite, .sqlite3)
+  - Added `load_sqlite()` and `save_sqlite()` helper methods using `SqliteBackend`
+  - Fixed GUI to skip migration check when `--file` is explicitly provided
+
+### Migration Warning Dialog UX Improvements
+- **Prompt**: "Center the OK button, and add a 'do not show warning again' checkbox"
+- **Actions**:
+  - Centered OK button using `ui.with_layout()` and `egui::Align::Center`
+  - Added "don't show again" checkbox
+  - Reduced dialog height by removing unnecessary spacing
+  - Added `migration_yaml_path` and `migration_dont_show_again` fields to track state
+
+### CLI --file Argument Fix
+- **Prompt**: "For the last /aida-capture we had FR-0233 and REQ-0234 but I do not see 233 or 234 in the database, maybe they are in the yaml?"
+- **Root Cause**: CLI defined `--file` option but never used it; path determination only used `cli.project`
+- **Solution**:
+  - Changed `cli.file` from `String` with default to `Option<String>`
+  - Updated main.rs to check `cli.file` first before auto-detection
+  - When `--file` is specified, bypasses migration status check entirely
+  - CLI now defaults to SQLite when both files exist (matching GUI behavior)
+- **Database Sync**:
+  - Migrated YAML to SQLite to sync FR-0233 and REQ-0234
+  - Used `aida db migrate --from yaml --to sqlite --force` with explicit `--file requirements.yaml`
