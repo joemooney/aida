@@ -3453,6 +3453,7 @@ pub struct RequirementsApp {
     ai_last_result: Option<AiResult>,             // Result from last AI action
     show_ai_results_panel: bool,                  // Whether to show AI results panel
     ai_loading: bool,                             // True while AI request is in progress
+    deferred_ai_action: Option<AiAction>,         // Action from popup to process in main loop
 
     // Background AI evaluation state (for non-blocking evaluation)
     ai_eval_receiver: Option<mpsc::Receiver<BackgroundAiResult>>, // Channel to receive results
@@ -4038,6 +4039,7 @@ impl RequirementsApp {
             ai_last_result: None,
             show_ai_results_panel: false,
             ai_loading: false,
+            deferred_ai_action: None,
             ai_eval_receiver: None,
             ai_eval_in_progress: None,
             find_duplicates_receiver: None,
@@ -4553,6 +4555,7 @@ impl RequirementsApp {
             ai_last_result: None,
             show_ai_results_panel: false,
             ai_loading: false,
+            deferred_ai_action: None,
 
             // Background AI evaluation state
             ai_eval_receiver: None,
@@ -19036,13 +19039,9 @@ impl RequirementsApp {
             });
         }
 
-        // Handle selected action - trigger the AI action
+        // Handle selected action - defer to main loop for actual AI processing
         if let Some(ai_action) = action {
-            self.ai_pending_action = Some(ai_action.clone());
-            self.ai_loading = true;
-            // Show result from placeholder (actual AI integration is separate)
-            self.ai_last_result = Some(AiResult::placeholder(&ai_action));
-            self.show_ai_results_panel = true;
+            self.deferred_ai_action = Some(ai_action);
             self.show_action_menu = false;
             self.action_menu_selected = 0;
             return;
@@ -19084,10 +19083,7 @@ impl RequirementsApp {
                                     4 => AiAction::GenerateChildren(req_uuid),
                                     _ => AiAction::Evaluate(req_uuid),
                                 };
-                                self.ai_pending_action = Some(ai_action.clone());
-                                self.ai_loading = true;
-                                self.ai_last_result = Some(AiResult::placeholder(&ai_action));
-                                self.show_ai_results_panel = true;
+                                self.deferred_ai_action = Some(ai_action);
                                 self.show_action_menu = false;
                                 self.action_menu_selected = 0;
                             }
@@ -20914,8 +20910,9 @@ impl RequirementsApp {
                     }
                 }
 
-                // Handle AI action trigger
-                if let Some(action) = trigger_ai_action {
+                // Handle AI action trigger (from menu or deferred from popup)
+                let effective_ai_action = trigger_ai_action.or_else(|| self.deferred_ai_action.take());
+                if let Some(action) = effective_ai_action {
                     eprintln!("AI action triggered: {:?}", action);
 
                     // Check if AI is available
