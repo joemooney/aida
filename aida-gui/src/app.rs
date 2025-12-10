@@ -18297,166 +18297,138 @@ impl RequirementsApp {
         }
     }
 
-    /// Show keyboard shortcuts help popup (triggered by '?' key)
+    /// Show keyboard shortcuts help window (triggered by '?' key)
     fn show_keyboard_help_popup(&mut self, ctx: &egui::Context) {
         if !self.show_keyboard_help {
             return;
         }
 
-        // Handle keyboard input for the popup
-        let mut close_popup = false;
+        let mut open = self.show_keyboard_help;
 
-        ctx.input(|i| {
-            // Escape, Space, or Enter to close
-            // Note: '?' (Shift+Slash) key_pressed is consumed in same frame that opens popup
-            if i.key_pressed(egui::Key::Escape)
-                || i.key_pressed(egui::Key::Space)
-                || i.key_pressed(egui::Key::Enter)
-            {
-                close_popup = true;
-            }
-        });
-
-        if close_popup {
-            self.show_keyboard_help = false;
-            return;
-        }
-
-        // Center the popup on screen - make it larger for all the shortcuts
-        let screen_rect = ctx.screen_rect();
-        let popup_size = egui::vec2(500.0, 550.0);
-        let popup_pos = egui::pos2(
-            (screen_rect.width() - popup_size.x) / 2.0,
-            (screen_rect.height() - popup_size.y) / 2.0,
-        );
-
-        egui::Area::new(egui::Id::new("keyboard_help_popup"))
-            .order(egui::Order::Foreground)
-            .fixed_pos(popup_pos)
+        egui::Window::new("Keyboard Shortcuts")
+            .id(egui::Id::new("keyboard_help_window"))
+            .open(&mut open)
+            .resizable(true)
+            .collapsible(true)
+            .default_size([500.0, 550.0])
+            .min_width(350.0)
+            .min_height(300.0)
             .show(ctx, |ui| {
-                egui::Frame::popup(ui.style())
-                    .inner_margin(12.0)
+                ui.horizontal(|ui| {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.small("Press Esc or ? to close");
+                    });
+                });
+                ui.separator();
+
+                egui::ScrollArea::vertical()
+                    .auto_shrink([false, false])
                     .show(ui, |ui| {
-                        ui.set_min_width(popup_size.x - 24.0);
-                        ui.set_max_height(popup_size.y - 24.0);
-
-                        ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new("Keyboard Shortcuts").strong().size(16.0));
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                ui.small("Press Esc or ? to close");
+                        // Helper to show a shortcut row
+                        let show_shortcut = |ui: &mut egui::Ui, key: &str, desc: &str| {
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new(format!("{:>12}", key)).monospace().strong());
+                                ui.label(desc);
                             });
-                        });
-                        ui.separator();
+                        };
 
-                        egui::ScrollArea::vertical()
-                            .max_height(popup_size.y - 80.0)
-                            .show(ui, |ui| {
-                                // Helper to show a shortcut row
-                                let show_shortcut = |ui: &mut egui::Ui, key: &str, desc: &str| {
-                                    ui.horizontal(|ui| {
-                                        ui.label(egui::RichText::new(format!("{:>12}", key)).monospace().strong());
-                                        ui.label(desc);
-                                    });
-                                };
+                        // Navigation section
+                        ui.label(egui::RichText::new("Navigation").strong());
+                        ui.add_space(4.0);
+                        show_shortcut(ui, "j / ↓", "Move down in list");
+                        show_shortcut(ui, "k / ↑", "Move up in list");
+                        show_shortcut(ui, "Enter / e", "Edit selected requirement");
+                        show_shortcut(ui, "Space", "Toggle expand/collapse");
+                        ui.add_space(8.0);
 
-                                // Navigation section
-                                ui.label(egui::RichText::new("Navigation").strong());
-                                ui.add_space(4.0);
-                                show_shortcut(ui, "j / ↓", "Move down in list");
-                                show_shortcut(ui, "k / ↑", "Move up in list");
-                                show_shortcut(ui, "Enter / e", "Edit selected requirement");
-                                show_shortcut(ui, "Space", "Toggle expand/collapse");
-                                ui.add_space(8.0);
+                        // Views section (two-key sequences)
+                        ui.label(egui::RichText::new("Views").strong());
+                        ui.small("Press v then:");
+                        ui.add_space(4.0);
+                        show_shortcut(ui, "v r", "Requirements list");
+                        show_shortcut(ui, "v k", "Kanban board");
+                        show_shortcut(ui, "v t", "Timeline");
+                        show_shortcut(ui, "v b", "Baselines");
+                        show_shortcut(ui, "v o", "Org Chart");
+                        show_shortcut(ui, "v s", "Sprint Planning");
+                        ui.add_space(8.0);
 
-                                // Views section (two-key sequences)
-                                ui.label(egui::RichText::new("Views").strong());
-                                ui.small("Press v then:");
-                                ui.add_space(4.0);
-                                show_shortcut(ui, "v r", "Requirements list");
-                                show_shortcut(ui, "v k", "Kanban board");
-                                show_shortcut(ui, "v t", "Timeline");
-                                show_shortcut(ui, "v b", "Baselines");
-                                show_shortcut(ui, "v o", "Org Chart");
-                                show_shortcut(ui, "v s", "Sprint Planning");
-                                ui.add_space(8.0);
+                        // Kanban section
+                        ui.label(egui::RichText::new("Kanban Board").strong());
+                        ui.add_space(4.0);
+                        show_shortcut(ui, "h / ←", "Move to left column");
+                        show_shortcut(ui, "l / →", "Move to right column");
+                        show_shortcut(ui, "j / ↓", "Move down in column");
+                        show_shortcut(ui, "k / ↑", "Move up in column");
+                        show_shortcut(ui, "Ctrl+h / Ctrl+←", "Move card to left column");
+                        show_shortcut(ui, "Ctrl+l / Ctrl+→", "Move card to right column");
+                        show_shortcut(ui, "Space", "Open/close detail modal");
+                        show_shortcut(ui, "s,p,o,f", "Quick actions in modal");
+                        ui.add_space(8.0);
 
-                                // Kanban section
-                                ui.label(egui::RichText::new("Kanban Board").strong());
-                                ui.add_space(4.0);
-                                show_shortcut(ui, "h / ←", "Move to left column");
-                                show_shortcut(ui, "l / →", "Move to right column");
-                                show_shortcut(ui, "j / ↓", "Move down in column");
-                                show_shortcut(ui, "k / ↑", "Move up in column");
-                                show_shortcut(ui, "Ctrl+h / Ctrl+←", "Move card to left column");
-                                show_shortcut(ui, "Ctrl+l / Ctrl+→", "Move card to right column");
-                                show_shortcut(ui, "Space", "Open/close detail modal");
-                                show_shortcut(ui, "s,p,o,f", "Quick actions in modal");
-                                ui.add_space(8.0);
+                        // Quick actions section
+                        ui.label(egui::RichText::new("Quick Actions").strong());
+                        ui.small("Opens picker for selected item:");
+                        ui.add_space(4.0);
+                        show_shortcut(ui, "s", "Change status");
+                        show_shortcut(ui, "p", "Change priority");
+                        show_shortcut(ui, "o", "Change owner");
+                        show_shortcut(ui, "f", "Assign to feature");
+                        show_shortcut(ui, "S", "Assign to sprint");
+                        ui.add_space(8.0);
 
-                                // Quick actions section
-                                ui.label(egui::RichText::new("Quick Actions").strong());
-                                ui.small("Opens picker for selected item:");
-                                ui.add_space(4.0);
-                                show_shortcut(ui, "s", "Change status");
-                                show_shortcut(ui, "p", "Change priority");
-                                show_shortcut(ui, "o", "Change owner");
-                                show_shortcut(ui, "f", "Assign to feature");
-                                show_shortcut(ui, "S", "Assign to sprint");
-                                ui.add_space(8.0);
+                        // Create section
+                        ui.label(egui::RichText::new("Create").strong());
+                        ui.add_space(4.0);
+                        show_shortcut(ui, "Ctrl+N", "New requirement (smart parent)");
+                        show_shortcut(ui, "n", "New sibling requirement");
+                        show_shortcut(ui, "N", "New child requirement");
+                        show_shortcut(ui, "c", "Add comment");
+                        ui.add_space(8.0);
 
-                                // Create section
-                                ui.label(egui::RichText::new("Create").strong());
-                                ui.add_space(4.0);
-                                show_shortcut(ui, "Ctrl+N", "New requirement (smart parent)");
-                                show_shortcut(ui, "n", "New sibling requirement");
-                                show_shortcut(ui, "N", "New child requirement");
-                                show_shortcut(ui, "c", "Add comment");
-                                ui.add_space(8.0);
+                        // Actions section
+                        ui.label(egui::RichText::new("Actions").strong());
+                        ui.add_space(4.0);
+                        show_shortcut(ui, "d", "Delete (with confirm)");
+                        show_shortcut(ui, "D", "Delete immediately");
+                        show_shortcut(ui, "a", "Archive/unarchive");
+                        show_shortcut(ui, "L", "Toggle links panel");
+                        ui.add_space(8.0);
 
-                                // Actions section
-                                ui.label(egui::RichText::new("Actions").strong());
-                                ui.add_space(4.0);
-                                show_shortcut(ui, "d", "Delete (with confirm)");
-                                show_shortcut(ui, "D", "Delete immediately");
-                                show_shortcut(ui, "a", "Archive/unarchive");
-                                show_shortcut(ui, "L", "Toggle links panel");
-                                ui.add_space(8.0);
+                        // Search section
+                        ui.label(egui::RichText::new("Search").strong());
+                        ui.add_space(4.0);
+                        show_shortcut(ui, "/", "Focus search box");
+                        show_shortcut(ui, "n", "Next search match (when searching)");
+                        show_shortcut(ui, "N", "Previous search match (when searching)");
+                        show_shortcut(ui, "Esc", "Clear search");
+                        ui.add_space(8.0);
 
-                                // Search section
-                                ui.label(egui::RichText::new("Search").strong());
-                                ui.add_space(4.0);
-                                show_shortcut(ui, "/", "Focus search box");
-                                show_shortcut(ui, "n", "Next search match (when searching)");
-                                show_shortcut(ui, "N", "Previous search match (when searching)");
-                                show_shortcut(ui, "Esc", "Clear search");
-                                ui.add_space(8.0);
+                        // Zoom section
+                        ui.label(egui::RichText::new("Zoom & Display").strong());
+                        ui.add_space(4.0);
+                        show_shortcut(ui, "Ctrl++", "Zoom in");
+                        show_shortcut(ui, "Ctrl+-", "Zoom out");
+                        show_shortcut(ui, "Ctrl+0", "Reset zoom");
+                        show_shortcut(ui, "Ctrl+wheel", "Zoom with mouse");
+                        show_shortcut(ui, "t", "Cycle theme");
+                        ui.add_space(8.0);
 
-                                // Zoom section
-                                ui.label(egui::RichText::new("Zoom & Display").strong());
-                                ui.add_space(4.0);
-                                show_shortcut(ui, "Ctrl++", "Zoom in");
-                                show_shortcut(ui, "Ctrl+-", "Zoom out");
-                                show_shortcut(ui, "Ctrl+0", "Reset zoom");
-                                show_shortcut(ui, "Ctrl+wheel", "Zoom with mouse");
-                                show_shortcut(ui, "t", "Cycle theme");
-                                ui.add_space(8.0);
-
-                                // Help section
-                                ui.label(egui::RichText::new("Help").strong());
-                                ui.add_space(4.0);
-                                show_shortcut(ui, "?", "Show this help");
-                            });
+                        // Help section
+                        ui.label(egui::RichText::new("Help").strong());
+                        ui.add_space(4.0);
+                        show_shortcut(ui, "?", "Show this help");
                     });
             });
 
-        // Close on click outside
-        if ctx.input(|i| i.pointer.any_click()) {
-            let popup_rect = egui::Rect::from_min_size(popup_pos, popup_size);
-            if let Some(pos) = ctx.input(|i| i.pointer.interact_pos()) {
-                if !popup_rect.contains(pos) {
-                    self.show_keyboard_help = false;
-                }
-            }
+        // Handle close via X button or Escape
+        if !open {
+            self.show_keyboard_help = false;
+        }
+
+        // Also handle Escape key directly
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            self.show_keyboard_help = false;
         }
     }
 
