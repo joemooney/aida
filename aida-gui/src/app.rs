@@ -4048,6 +4048,8 @@ impl RequirementsApp {
         }
 
         // Use provided file path, or determine from environment/current directory
+        // If --file is explicitly provided, use it directly without migration check
+        let explicit_file = file_path.is_some();
         let initial_requirements_path = if let Some(fp) = file_path {
             std::path::PathBuf::from(fp)
         } else {
@@ -4056,8 +4058,12 @@ impl RequirementsApp {
         };
 
         // Check for migration status (REQ-0231)
+        // Only check migration if no explicit file was provided
         // trace:REQ-0231 | ai:claude:high
-        let (requirements_path, migration_warning_kind, migration_sqlite_path) =
+        let (requirements_path, migration_warning_kind, migration_sqlite_path) = if explicit_file {
+            // User explicitly specified a file - use it directly
+            (initial_requirements_path.clone(), MigrationWarningKind::None, None)
+        } else {
             match check_migration_status(&initial_requirements_path) {
                 MigrationCheck::NoMigration(path) => {
                     (path, MigrationWarningKind::None, None)
@@ -4081,7 +4087,8 @@ impl RequirementsApp {
                     );
                     (sqlite_path.clone(), MigrationWarningKind::PossibleStaleYaml, Some(sqlite_path))
                 }
-            };
+            }
+        };
 
         let storage = Storage::new(&requirements_path);
         let store = match storage.load() {

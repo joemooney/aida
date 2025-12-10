@@ -378,8 +378,20 @@ impl Storage {
         }
     }
 
-    /// Loads requirements from the YAML file with file locking
+    /// Loads requirements from file with file locking
+    /// Automatically detects file type from extension (.db/.sqlite for SQLite, otherwise YAML)
     pub fn load(&self) -> Result<RequirementsStore> {
+        // Check if this is a SQLite database by extension
+        let is_sqlite = matches!(
+            self.file_path.extension().and_then(|e| e.to_str()),
+            Some("db") | Some("sqlite") | Some("sqlite3")
+        );
+
+        if is_sqlite {
+            // Use SQLite backend for .db files
+            return self.load_sqlite();
+        }
+
         // Create the file if it doesn't exist
         if !self.file_path.exists() {
             let parent = self
@@ -439,8 +451,44 @@ impl Storage {
         Ok(store)
     }
 
-    /// Saves requirements to the YAML file with file locking
+    /// Loads requirements from a SQLite database file
+    fn load_sqlite(&self) -> Result<RequirementsStore> {
+        use crate::db::{SqliteBackend, DatabaseBackend};
+
+        let backend = SqliteBackend::new(&self.file_path)?;
+        let mut store = backend.load()?;
+
+        // Run migrations just like YAML loading
+        store.migrate_features();
+        let had_missing_spec_ids = store.requirements.iter().any(|r| r.spec_id.is_none());
+        store.assign_spec_ids();
+        let had_missing_user_spec_ids = store.users.iter().any(|u| u.spec_id.is_none());
+        store.migrate_users_to_spec_ids();
+        let had_missing_types = store.migrate_type_definitions();
+        let repaired_duplicates = store.repair_duplicate_spec_ids();
+
+        // Save back if we made any changes
+        if had_missing_spec_ids || had_missing_user_spec_ids || had_missing_types || repaired_duplicates > 0 {
+            backend.save(&store)?;
+        }
+
+        store.validate_unique_spec_ids()?;
+        Ok(store)
+    }
+
+    /// Saves requirements to file with file locking
+    /// Automatically detects file type from extension (.db/.sqlite for SQLite, otherwise YAML)
     pub fn save(&self, store: &RequirementsStore) -> Result<()> {
+        // Check if this is a SQLite database by extension
+        let is_sqlite = matches!(
+            self.file_path.extension().and_then(|e| e.to_str()),
+            Some("db") | Some("sqlite") | Some("sqlite3")
+        );
+
+        if is_sqlite {
+            return self.save_sqlite(store);
+        }
+
         // Create parent directories if they don't exist
         if let Some(parent) = self.file_path.parent() {
             fs::create_dir_all(parent)?;
@@ -462,6 +510,15 @@ impl Storage {
         fs::write(&self.file_path, yaml)?;
 
         // Lock is automatically released when lock_file is dropped
+        Ok(())
+    }
+
+    /// Saves requirements to a SQLite database file
+    fn save_sqlite(&self, store: &RequirementsStore) -> Result<()> {
+        use crate::db::{SqliteBackend, DatabaseBackend};
+
+        let backend = SqliteBackend::new(&self.file_path)?;
+        backend.save(store)?;
         Ok(())
     }
 
