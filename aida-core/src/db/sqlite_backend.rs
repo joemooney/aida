@@ -294,6 +294,7 @@ impl SqliteBackend {
                 req_type,
                 dependencies,
                 tags,
+                weight: None,  // TODO: Add weight column to schema
                 relationships,
                 comments,
                 history,
@@ -789,6 +790,7 @@ impl DatabaseBackend for SqliteBackend {
                     req_type,
                     dependencies,
                     tags,
+                    weight: None,  // TODO: Add weight column to schema
                     relationships,
                     comments,
                     history,

@@ -3311,6 +3311,10 @@ pub struct RequirementsApp {
     type_picker_search: String,       // Search text for fuzzy filtering
     type_picker_selected: usize,      // Currently selected index in type list
 
+    // Weight picker popup (triggered by 'w' - set effort/story points)
+    show_weight_picker: bool,
+    weight_picker_input: String,      // Text input for weight value
+
     // Keyboard shortcuts help popup (triggered by '?' key)
     show_keyboard_help: bool,
 
@@ -3928,6 +3932,8 @@ impl RequirementsApp {
             show_type_picker: false,
             type_picker_search: String::new(),
             type_picker_selected: 0,
+            show_weight_picker: false,
+            weight_picker_input: String::new(),
             show_keyboard_help: false,
             last_db_check: std::time::Instant::now(),
             known_db_mtime: None,
@@ -4432,6 +4438,8 @@ impl RequirementsApp {
             show_type_picker: false,
             type_picker_search: String::new(),
             type_picker_selected: 0,
+            show_weight_picker: false,
+            weight_picker_input: String::new(),
             show_keyboard_help: false,
             last_db_check: std::time::Instant::now(),
             known_db_mtime: None,
@@ -19440,6 +19448,154 @@ impl RequirementsApp {
         }
     }
 
+    /// Show weight picker popup (triggered by 'w' key)
+    fn show_weight_picker_popup(&mut self, ctx: &egui::Context) {
+        if !self.show_weight_picker {
+            return;
+        }
+
+        // Ensure we have a selected requirement
+        let req_idx = match self.selected_idx {
+            Some(idx) => idx,
+            None => {
+                self.show_weight_picker = false;
+                return;
+            }
+        };
+
+        // Get current weight for display
+        let current_weight = self.store.requirements.get(req_idx)
+            .and_then(|r| r.weight);
+
+        // Handle keyboard input
+        let mut close_popup = false;
+        let mut apply_change = false;
+        let mut clear_weight = false;
+
+        ctx.input(|i| {
+            if i.key_pressed(egui::Key::Escape) {
+                close_popup = true;
+            }
+            if i.key_pressed(egui::Key::Enter) {
+                apply_change = true;
+            }
+        });
+
+        if close_popup {
+            self.show_weight_picker = false;
+            self.weight_picker_input.clear();
+            return;
+        }
+
+        // Apply the change
+        if apply_change {
+            let new_weight = if self.weight_picker_input.trim().is_empty() {
+                None
+            } else {
+                self.weight_picker_input.trim().parse::<f32>().ok()
+            };
+
+            if let Some(req) = self.store.requirements.get_mut(req_idx) {
+                req.weight = new_weight;
+                req.modified_at = chrono::Utc::now();
+                self.pending_save = true;
+            }
+            self.show_weight_picker = false;
+            self.weight_picker_input.clear();
+            return;
+        }
+
+        // Center the popup on screen
+        let screen_rect = ctx.screen_rect();
+        let popup_size = egui::vec2(220.0, 130.0);
+        let popup_pos = egui::pos2(
+            (screen_rect.width() - popup_size.x) / 2.0,
+            (screen_rect.height() - popup_size.y) / 2.0,
+        );
+
+        egui::Area::new(egui::Id::new("weight_picker_popup"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(popup_pos)
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style())
+                    .inner_margin(8.0)
+                    .show(ui, |ui| {
+                        ui.set_min_width(popup_size.x - 16.0);
+                        ui.label(egui::RichText::new("Set Weight").strong());
+                        ui.separator();
+
+                        // Show current weight if set
+                        if let Some(w) = current_weight {
+                            ui.horizontal(|ui| {
+                                ui.label("Current:");
+                                ui.label(egui::RichText::new(format!("{}", w)).monospace());
+                            });
+                        }
+
+                        // Weight input
+                        ui.horizontal(|ui| {
+                            ui.label("Weight:");
+                            let response = ui.add(
+                                egui::TextEdit::singleline(&mut self.weight_picker_input)
+                                    .hint_text("e.g., 3, 5, 8...")
+                                    .desired_width(80.0)
+                            );
+                            // Auto-focus the input field
+                            response.request_focus();
+                        });
+
+                        // Validate input and show error if invalid
+                        if !self.weight_picker_input.trim().is_empty() {
+                            if self.weight_picker_input.trim().parse::<f32>().is_err() {
+                                ui.colored_label(egui::Color32::RED, "Invalid number");
+                            }
+                        }
+
+                        ui.separator();
+
+                        ui.horizontal(|ui| {
+                            if ui.button("Clear").clicked() {
+                                clear_weight = true;
+                            }
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                if ui.button("Apply").clicked() {
+                                    apply_change = true;
+                                }
+                                if ui.button("Cancel").clicked() {
+                                    close_popup = true;
+                                }
+                            });
+                        });
+
+                        ui.separator();
+                        ui.small("Enter to apply • Esc to cancel");
+                    });
+            });
+
+        // Handle button clicks (processed after popup is drawn)
+        if clear_weight {
+            if let Some(req) = self.store.requirements.get_mut(req_idx) {
+                req.weight = None;
+                req.modified_at = chrono::Utc::now();
+                self.pending_save = true;
+            }
+            self.show_weight_picker = false;
+            self.weight_picker_input.clear();
+            return;
+        }
+
+        // Close on click outside
+        if ctx.input(|i| i.pointer.any_click()) {
+            let popup_rect = egui::Rect::from_min_size(popup_pos, popup_size);
+            if let Some(pos) = ctx.input(|i| i.pointer.interact_pos()) {
+                if !popup_rect.contains(pos) {
+                    self.show_weight_picker = false;
+                    self.weight_picker_input.clear();
+                }
+            }
+        }
+    }
+
     /// Show keyboard shortcuts help window (triggered by '?' key)
     fn show_keyboard_help_popup(&mut self, ctx: &egui::Context) {
         if !self.show_keyboard_help {
@@ -19518,6 +19674,9 @@ impl RequirementsApp {
                         show_shortcut(ui, "o", "Change owner");
                         show_shortcut(ui, "f", "Assign to feature");
                         show_shortcut(ui, "S", "Assign to sprint");
+                        show_shortcut(ui, "T", "Change type");
+                        show_shortcut(ui, "w", "Set weight/effort");
+                        show_shortcut(ui, "r", "Jump to detail tab");
                         ui.add_space(8.0);
 
                         // Create section
@@ -20993,6 +21152,12 @@ impl RequirementsApp {
                                                 ui.end_row();
                                             }
 
+                                            if let Some(weight) = req.weight {
+                                                ui.label("Weight:");
+                                                ui.label(format!("{}", weight));
+                                                ui.end_row();
+                                            }
+
                                             if let Some(ref created_by) = req.created_by {
                                                 ui.label("Created By:");
                                                 ui.label(created_by);
@@ -21116,6 +21281,12 @@ impl RequirementsApp {
                                 ui.label("Tags:");
                                 let tags_vec: Vec<String> = req.tags.iter().cloned().collect();
                                 ui.label(tags_vec.join(", "));
+                                ui.end_row();
+                            }
+
+                            if let Some(weight) = req.weight {
+                                ui.label("Weight:");
+                                ui.label(format!("{}", weight));
                                 ui.end_row();
                             }
 
@@ -26398,6 +26569,32 @@ impl eframe::App for RequirementsApp {
             self.type_picker_selected = 0;
         }
 
+        // 'w' to open weight picker (set effort/story points)
+        let w_pressed = ctx.input(|i| i.key_pressed(egui::Key::W) && !i.modifiers.ctrl && !i.modifiers.alt && !i.modifiers.shift);
+        if !in_form_view
+            && !in_settings
+            && !self.show_view_picker
+            && !self.show_keyboard_help
+            && !self.show_delete_menu
+            && !self.show_add_menu
+            && !self.show_action_menu
+            && !self.show_detail_tab_menu
+            && !self.show_type_picker
+            && !self.show_weight_picker
+            && self.quick_change_field.is_none()
+            && self.pending_delete_confirm.is_none()
+            && self.selected_idx.is_some()  // Need a selected requirement
+            && w_pressed
+        {
+            // Pre-fill with current weight if set
+            if let Some(idx) = self.selected_idx {
+                if let Some(req) = self.store.requirements.get(idx) {
+                    self.weight_picker_input = req.weight.map(|w| w.to_string()).unwrap_or_default();
+                }
+            }
+            self.show_weight_picker = true;
+        }
+
         // Also handle Ctrl+= as alternate zoom in (common on keyboards)
         ctx.input(|i| {
             let ctrl = i.modifiers.ctrl || i.modifiers.mac_cmd;
@@ -27514,6 +27711,9 @@ impl eframe::App for RequirementsApp {
 
         // Show type picker popup (triggered by 'T'/shift+t key)
         self.show_type_picker_popup(ctx);
+
+        // Show weight picker popup (triggered by 'w' key)
+        self.show_weight_picker_popup(ctx);
 
         // Show tag picker popup (triggered by 't' key)
         self.show_tag_picker_popup(ctx);

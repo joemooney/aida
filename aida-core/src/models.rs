@@ -2020,6 +2020,11 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "HashSet::is_empty")]
     pub tags: HashSet<String>,
 
+    /// Weight/effort estimate for the requirement (e.g., story points)
+    /// Optional - only shown in UI when set
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub weight: Option<f32>,
+
     /// Relationships to other requirements
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub relationships: Vec<Relationship>,
@@ -2090,6 +2095,7 @@ impl Requirement {
             req_type: RequirementType::Functional,
             dependencies: Vec::new(),
             tags: HashSet::new(),
+            weight: None,
             relationships: Vec::new(),
             comments: Vec::new(),
             history: Vec::new(),
