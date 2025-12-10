@@ -4,9 +4,9 @@ use std::path::PathBuf;
 #[derive(Parser, Debug)]
 #[clap(author, version, about = "A simple requirements management system")]
 pub struct Cli {
-    /// Path to the requirements file
-    #[clap(long, default_value = "requirements.yaml")]
-    pub file: String,
+    /// Path to the requirements file (overrides auto-detection)
+    #[clap(long)]
+    pub file: Option<String>,
 
     /// Project name to use from central registry
     #[clap(long, short = 'p')]

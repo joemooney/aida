@@ -30,40 +30,36 @@ fn main() -> Result<()> {
     }
 
     // Determine which requirements file to use
-    let initial_path = determine_requirements_path(cli.project.as_deref())?;
-
-    // Check for migration status (REQ-0231)
     // trace:REQ-0231 | ai:claude:high
-    // Note: CLI uses YAML-based Storage, so we only redirect to SQLite if migration marker exists.
-    // For PossibleStaleYaml case, we warn but continue with YAML since Storage can't handle SQLite.
-    let requirements_path = match check_migration_status(&initial_path) {
-        MigrationCheck::NoMigration(path) => path,
-        MigrationCheck::MigratedToSqlite { yaml_path: _, sqlite_path } => {
-            // YAML was officially migrated - the YAML file has a marker
-            // Unfortunately, CLI's Storage class only supports YAML.
-            // Warn user and suggest using GUI or aida-server for SQLite.
-            eprintln!(
-                "{}: YAML file was migrated to SQLite: {}",
-                "INFO".blue(),
-                sqlite_path.display()
-            );
-            eprintln!("The CLI currently uses YAML storage. For SQLite, use:");
-            eprintln!("  - aida-gui --file {}", sqlite_path.display());
-            eprintln!("  - aida-server with --database {}", sqlite_path.display());
-            eprintln!("");
-            eprintln!("Continuing with migrated YAML file (read-only backup)...");
-            initial_path
-        }
-        MigrationCheck::PossibleStaleYaml { yaml_path, sqlite_path } => {
-            // Both exist but no marker - user may have both formats in use
-            eprintln!(
-                "{}: Both {} and {} exist.",
-                "WARNING".yellow(),
-                yaml_path.display(),
-                sqlite_path.display()
-            );
-            eprintln!("Using YAML file. Use --file to specify a different file.");
-            yaml_path
+    let requirements_path = if let Some(ref explicit_file) = cli.file {
+        // User explicitly specified a file path - use it directly
+        std::path::PathBuf::from(explicit_file)
+    } else {
+        // Auto-detect: first find the base path, then check migration status
+        let initial_path = determine_requirements_path(cli.project.as_deref())?;
+
+        // Check for migration status (REQ-0231)
+        // Storage class now auto-detects SQLite vs YAML by file extension
+        match check_migration_status(&initial_path) {
+            MigrationCheck::NoMigration(path) => path,
+            MigrationCheck::MigratedToSqlite { yaml_path: _, sqlite_path } => {
+                // YAML was officially migrated - use SQLite
+                eprintln!(
+                    "{}: Using SQLite database: {}",
+                    "INFO".blue(),
+                    sqlite_path.display()
+                );
+                sqlite_path
+            }
+            MigrationCheck::PossibleStaleYaml { yaml_path: _, sqlite_path } => {
+                // Both exist but no marker - default to SQLite as it's likely more current
+                eprintln!(
+                    "{}: Both YAML and SQLite exist. Using SQLite.",
+                    "INFO".blue()
+                );
+                eprintln!("Use --file requirements.yaml to use YAML instead.");
+                sqlite_path
+            }
         }
     };
 
