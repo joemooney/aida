@@ -3460,6 +3460,8 @@ pub struct RequirementsApp {
     show_migration_warning: bool,                                    // Show migration warning dialog
     migration_warning_kind: MigrationWarningKind,                    // Type of migration warning
     migration_sqlite_path: Option<PathBuf>,                          // Path to SQLite database if relevant
+    migration_yaml_path: Option<PathBuf>,                            // Path to YAML file for marking as export
+    migration_dont_show_again: bool,                                 // Checkbox state for "don't show again"
 }
 
 /// A timeline event representing a change to a requirement
@@ -4002,6 +4004,8 @@ impl RequirementsApp {
             show_migration_warning: false,
             migration_warning_kind: MigrationWarningKind::None,
             migration_sqlite_path: None,
+            migration_yaml_path: None,
+            migration_dont_show_again: false,
         }
     }
 
@@ -4060,21 +4064,21 @@ impl RequirementsApp {
         // Check for migration status (REQ-0231)
         // Only check migration if no explicit file was provided
         // trace:REQ-0231 | ai:claude:high
-        let (requirements_path, migration_warning_kind, migration_sqlite_path) = if explicit_file {
+        let (requirements_path, migration_warning_kind, migration_sqlite_path, migration_yaml_path) = if explicit_file {
             // User explicitly specified a file - use it directly
-            (initial_requirements_path.clone(), MigrationWarningKind::None, None)
+            (initial_requirements_path.clone(), MigrationWarningKind::None, None, None)
         } else {
             match check_migration_status(&initial_requirements_path) {
                 MigrationCheck::NoMigration(path) => {
-                    (path, MigrationWarningKind::None, None)
+                    (path, MigrationWarningKind::None, None, None)
                 }
-                MigrationCheck::MigratedToSqlite { yaml_path: _, sqlite_path } => {
+                MigrationCheck::MigratedToSqlite { yaml_path, sqlite_path } => {
                     // YAML was migrated - use SQLite and warn user
                     eprintln!(
                         "INFO: YAML file has been migrated to SQLite. Using: {}",
                         sqlite_path.display()
                     );
-                    (sqlite_path.clone(), MigrationWarningKind::MigratedToSqlite, Some(sqlite_path))
+                    (sqlite_path.clone(), MigrationWarningKind::MigratedToSqlite, Some(sqlite_path), Some(yaml_path))
                 }
                 MigrationCheck::PossibleStaleYaml { yaml_path, sqlite_path } => {
                     // Both exist without marker - warn about potential stale data
@@ -4085,7 +4089,7 @@ impl RequirementsApp {
                         yaml_path.display(),
                         sqlite_path.display()
                     );
-                    (sqlite_path.clone(), MigrationWarningKind::PossibleStaleYaml, Some(sqlite_path))
+                    (sqlite_path.clone(), MigrationWarningKind::PossibleStaleYaml, Some(sqlite_path), Some(yaml_path))
                 }
             }
         };
@@ -4525,6 +4529,8 @@ impl RequirementsApp {
             show_migration_warning: migration_warning_kind != MigrationWarningKind::None,
             migration_warning_kind,
             migration_sqlite_path,
+            migration_yaml_path,
+            migration_dont_show_again: false,
         }
     }
 
@@ -6793,23 +6799,21 @@ impl RequirementsApp {
         }
 
         let mut close_dialog = false;
-        let max_size = modal_max_size(ctx);
+        let mut mark_yaml_as_export = false;
 
-        let (title, message, action_label) = match self.migration_warning_kind {
+        let (title, message) = match self.migration_warning_kind {
             MigrationWarningKind::MigratedToSqlite => (
-                "📋 Migrated Database Detected",
+                "Migrated Database Detected",
                 "This YAML file was previously migrated to SQLite. \
                 The SQLite database is now being used as it contains the most current data.\n\n\
                 The original YAML file has been preserved for backup purposes.",
-                "OK",
             ),
             MigrationWarningKind::PossibleStaleYaml => (
-                "⚠ Multiple Database Files Found",
+                "Multiple Database Files Found",
                 "Both a YAML file and SQLite database exist in this location. \
                 The SQLite database is being used as it likely contains more recent data.\n\n\
                 If you need to use the YAML file instead, restart with:\n  \
                 aida-gui --file requirements.yaml",
-                "OK",
             ),
             MigrationWarningKind::None => {
                 self.show_migration_warning = false;
@@ -6817,37 +6821,67 @@ impl RequirementsApp {
             }
         };
 
-        egui::Window::new(title)
+        egui::Window::new(format!("\u{26A0} {}", title))
             .collapsible(false)
             .resizable(false)
-            .min_width(400.0)
-            .max_width(max_size.x * 0.6)
+            .min_width(380.0)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
-                ui.add_space(10.0);
+                ui.add_space(4.0);
                 ui.label(message);
-                ui.add_space(10.0);
+                ui.add_space(4.0);
 
                 if let Some(ref sqlite_path) = self.migration_sqlite_path {
                     ui.horizontal(|ui| {
                         ui.label("Using:");
-                        ui.monospace(sqlite_path.display().to_string());
+                        ui.monospace(sqlite_path.file_name().unwrap_or_default().to_string_lossy());
                     });
-                    ui.add_space(10.0);
+                    ui.add_space(4.0);
                 }
 
-                ui.separator();
-                ui.add_space(10.0);
+                // Checkbox for "don't show again"
+                ui.checkbox(&mut self.migration_dont_show_again, "Do not show this warning again");
+                ui.add_space(4.0);
 
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button(action_label).clicked() {
+                ui.separator();
+                ui.add_space(4.0);
+
+                // Centered OK button
+                ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+                    if ui.button("OK").clicked() {
                         close_dialog = true;
+                        if self.migration_dont_show_again {
+                            mark_yaml_as_export = true;
+                        }
                     }
                 });
             });
 
         if close_dialog {
             self.show_migration_warning = false;
+
+            // If "don't show again" was checked, mark the YAML as an export file
+            if mark_yaml_as_export {
+                if let Some(ref yaml_path) = self.migration_yaml_path {
+                    if let Some(ref sqlite_path) = self.migration_sqlite_path {
+                        // Add migration marker to the YAML file
+                        if let Ok(content) = std::fs::read_to_string(yaml_path) {
+                            if !content.contains("migrated_to:") {
+                                // Add the migrated_to marker at the beginning
+                                let marker = format!(
+                                    "# This file is an export. The primary database is: {}\nmigrated_to: {}\n\n",
+                                    sqlite_path.display(),
+                                    sqlite_path.display()
+                                );
+                                let new_content = marker + &content;
+                                if let Err(e) = std::fs::write(yaml_path, new_content) {
+                                    eprintln!("Failed to mark YAML as export: {}", e);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
