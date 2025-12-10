@@ -1568,6 +1568,8 @@ pub enum KeyAction {
     OpenAddMenu,        // 'a' - open add menu (new sibling, new child)
     // Action/AI menu
     OpenActionMenu,     // 'A' (shift+a) - open AI/Action menu (evaluate, duplicates, etc.)
+    // Requirement detail tabs menu
+    OpenDetailTabMenu,  // 'r' - open detail tab picker (AI, Description, Comments, Links, History)
     // Search navigation
     NextSearchMatch,    // 'n' - next search match
     PrevSearchMatch,    // 'N' - previous search match
@@ -1608,6 +1610,7 @@ impl KeyAction {
             KeyAction::DeleteWithConfirm => "Delete (with confirm)",
             KeyAction::OpenAddMenu => "Open Add Menu",
             KeyAction::OpenActionMenu => "Open Action/AI Menu",
+            KeyAction::OpenDetailTabMenu => "Open Detail Tab Menu",
             KeyAction::NextSearchMatch => "Next Search Match",
             KeyAction::PrevSearchMatch => "Previous Search Match",
             KeyAction::ClearSearch => "Clear Search",
@@ -1646,6 +1649,7 @@ impl KeyAction {
             KeyAction::DeleteWithConfirm => KeyContext::RequirementsList,
             KeyAction::OpenAddMenu => KeyContext::RequirementsList,
             KeyAction::OpenActionMenu => KeyContext::RequirementsList,
+            KeyAction::OpenDetailTabMenu => KeyContext::RequirementsList,
             KeyAction::NextSearchMatch => KeyContext::RequirementsList,
             KeyAction::PrevSearchMatch => KeyContext::RequirementsList,
             KeyAction::ClearSearch => KeyContext::RequirementsList,
@@ -1683,6 +1687,7 @@ impl KeyAction {
             KeyAction::DeleteWithConfirm,
             KeyAction::OpenAddMenu,
             KeyAction::OpenActionMenu,
+            KeyAction::OpenDetailTabMenu,
             KeyAction::NextSearchMatch,
             KeyAction::PrevSearchMatch,
             KeyAction::ClearSearch,
@@ -2042,6 +2047,11 @@ impl Default for KeyBindings {
             KeyAction::OpenActionMenu,
             KeyBinding::new(egui::Key::A, KeyAction::OpenActionMenu.default_context())
                 .with_shift(),
+        );
+        // Detail tab menu: 'r' opens detail tab picker
+        bindings.insert(
+            KeyAction::OpenDetailTabMenu,
+            KeyBinding::new(egui::Key::R, KeyAction::OpenDetailTabMenu.default_context()),
         );
         // Search navigation: n/N for next/prev match (vim-style)
         bindings.insert(
@@ -3292,6 +3302,15 @@ pub struct RequirementsApp {
     show_action_menu: bool,
     action_menu_selected: usize,  // Currently selected index in action menu (for arrow navigation)
 
+    // Detail tab menu popup (triggered by 'r' - shows detail tabs: AI, Description, Comments, Links, History)
+    show_detail_tab_menu: bool,
+    detail_tab_menu_selected: usize,  // Currently selected index in detail tab menu (for arrow navigation)
+
+    // Type picker popup (triggered by 'T' / shift+t - change requirement type with fuzzy search)
+    show_type_picker: bool,
+    type_picker_search: String,       // Search text for fuzzy filtering
+    type_picker_selected: usize,      // Currently selected index in type list
+
     // Keyboard shortcuts help popup (triggered by '?' key)
     show_keyboard_help: bool,
 
@@ -3904,6 +3923,11 @@ impl RequirementsApp {
             add_menu_selected: 0,
             show_action_menu: false,
             action_menu_selected: 0,
+            show_detail_tab_menu: false,
+            detail_tab_menu_selected: 0,
+            show_type_picker: false,
+            type_picker_search: String::new(),
+            type_picker_selected: 0,
             show_keyboard_help: false,
             last_db_check: std::time::Instant::now(),
             known_db_mtime: None,
@@ -4403,6 +4427,11 @@ impl RequirementsApp {
             add_menu_selected: 0,
             show_action_menu: false,
             action_menu_selected: 0,
+            show_detail_tab_menu: false,
+            detail_tab_menu_selected: 0,
+            show_type_picker: false,
+            type_picker_search: String::new(),
+            type_picker_selected: 0,
             show_keyboard_help: false,
             last_db_check: std::time::Instant::now(),
             known_db_mtime: None,
@@ -19075,6 +19104,342 @@ impl RequirementsApp {
         }
     }
 
+    /// Show detail tab menu popup (triggered by 'r' key)
+    /// Allows quick switching between requirement detail tabs: AI, Description, Comments, Links, History
+    fn show_detail_tab_menu_popup(&mut self, ctx: &egui::Context) {
+        if !self.show_detail_tab_menu {
+            return;
+        }
+
+        // Ensure we have a selected requirement
+        if self.selected_idx.is_none() {
+            self.show_detail_tab_menu = false;
+            return;
+        }
+
+        // Define tab options with their shortcut keys
+        // Format: (key, label, description, DetailTab)
+        let tab_options: Vec<(char, &str, &str, DetailTab)> = vec![
+            ('a', "AI", "View AI evaluations and suggestions", DetailTab::Ai),
+            ('d', "Description", "View/edit description and notes", DetailTab::Description),
+            ('c', "Comments", "View comments and history notes", DetailTab::Comments),
+            ('l', "Links", "View relationships and URL links", DetailTab::Links),
+            ('h', "History", "View change history", DetailTab::History),
+        ];
+        let num_options = tab_options.len();
+
+        // Handle keyboard input for the popup
+        let mut close_popup = false;
+        let mut selected_tab: Option<DetailTab> = None;
+        let mut nav_up = false;
+        let mut nav_down = false;
+        let mut confirm = false;
+
+        ctx.input(|i| {
+            // Escape to close
+            if i.key_pressed(egui::Key::Escape) {
+                close_popup = true;
+            }
+            // Arrow key navigation
+            if i.key_pressed(egui::Key::ArrowUp) || i.key_pressed(egui::Key::K) {
+                nav_up = true;
+            }
+            if i.key_pressed(egui::Key::ArrowDown) || i.key_pressed(egui::Key::J) {
+                nav_down = true;
+            }
+            // Enter to confirm selection
+            if i.key_pressed(egui::Key::Enter) {
+                confirm = true;
+            }
+            // Shortcut keys for direct selection
+            if i.key_pressed(egui::Key::A) {
+                selected_tab = Some(DetailTab::Ai);
+            } else if i.key_pressed(egui::Key::D) {
+                selected_tab = Some(DetailTab::Description);
+            } else if i.key_pressed(egui::Key::C) {
+                selected_tab = Some(DetailTab::Comments);
+            } else if i.key_pressed(egui::Key::L) {
+                selected_tab = Some(DetailTab::Links);
+            } else if i.key_pressed(egui::Key::H) {
+                selected_tab = Some(DetailTab::History);
+            }
+        });
+
+        if close_popup {
+            self.show_detail_tab_menu = false;
+            self.detail_tab_menu_selected = 0;
+            return;
+        }
+
+        // Handle arrow navigation
+        if nav_up {
+            if self.detail_tab_menu_selected > 0 {
+                self.detail_tab_menu_selected -= 1;
+            } else {
+                self.detail_tab_menu_selected = num_options - 1; // Wrap to bottom
+            }
+        }
+        if nav_down {
+            if self.detail_tab_menu_selected < num_options - 1 {
+                self.detail_tab_menu_selected += 1;
+            } else {
+                self.detail_tab_menu_selected = 0; // Wrap to top
+            }
+        }
+
+        // Enter confirms the currently selected option
+        if confirm {
+            selected_tab = Some(match self.detail_tab_menu_selected {
+                0 => DetailTab::Ai,
+                1 => DetailTab::Description,
+                2 => DetailTab::Comments,
+                3 => DetailTab::Links,
+                4 => DetailTab::History,
+                _ => DetailTab::Description,
+            });
+        }
+
+        // Handle selected tab - switch to that detail tab
+        if let Some(tab) = selected_tab {
+            self.active_tab = tab;
+            self.show_detail_tab_menu = false;
+            self.detail_tab_menu_selected = 0;
+            return;
+        }
+
+        // Center the popup on screen
+        let screen_rect = ctx.screen_rect();
+        let popup_size = egui::vec2(260.0, 180.0);
+        let popup_pos = egui::pos2(
+            (screen_rect.width() - popup_size.x) / 2.0,
+            (screen_rect.height() - popup_size.y) / 2.0,
+        );
+
+        egui::Area::new(egui::Id::new("detail_tab_menu_popup"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(popup_pos)
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style())
+                    .inner_margin(8.0)
+                    .show(ui, |ui| {
+                        ui.set_min_width(popup_size.x - 16.0);
+                        ui.label(egui::RichText::new("Detail Tabs").strong());
+                        ui.separator();
+
+                        for (idx, (key, label, description, tab)) in tab_options.iter().enumerate() {
+                            let is_selected = idx == self.detail_tab_menu_selected;
+
+                            // Show selection highlight
+                            let text = format!("{}  {}", key, label);
+                            let response = ui.selectable_label(is_selected, &text);
+                            let was_clicked = response.clicked();
+                            response.on_hover_text(*description);
+                            if was_clicked {
+                                self.active_tab = tab.clone();
+                                self.show_detail_tab_menu = false;
+                                self.detail_tab_menu_selected = 0;
+                            }
+                        }
+
+                        ui.separator();
+                        ui.horizontal(|ui| {
+                            ui.small("↑↓/jk nav • Enter/key select • Esc close");
+                        });
+                    });
+            });
+
+        // Close on click outside
+        if ctx.input(|i| i.pointer.any_click()) {
+            let popup_rect = egui::Rect::from_min_size(popup_pos, popup_size);
+            if let Some(pos) = ctx.input(|i| i.pointer.interact_pos()) {
+                if !popup_rect.contains(pos) {
+                    self.show_detail_tab_menu = false;
+                    self.detail_tab_menu_selected = 0;
+                }
+            }
+        }
+    }
+
+    /// Show type picker popup (triggered by 'T' / shift+t key)
+    /// Allows changing requirement type with fuzzy search
+    fn show_type_picker_popup(&mut self, ctx: &egui::Context) {
+        if !self.show_type_picker {
+            return;
+        }
+
+        // Ensure we have a selected requirement
+        let req_idx = match self.selected_idx {
+            Some(idx) => idx,
+            None => {
+                self.show_type_picker = false;
+                return;
+            }
+        };
+
+        // Define all available types with their icons
+        let all_types: Vec<(RequirementType, &str, &str)> = vec![
+            (RequirementType::Functional, "📋", "Functional"),
+            (RequirementType::NonFunctional, "⚙️", "Non-Functional"),
+            (RequirementType::System, "🖥️", "System"),
+            (RequirementType::User, "👤", "User"),
+            (RequirementType::ChangeRequest, "🔄", "Change Request"),
+            (RequirementType::Bug, "🐛", "Bug"),
+            (RequirementType::Epic, "🎯", "Epic"),
+            (RequirementType::Story, "📖", "Story"),
+            (RequirementType::Task, "✅", "Task"),
+            (RequirementType::Spike, "🔬", "Spike"),
+            (RequirementType::Sprint, "🏃", "Sprint"),
+            (RequirementType::Folder, "📁", "Folder"),
+        ];
+
+        // Filter based on search text (fuzzy matching)
+        let search_lower = self.type_picker_search.to_lowercase();
+        let filtered_types: Vec<&(RequirementType, &str, &str)> = if search_lower.is_empty() {
+            all_types.iter().collect()
+        } else {
+            all_types.iter()
+                .filter(|(_, _, name)| name.to_lowercase().contains(&search_lower))
+                .collect()
+        };
+
+        let num_options = filtered_types.len();
+
+        // Handle keyboard input for the popup
+        let mut close_popup = false;
+        let mut apply_change = false;
+
+        ctx.input(|i| {
+            // Escape to close
+            if i.key_pressed(egui::Key::Escape) {
+                close_popup = true;
+            }
+            // Enter to apply (if we have options)
+            if i.key_pressed(egui::Key::Enter) && num_options > 0 {
+                apply_change = true;
+            }
+            // Up/Down to navigate
+            if i.key_pressed(egui::Key::ArrowUp) || i.key_pressed(egui::Key::K) {
+                if self.type_picker_selected > 0 {
+                    self.type_picker_selected -= 1;
+                } else if num_options > 0 {
+                    self.type_picker_selected = num_options - 1; // Wrap to bottom
+                }
+            }
+            if i.key_pressed(egui::Key::ArrowDown) || i.key_pressed(egui::Key::J) {
+                if num_options > 0 {
+                    if self.type_picker_selected < num_options - 1 {
+                        self.type_picker_selected += 1;
+                    } else {
+                        self.type_picker_selected = 0; // Wrap to top
+                    }
+                }
+            }
+        });
+
+        if close_popup {
+            self.show_type_picker = false;
+            self.type_picker_search.clear();
+            self.type_picker_selected = 0;
+            return;
+        }
+
+        // Apply the change
+        if apply_change {
+            if let Some((new_type, _, _)) = filtered_types.get(self.type_picker_selected) {
+                self.apply_type_change(req_idx, new_type.clone());
+            }
+            self.show_type_picker = false;
+            self.type_picker_search.clear();
+            self.type_picker_selected = 0;
+            return;
+        }
+
+        // Ensure selected index is valid after filtering
+        if self.type_picker_selected >= num_options && num_options > 0 {
+            self.type_picker_selected = num_options - 1;
+        }
+
+        // Center the popup on screen
+        let screen_rect = ctx.screen_rect();
+        let popup_size = egui::vec2(250.0, 320.0);
+        let popup_pos = egui::pos2(
+            (screen_rect.width() - popup_size.x) / 2.0,
+            (screen_rect.height() - popup_size.y) / 2.0,
+        );
+
+        egui::Area::new(egui::Id::new("type_picker_popup"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(popup_pos)
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style())
+                    .inner_margin(8.0)
+                    .show(ui, |ui| {
+                        ui.set_min_width(popup_size.x - 16.0);
+                        ui.label(egui::RichText::new("Change Type").strong());
+                        ui.separator();
+
+                        // Search input
+                        let response = ui.add(
+                            egui::TextEdit::singleline(&mut self.type_picker_search)
+                                .hint_text("Type to search...")
+                                .desired_width(ui.available_width())
+                        );
+                        // Auto-focus the search field
+                        response.request_focus();
+
+                        ui.separator();
+
+                        // Scrollable list of types
+                        egui::ScrollArea::vertical()
+                            .max_height(200.0)
+                            .show(ui, |ui| {
+                                if filtered_types.is_empty() {
+                                    ui.weak("No matching types");
+                                } else {
+                                    for (idx, (req_type, icon, name)) in filtered_types.iter().enumerate() {
+                                        let is_selected = idx == self.type_picker_selected;
+                                        let text = format!("{} {}", icon, name);
+                                        let response = ui.selectable_label(is_selected, &text);
+                                        if response.clicked() {
+                                            self.apply_type_change(req_idx, (*req_type).clone());
+                                            self.show_type_picker = false;
+                                            self.type_picker_search.clear();
+                                            self.type_picker_selected = 0;
+                                        }
+                                    }
+                                }
+                            });
+
+                        ui.separator();
+                        ui.horizontal(|ui| {
+                            ui.small("↑↓/jk nav • Enter select • Esc cancel");
+                        });
+                    });
+            });
+
+        // Close on click outside
+        if ctx.input(|i| i.pointer.any_click()) {
+            let popup_rect = egui::Rect::from_min_size(popup_pos, popup_size);
+            if let Some(pos) = ctx.input(|i| i.pointer.interact_pos()) {
+                if !popup_rect.contains(pos) {
+                    self.show_type_picker = false;
+                    self.type_picker_search.clear();
+                    self.type_picker_selected = 0;
+                }
+            }
+        }
+    }
+
+    /// Apply type change to a requirement
+    fn apply_type_change(&mut self, idx: usize, new_type: RequirementType) {
+        if let Some(req) = self.store.requirements.get_mut(idx) {
+            req.req_type = new_type;
+            self.pending_save = true;
+            // Also update modified_at
+            req.modified_at = chrono::Utc::now();
+        }
+    }
+
     /// Show keyboard shortcuts help window (triggered by '?' key)
     fn show_keyboard_help_popup(&mut self, ctx: &egui::Context) {
         if !self.show_keyboard_help {
@@ -25984,12 +26349,53 @@ impl eframe::App for RequirementsApp {
             && !self.show_delete_menu
             && !self.show_add_menu
             && !self.show_action_menu
+            && !self.show_detail_tab_menu
             && self.quick_change_field.is_none()
             && self.pending_delete_confirm.is_none()
             && self.selected_idx.is_some()  // Need a selected requirement for AI actions
             && shift_a_pressed
         {
             self.show_action_menu = true;
+        }
+
+        // 'r' to open detail tab menu (AI, Description, Comments, Links, History)
+        let r_pressed = ctx.input(|i| i.key_pressed(egui::Key::R) && !i.modifiers.ctrl && !i.modifiers.alt && !i.modifiers.shift);
+        if !in_form_view
+            && !in_settings
+            && !self.show_view_picker
+            && !self.show_keyboard_help
+            && !self.show_delete_menu
+            && !self.show_add_menu
+            && !self.show_action_menu
+            && !self.show_detail_tab_menu
+            && !self.show_type_picker
+            && self.quick_change_field.is_none()
+            && self.pending_delete_confirm.is_none()
+            && self.selected_idx.is_some()  // Need a selected requirement
+            && r_pressed
+        {
+            self.show_detail_tab_menu = true;
+        }
+
+        // 'T' (Shift+T) to open type picker (change requirement type with fuzzy search)
+        let shift_t_pressed = ctx.input(|i| i.key_pressed(egui::Key::T) && !i.modifiers.ctrl && !i.modifiers.alt && i.modifiers.shift);
+        if !in_form_view
+            && !in_settings
+            && !self.show_view_picker
+            && !self.show_keyboard_help
+            && !self.show_delete_menu
+            && !self.show_add_menu
+            && !self.show_action_menu
+            && !self.show_detail_tab_menu
+            && !self.show_type_picker
+            && self.quick_change_field.is_none()
+            && self.pending_delete_confirm.is_none()
+            && self.selected_idx.is_some()  // Need a selected requirement
+            && shift_t_pressed
+        {
+            self.show_type_picker = true;
+            self.type_picker_search.clear();
+            self.type_picker_selected = 0;
         }
 
         // Also handle Ctrl+= as alternate zoom in (common on keyboards)
@@ -27102,6 +27508,12 @@ impl eframe::App for RequirementsApp {
 
         // Show action/AI menu popup (triggered by 'A'/shift+a key)
         self.show_action_menu_popup(ctx);
+
+        // Show detail tab menu popup (triggered by 'r' key)
+        self.show_detail_tab_menu_popup(ctx);
+
+        // Show type picker popup (triggered by 'T'/shift+t key)
+        self.show_type_picker_popup(ctx);
 
         // Show tag picker popup (triggered by 't' key)
         self.show_tag_picker_popup(ctx);
