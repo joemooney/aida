@@ -1555,6 +1555,8 @@ pub enum KeyAction {
     // Deletion/Archive menu
     OpenDeleteMenu,     // 'd' - open delete/archive menu (two-key: d+d=delete, d+a=archive)
     DeleteWithConfirm,  // 'Ctrl+d' - delete with confirmation
+    // Add menu
+    OpenAddMenu,        // 'a' - open add menu (new sibling, new child)
     // Search navigation
     NextSearchMatch,    // 'n' - next search match
     PrevSearchMatch,    // 'N' - previous search match
@@ -1593,6 +1595,7 @@ impl KeyAction {
             KeyAction::ToggleLinksPanel => "Toggle Links Panel",
             KeyAction::OpenDeleteMenu => "Open Delete/Archive Menu",
             KeyAction::DeleteWithConfirm => "Delete (with confirm)",
+            KeyAction::OpenAddMenu => "Open Add Menu",
             KeyAction::NextSearchMatch => "Next Search Match",
             KeyAction::PrevSearchMatch => "Previous Search Match",
             KeyAction::ClearSearch => "Clear Search",
@@ -1629,6 +1632,7 @@ impl KeyAction {
             KeyAction::ToggleLinksPanel => KeyContext::RequirementsList,
             KeyAction::OpenDeleteMenu => KeyContext::RequirementsList,
             KeyAction::DeleteWithConfirm => KeyContext::RequirementsList,
+            KeyAction::OpenAddMenu => KeyContext::RequirementsList,
             KeyAction::NextSearchMatch => KeyContext::RequirementsList,
             KeyAction::PrevSearchMatch => KeyContext::RequirementsList,
             KeyAction::ClearSearch => KeyContext::RequirementsList,
@@ -1664,6 +1668,7 @@ impl KeyAction {
             KeyAction::ToggleLinksPanel,
             KeyAction::OpenDeleteMenu,
             KeyAction::DeleteWithConfirm,
+            KeyAction::OpenAddMenu,
             KeyAction::NextSearchMatch,
             KeyAction::PrevSearchMatch,
             KeyAction::ClearSearch,
@@ -1954,17 +1959,8 @@ impl Default for KeyBindings {
             KeyAction::NewRequirement,
             KeyBinding::new(egui::Key::N, KeyAction::NewRequirement.default_context()).with_ctrl(),
         );
-        // 'n' in reqlist for new sibling requirement
-        bindings.insert(
-            KeyAction::NewSiblingRequirement,
-            KeyBinding::new(egui::Key::N, KeyAction::NewSiblingRequirement.default_context()),
-        );
-        // 'N' (Shift+N) in reqlist for new child requirement
-        bindings.insert(
-            KeyAction::NewChildRequirement,
-            KeyBinding::new(egui::Key::N, KeyAction::NewChildRequirement.default_context())
-                .with_shift(),
-        );
+        // Note: 'n' and 'N' are now for search navigation (next/prev match)
+        // Use 'a' to open add menu for new sibling/child requirements
         // Vim-style navigation: 'j' for down, 'k' for up
         bindings.insert(
             KeyAction::NavigateDownVim,
@@ -2021,6 +2017,11 @@ impl Default for KeyBindings {
             KeyAction::DeleteWithConfirm,
             KeyBinding::new(egui::Key::D, KeyAction::DeleteWithConfirm.default_context())
                 .with_ctrl(),
+        );
+        // Add menu: 'a' opens add menu (new sibling, new child)
+        bindings.insert(
+            KeyAction::OpenAddMenu,
+            KeyBinding::new(egui::Key::A, KeyAction::OpenAddMenu.default_context()),
         );
         // Search navigation: n/N for next/prev match (vim-style)
         bindings.insert(
@@ -3247,6 +3248,10 @@ pub struct RequirementsApp {
     show_delete_menu: bool,
     delete_menu_selected: usize,  // Currently selected index in delete menu (for arrow navigation)
 
+    // Add menu popup (triggered by 'a' key - shows new sibling/child options)
+    show_add_menu: bool,
+    add_menu_selected: usize,  // Currently selected index in add menu (for arrow navigation)
+
     // Keyboard shortcuts help popup (triggered by '?' key)
     show_keyboard_help: bool,
 
@@ -3849,6 +3854,8 @@ impl RequirementsApp {
             view_picker_selected: 0,
             show_delete_menu: false,
             delete_menu_selected: 0,
+            show_add_menu: false,
+            add_menu_selected: 0,
             show_keyboard_help: false,
             split_perspective: Perspective::default(),
             split_perspective_direction: PerspectiveDirection::default(),
@@ -4339,6 +4346,8 @@ impl RequirementsApp {
             view_picker_selected: 0,
             show_delete_menu: false,
             delete_menu_selected: 0,
+            show_add_menu: false,
+            add_menu_selected: 0,
             show_keyboard_help: false,
             split_perspective: Perspective::default(),
             split_perspective_direction: PerspectiveDirection::default(),
@@ -5398,6 +5407,18 @@ impl RequirementsApp {
         self.clear_form_base();
         self.form_parent_id = self.get_child_parent();
         self.store_original_form_values();
+    }
+
+    /// Start adding a new sibling requirement (triggered by 'a' -> 's')
+    fn start_add_sibling(&mut self) {
+        self.clear_form_for_sibling();
+        self.pending_view_change = Some(View::Add);
+    }
+
+    /// Start adding a new child requirement (triggered by 'a' -> 'c')
+    fn start_add_child(&mut self) {
+        self.clear_form_for_child();
+        self.pending_view_change = Some(View::Add);
     }
 
     /// Base form clearing without parent logic
@@ -18531,6 +18552,156 @@ impl RequirementsApp {
         }
     }
 
+    /// Show add menu popup (triggered by 'a' key)
+    fn show_add_menu_popup(&mut self, ctx: &egui::Context) {
+        if !self.show_add_menu {
+            return;
+        }
+
+        // Define add options with their shortcut keys
+        let add_options: Vec<(char, &str, &str)> = vec![
+            ('s', "New Sibling", "Add requirement at same level"),
+            ('c', "New Child", "Add child requirement under selected"),
+        ];
+        let num_options = add_options.len();
+
+        // Handle keyboard input for the popup
+        let mut close_popup = false;
+        let mut action: Option<&str> = None;
+        let mut nav_up = false;
+        let mut nav_down = false;
+        let mut confirm = false;
+
+        ctx.input(|i| {
+            // Escape to close
+            if i.key_pressed(egui::Key::Escape) {
+                close_popup = true;
+            }
+            // Arrow key navigation
+            if i.key_pressed(egui::Key::ArrowUp) || i.key_pressed(egui::Key::K) {
+                nav_up = true;
+            }
+            if i.key_pressed(egui::Key::ArrowDown) || i.key_pressed(egui::Key::J) {
+                nav_down = true;
+            }
+            // Enter to confirm selection
+            if i.key_pressed(egui::Key::Enter) {
+                confirm = true;
+            }
+            // Shortcut keys for direct selection
+            if i.key_pressed(egui::Key::S) {
+                action = Some("sibling");
+            } else if i.key_pressed(egui::Key::C) {
+                action = Some("child");
+            }
+        });
+
+        if close_popup {
+            self.show_add_menu = false;
+            self.add_menu_selected = 0;
+            return;
+        }
+
+        // Handle arrow navigation
+        if nav_up {
+            if self.add_menu_selected > 0 {
+                self.add_menu_selected -= 1;
+            } else {
+                self.add_menu_selected = num_options - 1; // Wrap to bottom
+            }
+        }
+        if nav_down {
+            if self.add_menu_selected < num_options - 1 {
+                self.add_menu_selected += 1;
+            } else {
+                self.add_menu_selected = 0; // Wrap to top
+            }
+        }
+
+        // Enter confirms the currently selected option
+        if confirm {
+            if self.add_menu_selected == 0 {
+                action = Some("sibling");
+            } else if self.add_menu_selected == 1 {
+                action = Some("child");
+            }
+        }
+
+        // Handle selected action
+        if let Some(act) = action {
+            match act {
+                "sibling" => {
+                    // Add new sibling requirement
+                    self.start_add_sibling();
+                }
+                "child" => {
+                    // Add new child requirement under selected
+                    self.start_add_child();
+                }
+                _ => {}
+            }
+            self.show_add_menu = false;
+            self.add_menu_selected = 0;
+            return;
+        }
+
+        // Center the popup on screen
+        let screen_rect = ctx.screen_rect();
+        let popup_size = egui::vec2(220.0, 120.0);
+        let popup_pos = egui::pos2(
+            (screen_rect.width() - popup_size.x) / 2.0,
+            (screen_rect.height() - popup_size.y) / 2.0,
+        );
+
+        egui::Area::new(egui::Id::new("add_menu_popup"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(popup_pos)
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style())
+                    .inner_margin(8.0)
+                    .show(ui, |ui| {
+                        ui.set_min_width(popup_size.x - 16.0);
+                        ui.label(egui::RichText::new("Add Requirement").strong());
+                        ui.separator();
+
+                        for (idx, (key, label, description)) in add_options.iter().enumerate() {
+                            let is_selected = idx == self.add_menu_selected;
+
+                            // Show selection highlight
+                            let text = format!("{}  {}", key, label);
+                            let response = ui.selectable_label(is_selected, &text);
+                            let was_clicked = response.clicked();
+                            response.on_hover_text(*description);
+                            if was_clicked {
+                                if *label == "New Sibling" {
+                                    self.start_add_sibling();
+                                } else if *label == "New Child" {
+                                    self.start_add_child();
+                                }
+                                self.show_add_menu = false;
+                                self.add_menu_selected = 0;
+                            }
+                        }
+
+                        ui.separator();
+                        ui.horizontal(|ui| {
+                            ui.small("↑↓/jk nav • Enter/key select • Esc close");
+                        });
+                    });
+            });
+
+        // Close on click outside
+        if ctx.input(|i| i.pointer.any_click()) {
+            let popup_rect = egui::Rect::from_min_size(popup_pos, popup_size);
+            if let Some(pos) = ctx.input(|i| i.pointer.interact_pos()) {
+                if !popup_rect.contains(pos) {
+                    self.show_add_menu = false;
+                    self.add_menu_selected = 0;
+                }
+            }
+        }
+    }
+
     /// Show keyboard shortcuts help window (triggered by '?' key)
     fn show_keyboard_help_popup(&mut self, ctx: &egui::Context) {
         if !self.show_keyboard_help {
@@ -25326,6 +25497,7 @@ impl eframe::App for RequirementsApp {
             && !self.show_view_picker
             && !self.show_keyboard_help
             && !self.show_delete_menu
+            && !self.show_add_menu
             && self.quick_change_field.is_none()
             && self.pending_delete_confirm.is_none()
             && v_pressed
@@ -25345,6 +25517,7 @@ impl eframe::App for RequirementsApp {
             && !self.show_view_picker
             && !self.show_keyboard_help
             && !self.show_delete_menu
+            && !self.show_add_menu
             && self.quick_change_field.is_none()
             && self.pending_delete_confirm.is_none()
             && question_pressed
@@ -25360,6 +25533,7 @@ impl eframe::App for RequirementsApp {
             && !self.show_view_picker
             && !self.show_keyboard_help
             && !self.show_delete_menu
+            && !self.show_add_menu
             && self.quick_change_field.is_none()
             && self.pending_delete_confirm.is_none()
             && self.selected_idx.is_some()
@@ -25378,6 +25552,7 @@ impl eframe::App for RequirementsApp {
             && !self.show_view_picker
             && !self.show_keyboard_help
             && !self.show_delete_menu
+            && !self.show_add_menu
             && self.quick_change_field.is_none()
             && self.pending_delete_confirm.is_none()
             && ctrl_d_pressed
@@ -25385,6 +25560,21 @@ impl eframe::App for RequirementsApp {
             if let Some(idx) = self.selected_idx {
                 self.pending_delete_confirm = Some(idx);
             }
+        }
+
+        // 'a' to open add menu (new sibling / new child)
+        let a_pressed = ctx.input(|i| i.key_pressed(egui::Key::A) && !i.modifiers.ctrl && !i.modifiers.alt && !i.modifiers.shift);
+        if !in_form_view
+            && !in_settings
+            && !self.show_view_picker
+            && !self.show_keyboard_help
+            && !self.show_delete_menu
+            && !self.show_add_menu
+            && self.quick_change_field.is_none()
+            && self.pending_delete_confirm.is_none()
+            && a_pressed
+        {
+            self.show_add_menu = true;
         }
 
         // Also handle Ctrl+= as alternate zoom in (common on keyboards)
@@ -26486,6 +26676,9 @@ impl eframe::App for RequirementsApp {
 
         // Show delete/archive menu popup (triggered by 'd' key)
         self.show_delete_menu_popup(ctx);
+
+        // Show add menu popup (triggered by 'a' key)
+        self.show_add_menu_popup(ctx);
 
         // Show tag picker popup (triggered by 't' key)
         self.show_tag_picker_popup(ctx);
