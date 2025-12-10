@@ -22053,12 +22053,18 @@ fn main() {
             self.pending_save = false;
         }
 
-        // Check for ESC key to cancel (only if confirmation dialog is not open)
+        // Check for ESC key - in Edit mode, save and return to Detail view
+        // In Add mode, trigger cancel (with confirmation if there are changes)
         let esc_pressed =
             !self.show_cancel_confirm_dialog && ui.input(|i| i.key_pressed(egui::Key::Escape));
 
+        // In Edit mode, ESC saves and returns to Detail view
+        let esc_save = is_edit && esc_pressed;
+        // In Add mode, ESC cancels
+        let esc_cancel = !is_edit && esc_pressed;
+
         ui.horizontal(|ui| {
-            if ui.button("💾 Save").clicked() || should_save {
+            if ui.button("💾 Save").clicked() || should_save || esc_save {
                 if is_edit {
                     if let Some(idx) = self.selected_idx {
                         self.update_requirement(idx);
@@ -22067,7 +22073,7 @@ fn main() {
                     self.add_requirement();
                 }
             }
-            if ui.button("❌ Cancel").clicked() || esc_pressed {
+            if ui.button("❌ Cancel").clicked() || esc_cancel {
                 self.request_form_cancel(is_edit);
             }
         });
@@ -22113,9 +22119,15 @@ fn main() {
             self.pending_save = false;
         }
 
-        // Check for ESC key to cancel (only if confirmation dialog is not open)
+        // Check for ESC key - in Edit mode, save and return to Detail view
+        // In Add mode, trigger cancel (with confirmation if there are changes)
         let esc_pressed =
             !self.show_cancel_confirm_dialog && ui.input(|i| i.key_pressed(egui::Key::Escape));
+
+        // In Edit mode, ESC saves and returns to Detail view
+        let esc_save = is_edit && esc_pressed;
+        // In Add mode, ESC cancels
+        let esc_cancel = !is_edit && esc_pressed;
 
         // === TITLE BAR ===
         // Calculate button widths to reserve space (Save + Cancel + spacing)
@@ -22146,13 +22158,13 @@ fn main() {
                     );
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        // Cancel button
-                        if ui.button("❌ Cancel").clicked() || esc_pressed {
+                        // Cancel button (only trigger on click or ESC in Add mode)
+                        if ui.button("❌ Cancel").clicked() || esc_cancel {
                             self.request_form_cancel(is_edit);
                         }
 
-                        // Save button
-                        if ui.button("💾 Save").clicked() || should_save {
+                        // Save button (trigger on click, Ctrl+S, or ESC in Edit mode)
+                        if ui.button("💾 Save").clicked() || should_save || esc_save {
                             if is_edit {
                                 if let Some(idx) = self.selected_idx {
                                     self.update_requirement(idx);
@@ -22551,9 +22563,15 @@ fn main() {
             self.pending_save = false;
         }
 
-        // Check for ESC key to cancel (only if confirmation dialog is not open)
+        // Check for ESC key - in Edit mode, save and return to Detail view
+        // In Add mode, trigger cancel (with confirmation if there are changes)
         let esc_pressed =
             !self.show_cancel_confirm_dialog && ui.input(|i| i.key_pressed(egui::Key::Escape));
+
+        // In Edit mode, ESC saves and returns to Detail view
+        let esc_save = is_edit && esc_pressed;
+        // In Add mode, ESC cancels
+        let esc_cancel = !is_edit && esc_pressed;
 
         // === TITLE BAR ===
         // Calculate button widths to reserve space (Save + Cancel + spacing)
@@ -22584,13 +22602,13 @@ fn main() {
                     );
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        // Cancel button
-                        if ui.button("❌ Cancel").clicked() || esc_pressed {
+                        // Cancel button (only trigger on click or ESC in Add mode)
+                        if ui.button("❌ Cancel").clicked() || esc_cancel {
                             self.request_form_cancel(is_edit);
                         }
 
-                        // Save button
-                        if ui.button("💾 Save").clicked() || should_save {
+                        // Save button (trigger on click, Ctrl+S, or ESC in Edit mode)
+                        if ui.button("💾 Save").clicked() || should_save || esc_save {
                             if is_edit {
                                 if let Some(idx) = self.selected_idx {
                                     self.update_requirement(idx);
