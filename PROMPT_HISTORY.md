@@ -1389,3 +1389,24 @@ A chronological record of development sessions and changes made to the Requireme
 - **Database Sync**:
   - Migrated YAML to SQLite to sync FR-0233 and REQ-0234
   - Used `aida db migrate --from yaml --to sqlite --force` with explicit `--file requirements.yaml`
+
+### Add Menu Popup ('a' hotkey)
+- **Prompt**: "Since 'n' and Shift+N are used for search, I think I should eliminate the overlap and maybe use 'a' for add"
+- **Solution**: Implemented add menu popup similar to delete menu
+- **Implementation**:
+  - Added `OpenAddMenu` to `KeyAction` enum
+  - Added `show_add_menu` and `add_menu_selected` state fields
+  - Created `show_add_menu_popup()` function with:
+    - 's' for New Sibling requirement
+    - 'c' for New Child requirement
+    - Arrow/j/k navigation with Enter to confirm
+    - Escape to close
+  - Added `start_add_sibling()` and `start_add_child()` helper methods
+  - Removed old 'n'/'N' bindings for NewSiblingRequirement/NewChildRequirement
+  - 'n'/'N' are now exclusively for search navigation (next/prev match)
+  - Ctrl+N still works for smart new requirement with heuristic parent
+- **Key Bindings Summary**:
+  - 'a' -> opens add menu -> 's' for sibling, 'c' for child
+  - 'n' -> next search match (when search active)
+  - 'N' (Shift+N) -> previous search match
+  - Ctrl+N -> smart new requirement (global)
