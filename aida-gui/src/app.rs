@@ -26467,6 +26467,7 @@ impl eframe::App for RequirementsApp {
             && !self.show_keyboard_help
             && !self.show_delete_menu
             && !self.show_add_menu
+            && !self.show_detail_tab_menu  // Don't trigger when 'd' is for Description tab
             && self.quick_change_field.is_none()
             && self.pending_delete_confirm.is_none()
             && self.selected_idx.is_some()
