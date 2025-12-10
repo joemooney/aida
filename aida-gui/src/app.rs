@@ -19609,8 +19609,8 @@ impl RequirementsApp {
             .open(&mut open)
             .resizable(true)
             .collapsible(true)
-            .default_size([500.0, 550.0])
-            .min_width(350.0)
+            .default_size([900.0, 500.0])
+            .min_width(320.0)
             .min_height(300.0)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
@@ -19620,106 +19620,156 @@ impl RequirementsApp {
                 });
                 ui.separator();
 
+                // Helper to show a shortcut row
+                let show_shortcut = |ui: &mut egui::Ui, key: &str, desc: &str| {
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new(format!("{:>14}", key)).monospace().strong());
+                        ui.label(desc);
+                    });
+                };
+
+                // Helper to render a section
+                let render_section = |ui: &mut egui::Ui, title: &str, subtitle: Option<&str>, shortcuts: &[(&str, &str)]| {
+                    ui.label(egui::RichText::new(title).strong());
+                    if let Some(sub) = subtitle {
+                        ui.small(sub);
+                    }
+                    ui.add_space(4.0);
+                    for (key, desc) in shortcuts {
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new(format!("{:>14}", key)).monospace().strong());
+                            ui.label(*desc);
+                        });
+                    }
+                    ui.add_space(8.0);
+                };
+
+                // Define all sections with their shortcuts
+                let navigation = [
+                    ("j / ↓", "Move down in list"),
+                    ("k / ↑", "Move up in list"),
+                    ("Enter / e", "Edit selected"),
+                    ("Space", "Toggle expand/collapse"),
+                ];
+
+                let views = [
+                    ("v r", "Requirements list"),
+                    ("v k", "Kanban board"),
+                    ("v t", "Timeline"),
+                    ("v b", "Baselines"),
+                    ("v o", "Org Chart"),
+                    ("v s", "Sprint Planning"),
+                ];
+
+                let kanban = [
+                    ("h / ←", "Move to left column"),
+                    ("l / →", "Move to right column"),
+                    ("j / ↓", "Move down in column"),
+                    ("k / ↑", "Move up in column"),
+                    ("Ctrl+h", "Move card left"),
+                    ("Ctrl+l", "Move card right"),
+                    ("Space", "Open/close detail"),
+                ];
+
+                let quick_actions = [
+                    ("s", "Change status"),
+                    ("p", "Change priority"),
+                    ("o", "Change owner"),
+                    ("f", "Assign to feature"),
+                    ("S", "Assign to sprint"),
+                    ("T", "Change type"),
+                    ("w", "Set weight/effort"),
+                    ("r", "Jump to detail tab"),
+                ];
+
+                let create = [
+                    ("Ctrl+N", "New requirement"),
+                    ("n", "New sibling"),
+                    ("N", "New child"),
+                    ("c", "Add comment"),
+                ];
+
+                let actions = [
+                    ("d", "Delete (confirm)"),
+                    ("D", "Delete immediately"),
+                    ("a", "Archive/unarchive"),
+                    ("A", "AI Actions menu"),
+                    ("L", "Toggle links panel"),
+                ];
+
+                let search = [
+                    ("/", "Focus search box"),
+                    ("n", "Next match"),
+                    ("N", "Previous match"),
+                    ("Esc", "Clear search"),
+                ];
+
+                let zoom = [
+                    ("Ctrl++", "Zoom in"),
+                    ("Ctrl+-", "Zoom out"),
+                    ("Ctrl+0", "Reset zoom"),
+                    ("Ctrl+wheel", "Zoom with mouse"),
+                    ("t", "Cycle theme"),
+                ];
+
+                let help = [
+                    ("?", "Show this help"),
+                ];
+
+                // Determine number of columns based on available width
+                let available_width = ui.available_width();
+                let column_width = 280.0;
+                let num_columns = ((available_width / column_width) as usize).max(1).min(3);
+
                 egui::ScrollArea::vertical()
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
-                        // Helper to show a shortcut row
-                        let show_shortcut = |ui: &mut egui::Ui, key: &str, desc: &str| {
-                            ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new(format!("{:>12}", key)).monospace().strong());
-                                ui.label(desc);
+                        if num_columns >= 3 {
+                            // Three column layout
+                            ui.columns(3, |columns| {
+                                // Column 1: Navigation, Views, Kanban
+                                render_section(&mut columns[0], "Navigation", None, &navigation);
+                                render_section(&mut columns[0], "Views", Some("Press v then:"), &views);
+                                render_section(&mut columns[0], "Kanban Board", None, &kanban);
+
+                                // Column 2: Quick Actions, Create, Actions
+                                render_section(&mut columns[1], "Quick Actions", Some("Opens picker:"), &quick_actions);
+                                render_section(&mut columns[1], "Create", None, &create);
+                                render_section(&mut columns[1], "Actions", None, &actions);
+
+                                // Column 3: Search, Zoom, Help
+                                render_section(&mut columns[2], "Search", None, &search);
+                                render_section(&mut columns[2], "Zoom & Display", None, &zoom);
+                                render_section(&mut columns[2], "Help", None, &help);
                             });
-                        };
+                        } else if num_columns == 2 {
+                            // Two column layout
+                            ui.columns(2, |columns| {
+                                // Column 1: Navigation, Views, Kanban, Search
+                                render_section(&mut columns[0], "Navigation", None, &navigation);
+                                render_section(&mut columns[0], "Views", Some("Press v then:"), &views);
+                                render_section(&mut columns[0], "Kanban Board", None, &kanban);
+                                render_section(&mut columns[0], "Search", None, &search);
 
-                        // Navigation section
-                        ui.label(egui::RichText::new("Navigation").strong());
-                        ui.add_space(4.0);
-                        show_shortcut(ui, "j / ↓", "Move down in list");
-                        show_shortcut(ui, "k / ↑", "Move up in list");
-                        show_shortcut(ui, "Enter / e", "Edit selected requirement");
-                        show_shortcut(ui, "Space", "Toggle expand/collapse");
-                        ui.add_space(8.0);
-
-                        // Views section (two-key sequences)
-                        ui.label(egui::RichText::new("Views").strong());
-                        ui.small("Press v then:");
-                        ui.add_space(4.0);
-                        show_shortcut(ui, "v r", "Requirements list");
-                        show_shortcut(ui, "v k", "Kanban board");
-                        show_shortcut(ui, "v t", "Timeline");
-                        show_shortcut(ui, "v b", "Baselines");
-                        show_shortcut(ui, "v o", "Org Chart");
-                        show_shortcut(ui, "v s", "Sprint Planning");
-                        ui.add_space(8.0);
-
-                        // Kanban section
-                        ui.label(egui::RichText::new("Kanban Board").strong());
-                        ui.add_space(4.0);
-                        show_shortcut(ui, "h / ←", "Move to left column");
-                        show_shortcut(ui, "l / →", "Move to right column");
-                        show_shortcut(ui, "j / ↓", "Move down in column");
-                        show_shortcut(ui, "k / ↑", "Move up in column");
-                        show_shortcut(ui, "Ctrl+h / Ctrl+←", "Move card to left column");
-                        show_shortcut(ui, "Ctrl+l / Ctrl+→", "Move card to right column");
-                        show_shortcut(ui, "Space", "Open/close detail modal");
-                        show_shortcut(ui, "s,p,o,f", "Quick actions in modal");
-                        ui.add_space(8.0);
-
-                        // Quick actions section
-                        ui.label(egui::RichText::new("Quick Actions").strong());
-                        ui.small("Opens picker for selected item:");
-                        ui.add_space(4.0);
-                        show_shortcut(ui, "s", "Change status");
-                        show_shortcut(ui, "p", "Change priority");
-                        show_shortcut(ui, "o", "Change owner");
-                        show_shortcut(ui, "f", "Assign to feature");
-                        show_shortcut(ui, "S", "Assign to sprint");
-                        show_shortcut(ui, "T", "Change type");
-                        show_shortcut(ui, "w", "Set weight/effort");
-                        show_shortcut(ui, "r", "Jump to detail tab");
-                        ui.add_space(8.0);
-
-                        // Create section
-                        ui.label(egui::RichText::new("Create").strong());
-                        ui.add_space(4.0);
-                        show_shortcut(ui, "Ctrl+N", "New requirement (smart parent)");
-                        show_shortcut(ui, "n", "New sibling requirement");
-                        show_shortcut(ui, "N", "New child requirement");
-                        show_shortcut(ui, "c", "Add comment");
-                        ui.add_space(8.0);
-
-                        // Actions section
-                        ui.label(egui::RichText::new("Actions").strong());
-                        ui.add_space(4.0);
-                        show_shortcut(ui, "d", "Delete (with confirm)");
-                        show_shortcut(ui, "D", "Delete immediately");
-                        show_shortcut(ui, "a", "Archive/unarchive");
-                        show_shortcut(ui, "L", "Toggle links panel");
-                        ui.add_space(8.0);
-
-                        // Search section
-                        ui.label(egui::RichText::new("Search").strong());
-                        ui.add_space(4.0);
-                        show_shortcut(ui, "/", "Focus search box");
-                        show_shortcut(ui, "n", "Next search match (when searching)");
-                        show_shortcut(ui, "N", "Previous search match (when searching)");
-                        show_shortcut(ui, "Esc", "Clear search");
-                        ui.add_space(8.0);
-
-                        // Zoom section
-                        ui.label(egui::RichText::new("Zoom & Display").strong());
-                        ui.add_space(4.0);
-                        show_shortcut(ui, "Ctrl++", "Zoom in");
-                        show_shortcut(ui, "Ctrl+-", "Zoom out");
-                        show_shortcut(ui, "Ctrl+0", "Reset zoom");
-                        show_shortcut(ui, "Ctrl+wheel", "Zoom with mouse");
-                        show_shortcut(ui, "t", "Cycle theme");
-                        ui.add_space(8.0);
-
-                        // Help section
-                        ui.label(egui::RichText::new("Help").strong());
-                        ui.add_space(4.0);
-                        show_shortcut(ui, "?", "Show this help");
+                                // Column 2: Quick Actions, Create, Actions, Zoom, Help
+                                render_section(&mut columns[1], "Quick Actions", Some("Opens picker:"), &quick_actions);
+                                render_section(&mut columns[1], "Create", None, &create);
+                                render_section(&mut columns[1], "Actions", None, &actions);
+                                render_section(&mut columns[1], "Zoom & Display", None, &zoom);
+                                render_section(&mut columns[1], "Help", None, &help);
+                            });
+                        } else {
+                            // Single column layout (narrow window)
+                            render_section(ui, "Navigation", None, &navigation);
+                            render_section(ui, "Views", Some("Press v then:"), &views);
+                            render_section(ui, "Kanban Board", None, &kanban);
+                            render_section(ui, "Quick Actions", Some("Opens picker:"), &quick_actions);
+                            render_section(ui, "Create", None, &create);
+                            render_section(ui, "Actions", None, &actions);
+                            render_section(ui, "Search", None, &search);
+                            render_section(ui, "Zoom & Display", None, &zoom);
+                            render_section(ui, "Help", None, &help);
+                        }
                     });
             });
 
