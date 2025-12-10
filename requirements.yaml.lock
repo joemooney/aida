@@ -1,1 +1,9 @@
-Locked by PID 373688 at 2025-12-09T15:55:11.054255263+00:00
+sessions:
+  435494-f935134c-9592-4a51-acde-5a24a04af099:
+    session_id: 435494-f935134c-9592-4a51-acde-5a24a04af099
+    user_name: Joe Mooney
+    hostname: imac
+    pid: 435494
+    started_at: 2025-12-10T04:11:10.826795253Z
+    last_heartbeat: 2025-12-10T04:11:55.839681214Z
+    editing_requirement: null

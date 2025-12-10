@@ -2249,6 +2249,12 @@ pub struct UserSettings {
     /// Whether search navigation wraps around
     #[serde(default = "default_wrap_search")]
     pub wrap_search: bool,
+    /// Database change detection poll interval in seconds (0 = disabled)
+    #[serde(default = "default_db_poll_interval")]
+    pub db_poll_interval_secs: u32,
+    /// Whether to auto-reload when database changes externally (when not editing)
+    #[serde(default = "default_db_auto_reload")]
+    pub db_auto_reload: bool,
 }
 
 fn default_font_size() -> f32 {
@@ -2261,6 +2267,14 @@ fn default_ui_heading_level() -> u8 {
 
 fn default_wrap_search() -> bool {
     true // Wrap search by default
+}
+
+fn default_db_poll_interval() -> u32 {
+    30 // Check for database changes every 30 seconds
+}
+
+fn default_db_auto_reload() -> bool {
+    true // Auto-reload when not editing by default
 }
 
 impl Default for UserSettings {
@@ -2282,6 +2296,8 @@ impl Default for UserSettings {
             kanban_click_action: KanBanClickAction::default(),
             search_mode: SearchMode::default(),
             wrap_search: default_wrap_search(),
+            db_poll_interval_secs: default_db_poll_interval(),
+            db_auto_reload: default_db_auto_reload(),
         }
     }
 }
@@ -3255,6 +3271,12 @@ pub struct RequirementsApp {
     // Keyboard shortcuts help popup (triggered by '?' key)
     show_keyboard_help: bool,
 
+    // Database change detection
+    last_db_check: std::time::Instant,           // When we last checked the file mtime
+    known_db_mtime: Option<std::time::SystemTime>, // Last known modification time
+    pending_external_reload: bool,               // External changes detected while editing
+    external_change_detected_at: Option<std::time::Instant>, // When external change was detected
+
     // Split panel (second requirements list) - used in split layouts
     split_perspective: Perspective,
     split_perspective_direction: PerspectiveDirection,
@@ -3857,6 +3879,10 @@ impl RequirementsApp {
             show_add_menu: false,
             add_menu_selected: 0,
             show_keyboard_help: false,
+            last_db_check: std::time::Instant::now(),
+            known_db_mtime: None,
+            pending_external_reload: false,
+            external_change_detected_at: None,
             split_perspective: Perspective::default(),
             split_perspective_direction: PerspectiveDirection::default(),
             split_filter_text: String::new(),
@@ -4349,6 +4375,10 @@ impl RequirementsApp {
             show_add_menu: false,
             add_menu_selected: 0,
             show_keyboard_help: false,
+            last_db_check: std::time::Instant::now(),
+            known_db_mtime: None,
+            pending_external_reload: false,
+            external_change_detected_at: None,
             split_perspective: Perspective::default(),
             split_perspective_direction: PerspectiveDirection::default(),
             split_filter_text: String::new(),
@@ -5419,6 +5449,131 @@ impl RequirementsApp {
     fn start_add_child(&mut self) {
         self.clear_form_for_child();
         self.pending_view_change = Some(View::Add);
+    }
+
+    /// Get the current file modification time for the database
+    fn get_db_file_mtime(&self) -> Option<std::time::SystemTime> {
+        std::fs::metadata(self.storage.path())
+            .ok()
+            .and_then(|m| m.modified().ok())
+    }
+
+    /// Check if the database file has been modified externally
+    /// Returns true if changes were detected
+    fn check_for_external_db_changes(&mut self) -> bool {
+        // Skip if polling is disabled
+        if self.user_settings.db_poll_interval_secs == 0 {
+            return false;
+        }
+
+        let poll_interval = std::time::Duration::from_secs(
+            self.user_settings.db_poll_interval_secs as u64
+        );
+
+        // Check if enough time has passed since last check
+        if self.last_db_check.elapsed() < poll_interval {
+            return false;
+        }
+
+        self.last_db_check = std::time::Instant::now();
+
+        let current_mtime = self.get_db_file_mtime();
+
+        // If we don't have a known mtime yet, store the current one
+        if self.known_db_mtime.is_none() {
+            self.known_db_mtime = current_mtime;
+            return false;
+        }
+
+        // Compare mtimes
+        if current_mtime != self.known_db_mtime {
+            self.known_db_mtime = current_mtime;
+            return true;
+        }
+
+        false
+    }
+
+    /// Reload the database from disk, preserving selection if possible
+    fn reload_database(&mut self) {
+        // Remember current selection - get the requirement ID at selected index
+        let selected_id = self.selected_idx.and_then(|selected| {
+            let filtered = self.get_filtered_indices();
+            filtered.get(selected).and_then(|&store_idx| {
+                self.store.requirements.get(store_idx).map(|req| req.id)
+            })
+        });
+
+        // Reload from storage
+        if let Ok(new_store) = self.storage.load() {
+            self.store = new_store;
+
+            // Try to restore selection by finding the same requirement ID
+            if let Some(id) = selected_id {
+                let filtered = self.get_filtered_indices();
+                self.selected_idx = filtered.iter().position(|&store_idx| {
+                    self.store.requirements.get(store_idx)
+                        .map(|req| req.id == id)
+                        .unwrap_or(false)
+                });
+            }
+
+            // Update known mtime
+            self.known_db_mtime = self.get_db_file_mtime();
+            self.pending_external_reload = false;
+            self.external_change_detected_at = None;
+        }
+    }
+
+    /// Check if we're currently in an editing state
+    fn is_editing(&self) -> bool {
+        matches!(self.current_view, View::Edit | View::Add)
+    }
+
+    /// Handle database change detection and auto-reload logic
+    fn handle_db_change_detection(&mut self) {
+        // Check for external changes
+        if self.check_for_external_db_changes() {
+            if self.is_editing() {
+                // We're editing - defer reload and show notification
+                self.pending_external_reload = true;
+                self.external_change_detected_at = Some(std::time::Instant::now());
+                // Show toast notification
+                self.toast_message = Some(ToastNotification {
+                    message: "⚠️ Database changed externally. Changes will reload after editing.".to_string(),
+                    is_success: false,
+                    show_until: std::time::Instant::now() + std::time::Duration::from_secs(5),
+                });
+            } else if self.user_settings.db_auto_reload {
+                // Not editing and auto-reload is enabled - reload silently
+                self.reload_database();
+                // Show brief success toast
+                self.toast_message = Some(ToastNotification {
+                    message: "✓ Database reloaded".to_string(),
+                    is_success: true,
+                    show_until: std::time::Instant::now() + std::time::Duration::from_secs(2),
+                });
+            } else {
+                // Not editing but auto-reload disabled - just mark pending and notify
+                self.pending_external_reload = true;
+                self.external_change_detected_at = Some(std::time::Instant::now());
+                self.toast_message = Some(ToastNotification {
+                    message: "⚠️ Database changed externally. Press F5 or use menu to reload.".to_string(),
+                    is_success: false,
+                    show_until: std::time::Instant::now() + std::time::Duration::from_secs(5),
+                });
+            }
+        }
+
+        // Check if we just finished editing and have pending reload
+        if self.pending_external_reload && !self.is_editing() && self.user_settings.db_auto_reload {
+            self.reload_database();
+            self.toast_message = Some(ToastNotification {
+                message: "✓ Database reloaded after edit".to_string(),
+                is_success: true,
+                show_until: std::time::Instant::now() + std::time::Duration::from_secs(2),
+            });
+        }
     }
 
     /// Base form clearing without parent logic
@@ -25140,6 +25295,9 @@ impl eframe::App for RequirementsApp {
                 self.last_lock_info = Some(lock_info);
             }
         }
+
+        // Check for external database changes and auto-reload if needed
+        self.handle_db_change_detection();
 
         // Poll for background AI evaluation results
         if let Some(receiver) = &self.ai_eval_receiver {

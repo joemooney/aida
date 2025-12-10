@@ -4055,16 +4055,24 @@ requirements:
   spec_id: FR-0089
   title: SQLite format support
   description: Be able to store requirements in SQLite
-  status: Draft
+  status: Completed
   priority: Medium
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-11-28T20:47:24.654758521Z
-  modified_at: 2025-11-28T20:47:24.654758521Z
+  modified_at: 2025-12-10T03:13:32.581790473Z
   req_type: Functional
   relationships:
   - rel_type: Parent
     target_id: bb81e51e-dd32-48ef-9806-cf26a09643f5
+  history:
+  - id: 68c548a9-41c2-40c8-aa30-f4a149fbe5fc
+    author: CLI
+    timestamp: 2025-12-10T03:13:32.581788063Z
+    changes:
+    - field_name: status
+      old_value: Draft
+      new_value: Completed
 - id: 72cc760e-c566-4bbc-b7fb-82bf027f1eaa
   spec_id: FR-0091
   title: preview appearance changes
@@ -9864,6 +9872,28 @@ requirements:
   created_at: 2025-12-09T15:18:36.889907060Z
   modified_at: 2025-12-09T15:18:36.889907060Z
   req_type: Functional
+- id: 471aae85-4eca-41b0-ba08-e893d8b968a9
+  spec_id: FR-0233
+  title: Tag picker popup with 't' hotkey
+  description: Multi-select tag assignment popup triggered by 't' key in list view. Features fuzzy search filtering, Space to toggle tags or add new ones, Enter to apply all selected tags. Shows currently selected tags at top with click-to-remove.
+  status: Completed
+  priority: Medium
+  owner: ''
+  feature: 123-Uncategorized
+  created_at: 2025-12-10T03:13:24.020966011Z
+  modified_at: 2025-12-10T03:13:24.020966011Z
+  req_type: Functional
+- id: 9f764341-55dc-4f33-89f4-e4bd4c575163
+  spec_id: REQ-0234
+  title: Fix SQLite/YAML auto-detection in Storage
+  description: Storage.load() and Storage.save() now auto-detect file type by extension (.db/.sqlite for SQLite, otherwise YAML). GUI respects --file flag and skips migration check when explicit path is provided. Fixes issue where GUI showed empty list when both YAML and SQLite files exist in same directory.
+  status: Completed
+  priority: High
+  owner: ''
+  feature: 124-Uncategorized
+  created_at: 2025-12-10T03:13:39.544211884Z
+  modified_at: 2025-12-10T03:13:39.544211884Z
+  req_type: Bug
 users:
 - id: 150164ef-32ed-4d61-8cec-e887ac78cfd7
   spec_id: $USER-001
@@ -9961,8 +9991,8 @@ id_config:
     prefix: SPIKE
     description: Research or investigation task to reduce uncertainty or explore technical approaches
 features: []
-next_feature_number: 123
-next_spec_number: 233
+next_feature_number: 125
+next_spec_number: 235
 prefix_counters: {}
 relationship_definitions:
 - name: parent
@@ -19309,3 +19339,4 @@ baselines:
       created_at: 2025-12-07T03:12:45.182840867Z
       created_by: Joe Mooney
   locked: false
+migrated_to: requirements.db
