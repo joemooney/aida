@@ -82,6 +82,15 @@ fn get_sorted_range(range: &egui::text::CCursorRange) -> (usize, usize) {
     (start, end)
 }
 
+/// Sanitize a string by removing control characters that can break YAML serialization.
+/// Keeps newlines (\n), tabs (\t), and carriage returns (\r) which are valid in text.
+/// Removes escape characters and other control codes that egui might insert (e.g., when ESC is pressed).
+fn sanitize_text(s: &str) -> String {
+    s.chars()
+        .filter(|c| !c.is_control() || *c == '\n' || *c == '\t' || *c == '\r')
+        .collect()
+}
+
 /// Capture current text selection from a TextEdit widget.
 ///
 /// This reads the TextEdit's internal state to get the current cursor/selection range.
@@ -5687,7 +5696,10 @@ impl RequirementsApp {
             .filter(|s| !s.is_empty())
             .collect();
 
-        let mut req = Requirement::new(self.form_title.clone(), self.form_description.clone());
+        // Sanitize form fields to remove any control characters (e.g., ESC key inserted by egui)
+        let title = sanitize_text(&self.form_title);
+        let description = sanitize_text(&self.form_description);
+        let mut req = Requirement::new(title, description);
         // Set status from string (handles both standard and custom statuses)
         req.set_status_from_str(&self.form_status_string);
         // Set priority from string (handles both standard and custom priorities)
@@ -5800,6 +5812,10 @@ impl RequirementsApp {
     }
 
     fn update_requirement(&mut self, idx: usize) {
+        // Sanitize form fields to remove any control characters (e.g., ESC key inserted by egui)
+        let sanitized_title = sanitize_text(&self.form_title);
+        let sanitized_description = sanitize_text(&self.form_description);
+
         // Gather data we need before mutable borrows
         let (req_uuid, old_prefix_override, old_feature, old_req_type) = {
             if let Some(req) = self.store.requirements.get(idx) {
@@ -5860,24 +5876,24 @@ impl RequirementsApp {
         if let Some(req) = self.store.requirements.get_mut(idx) {
             let mut changes: Vec<FieldChange> = Vec::new();
 
-            // Track title change
-            if self.form_title != req.title {
+            // Track title change (use sanitized version)
+            if sanitized_title != req.title {
                 changes.push(Requirement::field_change(
                     "title",
                     req.title.clone(),
-                    self.form_title.clone(),
+                    sanitized_title.clone(),
                 ));
-                req.title = self.form_title.clone();
+                req.title = sanitized_title.clone();
             }
 
-            // Track description change
-            if self.form_description != req.description {
+            // Track description change (use sanitized version)
+            if sanitized_description != req.description {
                 changes.push(Requirement::field_change(
                     "description",
                     req.description.clone(),
-                    self.form_description.clone(),
+                    sanitized_description.clone(),
                 ));
-                req.description = self.form_description.clone();
+                req.description = sanitized_description.clone();
             }
 
             // Track status change (use effective_status for comparison)
