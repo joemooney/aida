@@ -1713,15 +1713,22 @@ impl KeyBinding {
     fn display(&self) -> String {
         let mut parts = Vec::new();
         if self.ctrl {
-            parts.push("Ctrl");
+            parts.push("Ctrl".to_string());
         }
         if self.shift {
-            parts.push("Shift");
+            parts.push("Shift".to_string());
         }
         if self.alt {
-            parts.push("Alt");
+            parts.push("Alt".to_string());
         }
-        parts.push(&self.key_name);
+        // Show lowercase letters unless Shift is pressed
+        // Single letter keys (A-Z) should display as lowercase 'a'-'z' when no shift
+        let key_display = if !self.shift && self.key_name.len() == 1 && self.key_name.chars().next().map(|c| c.is_ascii_uppercase()).unwrap_or(false) {
+            self.key_name.to_lowercase()
+        } else {
+            self.key_name.clone()
+        };
+        parts.push(key_display);
         parts.join("+")
     }
 
