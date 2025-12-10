@@ -2268,7 +2268,7 @@ impl Default for UserSettings {
             keybindings: KeyBindings::default(),
             view_presets: Vec::new(),
             custom_themes: Vec::new(),
-            show_status_icons: false,
+            show_status_icons: true,
             status_icons: StatusIconConfig::default(),
             priority_icons: PriorityIconConfig::default(),
             kanban_click_action: KanBanClickAction::default(),
