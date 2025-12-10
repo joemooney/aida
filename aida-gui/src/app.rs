@@ -1549,6 +1549,7 @@ pub enum KeyAction {
     OpenStatusPicker,   // 's' - status picker (existing, now formal)
     OpenPriorityPicker, // 'p' - priority picker (existing, now formal)
     OpenSprintPicker,   // 'S' (shift+s) - sprint assignment picker
+    OpenTagPicker,      // 't' - multi-select tag picker with fuzzy search
     AddComment,         // 'c' - add comment
     ToggleLinksPanel,   // 'L' - show/toggle links
     // Deletion/Archive menu
@@ -1587,6 +1588,7 @@ impl KeyAction {
             KeyAction::OpenStatusPicker => "Open Status Picker",
             KeyAction::OpenPriorityPicker => "Open Priority Picker",
             KeyAction::OpenSprintPicker => "Assign to Sprint",
+            KeyAction::OpenTagPicker => "Open Tag Picker",
             KeyAction::AddComment => "Add Comment",
             KeyAction::ToggleLinksPanel => "Toggle Links Panel",
             KeyAction::OpenDeleteMenu => "Open Delete/Archive Menu",
@@ -1622,6 +1624,7 @@ impl KeyAction {
             KeyAction::OpenStatusPicker => KeyContext::RequirementsList,
             KeyAction::OpenPriorityPicker => KeyContext::RequirementsList,
             KeyAction::OpenSprintPicker => KeyContext::RequirementsList,
+            KeyAction::OpenTagPicker => KeyContext::RequirementsList,
             KeyAction::AddComment => KeyContext::RequirementsList,
             KeyAction::ToggleLinksPanel => KeyContext::RequirementsList,
             KeyAction::OpenDeleteMenu => KeyContext::RequirementsList,
@@ -1656,6 +1659,7 @@ impl KeyAction {
             KeyAction::OpenStatusPicker,
             KeyAction::OpenPriorityPicker,
             KeyAction::OpenSprintPicker,
+            KeyAction::OpenTagPicker,
             KeyAction::AddComment,
             KeyAction::ToggleLinksPanel,
             KeyAction::OpenDeleteMenu,
@@ -1992,6 +1996,11 @@ impl Default for KeyBindings {
             KeyAction::OpenSprintPicker,
             KeyBinding::new(egui::Key::S, KeyAction::OpenSprintPicker.default_context())
                 .with_shift(),
+        );
+        // 't' for tag picker (multi-select with fuzzy search)
+        bindings.insert(
+            KeyAction::OpenTagPicker,
+            KeyBinding::new(egui::Key::T, KeyAction::OpenTagPicker.default_context()),
         );
         bindings.insert(
             KeyAction::AddComment,
@@ -2560,6 +2569,7 @@ enum QuickChangeField {
     Owner,
     Sprint,
     Feature,
+    Tags,
 }
 
 /// AI action types - what kind of AI analysis to perform
@@ -3220,6 +3230,12 @@ pub struct RequirementsApp {
     quick_change_owner_search: String,            // Search text for owner fuzzy finder
     quick_change_feature_search: String,          // Search text for feature fuzzy finder
 
+    // Tag picker popup state (triggered by 't' key)
+    show_tag_picker: bool,                        // Whether tag picker popup is visible
+    tag_picker_search: String,                    // Current search/input text in tag picker
+    tag_picker_selected_tags: HashSet<String>,    // Tags selected so far (pending to be applied)
+    tag_picker_dropdown_idx: usize,               // Currently highlighted option in dropdown
+
     // Delete confirmation state
     pending_delete_confirm: Option<usize>,        // Index of requirement awaiting delete confirmation
 
@@ -3822,6 +3838,10 @@ impl RequirementsApp {
             quick_change_consumed_action: false,
             quick_change_owner_search: String::new(),
             quick_change_feature_search: String::new(),
+            show_tag_picker: false,
+            tag_picker_search: String::new(),
+            tag_picker_selected_tags: HashSet::new(),
+            tag_picker_dropdown_idx: 0,
             pending_delete_confirm: None,
             show_view_picker: false,
             view_picker_selected: 0,
@@ -4299,6 +4319,10 @@ impl RequirementsApp {
             quick_change_consumed_action: false,
             quick_change_owner_search: String::new(),
             quick_change_feature_search: String::new(),
+            show_tag_picker: false,
+            tag_picker_search: String::new(),
+            tag_picker_selected_tags: HashSet::new(),
+            tag_picker_dropdown_idx: 0,
             pending_delete_confirm: None,
             show_view_picker: false,
             view_picker_selected: 0,
@@ -18029,6 +18053,7 @@ impl RequirementsApp {
             QuickChangeField::Owner => unreachable!(),
             QuickChangeField::Sprint => unreachable!(), // Handled separately via show_sprint_picker_popup
             QuickChangeField::Feature => unreachable!(), // Handled separately via show_feature_picker_popup
+            QuickChangeField::Tags => unreachable!(), // Handled separately via show_tag_picker_popup
         };
         let num_options = options.len();
 
@@ -18092,6 +18117,7 @@ impl RequirementsApp {
             QuickChangeField::Owner => unreachable!(),
             QuickChangeField::Sprint => unreachable!(), // Handled separately
             QuickChangeField::Feature => unreachable!(), // Handled separately
+            QuickChangeField::Tags => unreachable!(), // Handled separately via show_tag_picker_popup
         };
 
         egui::Area::new(egui::Id::new(popup_id))
@@ -18756,6 +18782,236 @@ impl RequirementsApp {
         }
     }
 
+    /// Show tag picker popup with multi-select and fuzzy search (triggered by 't' key)
+    fn show_tag_picker_popup(&mut self, ctx: &egui::Context) {
+        if !self.show_tag_picker {
+            return;
+        }
+
+        // Collect all unique tags from all requirements
+        let mut all_tags: Vec<String> = self.store.requirements.iter()
+            .flat_map(|r| r.tags.iter().cloned())
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+        all_tags.sort();
+
+        // Filter based on search text (fuzzy matching)
+        let search_lower = self.tag_picker_search.to_lowercase();
+        let filtered_tags: Vec<&String> = if search_lower.is_empty() {
+            all_tags.iter().collect()
+        } else {
+            all_tags.iter()
+                .filter(|t| t.to_lowercase().contains(&search_lower))
+                .collect()
+        };
+
+        let num_options = filtered_tags.len();
+
+        // Handle keyboard input for the popup
+        let mut close_popup = false;
+        let mut apply_tags = false;
+        let mut select_current = false;
+
+        ctx.input(|i| {
+            // Escape to close without applying
+            if i.key_pressed(egui::Key::Escape) {
+                close_popup = true;
+            }
+            // Enter to apply all selected tags
+            if i.key_pressed(egui::Key::Enter) {
+                apply_tags = true;
+            }
+            // Space to select current tag or finalize typed text
+            if i.key_pressed(egui::Key::Space) {
+                select_current = true;
+            }
+            // Up/Down to navigate dropdown
+            if i.key_pressed(egui::Key::ArrowUp) {
+                if self.tag_picker_dropdown_idx > 0 {
+                    self.tag_picker_dropdown_idx -= 1;
+                } else if num_options > 0 {
+                    self.tag_picker_dropdown_idx = num_options - 1; // Wrap to bottom
+                }
+            }
+            if i.key_pressed(egui::Key::ArrowDown) {
+                if num_options > 0 {
+                    if self.tag_picker_dropdown_idx < num_options - 1 {
+                        self.tag_picker_dropdown_idx += 1;
+                    } else {
+                        self.tag_picker_dropdown_idx = 0; // Wrap to top
+                    }
+                }
+            }
+        });
+
+        // Handle Space key: select highlighted tag or add typed text as new tag
+        if select_current {
+            if !filtered_tags.is_empty() && self.tag_picker_dropdown_idx < filtered_tags.len() {
+                // Select the highlighted tag from dropdown
+                let tag = filtered_tags[self.tag_picker_dropdown_idx].clone();
+                if self.tag_picker_selected_tags.contains(&tag) {
+                    self.tag_picker_selected_tags.remove(&tag);
+                } else {
+                    self.tag_picker_selected_tags.insert(tag);
+                }
+            } else if !self.tag_picker_search.trim().is_empty() {
+                // Add the typed text as a new tag
+                let new_tag = self.tag_picker_search.trim().to_string();
+                self.tag_picker_selected_tags.insert(new_tag);
+            }
+            // Clear search for next tag
+            self.tag_picker_search.clear();
+            self.tag_picker_dropdown_idx = 0;
+        }
+
+        if close_popup {
+            self.show_tag_picker = false;
+            self.tag_picker_search.clear();
+            self.tag_picker_selected_tags.clear();
+            self.quick_change_target_id = None;
+            return;
+        }
+
+        // Apply all selected tags to the requirement
+        if apply_tags {
+            if let Some(target_id) = self.quick_change_target_id {
+                // Find the requirement index
+                if let Some(idx) = self.store.requirements.iter().position(|r| r.id == target_id) {
+                    // Update tags
+                    self.store.requirements[idx].tags = self.tag_picker_selected_tags.clone();
+                    self.store.requirements[idx].modified_at = chrono::Utc::now();
+
+                    // Save using the app's save method
+                    if let Err(e) = self.storage.save(&self.store) {
+                        eprintln!("Failed to save after tag update: {}", e);
+                    }
+                }
+            }
+
+            self.show_tag_picker = false;
+            self.tag_picker_search.clear();
+            self.tag_picker_selected_tags.clear();
+            self.quick_change_target_id = None;
+            return;
+        }
+
+        // Ensure selected index is valid after filtering
+        if self.tag_picker_dropdown_idx >= num_options && num_options > 0 {
+            self.tag_picker_dropdown_idx = num_options - 1;
+        }
+
+        // Center the popup on screen
+        let screen_rect = ctx.screen_rect();
+        let popup_size = egui::vec2(300.0, 300.0);
+        let popup_pos = egui::pos2(
+            (screen_rect.width() - popup_size.x) / 2.0,
+            (screen_rect.height() - popup_size.y) / 2.0,
+        );
+
+        egui::Area::new(egui::Id::new("tag_picker_popup"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(popup_pos)
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style())
+                    .inner_margin(8.0)
+                    .show(ui, |ui| {
+                        ui.set_min_width(popup_size.x - 16.0);
+                        ui.label(egui::RichText::new("Assign Tags").strong());
+                        ui.separator();
+
+                        // Show currently selected tags
+                        if !self.tag_picker_selected_tags.is_empty() {
+                            ui.horizontal_wrapped(|ui| {
+                                let tags: Vec<_> = self.tag_picker_selected_tags.iter().cloned().collect();
+                                for tag in tags {
+                                    let tag_clone = tag.clone();
+                                    if ui.selectable_label(true, format!("✓ {}", tag)).clicked() {
+                                        // Click to remove from selection
+                                        self.tag_picker_selected_tags.remove(&tag_clone);
+                                    }
+                                }
+                            });
+                            ui.separator();
+                        }
+
+                        // Search input
+                        let response = ui.add(
+                            egui::TextEdit::singleline(&mut self.tag_picker_search)
+                                .hint_text("Type to search or add tags...")
+                                .desired_width(ui.available_width())
+                        );
+                        // Auto-focus the search field
+                        response.request_focus();
+
+                        ui.separator();
+
+                        // Show "Add new tag" option if search text doesn't match existing
+                        let search_trimmed = self.tag_picker_search.trim();
+                        let search_exists = all_tags.iter().any(|t| t.eq_ignore_ascii_case(search_trimmed));
+                        if !search_trimmed.is_empty() && !search_exists {
+                            ui.horizontal(|ui| {
+                                ui.weak("Press Space to add:");
+                                ui.label(egui::RichText::new(format!("\"{}\"", search_trimmed)).italics());
+                            });
+                            ui.separator();
+                        }
+
+                        // Scrollable list of filtered tags
+                        egui::ScrollArea::vertical()
+                            .max_height(120.0)
+                            .show(ui, |ui| {
+                                if filtered_tags.is_empty() {
+                                    if search_trimmed.is_empty() {
+                                        ui.weak("No tags yet");
+                                    } else {
+                                        ui.weak("No matching tags");
+                                    }
+                                } else {
+                                    for (idx, tag) in filtered_tags.iter().enumerate() {
+                                        let is_highlighted = idx == self.tag_picker_dropdown_idx;
+                                        let is_selected = self.tag_picker_selected_tags.contains(*tag);
+
+                                        let display = if is_selected {
+                                            format!("✓ {}", tag)
+                                        } else {
+                                            (*tag).clone()
+                                        };
+
+                                        let response = ui.selectable_label(is_highlighted, display);
+                                        if response.clicked() {
+                                            // Toggle selection on click
+                                            if is_selected {
+                                                self.tag_picker_selected_tags.remove(*tag);
+                                            } else {
+                                                self.tag_picker_selected_tags.insert((*tag).clone());
+                                            }
+                                        }
+                                    }
+                                }
+                            });
+
+                        ui.separator();
+                        ui.horizontal(|ui| {
+                            ui.small("↑↓ Navigate  Space Select  Enter Apply  Esc Cancel");
+                        });
+                    });
+            });
+
+        // Close on click outside
+        if ctx.input(|i| i.pointer.any_click()) {
+            let popup_rect = egui::Rect::from_min_size(popup_pos, popup_size);
+            if let Some(pos) = ctx.input(|i| i.pointer.interact_pos()) {
+                if !popup_rect.contains(pos) {
+                    self.show_tag_picker = false;
+                    self.tag_picker_search.clear();
+                    self.tag_picker_selected_tags.clear();
+                    self.quick_change_target_id = None;
+                }
+            }
+        }
+    }
+
     /// Show sprint picker popup for assigning requirement to sprint
     fn show_sprint_picker_popup(&mut self, ctx: &egui::Context) {
         // Get available sprints (active only)
@@ -19216,6 +19472,10 @@ impl RequirementsApp {
             }
             QuickChangeField::Feature => {
                 // Feature is handled separately via show_feature_picker_popup
+                // This branch should never be reached
+            }
+            QuickChangeField::Tags => {
+                // Tags are handled separately via show_tag_picker_popup
                 // This branch should never be reached
             }
         }
@@ -25322,6 +25582,23 @@ impl eframe::App for RequirementsApp {
                         }
                     }
                 }
+                // 't' key to open tag picker (multi-select with fuzzy search)
+                else if self.user_settings.keybindings.is_pressed(
+                    KeyAction::OpenTagPicker,
+                    ctx,
+                    self.current_key_context,
+                ) {
+                    if let Some(idx) = self.selected_idx {
+                        if let Some(req) = self.store.requirements.get(idx) {
+                            // Initialize with current tags
+                            self.tag_picker_selected_tags = req.tags.clone();
+                            self.tag_picker_search.clear();
+                            self.tag_picker_dropdown_idx = 0;
+                            self.quick_change_target_id = Some(req.id);
+                            self.show_tag_picker = true;
+                        }
+                    }
+                }
                 // 'f' key to open feature picker (fuzzy finder)
                 else if self.user_settings.keybindings.is_pressed(
                     KeyAction::OpenFeaturePicker,
@@ -26168,6 +26445,9 @@ impl eframe::App for RequirementsApp {
 
         // Show delete/archive menu popup (triggered by 'd' key)
         self.show_delete_menu_popup(ctx);
+
+        // Show tag picker popup (triggered by 't' key)
+        self.show_tag_picker_popup(ctx);
 
         // Show keyboard shortcuts help popup (triggered by '?' key)
         self.show_keyboard_help_popup(ctx);
