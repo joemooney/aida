@@ -1410,3 +1410,30 @@ A chronological record of development sessions and changes made to the Requireme
   - 'n' -> next search match (when search active)
   - 'N' (Shift+N) -> previous search match
   - Ctrl+N -> smart new requirement (global)
+
+### Database Change Detection and Auto-Reload
+- **Prompt**: "Maybe we should have a periodic check for updates to the database and alert the user"
+- **Requirements**:
+  - Auto-reload when not editing (silent, preserves selection)
+  - Toast notification when editing with deferred reload
+  - Configurable poll interval (default 30 seconds)
+- **Implementation**:
+  - Added `UserSettings` fields:
+    - `db_poll_interval_secs` (default 30): check interval, 0 to disable
+    - `db_auto_reload` (default true): auto-reload when not editing
+  - Added `RequirementsApp` state fields:
+    - `last_db_check`: tracks last file mtime check time
+    - `known_db_mtime`: last known modification time
+    - `pending_external_reload`: flag for deferred reload
+    - `external_change_detected_at`: timestamp of detected change
+  - Core methods:
+    - `get_db_file_mtime()`: get file modification time
+    - `check_for_external_db_changes()`: periodic mtime comparison
+    - `reload_database()`: reload with selection preservation
+    - `is_editing()`: check if in Edit/Add view
+    - `handle_db_change_detection()`: main detection logic
+  - Integrated into update loop for continuous monitoring
+- **Behavior**:
+  - When not editing: auto-reload if enabled, else show toast
+  - When editing: show toast "Database changed externally, reload pending"
+  - Selection is preserved across reloads by matching requirement IDs
