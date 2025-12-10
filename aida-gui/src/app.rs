@@ -19654,7 +19654,7 @@ impl RequirementsApp {
 
                 let views = [
                     ("v r", "Requirements list"),
-                    ("v k", "Kanban board"),
+                    ("v K", "Kanban board"),
                     ("v t", "Timeline"),
                     ("v b", "Baselines"),
                     ("v o", "Org Chart"),
@@ -19684,15 +19684,14 @@ impl RequirementsApp {
 
                 let create = [
                     ("Ctrl+N", "New requirement"),
-                    ("n", "New sibling"),
-                    ("N", "New child"),
+                    ("a s", "New sibling"),
+                    ("a c", "New child"),
                     ("c", "Add comment"),
                 ];
 
                 let actions = [
-                    ("d", "Delete (confirm)"),
-                    ("D", "Delete immediately"),
-                    ("a", "Archive/unarchive"),
+                    ("d d", "Delete (confirm)"),
+                    ("d a", "Archive/unarchive"),
                     ("A", "AI Actions menu"),
                     ("L", "Toggle links panel"),
                 ];
