@@ -336,6 +336,9 @@ pub fn proto_to_requirement(req: &proto::Requirement) -> Option<Requirement> {
         custom_fields: req.custom_fields.clone(),
         urls: req.urls.iter().map(proto_to_url_link).collect(),
         ai_evaluation: None, // AI evaluation is not exposed via gRPC
+        trace_links: Vec::new(), // Trace links are not exposed via gRPC yet
+        implementation_info: None, // Implementation info is not exposed via gRPC yet
+        weight: None, // Weight is not exposed via gRPC yet
         version: 1, // New requirements start at version 1
     })
 }

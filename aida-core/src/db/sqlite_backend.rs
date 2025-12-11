@@ -12,15 +12,15 @@ use uuid::Uuid;
 
 use crate::models::{
     Comment, CustomTypeDefinition, FeatureDefinition,
-    HistoryEntry, IdConfiguration, ReactionDefinition, RelationshipDefinition,
-    Relationship, Requirement, RequirementPriority, RequirementStatus,
-    RequirementType, RequirementsStore, UrlLink, User,
+    HistoryEntry, IdConfiguration, ImplementationInfo, ReactionDefinition,
+    RelationshipDefinition, Relationship, Requirement, RequirementPriority,
+    RequirementStatus, RequirementType, RequirementsStore, TraceLink, UrlLink, User,
 };
 
 use super::traits::{BackendType, DatabaseBackend};
 
-/// Current schema version
-const SCHEMA_VERSION: i32 = 2;
+/// Current schema version - updated to 3 for trace_links and implementation_info
+const SCHEMA_VERSION: i32 = 3;
 
 /// SQLite backend implementation
 pub struct SqliteBackend {
@@ -110,6 +110,29 @@ impl SqliteBackend {
 
             // Ensure schema version is updated even if some ALTERs failed
             let _ = conn.execute("UPDATE schema_version SET version = 2", []);
+        }
+
+        if from_version < 3 {
+            // Migration from v2 to v3: Add trace_links and implementation_info columns
+            // trace:REQ-0245 | ai:claude:high
+            conn.execute_batch(
+                r#"
+                -- Add trace_links column for code-to-requirement traceability
+                ALTER TABLE requirements ADD COLUMN trace_links TEXT NOT NULL DEFAULT '[]';
+
+                -- Add implementation_info column for implementation metadata
+                ALTER TABLE requirements ADD COLUMN implementation_info TEXT;
+
+                -- Update schema version
+                UPDATE schema_version SET version = 3;
+                "#,
+            ).unwrap_or_else(|e| {
+                // Some columns may already exist, ignore those errors
+                eprintln!("Note: Some v3 migration columns may already exist: {}", e);
+            });
+
+            // Ensure schema version is updated even if some ALTERs failed
+            let _ = conn.execute("UPDATE schema_version SET version = 3", []);
         }
 
         Ok(())
@@ -204,13 +227,30 @@ impl SqliteBackend {
 
     /// Load requirements from database
     fn load_requirements(&self, conn: &Connection) -> Result<Vec<Requirement>> {
-        let mut stmt = conn.prepare(
+        // Check if new columns exist (for schema migration compatibility)
+        let has_trace_links = conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('requirements') WHERE name='trace_links'",
+            [],
+            |row| row.get::<_, i32>(0),
+        ).unwrap_or(0) > 0;
+
+        let query = if has_trace_links {
             "SELECT id, spec_id, prefix_override, title, description, status, priority,
                     owner, feature, created_at, created_by, modified_at, req_type,
                     dependencies, tags, relationships, comments, history, archived,
-                    custom_status, custom_priority, custom_fields, urls, ai_evaluation, version
+                    custom_status, custom_priority, custom_fields, urls, trace_links,
+                    implementation_info, ai_evaluation, version
              FROM requirements ORDER BY created_at"
-        )?;
+        } else {
+            "SELECT id, spec_id, prefix_override, title, description, status, priority,
+                    owner, feature, created_at, created_by, modified_at, req_type,
+                    dependencies, tags, relationships, comments, history, archived,
+                    custom_status, custom_priority, custom_fields, urls, NULL as trace_links,
+                    NULL as implementation_info, ai_evaluation, version
+             FROM requirements ORDER BY created_at"
+        };
+
+        let mut stmt = conn.prepare(query)?;
 
         let rows = stmt.query_map([], |row| {
             let id_str: String = row.get(0)?;
@@ -236,15 +276,17 @@ impl SqliteBackend {
             let custom_priority: Option<String> = row.get(20)?;
             let custom_fields_json: String = row.get(21)?;
             let urls_json: String = row.get(22)?;
-            let ai_evaluation_json: Option<String> = row.get(23)?;
-            let version: i64 = row.get(24)?;
+            let trace_links_json: Option<String> = row.get(23)?;
+            let implementation_info_json: Option<String> = row.get(24)?;
+            let ai_evaluation_json: Option<String> = row.get(25)?;
+            let version: i64 = row.get(26)?;
 
             Ok((
                 id_str, spec_id, prefix_override, title, description, status_str, priority_str,
                 owner, feature, created_at_str, created_by, modified_at_str, req_type_str,
                 dependencies_json, tags_json, relationships_json, comments_json, history_json,
                 archived, custom_status, custom_priority, custom_fields_json, urls_json,
-                ai_evaluation_json, version
+                trace_links_json, implementation_info_json, ai_evaluation_json, version
             ))
         })?;
 
@@ -255,7 +297,7 @@ impl SqliteBackend {
                 owner, feature, created_at_str, created_by, modified_at_str, req_type_str,
                 dependencies_json, tags_json, relationships_json, comments_json, history_json,
                 archived, custom_status, custom_priority, custom_fields_json, urls_json,
-                ai_evaluation_json, version
+                trace_links_json, implementation_info_json, ai_evaluation_json, version
             ) = row_result?;
 
             let id = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4());
@@ -275,6 +317,11 @@ impl SqliteBackend {
             let history: Vec<HistoryEntry> = Self::from_json(&history_json).unwrap_or_default();
             let custom_fields: HashMap<String, String> = Self::from_json(&custom_fields_json).unwrap_or_default();
             let urls: Vec<UrlLink> = Self::from_json(&urls_json).unwrap_or_default();
+            let trace_links: Vec<TraceLink> = trace_links_json
+                .and_then(|json| Self::from_json(&json).ok())
+                .unwrap_or_default();
+            let implementation_info: Option<ImplementationInfo> = implementation_info_json
+                .and_then(|json| Self::from_json(&json).ok());
             let ai_evaluation = ai_evaluation_json
                 .and_then(|json| Self::from_json(&json).ok());
 
@@ -303,6 +350,8 @@ impl SqliteBackend {
                 custom_priority,
                 custom_fields,
                 urls,
+                trace_links,
+                implementation_info,
                 ai_evaluation,
                 version,
             });
@@ -457,42 +506,93 @@ impl SqliteBackend {
         let ai_eval_json = req.ai_evaluation.as_ref()
             .map(|e| Self::to_json(e))
             .transpose()?;
+        let impl_info_json = req.implementation_info.as_ref()
+            .map(|i| Self::to_json(i))
+            .transpose()?;
 
-        conn.execute(
-            "INSERT OR REPLACE INTO requirements
-             (id, spec_id, prefix_override, title, description, status, priority, owner, feature,
-              created_at, created_by, modified_at, req_type, dependencies, tags, relationships,
-              comments, history, archived, custom_status, custom_priority, custom_fields, urls,
-              ai_evaluation, version)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)",
-            params![
-                req.id.to_string(),
-                req.spec_id,
-                req.prefix_override,
-                req.title,
-                req.description,
-                Self::status_to_str(&req.status),
-                Self::priority_to_str(&req.priority),
-                req.owner,
-                req.feature,
-                req.created_at.to_rfc3339(),
-                req.created_by,
-                req.modified_at.to_rfc3339(),
-                Self::type_to_str(&req.req_type),
-                Self::to_json(&req.dependencies)?,
-                Self::to_json(&req.tags)?,
-                Self::to_json(&req.relationships)?,
-                Self::to_json(&req.comments)?,
-                Self::to_json(&req.history)?,
-                req.archived,
-                req.custom_status,
-                req.custom_priority,
-                Self::to_json(&req.custom_fields)?,
-                Self::to_json(&req.urls)?,
-                ai_eval_json,
-                req.version,
-            ],
-        )?;
+        // Check if new columns exist and use appropriate query
+        let has_trace_links = conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('requirements') WHERE name='trace_links'",
+            [],
+            |row| row.get::<_, i32>(0),
+        ).unwrap_or(0) > 0;
+
+        if has_trace_links {
+            conn.execute(
+                "INSERT OR REPLACE INTO requirements
+                 (id, spec_id, prefix_override, title, description, status, priority, owner, feature,
+                  created_at, created_by, modified_at, req_type, dependencies, tags, relationships,
+                  comments, history, archived, custom_status, custom_priority, custom_fields, urls,
+                  trace_links, implementation_info, ai_evaluation, version)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)",
+                params![
+                    req.id.to_string(),
+                    req.spec_id,
+                    req.prefix_override,
+                    req.title,
+                    req.description,
+                    Self::status_to_str(&req.status),
+                    Self::priority_to_str(&req.priority),
+                    req.owner,
+                    req.feature,
+                    req.created_at.to_rfc3339(),
+                    req.created_by,
+                    req.modified_at.to_rfc3339(),
+                    Self::type_to_str(&req.req_type),
+                    Self::to_json(&req.dependencies)?,
+                    Self::to_json(&req.tags)?,
+                    Self::to_json(&req.relationships)?,
+                    Self::to_json(&req.comments)?,
+                    Self::to_json(&req.history)?,
+                    req.archived,
+                    req.custom_status,
+                    req.custom_priority,
+                    Self::to_json(&req.custom_fields)?,
+                    Self::to_json(&req.urls)?,
+                    Self::to_json(&req.trace_links)?,
+                    impl_info_json,
+                    ai_eval_json,
+                    req.version,
+                ],
+            )?;
+        } else {
+            // Fallback for old schema without trace_links
+            conn.execute(
+                "INSERT OR REPLACE INTO requirements
+                 (id, spec_id, prefix_override, title, description, status, priority, owner, feature,
+                  created_at, created_by, modified_at, req_type, dependencies, tags, relationships,
+                  comments, history, archived, custom_status, custom_priority, custom_fields, urls,
+                  ai_evaluation, version)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)",
+                params![
+                    req.id.to_string(),
+                    req.spec_id,
+                    req.prefix_override,
+                    req.title,
+                    req.description,
+                    Self::status_to_str(&req.status),
+                    Self::priority_to_str(&req.priority),
+                    req.owner,
+                    req.feature,
+                    req.created_at.to_rfc3339(),
+                    req.created_by,
+                    req.modified_at.to_rfc3339(),
+                    Self::type_to_str(&req.req_type),
+                    Self::to_json(&req.dependencies)?,
+                    Self::to_json(&req.tags)?,
+                    Self::to_json(&req.relationships)?,
+                    Self::to_json(&req.comments)?,
+                    Self::to_json(&req.history)?,
+                    req.archived,
+                    req.custom_status,
+                    req.custom_priority,
+                    Self::to_json(&req.custom_fields)?,
+                    Self::to_json(&req.urls)?,
+                    ai_eval_json,
+                    req.version,
+                ],
+            )?;
+        }
         Ok(())
     }
 
@@ -702,12 +802,31 @@ impl DatabaseBackend for SqliteBackend {
     fn get_requirement(&self, id: &Uuid) -> Result<Option<Requirement>> {
         let conn = self.conn.lock().unwrap();
 
-        let result = conn.query_row(
+        // Check if new columns exist (for schema migration compatibility)
+        let has_trace_links = conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('requirements') WHERE name='trace_links'",
+            [],
+            |row| row.get::<_, i32>(0),
+        ).unwrap_or(0) > 0;
+
+        let query = if has_trace_links {
             "SELECT id, spec_id, prefix_override, title, description, status, priority,
                     owner, feature, created_at, created_by, modified_at, req_type,
                     dependencies, tags, relationships, comments, history, archived,
-                    custom_status, custom_priority, custom_fields, urls, ai_evaluation, version
-             FROM requirements WHERE id = ?1",
+                    custom_status, custom_priority, custom_fields, urls, trace_links,
+                    implementation_info, ai_evaluation, version
+             FROM requirements WHERE id = ?1"
+        } else {
+            "SELECT id, spec_id, prefix_override, title, description, status, priority,
+                    owner, feature, created_at, created_by, modified_at, req_type,
+                    dependencies, tags, relationships, comments, history, archived,
+                    custom_status, custom_priority, custom_fields, urls, NULL as trace_links,
+                    NULL as implementation_info, ai_evaluation, version
+             FROM requirements WHERE id = ?1"
+        };
+
+        let result = conn.query_row(
+            query,
             [id.to_string()],
             |row| {
                 let id_str: String = row.get(0)?;
@@ -733,15 +852,17 @@ impl DatabaseBackend for SqliteBackend {
                 let custom_priority: Option<String> = row.get(20)?;
                 let custom_fields_json: String = row.get(21)?;
                 let urls_json: String = row.get(22)?;
-                let ai_evaluation_json: Option<String> = row.get(23)?;
-                let version: i64 = row.get(24)?;
+                let trace_links_json: Option<String> = row.get(23)?;
+                let implementation_info_json: Option<String> = row.get(24)?;
+                let ai_evaluation_json: Option<String> = row.get(25)?;
+                let version: i64 = row.get(26)?;
 
                 Ok((
                     id_str, spec_id, prefix_override, title, description, status_str, priority_str,
                     owner, feature, created_at_str, created_by, modified_at_str, req_type_str,
                     dependencies_json, tags_json, relationships_json, comments_json, history_json,
                     archived, custom_status, custom_priority, custom_fields_json, urls_json,
-                    ai_evaluation_json, version
+                    trace_links_json, implementation_info_json, ai_evaluation_json, version
                 ))
             }
         ).optional()?;
@@ -752,7 +873,7 @@ impl DatabaseBackend for SqliteBackend {
                 owner, feature, created_at_str, created_by, modified_at_str, req_type_str,
                 dependencies_json, tags_json, relationships_json, comments_json, history_json,
                 archived, custom_status, custom_priority, custom_fields_json, urls_json,
-                ai_evaluation_json, version
+                trace_links_json, implementation_info_json, ai_evaluation_json, version
             )) => {
                 let id = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4());
                 let status = Self::str_to_status(&status_str);
@@ -771,6 +892,11 @@ impl DatabaseBackend for SqliteBackend {
                 let history: Vec<HistoryEntry> = Self::from_json(&history_json).unwrap_or_default();
                 let custom_fields: HashMap<String, String> = Self::from_json(&custom_fields_json).unwrap_or_default();
                 let urls: Vec<UrlLink> = Self::from_json(&urls_json).unwrap_or_default();
+                let trace_links: Vec<TraceLink> = trace_links_json
+                    .and_then(|json| Self::from_json(&json).ok())
+                    .unwrap_or_default();
+                let implementation_info: Option<ImplementationInfo> = implementation_info_json
+                    .and_then(|json| Self::from_json(&json).ok());
                 let ai_evaluation = ai_evaluation_json
                     .and_then(|json| Self::from_json(&json).ok());
 
@@ -799,6 +925,8 @@ impl DatabaseBackend for SqliteBackend {
                     custom_priority,
                     custom_fields,
                     urls,
+                    trace_links,
+                    implementation_info,
                     ai_evaluation,
                     version,
                 }))

@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER NOT NULL
 );
 
-INSERT INTO schema_version (version) VALUES (2);
+INSERT INTO schema_version (version) VALUES (3);
 
 -- Requirements table
 CREATE TABLE IF NOT EXISTS requirements (
@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS requirements (
     custom_priority TEXT,
     custom_fields TEXT NOT NULL DEFAULT '{}',
     urls TEXT NOT NULL DEFAULT '[]',
+    trace_links TEXT NOT NULL DEFAULT '[]',
+    implementation_info TEXT,
     ai_evaluation TEXT,
     version INTEGER NOT NULL DEFAULT 1
 );

@@ -29,6 +29,7 @@ rusqlite = { version = "0.31", features = ["bundled"] }  # SQLite database suppo
 clap = { version = "4.4", features = ["derive"] }
 inquire = { version = "0.9.1", features = ["editor"] }
 colored = "2.0"
+regex = "1.10"
 
 # GUI dependencies
 eframe = "0.29"

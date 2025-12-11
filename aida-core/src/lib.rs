@@ -20,6 +20,11 @@ pub use models::{
     AiActionPromptConfig,
     AiPromptConfig,
     AiTypePromptConfig,
+    // Traceability types
+    ArtifactType,
+    TraceLink,
+    ConfidenceLevel,
+    ImplementationInfo,
     // Baseline types
     Baseline,
     BaselineComparison,

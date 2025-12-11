@@ -1639,6 +1639,281 @@ impl UrlLink {
     }
 }
 
+// trace:REQ-0243 | ai:claude:high
+/// Represents the type of artifact being traced
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum ArtifactType {
+    /// Source code file
+    SourceCode,
+    /// Test code file
+    TestCode,
+    /// Configuration file
+    Config,
+    /// Documentation file
+    Doc,
+}
+
+impl fmt::Display for ArtifactType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ArtifactType::SourceCode => write!(f, "source"),
+            ArtifactType::TestCode => write!(f, "test"),
+            ArtifactType::Config => write!(f, "config"),
+            ArtifactType::Doc => write!(f, "doc"),
+        }
+    }
+}
+
+impl ArtifactType {
+    /// Parse an artifact type from a string
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "source" | "sourcecode" | "src" | "code" => Some(ArtifactType::SourceCode),
+            "test" | "testcode" | "tests" => Some(ArtifactType::TestCode),
+            "config" | "configuration" | "cfg" => Some(ArtifactType::Config),
+            "doc" | "docs" | "documentation" => Some(ArtifactType::Doc),
+            _ => None,
+        }
+    }
+}
+
+// trace:REQ-0243 | ai:claude:high
+/// Represents a trace link between a requirement and a code artifact
+/// This enables bidirectional traceability: requirement -> code and code -> requirement
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TraceLink {
+    /// Unique identifier for the trace link
+    pub id: Uuid,
+
+    /// The type of artifact (source, test, config, doc)
+    pub artifact_type: ArtifactType,
+
+    /// Path to the file containing the artifact (relative to project root)
+    pub file_path: String,
+
+    /// Optional symbol name (function, struct, module, etc.)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub symbol: Option<String>,
+
+    /// Optional line range (start, end) where the implementation exists
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line_start: Option<u32>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line_end: Option<u32>,
+
+    /// Optional notes about this trace link
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
+
+    /// When this trace link was created
+    pub created_at: DateTime<Utc>,
+
+    /// Who created this trace link
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created_by: Option<String>,
+
+    /// Git commit hash where this trace was identified (optional)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub commit_hash: Option<String>,
+}
+
+impl TraceLink {
+    /// Creates a new trace link
+    pub fn new(
+        artifact_type: ArtifactType,
+        file_path: impl Into<String>,
+    ) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            artifact_type,
+            file_path: file_path.into(),
+            symbol: None,
+            line_start: None,
+            line_end: None,
+            notes: None,
+            created_at: Utc::now(),
+            created_by: None,
+            commit_hash: None,
+        }
+    }
+
+    /// Sets the symbol name
+    pub fn with_symbol(mut self, symbol: impl Into<String>) -> Self {
+        self.symbol = Some(symbol.into());
+        self
+    }
+
+    /// Sets the line range
+    pub fn with_lines(mut self, start: u32, end: u32) -> Self {
+        self.line_start = Some(start);
+        self.line_end = Some(end);
+        self
+    }
+
+    /// Sets notes
+    pub fn with_notes(mut self, notes: impl Into<String>) -> Self {
+        self.notes = Some(notes.into());
+        self
+    }
+
+    /// Sets the creator
+    pub fn with_created_by(mut self, author: impl Into<String>) -> Self {
+        self.created_by = Some(author.into());
+        self
+    }
+
+    /// Sets the commit hash
+    pub fn with_commit(mut self, hash: impl Into<String>) -> Self {
+        self.commit_hash = Some(hash.into());
+        self
+    }
+
+    /// Returns the line range as a tuple if both start and end are set
+    pub fn line_range(&self) -> Option<(u32, u32)> {
+        match (self.line_start, self.line_end) {
+            (Some(start), Some(end)) => Some((start, end)),
+            _ => None,
+        }
+    }
+}
+
+// trace:EPIC-0246 | ai:claude:high
+/// Confidence level for AI-generated implementation
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum ConfidenceLevel {
+    /// >80% AI-generated
+    High,
+    /// 40-80% AI with modifications
+    Medium,
+    /// <40% AI, mostly human
+    Low,
+}
+
+impl fmt::Display for ConfidenceLevel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ConfidenceLevel::High => write!(f, "high"),
+            ConfidenceLevel::Medium => write!(f, "med"),
+            ConfidenceLevel::Low => write!(f, "low"),
+        }
+    }
+}
+
+impl ConfidenceLevel {
+    /// Parse a confidence level from a string
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "high" | "h" => Some(ConfidenceLevel::High),
+            "medium" | "med" | "m" => Some(ConfidenceLevel::Medium),
+            "low" | "l" => Some(ConfidenceLevel::Low),
+            _ => None,
+        }
+    }
+}
+
+// trace:EPIC-0246 | ai:claude:high
+/// Tracks implementation metadata for a requirement
+/// Stores information about how and when a requirement was implemented
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ImplementationInfo {
+    /// Whether the requirement has been implemented
+    pub implemented: bool,
+
+    /// Summary of the implementation
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+
+    /// When the last AI agent run occurred for this requirement
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_agent_run: Option<DateTime<Utc>>,
+
+    /// Risk notes identified during implementation
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub risk_notes: Option<String>,
+
+    /// Notes about test coverage
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub test_coverage_notes: Option<String>,
+
+    /// The AI tool used for implementation (e.g., "claude", "copilot")
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_tool: Option<String>,
+
+    /// Confidence level of the AI-generated implementation
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confidence: Option<ConfidenceLevel>,
+
+    /// When the implementation was completed
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub implemented_at: Option<DateTime<Utc>>,
+
+    /// Who performed the implementation
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub implemented_by: Option<String>,
+}
+
+impl Default for ImplementationInfo {
+    fn default() -> Self {
+        Self {
+            implemented: false,
+            summary: None,
+            last_agent_run: None,
+            risk_notes: None,
+            test_coverage_notes: None,
+            source_tool: None,
+            confidence: None,
+            implemented_at: None,
+            implemented_by: None,
+        }
+    }
+}
+
+impl ImplementationInfo {
+    /// Creates a new ImplementationInfo with implemented=false
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Creates a new ImplementationInfo marked as implemented
+    pub fn implemented() -> Self {
+        Self {
+            implemented: true,
+            implemented_at: Some(Utc::now()),
+            ..Self::default()
+        }
+    }
+
+    /// Sets the implementation summary
+    pub fn with_summary(mut self, summary: impl Into<String>) -> Self {
+        self.summary = Some(summary.into());
+        self
+    }
+
+    /// Sets the source tool
+    pub fn with_source_tool(mut self, tool: impl Into<String>) -> Self {
+        self.source_tool = Some(tool.into());
+        self
+    }
+
+    /// Sets the confidence level
+    pub fn with_confidence(mut self, confidence: ConfidenceLevel) -> Self {
+        self.confidence = Some(confidence);
+        self
+    }
+
+    /// Sets the implementer
+    pub fn with_implemented_by(mut self, author: impl Into<String>) -> Self {
+        self.implemented_by = Some(author.into());
+        self
+    }
+
+    /// Records an agent run
+    pub fn record_agent_run(&mut self) {
+        self.last_agent_run = Some(Utc::now());
+    }
+}
+
 /// Represents a comment on a requirement with threading support
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Comment {
@@ -2059,6 +2334,16 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub urls: Vec<UrlLink>,
 
+    // trace:REQ-0243 | ai:claude:high
+    /// Trace links to code artifacts implementing this requirement
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub trace_links: Vec<TraceLink>,
+
+    // trace:EPIC-0246 | ai:claude:high
+    /// Implementation metadata for this requirement
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub implementation_info: Option<ImplementationInfo>,
+
     /// Cached AI evaluation results
     /// Automatically populated by background evaluator when requirement changes
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -2104,6 +2389,8 @@ impl Requirement {
             custom_priority: None,
             custom_fields: std::collections::HashMap::new(),
             urls: Vec::new(),
+            trace_links: Vec::new(),
+            implementation_info: None,
             version: 1,
             ai_evaluation: None,
         }

@@ -51,6 +51,104 @@ pub enum ServerCommand {
     Ping,
 }
 
+/// Commands for code-to-requirement traceability
+#[derive(Subcommand, Debug)]
+pub enum TraceCommand {
+    /// Add a trace link from code to a requirement
+    Add {
+        /// Requirement ID (UUID or SPEC-ID)
+        #[clap(long)]
+        req: String,
+
+        /// Path to the source file
+        #[clap(long)]
+        file: String,
+
+        /// Symbol name (function, struct, module, etc.)
+        #[clap(long)]
+        symbol: Option<String>,
+
+        /// Starting line number
+        #[clap(long)]
+        line_start: Option<u32>,
+
+        /// Ending line number
+        #[clap(long)]
+        line_end: Option<u32>,
+
+        /// Artifact type: source, test, config, doc
+        #[clap(long, short = 't', default_value = "source")]
+        r#type: String,
+
+        /// Notes about this trace link
+        #[clap(long)]
+        notes: Option<String>,
+
+        /// Git commit hash where this was implemented
+        #[clap(long)]
+        commit: Option<String>,
+    },
+
+    /// List trace links for a requirement or file
+    List {
+        /// Requirement ID (UUID or SPEC-ID) - lists all trace links for this requirement
+        #[clap(long)]
+        req: Option<String>,
+
+        /// File path - lists all trace links for this file
+        #[clap(long)]
+        file: Option<String>,
+    },
+
+    /// Remove a trace link
+    Remove {
+        /// Requirement ID (UUID or SPEC-ID)
+        #[clap(long)]
+        req: String,
+
+        /// Trace link ID to remove
+        #[clap(long)]
+        link_id: String,
+    },
+
+    /// Scan source files for trace comments (// trace:REQ-ID format)
+    Scan {
+        /// Path to scan (file or directory, defaults to current directory)
+        path: Option<String>,
+
+        /// File extensions to scan (comma-separated, e.g., "rs,py,ts")
+        #[clap(long, default_value = "rs")]
+        extensions: String,
+
+        /// Add discovered trace links to requirements database
+        #[clap(long)]
+        update: bool,
+
+        /// Show verbose output
+        #[clap(long, short = 'v')]
+        verbose: bool,
+    },
+
+    /// Sweep git commits for requirement references
+    Sweep {
+        /// Number of commits to scan (default: all)
+        #[clap(long)]
+        limit: Option<u32>,
+
+        /// Branch to scan (default: current)
+        #[clap(long)]
+        branch: Option<String>,
+
+        /// Only show commits, don't update database
+        #[clap(long)]
+        dry_run: bool,
+
+        /// Show verbose output
+        #[clap(long, short = 'v')]
+        verbose: bool,
+    },
+}
+
 #[derive(Subcommand, Debug)]
 pub enum DbCommand {
     /// Register a project in the registry
@@ -589,4 +687,8 @@ pub enum Command {
     /// Server management commands (requires --server or AIDA_SERVER)
     #[clap(subcommand)]
     Server(ServerCommand),
+
+    /// Code-to-requirement traceability commands
+    #[clap(subcommand)]
+    Trace(TraceCommand),
 }

@@ -19,6 +19,7 @@ colored = { workspace = true }
 anyhow = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
+regex = { workspace = true }
 
 # gRPC client dependencies (optional)
 tonic = { workspace = true, optional = true }
