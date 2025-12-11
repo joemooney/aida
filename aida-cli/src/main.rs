@@ -1846,17 +1846,20 @@ fn handle_comment_command(cmd: &CommentCommand, storage: &Storage) -> Result<()>
         CommentCommand::Add {
             id,
             content,
+            content_positional,
             author,
             parent,
             interactive,
         } => {
-            if *interactive || content.is_none() {
+            // Use --content flag if provided, otherwise use positional argument
+            let effective_content = content.as_ref().or(content_positional.as_ref());
+            if *interactive || effective_content.is_none() {
                 add_comment_interactive(storage, id, author.as_deref(), parent.as_deref())?;
             } else {
                 add_comment_cli(
                     storage,
                     id,
-                    content.as_ref().unwrap(),
+                    effective_content.unwrap(),
                     author.as_deref(),
                     parent.as_deref(),
                 )?;

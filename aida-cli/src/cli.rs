@@ -511,12 +511,15 @@ pub enum CommentCommand {
     /// Add a comment to a requirement
     Add {
         /// Requirement ID (UUID or SPEC-ID)
-        #[clap(long)]
         id: String,
 
-        /// Comment content
+        /// Comment content (positional or --content)
         #[clap(long)]
         content: Option<String>,
+
+        /// Comment content (positional argument)
+        #[clap(name = "CONTENT")]
+        content_positional: Option<String>,
 
         /// Author of the comment (defaults to system user)
         #[clap(long)]
