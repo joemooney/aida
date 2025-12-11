@@ -1018,7 +1018,7 @@ aida feature list
             ProjectType::Rust | ProjectType::Cli => {
                 r#"**Rust:**
 ```rust
-// trace:FR-0042 - Keyboard navigation | ai:claude:high | impl:2025-12-10 | by:joe
+// trace:<SPEC-ID> - Keyboard navigation | ai:claude:high | impl:2025-12-10 | by:joe
 fn implement_feature() {
     // Implementation here
 }
@@ -1027,16 +1027,16 @@ fn implement_feature() {
             ProjectType::Python => {
                 r#"**Python:**
 ```python
-# trace:FR-0042 - Keyboard navigation | ai:claude:high | impl:2025-12-10 | by:joe
+# trace:<SPEC-ID> - Keyboard navigation | ai:claude:high | impl:2025-12-10 | by:joe
 def implement_feature():
-    """Implementation of FR-0042."""
+    """Implementation of <SPEC-ID>."""
     pass
 ```"#
             }
             ProjectType::TypeScript | ProjectType::Web | ProjectType::Api => {
                 r#"**TypeScript/JavaScript:**
 ```typescript
-// trace:FR-0042 - Keyboard navigation | ai:claude:high | impl:2025-12-10 | by:joe
+// trace:<SPEC-ID> - Keyboard navigation | ai:claude:high | impl:2025-12-10 | by:joe
 function implementFeature() {
     // Implementation here
 }
@@ -1045,7 +1045,7 @@ function implementFeature() {
             ProjectType::Generic => {
                 r#"**Generic (use language-appropriate comment syntax):**
 ```
-// trace:FR-0042 - Feature title | ai:claude:high | impl:2025-12-10 | by:joe
+// trace:<SPEC-ID> - Feature title | ai:claude:high | impl:2025-12-10 | by:joe
 // Your implementation here
 ```"#
             }
@@ -1123,7 +1123,7 @@ When writing or modifying code, add inline traceability comments:
 ```
 
 Where:
-- `<SPEC-ID>`: The requirement being implemented (e.g., FR-0042)
+- `<SPEC-ID>`: The requirement being implemented (e.g., FR-0100)
 - `<title>`: Brief requirement title (truncate if >40 chars)
 - `<tool>`: AI tool used (e.g., `claude`)
 - `<confidence>`: `high` (>80% AI), `med` (40-80%), `low` (<40%)
@@ -1198,6 +1198,13 @@ aida edit <SPEC-ID> --status <new-status>
 ```bash
 # Show requirement
 aida show <SPEC-ID>
+
+# Search for related requirements or design decisions
+aida grep "keyword"                          # Search all fields
+aida grep -i "pattern" -f description        # Case insensitive, description only
+aida grep -E "TODO|FIXME" -f comments        # Regex search in comments
+aida grep -l "database" --status approved    # List SPEC-IDs only, filter by status
+aida grep -C 2 "error"                       # Show 2 lines of context
 
 # Edit requirement
 aida edit <SPEC-ID> --description "..." --status <status>
@@ -1374,6 +1381,12 @@ When `/aida-implement` is invoked on a requirement:
 # Show requirement
 aida show <SPEC-ID>
 
+# Search for related requirements
+aida grep "keyword" -f description         # Search descriptions
+aida grep -i "auth" --status approved      # Case insensitive, filter by status
+aida grep -E "TODO|FIXME" -f comments      # Regex search in comments
+aida grep -l "database"                    # List matching SPEC-IDs only
+
 # Check status
 aida show <SPEC-ID> | grep Status
 
@@ -1395,6 +1408,36 @@ aida edit <CHILD-ID> --status approved
 # List children of a requirement
 aida show <SPEC-ID>  # Shows relationships section
 ```
+
+## Example Planning Session
+
+User invokes: `/aida-plan FR-0100`
+
+1. Fetch requirement:
+   ```
+   FR-0100: Add user authentication
+   Status: Approved
+   Description: The system shall support user authentication with username/password
+   ```
+
+2. Decompose:
+   - FR-0100-A: Database schema for users (task)
+   - FR-0100-B: Password hashing module (task)
+   - FR-0100-C: Login endpoint (task)
+   - FR-0100-D: Session management (task)
+
+3. Document decisions:
+   - "Using argon2 for password hashing"
+   - "JWT tokens for session management"
+   - "30-minute token expiry"
+
+4. Identify files:
+   - src/models/user.rs (new)
+   - src/auth/mod.rs (new)
+   - src/routes/auth.rs (new)
+   - migrations/001_users.sql (new)
+
+5. Mark as planned and present summary
 "#
         .to_string()
     }
