@@ -107,7 +107,7 @@ As you implement, update the requirement to reflect reality:
 aida edit <SPEC-ID> --description "Updated description with implementation notes..."
 
 # Add implementation notes to history
-aida comment add <SPEC-ID> "Implementation note: Used async/await pattern for..."
+aida comment add --id <SPEC-ID> --content "Implementation note: Used async/await pattern for..."
 
 # Update status as appropriate
 aida edit <SPEC-ID> --status completed
@@ -140,7 +140,7 @@ aida edit <SPEC-ID> --status completed
 
 2. Add completion comment:
 ```bash
-aida comment add <SPEC-ID> "Implementation complete. Files modified: src/foo.rs, src/bar.rs"
+aida comment add --id <SPEC-ID> --content "Implementation complete. Files modified: src/foo.rs, src/bar.rs"
 ```
 
 3. Create "Verifies" relationship if tests were added:
@@ -208,7 +208,7 @@ aida grep -C 2 "error"                       # Show 2 lines of context
 aida edit <SPEC-ID> --description "..." --status <status>
 
 # Add comment
-aida comment add <SPEC-ID> "Comment text"
+aida comment add --id <SPEC-ID> --content "Comment text"
 
 # Add relationship
 aida rel add --from <FROM-ID> --to <TO-ID> --type <Parent|Verifies|References|Duplicate>

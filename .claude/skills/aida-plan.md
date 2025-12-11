@@ -87,9 +87,9 @@ Guidelines for decomposition:
 Record any significant design decisions:
 
 ```bash
-aida comment add <SPEC-ID> "Design: Using async/await pattern because..."
-aida comment add <SPEC-ID> "Decision: Chose HashMap over BTreeMap for O(1) lookup"
-aida comment add <SPEC-ID> "Risk: External API rate limiting may need handling"
+aida comment add --id <SPEC-ID> --content "Design: Using async/await pattern because..."
+aida comment add --id <SPEC-ID> --content "Decision: Chose HashMap over BTreeMap for O(1) lookup"
+aida comment add --id <SPEC-ID> --content "Risk: External API rate limiting may need handling"
 ```
 
 ### Step 5: Identify File Changes
@@ -97,7 +97,7 @@ aida comment add <SPEC-ID> "Risk: External API rate limiting may need handling"
 List the files that will be modified or created:
 
 ```bash
-aida comment add <SPEC-ID> "Files to modify:
+aida comment add --id <SPEC-ID> --content "Files to modify:
 - src/models.rs: Add new struct
 - src/handlers.rs: Add endpoint
 - src/tests/mod.rs: Add unit tests"
@@ -109,7 +109,7 @@ When planning is complete:
 
 ```bash
 aida edit <SPEC-ID> --status planned
-aida comment add <SPEC-ID> "Planning complete. Ready for implementation."
+aida comment add --id <SPEC-ID> --content "Planning complete. Ready for implementation."
 ```
 
 If child requirements were created, approve them:
@@ -167,7 +167,7 @@ aida add --title "..." --description "..." --type task --status draft
 aida rel add --from <PARENT-ID> --to <CHILD-ID> --type Parent
 
 # Add design comment
-aida comment add <SPEC-ID> "Design: ..."
+aida comment add --id <SPEC-ID> --content "Design: ..."
 
 # Mark as planned
 aida edit <SPEC-ID> --status planned
