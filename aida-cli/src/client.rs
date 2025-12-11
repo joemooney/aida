@@ -102,6 +102,8 @@ pub async fn list_requirements(
         let status_str = match status {
             proto::RequirementStatus::Draft => "Draft".yellow(),
             proto::RequirementStatus::Approved => "Approved".blue(),
+            proto::RequirementStatus::Planned => "Planned".cyan(),
+            proto::RequirementStatus::InProgress => "In Progress".magenta(),
             proto::RequirementStatus::Completed => "Completed".green(),
             proto::RequirementStatus::Rejected => "Rejected".red(),
             _ => "Unknown".normal(),
@@ -154,6 +156,8 @@ pub async fn get_requirement(server_addr: &str, id: &str) -> Result<()> {
     let status_str = match status {
         proto::RequirementStatus::Draft => "Draft".yellow(),
         proto::RequirementStatus::Approved => "Approved".blue(),
+        proto::RequirementStatus::Planned => "Planned".cyan(),
+        proto::RequirementStatus::InProgress => "In Progress".magenta(),
         proto::RequirementStatus::Completed => "Completed".green(),
         proto::RequirementStatus::Rejected => "Rejected".red(),
         _ => "Unknown".normal(),

@@ -347,7 +347,7 @@ const KNOWN_TYPES: &[&str] = &[
 ];
 
 /// Known status strings (for validation)
-const KNOWN_STATUSES: &[&str] = &["Draft", "Approved", "Completed", "Rejected"];
+const KNOWN_STATUSES: &[&str] = &["Draft", "Approved", "Planned", "In Progress", "Completed", "Rejected"];
 
 /// Known priority strings (for validation)
 const KNOWN_PRIORITIES: &[&str] = &["High", "Medium", "Low"];

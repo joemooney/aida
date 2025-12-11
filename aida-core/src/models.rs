@@ -11,6 +11,8 @@ use uuid::Uuid;
 pub enum RequirementStatus {
     Draft,
     Approved,
+    Planned,
+    InProgress,
     Completed,
     Rejected,
 }
@@ -20,6 +22,8 @@ impl fmt::Display for RequirementStatus {
         match self {
             RequirementStatus::Draft => write!(f, "Draft"),
             RequirementStatus::Approved => write!(f, "Approved"),
+            RequirementStatus::Planned => write!(f, "Planned"),
+            RequirementStatus::InProgress => write!(f, "In Progress"),
             RequirementStatus::Completed => write!(f, "Completed"),
             RequirementStatus::Rejected => write!(f, "Rejected"),
         }

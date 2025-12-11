@@ -9,8 +9,17 @@ Implement an approved requirement with full traceability, evolving the requireme
 Use this skill when:
 - User says "implement <SPEC-ID>" or "work on <requirement>"
 - User triggers "Copy for Claude Code" from the aida-gui AI menu
-- An approved requirement is ready to be implemented
+- A requirement in `Planned` or `In Progress` status is ready to be implemented
 - Continuing implementation of a requirement from a previous session
+
+## Prerequisites
+
+Before implementing, check the requirement status:
+- **Planned** or **In Progress**: Proceed with implementation
+- **Approved**: Suggest running `/aida-plan` first to plan the implementation
+- **Draft**: Cannot implement - needs approval first
+- **Completed**: Already implemented
+- **Rejected**: Cannot implement - requirement was rejected
 
 ## Core Principles
 
@@ -40,6 +49,15 @@ Display to user:
 - Status, priority, type
 - Related requirements (parent/child, links)
 - Any existing implementation notes
+
+**Check status before proceeding:**
+- If `Approved`: Tell the user this requirement hasn't been planned yet. Suggest running `/aida-plan <SPEC-ID>` first to decompose and document the implementation approach.
+- If `Planned`: Proceed to Step 2. Update status to `In Progress`:
+  ```bash
+  aida edit <SPEC-ID> --status in_progress
+  ```
+- If `In Progress`: Continue implementation (resuming from previous session)
+- If `Draft`, `Completed`, or `Rejected`: Stop and inform user why implementation cannot proceed
 
 ### Step 2: Analyze Implementation Scope
 
@@ -134,9 +152,11 @@ aida rel add --from <TEST-SPEC-ID> --to <SPEC-ID> --type Verifies
 
 During implementation, requirements should transition through:
 
-1. **Approved** -> **In Progress** (when starting implementation)
+1. **Planned** -> **In Progress** (when starting implementation)
 2. **In Progress** -> **Completed** (when implementation is verified)
-3. **In Progress** -> **Draft** (if significant changes needed)
+3. **In Progress** -> **Draft** (if significant changes needed - requires re-approval and re-planning)
+
+Note: Requirements should be in `Planned` status before implementation begins. If a requirement is still `Approved`, use `/aida-plan` first.
 
 Update via:
 ```bash

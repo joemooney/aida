@@ -461,6 +461,8 @@ fn list_requirements(
         let status_str = match req.status {
             RequirementStatus::Draft => "Draft".yellow(),
             RequirementStatus::Approved => "Approved".blue(),
+            RequirementStatus::Planned => "Planned".cyan(),
+            RequirementStatus::InProgress => "In Progress".magenta(),
             RequirementStatus::Completed => "Completed".green(),
             RequirementStatus::Rejected => "Rejected".red(),
         };
@@ -510,6 +512,8 @@ fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
     let status_str = match req.status {
         RequirementStatus::Draft => "Draft".yellow(),
         RequirementStatus::Approved => "Approved".blue(),
+        RequirementStatus::Planned => "Planned".cyan(),
+        RequirementStatus::InProgress => "In Progress".magenta(),
         RequirementStatus::Completed => "Completed".green(),
         RequirementStatus::Rejected => "Rejected".red(),
     };
@@ -673,9 +677,11 @@ fn edit_requirement_cli(
         let new_status = match status_str.to_lowercase().as_str() {
             "draft" => RequirementStatus::Draft,
             "approved" => RequirementStatus::Approved,
+            "planned" => RequirementStatus::Planned,
+            "in_progress" | "in-progress" | "inprogress" => RequirementStatus::InProgress,
             "completed" => RequirementStatus::Completed,
             "rejected" => RequirementStatus::Rejected,
-            _ => anyhow::bail!("Invalid status '{}'. Use: draft, approved, completed, rejected", status_str),
+            _ => anyhow::bail!("Invalid status '{}'. Use: draft, approved, planned, in_progress, completed, rejected", status_str),
         };
         if new_status != req.status {
             changes.push(Requirement::field_change("status", format!("{:?}", req.status), format!("{:?}", new_status)));
@@ -824,6 +830,8 @@ fn edit_requirement_interactive(storage: &Storage, id_str: &str) -> Result<()> {
     let status_options = vec![
         RequirementStatus::Draft,
         RequirementStatus::Approved,
+        RequirementStatus::Planned,
+        RequirementStatus::InProgress,
         RequirementStatus::Completed,
         RequirementStatus::Rejected,
     ];
@@ -968,6 +976,8 @@ fn parse_status(status_str: &str) -> Result<RequirementStatus> {
     match status_str.to_lowercase().as_str() {
         "draft" => Ok(RequirementStatus::Draft),
         "approved" => Ok(RequirementStatus::Approved),
+        "planned" => Ok(RequirementStatus::Planned),
+        "in_progress" | "in-progress" | "inprogress" => Ok(RequirementStatus::InProgress),
         "completed" => Ok(RequirementStatus::Completed),
         "rejected" => Ok(RequirementStatus::Rejected),
         _ => anyhow::bail!("Invalid status: {}", status_str),

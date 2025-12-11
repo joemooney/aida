@@ -597,8 +597,10 @@ pub enum RequirementStatus {
     Unspecified = 0,
     Draft = 1,
     Approved = 2,
-    Completed = 3,
-    Rejected = 4,
+    Planned = 3,
+    InProgress = 4,
+    Completed = 5,
+    Rejected = 6,
 }
 impl RequirementStatus {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -610,6 +612,8 @@ impl RequirementStatus {
             Self::Unspecified => "REQUIREMENT_STATUS_UNSPECIFIED",
             Self::Draft => "REQUIREMENT_STATUS_DRAFT",
             Self::Approved => "REQUIREMENT_STATUS_APPROVED",
+            Self::Planned => "REQUIREMENT_STATUS_PLANNED",
+            Self::InProgress => "REQUIREMENT_STATUS_IN_PROGRESS",
             Self::Completed => "REQUIREMENT_STATUS_COMPLETED",
             Self::Rejected => "REQUIREMENT_STATUS_REJECTED",
         }
@@ -620,6 +624,8 @@ impl RequirementStatus {
             "REQUIREMENT_STATUS_UNSPECIFIED" => Some(Self::Unspecified),
             "REQUIREMENT_STATUS_DRAFT" => Some(Self::Draft),
             "REQUIREMENT_STATUS_APPROVED" => Some(Self::Approved),
+            "REQUIREMENT_STATUS_PLANNED" => Some(Self::Planned),
+            "REQUIREMENT_STATUS_IN_PROGRESS" => Some(Self::InProgress),
             "REQUIREMENT_STATUS_COMPLETED" => Some(Self::Completed),
             "REQUIREMENT_STATUS_REJECTED" => Some(Self::Rejected),
             _ => None,

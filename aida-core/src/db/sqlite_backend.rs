@@ -153,6 +153,8 @@ impl SqliteBackend {
         match status {
             RequirementStatus::Draft => "Draft",
             RequirementStatus::Approved => "Approved",
+            RequirementStatus::Planned => "Planned",
+            RequirementStatus::InProgress => "In Progress",
             RequirementStatus::Completed => "Completed",
             RequirementStatus::Rejected => "Rejected",
         }
@@ -163,6 +165,8 @@ impl SqliteBackend {
         match s {
             "Draft" => RequirementStatus::Draft,
             "Approved" => RequirementStatus::Approved,
+            "Planned" => RequirementStatus::Planned,
+            "In Progress" => RequirementStatus::InProgress,
             "Completed" => RequirementStatus::Completed,
             "Rejected" => RequirementStatus::Rejected,
             _ => RequirementStatus::Draft,

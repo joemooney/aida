@@ -6748,6 +6748,8 @@ impl RequirementsApp {
                     ui.indent("skills_indent", |ui| {
                         ui.checkbox(&mut self.scaffold_config.include_aida_req_skill, "Include aida-req skill")
                             .on_hover_text("Skill for adding requirements with AI evaluation");
+                        ui.checkbox(&mut self.scaffold_config.include_aida_plan_skill, "Include aida-plan skill")
+                            .on_hover_text("Skill for planning requirement implementation");
                         ui.checkbox(&mut self.scaffold_config.include_aida_implement_skill, "Include aida-implement skill")
                             .on_hover_text("Skill for implementing requirements with traceability");
                         ui.checkbox(&mut self.scaffold_config.include_aida_capture_skill, "Include aida-capture skill")

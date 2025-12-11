@@ -22,6 +22,8 @@ pub fn prompt_new_requirement(store: &mut aida_core::RequirementsStore) -> Resul
     let status_options = vec![
         RequirementStatus::Draft,
         RequirementStatus::Approved,
+        RequirementStatus::Planned,
+        RequirementStatus::InProgress,
         RequirementStatus::Completed,
         RequirementStatus::Rejected,
     ];
