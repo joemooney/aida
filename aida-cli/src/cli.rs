@@ -149,6 +149,66 @@ pub enum TraceCommand {
     },
 }
 
+/// Commands for generating reports
+#[derive(Subcommand, Debug)]
+pub enum ReportCommand {
+    /// Generate AI integration report
+    AiIntegration {
+        /// Output format: markdown or html
+        #[clap(long, short = 'f', default_value = "markdown")]
+        format: String,
+
+        /// Output file path (defaults to stdout)
+        #[clap(long, short = 'o')]
+        output: Option<PathBuf>,
+
+        /// Project root directory for scaffolding status check
+        #[clap(long)]
+        project_root: Option<PathBuf>,
+
+        /// Include scaffolding status in report
+        #[clap(long)]
+        include_scaffold: bool,
+    },
+}
+
+/// Commands for scaffolding management
+#[derive(Subcommand, Debug)]
+pub enum ScaffoldCommand {
+    /// Check scaffolding status against actual project files
+    Status {
+        /// Project root directory (defaults to current directory)
+        #[clap(long)]
+        project_root: Option<PathBuf>,
+
+        /// Show detailed file comparisons
+        #[clap(long, short = 'v')]
+        verbose: bool,
+    },
+
+    /// Preview scaffolding artifacts without applying
+    Preview {
+        /// Project root directory (defaults to current directory)
+        #[clap(long)]
+        project_root: Option<PathBuf>,
+    },
+
+    /// Apply scaffolding to project
+    Apply {
+        /// Project root directory (defaults to current directory)
+        #[clap(long)]
+        project_root: Option<PathBuf>,
+
+        /// Overwrite existing files
+        #[clap(long)]
+        force: bool,
+
+        /// Show what would be done without making changes
+        #[clap(long)]
+        dry_run: bool,
+    },
+}
+
 #[derive(Subcommand, Debug)]
 pub enum DbCommand {
     /// Register a project in the registry
@@ -691,4 +751,12 @@ pub enum Command {
     /// Code-to-requirement traceability commands
     #[clap(subcommand)]
     Trace(TraceCommand),
+
+    /// Report generation commands
+    #[clap(subcommand)]
+    Report(ReportCommand),
+
+    /// Scaffolding management commands
+    #[clap(subcommand)]
+    Scaffold(ScaffoldCommand),
 }

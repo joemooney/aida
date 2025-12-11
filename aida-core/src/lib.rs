@@ -5,6 +5,7 @@ pub mod import;
 pub mod models;
 pub mod project;
 pub mod registry;
+pub mod report;
 pub mod scaffolding;
 pub mod storage;
 
@@ -87,4 +88,9 @@ pub use import::{
     ImportConfig, ImportIssue, ImportIssueType, ImportMergeMode, ImportSummary, ImportValidation,
     IssueResolution, RawImportStore, create_backup, execute_import, validate_import_content,
     validate_import_file,
+};
+pub use report::{
+    AiIntegrationReport, AiPromptsSection, FileStatus, PromptCustomization, ReportFormat,
+    ReportGenerator, ScaffoldStatus, TraceabilityStats, TypePromptCustomization,
+    check_scaffold_status,
 };

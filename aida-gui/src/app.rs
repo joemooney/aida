@@ -3474,6 +3474,8 @@ pub struct RequirementsApp {
     scaffold_config: aida_core::ScaffoldConfig,   // Scaffolding configuration
     scaffold_preview: Option<aida_core::ScaffoldPreview>, // Preview of artifacts to generate
     scaffold_tech_stack_input: String,            // Input for adding tech stack items
+    show_scaffold_status_dialog: bool,            // Whether to show the scaffold status dialog (FR-0261)
+    scaffold_status: Option<aida_core::ScaffoldStatus>,  // Current scaffold status result
 
     // Conflict detection state (FR-0153)
     original_timestamps: HashMap<Uuid, DateTime<Utc>>,  // Requirement timestamps when loaded
@@ -4050,6 +4052,8 @@ impl RequirementsApp {
             scaffold_config: aida_core::ScaffoldConfig::default(),
             scaffold_preview: None,
             scaffold_tech_stack_input: String::new(),
+            show_scaffold_status_dialog: false,
+            scaffold_status: None,
             original_timestamps: initial_timestamps,
             modified_requirement_ids: HashSet::new(),
             show_conflict_dialog: false,
@@ -4576,6 +4580,8 @@ impl RequirementsApp {
             scaffold_config: aida_core::ScaffoldConfig::default(),
             scaffold_preview: None,
             scaffold_tech_stack_input: String::new(),
+            show_scaffold_status_dialog: false,
+            scaffold_status: None,
 
             // Conflict detection state (FR-0153)
             original_timestamps: initial_timestamps,
@@ -6888,6 +6894,136 @@ impl RequirementsApp {
         if close_dialog {
             self.show_scaffold_dialog = false;
             self.scaffold_preview = None;
+        }
+    }
+
+    // trace:FR-0261 | ai:claude:high
+    /// Show the scaffold status dialog comparing expected vs actual files
+    fn show_scaffold_status_dialog(&mut self, ctx: &egui::Context) {
+        if !self.show_scaffold_status_dialog {
+            return;
+        }
+
+        let status = match &self.scaffold_status {
+            Some(s) => s,
+            None => {
+                self.show_scaffold_status_dialog = false;
+                return;
+            }
+        };
+
+        let mut close_dialog = false;
+        let max_size = modal_max_size(ctx);
+
+        egui::Window::new("📋 Scaffold Status")
+            .collapsible(false)
+            .resizable(true)
+            .min_width(500.0)
+            .max_width(max_size.x)
+            .max_height(max_size.y)
+            .scroll([false, true])
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                // Status summary
+                if status.is_current {
+                    ui.colored_label(egui::Color32::from_rgb(100, 200, 100), "✓ Scaffold is up to date");
+                } else {
+                    ui.colored_label(egui::Color32::from_rgb(200, 180, 100), "⚠ Scaffold drift detected");
+                }
+                ui.add_space(10.0);
+
+                // Summary counts
+                ui.horizontal(|ui| {
+                    ui.label(format!(
+                        "{} matching, {} modified, {} missing, {} extra",
+                        status.matching.len(),
+                        status.modified.len(),
+                        status.missing.len(),
+                        status.extra.len()
+                    ));
+                });
+                ui.add_space(10.0);
+                ui.separator();
+                ui.add_space(10.0);
+
+                // Matching files
+                if !status.matching.is_empty() {
+                    ui.collapsing(format!("✓ Matching Files ({})", status.matching.len()), |ui| {
+                        for path in &status.matching {
+                            ui.horizontal(|ui| {
+                                ui.colored_label(egui::Color32::from_rgb(100, 200, 100), "✓");
+                                ui.label(path.display().to_string());
+                            });
+                        }
+                    });
+                }
+
+                // Modified files
+                if !status.modified.is_empty() {
+                    ui.collapsing(format!("~ Modified Files ({})", status.modified.len()), |ui| {
+                        for (path, file_status) in &status.modified {
+                            ui.horizontal(|ui| {
+                                ui.colored_label(egui::Color32::from_rgb(200, 180, 100), "~");
+                                match file_status {
+                                    aida_core::FileStatus::Modified { expected_lines, actual_lines } => {
+                                        ui.label(format!(
+                                            "{} (expected {} lines, found {})",
+                                            path.display(),
+                                            expected_lines,
+                                            actual_lines
+                                        ));
+                                    }
+                                    _ => {
+                                        ui.label(path.display().to_string());
+                                    }
+                                }
+                            });
+                        }
+                    });
+                }
+
+                // Missing files
+                if !status.missing.is_empty() {
+                    ui.collapsing(format!("✗ Missing Files ({})", status.missing.len()), |ui| {
+                        for path in &status.missing {
+                            ui.horizontal(|ui| {
+                                ui.colored_label(egui::Color32::from_rgb(200, 100, 100), "✗");
+                                ui.label(path.display().to_string());
+                            });
+                        }
+                    });
+                }
+
+                // Extra files
+                if !status.extra.is_empty() {
+                    ui.collapsing(format!("+ Extra Files ({})", status.extra.len()), |ui| {
+                        ui.label("Files in .claude/ not from scaffold:");
+                        for path in &status.extra {
+                            ui.horizontal(|ui| {
+                                ui.colored_label(egui::Color32::from_rgb(100, 150, 200), "+");
+                                ui.label(path.display().to_string());
+                            });
+                        }
+                    });
+                }
+
+                ui.add_space(15.0);
+                ui.separator();
+                ui.add_space(10.0);
+
+                // Buttons
+                ui.horizontal(|ui| {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.button("Close").clicked() {
+                            close_dialog = true;
+                        }
+                    });
+                });
+            });
+
+        if close_dialog {
+            self.show_scaffold_status_dialog = false;
+            self.scaffold_status = None;
         }
     }
 
@@ -13958,15 +14094,31 @@ impl RequirementsApp {
             ui.label("Generate Claude Code artifacts (CLAUDE.md, skills, commands) for this project.");
             ui.add_space(10.0);
 
-            if ui.button("🔧 Scaffold Project").clicked() {
-                // Generate preview when opening dialog
-                let project_dir = self.storage.path().parent()
-                    .map(|p| p.to_path_buf())
-                    .unwrap_or_else(|| std::path::PathBuf::from("."));
-                let scaffolder = aida_core::Scaffolder::new(project_dir, self.scaffold_config.clone());
-                self.scaffold_preview = Some(scaffolder.preview(&self.store));
-                self.show_scaffold_dialog = true;
-            }
+            ui.horizontal(|ui| {
+                if ui.button("🔧 Scaffold Project").clicked() {
+                    // Generate preview when opening dialog
+                    let project_dir = self.storage.path().parent()
+                        .map(|p| p.to_path_buf())
+                        .unwrap_or_else(|| std::path::PathBuf::from("."));
+                    let scaffolder = aida_core::Scaffolder::new(project_dir, self.scaffold_config.clone());
+                    self.scaffold_preview = Some(scaffolder.preview(&self.store));
+                    self.show_scaffold_dialog = true;
+                }
+
+                // trace:FR-0261 | ai:claude:high
+                if ui.button("📋 Check Status").clicked() {
+                    // Check scaffold status against current project
+                    let project_dir = self.storage.path().parent()
+                        .map(|p| p.to_path_buf())
+                        .unwrap_or_else(|| std::path::PathBuf::from("."));
+                    self.scaffold_status = Some(aida_core::check_scaffold_status(
+                        &self.store,
+                        &project_dir,
+                        &self.scaffold_config,
+                    ));
+                    self.show_scaffold_status_dialog = true;
+                }
+            });
             ui.label("Creates CLAUDE.md, .claude/commands/, and .claude/skills/ directories.");
 
             ui.add_space(15.0);
@@ -27774,6 +27926,9 @@ impl eframe::App for RequirementsApp {
 
         // Show scaffolding dialog (FR-0152)
         self.show_scaffold_dialog(ctx);
+
+        // Show scaffold status dialog (FR-0261)
+        self.show_scaffold_status_dialog(ctx);
 
         // Show conflict resolution dialog (FR-0153)
         self.show_conflict_resolution_dialog(ctx);

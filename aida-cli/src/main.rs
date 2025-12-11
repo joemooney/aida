@@ -10,15 +10,16 @@ use std::collections::HashSet;
 use uuid::Uuid;
 
 use aida_core::{
-    check_migration_status, determine_requirements_path, export, get_registry_path, ArtifactType,
-    Cardinality, Comment, ConfidenceLevel, FieldChange, IdFormat, MigrationCheck,
-    NumberingStrategy, Registry, RelationshipDefinition, RelationshipType, Requirement,
-    RequirementPriority, RequirementStatus, RequirementType, RequirementsStore, Storage, TraceLink,
+    check_migration_status, check_scaffold_status, determine_requirements_path, export,
+    get_registry_path, ArtifactType, Cardinality, Comment, FieldChange, FileStatus, IdFormat,
+    MigrationCheck, NumberingStrategy, Registry, RelationshipDefinition, RelationshipType,
+    ReportFormat, ReportGenerator, Requirement, RequirementPriority, RequirementStatus,
+    RequirementType, RequirementsStore, ScaffoldConfig, Scaffolder, Storage, TraceLink,
 };
 
 use crate::cli::{
     Cli, Command, CommentCommand, ConfigCommand, DbCommand, FeatureCommand, RelDefCommand,
-    RelationshipCommand, ServerCommand, TraceCommand, TypeCommand,
+    RelationshipCommand, ReportCommand, ScaffoldCommand, ServerCommand, TraceCommand, TypeCommand,
 };
 
 fn main() -> Result<()> {
@@ -196,6 +197,13 @@ fn main() -> Result<()> {
         }
         Command::Trace(trace_cmd) => {
             handle_trace_command(trace_cmd, &storage)?;
+        }
+        Command::Report(report_cmd) => {
+            let db_path_str = requirements_path.display().to_string();
+            handle_report_command(report_cmd, &storage, &db_path_str)?;
+        }
+        Command::Scaffold(scaffold_cmd) => {
+            handle_scaffold_command(scaffold_cmd, &storage)?;
         }
     }
 
@@ -3063,6 +3071,262 @@ fn trace_sweep(
 
         storage.save(&store)?;
         println!("{} Added {} new commit trace links", "✓".green(), updated);
+    }
+
+    Ok(())
+}
+
+// trace:FR-0259 | ai:claude:high
+fn handle_report_command(cmd: &ReportCommand, storage: &Storage, storage_path: &str) -> Result<()> {
+    match cmd {
+        ReportCommand::AiIntegration {
+            format,
+            output,
+            project_root,
+            include_scaffold,
+        } => {
+            let store = storage.load()?;
+
+            // Parse format
+            let report_format = match format.to_lowercase().as_str() {
+                "markdown" | "md" => ReportFormat::Markdown,
+                "html" | "htm" => ReportFormat::Html,
+                _ => {
+                    return Err(anyhow::anyhow!(
+                        "Unknown format '{}'. Use 'markdown' or 'html'.",
+                        format
+                    ))
+                }
+            };
+
+            // Create report generator
+            let mut generator = ReportGenerator::new(store, storage_path.to_string());
+
+            // Set project root if provided or use current directory for scaffold status
+            let root = if let Some(ref root) = project_root {
+                root.clone()
+            } else if *include_scaffold {
+                std::env::current_dir()?
+            } else {
+                // No root needed if not checking scaffold
+                std::path::PathBuf::new()
+            };
+
+            if *include_scaffold || project_root.is_some() {
+                if root.exists() {
+                    generator = generator.with_project_root(root.clone());
+                }
+            }
+
+            // Generate report
+            let report = generator.generate();
+
+            // Render based on format
+            let content = match report_format {
+                ReportFormat::Markdown => generator.render_markdown(&report),
+                ReportFormat::Html => generator.render_html(&report),
+            };
+
+            // Output
+            if let Some(ref output_path) = output {
+                std::fs::write(output_path, &content)?;
+                println!(
+                    "{} Report generated: {}",
+                    "✓".green(),
+                    output_path.display()
+                );
+            } else {
+                println!("{}", content);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+// trace:FR-0260 | ai:claude:high
+fn handle_scaffold_command(cmd: &ScaffoldCommand, storage: &Storage) -> Result<()> {
+    match cmd {
+        ScaffoldCommand::Status {
+            project_root,
+            verbose,
+        } => {
+            let store = storage.load()?;
+            let root = project_root
+                .clone()
+                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+            if !root.exists() {
+                return Err(anyhow::anyhow!(
+                    "Project root does not exist: {}",
+                    root.display()
+                ));
+            }
+
+            let config = ScaffoldConfig::default();
+            let status = check_scaffold_status(&store, &root, &config);
+
+            if status.is_current {
+                println!("{} Scaffold is up to date", "✓".green());
+            } else {
+                println!("{} Scaffold drift detected", "⚠".yellow());
+            }
+
+            println!();
+            println!(
+                "  {} matching, {} modified, {} missing, {} extra",
+                status.matching.len().to_string().green(),
+                status.modified.len().to_string().yellow(),
+                status.missing.len().to_string().red(),
+                status.extra.len().to_string().blue()
+            );
+
+            if *verbose {
+                if !status.matching.is_empty() {
+                    println!();
+                    println!("{}:", "Matching".green());
+                    for path in &status.matching {
+                        println!("  ✓ {}", path.display());
+                    }
+                }
+
+                if !status.modified.is_empty() {
+                    println!();
+                    println!("{}:", "Modified".yellow());
+                    for (path, file_status) in &status.modified {
+                        match file_status {
+                            FileStatus::Modified {
+                                expected_lines,
+                                actual_lines,
+                            } => {
+                                println!(
+                                    "  ~ {} (expected {} lines, found {})",
+                                    path.display(),
+                                    expected_lines,
+                                    actual_lines
+                                );
+                            }
+                            _ => {
+                                println!("  ~ {}", path.display());
+                            }
+                        }
+                    }
+                }
+
+                if !status.missing.is_empty() {
+                    println!();
+                    println!("{}:", "Missing".red());
+                    for path in &status.missing {
+                        println!("  ✗ {}", path.display());
+                    }
+                }
+
+                if !status.extra.is_empty() {
+                    println!();
+                    println!("{} (not from scaffold):", "Extra".blue());
+                    for path in &status.extra {
+                        println!("  + {}", path.display());
+                    }
+                }
+            }
+        }
+
+        ScaffoldCommand::Preview { project_root } => {
+            let store = storage.load()?;
+            let root = project_root
+                .clone()
+                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+            let config = ScaffoldConfig::default();
+            let scaffolder = Scaffolder::new(root.clone(), config);
+            let preview = scaffolder.preview(&store);
+
+            println!("{} Scaffold preview for: {}", "📁".blue(), root.display());
+            println!();
+
+            for artifact in &preview.artifacts {
+                let exists = root.join(&artifact.path).exists();
+                let status = if exists { "exists" } else { "new" };
+                println!(
+                    "  {} {} ({})",
+                    if exists { "~" } else { "+" },
+                    artifact.path.display(),
+                    status
+                );
+            }
+
+            println!();
+            println!(
+                "Total: {} files ({} new, {} existing)",
+                preview.artifacts.len(),
+                preview
+                    .artifacts
+                    .iter()
+                    .filter(|a| !root.join(&a.path).exists())
+                    .count(),
+                preview
+                    .artifacts
+                    .iter()
+                    .filter(|a| root.join(&a.path).exists())
+                    .count()
+            );
+        }
+
+        ScaffoldCommand::Apply {
+            project_root,
+            force,
+            dry_run,
+        } => {
+            let store = storage.load()?;
+            let root = project_root
+                .clone()
+                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+            let config = ScaffoldConfig::default();
+            let scaffolder = Scaffolder::new(root.clone(), config);
+
+            if *dry_run {
+                println!("{} Dry run - no files will be modified", "ℹ".blue());
+                println!();
+            }
+
+            let preview = scaffolder.preview(&store);
+
+            for artifact in &preview.artifacts {
+                let full_path = root.join(&artifact.path);
+                let exists = full_path.exists();
+
+                if exists && !force && !dry_run {
+                    println!(
+                        "  {} {} (skipped - exists, use --force to overwrite)",
+                        "~".yellow(),
+                        artifact.path.display()
+                    );
+                    continue;
+                }
+
+                if !*dry_run {
+                    // Create parent directories if needed
+                    if let Some(parent) = full_path.parent() {
+                        std::fs::create_dir_all(parent)?;
+                    }
+                    std::fs::write(&full_path, &artifact.content)?;
+                }
+
+                let action = if exists { "updated" } else { "created" };
+                println!(
+                    "  {} {} ({})",
+                    if exists { "~" } else { "+" },
+                    artifact.path.display(),
+                    action
+                );
+            }
+
+            if !*dry_run {
+                println!();
+                println!("{} Scaffold applied successfully", "✓".green());
+            }
+        }
     }
 
     Ok(())
