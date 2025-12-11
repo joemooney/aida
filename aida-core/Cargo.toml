@@ -16,6 +16,7 @@ thiserror = { workspace = true }
 dirs = { workspace = true }
 fs2 = { workspace = true }
 rusqlite = { workspace = true }
+regex = "1"
 pulldown-cmark = "0.9"
 
 [dev-dependencies]
