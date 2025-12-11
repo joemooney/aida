@@ -718,22 +718,16 @@ impl ReportGenerator {
     pub fn render_html(&self, report: &AiIntegrationReport) -> String {
         let markdown = self.render_markdown(report);
 
-        // Simple markdown to HTML conversion
-        // For a production system, you'd want to use a proper markdown parser like pulldown-cmark
-        let html_body = markdown
-            .replace("# AI Integration Report", "<h1>AI Integration Report")
-            .replace("\n## ", "\n<h2>")
-            .replace("\n### ", "\n<h3>")
-            .replace("\n#### ", "\n<h4>")
-            .replace("\n```\n", "\n<pre><code>")
-            .replace("\n```", "</code></pre>")
-            .replace("\n- ", "\n<li>")
-            .replace("\n\n", "</p>\n<p>")
-            .replace("**", "<strong>")
-            .replace("*Generated:", "<em>Generated:")
-            .replace("*</p>", "</em></p>")
-            .replace("`", "<code>")
-            .replace("</code></code>", "</code>");
+        // Use pulldown-cmark for proper markdown to HTML conversion
+        use pulldown_cmark::{Parser, Options, html};
+
+        let mut options = Options::empty();
+        options.insert(Options::ENABLE_STRIKETHROUGH);
+        options.insert(Options::ENABLE_TABLES);
+
+        let parser = Parser::new_ext(&markdown, options);
+        let mut html_body = String::new();
+        html::push_html(&mut html_body, parser);
 
         format!(
             r#"<!DOCTYPE html>
