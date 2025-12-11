@@ -202,7 +202,7 @@ aida add --type Sprint --title "Sprint 4" \
     --field sprint_goal="Complete authentication module"
 
 # Assign to Sprint
-aida rel add STORY-042 SPRINT-004 --type sprint_assignment
+aida rel add --from STORY-042 --to SPRINT-004 --type sprint_assignment
 
 # Move to different Sprint (removes old, adds new)
 aida sprint assign STORY-042 SPRINT-005

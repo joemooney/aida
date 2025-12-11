@@ -32,7 +32,7 @@ aida comment add <ID> "..."            # Add implementation note
 - When implementing a feature, update its requirement status
 - Add comments to requirements with implementation decisions
 - Create child requirements for sub-tasks discovered during implementation
-- Link related requirements with: `aida rel add <FROM> <TO> --type <Parent|Verifies|References>`
+- Link related requirements with: `aida rel add --from <FROM> --to <TO> --type <Parent|Verifies|References>`
 
 ### Session Workflow
 If you work conversationally without explicit /aida-req calls, use `/aida-capture` at session end to review and capture any requirements that were discussed but not yet added to the database.

@@ -54,7 +54,7 @@ If the requirement is too broad, suggest splitting:
 aida add --title "..." --description "..." --type functional --status draft
 
 # Link as child
-aida rel add <PARENT-ID> <CHILD-ID> --type Parent
+aida rel add --from <PARENT-ID> --to <CHILD-ID> --type Parent
 ```
 
 ### Step 3: Implement with Traceability
@@ -108,7 +108,7 @@ aida add \
   --status draft
 
 # Link to parent
-aida rel add <PARENT-ID> <NEW-CHILD-ID> --type Parent
+aida rel add --from <PARENT-ID> --to <NEW-CHILD-ID> --type Parent
 ```
 
 ### Step 6: Document Completion
@@ -127,7 +127,7 @@ aida comment add <SPEC-ID> "Implementation complete. Files modified: src/foo.rs,
 
 3. Create "Verifies" relationship if tests were added:
 ```bash
-aida rel add <TEST-SPEC-ID> <SPEC-ID> --type Verifies
+aida rel add --from <TEST-SPEC-ID> --to <SPEC-ID> --type Verifies
 ```
 
 ## State Transitions
@@ -156,7 +156,7 @@ aida edit <SPEC-ID> --description "..." --status <status>
 aida comment add <SPEC-ID> "Comment text"
 
 # Add relationship
-aida rel add <FROM-ID> <TO-ID> --type <Parent|Verifies|References|Duplicate>
+aida rel add --from <FROM-ID> --to <TO-ID> --type <Parent|Verifies|References|Duplicate>
 
 # Create new requirement
 aida add --title "..." --description "..." --type <type> --status draft
