@@ -6725,6 +6725,8 @@ impl RequirementsApp {
                             .on_hover_text("Skill for capturing requirements from session review");
                         ui.checkbox(&mut self.scaffold_config.include_aida_docs_skill, "Include aida-docs skill")
                             .on_hover_text("Skill for documentation management and generation");
+                        ui.checkbox(&mut self.scaffold_config.include_aida_release_skill, "Include aida-release skill")
+                            .on_hover_text("Skill for release management and version bumping");
                     });
                 }
 
