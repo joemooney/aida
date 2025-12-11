@@ -169,6 +169,13 @@ aida edit <SPEC-ID> --status <new-status>
 # Show requirement
 aida show <SPEC-ID>
 
+# Search for related requirements or design decisions
+aida grep "keyword"                          # Search all fields
+aida grep -i "pattern" -f description        # Case insensitive, description only
+aida grep -E "TODO|FIXME" -f comments        # Regex search in comments
+aida grep -l "database" --status approved    # List SPEC-IDs only, filter by status
+aida grep -C 2 "error"                       # Show 2 lines of context
+
 # Edit requirement
 aida edit <SPEC-ID> --description "..." --status <status>
 

@@ -205,6 +205,38 @@ fn main() -> Result<()> {
         Command::Scaffold(scaffold_cmd) => {
             handle_scaffold_command(scaffold_cmd, &storage, &requirements_path)?;
         }
+        Command::Grep {
+            pattern,
+            ignore_case,
+            extended_regex,
+            after_context,
+            before_context,
+            context,
+            field,
+            status,
+            r#type,
+            feature,
+            files_with_matches,
+            count,
+            invert_match,
+        } => {
+            grep_requirements(
+                &storage,
+                pattern,
+                *ignore_case,
+                *extended_regex,
+                *after_context,
+                *before_context,
+                *context,
+                field.as_deref(),
+                status.as_deref(),
+                r#type.as_deref(),
+                feature.as_deref(),
+                *files_with_matches,
+                *count,
+                *invert_match,
+            )?;
+        }
     }
 
     Ok(())
@@ -3368,4 +3400,297 @@ fn handle_scaffold_command(cmd: &ScaffoldCommand, storage: &Storage, db_path: &s
     }
 
     Ok(())
+}
+
+/// Search requirements for a pattern
+#[allow(clippy::too_many_arguments)]
+fn grep_requirements(
+    storage: &Storage,
+    pattern: &str,
+    ignore_case: bool,
+    extended_regex: bool,
+    after_context: usize,
+    before_context: usize,
+    context: Option<usize>,
+    field_filter: Option<&str>,
+    status_filter: Option<&str>,
+    type_filter: Option<&str>,
+    feature_filter: Option<&str>,
+    files_with_matches: bool,
+    count_only: bool,
+    invert_match: bool,
+) -> Result<()> {
+    use regex::RegexBuilder;
+
+    let store = storage.load()?;
+
+    // Build the regex pattern
+    let regex = if extended_regex {
+        RegexBuilder::new(pattern)
+            .case_insensitive(ignore_case)
+            .build()
+            .context("Invalid regex pattern")?
+    } else {
+        // Escape special regex characters for literal search
+        let escaped = regex::escape(pattern);
+        RegexBuilder::new(&escaped)
+            .case_insensitive(ignore_case)
+            .build()
+            .context("Invalid pattern")?
+    };
+
+    // Parse field filter
+    let fields: HashSet<&str> = if let Some(f) = field_filter {
+        f.split(',').map(|s| s.trim()).collect()
+    } else {
+        ["title", "description", "comments", "tags", "owner", "feature", "spec_id"]
+            .iter()
+            .copied()
+            .collect()
+    };
+
+    // Context lines (C overrides A and B)
+    let ctx_before = context.unwrap_or(before_context);
+    let ctx_after = context.unwrap_or(after_context);
+
+    let mut total_matches = 0;
+    let mut matching_reqs = 0;
+
+    for req in &store.requirements {
+        // Apply filters
+        if let Some(status_str) = status_filter {
+            let req_status = req.status.to_string().to_lowercase();
+            if !req_status.contains(&status_str.to_lowercase()) {
+                continue;
+            }
+        }
+
+        if let Some(type_str) = type_filter {
+            let req_type = req.req_type.to_string().to_lowercase();
+            if !req_type.contains(&type_str.to_lowercase()) {
+                continue;
+            }
+        }
+
+        if let Some(feature_str) = feature_filter {
+            if !req.feature.to_lowercase().contains(&feature_str.to_lowercase()) {
+                continue;
+            }
+        }
+
+        // Collect matches from all fields
+        let mut matches: Vec<GrepMatch> = Vec::new();
+
+        // Search title
+        if fields.contains("title") {
+            if let Some(m) = search_field(&regex, "title", &req.title, ctx_before, ctx_after) {
+                matches.push(m);
+            }
+        }
+
+        // Search description
+        if fields.contains("description") {
+            for m in search_multiline_field(&regex, "description", &req.description, ctx_before, ctx_after) {
+                matches.push(m);
+            }
+        }
+
+        // Search spec_id
+        if fields.contains("spec_id") {
+            if let Some(spec_id) = &req.spec_id {
+                if let Some(m) = search_field(&regex, "spec_id", spec_id, ctx_before, ctx_after) {
+                    matches.push(m);
+                }
+            }
+        }
+
+        // Search owner
+        if fields.contains("owner") {
+            if let Some(m) = search_field(&regex, "owner", &req.owner, ctx_before, ctx_after) {
+                matches.push(m);
+            }
+        }
+
+        // Search feature
+        if fields.contains("feature") {
+            if let Some(m) = search_field(&regex, "feature", &req.feature, ctx_before, ctx_after) {
+                matches.push(m);
+            }
+        }
+
+        // Search tags
+        if fields.contains("tags") {
+            for tag in &req.tags {
+                if let Some(m) = search_field(&regex, "tags", tag, ctx_before, ctx_after) {
+                    matches.push(m);
+                }
+            }
+        }
+
+        // Search comments
+        if fields.contains("comments") {
+            for comment in &req.comments {
+                for m in search_multiline_field(&regex, &format!("comment:{}", comment.author), &comment.content, ctx_before, ctx_after) {
+                    matches.push(m);
+                }
+            }
+        }
+
+        let has_matches = !matches.is_empty();
+        let should_show = if invert_match { !has_matches } else { has_matches };
+
+        if should_show {
+            matching_reqs += 1;
+            let match_count = matches.len();
+            total_matches += match_count;
+
+            let id_string = req.id.to_string();
+            let spec_id = req.spec_id.as_deref().unwrap_or(&id_string);
+
+            if files_with_matches {
+                // Just print the SPEC-ID
+                println!("{}", spec_id.cyan());
+            } else if count_only {
+                // Print count for this requirement
+                println!("{}: {}", spec_id.cyan(), match_count);
+            } else if invert_match {
+                // For invert match, just show SPEC-ID and title
+                println!("{}: {}", spec_id.cyan(), req.title);
+            } else {
+                // Full output with matches
+                println!("{}: {}", spec_id.cyan().bold(), req.title);
+                for m in matches {
+                    print_grep_match(&m);
+                }
+                println!();
+            }
+        }
+    }
+
+    // Summary
+    if !files_with_matches && !count_only {
+        if matching_reqs == 0 {
+            if invert_match {
+                println!("{}", "All requirements matched the pattern.".yellow());
+            } else {
+                println!("{}", "No matches found.".yellow());
+            }
+        } else {
+            println!(
+                "{} match(es) in {} requirement(s)",
+                total_matches.to_string().green(),
+                matching_reqs.to_string().green()
+            );
+        }
+    }
+
+    Ok(())
+}
+
+/// A single grep match result
+struct GrepMatch {
+    field: String,
+    line_num: Option<usize>,
+    line: String,
+    match_start: usize,
+    match_end: usize,
+    context_before: Vec<String>,
+    context_after: Vec<String>,
+}
+
+/// Search a single-line field for matches
+fn search_field(
+    regex: &regex::Regex,
+    field: &str,
+    content: &str,
+    _ctx_before: usize,
+    _ctx_after: usize,
+) -> Option<GrepMatch> {
+    if let Some(m) = regex.find(content) {
+        Some(GrepMatch {
+            field: field.to_string(),
+            line_num: None,
+            line: content.to_string(),
+            match_start: m.start(),
+            match_end: m.end(),
+            context_before: vec![],
+            context_after: vec![],
+        })
+    } else {
+        None
+    }
+}
+
+/// Search a multiline field for matches
+fn search_multiline_field(
+    regex: &regex::Regex,
+    field: &str,
+    content: &str,
+    ctx_before: usize,
+    ctx_after: usize,
+) -> Vec<GrepMatch> {
+    let lines: Vec<&str> = content.lines().collect();
+    let mut matches = Vec::new();
+
+    for (line_idx, line) in lines.iter().enumerate() {
+        if let Some(m) = regex.find(line) {
+            // Gather context before
+            let start = line_idx.saturating_sub(ctx_before);
+            let context_before: Vec<String> = lines[start..line_idx]
+                .iter()
+                .map(|s| s.to_string())
+                .collect();
+
+            // Gather context after
+            let end = (line_idx + 1 + ctx_after).min(lines.len());
+            let context_after: Vec<String> = lines[line_idx + 1..end]
+                .iter()
+                .map(|s| s.to_string())
+                .collect();
+
+            matches.push(GrepMatch {
+                field: field.to_string(),
+                line_num: Some(line_idx + 1),
+                line: line.to_string(),
+                match_start: m.start(),
+                match_end: m.end(),
+                context_before,
+                context_after,
+            });
+        }
+    }
+
+    matches
+}
+
+/// Print a grep match with highlighting
+fn print_grep_match(m: &GrepMatch) {
+    let field_display = if let Some(line_num) = m.line_num {
+        format!("[{}:{}]", m.field, line_num)
+    } else {
+        format!("[{}]", m.field)
+    };
+
+    // Print context before
+    for ctx_line in &m.context_before {
+        println!("  {} {}", field_display.dimmed(), ctx_line.dimmed());
+    }
+
+    // Print the matching line with highlighted match
+    let before_match = &m.line[..m.match_start];
+    let match_text = &m.line[m.match_start..m.match_end];
+    let after_match = &m.line[m.match_end..];
+
+    println!(
+        "  {} {}{}{}",
+        field_display.blue(),
+        before_match,
+        match_text.red().bold(),
+        after_match
+    );
+
+    // Print context after
+    for ctx_line in &m.context_after {
+        println!("  {} {}", field_display.dimmed(), ctx_line.dimmed());
+    }
 }

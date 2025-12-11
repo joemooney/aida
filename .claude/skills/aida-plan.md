@@ -151,6 +151,12 @@ When `/aida-implement` is invoked on a requirement:
 # Show requirement
 aida show <SPEC-ID>
 
+# Search for related requirements
+aida grep "keyword" -f description         # Search descriptions
+aida grep -i "auth" --status approved      # Case insensitive, filter by status
+aida grep -E "TODO|FIXME" -f comments      # Regex search in comments
+aida grep -l "database"                    # List matching SPEC-IDs only
+
 # Check status
 aida show <SPEC-ID> | grep Status
 

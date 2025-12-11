@@ -759,4 +759,58 @@ pub enum Command {
     /// Scaffolding management commands
     #[clap(subcommand)]
     Scaffold(ScaffoldCommand),
+
+    /// Search requirements for a pattern (like grep)
+    Grep {
+        /// Pattern to search for (regex supported with -E)
+        pattern: String,
+
+        /// Case insensitive search
+        #[clap(long, short = 'i')]
+        ignore_case: bool,
+
+        /// Use extended regex (ERE)
+        #[clap(long, short = 'E')]
+        extended_regex: bool,
+
+        /// Show N lines of context after match
+        #[clap(long, short = 'A', default_value = "0")]
+        after_context: usize,
+
+        /// Show N lines of context before match
+        #[clap(long, short = 'B', default_value = "0")]
+        before_context: usize,
+
+        /// Show N lines of context before and after match
+        #[clap(long, short = 'C')]
+        context: Option<usize>,
+
+        /// Search only in specific field(s): title, description, comments, tags, owner, feature
+        #[clap(long, short = 'f')]
+        field: Option<String>,
+
+        /// Filter by status
+        #[clap(long)]
+        status: Option<String>,
+
+        /// Filter by type
+        #[clap(long)]
+        r#type: Option<String>,
+
+        /// Filter by feature
+        #[clap(long)]
+        feature: Option<String>,
+
+        /// Only show matching SPEC-IDs (like grep -l)
+        #[clap(long, short = 'l')]
+        files_with_matches: bool,
+
+        /// Show match count per requirement (like grep -c)
+        #[clap(long, short = 'c')]
+        count: bool,
+
+        /// Invert match (show non-matching)
+        #[clap(long, short = 'v')]
+        invert_match: bool,
+    },
 }
