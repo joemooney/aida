@@ -3492,6 +3492,7 @@ pub struct RequirementsApp {
     ai_report_include_scaffold: bool,             // Include scaffold status in report
     ai_report_output_path: String,                // Output file path for report
     ai_report_last_result: Option<String>,        // Last report generation result message
+    ai_report_generated_path: Option<std::path::PathBuf>, // Path of last generated report (for opening)
 
     // Conflict detection state (FR-0153)
     original_timestamps: HashMap<Uuid, DateTime<Utc>>,  // Requirement timestamps when loaded
@@ -4075,6 +4076,7 @@ impl RequirementsApp {
             ai_report_include_scaffold: true,
             ai_report_output_path: String::new(),
             ai_report_last_result: None,
+            ai_report_generated_path: None,
             original_timestamps: initial_timestamps,
             modified_requirement_ids: HashSet::new(),
             show_conflict_dialog: false,
@@ -4608,6 +4610,7 @@ impl RequirementsApp {
             ai_report_include_scaffold: true,
             ai_report_output_path: String::new(),
             ai_report_last_result: None,
+            ai_report_generated_path: None,
 
             // Conflict detection state (FR-0153)
             original_timestamps: initial_timestamps,
@@ -14262,10 +14265,21 @@ impl RequirementsApp {
 
         ui.add_space(10.0);
 
-        // Generate button
-        if ui.button("📄 Generate Report").clicked() {
-            self.generate_ai_integration_report();
-        }
+        // Generate and Open buttons
+        ui.horizontal(|ui| {
+            if ui.button("📄 Generate Report").clicked() {
+                self.generate_ai_integration_report();
+            }
+
+            // Show Open button if a report was generated successfully
+            if let Some(ref path) = self.ai_report_generated_path {
+                if ui.button("🔗 Open Report").on_hover_text(format!("Open {}", path.display())).clicked() {
+                    if let Err(e) = open::that(path) {
+                        self.ai_report_last_result = Some(format!("Error opening report: {}", e));
+                    }
+                }
+            }
+        });
 
         // Show last result message
         if let Some(ref result) = self.ai_report_last_result {
@@ -14350,9 +14364,11 @@ impl RequirementsApp {
                     "Report generated: {}",
                     output_path.display()
                 ));
+                self.ai_report_generated_path = Some(output_path);
             }
             Err(e) => {
                 self.ai_report_last_result = Some(format!("Error writing report: {}", e));
+                self.ai_report_generated_path = None;
             }
         }
     }
