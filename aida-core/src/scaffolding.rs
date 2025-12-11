@@ -140,6 +140,8 @@ pub struct Scaffolder {
     project_root: PathBuf,
     /// Scaffolding configuration
     config: ScaffoldConfig,
+    /// Database path (to determine backend type)
+    database_path: Option<PathBuf>,
 }
 
 impl Scaffolder {
@@ -148,7 +150,34 @@ impl Scaffolder {
         Self {
             project_root,
             config,
+            database_path: None,
         }
+    }
+
+    /// Create a new scaffolder with database path for backend-aware scaffolding
+    pub fn with_database(project_root: PathBuf, config: ScaffoldConfig, database_path: PathBuf) -> Self {
+        Self {
+            project_root,
+            config,
+            database_path: Some(database_path),
+        }
+    }
+
+    /// Check if the database is SQLite based on path extension
+    fn is_sqlite_database(&self) -> bool {
+        self.database_path
+            .as_ref()
+            .map(|p| p.extension().map(|e| e == "db").unwrap_or(false))
+            .unwrap_or(false)
+    }
+
+    /// Get the database filename for display
+    fn database_filename(&self) -> String {
+        self.database_path
+            .as_ref()
+            .and_then(|p| p.file_name())
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| "requirements.yaml".to_string())
     }
 
     /// Generate a preview of what would be scaffolded
@@ -492,12 +521,26 @@ Confidence levels:
 - `low`: <40% AI, mostly human
 "#;
 
-        let requirements_section = r#"
+        let db_filename = self.database_filename();
+        let db_storage_section = if self.is_sqlite_database() {
+            format!(r#"Requirements database: `{}`
+
+### Database Storage
+AIDA supports both YAML and SQLite backends:
+- **YAML**: Human-readable, git-friendly, good for single-user scenarios
+- **SQLite**: Better for concurrent access (GUI + CLI), optimistic locking
+
+To migrate: `aida db migrate --from yaml --to sqlite`"#, db_filename)
+        } else {
+            format!("Requirements database: `{}`", db_filename)
+        };
+
+        let requirements_section = format!(r#"
 ## Requirements Management
 
 This project uses AIDA for requirements tracking. **Do NOT maintain a separate REQUIREMENTS.md file.**
 
-Requirements database: `requirements.yaml`
+{}
 
 ### CLI Commands
 ```bash
@@ -517,7 +560,7 @@ aida comment add <ID> "..."            # Add implementation note
 
 ### Session Workflow
 If you work conversationally without explicit /aida-req calls, use `/aida-capture` at session end to review and capture any requirements that were discussed but not yet added to the database.
-"#;
+"#, db_storage_section);
 
         let skills_section = r#"
 ## Claude Code Skills

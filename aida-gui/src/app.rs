@@ -6888,7 +6888,8 @@ impl RequirementsApp {
                         let project_dir = self.storage.path().parent()
                             .map(|p| p.to_path_buf())
                             .unwrap_or_else(|| std::path::PathBuf::from("."));
-                        let scaffolder = aida_core::Scaffolder::new(project_dir, self.scaffold_config.clone());
+                        let db_path = self.storage.path().to_path_buf();
+                        let scaffolder = aida_core::Scaffolder::with_database(project_dir, self.scaffold_config.clone(), db_path);
                         self.scaffold_preview = Some(scaffolder.preview(&self.store));
                     }
 
@@ -6908,7 +6909,8 @@ impl RequirementsApp {
                 let project_dir = self.storage.path().parent()
                     .map(|p| p.to_path_buf())
                     .unwrap_or_else(|| std::path::PathBuf::from("."));
-                let scaffolder = aida_core::Scaffolder::new(project_dir, self.scaffold_config.clone());
+                let db_path = self.storage.path().to_path_buf();
+                let scaffolder = aida_core::Scaffolder::with_database(project_dir, self.scaffold_config.clone(), db_path);
 
                 match scaffolder.apply(preview) {
                     Ok(files) => {
@@ -14202,7 +14204,8 @@ impl RequirementsApp {
                 let project_dir = self.storage.path().parent()
                     .map(|p| p.to_path_buf())
                     .unwrap_or_else(|| std::path::PathBuf::from("."));
-                let scaffolder = aida_core::Scaffolder::new(project_dir, self.scaffold_config.clone());
+                let db_path = self.storage.path().to_path_buf();
+                let scaffolder = aida_core::Scaffolder::with_database(project_dir, self.scaffold_config.clone(), db_path);
                 self.scaffold_preview = Some(scaffolder.preview(&self.store));
                 self.show_scaffold_dialog = true;
             }
@@ -14213,10 +14216,12 @@ impl RequirementsApp {
                 let project_dir = self.storage.path().parent()
                     .map(|p| p.to_path_buf())
                     .unwrap_or_else(|| std::path::PathBuf::from("."));
+                let db_path = self.storage.path();
                 self.scaffold_status = Some(aida_core::check_scaffold_status(
                     &self.store,
                     &project_dir,
                     &self.scaffold_config,
+                    db_path,
                 ));
                 self.show_scaffold_status_dialog = true;
             }

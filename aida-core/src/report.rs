@@ -397,7 +397,8 @@ impl ReportGenerator {
     fn check_scaffold_status(&self, project_root: &Path) -> (Option<ScaffoldStatus>, Option<ScaffoldConfig>) {
         // Use default scaffold config
         let config = ScaffoldConfig::default();
-        let scaffolder = Scaffolder::new(project_root.to_path_buf(), config.clone());
+        let db_path = PathBuf::from(&self.database_path);
+        let scaffolder = Scaffolder::with_database(project_root.to_path_buf(), config.clone(), db_path);
 
         // Generate expected artifacts
         let preview = scaffolder.preview(&self.store);
@@ -800,8 +801,9 @@ pub fn check_scaffold_status(
     store: &RequirementsStore,
     project_root: &Path,
     config: &ScaffoldConfig,
+    database_path: &Path,
 ) -> ScaffoldStatus {
-    let scaffolder = Scaffolder::new(project_root.to_path_buf(), config.clone());
+    let scaffolder = Scaffolder::with_database(project_root.to_path_buf(), config.clone(), database_path.to_path_buf());
     let preview = scaffolder.preview(store);
 
     let mut status = ScaffoldStatus::new();

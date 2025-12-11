@@ -9,7 +9,14 @@ AI Design Assistant
 
 This project uses AIDA for requirements tracking. **Do NOT maintain a separate REQUIREMENTS.md file.**
 
-Requirements database: `requirements.yaml`
+Requirements database: `requirements.db`
+
+### Database Storage
+AIDA supports both YAML and SQLite backends:
+- **YAML**: Human-readable, git-friendly, good for single-user scenarios
+- **SQLite**: Better for concurrent access (GUI + CLI), optimistic locking
+
+To migrate: `aida db migrate --from yaml --to sqlite`
 
 ### CLI Commands
 ```bash
@@ -35,21 +42,13 @@ If you work conversationally without explicit /aida-req calls, use `/aida-captur
 When implementing requirements, add inline trace comments:
 
 ```rust
-// trace:FR-0042 - Keyboard navigation | ai:claude:high | impl:2025-12-10 | by:joe
+// trace:FR-0042 | ai:claude:high
 fn implement_feature() {
     // Implementation
 }
 ```
 
-Format: `// trace:<SPEC-ID> - <title> | ai:<tool>:<confidence> | impl:<date> | by:<user>`
-
-Fields:
-- `<SPEC-ID>`: The requirement being implemented (e.g., FR-0042)
-- `<title>`: Brief requirement title (truncate if >40 chars)
-- `<tool>`: AI tool used (e.g., `claude`)
-- `<confidence>`: `high` (>80% AI), `med` (40-80%), `low` (<40%)
-- `<date>`: Implementation date (YYYY-MM-DD)
-- `<user>`: Who implemented it
+Format: `// trace:<SPEC-ID> | ai:<tool>:<confidence>`
 
 Confidence levels:
 - `high`: >80% AI-generated

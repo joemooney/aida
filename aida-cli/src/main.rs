@@ -203,7 +203,7 @@ fn main() -> Result<()> {
             handle_report_command(report_cmd, &storage, &db_path_str)?;
         }
         Command::Scaffold(scaffold_cmd) => {
-            handle_scaffold_command(scaffold_cmd, &storage)?;
+            handle_scaffold_command(scaffold_cmd, &storage, &requirements_path)?;
         }
     }
 
@@ -3173,7 +3173,7 @@ fn handle_report_command(cmd: &ReportCommand, storage: &Storage, storage_path: &
 }
 
 // trace:FR-0260 | ai:claude:high
-fn handle_scaffold_command(cmd: &ScaffoldCommand, storage: &Storage) -> Result<()> {
+fn handle_scaffold_command(cmd: &ScaffoldCommand, storage: &Storage, db_path: &std::path::Path) -> Result<()> {
     match cmd {
         ScaffoldCommand::Status {
             project_root,
@@ -3192,7 +3192,7 @@ fn handle_scaffold_command(cmd: &ScaffoldCommand, storage: &Storage) -> Result<(
             }
 
             let config = ScaffoldConfig::default();
-            let status = check_scaffold_status(&store, &root, &config);
+            let status = check_scaffold_status(&store, &root, &config, db_path);
 
             if status.is_current {
                 println!("{} Scaffold is up to date", "✓".green());
@@ -3266,7 +3266,7 @@ fn handle_scaffold_command(cmd: &ScaffoldCommand, storage: &Storage) -> Result<(
                 .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
             let config = ScaffoldConfig::default();
-            let scaffolder = Scaffolder::new(root.clone(), config);
+            let scaffolder = Scaffolder::with_database(root.clone(), config, db_path.to_path_buf());
             let preview = scaffolder.preview(&store);
 
             println!("{} Scaffold preview for: {}", "📁".blue(), root.display());
@@ -3311,7 +3311,7 @@ fn handle_scaffold_command(cmd: &ScaffoldCommand, storage: &Storage) -> Result<(
                 .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
             let config = ScaffoldConfig::default();
-            let scaffolder = Scaffolder::new(root.clone(), config);
+            let scaffolder = Scaffolder::with_database(root.clone(), config, db_path.to_path_buf());
 
             if *dry_run {
                 println!("{} Dry run - no files will be modified", "ℹ".blue());
