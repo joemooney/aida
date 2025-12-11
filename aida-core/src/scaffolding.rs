@@ -952,7 +952,7 @@ aida feature list
             ProjectType::Rust | ProjectType::Cli => {
                 r#"**Rust:**
 ```rust
-// trace:FR-0042 | ai:claude:high
+// trace:FR-0042 - Keyboard navigation | ai:claude:high | impl:2025-12-10 | by:joe
 fn implement_feature() {
     // Implementation here
 }
@@ -961,7 +961,7 @@ fn implement_feature() {
             ProjectType::Python => {
                 r#"**Python:**
 ```python
-# trace:FR-0042 | ai:claude:high
+# trace:FR-0042 - Keyboard navigation | ai:claude:high | impl:2025-12-10 | by:joe
 def implement_feature():
     """Implementation of FR-0042."""
     pass
@@ -970,7 +970,7 @@ def implement_feature():
             ProjectType::TypeScript | ProjectType::Web | ProjectType::Api => {
                 r#"**TypeScript/JavaScript:**
 ```typescript
-// trace:FR-0042 | ai:claude:high
+// trace:FR-0042 - Keyboard navigation | ai:claude:high | impl:2025-12-10 | by:joe
 function implementFeature() {
     // Implementation here
 }
@@ -979,7 +979,7 @@ function implementFeature() {
             ProjectType::Generic => {
                 r#"**Generic (use language-appropriate comment syntax):**
 ```
-// trace:FR-0042 | ai:claude:high
+// trace:FR-0042 - Feature title | ai:claude:high | impl:2025-12-10 | by:joe
 // Your implementation here
 ```"#
             }
@@ -1053,13 +1053,16 @@ When writing or modifying code, add inline traceability comments:
 
 **Comment Format:**
 ```
-// trace:<SPEC-ID> | ai:<tool>:<confidence>
+// trace:<SPEC-ID> - <title> | ai:<tool>:<confidence> | impl:<date> | by:<user>
 ```
 
 Where:
 - `<SPEC-ID>`: The requirement being implemented (e.g., FR-0042)
-- `<tool>`: Always `claude` for Claude-generated code
+- `<title>`: Brief requirement title (truncate if >40 chars)
+- `<tool>`: AI tool used (e.g., `claude`)
 - `<confidence>`: `high` (>80% AI), `med` (40-80%), `low` (<40%)
+- `<date>`: Implementation date (YYYY-MM-DD)
+- `<user>`: Who implemented it
 
 ### Step 4: Update Requirement During Implementation
 

@@ -1914,6 +1914,117 @@ impl ImplementationInfo {
     }
 }
 
+/// Parsed trace comment from source code
+/// Format: `// trace:<SPEC-ID> - <title> | ai:<tool>:<confidence> | impl:<date> | by:<user>`
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TraceComment {
+    /// The requirement ID (e.g., FR-0042)
+    pub spec_id: String,
+    /// Brief title from the requirement (optional)
+    pub title: Option<String>,
+    /// AI tool used (e.g., "claude")
+    pub ai_tool: Option<String>,
+    /// Confidence level
+    pub confidence: Option<ConfidenceLevel>,
+    /// Implementation date
+    pub impl_date: Option<String>,
+    /// Implementer username
+    pub implemented_by: Option<String>,
+}
+
+impl TraceComment {
+    /// Parse a trace comment from a line of source code
+    /// Supports both old format: `// trace:FR-0042 | ai:claude:high`
+    /// And new format: `// trace:FR-0042 - Title | ai:claude:high | impl:2025-12-10 | by:joe`
+    pub fn parse(line: &str) -> Option<Self> {
+        // Strip comment prefix and find trace:
+        let line = line.trim();
+        let trace_start = line.find("trace:")?;
+        let content = &line[trace_start + 6..];
+
+        // Split by pipe to get segments
+        let segments: Vec<&str> = content.split('|').map(|s| s.trim()).collect();
+        if segments.is_empty() {
+            return None;
+        }
+
+        // First segment: SPEC-ID optionally followed by " - title"
+        let first = segments[0];
+        let (spec_id, title) = if let Some(dash_pos) = first.find(" - ") {
+            let id = first[..dash_pos].trim().to_string();
+            let title = first[dash_pos + 3..].trim().to_string();
+            (id, Some(title))
+        } else {
+            (first.trim().to_string(), None)
+        };
+
+        let mut result = TraceComment {
+            spec_id,
+            title,
+            ai_tool: None,
+            confidence: None,
+            impl_date: None,
+            implemented_by: None,
+        };
+
+        // Parse remaining segments
+        for segment in segments.iter().skip(1) {
+            let segment = segment.trim();
+            if segment.starts_with("ai:") {
+                // Format: ai:claude:high or ai:claude
+                let parts: Vec<&str> = segment[3..].split(':').collect();
+                if !parts.is_empty() {
+                    result.ai_tool = Some(parts[0].to_string());
+                }
+                if parts.len() > 1 {
+                    result.confidence = ConfidenceLevel::from_str(parts[1]);
+                }
+            } else if segment.starts_with("impl:") {
+                result.impl_date = Some(segment[5..].trim().to_string());
+            } else if segment.starts_with("by:") {
+                result.implemented_by = Some(segment[3..].trim().to_string());
+            }
+        }
+
+        Some(result)
+    }
+
+    /// Format as a trace comment string (without the comment prefix)
+    pub fn format(&self) -> String {
+        let mut parts = Vec::new();
+
+        // SPEC-ID with optional title
+        let spec_part = if let Some(ref title) = self.title {
+            format!("{} - {}", self.spec_id, title)
+        } else {
+            self.spec_id.clone()
+        };
+        parts.push(spec_part);
+
+        // AI tool and confidence
+        if let Some(ref tool) = self.ai_tool {
+            let ai_part = if let Some(ref conf) = self.confidence {
+                format!("ai:{}:{}", tool, conf)
+            } else {
+                format!("ai:{}", tool)
+            };
+            parts.push(ai_part);
+        }
+
+        // Implementation date
+        if let Some(ref date) = self.impl_date {
+            parts.push(format!("impl:{}", date));
+        }
+
+        // Implementer
+        if let Some(ref by) = self.implemented_by {
+            parts.push(format!("by:{}", by));
+        }
+
+        format!("trace:{}", parts.join(" | "))
+    }
+}
+
 /// Represents a comment on a requirement with threading support
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Comment {

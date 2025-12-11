@@ -9,14 +9,7 @@ AI Design Assistant
 
 This project uses AIDA for requirements tracking. **Do NOT maintain a separate REQUIREMENTS.md file.**
 
-Requirements database: `requirements.yaml` (or `requirements.db` for SQLite)
-
-### Database Storage
-AIDA supports both YAML and SQLite backends:
-- **YAML**: Human-readable, git-friendly, good for single-user scenarios
-- **SQLite**: Better for concurrent access (GUI + CLI), optimistic locking
-
-To migrate: `aida db migrate --from yaml --to sqlite`
+Requirements database: `requirements.yaml`
 
 ### CLI Commands
 ```bash
@@ -42,13 +35,21 @@ If you work conversationally without explicit /aida-req calls, use `/aida-captur
 When implementing requirements, add inline trace comments:
 
 ```rust
-// trace:FR-0042 | ai:claude:high
+// trace:FR-0042 - Keyboard navigation | ai:claude:high | impl:2025-12-10 | by:joe
 fn implement_feature() {
     // Implementation
 }
 ```
 
-Format: `// trace:<SPEC-ID> | ai:<tool>:<confidence>`
+Format: `// trace:<SPEC-ID> - <title> | ai:<tool>:<confidence> | impl:<date> | by:<user>`
+
+Fields:
+- `<SPEC-ID>`: The requirement being implemented (e.g., FR-0042)
+- `<title>`: Brief requirement title (truncate if >40 chars)
+- `<tool>`: AI tool used (e.g., `claude`)
+- `<confidence>`: `high` (>80% AI), `med` (40-80%), `low` (<40%)
+- `<date>`: Implementation date (YYYY-MM-DD)
+- `<user>`: Who implemented it
 
 Confidence levels:
 - `high`: >80% AI-generated
@@ -79,4 +80,4 @@ Review session and capture missed requirements:
 - Identify implemented work not yet in requirements database
 - Prompt to add missing requirements or update statuses
 - Use at end of conversational sessions as a safety net
-- a goal for this project is to make aida very much like an editor like Vim. We want to maximize the use of the keyboard. Key combinations where the first key (e.g. 's') shows a menu and the second key chooses from that menu are preferred since they are an excellent way to help new users get used to the key combos without immediate action.
+

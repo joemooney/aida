@@ -2781,11 +2781,15 @@ fn trace_scan(
         extensions
     );
 
-    // Regex pattern for trace comments: // trace:REQ-ID | ai:tool:confidence
-    let trace_pattern =
-        regex::Regex::new(r"//\s*trace:([A-Z]+-\d+)(?:\s*\|\s*ai:(\w+):(\w+))?").unwrap();
+    // Regex pattern for trace comments (supports both old and new formats):
+    // Old: // trace:REQ-ID | ai:tool:confidence
+    // New: // trace:REQ-ID - Title | ai:tool:confidence | impl:date | by:user
+    let trace_pattern = regex::Regex::new(
+        r"//\s*trace:([A-Z]+-\d+)(?:\s*-\s*([^|]+))?(?:\s*\|\s*ai:(\w+):(\w+))?(?:\s*\|\s*impl:(\S+))?(?:\s*\|\s*by:(\S+))?"
+    ).unwrap();
 
-    let mut found_traces: Vec<(String, String, String, u32, Option<String>, Option<String>)> =
+    // (req_id, file_path, line_content, line_num, tool, confidence, title, impl_date, by_user)
+    let mut found_traces: Vec<(String, String, String, u32, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>)> =
         Vec::new();
 
     // Walk through files
@@ -2793,7 +2797,7 @@ fn trace_scan(
         dir: &std::path::Path,
         ext_list: &[&str],
         pattern: &regex::Regex,
-        found: &mut Vec<(String, String, String, u32, Option<String>, Option<String>)>,
+        found: &mut Vec<(String, String, String, u32, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>)>,
         verbose: bool,
     ) -> Result<()> {
         if dir.is_file() {
@@ -2835,7 +2839,7 @@ fn trace_scan(
     fn scan_file(
         path: &std::path::Path,
         pattern: &regex::Regex,
-        found: &mut Vec<(String, String, String, u32, Option<String>, Option<String>)>,
+        found: &mut Vec<(String, String, String, u32, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>)>,
         verbose: bool,
     ) -> Result<()> {
         let file = fs::File::open(path)?;
@@ -2845,13 +2849,18 @@ fn trace_scan(
             let line = line?;
             if let Some(caps) = pattern.captures(&line) {
                 let req_id = caps.get(1).map(|m| m.as_str().to_string()).unwrap();
-                let tool = caps.get(2).map(|m| m.as_str().to_string());
-                let confidence = caps.get(3).map(|m| m.as_str().to_string());
+                let title = caps.get(2).map(|m| m.as_str().trim().to_string());
+                let tool = caps.get(3).map(|m| m.as_str().to_string());
+                let confidence = caps.get(4).map(|m| m.as_str().to_string());
+                let impl_date = caps.get(5).map(|m| m.as_str().to_string());
+                let by_user = caps.get(6).map(|m| m.as_str().to_string());
 
                 if verbose {
+                    let title_str = title.as_deref().unwrap_or("");
                     println!(
-                        "  Found: {} in {}:{}",
+                        "  Found: {}{} in {}:{}",
                         req_id.yellow(),
+                        if title_str.is_empty() { "".to_string() } else { format!(" - {}", title_str) },
                         path.display(),
                         line_num + 1
                     );
@@ -2864,6 +2873,9 @@ fn trace_scan(
                     (line_num + 1) as u32,
                     tool,
                     confidence,
+                    title,
+                    impl_date,
+                    by_user,
                 ));
             }
         }
@@ -2891,12 +2903,15 @@ fn trace_scan(
 
     for (req_id, traces) in &by_req {
         println!("\n  {} ({} links):", req_id.yellow(), traces.len());
-        for (_, file, _, line, tool, conf) in traces {
+        for (_, file, _, line, tool, conf, title, impl_date, by_user) in traces {
+            let title_info = title.as_ref().map(|t| format!(" - {}", t)).unwrap_or_default();
             let ai_info = match (tool, conf) {
                 (Some(t), Some(c)) => format!(" [ai:{t}:{c}]").dimmed().to_string(),
                 _ => String::new(),
             };
-            println!("    {}:{}{}", file.cyan(), line, ai_info);
+            let impl_info = impl_date.as_ref().map(|d| format!(" impl:{}", d)).unwrap_or_default();
+            let by_info = by_user.as_ref().map(|u| format!(" by:{}", u)).unwrap_or_default();
+            println!("    {}:{}{}{}{}{}", file.cyan(), line, title_info, ai_info, impl_info.dimmed(), by_info.dimmed());
         }
     }
 
@@ -2905,7 +2920,7 @@ fn trace_scan(
         let mut store = storage.load()?;
         let mut added = 0;
 
-        for (req_id, file_path, _, line_num, tool, confidence) in found_traces {
+        for (req_id, file_path, _, line_num, tool, confidence, _title, impl_date, by_user) in found_traces {
             // Find requirement by spec_id
             if let Some(req) = store
                 .requirements
@@ -2920,10 +2935,23 @@ fn trace_scan(
                 if !exists {
                     let mut trace = TraceLink::new(ArtifactType::SourceCode, file_path.clone());
                     trace.line_start = Some(line_num);
-                    trace.created_by = Some("scan".to_string());
-                    if let Some(t) = tool {
-                        trace.notes = Some(format!("AI tool: {}", t));
+
+                    // Use by_user from comment if present, otherwise default to "scan"
+                    trace.created_by = by_user.or_else(|| Some("scan".to_string()));
+
+                    // Build notes from available info
+                    let mut notes_parts = Vec::new();
+                    if let Some(t) = &tool {
+                        let conf_str = confidence.as_ref().map(|c| format!(":{}", c)).unwrap_or_default();
+                        notes_parts.push(format!("AI tool: {}{}", t, conf_str));
                     }
+                    if let Some(date) = &impl_date {
+                        notes_parts.push(format!("Implemented: {}", date));
+                    }
+                    if !notes_parts.is_empty() {
+                        trace.notes = Some(notes_parts.join(", "));
+                    }
+
                     req.trace_links.push(trace);
                     added += 1;
                 }
