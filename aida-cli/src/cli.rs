@@ -521,7 +521,7 @@ pub enum CommentCommand {
         #[clap(name = "CONTENT")]
         content_positional: Option<String>,
 
-        /// Author of the comment (defaults to system user)
+        /// Author of the comment (defaults to AIDA_AUTHOR env var or system user)
         #[clap(long)]
         author: Option<String>,
 
@@ -595,7 +595,7 @@ pub enum Command {
         #[clap(long)]
         r#type: Option<String>,
 
-        /// Owner of the requirement
+        /// Owner of the requirement (defaults to AIDA_AUTHOR env var or system user)
         #[clap(long)]
         owner: Option<String>,
 

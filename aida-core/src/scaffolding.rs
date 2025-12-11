@@ -1277,6 +1277,17 @@ The requirements database should evolve during implementation to accurately refl
 ### Traceability
 All AI-generated code must include inline traceability comments linking back to requirement IDs.
 
+### AI Authorship Attribution
+When adding requirements or comments via the CLI, authorship should reflect AI assistance.
+
+**Set the AIDA_AUTHOR environment variable:**
+```bash
+export AIDA_AUTHOR="ai:claude:$USER"
+```
+
+This ensures all `aida add` and `aida comment add` commands automatically use the AI author format.
+Format: `ai:<tool>:<username>` (e.g., `ai:claude:joe`)
+
 ## Workflow
 
 ### Step 1: Load Requirement Context

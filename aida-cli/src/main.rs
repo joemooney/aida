@@ -22,6 +22,19 @@ use crate::cli::{
     RelationshipCommand, ReportCommand, ScaffoldCommand, ServerCommand, TraceCommand, TypeCommand,
 };
 
+/// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
+/// Format recommendation: "ai:claude:username" for AI-assisted work
+fn get_default_author() -> String {
+    if let Ok(author) = std::env::var("AIDA_AUTHOR") {
+        author
+    } else {
+        // Fall back to system username
+        std::env::var("USER")
+            .or_else(|_| std::env::var("USERNAME")) // Windows fallback
+            .unwrap_or_else(|_| "Unknown".to_string())
+    }
+}
+
 fn main() -> Result<()> {
     let mut cli = Cli::parse();
 
@@ -373,9 +386,10 @@ fn add_requirement_cli(
         requirement.req_type = parse_type(req_type)?;
     }
 
-    if let Some(owner_val) = owner {
-        requirement.owner = owner_val.clone();
-    }
+    // Set owner: use explicit value, AIDA_AUTHOR env var, or system username
+    requirement.owner = owner
+        .clone()
+        .unwrap_or_else(get_default_author);
 
     if let Some(feature_val) = feature {
         requirement.feature = feature_val.clone();
@@ -1905,7 +1919,10 @@ fn add_comment_interactive(
     let author = if let Some(a) = author {
         a.to_string()
     } else {
-        inquire::Text::new("Author:").prompt()?
+        let default_author = get_default_author();
+        inquire::Text::new("Author:")
+            .with_default(&default_author)
+            .prompt()?
     };
 
     let content = inquire::Editor::new("Comment content:").prompt()?;
@@ -1945,7 +1962,9 @@ fn add_comment_cli(
         .find(|r| r.id == id)
         .context("Requirement not found")?;
 
-    let author = author.unwrap_or("Unknown").to_string();
+    let author = author
+        .map(|a| a.to_string())
+        .unwrap_or_else(get_default_author);
 
     let comment = if let Some(parent_str) = parent_id {
         let parent_uuid = Uuid::parse_str(parent_str).context("Invalid parent comment ID")?;
