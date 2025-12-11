@@ -6891,7 +6891,7 @@ impl RequirementsApp {
                             .map(|p| p.to_path_buf())
                             .unwrap_or_else(|| std::path::PathBuf::from("."));
                         let db_path = self.storage.path().to_path_buf();
-                        let scaffolder = aida_core::Scaffolder::with_database(project_dir, self.scaffold_config.clone(), db_path);
+                        let mut scaffolder = aida_core::Scaffolder::with_database(project_dir, self.scaffold_config.clone(), db_path);
                         self.scaffold_preview = Some(scaffolder.preview(&self.store));
                     }
 
@@ -6912,7 +6912,7 @@ impl RequirementsApp {
                     .map(|p| p.to_path_buf())
                     .unwrap_or_else(|| std::path::PathBuf::from("."));
                 let db_path = self.storage.path().to_path_buf();
-                let scaffolder = aida_core::Scaffolder::with_database(project_dir, self.scaffold_config.clone(), db_path);
+                let mut scaffolder = aida_core::Scaffolder::with_database(project_dir, self.scaffold_config.clone(), db_path);
 
                 match scaffolder.apply(preview) {
                     Ok(files) => {
@@ -14207,7 +14207,7 @@ impl RequirementsApp {
                     .map(|p| p.to_path_buf())
                     .unwrap_or_else(|| std::path::PathBuf::from("."));
                 let db_path = self.storage.path().to_path_buf();
-                let scaffolder = aida_core::Scaffolder::with_database(project_dir, self.scaffold_config.clone(), db_path);
+                let mut scaffolder = aida_core::Scaffolder::with_database(project_dir, self.scaffold_config.clone(), db_path);
                 self.scaffold_preview = Some(scaffolder.preview(&self.store));
                 self.show_scaffold_dialog = true;
             }

@@ -8,6 +8,7 @@ pub mod registry;
 pub mod report;
 pub mod scaffolding;
 pub mod storage;
+pub mod templates;
 
 // Re-export commonly used types
 pub use ai::{

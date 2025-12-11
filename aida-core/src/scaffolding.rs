@@ -15,6 +15,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 use crate::models::RequirementsStore;
+use crate::templates::TemplateLoader;
 
 /// Current scaffolding version - increment when templates change significantly
 pub const SCAFFOLD_VERSION: &str = "1.0.0";
@@ -280,24 +281,30 @@ pub struct Scaffolder {
     config: ScaffoldConfig,
     /// Database path (to determine backend type)
     database_path: Option<PathBuf>,
+    /// Template loader for external/embedded templates
+    template_loader: TemplateLoader,
 }
 
 impl Scaffolder {
     /// Create a new scaffolder for the given project directory
     pub fn new(project_root: PathBuf, config: ScaffoldConfig) -> Self {
+        let template_loader = TemplateLoader::with_project_root(&project_root);
         Self {
             project_root,
             config,
             database_path: None,
+            template_loader,
         }
     }
 
     /// Create a new scaffolder with database path for backend-aware scaffolding
     pub fn with_database(project_root: PathBuf, config: ScaffoldConfig, database_path: PathBuf) -> Self {
+        let template_loader = TemplateLoader::with_project_root(&project_root);
         Self {
             project_root,
             config,
             database_path: Some(database_path),
+            template_loader,
         }
     }
 
@@ -316,6 +323,11 @@ impl Scaffolder {
             .and_then(|p| p.file_name())
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| "requirements.yaml".to_string())
+    }
+
+    /// Load a template from external sources or embedded, with fallback to inline
+    fn load_template(&mut self, key: &str) -> Option<String> {
+        self.template_loader.load(key)
     }
 
     /// Helper to create an artifact with version/checksum header and file status checking
@@ -353,7 +365,7 @@ impl Scaffolder {
     }
 
     /// Generate a preview of what would be scaffolded
-    pub fn preview(&self, store: &RequirementsStore) -> ScaffoldPreview {
+    pub fn preview(&mut self, store: &RequirementsStore) -> ScaffoldPreview {
         let mut artifacts = Vec::new();
         let mut overwrites = Vec::new();
         let mut new_files = Vec::new();
@@ -2412,7 +2424,7 @@ mod tests {
     fn test_preview_generates_expected_artifacts() {
         let temp_dir = TempDir::new().unwrap();
         let config = ScaffoldConfig::default();
-        let scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config);
+        let mut scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config);
         let store = create_test_store();
 
         let preview = scaffolder.preview(&store);
@@ -2433,7 +2445,7 @@ mod tests {
     fn test_apply_creates_files() {
         let temp_dir = TempDir::new().unwrap();
         let config = ScaffoldConfig::default();
-        let scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config);
+        let mut scaffolder = Scaffolder::new(temp_dir.path().to_path_buf(), config);
         let store = create_test_store();
 
         let preview = scaffolder.preview(&store);

@@ -207,6 +207,17 @@ pub enum ScaffoldCommand {
         #[clap(long)]
         dry_run: bool,
     },
+
+    /// Extract embedded templates to disk for customization
+    Extract {
+        /// Directory to extract templates to (defaults to ~/.config/aida/templates)
+        #[clap(long)]
+        output: Option<PathBuf>,
+
+        /// Overwrite existing files
+        #[clap(long)]
+        force: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]

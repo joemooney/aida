@@ -3330,7 +3330,7 @@ fn handle_scaffold_command(cmd: &ScaffoldCommand, storage: &Storage, db_path: &s
                 .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
             let config = ScaffoldConfig::default();
-            let scaffolder = Scaffolder::with_database(root.clone(), config, db_path.to_path_buf());
+            let mut scaffolder = Scaffolder::with_database(root.clone(), config, db_path.to_path_buf());
             let preview = scaffolder.preview(&store);
 
             println!("{} Scaffold preview for: {}", "📁".blue(), root.display());
@@ -3375,7 +3375,7 @@ fn handle_scaffold_command(cmd: &ScaffoldCommand, storage: &Storage, db_path: &s
                 .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
             let config = ScaffoldConfig::default();
-            let scaffolder = Scaffolder::with_database(root.clone(), config, db_path.to_path_buf());
+            let mut scaffolder = Scaffolder::with_database(root.clone(), config, db_path.to_path_buf());
 
             if *dry_run {
                 println!("{} Dry run - no files will be modified", "ℹ".blue());
@@ -3417,6 +3417,66 @@ fn handle_scaffold_command(cmd: &ScaffoldCommand, storage: &Storage, db_path: &s
             if !*dry_run {
                 println!();
                 println!("{} Scaffold applied successfully", "✓".green());
+            }
+        }
+
+        // trace:FR-0269 - Template extraction command | ai:claude:high
+        ScaffoldCommand::Extract { output, force } => {
+            use aida_core::templates::TemplateLoader;
+
+            let dest = output.clone().unwrap_or_else(|| {
+                dirs::config_dir()
+                    .map(|p| p.join("aida/templates"))
+                    .unwrap_or_else(|| std::path::PathBuf::from("templates"))
+            });
+
+            println!("{} Extracting embedded templates to: {}", "📦".blue(), dest.display());
+
+            // Create the destination directory if it doesn't exist
+            if !dest.exists() {
+                std::fs::create_dir_all(&dest)?;
+            }
+
+            let loader = TemplateLoader::new();
+            let templates = loader.list_templates();
+
+            let mut extracted = 0;
+            let mut skipped = 0;
+
+            for key in &templates {
+                let full_path = dest.join(key);
+
+                // Check if file exists and skip unless force
+                if full_path.exists() && !force {
+                    println!("  {} {} (skipped - exists)", "~".yellow(), key);
+                    skipped += 1;
+                    continue;
+                }
+
+                // Create parent directories if needed
+                if let Some(parent) = full_path.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+
+                // Load from embedded and write to disk
+                let mut temp_loader = TemplateLoader::new();
+                if let Some(content) = temp_loader.load(key) {
+                    std::fs::write(&full_path, &content)?;
+                    println!("  {} {} (extracted)", "+".green(), key);
+                    extracted += 1;
+                }
+            }
+
+            println!();
+            println!(
+                "{} Extracted {} templates ({} skipped)",
+                "✓".green(),
+                extracted,
+                skipped
+            );
+
+            if skipped > 0 && !force {
+                println!("  Use --force to overwrite existing files");
             }
         }
     }
