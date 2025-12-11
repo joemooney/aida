@@ -2207,7 +2207,20 @@ AI_TAG_PATTERN='\[AI:[a-zA-Z]+:(high|med|low)\]'
 STAGED_FILES=$(git diff --cached --name-only)
 HAS_TRACE_FILES=false
 
+# Files to exclude from trace detection (data files, not source code)
+EXCLUDE_PATTERNS="requirements.yaml requirements.yaml.lock requirements.db"
+
 for file in $STAGED_FILES; do
+    # Skip excluded files
+    skip=false
+    for pattern in $EXCLUDE_PATTERNS; do
+        if [[ "$file" == *"$pattern"* ]]; then
+            skip=true
+            break
+        fi
+    done
+    [ "$skip" = true ] && continue
+
     if [ -f "$file" ]; then
         if grep -q "trace:[A-Z]*-[0-9]*" "$file" 2>/dev/null; then
             HAS_TRACE_FILES=true
@@ -2228,9 +2241,19 @@ fi
 
 # Check for Trace: references in commit message matching staged file traces
 if [ "$HAS_TRACE_FILES" = true ]; then
-    # Extract spec IDs from staged files
+    # Extract spec IDs from staged files (excluding data files)
     SPEC_IDS=""
     for file in $STAGED_FILES; do
+        # Skip excluded files
+        skip=false
+        for pattern in $EXCLUDE_PATTERNS; do
+            if [[ "$file" == *"$pattern"* ]]; then
+                skip=true
+                break
+            fi
+        done
+        [ "$skip" = true ] && continue
+
         if [ -f "$file" ]; then
             FILE_SPECS=$(grep -oE "trace:[A-Z]+-[0-9]+" "$file" 2>/dev/null | sed 's/trace://' | sort -u)
             if [ -n "$FILE_SPECS" ]; then
