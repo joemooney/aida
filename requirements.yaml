@@ -1,6 +1,3 @@
-# This file is an export. The primary database is: requirements.db
-migrated_to: requirements.db
-
 name: Aida
 title: AI Design Assistant
 description: ''
@@ -9,12 +6,12 @@ requirements:
   spec_id: FR-0001
   title: Default owner depending on state
   description: "When we transition a feature we want the owner to be assigned based on state\n\n*this is bold*\n\n_italic_\n\n# Head 1\n\nasdfasdf\n\n## Head2 \n\nasdfasdf"
-  status: Draft
+  status: Completed
   priority: Medium
   owner: ''
   feature: 1-REQ
   created_at: 2025-11-25T19:45:25.234562378Z
-  modified_at: 2025-12-07T17:02:44.462006980Z
+  modified_at: 2025-12-11T03:58:55.745739747Z
   req_type: Functional
   relationships:
   - rel_type: Parent
@@ -38,6 +35,20 @@ requirements:
     - field_name: sprint_assignment
       old_value: ''
       new_value: REQ-0219
+  - id: 1baec5d5-69a7-4248-9593-d0adff400c5f
+    author: CLI
+    timestamp: 2025-12-11T03:58:44.837016020Z
+    changes:
+    - field_name: status
+      old_value: Draft
+      new_value: Planned
+  - id: fff2ff6e-da4d-4237-81ed-c9438b160c2c
+    author: CLI
+    timestamp: 2025-12-11T03:58:55.745738454Z
+    changes:
+    - field_name: status
+      old_value: Planned
+      new_value: Completed
 - id: 59d3cc0b-25a5-4076-8966-94b8ef4e36b1
   spec_id: FR-0002
   title: Add child requirement button
@@ -875,7 +886,7 @@ requirements:
   owner: ''
   feature: 112-Uncategorized
   created_at: 2025-11-26T01:15:26.926247061Z
-  modified_at: 2025-12-07T05:38:37.790393683Z
+  modified_at: 2025-12-10T05:57:00.596100791Z
   req_type: ChangeRequest
   relationships:
   - rel_type: Parent
@@ -6888,16 +6899,24 @@ requirements:
   description: |-
     The system shall support inline traceability comments in generated code that link back to requirement IDs.
 
-    ### Comment Format
-    `// trace:<SPEC-ID> | ai:<tool>:<confidence>`
+    ### Comment Format (Enriched)
+    `// trace:<SPEC-ID> - <title> | ai:<tool>:<confidence> | impl:<date> | by:<user>`
 
     Example:
-    `// trace:FR-0042 | ai:claude:high`
+    `// trace:FR-0042 - Keyboard navigation | ai:claude:high | impl:2025-12-10 | by:joe`
 
-    ### Confidence Levels
-    - high: >80% AI-generated code
-    - med: 40-80% AI with human modifications
-    - low: <40% AI, mostly human written
+    ### Fields
+    - `<SPEC-ID>`: The requirement being implemented (e.g., FR-0042)
+    - `<title>`: Brief requirement title (optional, truncate if >40 chars)
+    - `<tool>`: AI tool used (e.g., `claude`)
+    - `<confidence>`: `high` (>80% AI), `med` (40-80%), `low` (<40%)
+    - `<date>`: Implementation date (YYYY-MM-DD)
+    - `<user>`: Who implemented it
+
+    ### Backward Compatibility
+    The parser supports both formats:
+    - New: `// trace:FR-0042 - Title | ai:claude:high | impl:2025-12-10 | by:joe`
+    - Legacy: `// trace:FR-0042 | ai:claude:high`
 
     ### Language Support
     Comments should follow language conventions:
@@ -6905,17 +6924,82 @@ requirements:
     - Python/Shell: `# trace:...`
     - HTML: `<!-- trace:... -->`
 
-    ### Acceptance Criteria
-    - All AI-generated code includes trace comments
-    - Comments reference valid SPEC-IDs
-    - Confidence level accurately reflects AI contribution
-  status: Approved
+    ### Implementation Notes
+    - TraceComment struct added in models.rs with parse() and format() methods
+    - CLI trace scan updated for new regex pattern
+    - Scaffolding documentation updated
+  status: Completed
   priority: Medium
   owner: ''
   feature: 12-Claude-Code-Integration
   created_at: 2025-12-01T06:27:09.025805737Z
-  modified_at: 2025-12-01T06:27:09.025805737Z
+  modified_at: 2025-12-11T03:41:45.904538115Z
   req_type: System
+  history:
+  - id: b1352ac6-dad8-4486-95a6-687481400adf
+    author: CLI
+    timestamp: 2025-12-11T03:41:45.904536463Z
+    changes:
+    - field_name: description
+      old_value: |-
+        The system shall support inline traceability comments in generated code that link back to requirement IDs.
+
+        ### Comment Format
+        `// trace:<SPEC-ID> | ai:<tool>:<confidence>`
+
+        Example:
+        `// trace:FR-0042 | ai:claude:high`
+
+        ### Confidence Levels
+        - high: >80% AI-generated code
+        - med: 40-80% AI with human modifications
+        - low: <40% AI, mostly human written
+
+        ### Language Support
+        Comments should follow language conventions:
+        - Rust/C/JS: `// trace:...`
+        - Python/Shell: `# trace:...`
+        - HTML: `<!-- trace:... -->`
+
+        ### Acceptance Criteria
+        - All AI-generated code includes trace comments
+        - Comments reference valid SPEC-IDs
+        - Confidence level accurately reflects AI contribution
+      new_value: |-
+        The system shall support inline traceability comments in generated code that link back to requirement IDs.
+
+        ### Comment Format (Enriched)
+        `// trace:<SPEC-ID> - <title> | ai:<tool>:<confidence> | impl:<date> | by:<user>`
+
+        Example:
+        `// trace:FR-0042 - Keyboard navigation | ai:claude:high | impl:2025-12-10 | by:joe`
+
+        ### Fields
+        - `<SPEC-ID>`: The requirement being implemented (e.g., FR-0042)
+        - `<title>`: Brief requirement title (optional, truncate if >40 chars)
+        - `<tool>`: AI tool used (e.g., `claude`)
+        - `<confidence>`: `high` (>80% AI), `med` (40-80%), `low` (<40%)
+        - `<date>`: Implementation date (YYYY-MM-DD)
+        - `<user>`: Who implemented it
+
+        ### Backward Compatibility
+        The parser supports both formats:
+        - New: `// trace:FR-0042 - Title | ai:claude:high | impl:2025-12-10 | by:joe`
+        - Legacy: `// trace:FR-0042 | ai:claude:high`
+
+        ### Language Support
+        Comments should follow language conventions:
+        - Rust/C/JS: `// trace:...`
+        - Python/Shell: `# trace:...`
+        - HTML: `<!-- trace:... -->`
+
+        ### Implementation Notes
+        - TraceComment struct added in models.rs with parse() and format() methods
+        - CLI trace scan updated for new regex pattern
+        - Scaffolding documentation updated
+    - field_name: status
+      old_value: Approved
+      new_value: Completed
 - id: 57e4297c-c8f7-4d48-8f1b-66fd7de5789d
   spec_id: FR-0152
   title: AI scaffhold project with skills during new pro...
@@ -6974,6 +7058,9 @@ requirements:
     target_id: 9e9ea9a2-0734-44b8-b911-f76f5aabc4ac
     created_at: 2025-12-01T06:40:42.221970691Z
     created_by: Unknown User
+  - rel_type: Parent
+    target_id: 68f3a5de-b0e2-4d37-be23-5b855e169b88
+    created_at: 2025-12-11T04:55:32.347946044Z
   history:
   - id: 51037f19-3663-4a0b-b157-753bcef22bcb
     author: ''
@@ -7025,6 +7112,20 @@ requirements:
     - field_name: status
       old_value: Draft
       new_value: Approved
+  trace_links:
+  - id: 1589c7ec-05fc-4bfb-bb6b-6e9b0c63b0d5
+    artifact_type: SourceCode
+    file_path: ./aida-core/src/scaffolding.rs
+    line_start: 1
+    created_at: 2025-12-11T00:58:30.967498971Z
+    created_by: scan
+  - id: 1cce20b9-15d4-4bde-bdb9-de06a778cdbd
+    artifact_type: SourceCode
+    file_path: ./aida-gui/src/app.rs
+    line_start: 6676
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967831729Z
+    created_by: scan
 - id: 9af27c34-8a93-4285-9ae6-2448a6bcddde
   spec_id: FR-0153
   title: YAML database store last updated and do not ove...
@@ -7117,6 +7218,35 @@ requirements:
     - field_name: status
       old_value: Draft
       new_value: Approved
+  trace_links:
+  - id: 092fe3e2-e55d-454d-a5dd-8c454a55678c
+    artifact_type: SourceCode
+    file_path: ./aida-core/src/storage.rs
+    line_start: 1
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967371245Z
+    created_by: scan
+  - id: 0ddd1a20-3275-4304-a7e9-c481af521ffe
+    artifact_type: SourceCode
+    file_path: ./aida-core/src/storage.rs
+    line_start: 577
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967385755Z
+    created_by: scan
+  - id: 5b557dab-62b0-45aa-95ca-b7ff20134bda
+    artifact_type: SourceCode
+    file_path: ./aida-gui/src/app.rs
+    line_start: 5215
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967792439Z
+    created_by: scan
+  - id: 5b22f1b9-bb1b-448f-be3c-0c2761b0d017
+    artifact_type: SourceCode
+    file_path: ./aida-gui/src/app.rs
+    line_start: 6894
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967839074Z
+    created_by: scan
 - id: 7b5170c6-97aa-429c-851e-086f89768ccf
   spec_id: REQ-0154
   title: Stale Data Protection / Conflict Detection
@@ -7153,6 +7283,9 @@ requirements:
     target_id: 9af27c34-8a93-4285-9ae6-2448a6bcddde
     created_at: 2025-12-01T15:20:55.158732180Z
     created_by: Unknown User
+  - rel_type: Parent
+    target_id: dd108b2e-541e-4878-aa4f-232a4163a073
+    created_at: 2025-12-10T04:23:08.750938850Z
 - id: 44c3a73f-f643-4833-8398-4e0738b31d08
   spec_id: FR-0155
   title: testing abc
@@ -7398,6 +7531,9 @@ requirements:
     target_id: 58f1be6d-b5c8-4304-b453-e495a13cadd5
     created_at: 2025-12-02T04:26:09.167768664Z
     created_by: Joe Mooney
+  - rel_type: Parent
+    target_id: 31e0af07-4b1d-4e77-b7d5-819ec155f8e3
+    created_at: 2025-12-11T03:42:08.380649622Z
 - id: 58f1be6d-b5c8-4304-b453-e495a13cadd5
   spec_id: IMPL-0169
   prefix_override: IMPL
@@ -7906,6 +8042,21 @@ requirements:
   created_at: 2025-12-02T06:20:45.623601337Z
   modified_at: 2025-12-02T06:20:45.623601337Z
   req_type: Functional
+  trace_links:
+  - id: 6c125981-de1d-472b-8dd1-1a31fba08902
+    artifact_type: SourceCode
+    file_path: ./aida-core/src/storage.rs
+    line_start: 968
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967395031Z
+    created_by: scan
+  - id: 939ec64d-7b7f-4c8a-a074-39b85647ad36
+    artifact_type: SourceCode
+    file_path: ./aida-gui/src/app.rs
+    line_start: 5749
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967800994Z
+    created_by: scan
 - id: b6911b4c-a0d4-46ee-b87d-c94de49fcd57
   spec_id: FR-0184
   title: Team Management Support
@@ -8215,8 +8366,10 @@ requirements:
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-12-06T17:53:13.302638222Z
-  modified_at: 2025-12-06T17:53:13.302638222Z
+  modified_at: 2025-12-10T03:35:32.942549775Z
   req_type: Functional
+  tags:
+  - git
   relationships:
   - rel_type: Parent
     target_id: 7d5f9637-5f9e-4c3c-9706-669341c466f4
@@ -8287,6 +8440,10 @@ requirements:
   created_at: 2025-12-06T18:23:18.455973951Z
   modified_at: 2025-12-07T20:04:42.681742086Z
   req_type: Functional
+  relationships:
+  - rel_type: Parent
+    target_id: 05c2cdcd-564f-4b3c-a6e6-ca0dbd8850f3
+    created_at: 2025-12-10T04:23:14.881082979Z
   history:
   - id: ef448e7f-b785-4891-94a1-537d5f82e2d7
     author: Joe Mooney
@@ -9653,6 +9810,63 @@ requirements:
     - field_name: status
       old_value: Draft
       new_value: Approved
+  trace_links:
+  - id: 7d9d9c55-acdf-468a-8a49-47f502ad2214
+    artifact_type: SourceCode
+    file_path: ./aida-cli/build.rs
+    line_start: 1
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967559062Z
+    created_by: scan
+  - id: 06ef5b54-26d0-4a75-81bb-2a7884fb74d8
+    artifact_type: SourceCode
+    file_path: ./aida-cli/src/client.rs
+    line_start: 1
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967682975Z
+    created_by: scan
+  - id: 96bbfd43-34cd-40bc-ae14-aefc7a9e86b6
+    artifact_type: SourceCode
+    file_path: ./aida-server/build.rs
+    line_start: 1
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967694302Z
+    created_by: scan
+  - id: e5270c8d-ad4c-449e-8945-6e798175626c
+    artifact_type: SourceCode
+    file_path: ./aida-server/src/convert.rs
+    line_start: 1
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967705218Z
+    created_by: scan
+  - id: 87266390-2d41-4739-9eb5-10aaed606918
+    artifact_type: SourceCode
+    file_path: ./aida-server/src/service.rs
+    line_start: 1
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967716191Z
+    created_by: scan
+  - id: 1fb46ec1-37de-49c1-92d4-0df3fe33acb4
+    artifact_type: SourceCode
+    file_path: ./aida-server/src/main.rs
+    line_start: 1
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967728234Z
+    created_by: scan
+  - id: 540e72aa-c3d0-43c5-8393-5c706aabe4e1
+    artifact_type: SourceCode
+    file_path: ./aida-gui/build.rs
+    line_start: 1
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967739652Z
+    created_by: scan
+  - id: 1b75ccbf-6b3b-4668-8cb5-2aa45f12af27
+    artifact_type: SourceCode
+    file_path: ./aida-gui/src/remote.rs
+    line_start: 1
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967969678Z
+    created_by: scan
   ai_evaluation:
     evaluation:
       quality_score: 4
@@ -9741,7 +9955,7 @@ requirements:
   owner: ''
   feature: 118-Uncategorized
   created_at: 2025-12-09T04:33:24.924942905Z
-  modified_at: 2025-12-09T04:33:24.924942905Z
+  modified_at: 2025-12-10T03:36:08.576963706Z
   req_type: Functional
 - id: 611bd5c5-0d47-4ea0-93aa-b6676e6830de
   spec_id: FR-0229
@@ -9864,6 +10078,70 @@ requirements:
     - field_name: owner
       old_value: ''
       new_value: joe
+  trace_links:
+  - id: b446fc92-9b3d-453a-a5f5-d7ed3e34402b
+    artifact_type: SourceCode
+    file_path: ./aida-cli/src/main.rs
+    line_start: 33
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967569761Z
+    created_by: scan
+  - id: b967f42f-b626-4bc2-bd9b-f1b363183c66
+    artifact_type: SourceCode
+    file_path: ./aida-cli/src/main.rs
+    line_start: 1479
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967592529Z
+    created_by: scan
+  - id: e989bb88-1c4b-48c4-b704-8377dedf94e2
+    artifact_type: SourceCode
+    file_path: ./aida-cli/src/main.rs
+    line_start: 1535
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967603080Z
+    created_by: scan
+  - id: b175982a-7c44-4ab4-afda-d440b3c27b78
+    artifact_type: SourceCode
+    file_path: ./aida-gui/src/app.rs
+    line_start: 4157
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967762817Z
+    created_by: scan
+  - id: 628f69a5-0893-4f16-b645-adc4cfbac1f9
+    artifact_type: SourceCode
+    file_path: ./aida-gui/src/app.rs
+    line_start: 5118
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967773362Z
+    created_by: scan
+  - id: 76c4e958-daaa-4fa0-b9e7-3dc21d2db8b8
+    artifact_type: SourceCode
+    file_path: ./aida-gui/src/app.rs
+    line_start: 5152
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967784934Z
+    created_by: scan
+  - id: a6956c9d-2261-4982-b211-2558de227955
+    artifact_type: SourceCode
+    file_path: ./aida-gui/src/app.rs
+    line_start: 6164
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967824213Z
+    created_by: scan
+  - id: 5864756f-9e95-4af2-b7cc-264cb0a0ff3e
+    artifact_type: SourceCode
+    file_path: ./aida-gui/src/app.rs
+    line_start: 7046
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967849615Z
+    created_by: scan
+  - id: 5558e4cb-1b46-49b6-abe5-c9b911c94834
+    artifact_type: SourceCode
+    file_path: ./aida-gui/src/app.rs
+    line_start: 13476
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967958226Z
+    created_by: scan
 - id: 436fc14e-cccb-4dcc-afc2-d50178ffabce
   spec_id: FR-0232
   title: Non-Interactive CLI Edit Command
@@ -9897,6 +10175,689 @@ requirements:
   created_at: 2025-12-10T03:13:39.544211884Z
   modified_at: 2025-12-10T03:13:39.544211884Z
   req_type: Bug
+- id: a52ba7d4-3cd0-4c27-8a7f-6aaf43384bc2
+  spec_id: FR-0235
+  title: Test
+  description: External change test
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 125-Uncategorized
+  created_at: 2025-12-10T04:21:29.782773684Z
+  modified_at: 2025-12-10T04:21:29.782773684Z
+  req_type: Functional
+- id: dd108b2e-541e-4878-aa4f-232a4163a073
+  spec_id: FR-0236
+  title: Database change detection and auto-reload
+  description: 'Periodic monitoring of database file modification time (mtime) to detect external changes. When changes detected: auto-reloads if not editing (preserves selection), shows toast notification if editing (defers reload). Configurable settings: db_poll_interval_secs (default 30, 0 to disable), db_auto_reload (default true).'
+  status: Completed
+  priority: Medium
+  owner: ''
+  feature: 126-Uncategorized
+  created_at: 2025-12-10T04:22:51.841726613Z
+  modified_at: 2025-12-10T04:22:51.841726613Z
+  req_type: Functional
+- id: 05c2cdcd-564f-4b3c-a6e6-ca0dbd8850f3
+  spec_id: FR-0237
+  title: Add menu popup ('a' hotkey)
+  description: Popup menu for adding new requirements. Press 'a' to open menu, then 's' for new sibling requirement or 'c' for new child requirement. Supports arrow/j/k navigation, Enter to confirm, Escape to close. Removes overlap between n/N search navigation and add operations.
+  status: Completed
+  priority: Medium
+  owner: ''
+  feature: 127-Uncategorized
+  created_at: 2025-12-10T04:22:59.236503533Z
+  modified_at: 2025-12-10T04:22:59.236503533Z
+  req_type: Functional
+- id: abcfdd43-8ddd-49ff-92bb-22eccc4b71ad
+  spec_id: FR-0238
+  title: Test requirement
+  description: Simple test
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 128-Uncategorized
+  created_at: 2025-12-10T05:58:53.812489362Z
+  modified_at: 2025-12-10T05:58:53.812489362Z
+  req_type: Functional
+- id: 8811c562-102b-4bc4-9100-bec3d954ca45
+  spec_id: FR-0239
+  title: Weight/effort field for requirements
+  description: |-
+    Added optional weight field (f32) to requirements for tracking effort/story points:
+    - 'w' hotkey opens popup to set/clear weight on selected requirement
+    - Weight displayed in detail view metadata when set (similar to tags)
+    - Input validation for numeric values
+    - Clear button to remove weight
+  status: Completed
+  priority: Medium
+  owner: ''
+  feature: 129-Uncategorized
+  created_at: 2025-12-10T07:08:01.426410572Z
+  modified_at: 2025-12-10T07:08:01.426410572Z
+  req_type: Functional
+- id: 893da355-e72c-4b75-9d76-ee4fb19d91b0
+  spec_id: FR-0240
+  title: Multi-column keyboard shortcuts help
+  description: "Keyboard shortcuts help popup ('?' key) now uses responsive multi-column layout:\n- 3 columns when window >= 840px wide\n- 2 columns when window >= 560px wide  \n- 1 column with scrolling for narrower windows\n- Default window size 900x500 to show all shortcuts without scrolling"
+  status: Completed
+  priority: Medium
+  owner: ''
+  feature: 130-Uncategorized
+  created_at: 2025-12-10T07:08:13.708905356Z
+  modified_at: 2025-12-10T07:08:13.708905356Z
+  req_type: Functional
+- id: 8864175f-ce6b-44a7-9348-34aba0d4a96b
+  spec_id: REQ-0241
+  title: Fix hotkey conflicts in detail tab menu
+  description: |-
+    Fixed keyboard conflicts when using 'r' detail tab menu:
+    - 'd' key now only triggers delete menu when detail tab menu is closed
+    - Pressing 'r d' correctly switches to Description tab without opening delete popup
+    - Added !show_detail_tab_menu guard to delete menu handler
+  status: Completed
+  priority: Medium
+  owner: ''
+  feature: 131-Uncategorized
+  created_at: 2025-12-10T07:08:22.043511437Z
+  modified_at: 2025-12-10T07:08:22.043511437Z
+  req_type: Bug
+- id: 08beead7-df0a-470f-a7c4-099682d8e24d
+  spec_id: EPIC-0242
+  title: 'TraceLink: Code-to-Requirement Traceability'
+  description: 'Add a TraceLink structure to track mappings between code artifacts and requirements. Each TraceLink records: file_path, line_range (start/end), symbol (function/struct/module name), artifact_type (SourceCode, TestCode, Config, Doc), notes, and timestamps. This enables queries like ''show all code implementing REQ-123'' or ''which requirements does this function satisfy?'' The links should be stored in both YAML and SQLite backends.'
+  status: Draft
+  priority: High
+  owner: ''
+  feature: 132-traceability
+  created_at: 2025-12-11T00:36:45.384876724Z
+  modified_at: 2025-12-11T00:36:45.384876724Z
+  req_type: Epic
+  relationships:
+  - rel_type: Parent
+    target_id: adc7fbf2-8631-41cc-a8d2-3aad569fb80a
+    created_at: 2025-12-11T00:37:28.946546877Z
+  - rel_type: Parent
+    target_id: 8958bb92-431b-4a32-ad02-e5427754d693
+    created_at: 2025-12-11T00:37:45.672823727Z
+  - rel_type: Parent
+    target_id: 7ffbe533-da5b-4288-9081-8537c50a7fde
+    created_at: 2025-12-11T00:37:46.101943350Z
+  - rel_type: Parent
+    target_id: 0b538ee1-c4d5-4b9d-9611-6ab9fc58968c
+    created_at: 2025-12-11T00:38:30.454097650Z
+  - rel_type: Parent
+    target_id: 6894f779-5de6-4c26-b9f8-a67ae4db55ef
+    created_at: 2025-12-11T00:38:30.806817376Z
+  - rel_type: Parent
+    target_id: 6b61fca9-9fb8-4678-a49a-70ab43647fbd
+    created_at: 2025-12-11T00:38:50.478569378Z
+  - rel_type: Parent
+    target_id: 063b9d61-e0bb-45b8-8552-4ea1373d3e8d
+    created_at: 2025-12-11T00:45:56.872732998Z
+- id: adc7fbf2-8631-41cc-a8d2-3aad569fb80a
+  spec_id: REQ-0243
+  title: TraceLink data model
+  description: 'Define the TraceLink struct with fields: id (Uuid), requirement_id (Uuid), artifact_type (enum: SourceCode, TestCode, Config, Doc), file_path (String), symbol (Option String for function/struct/module name), line_range (Option tuple for start/end lines), notes (Option String), created_at (DateTime), created_by (Option String). Include serde serialization support.'
+  status: Draft
+  priority: High
+  owner: ''
+  feature: 133-traceability
+  created_at: 2025-12-11T00:37:02.685135148Z
+  modified_at: 2025-12-11T00:37:02.685135148Z
+  req_type: Story
+  trace_links:
+  - id: 8b6ab3b1-d879-4844-9f26-d18c03df08d9
+    artifact_type: SourceCode
+    file_path: ./aida-core/src/models.rs
+    line_start: 1642
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967436179Z
+    created_by: scan
+  - id: 31ce1374-1ad6-4d00-a769-56444852c2b1
+    artifact_type: SourceCode
+    file_path: ./aida-core/src/models.rs
+    line_start: 1680
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967447336Z
+    created_by: scan
+  - id: c0b48418-0dc1-4f54-acf2-25bec269c83e
+    artifact_type: SourceCode
+    file_path: ./aida-core/src/models.rs
+    line_start: 2337
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967480371Z
+    created_by: scan
+  - id: ddddeb66-dc04-4e49-84ae-71f1022ac4d8
+    artifact_type: SourceCode
+    file_path: ./aida-cli/src/main.rs
+    line_start: 2477
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967614421Z
+    created_by: scan
+  - id: ce27706e-de3c-4a99-b681-ca47cd7aa527
+    artifact_type: SourceCode
+    file_path: ./aida-cli/src/main.rs
+    line_start: 2528
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967625388Z
+    created_by: scan
+- id: 8958bb92-431b-4a32-ad02-e5427754d693
+  spec_id: REQ-0244
+  title: TraceLink YAML storage
+  description: Store TraceLinks as a Vec in the Requirement struct for YAML backend. Each requirement has an optional trace_links field containing the list of TraceLink entries. Ensure proper serialization with serde.
+  status: Draft
+  priority: High
+  owner: ''
+  feature: 134-traceability
+  created_at: 2025-12-11T00:37:30.564686252Z
+  modified_at: 2025-12-11T00:37:30.564686252Z
+  req_type: Story
+  trace_links:
+  - id: 2e9105f6-7d8a-460a-bd50-e297c7358102
+    artifact_type: SourceCode
+    file_path: ./aida-cli/src/main.rs
+    line_start: 2611
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967641925Z
+    created_by: scan
+- id: 7ffbe533-da5b-4288-9081-8537c50a7fde
+  spec_id: REQ-0245
+  title: TraceLink SQLite storage
+  description: 'Create a trace_links table in SQLite with columns: id, requirement_id, artifact_type, file_path, symbol, line_start, line_end, notes, created_at, created_by. Include foreign key to requirements table and indexes for efficient queries.'
+  status: Draft
+  priority: High
+  owner: ''
+  feature: 135-traceability
+  created_at: 2025-12-11T00:37:32.363918629Z
+  modified_at: 2025-12-11T00:37:32.363918629Z
+  req_type: Story
+  trace_links:
+  - id: 50b234e3-2ed5-436d-96dd-9417944f0ddb
+    artifact_type: SourceCode
+    file_path: ./aida-core/src/db/sqlite_backend.rs
+    line_start: 117
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967406951Z
+    created_by: scan
+  - id: 63bcfc5d-0d21-4f43-8c28-b67f4f7a8d22
+    artifact_type: SourceCode
+    file_path: ./aida-cli/src/main.rs
+    line_start: 2756
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967652938Z
+    created_by: scan
+- id: 3999e6a2-0914-43de-a953-ee09d418d78a
+  spec_id: EPIC-0246
+  title: 'ImplementationInfo: Implementation Metadata Tracking'
+  description: 'Add an ImplementationInfo structure to track implementation metadata for requirements. Fields: implemented (bool), implementation_summary (Option String), last_agent_run (Option DateTime), risk_notes (Option String), test_coverage_notes (Option String), source_tool (Option String - e.g. claude, copilot), confidence_level (Option enum: High, Med, Low). Store as part of the Requirement in both YAML and SQLite backends.'
+  status: Draft
+  priority: High
+  owner: ''
+  feature: 136-traceability
+  created_at: 2025-12-11T00:37:47.918542666Z
+  modified_at: 2025-12-11T00:37:47.918542666Z
+  req_type: Epic
+  trace_links:
+  - id: c2bb330c-f8b8-4e5d-900b-9b83ff68ca98
+    artifact_type: SourceCode
+    file_path: ./aida-core/src/models.rs
+    line_start: 1781
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967458285Z
+    created_by: scan
+  - id: 6056afd7-165c-422a-87bc-a9f07a17ba90
+    artifact_type: SourceCode
+    file_path: ./aida-core/src/models.rs
+    line_start: 1815
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967469291Z
+    created_by: scan
+  - id: 4adb83c9-3bdf-4f37-9ce0-f917a43e4460
+    artifact_type: SourceCode
+    file_path: ./aida-core/src/models.rs
+    line_start: 2342
+    notes: 'AI tool: claude'
+    created_at: 2025-12-11T00:58:30.967491448Z
+    created_by: scan
+- id: d62a47e4-4048-43a4-8d21-10d26e654876
+  spec_id: EPIC-0247
+  title: Agent Planning Phase
+  description: 'Add support for a two-phase implementation workflow. Phase 1 (Planning): When implementing a requirement, first ask the AI to produce a structured plan that identifies: 1) modules/files likely affected, 2) additional context needed (related requirements, existing code, schema), 3) step-by-step implementation plan, 4) traceability strategy. Store the plan as a JSON structure that can be reviewed before proceeding to implementation.'
+  status: Draft
+  priority: High
+  owner: ''
+  feature: 137-ai-workflow
+  created_at: 2025-12-11T00:37:49.408596726Z
+  modified_at: 2025-12-11T00:37:49.408596726Z
+  req_type: Epic
+  relationships:
+  - rel_type: Parent
+    target_id: a8cfa2ee-1a98-4120-9c4d-3d4d97b195aa
+    created_at: 2025-12-11T00:38:29.709857712Z
+  - rel_type: Parent
+    target_id: d24a14b7-55d2-41b4-b314-be1561757ee9
+    created_at: 2025-12-11T00:38:30.100353137Z
+  - rel_type: Parent
+    target_id: c5191f5f-f6d5-47f9-93db-603602814ca2
+    created_at: 2025-12-11T00:38:50.897104989Z
+  - rel_type: Parent
+    target_id: 8d325eff-a376-4230-b508-d5d8093ef9d6
+    created_at: 2025-12-11T00:38:51.284427918Z
+  - rel_type: Parent
+    target_id: 78859579-fcec-4a8e-b098-bcdad7d5a0fa
+    created_at: 2025-12-11T00:39:03.897138021Z
+  - rel_type: Parent
+    target_id: a96d81eb-8ba7-45d1-afc1-333760012b78
+    created_at: 2025-12-11T00:39:04.295154865Z
+- id: a8cfa2ee-1a98-4120-9c4d-3d4d97b195aa
+  spec_id: REQ-0248
+  title: Context Gathering Tool
+  description: 'After planning phase, automatically gather context based on the plan. This includes: 1) Fetching requested files/snippets from disk, 2) Running code search for existing requirement references, 3) Collecting DB schema info, 4) Fetching related requirements and their trace links. Provide all this context to the AI for the implementation phase.'
+  status: Draft
+  priority: High
+  owner: ''
+  feature: 138-ai-workflow
+  created_at: 2025-12-11T00:38:05.334289421Z
+  modified_at: 2025-12-11T00:38:05.334289421Z
+  req_type: Story
+- id: d24a14b7-55d2-41b4-b314-be1561757ee9
+  spec_id: REQ-0249
+  title: Implementation Phase with Traceability
+  description: 'Phase 2 (Implementation): After context gathering, call AI to produce: 1) Code edits as patches, 2) Annotated code with requirement references (// trace:REQ-xxx comments), 3) TraceLink data (file paths, line ranges, symbols, notes), 4) ImplementationInfo updates. Apply patches, run tests, and update the requirements database with all traceability data.'
+  status: Draft
+  priority: High
+  owner: ''
+  feature: 139-ai-workflow
+  created_at: 2025-12-11T00:38:06.778903807Z
+  modified_at: 2025-12-11T00:38:06.778903807Z
+  req_type: Story
+- id: 0b538ee1-c4d5-4b9d-9611-6ab9fc58968c
+  spec_id: REQ-0250
+  title: 'CLI: aida trace add'
+  description: 'Add a CLI command to manually add trace links: aida trace add REQ-ID --file PATH --symbol SYMBOL --lines START-END --type (source|test|config|doc) --notes NOTES. This allows manual annotation of code that implements a requirement.'
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 140-traceability
+  created_at: 2025-12-11T00:38:08.170446695Z
+  modified_at: 2025-12-11T00:38:08.170446695Z
+  req_type: Story
+- id: 6894f779-5de6-4c26-b9f8-a67ae4db55ef
+  spec_id: REQ-0251
+  title: 'CLI: aida trace list'
+  description: 'Add a CLI command to list trace links for a requirement: aida trace list REQ-ID. Shows all code artifacts linked to the requirement with file paths, symbols, line ranges, and artifact types. Also support aida trace list --file PATH to show all requirements traced to a specific file.'
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 141-traceability
+  created_at: 2025-12-11T00:38:10.030743795Z
+  modified_at: 2025-12-11T00:38:10.030743795Z
+  req_type: Story
+- id: 6b61fca9-9fb8-4678-a49a-70ab43647fbd
+  spec_id: REQ-0252
+  title: 'CLI: aida trace scan'
+  description: 'Add a CLI command to scan the codebase for trace comments and update trace links: aida trace scan [PATH]. Parses comments matching the pattern // trace:SPEC-ID and creates/updates TraceLink entries. Useful for syncing the database with existing code annotations.'
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 142-traceability
+  created_at: 2025-12-11T00:38:33.169034785Z
+  modified_at: 2025-12-11T00:38:33.169034785Z
+  req_type: Story
+- id: c5191f5f-f6d5-47f9-93db-603602814ca2
+  spec_id: REQ-0253
+  title: Review Requirements Workflow
+  description: 'Implement a review workflow where the AI analyzes requirements marked InReview. For each requirement: 1) Fetch requirement, parent, children, and related requirements, 2) Ask AI to evaluate clarity, testability, consistency, 3) Suggest refinements, missing acceptance criteria, conflicts, 4) Optionally update requirement with rationale, acceptance criteria, links. Store review results and suggestions in the requirement.'
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 143-ai-workflow
+  created_at: 2025-12-11T00:38:34.641203323Z
+  modified_at: 2025-12-11T00:38:34.641203323Z
+  req_type: Story
+- id: 8d325eff-a376-4230-b508-d5d8093ef9d6
+  spec_id: REQ-0254
+  title: Agent Tool Exposure API
+  description: 'Define a controlled set of tools/functions that AI agents can call, similar to OpenAI function calling. Tools include: get_requirement, get_related_requirements, search_requirements, update_requirement, get_trace_links, add_trace_link, list_code_artifacts, get_file_snippet, update_implementation_info. Each tool has a JSON schema and the orchestrator executes them securely.'
+  status: Draft
+  priority: High
+  owner: ''
+  feature: 144-ai-workflow
+  created_at: 2025-12-11T00:38:36.073832116Z
+  modified_at: 2025-12-11T00:38:36.073832116Z
+  req_type: Story
+- id: 78859579-fcec-4a8e-b098-bcdad7d5a0fa
+  spec_id: REQ-0255
+  title: Enhanced /aida-implement skill
+  description: 'Upgrade the /aida-implement Claude Code skill to use the two-phase approach: 1) Planning phase - gather context from requirements DB, related requirements, existing traces, 2) Implementation phase - code with traceability. Update the requirements database with ImplementationInfo and TraceLinks after implementation. Show the plan to the user before proceeding.'
+  status: Draft
+  priority: High
+  owner: ''
+  feature: 145-ai-workflow
+  created_at: 2025-12-11T00:38:53.477757721Z
+  modified_at: 2025-12-11T00:38:53.477757721Z
+  req_type: Story
+- id: a96d81eb-8ba7-45d1-afc1-333760012b78
+  spec_id: REQ-0256
+  title: Feedback Loop Closure
+  description: 'Ensure every implementation run updates the requirements database so future runs have richer context. After implementation: 1) Update requirement status, 2) Add TraceLinks for new/modified code, 3) Update ImplementationInfo with summary, risk notes, test coverage, 4) Add comments with implementation decisions. This creates a virtuous feedback cycle.'
+  status: Draft
+  priority: High
+  owner: ''
+  feature: 146-ai-workflow
+  created_at: 2025-12-11T00:38:54.877747158Z
+  modified_at: 2025-12-11T00:38:54.877747158Z
+  req_type: Story
+- id: 063b9d61-e0bb-45b8-8552-4ea1373d3e8d
+  spec_id: REQ-0257
+  title: Commit History Sweep
+  description: 'Add capability to sweep through git commit history and trace commits to requirements. For each commit: 1) Parse commit message for requirement references (SPEC-IDs), 2) Analyze changed files for trace comments, 3) Create TraceLinks for code implementing requirements, 4) Optionally create new requirements for commits without references, 5) Generate a report of coverage (commits with/without requirement links). This helps ensure AIDA is a poster child for its own methodology.'
+  status: Approved
+  priority: High
+  owner: ''
+  feature: 147-traceability
+  created_at: 2025-12-11T00:45:49.848325419Z
+  modified_at: 2025-12-11T02:19:58.118267184Z
+  req_type: Story
+  history:
+  - id: 2cdab21f-5cf8-448f-85dc-74e75f4f352c
+    author: Joe Mooney
+    timestamp: 2025-12-11T02:19:58.118269774Z
+    changes:
+    - field_name: status
+      old_value: Draft
+      new_value: Approved
+  ai_evaluation:
+    evaluation:
+      quality_score: 7
+      issues:
+      - type: incomplete
+        severity: medium
+        text: No specification of which VCS systems to support beyond git
+        suggestion: Clarify that this is git-only or explicitly list supported VCS systems
+      - type: ambiguous
+        severity: medium
+        text: The phrase 'optionally create new requirements' is unclear about who decides and how
+        suggestion: Specify whether this is a user prompt, automatic with review, or a configurable setting
+      - type: missing_criteria
+        severity: medium
+        text: No acceptance criteria for the coverage report format or content
+        suggestion: Define what metrics the report should include (e.g., percentage coverage, list of unlinked commits, commits per requirement)
+      - type: incomplete
+        severity: low
+        text: No specification of how to handle merge commits vs regular commits
+        suggestion: Clarify whether merge commits should be analyzed, skipped, or handled differently
+      - type: missing_criteria
+        severity: low
+        text: No performance expectations for large repositories
+        suggestion: Consider adding guidance on expected behavior for repositories with thousands of commits
+      strengths:
+      - Clear enumeration of the five main capabilities in a logical sequence
+      - Strong alignment with AIDA's core mission of requirements traceability
+      - Addresses the 'dogfooding' goal of using AIDA for its own development
+      - Leverages existing TraceLink infrastructure
+      - Practical scope covering both explicit references and code analysis
+      suggested_improvements:
+        description: 'Add capability to sweep through git commit history and trace commits to requirements. For each commit: 1) Parse commit message for requirement references (SPEC-IDs like REQ-XXXX, FR-XXXX), 2) Analyze changed files for trace comments (// trace:SPEC-ID format), 3) Create TraceLinks connecting commits to requirements they implement, 4) Prompt user to create/link requirements for commits without references (with batch review mode), 5) Generate a coverage report showing: total commits analyzed, commits with requirement links, orphan commits, requirements with implementation evidence. Should support incremental sweeps (only new commits since last sweep) and full repository sweeps. Accessible via both CLI (aida trace sweep) and GUI.'
+        rationale: Adds specificity around SPEC-ID formats, clarifies the user interaction model for creating new requirements, defines report contents, and adds incremental sweep capability for practical use on active repositories
+    evaluated_at: 2025-12-11T02:20:36.815922970Z
+    content_hash: 75ccc8a69c465c68
+- id: e7082183-7023-4223-90f2-621ceefc3890
+  spec_id: EPIC-0258
+  title: AI Integration Report Generation
+  description: Generate a comprehensive AI integration report/guide for a project that documents all AI configuration, prompts, skills, traceability data, and scaffolding status. The report should be exportable in both markdown and HTML formats, serving as onboarding documentation, audit trail, and compliance reference.
+  status: Completed
+  priority: Medium
+  owner: ''
+  feature: 148-AI Integration
+  created_at: 2025-12-11T02:33:25.895662817Z
+  modified_at: 2025-12-11T02:45:27.804139996Z
+  req_type: Epic
+  history:
+  - id: 3c86fa44-79ea-4597-996c-72f4e5621743
+    author: CLI
+    timestamp: 2025-12-11T02:45:27.804138671Z
+    changes:
+    - field_name: status
+      old_value: Draft
+      new_value: Completed
+- id: c25591af-df93-4dc3-af28-3432e02f68ba
+  spec_id: FR-0259
+  title: 'CLI command: aida report ai-integration'
+  description: 'Add CLI command to generate AI integration report with --format (markdown|html) and --output options. The report should include: project overview, AI configuration, prompts catalog, code traceability summary, scaffolding status, and skills/commands.'
+  status: Completed
+  priority: Medium
+  owner: ''
+  feature: 149-AI Integration
+  created_at: 2025-12-11T02:33:32.545779109Z
+  modified_at: 2025-12-11T02:42:12.816066190Z
+  req_type: Functional
+  relationships:
+  - rel_type: Parent
+    target_id: e7082183-7023-4223-90f2-621ceefc3890
+    created_at: 2025-12-11T02:33:32.545825497Z
+  history:
+  - id: 83f22c16-2cdc-4cd9-86d2-b5e9fd04588f
+    author: CLI
+    timestamp: 2025-12-11T02:42:12.816064457Z
+    changes:
+    - field_name: status
+      old_value: Draft
+      new_value: Completed
+- id: ea7462df-21db-4ce3-bcd7-f45f7f7bb3f2
+  spec_id: FR-0260
+  title: Scaffolding status check command
+  description: 'Add CLI command ''aida scaffold status'' (or --check flag) to compare scaffolded artifacts with actual project files. Show: matching files, modified files (with diff), missing files, and extra files not in scaffold.'
+  status: Completed
+  priority: Medium
+  owner: ''
+  feature: 150-AI Integration
+  created_at: 2025-12-11T02:33:39.644443184Z
+  modified_at: 2025-12-11T02:42:18.504624035Z
+  req_type: Functional
+  relationships:
+  - rel_type: Parent
+    target_id: e7082183-7023-4223-90f2-621ceefc3890
+    created_at: 2025-12-11T02:33:39.644484354Z
+  history:
+  - id: 2a168573-ba24-49b0-9c4f-20f35fb66846
+    author: CLI
+    timestamp: 2025-12-11T02:42:18.504622334Z
+    changes:
+    - field_name: status
+      old_value: Draft
+      new_value: Completed
+- id: 9536e77a-322e-45ca-b14a-a0d18099c6b2
+  spec_id: FR-0261
+  title: GUI Check Status button for scaffolding
+  description: Add 'Check Status' button next to 'Scaffold Project' in the GUI that shows a dialog with scaffolding drift status - comparing expected scaffolded files with actual project state.
+  status: Completed
+  priority: Medium
+  owner: ''
+  feature: 151-AI Integration
+  created_at: 2025-12-11T02:33:46.633855393Z
+  modified_at: 2025-12-11T02:45:20.931151843Z
+  req_type: Functional
+  relationships:
+  - rel_type: Parent
+    target_id: e7082183-7023-4223-90f2-621ceefc3890
+    created_at: 2025-12-11T02:33:46.633893843Z
+  history:
+  - id: 390a23fb-d8af-4db1-9d8e-c4fa066c4219
+    author: CLI
+    timestamp: 2025-12-11T02:45:20.931150566Z
+    changes:
+    - field_name: status
+      old_value: Draft
+      new_value: Completed
+- id: 31e0af07-4b1d-4e77-b7d5-819ec155f8e3
+  spec_id: FR-0262
+  title: Database-aware scaffolding generates backend-specific CLAUDE.md
+  description: |-
+    The scaffolding system shall detect the database backend type (SQLite vs YAML) and generate appropriate CLAUDE.md content:
+
+    ### SQLite Backend
+    When using a .db file:
+    - Shows `Requirements database: \`requirements.db\``
+    - Includes full "Database Storage" section with:
+      - YAML vs SQLite comparison
+      - Migration instructions
+
+    ### YAML Backend
+    When using a .yaml file:
+    - Shows `Requirements database: \`requirements.yaml\``
+    - No database storage section (not needed for YAML users)
+
+    ### Implementation
+    - Added `database_path: Option<PathBuf>` to Scaffolder struct
+    - Added `with_database()` constructor
+    - Added `is_sqlite_database()` and `database_filename()` helpers
+    - Updated all callers in CLI, GUI, and report.rs
+
+    ### Acceptance Criteria
+    - Scaffolding correctly identifies database type from file extension
+    - CLAUDE.md content varies based on backend type
+    - Existing scaffold commands work with new parameter
+  status: Completed
+  priority: Medium
+  owner: ''
+  feature: 152-AI Integration
+  created_at: 2025-12-11T03:41:58.093566293Z
+  modified_at: 2025-12-11T03:41:58.093566293Z
+  req_type: Functional
+- id: f540638b-6631-4531-b199-3b4fec51d469
+  spec_id: FR-0263
+  title: CLI grep command for searching requirements
+  description: 'The aida CLI shall provide a grep subcommand that searches requirement fields with support for: regex patterns (-E), case insensitivity (-i), context lines (-A/-B/-C), field filtering (-f), status/type/feature filters, files-with-matches mode (-l), count mode (-c), and invert match (-v).'
+  status: Completed
+  priority: Medium
+  owner: ''
+  feature: 153-Uncategorized
+  created_at: 2025-12-11T04:25:09.145520897Z
+  modified_at: 2025-12-11T04:40:16.394208198Z
+  req_type: Functional
+  comments:
+  - id: 0192fa0d-c19f-400a-a43b-2b81ccd2b1fa
+    author: Unknown
+    content: 'Implementation complete. Commit: cc22679. Files: aida-cli/src/cli.rs (Command enum), aida-cli/src/main.rs (grep_requirements function ~290 lines)'
+    created_at: 2025-12-11T04:25:37.865364916Z
+    modified_at: 2025-12-11T04:25:37.865364916Z
+- id: 93bc227e-2a79-44bd-a5a2-e105123ad192
+  spec_id: FR-0264
+  title: Planned status for implementation workflow
+  description: 'The system shall support a ''Planned'' status between Approved and In Progress, allowing requirements to be decomposed and planned before implementation begins. This enables a workflow: Draft → Approved → Planned → In Progress → Completed.'
+  status: Completed
+  priority: Medium
+  owner: ''
+  feature: 154-Uncategorized
+  created_at: 2025-12-11T04:25:10.655771664Z
+  modified_at: 2025-12-11T04:25:39.911547793Z
+  req_type: Functional
+  comments:
+  - id: d279a346-dcbc-418a-b89c-47b613afbacd
+    author: Unknown
+    content: 'Implementation complete. Commit: 79896c0. Files: aida-core/src/lib.rs (RequirementStatus enum), .claude/skills/aida-plan.md (new skill file), .claude/skills/aida-implement.md (updated)'
+    created_at: 2025-12-11T04:25:39.911538561Z
+    modified_at: 2025-12-11T04:25:39.911538561Z
+- id: 68f3a5de-b0e2-4d37-be23-5b855e169b88
+  spec_id: FR-0265
+  title: Scaffolding version/checksum protection for user modifications
+  description: "The scaffolding system shall protect user modifications to generated files by:\n- Adding AIDA headers with version and checksum to generated files\n- Detecting when files have been modified by comparing checksums  \n- Categorizing files as New, Unmodified, Modified, NoHeader, or OlderVersion\n- Skipping modified files by default during re-scaffolding\n- Supporting --force flag to override and overwrite modified files\n\nHeader format for markdown:\n```\n<!-- AIDA Generated: v1.0.0 | checksum:abcd1234 | DO NOT EDIT DIRECTLY -->\n<!-- To customize: copy to .claude/skills/custom/ and modify there -->\n```\n\nHeader format for shell scripts:\n```\n# AIDA Generated: v1.0.0 | checksum:abcd1234\n# To customize: copy this file and modify the copy\n```\n\nImplementation complete:\n- Added SCAFFOLD_VERSION constant and compute_checksum() function\n- Added FileStatus enum with all states\n- Added check_file_status() to parse headers\n- Added ApplyOptions with force flag\n- Added apply_with_options() method\n- Updated preview() to track modified_files and upgradeable_files"
+  status: Completed
+  priority: Medium
+  owner: ''
+  feature: 155-scaffolding
+  created_at: 2025-12-11T04:55:26.391272156Z
+  modified_at: 2025-12-11T05:02:10.012546569Z
+  req_type: Functional
+  comments:
+  - id: 5ac6d6c3-dab9-4a51-95ff-4f913561b2e5
+    author: Unknown
+    content: 'Implementation complete. Files modified: aida-core/src/scaffolding.rs, aida-core/Cargo.toml (added regex dependency). Commit: d3cbb1e'
+    created_at: 2025-12-11T04:55:38.850200801Z
+    modified_at: 2025-12-11T04:55:38.850200801Z
+  - id: 6410a35e-70ba-4698-a10b-3e48303ff0fd
+    author: ai:claude:joe
+    content: Test comment with AIDA_AUTHOR env var
+    created_at: 2025-12-11T05:02:10.012537718Z
+    modified_at: 2025-12-11T05:02:10.012537718Z
+- id: 682e989c-718f-4e23-a2f9-6bc49d4371c5
+  spec_id: FR-0266
+  title: AIDA_AUTHOR environment variable for AI authorship attribution
+  description: |-
+    The CLI shall support an AIDA_AUTHOR environment variable to automatically set the author/owner field for AI-assisted work.
+
+    Features:
+    - get_default_author() helper checks AIDA_AUTHOR, USER, USERNAME, then 'Unknown'
+    - aida comment add uses AIDA_AUTHOR for author field
+    - aida add uses AIDA_AUTHOR for owner field
+    - Interactive mode pre-fills author with the default value
+    - CLI help text documents the environment variable
+
+    Recommended format: ai:<tool>:<username> (e.g., ai:claude:joe)
+
+    Usage:
+    ```bash
+    export AIDA_AUTHOR="ai:claude:$USER"
+    aida comment add FR-0042 "Implementation note..."
+    ```
+
+    Implementation complete in commit 6e84ec6.
+  status: Completed
+  priority: Medium
+  owner: ai:claude:joe
+  feature: 156-cli
+  created_at: 2025-12-11T05:03:51.099091947Z
+  modified_at: 2025-12-11T05:03:51.099091947Z
+  req_type: Functional
+- id: 2a5e9947-12f6-41d9-9492-92662208ccc3
+  spec_id: FR-0267
+  title: 'Release workflow: export SQLite to YAML for version control'
+  description: |-
+    ## Problem
+    SQLite databases are binary and not suitable for git version control. However, SQLite provides better performance for local development.
+
+    ## Solution
+    At release points, export the requirements database from SQLite to YAML format for inclusion in git commits.
+
+    ## Workflow
+    1. **During Development**: Use SQLite locally for performance
+    2. **At Release**: Run `aida db migrate --from sqlite --to yaml --force` to export
+    3. **Commit**: Include requirements.yaml in the release commit
+    4. **Clone**: New developers run `aida db migrate --from yaml --to sqlite` to import
+
+    ## Integration with /aida-release skill
+    The /aida-release skill should:
+    - Export SQLite to YAML before creating release commit
+    - Include requirements.yaml in staged files
+    - Optionally validate that export matches what's in SQLite
+
+    ## Commands
+    ```bash
+    # Export at release time
+    aida db migrate --from sqlite --to yaml --force
+
+    # Import after clone
+    aida db migrate --from yaml --to sqlite
+    ```
+  status: Draft
+  priority: High
+  owner: ai:claude:joe
+  feature: 157-release
+  created_at: 2025-12-11T06:34:32.423442394Z
+  modified_at: 2025-12-11T06:34:32.423442394Z
+  req_type: Functional
+- id: ccd4bffe-dec3-4295-af16-81d1da24aa41
+  spec_id: FR-0268
+  title: Requirements sync/merge workflow for distributed teams
+  description: "## Problem\nWhen multiple developers work on requirements in parallel with local SQLite databases, their changes need to be merged at sync points.\n\n## Scenarios\n\n### Simple Sync (No Conflicts)\nWhen only one person modified requirements:\n1. Export local SQLite to YAML\n2. Commit and push\n3. Others pull and re-import YAML to SQLite\n\n### Conflict Resolution\nWhen multiple people modified requirements:\n1. Each developer exports to YAML\n2. Use git merge on YAML files (human-readable diff)\n3. Resolve conflicts manually in YAML\n4. Import merged YAML back to SQLite\n\n## Proposed Commands\n```bash\n# Check for local changes not in YAML\naida db diff                    # Compare SQLite vs requirements.yaml\n\n# Merge remote YAML into local SQLite  \naida db sync                    # Pull YAML changes, merge with local\n\n# Three-way merge\naida db merge <base> <theirs>   # Merge external YAML with local\n```\n\n## Conflict Markers\nFor YAML conflicts, use standard git conflict markers. AIDA should:\n- Detect conflict markers in YAML\n- Provide UI to resolve conflicts (show both versions)\n- Validate merged result before importing\n\n## Notes\n- UUIDs ensure same requirement can be identified across databases\n- SPEC-IDs (FR-0042) may conflict if multiple people add requirements\n- Consider: auto-generate SPEC-IDs at sync time, not add time?"
+  status: Draft
+  priority: Medium
+  owner: ai:claude:joe
+  feature: release
+  created_at: 2025-12-11T06:34:46.780073412Z
+  modified_at: 2025-12-11T06:34:46.780073412Z
+  req_type: Functional
 users:
 - id: 150164ef-32ed-4d61-8cec-e887ac78cfd7
   spec_id: $USER-001
@@ -9994,8 +10955,8 @@ id_config:
     prefix: SPIKE
     description: Research or investigation task to reduce uncertainty or explore technical approaches
 features: []
-next_feature_number: 125
-next_spec_number: 235
+next_feature_number: 158
+next_spec_number: 269
 prefix_counters: {}
 relationship_definitions:
 - name: parent
@@ -10603,6 +11564,8 @@ ai_prompts:
       - Consider CLI equivalent functionality
       - Think about keyboard vs mouse interactions
       - Consider state persistence requirements
+  type_prompts:
+  - type_name: Functional
 baselines:
 - id: e25400c0-275f-412c-8162-8556032deb7e
   name: Sprint 1 End
@@ -19342,4 +20305,3 @@ baselines:
       created_at: 2025-12-07T03:12:45.182840867Z
       created_by: Joe Mooney
   locked: false
-migrated_to: requirements.db
