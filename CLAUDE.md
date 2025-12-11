@@ -26,10 +26,6 @@ aida show <ID>                         # Show requirement details (e.g., FR-0042
 aida add --title "..." --description "..." --status draft  # Add new requirement
 aida edit <ID> --status completed      # Update status
 aida comment add <ID> "..."            # Add implementation note
-aida grep "pattern"                    # Search requirements for a pattern
-aida grep -i "auth" -f description     # Case insensitive, search descriptions
-aida grep -E "TODO|FIXME" -f comments  # Regex search in comments
-aida grep -l "keyword" --status draft  # List matching SPEC-IDs only
 ```
 
 ### During Development

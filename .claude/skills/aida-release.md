@@ -179,11 +179,28 @@ sed -i 's/^version = ".*"/version = "{new_version}"/' Cargo.toml
 npm version {new_version} --no-git-tag-version
 ```
 
-### Step 8: Commit and Tag
+### Step 8: Export Requirements Database
+
+Export the SQLite database to YAML for version control. This allows:
+- Git-friendly diffs of requirement changes
+- Easy onboarding for new developers who clone the repo
+- Sync points for distributed teams
 
 ```bash
-# Stage changes
-git add Cargo.toml CHANGELOG.md  # or package.json
+# Export SQLite to YAML
+aida db migrate --from sqlite --to yaml --force
+
+# Verify export
+echo "Exported $(grep -c '^  - id:' requirements.yaml 2>/dev/null || echo 0) requirements to YAML"
+```
+
+This ensures the requirements.yaml in git always reflects the latest database state.
+
+### Step 9: Commit and Tag
+
+```bash
+# Stage changes including requirements.yaml
+git add Cargo.toml CHANGELOG.md requirements.yaml  # or package.json
 
 # Commit version bump
 git commit -m "chore: release v{version}
@@ -192,6 +209,7 @@ Release notes:
 - X features added
 - Y bugs fixed
 
+Requirements database exported (X requirements).
 See CHANGELOG.md for details."
 
 # Create annotated tag
@@ -200,7 +218,7 @@ git tag -a v{version} -m "Release v{version}
 {release_notes_summary}"
 ```
 
-### Step 9: Offer Push
+### Step 10: Offer Push
 
 Ask user if they want to push:
 ```
