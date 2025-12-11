@@ -148,6 +148,34 @@ aida comment add <SPEC-ID> "Implementation complete. Files modified: src/foo.rs,
 aida rel add --from <TEST-SPEC-ID> --to <SPEC-ID> --type Verifies
 ```
 
+### Step 7: Commit with AI Attribution
+
+When committing code with trace comments, include the AI attribution tag in the commit message:
+
+**Commit Message Format:**
+```
+[AI:claude:high] feat: description of changes
+
+Trace: FR-0042, FR-0043
+```
+
+Where:
+- `[AI:tool:conf]`: AI attribution tag (e.g., `[AI:claude:high]`)
+  - `tool`: AI tool used (e.g., `claude`, `copilot`)
+  - `conf`: Confidence level (`high`, `med`, `low`)
+- `Trace:`: Optional list of requirement IDs implemented in this commit
+
+The git hook will warn if files have trace comments but the commit message lacks the AI tag.
+
+**Example:**
+```bash
+git commit -m "[AI:claude:high] feat: add grep command for searching requirements
+
+Implements pattern search with regex support, context lines, and field filtering.
+
+Trace: FR-0250"
+```
+
 ## State Transitions
 
 During implementation, requirements should transition through:
