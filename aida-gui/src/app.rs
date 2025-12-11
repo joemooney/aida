@@ -2562,6 +2562,15 @@ enum SettingsTab {
     Members, // Replaced Users with Members (contains Users and Teams sub-tabs)
     Database,
     AiPrompts,
+    AiIntegration, // Claude Code and other AI agent integrations
+}
+
+/// AI agent types for integration
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+enum AiAgent {
+    #[default]
+    ClaudeCode,
+    // Future agents can be added here
 }
 
 impl SettingsTab {
@@ -3477,6 +3486,13 @@ pub struct RequirementsApp {
     show_scaffold_status_dialog: bool,            // Whether to show the scaffold status dialog (FR-0261)
     scaffold_status: Option<aida_core::ScaffoldStatus>,  // Current scaffold status result
 
+    // AI Integration state
+    selected_ai_agent: AiAgent,                   // Currently selected AI agent for integration
+    ai_report_format: aida_core::ReportFormat,    // Report output format (Markdown/HTML)
+    ai_report_include_scaffold: bool,             // Include scaffold status in report
+    ai_report_output_path: String,                // Output file path for report
+    ai_report_last_result: Option<String>,        // Last report generation result message
+
     // Conflict detection state (FR-0153)
     original_timestamps: HashMap<Uuid, DateTime<Utc>>,  // Requirement timestamps when loaded
     modified_requirement_ids: HashSet<Uuid>,            // IDs of requirements modified since load
@@ -4054,6 +4070,11 @@ impl RequirementsApp {
             scaffold_tech_stack_input: String::new(),
             show_scaffold_status_dialog: false,
             scaffold_status: None,
+            selected_ai_agent: AiAgent::default(),
+            ai_report_format: aida_core::ReportFormat::Html,
+            ai_report_include_scaffold: true,
+            ai_report_output_path: String::new(),
+            ai_report_last_result: None,
             original_timestamps: initial_timestamps,
             modified_requirement_ids: HashSet::new(),
             show_conflict_dialog: false,
@@ -4582,6 +4603,11 @@ impl RequirementsApp {
             scaffold_tech_stack_input: String::new(),
             show_scaffold_status_dialog: false,
             scaffold_status: None,
+            selected_ai_agent: AiAgent::default(),
+            ai_report_format: aida_core::ReportFormat::Html,
+            ai_report_include_scaffold: true,
+            ai_report_output_path: String::new(),
+            ai_report_last_result: None,
 
             // Conflict detection state (FR-0153)
             original_timestamps: initial_timestamps,
@@ -7883,7 +7909,8 @@ impl RequirementsApp {
                         "📝 Types",
                     );
                     ui.selectable_value(&mut self.settings_tab, SettingsTab::Members, "👥 Members");
-                    ui.selectable_value(&mut self.settings_tab, SettingsTab::AiPrompts, "✦ AI");
+                    ui.selectable_value(&mut self.settings_tab, SettingsTab::AiPrompts, "✦ Prompts");
+                    ui.selectable_value(&mut self.settings_tab, SettingsTab::AiIntegration, "🤖 Agents");
                     ui.selectable_value(&mut self.settings_tab, SettingsTab::Database, "🗄 Db");
                 });
 
@@ -7921,6 +7948,9 @@ impl RequirementsApp {
                     }
                     SettingsTab::AiPrompts => {
                         self.show_settings_ai_prompts_tab(ui);
+                    }
+                    SettingsTab::AiIntegration => {
+                        self.show_settings_ai_integration_tab(ui);
                     }
                 }
 
@@ -14090,43 +14120,6 @@ impl RequirementsApp {
             ui.separator();
             ui.add_space(10.0);
 
-            // Project Scaffolding Section (FR-0152)
-            ui.heading("Claude Code Integration");
-            ui.add_space(5.0);
-            ui.label("Generate Claude Code artifacts (CLAUDE.md, skills, commands) for this project.");
-            ui.add_space(10.0);
-
-            ui.horizontal(|ui| {
-                if ui.button("🔧 Scaffold Project").clicked() {
-                    // Generate preview when opening dialog
-                    let project_dir = self.storage.path().parent()
-                        .map(|p| p.to_path_buf())
-                        .unwrap_or_else(|| std::path::PathBuf::from("."));
-                    let scaffolder = aida_core::Scaffolder::new(project_dir, self.scaffold_config.clone());
-                    self.scaffold_preview = Some(scaffolder.preview(&self.store));
-                    self.show_scaffold_dialog = true;
-                }
-
-                // trace:FR-0261 | ai:claude:high
-                if ui.button("📋 Check Status").clicked() {
-                    // Check scaffold status against current project
-                    let project_dir = self.storage.path().parent()
-                        .map(|p| p.to_path_buf())
-                        .unwrap_or_else(|| std::path::PathBuf::from("."));
-                    self.scaffold_status = Some(aida_core::check_scaffold_status(
-                        &self.store,
-                        &project_dir,
-                        &self.scaffold_config,
-                    ));
-                    self.show_scaffold_status_dialog = true;
-                }
-            });
-            ui.label("Creates CLAUDE.md, .claude/commands/, and .claude/skills/ directories.");
-
-            ui.add_space(15.0);
-            ui.separator();
-            ui.add_space(10.0);
-
             // Template placeholders reference
             ui.heading("Template Placeholders");
             ui.add_space(5.0);
@@ -14156,6 +14149,212 @@ impl RequirementsApp {
                     ui.end_row();
                 });
         });
+    }
+
+    /// Show the AI Integration settings tab
+    fn show_settings_ai_integration_tab(&mut self, ui: &mut egui::Ui) {
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            // Agent selector
+            ui.heading("AI Agent");
+            ui.add_space(5.0);
+
+            ui.horizontal(|ui| {
+                ui.label("Agent:");
+                egui::ComboBox::from_id_salt("ai_agent_selector")
+                    .selected_text(match self.selected_ai_agent {
+                        AiAgent::ClaudeCode => "Claude Code",
+                    })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.selected_ai_agent, AiAgent::ClaudeCode, "Claude Code");
+                        // Future agents can be added here
+                    });
+            });
+            ui.add_space(5.0);
+            ui.label("Select the AI coding agent to configure integration artifacts.");
+
+            ui.add_space(15.0);
+            ui.separator();
+            ui.add_space(10.0);
+
+            // Show agent-specific content
+            match self.selected_ai_agent {
+                AiAgent::ClaudeCode => {
+                    self.show_claude_code_integration(ui);
+                }
+            }
+        });
+    }
+
+    /// Show Claude Code specific integration options
+    fn show_claude_code_integration(&mut self, ui: &mut egui::Ui) {
+        // Project Scaffolding Section (FR-0152)
+        ui.heading("Project Scaffolding");
+        ui.add_space(5.0);
+        ui.label("Generate Claude Code artifacts (CLAUDE.md, skills, commands) for this project.");
+        ui.add_space(10.0);
+
+        ui.horizontal(|ui| {
+            if ui.button("🔧 Scaffold Project").clicked() {
+                // Generate preview when opening dialog
+                let project_dir = self.storage.path().parent()
+                    .map(|p| p.to_path_buf())
+                    .unwrap_or_else(|| std::path::PathBuf::from("."));
+                let scaffolder = aida_core::Scaffolder::new(project_dir, self.scaffold_config.clone());
+                self.scaffold_preview = Some(scaffolder.preview(&self.store));
+                self.show_scaffold_dialog = true;
+            }
+
+            // trace:FR-0261 | ai:claude:high
+            if ui.button("📋 Check Status").clicked() {
+                // Check scaffold status against current project
+                let project_dir = self.storage.path().parent()
+                    .map(|p| p.to_path_buf())
+                    .unwrap_or_else(|| std::path::PathBuf::from("."));
+                self.scaffold_status = Some(aida_core::check_scaffold_status(
+                    &self.store,
+                    &project_dir,
+                    &self.scaffold_config,
+                ));
+                self.show_scaffold_status_dialog = true;
+            }
+        });
+        ui.label("Creates CLAUDE.md, .claude/commands/, and .claude/skills/ directories.");
+
+        ui.add_space(15.0);
+        ui.separator();
+        ui.add_space(10.0);
+
+        // AI Integration Report Section
+        ui.heading("AI Integration Report");
+        ui.add_space(5.0);
+        ui.label("Generate a comprehensive report documenting AI integration in this project.");
+        ui.add_space(10.0);
+
+        // Report format selection
+        ui.horizontal(|ui| {
+            ui.label("Format:");
+            ui.selectable_value(&mut self.ai_report_format, aida_core::ReportFormat::Html, "HTML");
+            ui.selectable_value(&mut self.ai_report_format, aida_core::ReportFormat::Markdown, "Markdown");
+        });
+
+        ui.add_space(5.0);
+
+        // Include scaffold status option
+        ui.checkbox(&mut self.ai_report_include_scaffold, "Include scaffold status")
+            .on_hover_text("Include scaffold drift detection in the report");
+
+        ui.add_space(5.0);
+
+        // Output path
+        ui.horizontal(|ui| {
+            ui.label("Output:");
+            let hint = match self.ai_report_format {
+                aida_core::ReportFormat::Html => "ai-integration-report.html",
+                aida_core::ReportFormat::Markdown => "ai-integration-report.md",
+            };
+            ui.add(
+                egui::TextEdit::singleline(&mut self.ai_report_output_path)
+                    .desired_width(300.0)
+                    .hint_text(hint),
+            );
+        });
+        ui.label("Leave empty to use default filename in project directory.");
+
+        ui.add_space(10.0);
+
+        // Generate button
+        if ui.button("📄 Generate Report").clicked() {
+            self.generate_ai_integration_report();
+        }
+
+        // Show last result message
+        if let Some(ref result) = self.ai_report_last_result {
+            ui.add_space(5.0);
+            if result.starts_with("Error") {
+                ui.colored_label(egui::Color32::from_rgb(200, 100, 100), result);
+            } else {
+                ui.colored_label(egui::Color32::from_rgb(100, 200, 100), result);
+            }
+        }
+
+        ui.add_space(15.0);
+        ui.separator();
+        ui.add_space(10.0);
+
+        // Report contents description
+        ui.heading("Report Contents");
+        ui.add_space(5.0);
+        ui.label("The AI Integration Report includes:");
+        ui.add_space(3.0);
+        egui::Grid::new("report_contents_grid")
+            .num_columns(2)
+            .spacing([10.0, 3.0])
+            .show(ui, |ui| {
+                ui.label("•");
+                ui.label("Project overview and requirement statistics");
+                ui.end_row();
+
+                ui.label("•");
+                ui.label("AI prompts configuration and customizations");
+                ui.end_row();
+
+                ui.label("•");
+                ui.label("Code traceability summary (trace links by requirement)");
+                ui.end_row();
+
+                ui.label("•");
+                ui.label("Scaffold status and drift detection (if enabled)");
+                ui.end_row();
+
+                ui.label("•");
+                ui.label("Type definitions and feature configuration");
+                ui.end_row();
+            });
+    }
+
+    /// Generate the AI Integration Report
+    fn generate_ai_integration_report(&mut self) {
+        let project_dir = self.storage.path().parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| std::path::PathBuf::from("."));
+
+        let db_path = self.storage.path().to_string_lossy().to_string();
+
+        // Create report generator
+        let mut generator = aida_core::ReportGenerator::new(self.store.clone(), db_path);
+
+        if self.ai_report_include_scaffold {
+            generator = generator.with_project_root(project_dir.clone());
+        }
+
+        // Generate report data
+        let report = generator.generate();
+
+        // Render to selected format
+        let (content, extension) = match self.ai_report_format {
+            aida_core::ReportFormat::Html => (generator.render_html(&report), "html"),
+            aida_core::ReportFormat::Markdown => (generator.render_markdown(&report), "md"),
+        };
+
+        // Determine output path
+        let output_path = if self.ai_report_output_path.is_empty() {
+            project_dir.join(format!("ai-integration-report.{}", extension))
+        } else {
+            std::path::PathBuf::from(&self.ai_report_output_path)
+        };
+
+        // Write the report
+        match std::fs::write(&output_path, content) {
+            Ok(()) => {
+                self.ai_report_last_result = Some(format!(
+                    "Report generated: {}",
+                    output_path.display()
+                ));
+            }
+            Err(e) => {
+                self.ai_report_last_result = Some(format!("Error writing report: {}", e));
+            }
+        }
     }
 
     /// Show the theme editor dialog
