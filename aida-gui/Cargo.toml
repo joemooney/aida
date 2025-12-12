@@ -28,6 +28,8 @@ serde = { workspace = true }
 serde_yaml = { workspace = true }
 url = "2"
 similar = { version = "2", features = ["inline"] }
+# Cross-platform time (uses std::time on native, performance.now() on WASM)
+web-time = "1"
 
 # Native-only dependencies (file dialogs, clipboard, etc.)
 env_logger = { version = "0.11", optional = true }

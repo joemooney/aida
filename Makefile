@@ -273,9 +273,9 @@ web-build-release: ## Build WASM web client (release/optimized)
 web-serve: ## Serve WASM web client for development (port 8088)
 	cd aida-gui && trunk serve --port $(WEB_PORT)
 
-web-serve-force: ## Serve web client, killing any existing process on port
-	@-lsof -t -i:$(WEB_PORT) | xargs -r kill 2>/dev/null || true
-	@sleep 0.1
+web-serve-force: ## Serve web client, killing any existing trunk process on port
+	@-pkill -f "trunk serve.*$(WEB_PORT)" 2>/dev/null || true
+	@sleep 0.2
 	cd aida-gui && trunk serve --port $(WEB_PORT)
 
 web-clean: ## Clean web build artifacts

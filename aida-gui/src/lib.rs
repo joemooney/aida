@@ -69,36 +69,49 @@ mod web_entry {
     #[wasm_bindgen(start)]
     pub fn start() -> Result<(), JsValue> {
         init_web();
+        log::info!("AIDA WASM: init_web() completed");
 
         // Get server address from URL query params
         let server_address = platform::web::get_query_param("server");
+        log::info!("AIDA WASM: server_address = {:?}", server_address);
 
         // Start the eframe web runner
         let web_options = eframe::WebOptions::default();
+        log::info!("AIDA WASM: spawning eframe async task");
 
         wasm_bindgen_futures::spawn_local(async move {
+            log::info!("AIDA WASM: inside async task, looking for canvas");
             // Get the canvas element
             let canvas = match get_canvas_by_id("aida_canvas") {
-                Some(c) => c,
+                Some(c) => {
+                    log::info!("AIDA WASM: found canvas element");
+                    c
+                }
                 None => {
                     log::error!("Canvas element 'aida_canvas' not found");
                     return;
                 }
             };
 
+            log::info!("AIDA WASM: starting eframe WebRunner");
             let start_result = eframe::WebRunner::new()
                 .start(
                     canvas,
                     web_options,
-                    Box::new(move |cc| Ok(Box::new(RequirementsApp::new_wasm(cc)))),
+                    Box::new(move |cc| {
+                        log::info!("AIDA WASM: creating RequirementsApp");
+                        Ok(Box::new(RequirementsApp::new_wasm(cc)))
+                    }),
                 )
                 .await;
 
-            if let Err(e) = start_result {
-                log::error!("Failed to start eframe: {:?}", e);
+            match &start_result {
+                Ok(_) => log::info!("AIDA WASM: eframe started successfully"),
+                Err(e) => log::error!("Failed to start eframe: {:?}", e),
             }
         });
 
+        log::info!("AIDA WASM: start() returning Ok");
         Ok(())
     }
 }

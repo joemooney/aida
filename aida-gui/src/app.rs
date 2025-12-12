@@ -28,7 +28,8 @@ use std::path::PathBuf;
 use std::sync::mpsc;
 #[cfg(not(target_arch = "wasm32"))]
 use std::thread;
-use std::time::Instant;
+// Use web-time for cross-platform Instant (works on both native and WASM)
+use web_time::{Duration, Instant};
 use uuid::Uuid;
 
 /// Commands sent to the heartbeat thread (native only - WASM doesn't have threads)
@@ -3432,7 +3433,7 @@ pub struct RequirementsApp {
     // Layout state
     left_panel_collapsed: bool,  // Whether left panel is manually collapsed (in form view)
     layout_mode: LayoutMode,     // Current layout mode (cycles through 5 layouts)
-    layout_button_press_start: Option<std::time::Instant>,  // When layout button was pressed
+    layout_button_press_start: Option<Instant>,  // When layout button was pressed
     show_layout_menu: bool,      // Whether to show the layout selection menu
     layout_button_rect: Option<egui::Rect>,  // Position of layout button for popup menu
 
@@ -3492,10 +3493,10 @@ pub struct RequirementsApp {
     show_keyboard_help: bool,
 
     // Database change detection
-    last_db_check: std::time::Instant,           // When we last checked the file mtime
+    last_db_check: Instant,           // When we last checked the file mtime
     known_db_mtime: Option<std::time::SystemTime>, // Last known modification time
     pending_external_reload: bool,               // External changes detected while editing
-    external_change_detected_at: Option<std::time::Instant>, // When external change was detected
+    external_change_detected_at: Option<Instant>, // When external change was detected
 
     // Split panel (second requirements list) - used in split layouts
     split_perspective: Perspective,
@@ -4170,7 +4171,7 @@ impl RequirementsApp {
             show_weight_picker: false,
             weight_picker_input: String::new(),
             show_keyboard_help: false,
-            last_db_check: std::time::Instant::now(),
+            last_db_check: Instant::now(),
             known_db_mtime: None,
             pending_external_reload: false,
             external_change_detected_at: None,
@@ -4490,7 +4491,7 @@ impl RequirementsApp {
 
                 loop {
                     // Check for commands (non-blocking with timeout)
-                    match heartbeat_receiver.recv_timeout(std::time::Duration::from_secs(5)) {
+                    match heartbeat_receiver.recv_timeout(Duration::from_secs(5)) {
                         Ok(HeartbeatCommand::SetEditLock(lock)) => {
                             current_edit_lock = lock;
                         }
@@ -4701,7 +4702,7 @@ impl RequirementsApp {
             show_weight_picker: false,
             weight_picker_input: String::new(),
             show_keyboard_help: false,
-            last_db_check: std::time::Instant::now(),
+            last_db_check: Instant::now(),
             known_db_mtime: None,
             pending_external_reload: false,
             external_change_detected_at: None,
@@ -5172,7 +5173,7 @@ impl RequirementsApp {
             show_weight_picker: false,
             weight_picker_input: String::new(),
             show_keyboard_help: false,
-            last_db_check: std::time::Instant::now(),
+            last_db_check: Instant::now(),
             known_db_mtime: None,
             pending_external_reload: false,
             external_change_detected_at: None,
@@ -6153,7 +6154,7 @@ impl RequirementsApp {
         // Show theme name briefly in menu bar
         self.theme_change_display = Some((
             self.user_settings.theme.label(),
-            Instant::now() + std::time::Duration::from_secs(2),
+            Instant::now() + Duration::from_secs(2),
         ));
     }
 
@@ -6269,7 +6270,7 @@ impl RequirementsApp {
             return false;
         }
 
-        let poll_interval = std::time::Duration::from_secs(
+        let poll_interval = Duration::from_secs(
             self.user_settings.db_poll_interval_secs as u64
         );
 
@@ -6278,7 +6279,7 @@ impl RequirementsApp {
             return false;
         }
 
-        self.last_db_check = std::time::Instant::now();
+        self.last_db_check = Instant::now();
 
         let current_mtime = self.get_db_file_mtime();
 
@@ -6348,12 +6349,12 @@ impl RequirementsApp {
             if self.is_editing() {
                 // We're editing - defer reload and show notification
                 self.pending_external_reload = true;
-                self.external_change_detected_at = Some(std::time::Instant::now());
+                self.external_change_detected_at = Some(Instant::now());
                 // Show toast notification
                 self.toast_message = Some(ToastNotification {
                     message: "⚠️ Database changed externally. Changes will reload after editing.".to_string(),
                     is_success: false,
-                    show_until: std::time::Instant::now() + std::time::Duration::from_secs(5),
+                    show_until: Instant::now() + Duration::from_secs(5),
                 });
             } else if self.user_settings.db_auto_reload {
                 // Not editing and auto-reload is enabled - reload silently
@@ -6362,16 +6363,16 @@ impl RequirementsApp {
                 self.toast_message = Some(ToastNotification {
                     message: "✓ Database reloaded".to_string(),
                     is_success: true,
-                    show_until: std::time::Instant::now() + std::time::Duration::from_secs(2),
+                    show_until: Instant::now() + Duration::from_secs(2),
                 });
             } else {
                 // Not editing but auto-reload disabled - just mark pending and notify
                 self.pending_external_reload = true;
-                self.external_change_detected_at = Some(std::time::Instant::now());
+                self.external_change_detected_at = Some(Instant::now());
                 self.toast_message = Some(ToastNotification {
                     message: "⚠️ Database changed externally. Press F5 or use menu to reload.".to_string(),
                     is_success: false,
-                    show_until: std::time::Instant::now() + std::time::Duration::from_secs(5),
+                    show_until: Instant::now() + Duration::from_secs(5),
                 });
             }
         }
@@ -6382,7 +6383,7 @@ impl RequirementsApp {
             self.toast_message = Some(ToastNotification {
                 message: "✓ Database reloaded after edit".to_string(),
                 is_success: true,
-                show_until: std::time::Instant::now() + std::time::Duration::from_secs(2),
+                show_until: Instant::now() + Duration::from_secs(2),
             });
         }
     }
@@ -7061,11 +7062,11 @@ impl RequirementsApp {
                     // Track button press timing for long-press detection
                     if layout_button.is_pointer_button_down_on() {
                         if self.layout_button_press_start.is_none() {
-                            self.layout_button_press_start = Some(std::time::Instant::now());
+                            self.layout_button_press_start = Some(Instant::now());
                         }
                         // Check if held long enough (300ms) to show menu
                         if let Some(start) = self.layout_button_press_start {
-                            if start.elapsed() >= std::time::Duration::from_millis(300) {
+                            if start.elapsed() >= Duration::from_millis(300) {
                                 self.show_layout_menu = true;
                             }
                         }
@@ -7073,7 +7074,7 @@ impl RequirementsApp {
                         // Button released
                         if let Some(start) = self.layout_button_press_start.take() {
                             // If it was a quick click (< 300ms), menu isn't showing, and not a double-click, cycle
-                            if start.elapsed() < std::time::Duration::from_millis(300)
+                            if start.elapsed() < Duration::from_millis(300)
                                 && !self.show_layout_menu
                                 && !double_clicked
                             {
@@ -15034,14 +15035,14 @@ impl RequirementsApp {
                     self.toast_message = Some(ToastNotification {
                         message: "Skill saved successfully".to_string(),
                         is_success: true,
-                        show_until: std::time::Instant::now() + std::time::Duration::from_secs(3),
+                        show_until: Instant::now() + Duration::from_secs(3),
                     });
                 }
                 Err(e) => {
                     self.toast_message = Some(ToastNotification {
                         message: format!("Failed to save: {}", e),
                         is_success: false,
-                        show_until: std::time::Instant::now() + std::time::Duration::from_secs(5),
+                        show_until: Instant::now() + Duration::from_secs(5),
                     });
                 }
             }
@@ -17159,14 +17160,14 @@ impl RequirementsApp {
             self.toast_message = Some(ToastNotification {
                 message: format!("Applied AI improvement to {}", spec_id),
                 is_success: true,
-                show_until: std::time::Instant::now() + std::time::Duration::from_secs(3),
+                show_until: Instant::now() + Duration::from_secs(3),
             });
         } else {
             // Requirement not found - show error
             self.toast_message = Some(ToastNotification {
                 message: "Failed to apply: requirement not found".to_string(),
                 is_success: false,
-                show_until: std::time::Instant::now() + std::time::Duration::from_secs(3),
+                show_until: Instant::now() + Duration::from_secs(3),
             });
         }
     }
@@ -22664,7 +22665,7 @@ impl RequirementsApp {
                         self.toast_message = Some(ToastNotification {
                             message: format!("Copied {} to clipboard - paste into Claude Code", req_id),
                             is_success: true,
-                            show_until: Instant::now() + std::time::Duration::from_secs(4),
+                            show_until: Instant::now() + Duration::from_secs(4),
                         });
                     }
                 }
@@ -22702,7 +22703,7 @@ impl RequirementsApp {
                                         self.toast_message = Some(ToastNotification {
                                             message: "AI evaluation already in progress...".to_string(),
                                             is_success: false,
-                                            show_until: Instant::now() + std::time::Duration::from_secs(3),
+                                            show_until: Instant::now() + Duration::from_secs(3),
                                         });
                                         None // Skip, return no result
                                     } else {
@@ -22725,7 +22726,7 @@ impl RequirementsApp {
                                             self.toast_message = Some(ToastNotification {
                                                 message: format!("Evaluating {}...", spec_id),
                                                 is_success: true,
-                                                show_until: Instant::now() + std::time::Duration::from_secs(3),
+                                                show_until: Instant::now() + Duration::from_secs(3),
                                             });
 
                                             thread::spawn(move || {
@@ -22750,7 +22751,7 @@ impl RequirementsApp {
                                             self.toast_message = Some(ToastNotification {
                                                 message: "AI evaluation not available in browser".to_string(),
                                                 is_success: false,
-                                                show_until: Instant::now() + std::time::Duration::from_secs(3),
+                                                show_until: Instant::now() + Duration::from_secs(3),
                                             });
                                             None
                                         }
@@ -22762,7 +22763,7 @@ impl RequirementsApp {
                                         self.toast_message = Some(ToastNotification {
                                             message: "Find duplicates already in progress...".to_string(),
                                             is_success: false,
-                                            show_until: Instant::now() + std::time::Duration::from_secs(3),
+                                            show_until: Instant::now() + Duration::from_secs(3),
                                         });
                                         None // Skip, return no result
                                     } else {
@@ -22784,7 +22785,7 @@ impl RequirementsApp {
                                             self.toast_message = Some(ToastNotification {
                                                 message: format!("Finding duplicates for {}...", spec_id),
                                                 is_success: true,
-                                                show_until: Instant::now() + std::time::Duration::from_secs(3),
+                                                show_until: Instant::now() + Duration::from_secs(3),
                                             });
 
                                             thread::spawn(move || {
@@ -22819,7 +22820,7 @@ impl RequirementsApp {
                                             self.toast_message = Some(ToastNotification {
                                                 message: "Find duplicates not available in browser".to_string(),
                                                 is_success: false,
-                                                show_until: Instant::now() + std::time::Duration::from_secs(3),
+                                                show_until: Instant::now() + Duration::from_secs(3),
                                             });
                                             None
                                         }
@@ -28064,7 +28065,7 @@ impl eframe::App for RequirementsApp {
                     self.toast_message = Some(ToastNotification {
                         message: format!("⚠️ {} also has this file open", user_names.join(", ")),
                         is_success: false,
-                        show_until: Instant::now() + std::time::Duration::from_secs(10),
+                        show_until: Instant::now() + Duration::from_secs(10),
                     });
                     self.other_sessions_warning_shown = true;
                 }
@@ -28105,7 +28106,7 @@ impl eframe::App for RequirementsApp {
                             message: format!("AI evaluation complete for {} (Score: {}/10)",
                                 result.spec_id, response.quality_score),
                             is_success: true,
-                            show_until: Instant::now() + std::time::Duration::from_secs(5),
+                            show_until: Instant::now() + Duration::from_secs(5),
                         });
 
                         // Also update the AI result panel
@@ -28136,7 +28137,7 @@ impl eframe::App for RequirementsApp {
                         self.toast_message = Some(ToastNotification {
                             message: format!("AI evaluation failed for {}: {}", result.spec_id, e),
                             is_success: false,
-                            show_until: Instant::now() + std::time::Duration::from_secs(5),
+                            show_until: Instant::now() + Duration::from_secs(5),
                         });
                     }
                 }
@@ -28179,7 +28180,7 @@ impl eframe::App for RequirementsApp {
                                 format!("Found {} potential duplicate(s) for {}", count, result.spec_id)
                             },
                             is_success: true,
-                            show_until: Instant::now() + std::time::Duration::from_secs(5),
+                            show_until: Instant::now() + Duration::from_secs(5),
                         });
 
                         // Update AI result panel
@@ -28196,7 +28197,7 @@ impl eframe::App for RequirementsApp {
                         self.toast_message = Some(ToastNotification {
                             message: format!("Find duplicates failed for {}: {}", result.spec_id, e),
                             is_success: false,
-                            show_until: Instant::now() + std::time::Duration::from_secs(5),
+                            show_until: Instant::now() + Duration::from_secs(5),
                         });
 
                         // Update AI result panel with error
@@ -29251,7 +29252,7 @@ impl eframe::App for RequirementsApp {
                                         message: format!("⚠️ {} is currently editing this requirement!",
                                             editor_names.join(", ")),
                                         is_success: false,
-                                        show_until: Instant::now() + std::time::Duration::from_secs(8),
+                                        show_until: Instant::now() + Duration::from_secs(8),
                                     });
                                 }
                             }

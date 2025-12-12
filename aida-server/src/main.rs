@@ -239,6 +239,11 @@ async fn main() -> Result<()> {
     let grpc_service = RequirementsServiceServer::new(grpc_service);
     let grpc_web_service = tonic_web::enable(grpc_service);
 
+    // Create a shutdown signal that can be shared between gRPC and REST servers
+    // Note: _shutdown_rx is unused when REST is disabled (rest_port=0)
+    #[allow(unused_variables)]
+    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(());
+
     // Start REST server if enabled
     let rest_handle = if args.rest_port > 0 {
         let rest_addr: SocketAddr = format!("{}:{}", args.host, args.rest_port).parse()?;
@@ -247,8 +252,14 @@ async fn main() -> Result<()> {
         let rest_router = rest::create_rest_router(state.clone()).layer(cors.clone());
 
         let rest_listener = tokio::net::TcpListener::bind(rest_addr).await?;
+        let mut rest_shutdown_rx = shutdown_rx.clone();
         Some(tokio::spawn(async move {
-            axum::serve(rest_listener, rest_router).await
+            axum::serve(rest_listener, rest_router)
+                .with_graceful_shutdown(async move {
+                    // Wait for the shutdown signal
+                    let _ = rest_shutdown_rx.changed().await;
+                })
+                .await
         }))
     } else {
         info!("REST API: disabled");
@@ -269,6 +280,8 @@ async fn main() -> Result<()> {
                 .await
                 .expect("Failed to install CTRL+C signal handler");
             info!("Received shutdown signal, stopping server...");
+            // Signal the REST server to shutdown too
+            let _ = shutdown_tx.send(());
         })
         .await?;
 
