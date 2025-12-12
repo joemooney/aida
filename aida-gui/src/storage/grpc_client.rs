@@ -2,7 +2,8 @@
 //! gRPC client implementation of StorageClient trait
 //!
 //! This module provides a gRPC client that implements the StorageClient trait,
-//! enabling uniform access to remote AIDA servers.
+//! enabling uniform access to AIDA servers. It supports both native (via tokio)
+//! and WASM (via tonic-web-wasm-client) targets.
 
 use anyhow::{Context, Result};
 use std::sync::{Arc, Mutex};
@@ -17,18 +18,26 @@ pub mod proto {
 }
 
 use proto::requirements_service_client::RequirementsServiceClient;
+
+// =============================================================================
+// Native implementation (using tokio runtime)
+// =============================================================================
+
+#[cfg(not(target_arch = "wasm32"))]
 use tonic::transport::Channel;
 
 /// gRPC-based storage client
 ///
 /// This client connects to an AIDA server via gRPC and implements
 /// the StorageClient trait for uniform access.
+#[cfg(not(target_arch = "wasm32"))]
 pub struct GrpcStorageClient {
     server_addr: String,
     runtime: tokio::runtime::Runtime,
     client: Arc<Mutex<Option<RequirementsServiceClient<Channel>>>>,
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl GrpcStorageClient {
     /// Connect to a gRPC server
     ///
@@ -53,6 +62,7 @@ impl GrpcStorageClient {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl StorageClient for GrpcStorageClient {
     fn load(&self) -> Result<RequirementsStore> {
         let mut client_guard = self.client.lock().unwrap();
@@ -292,7 +302,246 @@ impl StorageClient for GrpcStorageClient {
 }
 
 // =============================================================================
-// Helper functions
+// WASM implementation (using tonic-web-wasm-client)
+// =============================================================================
+
+#[cfg(target_arch = "wasm32")]
+use tonic_web_wasm_client::Client as WasmClient;
+
+/// gRPC-based storage client for WASM
+///
+/// This client connects to an AIDA server via gRPC-Web and implements
+/// the StorageClient trait for uniform access in the browser.
+#[cfg(target_arch = "wasm32")]
+pub struct GrpcStorageClient {
+    server_addr: String,
+    client: Arc<Mutex<RequirementsServiceClient<WasmClient>>>,
+}
+
+#[cfg(target_arch = "wasm32")]
+impl GrpcStorageClient {
+    /// Connect to a gRPC-Web server
+    ///
+    /// # Arguments
+    /// * `server_addr` - Server URL (e.g., "http://localhost:50051")
+    pub fn connect(server_addr: &str) -> Result<Self> {
+        let addr = normalize_addr(server_addr);
+        let wasm_client = WasmClient::new(addr.clone());
+        let client = RequirementsServiceClient::new(wasm_client);
+
+        Ok(GrpcStorageClient {
+            server_addr: server_addr.to_string(),
+            client: Arc::new(Mutex::new(client)),
+        })
+    }
+
+    /// Get a mutable reference to the inner client for async operations
+    pub fn inner(&self) -> std::sync::MutexGuard<'_, RequirementsServiceClient<WasmClient>> {
+        self.client.lock().unwrap()
+    }
+}
+
+// Note: For WASM, we implement StorageClient with stub methods that return errors
+// since the actual async operations should be done via the `inner()` method
+// and `wasm_bindgen_futures::spawn_local()` pattern in the application layer.
+#[cfg(target_arch = "wasm32")]
+impl StorageClient for GrpcStorageClient {
+    fn load(&self) -> Result<RequirementsStore> {
+        // In WASM, we can't block on async. The caller should use spawn_local()
+        // with the inner client directly for async operations.
+        Err(anyhow::anyhow!(
+            "Direct sync load() not supported in WASM. Use inner() with spawn_local() instead."
+        ))
+    }
+
+    fn save(&self, _store: &RequirementsStore) -> Result<()> {
+        Err(anyhow::anyhow!(
+            "Direct sync save() not supported in WASM. Use inner() with spawn_local() instead."
+        ))
+    }
+
+    fn display_path(&self) -> String {
+        self.server_addr.clone()
+    }
+
+    fn is_remote(&self) -> bool {
+        true
+    }
+
+    fn create_requirement(&self, _req: &Requirement) -> Result<Requirement> {
+        Err(anyhow::anyhow!(
+            "Direct sync create_requirement() not supported in WASM."
+        ))
+    }
+
+    fn update_requirement(&self, _req: &Requirement) -> Result<Requirement> {
+        Err(anyhow::anyhow!(
+            "Direct sync update_requirement() not supported in WASM."
+        ))
+    }
+
+    fn delete_requirement(&self, _id: &str) -> Result<()> {
+        Err(anyhow::anyhow!(
+            "Direct sync delete_requirement() not supported in WASM."
+        ))
+    }
+
+    fn add_comment(
+        &self,
+        _req_id: &str,
+        _content: &str,
+        _author: &str,
+        _parent_id: Option<&str>,
+    ) -> Result<Comment> {
+        Err(anyhow::anyhow!(
+            "Direct sync add_comment() not supported in WASM."
+        ))
+    }
+
+    fn add_relationship(
+        &self,
+        _source_id: &str,
+        _target_id: &str,
+        _rel_type: &RelationshipType,
+        _created_by: &str,
+    ) -> Result<()> {
+        Err(anyhow::anyhow!(
+            "Direct sync add_relationship() not supported in WASM."
+        ))
+    }
+
+    fn get_server_status(&self) -> Result<ServerStatus> {
+        Err(anyhow::anyhow!(
+            "Direct sync get_server_status() not supported in WASM."
+        ))
+    }
+}
+
+// =============================================================================
+// WASM async helper functions for use with spawn_local()
+// =============================================================================
+
+#[cfg(target_arch = "wasm32")]
+impl GrpcStorageClient {
+    /// Async version of load() for WASM
+    pub async fn load_async(&self) -> Result<RequirementsStore> {
+        let mut client = self.client.lock().unwrap();
+        let request = proto::GetStoreRequest {};
+        let response = client.get_store(request).await
+            .map_err(|e| anyhow::anyhow!("Failed to get store: {}", e))?;
+        let proto_store = response.into_inner().store
+            .ok_or_else(|| anyhow::anyhow!("Server returned empty store"))?;
+        proto_to_store(&proto_store)
+    }
+
+    /// Async version of get_server_status() for WASM
+    pub async fn get_server_status_async(&self) -> Result<ServerStatus> {
+        let mut client = self.client.lock().unwrap();
+        let request = proto::GetServerStatusRequest {};
+        let response = client.get_server_status(request).await
+            .map_err(|e| anyhow::anyhow!("Failed to get server status: {}", e))?;
+        let status = response.into_inner();
+        Ok(ServerStatus {
+            version: status.version,
+            status: status.status,
+            uptime_seconds: status.uptime_seconds,
+            active_connections: status.active_connections,
+            storage_backend: status.storage_backend,
+            storage_path: status.storage_path,
+        })
+    }
+
+    /// Async version of create_requirement() for WASM
+    pub async fn create_requirement_async(&self, req: &Requirement) -> Result<Requirement> {
+        let mut client = self.client.lock().unwrap();
+        let request = requirement_to_create_request(req);
+        let response = client.create_requirement(request).await
+            .map_err(|e| anyhow::anyhow!("Failed to create requirement: {}", e))?;
+        let created = response.into_inner().requirement
+            .ok_or_else(|| anyhow::anyhow!("Server returned empty requirement"))?;
+        proto_to_requirement(&created)
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse server response"))
+    }
+
+    /// Async version of update_requirement() for WASM
+    pub async fn update_requirement_async(&self, req: &Requirement) -> Result<Requirement> {
+        let mut client = self.client.lock().unwrap();
+        let request = requirement_to_update_request(req);
+        let response = client.update_requirement(request).await
+            .map_err(|e| anyhow::anyhow!("Failed to update requirement: {}", e))?;
+        let updated = response.into_inner().requirement
+            .ok_or_else(|| anyhow::anyhow!("Server returned empty requirement"))?;
+        proto_to_requirement(&updated)
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse server response"))
+    }
+
+    /// Async version of delete_requirement() for WASM
+    pub async fn delete_requirement_async(&self, id: &str) -> Result<()> {
+        let mut client = self.client.lock().unwrap();
+        let request = proto::DeleteRequirementRequest {
+            id: id.to_string(),
+        };
+        let response = client.delete_requirement(request).await
+            .map_err(|e| anyhow::anyhow!("Failed to delete requirement: {}", e))?;
+        if response.into_inner().success {
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Server rejected delete request"))
+        }
+    }
+
+    /// Async version of add_comment() for WASM
+    pub async fn add_comment_async(
+        &self,
+        req_id: &str,
+        content: &str,
+        author: &str,
+        parent_id: Option<&str>,
+    ) -> Result<Comment> {
+        let mut client = self.client.lock().unwrap();
+        let request = proto::AddCommentRequest {
+            requirement_id: req_id.to_string(),
+            content: content.to_string(),
+            author: author.to_string(),
+            parent_comment_id: parent_id.unwrap_or("").to_string(),
+        };
+        let response = client.add_comment(request).await
+            .map_err(|e| anyhow::anyhow!("Failed to add comment: {}", e))?;
+        let comment = response.into_inner().comment
+            .ok_or_else(|| anyhow::anyhow!("Server returned empty comment"))?;
+        proto_to_comment(&comment)
+            .ok_or_else(|| anyhow::anyhow!("Failed to parse server response"))
+    }
+
+    /// Async version of add_relationship() for WASM
+    pub async fn add_relationship_async(
+        &self,
+        source_id: &str,
+        target_id: &str,
+        rel_type: &RelationshipType,
+        created_by: &str,
+    ) -> Result<()> {
+        let mut client = self.client.lock().unwrap();
+        let (proto_rel_type, custom_name) = rel_type_to_proto(rel_type);
+        let request = proto::AddRelationshipRequest {
+            source_id: source_id.to_string(),
+            target_id: target_id.to_string(),
+            rel_type: proto_rel_type as i32,
+            custom_type_name: custom_name,
+            created_by: created_by.to_string(),
+        };
+        let response = client.add_relationship(request).await
+            .map_err(|e| anyhow::anyhow!("Failed to add relationship: {}", e))?;
+        if response.into_inner().success {
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Server rejected relationship"))
+        }
+    }
+}
+
+// =============================================================================
+// Shared helper functions
 // =============================================================================
 
 fn normalize_addr(server_addr: &str) -> String {
@@ -306,10 +555,10 @@ fn normalize_addr(server_addr: &str) -> String {
 }
 
 // =============================================================================
-// Proto conversion functions
+// Proto conversion functions (shared between native and WASM)
 // =============================================================================
 
-fn proto_to_store(store: &proto::RequirementsStore) -> Result<RequirementsStore> {
+pub fn proto_to_store(store: &proto::RequirementsStore) -> Result<RequirementsStore> {
     use aida_core::{FeatureDefinition, IdConfiguration, IdFormat, NumberingStrategy, User};
 
     let requirements: Vec<Requirement> = store.requirements
@@ -389,7 +638,7 @@ fn proto_to_store(store: &proto::RequirementsStore) -> Result<RequirementsStore>
     })
 }
 
-fn proto_to_requirement(req: &proto::Requirement) -> Option<Requirement> {
+pub fn proto_to_requirement(req: &proto::Requirement) -> Option<Requirement> {
     use uuid::Uuid;
 
     let id = Uuid::parse_str(&req.id).ok()?;
@@ -509,7 +758,7 @@ fn proto_to_rel_type(rel_type: proto::RelationshipType, custom_name: &str) -> Re
     }
 }
 
-fn proto_to_comment(comment: &proto::Comment) -> Option<Comment> {
+pub fn proto_to_comment(comment: &proto::Comment) -> Option<Comment> {
     use uuid::Uuid;
 
     let id = Uuid::parse_str(&comment.id).ok()?;
@@ -552,7 +801,7 @@ fn proto_to_url_link(link: &proto::UrlLink) -> aida_core::UrlLink {
 // Core to Proto conversion functions (for save operations)
 // =============================================================================
 
-fn requirement_to_create_request(req: &Requirement) -> proto::CreateRequirementRequest {
+pub fn requirement_to_create_request(req: &Requirement) -> proto::CreateRequirementRequest {
     proto::CreateRequirementRequest {
         title: req.title.clone(),
         description: req.description.clone(),
@@ -567,7 +816,7 @@ fn requirement_to_create_request(req: &Requirement) -> proto::CreateRequirementR
     }
 }
 
-fn requirement_to_update_request(req: &Requirement) -> proto::UpdateRequirementRequest {
+pub fn requirement_to_update_request(req: &Requirement) -> proto::UpdateRequirementRequest {
     proto::UpdateRequirementRequest {
         id: req.id.to_string(),
         title: Some(req.title.clone()),

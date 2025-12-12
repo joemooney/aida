@@ -38,10 +38,17 @@ rfd = { version = "0.15", optional = true }
 hostname = { version = "0.4", optional = true }
 libc = { version = "0.2", optional = true }
 
-# gRPC client dependencies (always available for storage module)
-tonic = { workspace = true }
+# gRPC client dependencies
+# Native: Uses tonic with full transport and tokio runtime
+# WASM: Uses tonic-web-wasm-client (browser handles async)
 prost = { workspace = true }
-tokio = { workspace = true }
+
+# Native gRPC (tonic with transport requires tokio)
+tonic = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+
+# WASM gRPC-Web client
+tonic-web-wasm-client = { version = "0.6", optional = true }
 
 # Web/WASM dependencies (optional)
 wasm-bindgen = { version = "0.2", optional = true }
@@ -80,6 +87,9 @@ native = [
     "rfd",
     "hostname",
     "libc",
+    # Native gRPC with tokio runtime
+    "tonic",
+    "tokio",
 ]
 web = [
     "wasm-bindgen",
@@ -89,6 +99,8 @@ web = [
     "console_log",
     "console_error_panic_hook",
     "log",
+    # WASM gRPC-Web client
+    "tonic-web-wasm-client",
 ]
 # Legacy feature - gRPC is now always available
 remote = []
