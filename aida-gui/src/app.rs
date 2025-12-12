@@ -14,6 +14,14 @@ use aida_core::{
     EditLock, LockFileInfo, MigrationCheck, SaveResult, SessionInfo, Storage,
 };
 
+// WASM-only imports for async state management
+#[cfg(target_arch = "wasm32")]
+use std::cell::RefCell;
+#[cfg(target_arch = "wasm32")]
+use std::rc::Rc;
+#[cfg(target_arch = "wasm32")]
+use crate::storage::GrpcStorageClient;
+
 use crate::storage::StorageClient;
 #[cfg(feature = "remote")]
 use crate::storage::create_storage_client;
@@ -3752,6 +3760,16 @@ pub struct RequirementsApp {
     migration_yaml_path: Option<PathBuf>,                            // Path to YAML file for marking as export
     #[cfg(not(target_arch = "wasm32"))]
     migration_dont_show_again: bool,                                 // Checkbox state for "don't show again"
+
+    // WASM async loading state (FR-0281) - for gRPC-Web client connection
+    #[cfg(target_arch = "wasm32")]
+    wasm_grpc_client: Option<Rc<GrpcStorageClient>>,                 // gRPC-Web client for server communication
+    #[cfg(target_arch = "wasm32")]
+    wasm_pending_store: Rc<RefCell<Option<RequirementsStore>>>,      // Pending store from async load
+    #[cfg(target_arch = "wasm32")]
+    wasm_load_error: Rc<RefCell<Option<String>>>,                    // Error from async load
+    #[cfg(target_arch = "wasm32")]
+    wasm_loading: bool,                                              // True while loading from server
 }
 
 /// A timeline event representing a change to a requirement
@@ -4940,6 +4958,7 @@ impl RequirementsApp {
     /// Create a new app for WASM (browser environment)
     #[cfg(target_arch = "wasm32")]
     pub fn new_wasm(cc: &eframe::CreationContext<'_>) -> Self {
+        // trace:FR-0281 | ai:claude:high
         // Configure fonts with better Unicode support
         Self::configure_fonts(&cc.egui_ctx);
 
@@ -4979,7 +4998,58 @@ impl RequirementsApp {
             cc.egui_ctx.set_style(style);
         }
 
-        // Create empty store (WASM will use server storage)
+        // Get server address from URL query param (?server=...) or use default
+        let server_addr = crate::platform::web::get_query_param("server")
+            .unwrap_or_else(|| "http://localhost:50051".to_string());
+        log::info!("WASM: Connecting to server at {}", server_addr);
+
+        // Create gRPC-Web client and shared state for async loading
+        let (grpc_client, wasm_pending_store, wasm_load_error, wasm_loading) =
+            match GrpcStorageClient::connect(&server_addr) {
+                Ok(client) => {
+                    let client = Rc::new(client);
+                    let pending_store = Rc::new(RefCell::new(None));
+                    let load_error = Rc::new(RefCell::new(None));
+
+                    // Spawn async task to load requirements from server
+                    {
+                        let client_clone = Rc::clone(&client);
+                        let pending_store_clone = Rc::clone(&pending_store);
+                        let load_error_clone = Rc::clone(&load_error);
+                        let ctx = cc.egui_ctx.clone();
+
+                        wasm_bindgen_futures::spawn_local(async move {
+                            log::info!("WASM: Starting async load from server");
+                            match client_clone.load_async().await {
+                                Ok(store) => {
+                                    log::info!("WASM: Successfully loaded {} requirements from server",
+                                              store.requirements.len());
+                                    *pending_store_clone.borrow_mut() = Some(store);
+                                }
+                                Err(e) => {
+                                    log::error!("WASM: Failed to load from server: {}", e);
+                                    *load_error_clone.borrow_mut() = Some(format!("Failed to load: {}", e));
+                                }
+                            }
+                            // Request repaint to update UI with loaded data
+                            ctx.request_repaint();
+                        });
+                    }
+
+                    (Some(client), pending_store, load_error, true)
+                }
+                Err(e) => {
+                    log::error!("WASM: Failed to connect to server: {}", e);
+                    (
+                        None,
+                        Rc::new(RefCell::new(None)),
+                        Rc::new(RefCell::new(Some(format!("Connection failed: {}", e)))),
+                        false
+                    )
+                }
+            };
+
+        // Create empty store (will be replaced when async load completes)
         let store = RequirementsStore::new();
         let user_settings = UserSettings::load();
 
@@ -4997,7 +5067,7 @@ impl RequirementsApp {
             storage_client: None,
             #[cfg(feature = "remote")]
             remote_client: None,
-            server_addr: None,
+            server_addr: Some(server_addr),
             current_view: View::List,
             selected_idx: None,
             filter_text: String::new(),
@@ -5314,6 +5384,11 @@ impl RequirementsApp {
             planning_selected_sprint: None,
             planning_drag_source: None,
             planning_drag_target_sprint: None,
+            // WASM async loading state (FR-0281)
+            wasm_grpc_client: grpc_client,
+            wasm_pending_store,
+            wasm_load_error,
+            wasm_loading,
         }
     }
 
@@ -28048,6 +28123,28 @@ impl eframe::App for RequirementsApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Reset per-frame flags at the start of each frame
         self.quick_change_consumed_action = false;
+
+        // WASM: Check for pending loaded data from async server fetch (FR-0281)
+        #[cfg(target_arch = "wasm32")]
+        {
+            // Check if async load has completed with data
+            if let Some(loaded_store) = self.wasm_pending_store.borrow_mut().take() {
+                log::info!("WASM: Applying loaded store with {} requirements", loaded_store.requirements.len());
+                self.store = loaded_store;
+                self.wasm_loading = false;
+                // Show success message
+                self.message = Some((
+                    format!("Loaded {} requirements from server", self.store.requirements.len()),
+                    false
+                ));
+            }
+            // Check if async load failed with error
+            if let Some(error) = self.wasm_load_error.borrow_mut().take() {
+                log::error!("WASM: Load error displayed: {}", error);
+                self.wasm_loading = false;
+                self.message = Some((error, true));
+            }
+        }
 
         // Periodically check for other concurrent users (every ~60 frames = ~1 second)
         #[cfg(not(target_arch = "wasm32"))]
