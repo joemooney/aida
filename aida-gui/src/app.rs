@@ -5956,17 +5956,24 @@ impl RequirementsApp {
         // Sanitize form fields to remove any control characters (e.g., ESC key inserted by egui)
         let title = sanitize_text(&self.form_title);
         let description = sanitize_text(&self.form_description);
+        let owner = sanitize_text(&self.form_owner);
+        let feature = sanitize_text(&self.form_feature);
         let mut req = Requirement::new(title, description);
         // Set status from string (handles both standard and custom statuses)
-        req.set_status_from_str(&self.form_status_string);
+        req.set_status_from_str(&sanitize_text(&self.form_status_string));
         // Set priority from string (handles both standard and custom priorities)
-        req.set_priority_from_str(&self.form_priority_string);
+        req.set_priority_from_str(&sanitize_text(&self.form_priority_string));
         req.req_type = self.form_type.clone();
-        req.owner = self.form_owner.clone();
-        req.feature = self.form_feature.clone();
-        req.tags = tags;
-        // Copy custom field values
-        req.custom_fields = self.form_custom_fields.clone();
+        req.owner = owner;
+        req.feature = feature;
+        // Sanitize tags
+        let sanitized_tags: HashSet<String> = tags.iter().map(|t| sanitize_text(t)).collect();
+        req.tags = sanitized_tags;
+        // Copy custom field values (sanitized)
+        req.custom_fields = self.form_custom_fields
+            .iter()
+            .map(|(k, v)| (sanitize_text(k), sanitize_text(v)))
+            .collect();
         // Set created_by to current user
         req.created_by = Some(self.user_settings.display_name());
 
@@ -6072,6 +6079,14 @@ impl RequirementsApp {
         // Sanitize form fields to remove any control characters (e.g., ESC key inserted by egui)
         let sanitized_title = sanitize_text(&self.form_title);
         let sanitized_description = sanitize_text(&self.form_description);
+        let sanitized_owner = sanitize_text(&self.form_owner);
+        let sanitized_feature = sanitize_text(&self.form_feature);
+        let sanitized_status = sanitize_text(&self.form_status_string);
+        let sanitized_priority = sanitize_text(&self.form_priority_string);
+        let sanitized_custom_fields: std::collections::HashMap<String, String> = self.form_custom_fields
+            .iter()
+            .map(|(k, v)| (sanitize_text(k), sanitize_text(v)))
+            .collect();
 
         // Gather data we need before mutable borrows
         let (req_uuid, old_prefix_override, old_feature, old_req_type) = {
@@ -6155,33 +6170,33 @@ impl RequirementsApp {
 
             // Track status change (use effective_status for comparison)
             let old_status = req.effective_status();
-            if self.form_status_string != old_status {
+            if sanitized_status != old_status {
                 changes.push(Requirement::field_change(
                     "status",
                     old_status,
-                    self.form_status_string.clone(),
+                    sanitized_status.clone(),
                 ));
-                req.set_status_from_str(&self.form_status_string);
+                req.set_status_from_str(&sanitized_status);
             }
 
             // Track custom fields changes
-            for (key, new_value) in &self.form_custom_fields {
+            for (key, new_value) in &sanitized_custom_fields {
                 let old_value = req.custom_fields.get(key).cloned().unwrap_or_default();
                 if *new_value != old_value {
                     changes.push(Requirement::field_change(key, old_value, new_value.clone()));
                 }
             }
-            req.custom_fields = self.form_custom_fields.clone();
+            req.custom_fields = sanitized_custom_fields.clone();
 
             // Track priority change (use effective_priority for comparison)
             let old_priority = req.effective_priority();
-            if self.form_priority_string != old_priority {
+            if sanitized_priority != old_priority {
                 changes.push(Requirement::field_change(
                     "priority",
                     old_priority,
-                    self.form_priority_string.clone(),
+                    sanitized_priority.clone(),
                 ));
-                req.set_priority_from_str(&self.form_priority_string);
+                req.set_priority_from_str(&sanitized_priority);
             }
 
             // Track type change
@@ -6195,30 +6210,30 @@ impl RequirementsApp {
             }
 
             // Track owner change
-            if self.form_owner != req.owner {
+            if sanitized_owner != req.owner {
                 changes.push(Requirement::field_change(
                     "owner",
                     req.owner.clone(),
-                    self.form_owner.clone(),
+                    sanitized_owner.clone(),
                 ));
-                req.owner = self.form_owner.clone();
+                req.owner = sanitized_owner.clone();
             }
 
             // Track feature change
-            if self.form_feature != req.feature {
+            if sanitized_feature != req.feature {
                 changes.push(Requirement::field_change(
                     "feature",
                     req.feature.clone(),
-                    self.form_feature.clone(),
+                    sanitized_feature.clone(),
                 ));
-                req.feature = self.form_feature.clone();
+                req.feature = sanitized_feature.clone();
             }
 
-            // Track tags change
+            // Track tags change (sanitized)
             let new_tags: HashSet<String> = self
                 .form_tags
                 .split(',')
-                .map(|s| s.trim().to_string())
+                .map(|s| sanitize_text(s.trim()))
                 .filter(|s| !s.is_empty())
                 .collect();
 
@@ -27855,8 +27870,9 @@ impl eframe::App for RequirementsApp {
             let no_popup_open = self.quick_change_field.is_none();
             let no_delete_confirm = self.pending_delete_confirm.is_none();
             let no_view_picker = !self.show_view_picker && !self.show_keyboard_help;
+            let no_add_menu = !self.show_add_menu;
 
-            if nav_context_active && no_popup_open && not_in_form && no_delete_confirm && no_view_picker {
+            if nav_context_active && no_popup_open && not_in_form && no_delete_confirm && no_view_picker && no_add_menu {
                 // 's' key to open status popup
                 if self.user_settings.keybindings.is_pressed(
                     KeyAction::OpenStatusPicker,

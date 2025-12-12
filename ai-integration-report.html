@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Integration Report: Aida</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            line-height: 1.6;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+        }
+        h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        h2 { color: #34495e; margin-top: 30px; }
+        h3 { color: #7f8c8d; }
+        h4 { color: #95a5a6; }
+        pre {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        code {
+            background: #f4f4f4;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-family: 'Fira Code', monospace;
+        }
+        pre code {
+            background: none;
+            padding: 0;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 15px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background: #f4f4f4;
+        }
+        li {
+            margin: 5px 0;
+        }
+        .status-current { color: #27ae60; }
+        .status-drift { color: #e74c3c; }
+    </style>
+</head>
+<body>
+<h1>AI Integration Report: Aida</p>
+<p><em>Generated: 2025-12-11 03:14 UTC</em></p>
+<p><h2>Project Overview</p>
+<p><li><strong>Database<strong>: <code>requirements.db<code>
+<li><strong>Total Requirements<strong>: 235</p>
+<p><h3>Requirement Types</p>
+<p><li><strong>Functional<strong>: Functional requirements describing system behavior
+<li><strong>NonFunctional<strong>: Non-functional requirements (performance, security, etc.)
+<li><strong>System<strong>: System-level requirements
+<li><strong>User<strong>: User stories and user requirements
+<li><strong>ChangeRequest<strong>: Change requests for existing functionality
+<li><strong>Folder<strong>: Organizational container for grouping related requirements
+<li><strong>Bug<strong>: Bug reports and defects
+<li><strong>Epic<strong>: Large feature or initiative spanning multiple stories
+<li><strong>Task<strong>: Implementation task or work item
+<li><strong>Spike<strong>: Research or investigation task with time-boxed exploration
+<li><strong>Sprint<strong>: Time-boxed iteration for work planning</p>
+<p><h2>AI Configuration</p>
+<p><h3>Global Context</p>
+<p><pre><code>AIDA (AI Design Assistant) is a requirements management system built in Rust with egui.</p>
+<p>Key architectural aspects:
+<li>aida-core: Core library with models, storage (YAML/SQLite), AI integration
+<li>aida-gui: Desktop GUI application using egui/eframe
+<li>aida-cli: Command-line interface</p>
+<p>Requirements should follow software engineering best practices:
+<li>Clear, testable acceptance criteria
+<li>Appropriate granularity for implementation
+<li>Consider keyboard navigation and accessibility
+<li>Follow existing patterns in the codebase</p>
+<p>The project uses vim-style keyboard navigation throughout the UI.
+Requirements are organized by Features and can have Parent/Child, Verifies, and References relationships.</p>
+<p><pre><code>
+<h3>Prompt Customizations</p>
+<p><h4>Evaluation</p>
+<p><strong>Additional Instructions:<strong>
+<pre><code>When evaluating AIDA requirements, pay special attention to:
+1. UI/UX considerations - keyboard shortcuts, accessibility
+2. Data persistence - YAML and SQLite backend compatibility
+3. Cross-platform support - Linux, macOS, Windows
+4. Integration with Claude Code and AI workflows</p>
+<p><pre><code>
+<h4>Improve Description</p>
+<p><strong>Additional Instructions:<strong>
+<pre><code>When improving AIDA requirement descriptions:
+<li>Include keyboard shortcuts if relevant (e.g., "Press 'j' to navigate down")
+<li>Reference specific views (List, Kanban, Timeline, Sprint Planning)
+<li>Consider both GUI and CLI interfaces
+<li>Include acceptance criteria that can be tested</p>
+<p><pre><code>
+<h4>Generate Children</p>
+<p><strong>Additional Instructions:<strong>
+<pre><code>When decomposing AIDA requirements:
+<li>Separate GUI from core logic where appropriate
+<li>Consider CLI equivalent functionality
+<li>Think about keyboard vs mouse interactions
+<li>Consider state persistence requirements</p>
+<p><pre><code>
+<h3>Type-Specific Customizations</p>
+<p><h4>Type: Functional</p>
+<p>
+<h2>Code Traceability</p>
+<p><h3>Statistics</p>
+<p><li><strong>Total Trace Links<strong>: 36
+<li><strong>Requirements with Links<strong>: 9 (3.8%)
+<li><strong>Requirements without Links<strong>: 226
+<li><strong>Unique Files Referenced<strong>: 14</p>
+<p><h4>By Artifact Type</p>
+<p><li>SourceCode: 36</p>
+<p><h4>By Confidence Level</p>
+<p><li>High: 35</p>
+<p><h3>Trace Links by Requirement</p>
+<p><h4>FR-0152 - AI scaffhold project with skills during new pro...</p>
+<p><li><code>./aida-core/src/scaffolding.rs:1<code> - SourceCode
+<li><code>./aida-gui/src/app.rs:6676<code> - SourceCode - *AI tool: claude</em></p>
+<p><h4>FR-0153 - YAML database store last updated and do not ove...</p>
+<p><li><code>./aida-core/src/storage.rs:1<code> - SourceCode - *AI tool: claude*
+<li><code>./aida-core/src/storage.rs:577<code> - SourceCode - *AI tool: claude*
+<li><code>./aida-gui/src/app.rs:5215<code> - SourceCode - *AI tool: claude*
+<li><code>./aida-gui/src/app.rs:6894<code> - SourceCode - *AI tool: claude</em></p>
+<p><h4>FR-0183 - Optimistic reload on save for new requirements</p>
+<p><li><code>./aida-core/src/storage.rs:968<code> - SourceCode - *AI tool: claude*
+<li><code>./aida-gui/src/app.rs:5749<code> - SourceCode - *AI tool: claude</em></p>
+<p><h4>FR-0227 - Headless server mode</p>
+<p><li><code>./aida-cli/build.rs:1<code> - SourceCode - *AI tool: claude*
+<li><code>./aida-cli/src/client.rs:1<code> - SourceCode - *AI tool: claude*
+<li><code>./aida-server/build.rs:1<code> - SourceCode - *AI tool: claude*
+<li><code>./aida-server/src/convert.rs:1<code> - SourceCode - *AI tool: claude*
+<li><code>./aida-server/src/service.rs:1<code> - SourceCode - *AI tool: claude*
+<li><code>./aida-server/src/main.rs:1<code> - SourceCode - *AI tool: claude*
+<li><code>./aida-gui/build.rs:1<code> - SourceCode - *AI tool: claude*
+<li><code>./aida-gui/src/remote.rs:1<code> - SourceCode - *AI tool: claude</em></p>
+<p><h4>REQ-0231 - Concurrent Edit Protection</p>
+<p><li><code>./aida-cli/src/main.rs:33<code> - SourceCode - *AI tool: claude*
+<li><code>./aida-cli/src/main.rs:1479<code> - SourceCode - *AI tool: claude*
+<li><code>./aida-cli/src/main.rs:1535<code> - SourceCode - *AI tool: claude*
+<li><code>./aida-gui/src/app.rs:4157<code> - SourceCode - *AI tool: claude*
+<li><code>./aida-gui/src/app.rs:5118<code> - SourceCode - *AI tool: claude*
+<li><code>./aida-gui/src/app.rs:5152<code> - SourceCode - *AI tool: claude*
+<li><code>./aida-gui/src/app.rs:6164<code> - SourceCode - *AI tool: claude*
+<li><code>./aida-gui/src/app.rs:7046<code> - SourceCode - *AI tool: claude*
+<li><code>./aida-gui/src/app.rs:13476<code> - SourceCode - *AI tool: claude</em></p>
+<p><h4>REQ-0243 - TraceLink data model</p>
+<p><li><code>./aida-core/src/models.rs:1642<code> - SourceCode - *AI tool: claude*
+<li><code>./aida-core/src/models.rs:1680<code> - SourceCode - *AI tool: claude*
+<li><code>./aida-core/src/models.rs:2337<code> - SourceCode - *AI tool: claude*
+<li><code>./aida-cli/src/main.rs:2477<code> - SourceCode - *AI tool: claude*
+<li><code>./aida-cli/src/main.rs:2528<code> - SourceCode - *AI tool: claude</em></p>
+<p><h4>REQ-0244 - TraceLink YAML storage</p>
+<p><li><code>./aida-cli/src/main.rs:2611<code> - SourceCode - *AI tool: claude</em></p>
+<p><h4>REQ-0245 - TraceLink SQLite storage</p>
+<p><li><code>./aida-core/src/db/sqlite_backend.rs:117<code> - SourceCode - *AI tool: claude*
+<li><code>./aida-cli/src/main.rs:2756<code> - SourceCode - *AI tool: claude</em></p>
+<p><h4>EPIC-0246 - ImplementationInfo: Implementation Metadata Tracking</p>
+<p><li><code>./aida-core/src/models.rs:1781<code> - SourceCode - *AI tool: claude*
+<li><code>./aida-core/src/models.rs:1815<code> - SourceCode - *AI tool: claude*
+<li><code>./aida-core/src/models.rs:2342<code> - SourceCode - *AI tool: claude</em></p>
+<p><h2>Scaffolding Status</p>
+<p><strong>Status: Drift detected<strong></p>
+<p><li><strong>Matching Files<strong>: 8
+<li><strong>Modified Files<strong>: 3
+<li><strong>Missing Files<strong>: 1
+<li><strong>Extra Files<strong>: 0</p>
+<p><h3>Matching Files</p>
+<p><li><code>.claude/commands/status.md<code>
+<li><code>.claude/commands/review.md<code>
+<li><code>.claude/commands/aida-req.md<code>
+<li><code>.claude/commands/aida-implement.md<code>
+<li><code>.claude/commands/aida-capture.md<code>
+<li><code>.claude/skills/aida-req.md<code>
+<li><code>.claude/skills/aida-implement.md<code>
+<li><code>.claude/skills/aida-release.md<code></p>
+<p><h3>Modified Files</p>
+<p><li><code>CLAUDE.md<code> (expected 75 lines, found 82 lines)
+<li><code>.claude/skills/aida-capture.md<code> (expected 91 lines, found 202 lines)
+<li><code>.claude/skills/aida-docs.md<code> (expected 112 lines, found 233 lines)</p>
+<p><h3>Missing Files</p>
+<p><li><code>.git/hooks/commit-msg<code></p>
+<p><h3>Scaffold Configuration</p>
+<p><li><strong>Project Type<strong>: Generic
+<li><strong>Generate CLAUDE.md<strong>: true
+<li><strong>Generate Commands<strong>: true
+<li><strong>Generate Skills<strong>: true
+<li><strong>Generate Git Hooks<strong>: true</p>
+<p>---</p>
+<p>*This report was generated by AIDA (AI Design Assistant)*
+
+</body>
+</html>
