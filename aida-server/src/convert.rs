@@ -344,6 +344,7 @@ pub fn proto_to_requirement(req: &proto::Requirement) -> Option<Requirement> {
         implementation_info: None, // Implementation info is not exposed via gRPC yet
         weight: None, // Weight is not exposed via gRPC yet
         version: 1, // New requirements start at version 1
+        attachments: Vec::new(), // Attachments are not exposed via gRPC yet
     })
 }
 
