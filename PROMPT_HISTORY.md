@@ -1564,3 +1564,38 @@ A chronological record of development sessions and changes made to the Requireme
   - 527848a: feat: add unified storage abstraction with StorageClient trait
   - 402be3c: feat: integrate storage_client into RequirementsApp
 - **Status**: Phase 1 complete - storage_client integrated, legacy code preserved for compatibility
+
+---
+
+### Shared UI Components for Native/WASM Code Reuse
+- **Prompt**: Bring WASM UI in line with desktop UI with maximum code reuse
+- **Problem**: aida-web had duplicate rendering code, inconsistent with native GUI
+- **Solution**: Create shared UI components in aida-gui that work on both platforms
+- **Implementation**:
+  - Created `aida-gui/src/ui/` module with pure egui rendering functions:
+    - `formatters.rs` - Text formatters for status/priority/type/timestamps
+    - `badges.rs` - Colored badge/dot rendering for status, priority, type
+    - `list_item.rs` - Requirement list item with configurable display options
+    - `requirement_form.rs` - Form components with combo boxes for status/priority/type
+    - `comment_list.rs` - Comment rendering and input components
+    - `detail_view.rs` - Full requirement detail view rendering
+    - `mod.rs` - Module root exporting all components
+  - Updated `aida-gui/src/lib.rs`:
+    - Added `pub mod ui;` for both native and web builds
+  - Updated `aida-web/src/lib.rs`:
+    - Re-export proto from `aida_gui::storage::proto` for type compatibility
+  - Updated `aida-web/src/app.rs`:
+    - Import shared UI components from `aida_gui::ui`
+    - Use `requirement_list_item` for list rendering
+    - Use `status_combo`, `priority_combo`, `type_combo` for forms
+    - Use `comment_list`, `comment_input` for comments
+    - Removed duplicate local helper functions
+- **Key Design Decision**: Extract pure egui rendering functions that work with proto types, rather than refactoring the full 29k-line app.rs for dual-target
+- **Commits**:
+  - 7758d76: [AI:claude:high] feat: add shared UI components for native/WASM code reuse
+- **Benefits**:
+  - Consistent UI rendering between native desktop and browser clients
+  - Reduced code duplication (~200 lines removed from aida-web)
+  - Shared proto types ensure type compatibility
+  - Easy to add more shared components incrementally
+- **Status**: Complete - both native (cargo build -p aida-gui) and WASM (trunk build) compile successfully

@@ -112,6 +112,17 @@ Define connections between requirements:
 - Build: `make web-build` or `trunk build`
 - Serve: `make web-serve` (port 8088)
 
+### Shared UI Components
+- **Reusable egui components** in `aida-gui/src/ui/` for native and WASM
+  - `formatters.rs`: Text formatters for status/priority/type/timestamps
+  - `badges.rs`: Colored badge/dot rendering
+  - `list_item.rs`: Requirement list item rendering
+  - `requirement_form.rs`: Form components with combo boxes
+  - `comment_list.rs`: Comment rendering and input
+  - `detail_view.rs`: Full requirement detail view
+- `aida-web` re-exports proto types from `aida-gui` for type compatibility
+- Consistent UI rendering between native desktop and browser clients
+
 ### GUI-Specific Features
 - Multiple view perspectives (Flat, Parent/Child, Verification, References)
 - Two-level filtering (Root/Children) for hierarchical views
