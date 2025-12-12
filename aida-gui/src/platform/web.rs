@@ -165,7 +165,7 @@ impl PlatformServices for WebPlatform {
 
         storage
             .set_item(key, value)
-            .map_err(|_| "Failed to save to localStorage")
+            .map_err(|_| "Failed to save to localStorage".to_string())
     }
 
     fn delete_setting(&self, key: &str) -> Result<(), String> {
@@ -177,7 +177,7 @@ impl PlatformServices for WebPlatform {
 
         storage
             .remove_item(key)
-            .map_err(|_| "Failed to delete from localStorage")
+            .map_err(|_| "Failed to delete from localStorage".to_string())
     }
 
     // ============ External Actions ============

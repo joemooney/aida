@@ -259,30 +259,36 @@ test-grpc-ping: cli-remote ## Test gRPC ping
 #==============================================================================
 # WASM WEB CLIENT TARGETS
 #==============================================================================
+# Primary web client is aida-gui (full-featured, same codebase as desktop)
+# Alternative: aida-web (lightweight, separate crate - use web-*-lite targets)
 
 WEB_PORT ?= 8088
 
 web-build: ## Build WASM web client (requires trunk)
-	cd aida-web && trunk build
+	cd aida-gui && trunk build
 
 web-build-release: ## Build WASM web client (release/optimized)
-	cd aida-web && trunk build --release
+	cd aida-gui && trunk build --release
 
 web-serve: ## Serve WASM web client for development (port 8088)
-	cd aida-web && trunk serve --port $(WEB_PORT)
+	cd aida-gui && trunk serve --port $(WEB_PORT)
 
 web-serve-force: ## Serve web client, killing any existing process on port
 	@-lsof -t -i:$(WEB_PORT) | xargs -r kill 2>/dev/null || true
 	@sleep 0.1
-	cd aida-web && trunk serve --port $(WEB_PORT)
+	cd aida-gui && trunk serve --port $(WEB_PORT)
 
 web-clean: ## Clean web build artifacts
-	rm -rf aida-web/dist
+	rm -rf aida-gui/dist aida-web/dist
 
 web-deps: ## Install WASM build dependencies
 	rustup target add wasm32-unknown-unknown
 	cargo install --locked trunk
 	@echo "WASM dependencies installed"
 
-web-proto: ## Regenerate proto code for web client
-	cd aida-web && cargo build
+# Lightweight web client (aida-web) - alternative to full aida-gui
+web-build-lite: ## Build lightweight web client (aida-web)
+	cd aida-web && trunk build
+
+web-serve-lite: ## Serve lightweight web client (aida-web)
+	cd aida-web && trunk serve --port $(WEB_PORT)

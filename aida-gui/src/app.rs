@@ -1,12 +1,19 @@
+// Cross-platform imports (work on both native and WASM)
+use aida_core::{
+    Cardinality, Comment, CustomFieldDefinition, CustomFieldType, DatabaseBackend,
+    EvaluationResponse, FieldChange, IdFormat, NumberingStrategy, RelationshipDefinition,
+    RelationshipType, Requirement, RequirementPriority, RequirementStatus, RequirementType,
+    RequirementsStore, StoredAiEvaluation, UrlLink,
+};
+
+// Native-only imports (require filesystem access)
+#[cfg(not(target_arch = "wasm32"))]
 use aida_core::{
     ai::AiClient,
-    check_migration_status, determine_requirements_path, Cardinality, Comment, ConflictInfo,
-    ConflictResolution, MigrationCheck,
-    CustomFieldDefinition, CustomFieldType, DatabaseBackend, EditLock, EvaluationResponse,
-    FieldChange, IdFormat, LockFileInfo, NumberingStrategy, RelationshipDefinition,
-    RelationshipType, Requirement, RequirementPriority, RequirementStatus, RequirementType,
-    RequirementsStore, SaveResult, SessionInfo, Storage, StoredAiEvaluation, UrlLink,
+    check_migration_status, determine_requirements_path, ConflictInfo, ConflictResolution,
+    EditLock, LockFileInfo, MigrationCheck, SaveResult, SessionInfo, Storage,
 };
+
 use crate::storage::StorageClient;
 #[cfg(feature = "remote")]
 use crate::storage::create_storage_client;
@@ -17,12 +24,15 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+#[cfg(not(target_arch = "wasm32"))]
 use std::sync::mpsc;
+#[cfg(not(target_arch = "wasm32"))]
 use std::thread;
 use std::time::Instant;
 use uuid::Uuid;
 
-/// Commands sent to the heartbeat thread
+/// Commands sent to the heartbeat thread (native only - WASM doesn't have threads)
+#[cfg(not(target_arch = "wasm32"))]
 enum HeartbeatCommand {
     /// Update the edit lock for a requirement
     SetEditLock(Option<EditLock>),
@@ -30,7 +40,8 @@ enum HeartbeatCommand {
     Shutdown,
 }
 
-/// Types of migration warnings (REQ-0231)
+/// Types of migration warnings (REQ-0231) - native only, WASM uses server storage
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Clone, Debug, Default, PartialEq)]
 enum MigrationWarningKind {
     /// No warning needed
@@ -3229,6 +3240,7 @@ impl ViewPreset {
 }
 
 pub struct RequirementsApp {
+    #[cfg(not(target_arch = "wasm32"))]
     storage: Storage,
     store: RequirementsStore,
     /// Unified storage client for gRPC-based access (local or remote)
@@ -3608,7 +3620,8 @@ pub struct RequirementsApp {
     original_form_prefix: String,
     original_form_custom_fields: HashMap<String, String>,
 
-    // AI integration state
+    // AI integration state (native only - uses CLI and filesystem)
+    #[cfg(not(target_arch = "wasm32"))]
     ai_client: AiClient,                          // AI client for Claude CLI integration
     ai_pending_action: Option<AiAction>,          // Currently running AI action
     ai_last_result: Option<AiResult>,             // Result from last AI action
@@ -3617,10 +3630,14 @@ pub struct RequirementsApp {
     deferred_ai_action: Option<AiAction>,         // Action from popup to process in main loop
 
     // Background AI evaluation state (for non-blocking evaluation)
+    // On WASM, AI evaluation is done synchronously (no threads available)
+    #[cfg(not(target_arch = "wasm32"))]
     ai_eval_receiver: Option<mpsc::Receiver<BackgroundAiResult>>, // Channel to receive results
     ai_eval_in_progress: Option<(Uuid, String)>,  // (req_id, spec_id) of req being evaluated
 
     // Background Find Duplicates state (for non-blocking duplicate detection)
+    // On WASM, duplicate detection is done synchronously (no threads available)
+    #[cfg(not(target_arch = "wasm32"))]
     find_duplicates_receiver: Option<mpsc::Receiver<BackgroundFindDuplicatesResult>>,
     find_duplicates_in_progress: Option<(Uuid, String)>,  // (req_id, spec_id) of req being checked
 
@@ -3630,32 +3647,53 @@ pub struct RequirementsApp {
     // Theme change indicator
     theme_change_display: Option<(String, Instant)>,  // (theme name, show until)
 
-    // Project scaffolding state (FR-0152)
+    // Project scaffolding state (FR-0152) - native only (requires filesystem)
+    #[cfg(not(target_arch = "wasm32"))]
     show_scaffold_dialog: bool,                   // Whether to show the scaffolding dialog
+    #[cfg(not(target_arch = "wasm32"))]
     scaffold_config: aida_core::ScaffoldConfig,   // Scaffolding configuration
+    #[cfg(not(target_arch = "wasm32"))]
     scaffold_preview: Option<aida_core::ScaffoldPreview>, // Preview of artifacts to generate
+    #[cfg(not(target_arch = "wasm32"))]
     scaffold_tech_stack_input: String,            // Input for adding tech stack items
+    #[cfg(not(target_arch = "wasm32"))]
     show_scaffold_status_dialog: bool,            // Whether to show the scaffold status dialog (FR-0261)
+    #[cfg(not(target_arch = "wasm32"))]
     scaffold_status: Option<aida_core::ScaffoldStatus>,  // Current scaffold status result
 
-    // AI Integration state
+    // AI Report Integration state - native only (requires filesystem)
+    #[cfg(not(target_arch = "wasm32"))]
     selected_ai_agent: AiAgent,                   // Currently selected AI agent for integration
+    #[cfg(not(target_arch = "wasm32"))]
     ai_report_format: aida_core::ReportFormat,    // Report output format (Markdown/HTML)
+    #[cfg(not(target_arch = "wasm32"))]
     ai_report_include_scaffold: bool,             // Include scaffold status in report
+    #[cfg(not(target_arch = "wasm32"))]
     ai_report_output_path: String,                // Output file path for report
+    #[cfg(not(target_arch = "wasm32"))]
     ai_report_last_result: Option<String>,        // Last report generation result message
+    #[cfg(not(target_arch = "wasm32"))]
     ai_report_generated_path: Option<std::path::PathBuf>, // Path of last generated report (for opening)
 
-    // Conflict detection state (FR-0153)
+    // Conflict detection state (FR-0153) - native only (local file storage)
+    #[cfg(not(target_arch = "wasm32"))]
     original_timestamps: HashMap<Uuid, DateTime<Utc>>,  // Requirement timestamps when loaded
+    #[cfg(not(target_arch = "wasm32"))]
     modified_requirement_ids: HashSet<Uuid>,            // IDs of requirements modified since load
+    #[cfg(not(target_arch = "wasm32"))]
     show_conflict_dialog: bool,                         // Whether to show conflict resolution dialog
+    #[cfg(not(target_arch = "wasm32"))]
     current_conflict: Option<ConflictInfo>,             // Current conflict being resolved
 
-    // Session tracking state (collaborative awareness)
+    // Session tracking state (collaborative awareness) - native only
+    #[cfg(not(target_arch = "wasm32"))]
     session_id: String,                                 // Unique session ID for this instance
+    // Heartbeat thread is native-only (WASM doesn't support threads)
+    #[cfg(not(target_arch = "wasm32"))]
     heartbeat_sender: Option<std::sync::mpsc::Sender<HeartbeatCommand>>,  // Channel to heartbeat thread
+    #[cfg(not(target_arch = "wasm32"))]
     last_lock_info: Option<LockFileInfo>,               // Last known lock file state
+    #[cfg(not(target_arch = "wasm32"))]
     other_sessions_warning_shown: bool,                 // Whether we've shown the concurrent users warning
 
     // Baseline management state
@@ -3702,11 +3740,16 @@ pub struct RequirementsApp {
     planning_drag_source: Option<Uuid>,                              // Item being dragged
     planning_drag_target_sprint: Option<Option<Uuid>>,               // Target sprint (None = Backlog)
 
-    // Migration warning state (REQ-0231)
+    // Migration warning state (REQ-0231) - native only (local file storage)
+    #[cfg(not(target_arch = "wasm32"))]
     show_migration_warning: bool,                                    // Show migration warning dialog
+    #[cfg(not(target_arch = "wasm32"))]
     migration_warning_kind: MigrationWarningKind,                    // Type of migration warning
+    #[cfg(not(target_arch = "wasm32"))]
     migration_sqlite_path: Option<PathBuf>,                          // Path to SQLite database if relevant
+    #[cfg(not(target_arch = "wasm32"))]
     migration_yaml_path: Option<PathBuf>,                            // Path to YAML file for marking as export
+    #[cfg(not(target_arch = "wasm32"))]
     migration_dont_show_again: bool,                                 // Checkbox state for "don't show again"
 }
 
@@ -3816,11 +3859,18 @@ struct TextSelection {
 }
 
 impl RequirementsApp {
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         Self::new_with_file(cc, None)
     }
 
+    #[cfg(target_arch = "wasm32")]
+    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        Self::new_wasm(cc)
+    }
+
     /// Create a new app with configuration for either local file or remote server
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn new_with_config(
         cc: &eframe::CreationContext<'_>,
         file_path: Option<String>,
@@ -3843,7 +3893,7 @@ impl RequirementsApp {
     }
 
     /// Create a new app connected to a remote gRPC server
-    #[cfg(feature = "remote")]
+    #[cfg(all(feature = "remote", not(target_arch = "wasm32")))]
     pub fn new_with_server(cc: &eframe::CreationContext<'_>, server_addr: &str) -> Self {
         use crate::remote::StorageBackend;
 
@@ -4224,8 +4274,10 @@ impl RequirementsApp {
             show_ai_results_panel: false,
             ai_loading: false,
             deferred_ai_action: None,
+            #[cfg(not(target_arch = "wasm32"))]
             ai_eval_receiver: None,
             ai_eval_in_progress: None,
+            #[cfg(not(target_arch = "wasm32"))]
             find_duplicates_receiver: None,
             find_duplicates_in_progress: None,
             toast_message: None,
@@ -4247,6 +4299,7 @@ impl RequirementsApp {
             show_conflict_dialog: false,
             current_conflict: None,
             session_id,
+            #[cfg(not(target_arch = "wasm32"))]
             heartbeat_sender: None, // No heartbeat for remote
             last_lock_info: None,
             other_sessions_warning_shown: false,
@@ -4284,14 +4337,20 @@ impl RequirementsApp {
             planning_selected_sprint: None,
             planning_drag_source: None,
             planning_drag_target_sprint: None,
+            #[cfg(not(target_arch = "wasm32"))]
             show_migration_warning: false,
+            #[cfg(not(target_arch = "wasm32"))]
             migration_warning_kind: MigrationWarningKind::None,
+            #[cfg(not(target_arch = "wasm32"))]
             migration_sqlite_path: None,
+            #[cfg(not(target_arch = "wasm32"))]
             migration_yaml_path: None,
+            #[cfg(not(target_arch = "wasm32"))]
             migration_dont_show_again: false,
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn new_with_file(cc: &eframe::CreationContext<'_>, file_path: Option<String>) -> Self {
         // Configure fonts with better Unicode support
         Self::configure_fonts(&cc.egui_ctx);
@@ -4419,42 +4478,46 @@ impl RequirementsApp {
         // Register session and get initial lock info
         let initial_lock_info = storage.register_session(session_info).ok();
 
-        // Start heartbeat thread
-        let (heartbeat_sender, heartbeat_receiver) = mpsc::channel::<HeartbeatCommand>();
-        let heartbeat_storage = Storage::new(storage.path());
-        let heartbeat_session_id = session_id.clone();
+        // Start heartbeat thread (native only - WASM doesn't support threads)
+        #[cfg(not(target_arch = "wasm32"))]
+        let heartbeat_sender = {
+            let (heartbeat_sender, heartbeat_receiver) = mpsc::channel::<HeartbeatCommand>();
+            let heartbeat_storage = Storage::new(storage.path());
+            let heartbeat_session_id = session_id.clone();
 
-        thread::spawn(move || {
-            let mut current_edit_lock: Option<EditLock> = None;
+            thread::spawn(move || {
+                let mut current_edit_lock: Option<EditLock> = None;
 
-            loop {
-                // Check for commands (non-blocking with timeout)
-                match heartbeat_receiver.recv_timeout(std::time::Duration::from_secs(5)) {
-                    Ok(HeartbeatCommand::SetEditLock(lock)) => {
-                        current_edit_lock = lock;
+                loop {
+                    // Check for commands (non-blocking with timeout)
+                    match heartbeat_receiver.recv_timeout(std::time::Duration::from_secs(5)) {
+                        Ok(HeartbeatCommand::SetEditLock(lock)) => {
+                            current_edit_lock = lock;
+                        }
+                        Ok(HeartbeatCommand::Shutdown) => {
+                            // Unregister session on shutdown
+                            let _ = heartbeat_storage.unregister_session(&heartbeat_session_id);
+                            break;
+                        }
+                        Err(mpsc::RecvTimeoutError::Timeout) => {
+                            // Normal timeout - update heartbeat
+                        }
+                        Err(mpsc::RecvTimeoutError::Disconnected) => {
+                            // Channel closed - cleanup and exit
+                            let _ = heartbeat_storage.unregister_session(&heartbeat_session_id);
+                            break;
+                        }
                     }
-                    Ok(HeartbeatCommand::Shutdown) => {
-                        // Unregister session on shutdown
-                        let _ = heartbeat_storage.unregister_session(&heartbeat_session_id);
-                        break;
-                    }
-                    Err(mpsc::RecvTimeoutError::Timeout) => {
-                        // Normal timeout - update heartbeat
-                    }
-                    Err(mpsc::RecvTimeoutError::Disconnected) => {
-                        // Channel closed - cleanup and exit
-                        let _ = heartbeat_storage.unregister_session(&heartbeat_session_id);
-                        break;
-                    }
+
+                    // Update heartbeat
+                    let _ = heartbeat_storage.update_heartbeat(
+                        &heartbeat_session_id,
+                        current_edit_lock.clone(),
+                    );
                 }
-
-                // Update heartbeat
-                let _ = heartbeat_storage.update_heartbeat(
-                    &heartbeat_session_id,
-                    current_edit_lock.clone(),
-                );
-            }
-        });
+            });
+            heartbeat_sender
+        };
 
         Self {
             storage,
@@ -4744,7 +4807,8 @@ impl RequirementsApp {
             original_form_prefix: String::new(),
             original_form_custom_fields: HashMap::new(),
 
-            // AI integration state
+            // AI integration state (native only)
+            #[cfg(not(target_arch = "wasm32"))]
             ai_client: AiClient::new(),
             ai_pending_action: None,
             ai_last_result: None,
@@ -4753,10 +4817,12 @@ impl RequirementsApp {
             deferred_ai_action: None,
 
             // Background AI evaluation state
+            #[cfg(not(target_arch = "wasm32"))]
             ai_eval_receiver: None,
             ai_eval_in_progress: None,
 
             // Background Find Duplicates state
+            #[cfg(not(target_arch = "wasm32"))]
             find_duplicates_receiver: None,
             find_duplicates_in_progress: None,
 
@@ -4766,30 +4832,50 @@ impl RequirementsApp {
             // Theme change indicator
             theme_change_display: None,
 
-            // Project scaffolding state (FR-0152)
+            // Project scaffolding state (FR-0152) - native only
+            #[cfg(not(target_arch = "wasm32"))]
             show_scaffold_dialog: false,
+            #[cfg(not(target_arch = "wasm32"))]
             scaffold_config: aida_core::ScaffoldConfig::default(),
+            #[cfg(not(target_arch = "wasm32"))]
             scaffold_preview: None,
+            #[cfg(not(target_arch = "wasm32"))]
             scaffold_tech_stack_input: String::new(),
+            #[cfg(not(target_arch = "wasm32"))]
             show_scaffold_status_dialog: false,
+            #[cfg(not(target_arch = "wasm32"))]
             scaffold_status: None,
+            #[cfg(not(target_arch = "wasm32"))]
             selected_ai_agent: AiAgent::default(),
+            #[cfg(not(target_arch = "wasm32"))]
             ai_report_format: aida_core::ReportFormat::Html,
+            #[cfg(not(target_arch = "wasm32"))]
             ai_report_include_scaffold: true,
+            #[cfg(not(target_arch = "wasm32"))]
             ai_report_output_path: String::new(),
+            #[cfg(not(target_arch = "wasm32"))]
             ai_report_last_result: None,
+            #[cfg(not(target_arch = "wasm32"))]
             ai_report_generated_path: None,
 
-            // Conflict detection state (FR-0153)
+            // Conflict detection state (FR-0153) - native only
+            #[cfg(not(target_arch = "wasm32"))]
             original_timestamps: initial_timestamps,
+            #[cfg(not(target_arch = "wasm32"))]
             modified_requirement_ids: HashSet::new(),
+            #[cfg(not(target_arch = "wasm32"))]
             show_conflict_dialog: false,
+            #[cfg(not(target_arch = "wasm32"))]
             current_conflict: None,
 
-            // Session tracking state (collaborative awareness)
+            // Session tracking state (collaborative awareness) - native only
+            #[cfg(not(target_arch = "wasm32"))]
             session_id: session_id.clone(),
-            heartbeat_sender: Some(heartbeat_sender),
+            #[cfg(not(target_arch = "wasm32"))]
+            heartbeat_sender: Some(heartbeat_sender), // Uses the heartbeat_sender from thread setup above
+            #[cfg(not(target_arch = "wasm32"))]
             last_lock_info: initial_lock_info,
+            #[cfg(not(target_arch = "wasm32"))]
             other_sessions_warning_shown: false,
 
             // Baseline management state
@@ -4837,11 +4923,396 @@ impl RequirementsApp {
             planning_drag_target_sprint: None,
 
             // Migration warning state (REQ-0231)
+            #[cfg(not(target_arch = "wasm32"))]
             show_migration_warning: migration_warning_kind != MigrationWarningKind::None,
+            #[cfg(not(target_arch = "wasm32"))]
             migration_warning_kind,
+            #[cfg(not(target_arch = "wasm32"))]
             migration_sqlite_path,
+            #[cfg(not(target_arch = "wasm32"))]
             migration_yaml_path,
+            #[cfg(not(target_arch = "wasm32"))]
             migration_dont_show_again: false,
+        }
+    }
+
+    /// Create a new app for WASM (browser environment)
+    #[cfg(target_arch = "wasm32")]
+    pub fn new_wasm(cc: &eframe::CreationContext<'_>) -> Self {
+        // Configure fonts with better Unicode support
+        Self::configure_fonts(&cc.egui_ctx);
+
+        // Configure heading styles for markdown rendering
+        {
+            let mut style = (*cc.egui_ctx.style()).clone();
+            let base_size = style
+                .text_styles
+                .get(&egui::TextStyle::Body)
+                .map(|f| f.size)
+                .unwrap_or(14.0);
+
+            style.text_styles.insert(
+                egui::TextStyle::Name("Heading".into()),
+                egui::FontId::new(base_size * 1.8, egui::FontFamily::Proportional),
+            );
+            style.text_styles.insert(
+                egui::TextStyle::Name("Heading2".into()),
+                egui::FontId::new(base_size * 1.5, egui::FontFamily::Proportional),
+            );
+            style.text_styles.insert(
+                egui::TextStyle::Name("Heading3".into()),
+                egui::FontId::new(base_size * 1.25, egui::FontFamily::Proportional),
+            );
+            style.text_styles.insert(
+                egui::TextStyle::Name("Heading4".into()),
+                egui::FontId::new(base_size * 1.1, egui::FontFamily::Proportional),
+            );
+            style.text_styles.insert(
+                egui::TextStyle::Name("Heading5".into()),
+                egui::FontId::new(base_size * 1.0, egui::FontFamily::Proportional),
+            );
+            style.text_styles.insert(
+                egui::TextStyle::Name("Heading6".into()),
+                egui::FontId::new(base_size * 0.9, egui::FontFamily::Proportional),
+            );
+            cc.egui_ctx.set_style(style);
+        }
+
+        // Create empty store (WASM will use server storage)
+        let store = RequirementsStore::new();
+        let user_settings = UserSettings::load();
+
+        // Extract project settings
+        let initial_id_format = store.id_config.format.clone();
+        let initial_numbering = store.id_config.numbering.clone();
+        let initial_digits = store.id_config.digits;
+
+        // Apply saved preferences
+        let initial_font_size = user_settings.base_font_size;
+        let initial_perspective = user_settings.preferred_perspective.clone();
+
+        Self {
+            store,
+            storage_client: None,
+            #[cfg(feature = "remote")]
+            remote_client: None,
+            server_addr: None,
+            current_view: View::List,
+            selected_idx: None,
+            filter_text: String::new(),
+            search_scope: SearchScope::all(),
+            search_match_indices: Vec::new(),
+            search_current_match: None,
+            search_focus_requested: false,
+            search_history: Vec::new(),
+            search_history_idx: None,
+            active_tab: DetailTab::Description,
+            form_title: String::new(),
+            form_description: String::new(),
+            form_status: RequirementStatus::Draft,
+            form_status_string: String::from("Draft"),
+            form_custom_fields: HashMap::new(),
+            form_priority: RequirementPriority::Medium,
+            form_priority_string: String::from("Medium"),
+            form_type: RequirementType::Functional,
+            form_owner: String::new(),
+            form_feature: String::from("Uncategorized"),
+            form_tags: String::new(),
+            form_prefix: String::new(),
+            form_parent_id: None,
+            focus_description: false,
+            form_title_auto_synced: true,
+            form_last_description: String::new(),
+            message: None,
+            comment_author: String::new(),
+            comment_content: String::new(),
+            show_add_comment: false,
+            reply_to_comment: None,
+            collapsed_comments: HashMap::new(),
+            edit_comment_id: None,
+            pending_delete: None,
+            pending_view_change: None,
+            pending_save: false,
+            pending_comment_add: None,
+            pending_comment_delete: None,
+            pending_reaction_toggle: None,
+            show_reaction_picker: None,
+            scroll_to_requirement: None,
+            split_scroll_to_requirement: None,
+            current_font_size: initial_font_size,
+            user_settings,
+            show_settings_dialog: false,
+            show_settings_close_confirm: false,
+            settings_tab: SettingsTab::default(),
+            ids_subtab: IdsSubTab::default(),
+            ai_subtab: AiSubTab::default(),
+            loaded_skills: Vec::new(),
+            show_skill_editor: false,
+            skill_editor_filename: String::new(),
+            skill_editor_content: String::new(),
+            skill_editor_original_content: String::new(),
+            skill_editor_edit_mode: false,
+            rename_prefix_from: String::new(),
+            rename_prefix_to: String::new(),
+            show_rename_prefix_dialog: false,
+            settings_form_name: String::new(),
+            settings_form_email: String::new(),
+            settings_form_handle: String::new(),
+            settings_form_font_size: DEFAULT_FONT_SIZE,
+            settings_form_ui_heading_level: default_ui_heading_level(),
+            settings_form_perspective: Perspective::default(),
+            settings_form_theme: Theme::default(),
+            settings_form_keybindings: KeyBindings::default(),
+            capturing_key_for: None,
+            settings_form_show_status_icons: false,
+            settings_form_status_icons: StatusIconConfig::default(),
+            settings_form_priority_icons: PriorityIconConfig::default(),
+            show_icon_editor: false,
+            icon_editor_new_keyword: String::new(),
+            icon_editor_new_icon: String::new(),
+            show_symbol_picker: false,
+            symbol_picker_target: None,
+            original_appearance_theme: Theme::default(),
+            original_appearance_font_size: DEFAULT_FONT_SIZE,
+            original_appearance_ui_heading_level: default_ui_heading_level(),
+            original_appearance_show_status_icons: false,
+            original_appearance_status_icons: StatusIconConfig::default(),
+            original_appearance_priority_icons: PriorityIconConfig::default(),
+            settings_form_id_format: initial_id_format,
+            settings_form_numbering: initial_numbering,
+            settings_form_digits: initial_digits,
+            show_migration_dialog: false,
+            pending_migration: None,
+            show_theme_editor: false,
+            theme_editor_theme: CustomTheme::default(),
+            theme_editor_category: ThemeEditorCategory::default(),
+            theme_editor_original_theme: Theme::default(),
+            show_user_form: false,
+            editing_user_id: None,
+            user_form_name: String::new(),
+            user_form_email: String::new(),
+            user_form_handle: String::new(),
+            show_archived_users: false,
+            members_sub_tab: MembersSubTab::default(),
+            show_team_form: false,
+            editing_team_id: None,
+            team_form_name: String::new(),
+            team_form_description: String::new(),
+            team_form_parent_id: None,
+            show_archived_teams: false,
+            show_team_members_dialog: None,
+            show_recursive_relationships: false,
+            relationship_tree_collapsed: HashMap::new(),
+            perspective: initial_perspective,
+            perspective_direction: PerspectiveDirection::default(),
+            owner_view_mode: OwnerViewMode::default(),
+            kanban_field: KanBanField::default(),
+            kanban_filter_type: None,
+            kanban_wip_limits: HashMap::new(),
+            kanban_drag_card: None,
+            kanban_drop_column: None,
+            kanban_detail_modal: None,
+            kanban_selected_column: 0,
+            kanban_selected_card: 0,
+            filter_types: HashSet::new(),
+            filter_features: HashSet::new(),
+            filter_prefixes: HashSet::new(),
+            filter_statuses: HashSet::new(),
+            filter_priorities: HashSet::new(),
+            child_filter_types: HashSet::new(),
+            child_filter_features: HashSet::new(),
+            child_filter_prefixes: HashSet::new(),
+            child_filter_statuses: HashSet::new(),
+            child_filter_priorities: HashSet::new(),
+            children_same_as_root: true,
+            filter_tab: FilterTab::Root,
+            tree_collapsed: HashMap::new(),
+            show_filter_panel: false,
+            show_archived: false,
+            show_filtered_parents: true,
+            drag_source: None,
+            drop_target: None,
+            pending_relationship: None,
+            pending_apply_ai_description: None,
+            drag_scroll_delta: 0.0,
+            markdown_cache: CommonMarkCache::default(),
+            show_description_preview: false,
+            left_panel_collapsed: false,
+            layout_mode: LayoutMode::ListDetailsSide,
+            layout_button_press_start: None,
+            show_layout_menu: false,
+            layout_button_rect: None,
+            quick_change_field: None,
+            quick_change_selected: 0,
+            quick_change_target_id: None,
+            quick_change_consumed_action: false,
+            quick_change_owner_search: String::new(),
+            quick_change_feature_search: String::new(),
+            show_tag_picker: false,
+            tag_picker_search: String::new(),
+            tag_picker_selected_tags: HashSet::new(),
+            tag_picker_dropdown_idx: 0,
+            pending_delete_confirm: None,
+            show_view_picker: false,
+            view_picker_selected: 0,
+            show_delete_menu: false,
+            delete_menu_selected: 0,
+            show_add_menu: false,
+            add_menu_selected: 0,
+            show_action_menu: false,
+            action_menu_selected: 0,
+            show_detail_tab_menu: false,
+            detail_tab_menu_selected: 0,
+            show_queue_menu: false,
+            queue_menu_selected: 0,
+            queue_selected_idx: 0,
+            show_type_picker: false,
+            type_picker_search: String::new(),
+            type_picker_selected: 0,
+            show_weight_picker: false,
+            weight_picker_input: String::new(),
+            show_keyboard_help: false,
+            last_db_check: std::time::Instant::now(),
+            known_db_mtime: None,
+            pending_external_reload: false,
+            external_change_detected_at: None,
+            split_perspective: Perspective::default(),
+            split_perspective_direction: PerspectiveDirection::default(),
+            split_filter_text: String::new(),
+            split_filter_types: HashSet::new(),
+            split_filter_features: HashSet::new(),
+            split_filter_prefixes: HashSet::new(),
+            split_filter_statuses: HashSet::new(),
+            split_filter_priorities: HashSet::new(),
+            split_show_filter_panel: false,
+            split_tree_collapsed: HashMap::new(),
+            split_selected_idx: None,
+            split_active_preset: None,
+            focused_list: FocusedList::default(),
+            navigation_locked: false,
+            scroll_to_center: false,
+            show_filter_dialog_list1: false,
+            show_filter_dialog_list2: false,
+            editing_rel_def: None,
+            rel_def_form_name: String::new(),
+            rel_def_form_display_name: String::new(),
+            rel_def_form_description: String::new(),
+            rel_def_form_inverse: String::new(),
+            rel_def_form_symmetric: false,
+            rel_def_form_cardinality: Cardinality::default(),
+            rel_def_form_source_types: String::new(),
+            rel_def_form_target_types: String::new(),
+            rel_def_form_color: String::new(),
+            show_rel_def_form: false,
+            active_preset: None,
+            show_save_preset_dialog: false,
+            show_split_save_preset_dialog: false,
+            preset_name_input: String::new(),
+            show_delete_preset_confirm: None,
+            current_key_context: KeyContext::RequirementsList,
+            editing_reaction_def: None,
+            reaction_def_form_name: String::new(),
+            reaction_def_form_emoji: String::new(),
+            reaction_def_form_label: String::new(),
+            reaction_def_form_description: String::new(),
+            show_reaction_def_form: false,
+            new_prefix_input: String::new(),
+            editing_type_def: None,
+            type_def_form_name: String::new(),
+            type_def_form_display_name: String::new(),
+            type_def_form_description: String::new(),
+            type_def_form_prefix: String::new(),
+            type_def_form_statuses: Vec::new(),
+            type_def_form_priorities: Vec::new(),
+            type_def_form_fields: Vec::new(),
+            show_type_def_form: false,
+            new_status_input: String::new(),
+            new_priority_input: String::new(),
+            editing_field_idx: None,
+            field_form_name: String::new(),
+            field_form_label: String::new(),
+            field_form_type: CustomFieldType::Text,
+            field_form_required: false,
+            field_form_options: String::new(),
+            field_form_default: String::new(),
+            show_field_form: false,
+            show_url_form: false,
+            editing_url_id: None,
+            url_form_url: String::new(),
+            url_form_title: String::new(),
+            url_form_description: String::new(),
+            url_verification_status: None,
+            url_verification_in_progress: false,
+            show_markdown_help: false,
+            show_reference_picker: false,
+            reference_picker_search: String::new(),
+            reference_picker_selected: None,
+            last_text_selection: None,
+            show_new_project_dialog: false,
+            new_project_dir: String::new(),
+            new_project_name: String::new(),
+            new_project_title: String::new(),
+            new_project_description: String::new(),
+            new_project_template: "current".to_string(),
+            new_project_include_users: false,
+            show_switch_project_dialog: false,
+            available_projects: Vec::new(),
+            show_cancel_confirm_dialog: false,
+            original_form_title: String::new(),
+            original_form_description: String::new(),
+            original_form_status_string: String::new(),
+            original_form_priority: RequirementPriority::Medium,
+            original_form_priority_string: String::new(),
+            original_form_type: RequirementType::Functional,
+            original_form_owner: String::new(),
+            original_form_feature: String::new(),
+            form_feature_selected_idx: 0,
+            original_form_tags: String::new(),
+            original_form_prefix: String::new(),
+            original_form_custom_fields: HashMap::new(),
+            ai_pending_action: None,
+            ai_last_result: None,
+            show_ai_results_panel: false,
+            ai_loading: false,
+            deferred_ai_action: None,
+            ai_eval_in_progress: None,
+            find_duplicates_in_progress: None,
+            toast_message: None,
+            theme_change_display: None,
+            show_create_baseline_dialog: false,
+            baseline_form_name: String::new(),
+            baseline_form_description: String::new(),
+            selected_baseline_id: None,
+            baseline_compare_source: None,
+            baseline_compare_target: None,
+            show_baseline_comparison: false,
+            show_clone_dialog: false,
+            clone_source_idx: None,
+            clone_include_tags: false,
+            clone_include_relationships: false,
+            clone_include_comments: false,
+            clone_include_history: false,
+            clone_include_urls: false,
+            clone_include_custom_fields: false,
+            show_import_dialog: false,
+            import_validation: None,
+            import_config: aida_core::ImportConfig::default(),
+            import_source_path: None,
+            import_summary: None,
+            import_dialog_phase: ImportDialogPhase::default(),
+            timeline_selected_date: None,
+            timeline_events: Vec::new(),
+            timeline_filter_author: String::new(),
+            timeline_filter_field: String::new(),
+            timeline_selected_event_idx: None,
+            timeline_suppress_hover: false,
+            timeline_suppress_hover_pos: None,
+            planning_collapsed_sprints: std::collections::HashSet::new(),
+            planning_show_completed_sprints: false,
+            planning_selected_item: None,
+            planning_selected_sprint: None,
+            planning_drag_source: None,
+            planning_drag_target_sprint: None,
         }
     }
 
@@ -5266,12 +5737,16 @@ impl RequirementsApp {
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn reload(&mut self) {
         match self.storage.load() {
             Ok(store) => {
                 // Update timestamps snapshot when reloading
-                self.original_timestamps = Storage::get_requirement_timestamps(&store);
-                self.modified_requirement_ids.clear();
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    self.original_timestamps = Storage::get_requirement_timestamps(&store);
+                    self.modified_requirement_ids.clear();
+                }
                 self.store = store;
                 self.message = Some(("Reloaded successfully".to_string(), false));
             }
@@ -5444,8 +5919,11 @@ impl RequirementsApp {
         if let Some(ref client) = self.storage_client {
             match client.save(&self.store) {
                 Ok(()) => {
-                    self.original_timestamps = Storage::get_requirement_timestamps(&self.store);
-                    self.modified_requirement_ids.clear();
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        self.original_timestamps = Storage::get_requirement_timestamps(&self.store);
+                        self.modified_requirement_ids.clear();
+                    }
                     let msg = if client.is_remote() {
                         "Saved to server successfully"
                     } else {
@@ -5466,8 +5944,11 @@ impl RequirementsApp {
             // Use remote save
             match remote.save(&self.store) {
                 Ok(()) => {
-                    self.original_timestamps = Storage::get_requirement_timestamps(&self.store);
-                    self.modified_requirement_ids.clear();
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        self.original_timestamps = Storage::get_requirement_timestamps(&self.store);
+                        self.modified_requirement_ids.clear();
+                    }
                     self.message = Some(("Saved to server successfully".to_string(), false));
                 }
                 Err(e) => {
@@ -5478,6 +5959,7 @@ impl RequirementsApp {
         }
 
         // Local save: If no requirements were modified, use standard save
+        #[cfg(not(target_arch = "wasm32"))]
         if self.modified_requirement_ids.is_empty() {
             if let Err(e) = self.storage.save(&self.store) {
                 self.message = Some((format!("Error saving: {}", e), true));
@@ -5488,43 +5970,47 @@ impl RequirementsApp {
         }
 
         // Use conflict-aware save
-        let modified_ids: Vec<Uuid> = self.modified_requirement_ids.iter().cloned().collect();
-        match self.storage.save_with_conflict_detection(
-            &self.store,
-            &self.original_timestamps,
-            &modified_ids,
-        ) {
-            Ok(SaveResult::Success) => {
-                // Update timestamps and clear modified set
-                self.original_timestamps = Storage::get_requirement_timestamps(&self.store);
-                self.modified_requirement_ids.clear();
-                self.message = Some(("Saved successfully".to_string(), false));
-            }
-            Ok(SaveResult::Merged { merged_count }) => {
-                // Reload to get merged changes
-                if let Ok(store) = self.storage.load() {
-                    self.store = store;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let modified_ids: Vec<Uuid> = self.modified_requirement_ids.iter().cloned().collect();
+            match self.storage.save_with_conflict_detection(
+                &self.store,
+                &self.original_timestamps,
+                &modified_ids,
+            ) {
+                Ok(SaveResult::Success) => {
+                    // Update timestamps and clear modified set
                     self.original_timestamps = Storage::get_requirement_timestamps(&self.store);
                     self.modified_requirement_ids.clear();
+                    self.message = Some(("Saved successfully".to_string(), false));
                 }
-                self.message = Some((
-                    format!("Saved with {} merged external change(s)", merged_count),
-                    false,
-                ));
-            }
-            Ok(SaveResult::Conflict(conflict_info)) => {
-                // Show conflict resolution dialog
-                self.current_conflict = Some(conflict_info);
-                self.show_conflict_dialog = true;
-                // Don't clear modified_requirement_ids - user needs to resolve
-            }
-            Err(e) => {
-                self.message = Some((format!("Error saving: {}", e), true));
+                Ok(SaveResult::Merged { merged_count }) => {
+                    // Reload to get merged changes
+                    if let Ok(store) = self.storage.load() {
+                        self.store = store;
+                        self.original_timestamps = Storage::get_requirement_timestamps(&self.store);
+                        self.modified_requirement_ids.clear();
+                    }
+                    self.message = Some((
+                        format!("Saved with {} merged external change(s)", merged_count),
+                        false,
+                    ));
+                }
+                Ok(SaveResult::Conflict(conflict_info)) => {
+                    // Show conflict resolution dialog
+                    self.current_conflict = Some(conflict_info);
+                    self.show_conflict_dialog = true;
+                    // Don't clear modified_requirement_ids - user needs to resolve
+                }
+                Err(e) => {
+                    self.message = Some((format!("Error saving: {}", e), true));
+                }
             }
         }
     }
 
     /// Mark a requirement as modified (for conflict tracking)
+    #[cfg(not(target_arch = "wasm32"))]
     fn mark_requirement_modified(&mut self, req_id: Uuid) {
         self.modified_requirement_ids.insert(req_id);
     }
@@ -5767,6 +6253,7 @@ impl RequirementsApp {
     }
 
     /// Get the current file modification time for the database
+    #[cfg(not(target_arch = "wasm32"))]
     fn get_db_file_mtime(&self) -> Option<std::time::SystemTime> {
         std::fs::metadata(self.storage.path())
             .ok()
@@ -5775,6 +6262,7 @@ impl RequirementsApp {
 
     /// Check if the database file has been modified externally
     /// Returns true if changes were detected
+    #[cfg(not(target_arch = "wasm32"))]
     fn check_for_external_db_changes(&mut self) -> bool {
         // Skip if polling is disabled
         if self.user_settings.db_poll_interval_secs == 0 {
@@ -5810,6 +6298,7 @@ impl RequirementsApp {
     }
 
     /// Reload the database from disk, preserving selection if possible
+    #[cfg(not(target_arch = "wasm32"))]
     fn reload_database(&mut self) {
         // Remember current selection - get the requirement ID at selected index
         let selected_id = self.selected_idx.and_then(|selected| {
@@ -5840,12 +6329,19 @@ impl RequirementsApp {
         }
     }
 
+    /// WASM stub - no file modification time checking in browser
+    #[cfg(target_arch = "wasm32")]
+    fn check_for_external_db_changes(&mut self) -> bool {
+        false
+    }
+
     /// Check if we're currently in an editing state
     fn is_editing(&self) -> bool {
         matches!(self.current_view, View::Edit | View::Add)
     }
 
     /// Handle database change detection and auto-reload logic
+    #[cfg(not(target_arch = "wasm32"))]
     fn handle_db_change_detection(&mut self) {
         // Check for external changes
         if self.check_for_external_db_changes() {
@@ -5889,6 +6385,12 @@ impl RequirementsApp {
                 show_until: std::time::Instant::now() + std::time::Duration::from_secs(2),
             });
         }
+    }
+
+    /// WASM stub - no file modification time checking in browser
+    #[cfg(target_arch = "wasm32")]
+    fn handle_db_change_detection(&mut self) {
+        // No-op in WASM
     }
 
     /// Base form clearing without parent logic
@@ -6053,6 +6555,7 @@ impl RequirementsApp {
 
         // Use atomic add which reloads fresh data before adding (FR-0183)
         // This prevents duplicate SPEC-IDs and preserves concurrent changes
+        #[cfg(not(target_arch = "wasm32"))]
         match self.storage.add_requirement_atomic(
             &self.store,
             req,
@@ -6064,8 +6567,11 @@ impl RequirementsApp {
                 self.store = result.store;
 
                 // Update timestamps for conflict detection
-                self.original_timestamps = Storage::get_requirement_timestamps(&self.store);
-                self.modified_requirement_ids.clear();
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    self.original_timestamps = Storage::get_requirement_timestamps(&self.store);
+                    self.modified_requirement_ids.clear();
+                }
 
                 // Create parent relationship if specified
                 if let Some(parent_id) = parent_id {
@@ -6078,6 +6584,7 @@ impl RequirementsApp {
                         Some(self.user_settings.display_name()),
                     );
                     // Save the relationship
+                    #[cfg(not(target_arch = "wasm32"))]
                     if let Err(e) = self.storage.save(&self.store) {
                         self.message = Some((format!("Error saving relationship: {}", e), true));
                         return;
@@ -6120,6 +6627,47 @@ impl RequirementsApp {
             Err(e) => {
                 self.message = Some((format!("Error adding requirement: {}", e), true));
             }
+        }
+
+        // WASM fallback: just add requirement directly without atomic guarantees
+        #[cfg(target_arch = "wasm32")]
+        {
+            // Note: On WASM we don't have atomic spec_id generation, so we just add the requirement
+            // The spec_id should already be set on the requirement object
+            self.store.add_requirement(req);
+            let spec_id = self.store.requirements.last()
+                .and_then(|r| r.spec_id.clone())
+                .unwrap_or_else(|| "unknown".to_string());
+
+            // Create parent relationship if specified
+            if let Some(parent_id) = parent_id {
+                let _ = self.store.add_relationship_with_creator(
+                    &new_req_id,
+                    RelationshipType::Parent,
+                    &parent_id,
+                    true,
+                    Some(self.user_settings.display_name()),
+                );
+            }
+
+            self.form_parent_id = None;
+            self.clear_form();
+
+            // Find the index of the newly added requirement and select it
+            if let Some(idx) = self
+                .store
+                .requirements
+                .iter()
+                .position(|r| r.id == new_req_id)
+            {
+                self.selected_idx = Some(idx);
+                self.scroll_to_requirement = Some(new_req_id);
+                self.current_view = View::Detail;
+            } else {
+                self.current_view = View::List;
+            }
+
+            self.message = Some((format!("Requirement {} added successfully", &spec_id), false));
         }
     }
 
@@ -6321,6 +6869,7 @@ impl RequirementsApp {
             req.record_change(self.user_settings.display_name(), changes);
 
             // Mark requirement as modified for conflict tracking (FR-0153)
+            #[cfg(not(target_arch = "wasm32"))]
             self.mark_requirement_modified(req_uuid);
 
             self.save();
@@ -6336,6 +6885,7 @@ impl RequirementsApp {
             let deleted_id = self.store.requirements[idx].id;
             self.store.requirements.remove(idx);
             // Mark as modified so conflict detection handles the deletion
+            #[cfg(not(target_arch = "wasm32"))]
             self.modified_requirement_ids.insert(deleted_id);
             self.save();
             self.selected_idx = None;
@@ -6367,6 +6917,7 @@ impl RequirementsApp {
         }
 
         // Mark requirement as modified for conflict tracking (FR-0153)
+        #[cfg(not(target_arch = "wasm32"))]
         self.mark_requirement_modified(req_id);
 
         self.save();
@@ -6383,15 +6934,19 @@ impl RequirementsApp {
             egui::menu::bar(ui, |ui| {
                 // Menu dropdown
                 ui.menu_button("☰ Menu", |ui| {
+                    #[cfg(not(target_arch = "wasm32"))]
                     if ui.button("🔄 Reload").clicked() {
                         self.reload();
                         ui.close_menu();
                     }
+                    #[cfg(not(target_arch = "wasm32"))]
                     if ui.button("💾 Save As...").clicked() {
                         self.save_as();
                         ui.close_menu();
                     }
+                    #[cfg(not(target_arch = "wasm32"))]
                     ui.separator();
+                    #[cfg(not(target_arch = "wasm32"))]
                     if ui.button("📁 Switch Project...").clicked() {
                         self.load_available_projects();
                         self.show_switch_project_dialog = true;
@@ -6412,13 +6967,16 @@ impl RequirementsApp {
                         }
                         ui.close_menu();
                     }
+                    #[cfg(not(target_arch = "wasm32"))]
                     if ui.button("➕ New Project...").clicked() {
                         self.clear_new_project_form();
                         self.show_new_project_dialog = true;
                         ui.close_menu();
                     }
+                    #[cfg(not(target_arch = "wasm32"))]
                     ui.separator();
                     // trace:FR-0226 | ai:claude:high
+                    #[cfg(not(target_arch = "wasm32"))]
                     if ui.button("📥 Import Database...").clicked() {
                         self.start_import_workflow();
                         ui.close_menu();
@@ -6601,7 +7159,8 @@ impl RequirementsApp {
         });
     }
 
-    /// Load available projects from registry
+    /// Load available projects from registry (native only - uses filesystem registry)
+    #[cfg(not(target_arch = "wasm32"))]
     fn load_available_projects(&mut self) {
         self.available_projects.clear();
         if let Ok(registry_path) = aida_core::get_registry_path() {
@@ -6625,6 +7184,13 @@ impl RequirementsApp {
         }
     }
 
+    /// WASM stub - project switching not available in browser
+    #[cfg(target_arch = "wasm32")]
+    fn load_available_projects(&mut self) {
+        // Project switching not available in browser
+        self.available_projects.clear();
+    }
+
     /// Clear the new project form
     fn clear_new_project_form(&mut self) {
         use crate::platform::PlatformServices;
@@ -6640,6 +7206,7 @@ impl RequirementsApp {
     }
 
     /// Switch to a different project
+    #[cfg(not(target_arch = "wasm32"))]
     fn switch_project(&mut self, path: &str) {
         let path = std::path::PathBuf::from(path);
         if path.exists() {
@@ -6657,7 +7224,8 @@ impl RequirementsApp {
         }
     }
 
-    /// Create a new project from template
+    /// Create a new project from template (native only - requires filesystem)
+    #[cfg(not(target_arch = "wasm32"))]
     fn create_new_project(&mut self) -> Result<(), String> {
         use std::fs;
         use std::path::PathBuf;
@@ -6753,6 +7321,7 @@ impl RequirementsApp {
     }
 
     /// Show the switch project dialog
+    #[cfg(not(target_arch = "wasm32"))]
     fn show_switch_project_dialog(&mut self, ctx: &egui::Context) {
         if !self.show_switch_project_dialog {
             return;
@@ -6822,6 +7391,7 @@ impl RequirementsApp {
     }
 
     /// Show the new project dialog
+    #[cfg(not(target_arch = "wasm32"))]
     fn show_new_project_dialog(&mut self, ctx: &egui::Context) {
         if !self.show_new_project_dialog {
             return;
@@ -6939,6 +7509,7 @@ impl RequirementsApp {
 
     // trace:FR-0152 | ai:claude:high
     /// Show the project scaffolding dialog for generating Claude Code artifacts
+    #[cfg(not(target_arch = "wasm32"))]
     fn show_scaffold_dialog(&mut self, ctx: &egui::Context) {
         if !self.show_scaffold_dialog {
             return;
@@ -7163,6 +7734,7 @@ impl RequirementsApp {
 
     // trace:FR-0261 | ai:claude:high
     /// Show the scaffold status dialog comparing expected vs actual files
+    #[cfg(not(target_arch = "wasm32"))]
     fn show_scaffold_status_dialog(&mut self, ctx: &egui::Context) {
         if !self.show_scaffold_status_dialog {
             return;
@@ -7293,6 +7865,7 @@ impl RequirementsApp {
 
     // trace:FR-0153 | ai:claude:high
     /// Show the conflict resolution dialog when a save conflict is detected
+    #[cfg(not(target_arch = "wasm32"))]
     fn show_conflict_resolution_dialog(&mut self, ctx: &egui::Context) {
         if !self.show_conflict_dialog {
             return;
@@ -7445,6 +8018,7 @@ impl RequirementsApp {
 
     // trace:REQ-0231 | ai:claude:high
     /// Shows a warning dialog when a YAML file has been migrated to SQLite
+    #[cfg(not(target_arch = "wasm32"))]
     fn show_migration_warning_dialog(&mut self, ctx: &egui::Context) {
         if !self.show_migration_warning {
             return;
@@ -7542,6 +8116,7 @@ impl RequirementsApp {
 
     // trace:FR-0226 | ai:claude:high
     /// Start the import database workflow
+    #[cfg(not(target_arch = "wasm32"))]
     fn start_import_workflow(&mut self) {
         self.show_import_dialog = true;
         self.import_dialog_phase = ImportDialogPhase::SelectFile;
@@ -7553,6 +8128,7 @@ impl RequirementsApp {
 
     // trace:FR-0226 | ai:claude:high
     /// Show the import database dialog
+    #[cfg(not(target_arch = "wasm32"))]
     fn show_import_database_dialog(&mut self, ctx: &egui::Context) {
         if !self.show_import_dialog {
             return;
@@ -7758,6 +8334,7 @@ impl RequirementsApp {
                     }
                 } else {
                     if ui.button("▶ Import Now").clicked() {
+                        #[cfg(not(target_arch = "wasm32"))]
                         self.execute_import();
                     }
                 }
@@ -7875,6 +8452,7 @@ impl RequirementsApp {
             self.message = Some(("Import aborted by user".to_string(), false));
         }
         if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+            #[cfg(not(target_arch = "wasm32"))]
             self.execute_import();
             action_triggered = true;
         }
@@ -7885,6 +8463,7 @@ impl RequirementsApp {
             }
 
             if ui.button("▶ Import").clicked() && !action_triggered {
+                #[cfg(not(target_arch = "wasm32"))]
                 self.execute_import();
             }
 
@@ -7896,6 +8475,7 @@ impl RequirementsApp {
 
     // trace:FR-0226 | ai:claude:high
     /// Execute the import operation
+    #[cfg(not(target_arch = "wasm32"))]
     fn execute_import(&mut self) {
         let source_path = match &self.import_source_path {
             Some(p) => p.clone(),
@@ -8274,6 +8854,7 @@ impl RequirementsApp {
 
         // Save project settings (requirements store) to file
         if save_success {
+            #[cfg(not(target_arch = "wasm32"))]
             match self.storage.save(&self.store) {
                 Ok(()) => {
                     self.message = Some(("Settings saved successfully".to_string(), false));
@@ -8284,6 +8865,10 @@ impl RequirementsApp {
                         true,
                     ));
                 }
+            }
+            #[cfg(target_arch = "wasm32")]
+            {
+                self.message = Some(("Settings saved successfully (in-memory only)".to_string(), false));
             }
         }
     }
@@ -11765,6 +12350,7 @@ impl RequirementsApp {
                 }
             }
             // Save changes
+            #[cfg(not(target_arch = "wasm32"))]
             if let Err(e) = self.storage.save(&self.store) {
                 eprintln!("Failed to save after KanBan update: {}", e);
             }
@@ -12249,6 +12835,7 @@ impl RequirementsApp {
                         // Handle delete after iteration
                         if let Some(id) = delete_baseline_id {
                             self.store.delete_baseline(&id);
+                            #[cfg(not(target_arch = "wasm32"))]
                             if let Err(e) = self.storage.save(&self.store) {
                                 self.message = Some((format!("Failed to save: {}", e), true));
                             }
@@ -12469,13 +13056,27 @@ impl RequirementsApp {
             let baseline = self.store.create_baseline(name.clone(), description, created_by).clone();
 
             // Save
-            if let Err(e) = self.storage.save(&self.store) {
-                self.message = Some((format!("Failed to save baseline: {}", e), true));
-            } else {
-                // Select the new baseline
-                self.selected_baseline_id = Some(baseline.id);
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                if let Err(e) = self.storage.save(&self.store) {
+                    self.message = Some((format!("Failed to save baseline: {}", e), true));
+                } else {
+                    // Select the new baseline
+                    self.selected_baseline_id = Some(baseline.id);
 
-                // Show success message
+                    // Show success message
+                    let git_msg = if baseline.git_tag.is_some() {
+                        " (git tag created)"
+                    } else {
+                        ""
+                    };
+                    self.message = Some((format!("Baseline '{}' created{}", name, git_msg), false));
+                }
+            }
+            #[cfg(target_arch = "wasm32")]
+            {
+                // On WASM, just select the baseline and show success message
+                self.selected_baseline_id = Some(baseline.id);
                 let git_msg = if baseline.git_tag.is_some() {
                     " (git tag created)"
                 } else {
@@ -13952,10 +14553,29 @@ impl RequirementsApp {
         self.store.add_requirement_with_spec_id(cloned);
 
         // Save
-        if let Err(e) = self.storage.save(&self.store) {
-            self.message = Some((format!("Failed to save: {}", e), true));
-        } else {
-            // Select the new requirement (last in list)
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if let Err(e) = self.storage.save(&self.store) {
+                self.message = Some((format!("Failed to save: {}", e), true));
+            } else {
+                // Select the new requirement (last in list)
+                let new_idx = self.store.requirements.len() - 1;
+                self.selected_idx = Some(new_idx);
+
+                let new_spec_id = self.store.requirements.get(new_idx)
+                    .and_then(|r| r.spec_id.clone())
+                    .unwrap_or_else(|| "new".to_string());
+
+                self.message = Some((format!("Cloned as {}", new_spec_id), false));
+
+                // Open the cloned requirement in edit mode
+                self.load_form_from_requirement(new_idx);
+                self.pending_view_change = Some(View::Edit);
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            // On WASM, just select the cloned requirement
             let new_idx = self.store.requirements.len() - 1;
             self.selected_idx = Some(new_idx);
 
@@ -14098,6 +14718,7 @@ impl RequirementsApp {
             ui.add_space(5.0);
 
             if ui.button("📦 Backup Database").clicked() {
+                #[cfg(not(target_arch = "wasm32"))]
                 self.backup_database();
             }
             ui.label("Creates a timestamped backup of the requirements database.");
@@ -14112,7 +14733,10 @@ impl RequirementsApp {
             ui.add_space(5.0);
 
             // Detect current backend type
+            #[cfg(not(target_arch = "wasm32"))]
             let current_path = self.storage.path();
+            #[cfg(target_arch = "wasm32")]
+            let current_path = std::path::Path::new("wasm-storage");
             let is_sqlite = current_path.extension()
                 .map(|e| e == "db" || e == "sqlite" || e == "sqlite3")
                 .unwrap_or(false);
@@ -14191,7 +14815,10 @@ impl RequirementsApp {
                     ui.end_row();
 
                     ui.label("Database Path:");
+                    #[cfg(not(target_arch = "wasm32"))]
                     ui.label(self.storage.path().display().to_string());
+                    #[cfg(target_arch = "wasm32")]
+                    ui.label("(WASM local storage)");
                     ui.end_row();
                 });
         });
@@ -14222,6 +14849,7 @@ impl RequirementsApp {
             ui.add_space(10.0);
 
             // Load skills from .claude/skills/ directory if not already loaded
+            #[cfg(not(target_arch = "wasm32"))]
             if self.loaded_skills.is_empty() {
                 let project_dir = self.storage.path().parent()
                     .map(|p| p.to_path_buf())
@@ -14252,11 +14880,16 @@ impl RequirementsApp {
                     self.loaded_skills.clear();
                 }
 
-                let project_dir = self.storage.path().parent()
-                    .map(|p| p.to_path_buf())
-                    .unwrap_or_else(|| std::path::PathBuf::from("."));
-                let skills_dir = project_dir.join(".claude").join("skills");
-                ui.label(format!("Path: {}", skills_dir.display()));
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    let project_dir = self.storage.path().parent()
+                        .map(|p| p.to_path_buf())
+                        .unwrap_or_else(|| std::path::PathBuf::from("."));
+                    let skills_dir = project_dir.join(".claude").join("skills");
+                    ui.label(format!("Path: {}", skills_dir.display()));
+                }
+                #[cfg(target_arch = "wasm32")]
+                ui.label("Skills not available in WASM");
             });
             ui.add_space(10.0);
 
@@ -14381,6 +15014,7 @@ impl RequirementsApp {
             });
 
         // Handle save
+        #[cfg(not(target_arch = "wasm32"))]
         if should_save {
             // Get skills directory path
             let project_dir = self.storage.path().parent()
@@ -14624,29 +15258,36 @@ impl RequirementsApp {
             ui.heading("AI Agent");
             ui.add_space(5.0);
 
-            ui.horizontal(|ui| {
-                ui.label("Agent:");
-                egui::ComboBox::from_id_salt("ai_agent_selector")
-                    .selected_text(match self.selected_ai_agent {
-                        AiAgent::ClaudeCode => "Claude Code",
-                    })
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.selected_ai_agent, AiAgent::ClaudeCode, "Claude Code");
-                        // Future agents can be added here
-                    });
-            });
-            ui.add_space(5.0);
-            ui.label("Select the AI coding agent to configure integration artifacts.");
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                ui.horizontal(|ui| {
+                    ui.label("Agent:");
+                    egui::ComboBox::from_id_salt("ai_agent_selector")
+                        .selected_text(match self.selected_ai_agent {
+                            AiAgent::ClaudeCode => "Claude Code",
+                        })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut self.selected_ai_agent, AiAgent::ClaudeCode, "Claude Code");
+                            // Future agents can be added here
+                        });
+                });
+                ui.add_space(5.0);
+                ui.label("Select the AI coding agent to configure integration artifacts.");
 
-            ui.add_space(15.0);
-            ui.separator();
-            ui.add_space(10.0);
+                ui.add_space(15.0);
+                ui.separator();
+                ui.add_space(10.0);
 
-            // Show agent-specific content
-            match self.selected_ai_agent {
-                AiAgent::ClaudeCode => {
-                    self.show_claude_code_integration(ui);
+                // Show agent-specific content
+                match self.selected_ai_agent {
+                    AiAgent::ClaudeCode => {
+                        self.show_claude_code_integration(ui);
+                    }
                 }
+            }
+            #[cfg(target_arch = "wasm32")]
+            {
+                ui.label("AI agent integration not available in WASM");
             }
         });
     }
@@ -14654,147 +15295,153 @@ impl RequirementsApp {
     /// Show Claude Code specific integration options
     fn show_claude_code_integration(&mut self, ui: &mut egui::Ui) {
         // Project Scaffolding Section (FR-0152)
-        ui.heading("Project Scaffolding");
-        ui.add_space(5.0);
-        ui.label("Generate Claude Code artifacts (CLAUDE.md, skills, commands) for this project.");
-        ui.add_space(10.0);
-
-        ui.horizontal(|ui| {
-            if ui.button("🔧 Scaffold Project").clicked() {
-                // Generate preview when opening dialog
-                let project_dir = self.storage.path().parent()
-                    .map(|p| p.to_path_buf())
-                    .unwrap_or_else(|| std::path::PathBuf::from("."));
-                let db_path = self.storage.path().to_path_buf();
-                let mut scaffolder = aida_core::Scaffolder::with_database(project_dir, self.scaffold_config.clone(), db_path);
-                self.scaffold_preview = Some(scaffolder.preview(&self.store));
-                self.show_scaffold_dialog = true;
-            }
-
-            // trace:FR-0261 | ai:claude:high
-            if ui.button("📋 Check Status").clicked() {
-                // Check scaffold status against current project
-                let project_dir = self.storage.path().parent()
-                    .map(|p| p.to_path_buf())
-                    .unwrap_or_else(|| std::path::PathBuf::from("."));
-                let db_path = self.storage.path();
-                self.scaffold_status = Some(aida_core::check_scaffold_status(
-                    &self.store,
-                    &project_dir,
-                    &self.scaffold_config,
-                    db_path,
-                ));
-                self.show_scaffold_status_dialog = true;
-            }
-        });
-        ui.label("Creates CLAUDE.md, .claude/commands/, and .claude/skills/ directories.");
-
-        ui.add_space(15.0);
-        ui.separator();
-        ui.add_space(10.0);
-
-        // AI Integration Report Section
-        ui.heading("AI Integration Report");
-        ui.add_space(5.0);
-        ui.label("Generate a comprehensive report documenting AI integration in this project.");
-        ui.add_space(10.0);
-
-        // Report format selection
-        ui.horizontal(|ui| {
-            ui.label("Format:");
-            ui.selectable_value(&mut self.ai_report_format, aida_core::ReportFormat::Html, "HTML");
-            ui.selectable_value(&mut self.ai_report_format, aida_core::ReportFormat::Markdown, "Markdown");
-        });
-
-        ui.add_space(5.0);
-
-        // Include scaffold status option
-        ui.checkbox(&mut self.ai_report_include_scaffold, "Include scaffold status")
-            .on_hover_text("Include scaffold drift detection in the report");
-
-        ui.add_space(5.0);
-
-        // Output path
-        ui.horizontal(|ui| {
-            ui.label("Output:");
-            let hint = match self.ai_report_format {
-                aida_core::ReportFormat::Html => "ai-integration-report.html",
-                aida_core::ReportFormat::Markdown => "ai-integration-report.md",
-            };
-            ui.add(
-                egui::TextEdit::singleline(&mut self.ai_report_output_path)
-                    .desired_width(300.0)
-                    .hint_text(hint),
-            );
-        });
-        ui.label("Leave empty to use default filename in project directory.");
-
-        ui.add_space(10.0);
-
-        // Generate and Open buttons
-        ui.horizontal(|ui| {
-            if ui.button("📄 Generate Report").clicked() {
-                self.generate_ai_integration_report();
-            }
-
-            // Show Open button if a report was generated successfully
-            #[cfg(not(target_arch = "wasm32"))]
-            if let Some(ref path) = self.ai_report_generated_path {
-                if ui.button("🔗 Open Report").on_hover_text(format!("Open {}", path.display())).clicked() {
-                    use crate::platform::PlatformServices;
-                    if let Err(e) = crate::platform::platform().open_file_external(path) {
-                        self.ai_report_last_result = Some(format!("Error opening report: {}", e));
-                    }
-                }
-            }
-        });
-
-        // Show last result message
-        if let Some(ref result) = self.ai_report_last_result {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            ui.heading("Project Scaffolding");
             ui.add_space(5.0);
-            if result.starts_with("Error") {
-                ui.colored_label(egui::Color32::from_rgb(200, 100, 100), result);
-            } else {
-                ui.colored_label(egui::Color32::from_rgb(100, 200, 100), result);
-            }
+            ui.label("Generate Claude Code artifacts (CLAUDE.md, skills, commands) for this project.");
+            ui.add_space(10.0);
+
+            ui.horizontal(|ui| {
+                if ui.button("🔧 Scaffold Project").clicked() {
+                    // Generate preview when opening dialog
+                    let project_dir = self.storage.path().parent()
+                        .map(|p| p.to_path_buf())
+                        .unwrap_or_else(|| std::path::PathBuf::from("."));
+                    let db_path = self.storage.path().to_path_buf();
+                    let mut scaffolder = aida_core::Scaffolder::with_database(project_dir, self.scaffold_config.clone(), db_path);
+                    self.scaffold_preview = Some(scaffolder.preview(&self.store));
+                    self.show_scaffold_dialog = true;
+                }
+
+                // trace:FR-0261 | ai:claude:high
+                if ui.button("📋 Check Status").clicked() {
+                    // Check scaffold status against current project
+                    let project_dir = self.storage.path().parent()
+                        .map(|p| p.to_path_buf())
+                        .unwrap_or_else(|| std::path::PathBuf::from("."));
+                    let db_path = self.storage.path();
+                    self.scaffold_status = Some(aida_core::check_scaffold_status(
+                        &self.store,
+                        &project_dir,
+                        &self.scaffold_config,
+                        db_path,
+                    ));
+                    self.show_scaffold_status_dialog = true;
+                }
+            });
+            ui.label("Creates CLAUDE.md, .claude/commands/, and .claude/skills/ directories.");
         }
 
         ui.add_space(15.0);
         ui.separator();
         ui.add_space(10.0);
 
-        // Report contents description
-        ui.heading("Report Contents");
-        ui.add_space(5.0);
-        ui.label("The AI Integration Report includes:");
-        ui.add_space(3.0);
-        egui::Grid::new("report_contents_grid")
-            .num_columns(2)
-            .spacing([10.0, 3.0])
-            .show(ui, |ui| {
-                ui.label("•");
-                ui.label("Project overview and requirement statistics");
-                ui.end_row();
+        // AI Integration Report Section
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            ui.heading("AI Integration Report");
+            ui.add_space(5.0);
+            ui.label("Generate a comprehensive report documenting AI integration in this project.");
+            ui.add_space(10.0);
 
-                ui.label("•");
-                ui.label("AI prompts configuration and customizations");
-                ui.end_row();
-
-                ui.label("•");
-                ui.label("Code traceability summary (trace links by requirement)");
-                ui.end_row();
-
-                ui.label("•");
-                ui.label("Scaffold status and drift detection (if enabled)");
-                ui.end_row();
-
-                ui.label("•");
-                ui.label("Type definitions and feature configuration");
-                ui.end_row();
+            // Report format selection
+            ui.horizontal(|ui| {
+                ui.label("Format:");
+                ui.selectable_value(&mut self.ai_report_format, aida_core::ReportFormat::Html, "HTML");
+                ui.selectable_value(&mut self.ai_report_format, aida_core::ReportFormat::Markdown, "Markdown");
             });
+
+            ui.add_space(5.0);
+
+            // Include scaffold status option
+            ui.checkbox(&mut self.ai_report_include_scaffold, "Include scaffold status")
+                .on_hover_text("Include scaffold drift detection in the report");
+
+            ui.add_space(5.0);
+
+            // Output path
+            ui.horizontal(|ui| {
+                ui.label("Output:");
+                let hint = match self.ai_report_format {
+                    aida_core::ReportFormat::Html => "ai-integration-report.html",
+                    aida_core::ReportFormat::Markdown => "ai-integration-report.md",
+                };
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.ai_report_output_path)
+                        .desired_width(300.0)
+                        .hint_text(hint),
+                );
+            });
+            ui.label("Leave empty to use default filename in project directory.");
+
+            ui.add_space(10.0);
+
+            // Generate and Open buttons
+            ui.horizontal(|ui| {
+                if ui.button("📄 Generate Report").clicked() {
+                    self.generate_ai_integration_report();
+                }
+
+                // Show Open button if a report was generated successfully
+                if let Some(ref path) = self.ai_report_generated_path {
+                    if ui.button("🔗 Open Report").on_hover_text(format!("Open {}", path.display())).clicked() {
+                        use crate::platform::PlatformServices;
+                        if let Err(e) = crate::platform::platform().open_file_external(path) {
+                            self.ai_report_last_result = Some(format!("Error opening report: {}", e));
+                        }
+                    }
+                }
+            });
+
+            // Show last result message
+            if let Some(ref result) = self.ai_report_last_result {
+                ui.add_space(5.0);
+                if result.starts_with("Error") {
+                    ui.colored_label(egui::Color32::from_rgb(200, 100, 100), result);
+                } else {
+                    ui.colored_label(egui::Color32::from_rgb(100, 200, 100), result);
+                }
+            }
+
+            ui.add_space(15.0);
+            ui.separator();
+            ui.add_space(10.0);
+
+            // Report contents description
+            ui.heading("Report Contents");
+            ui.add_space(5.0);
+            ui.label("The AI Integration Report includes:");
+            ui.add_space(3.0);
+            egui::Grid::new("report_contents_grid")
+                .num_columns(2)
+                .spacing([10.0, 3.0])
+                .show(ui, |ui| {
+                    ui.label("•");
+                    ui.label("Project overview and requirement statistics");
+                    ui.end_row();
+
+                    ui.label("•");
+                    ui.label("AI prompts configuration and customizations");
+                    ui.end_row();
+
+                    ui.label("•");
+                    ui.label("Code traceability summary (trace links by requirement)");
+                    ui.end_row();
+
+                    ui.label("•");
+                    ui.label("Scaffold status and drift detection (if enabled)");
+                    ui.end_row();
+
+                    ui.label("•");
+                    ui.label("Type definitions and feature configuration");
+                    ui.end_row();
+                });
+        }
     }
 
     /// Generate the AI Integration Report
+    #[cfg(not(target_arch = "wasm32"))]
     fn generate_ai_integration_report(&mut self) {
         let project_dir = self.storage.path().parent()
             .map(|p| p.to_path_buf())
@@ -15658,6 +16305,7 @@ impl RequirementsApp {
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn backup_database(&mut self) {
         use chrono::Local;
 
@@ -21141,6 +21789,7 @@ impl RequirementsApp {
                     self.store.requirements[idx].modified_at = chrono::Utc::now();
 
                     // Save using the app's save method
+                    #[cfg(not(target_arch = "wasm32"))]
                     if let Err(e) = self.storage.save(&self.store) {
                         eprintln!("Failed to save after tag update: {}", e);
                     }
@@ -21451,6 +22100,7 @@ impl RequirementsApp {
                     new_value: new_owner,
                 }],
             });
+            #[cfg(not(target_arch = "wasm32"))]
             if let Err(e) = self.storage.save(&self.store) {
                 eprintln!("Failed to save after owner change: {}", e);
             }
@@ -21630,6 +22280,7 @@ impl RequirementsApp {
                     new_value: new_feature,
                 }],
             });
+            #[cfg(not(target_arch = "wasm32"))]
             if let Err(e) = self.storage.save(&self.store) {
                 eprintln!("Failed to save after feature change: {}", e);
             }
@@ -21682,6 +22333,7 @@ impl RequirementsApp {
                             new_value: new_status_str,
                         }],
                     });
+                    #[cfg(not(target_arch = "wasm32"))]
                     if let Err(e) = self.storage.save(&self.store) {
                         eprintln!("Failed to save after status change: {}", e);
                     }
@@ -21715,6 +22367,7 @@ impl RequirementsApp {
                             new_value: new_priority_str,
                         }],
                     });
+                    #[cfg(not(target_arch = "wasm32"))]
                     if let Err(e) = self.storage.save(&self.store) {
                         eprintln!("Failed to save after priority change: {}", e);
                     }
@@ -21976,6 +22629,7 @@ impl RequirementsApp {
                             priority.to_string(),
                         );
                         req.record_change(self.user_settings.display_name(), vec![change]);
+                        #[cfg(not(target_arch = "wasm32"))]
                         self.mark_requirement_modified(req_id);
                         self.save();
                     }
@@ -21993,6 +22647,7 @@ impl RequirementsApp {
                             status.to_string(),
                         );
                         req.record_change(self.user_settings.display_name(), vec![change]);
+                        #[cfg(not(target_arch = "wasm32"))]
                         self.mark_requirement_modified(req_id);
                         self.save();
                     }
@@ -22015,12 +22670,14 @@ impl RequirementsApp {
                 }
 
                 // Handle AI action trigger (from menu or deferred from popup)
-                let effective_ai_action = trigger_ai_action.or_else(|| self.deferred_ai_action.take());
-                if let Some(action) = effective_ai_action {
-                    eprintln!("AI action triggered: {:?}", action);
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    let effective_ai_action = trigger_ai_action.or_else(|| self.deferred_ai_action.take());
+                    if let Some(action) = effective_ai_action {
+                        eprintln!("AI action triggered: {:?}", action);
 
-                    // Check if AI is available
-                    if !self.ai_client.is_available() {
+                        // Check if AI is available
+                        if !self.ai_client.is_available() {
                         self.ai_last_result = Some(AiResult {
                             action_name: action.name().to_string(),
                             success: false,
@@ -22049,39 +22706,54 @@ impl RequirementsApp {
                                         });
                                         None // Skip, return no result
                                     } else {
-                                        // Spawn background thread for evaluation
-                                        let (tx, rx) = mpsc::channel();
-                                        let ai_client = self.ai_client.clone();
-                                        let store_clone = self.store.clone();
-                                        let req_clone = req.clone();
                                         let req_id = req.id;
                                         let spec_id = req.spec_id.clone().unwrap_or_else(|| req.id.to_string());
-                                        let content_hash = req.content_hash();
 
-                                        self.ai_eval_receiver = Some(rx);
-                                        self.ai_eval_in_progress = Some((req_id, spec_id.clone()));
+                                        // Native: spawn background thread for evaluation
+                                        #[cfg(not(target_arch = "wasm32"))]
+                                        {
+                                            let (tx, rx) = mpsc::channel();
+                                            let ai_client = self.ai_client.clone();
+                                            let store_clone = self.store.clone();
+                                            let req_clone = req.clone();
+                                            let content_hash = req.content_hash();
 
-                                        // Show toast that evaluation started
-                                        self.toast_message = Some(ToastNotification {
-                                            message: format!("Evaluating {}...", spec_id),
-                                            is_success: true,
-                                            show_until: Instant::now() + std::time::Duration::from_secs(3),
-                                        });
+                                            self.ai_eval_receiver = Some(rx);
+                                            self.ai_eval_in_progress = Some((req_id, spec_id.clone()));
 
-                                        thread::spawn(move || {
-                                            let result = match ai_client.evaluate_requirement(&req_clone, &store_clone) {
-                                                Ok(response) => Ok(response),
-                                                Err(e) => Err(e.to_string()),
-                                            };
-                                            let _ = tx.send(BackgroundAiResult {
-                                                req_id,
-                                                spec_id,
-                                                content_hash,
-                                                result,
+                                            // Show toast that evaluation started
+                                            self.toast_message = Some(ToastNotification {
+                                                message: format!("Evaluating {}...", spec_id),
+                                                is_success: true,
+                                                show_until: Instant::now() + std::time::Duration::from_secs(3),
                                             });
-                                        });
 
-                                        None // No immediate result, will be polled later
+                                            thread::spawn(move || {
+                                                let result = match ai_client.evaluate_requirement(&req_clone, &store_clone) {
+                                                    Ok(response) => Ok(response),
+                                                    Err(e) => Err(e.to_string()),
+                                                };
+                                                let _ = tx.send(BackgroundAiResult {
+                                                    req_id,
+                                                    spec_id,
+                                                    content_hash,
+                                                    result,
+                                                });
+                                            });
+
+                                            None // No immediate result, will be polled later
+                                        }
+
+                                        // WASM: AI evaluation not available (requires CLI)
+                                        #[cfg(target_arch = "wasm32")]
+                                        {
+                                            self.toast_message = Some(ToastNotification {
+                                                message: "AI evaluation not available in browser".to_string(),
+                                                is_success: false,
+                                                show_until: Instant::now() + std::time::Duration::from_secs(3),
+                                            });
+                                            None
+                                        }
                                     }
                                 },
                                 AiAction::FindDuplicates(_) => {
@@ -22094,48 +22766,63 @@ impl RequirementsApp {
                                         });
                                         None // Skip, return no result
                                     } else {
-                                        // Spawn background thread for find duplicates
-                                        let (tx, rx) = mpsc::channel();
-                                        let ai_client = self.ai_client.clone();
-                                        let store_clone = self.store.clone();
-                                        let req_clone = req.clone();
                                         let req_id = req.id;
                                         let spec_id = req.spec_id.clone().unwrap_or_else(|| req.id.to_string());
 
-                                        self.find_duplicates_receiver = Some(rx);
-                                        self.find_duplicates_in_progress = Some((req_id, spec_id.clone()));
+                                        // Native: spawn background thread for find duplicates
+                                        #[cfg(not(target_arch = "wasm32"))]
+                                        {
+                                            let (tx, rx) = mpsc::channel();
+                                            let ai_client = self.ai_client.clone();
+                                            let store_clone = self.store.clone();
+                                            let req_clone = req.clone();
 
-                                        // Show toast that find duplicates started
-                                        self.toast_message = Some(ToastNotification {
-                                            message: format!("Finding duplicates for {}...", spec_id),
-                                            is_success: true,
-                                            show_until: Instant::now() + std::time::Duration::from_secs(3),
-                                        });
+                                            self.find_duplicates_receiver = Some(rx);
+                                            self.find_duplicates_in_progress = Some((req_id, spec_id.clone()));
 
-                                        thread::spawn(move || {
-                                            let result = match ai_client.find_duplicates(&req_clone, &store_clone) {
-                                                Ok(response) => {
-                                                    let duplicates: Vec<DuplicateInfo> = response.potential_duplicates
-                                                        .into_iter()
-                                                        .map(|d| DuplicateInfo {
-                                                            spec_id: d.spec_id,
-                                                            similarity: d.similarity,
-                                                            reason: d.reason,
-                                                            recommendation: d.recommendation,
-                                                        })
-                                                        .collect();
-                                                    Ok(duplicates)
-                                                },
-                                                Err(e) => Err(e.to_string()),
-                                            };
-                                            let _ = tx.send(BackgroundFindDuplicatesResult {
-                                                req_id,
-                                                spec_id,
-                                                result,
+                                            // Show toast that find duplicates started
+                                            self.toast_message = Some(ToastNotification {
+                                                message: format!("Finding duplicates for {}...", spec_id),
+                                                is_success: true,
+                                                show_until: Instant::now() + std::time::Duration::from_secs(3),
                                             });
-                                        });
 
-                                        None // No immediate result, will be polled later
+                                            thread::spawn(move || {
+                                                let result = match ai_client.find_duplicates(&req_clone, &store_clone) {
+                                                    Ok(response) => {
+                                                        let duplicates: Vec<DuplicateInfo> = response.potential_duplicates
+                                                            .into_iter()
+                                                            .map(|d| DuplicateInfo {
+                                                                spec_id: d.spec_id,
+                                                                similarity: d.similarity,
+                                                                reason: d.reason,
+                                                                recommendation: d.recommendation,
+                                                            })
+                                                            .collect();
+                                                        Ok(duplicates)
+                                                    },
+                                                    Err(e) => Err(e.to_string()),
+                                                };
+                                                let _ = tx.send(BackgroundFindDuplicatesResult {
+                                                    req_id,
+                                                    spec_id,
+                                                    result,
+                                                });
+                                            });
+
+                                            None // No immediate result, will be polled later
+                                        }
+
+                                        // WASM: Find duplicates not available (requires CLI)
+                                        #[cfg(target_arch = "wasm32")]
+                                        {
+                                            self.toast_message = Some(ToastNotification {
+                                                message: "Find duplicates not available in browser".to_string(),
+                                                is_success: false,
+                                                show_until: Instant::now() + std::time::Duration::from_secs(3),
+                                            });
+                                            None
+                                        }
                                     }
                                 },
                                 AiAction::SuggestRelationships(_) => {
@@ -22242,6 +22929,7 @@ impl RequirementsApp {
                             self.show_ai_results_panel = true;
                         }
                     }
+                }
                 }
 
                 ui.separator();
@@ -24052,6 +24740,7 @@ fn main() {
             if let Some(id) = attachment_to_remove {
                 if let Some(attachment) = attachments.iter().find(|a| a.id == id) {
                     // Remove file from disk
+                    #[cfg(not(target_arch = "wasm32"))]
                     if let Err(e) = self.storage.remove_attachment_file(&spec_id, &attachment.stored_path) {
                         self.message = Some((format!("Warning: Could not remove file: {}", e), true));
                     }
@@ -26199,6 +26888,7 @@ fn main() {
                         self.settings_form_digits = self.store.id_config.digits;
 
                         // Save to file
+                        #[cfg(not(target_arch = "wasm32"))]
                         match self.storage.save(&self.store) {
                             Ok(()) => {
                                 self.message = Some((
@@ -27359,10 +28049,12 @@ impl eframe::App for RequirementsApp {
         self.quick_change_consumed_action = false;
 
         // Periodically check for other concurrent users (every ~60 frames = ~1 second)
-        static CONCURRENT_CHECK_COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-        let counter = CONCURRENT_CHECK_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        if counter % 60 == 0 {
-            if let Ok(lock_info) = self.storage.get_active_sessions() {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            static CONCURRENT_CHECK_COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+            let counter = CONCURRENT_CHECK_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if counter % 60 == 0 {
+                if let Ok(lock_info) = self.storage.get_active_sessions() {
                 let other_sessions = lock_info.get_other_sessions(&self.session_id);
                 if !other_sessions.is_empty() && !self.other_sessions_warning_shown {
                     // Show warning about other users
@@ -27376,14 +28068,16 @@ impl eframe::App for RequirementsApp {
                     });
                     self.other_sessions_warning_shown = true;
                 }
-                self.last_lock_info = Some(lock_info);
+                    self.last_lock_info = Some(lock_info);
+                }
             }
         }
 
         // Check for external database changes and auto-reload if needed
         self.handle_db_change_detection();
 
-        // Poll for background AI evaluation results
+        // Poll for background AI evaluation results (native only - WASM doesn't have background threads)
+        #[cfg(not(target_arch = "wasm32"))]
         if let Some(receiver) = &self.ai_eval_receiver {
             if let Ok(result) = receiver.try_recv() {
                 eprintln!("DEBUG: Background AI evaluation completed for {}", result.spec_id);
@@ -27449,7 +28143,8 @@ impl eframe::App for RequirementsApp {
             }
         }
 
-        // Poll for background Find Duplicates results
+        // Poll for background Find Duplicates results (native only - WASM doesn't have background threads)
+        #[cfg(not(target_arch = "wasm32"))]
         if let Some(receiver) = &self.find_duplicates_receiver {
             if let Ok(result) = receiver.try_recv() {
                 eprintln!("DEBUG: Background Find Duplicates completed for {}", result.spec_id);
@@ -28540,6 +29235,7 @@ impl eframe::App for RequirementsApp {
 
             if will_edit && !was_editing {
                 // Entering edit mode - check if someone else is editing and set edit lock
+                #[cfg(not(target_arch = "wasm32"))]
                 if let Some(idx) = self.selected_idx {
                     if let Some(req) = self.store.requirements.get(idx) {
                         // Check if someone else is editing this requirement
@@ -28561,18 +29257,21 @@ impl eframe::App for RequirementsApp {
                             }
                         }
 
-                        let edit_lock = EditLock {
-                            requirement_id: req.id,
-                            spec_id: req.spec_id.clone().unwrap_or_else(|| req.id.to_string()),
-                            started_at: Utc::now(),
-                        };
-                        if let Some(sender) = &self.heartbeat_sender {
-                            let _ = sender.send(HeartbeatCommand::SetEditLock(Some(edit_lock)));
+                        {
+                            let edit_lock = EditLock {
+                                requirement_id: req.id,
+                                spec_id: req.spec_id.clone().unwrap_or_else(|| req.id.to_string()),
+                                started_at: Utc::now(),
+                            };
+                            if let Some(sender) = &self.heartbeat_sender {
+                                let _ = sender.send(HeartbeatCommand::SetEditLock(Some(edit_lock)));
+                            }
                         }
                     }
                 }
             } else if was_editing && !will_edit {
                 // Exiting edit mode - clear edit lock
+                #[cfg(not(target_arch = "wasm32"))]
                 if let Some(sender) = &self.heartbeat_sender {
                     let _ = sender.send(HeartbeatCommand::SetEditLock(None));
                 }
@@ -29085,19 +29784,26 @@ impl eframe::App for RequirementsApp {
         self.show_keyboard_help_popup(ctx);
 
         // Show project dialogs
-        self.show_switch_project_dialog(ctx);
-        self.show_new_project_dialog(ctx);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.show_switch_project_dialog(ctx);
+            self.show_new_project_dialog(ctx);
+        }
 
         // Show scaffolding dialog (FR-0152)
+        #[cfg(not(target_arch = "wasm32"))]
         self.show_scaffold_dialog(ctx);
 
         // Show scaffold status dialog (FR-0261)
+        #[cfg(not(target_arch = "wasm32"))]
         self.show_scaffold_status_dialog(ctx);
 
         // Show conflict resolution dialog (FR-0153)
+        #[cfg(not(target_arch = "wasm32"))]
         self.show_conflict_resolution_dialog(ctx);
 
         // Show migration warning dialog (REQ-0231)
+        #[cfg(not(target_arch = "wasm32"))]
         self.show_migration_warning_dialog(ctx);
 
         // Show migration confirmation dialog
@@ -29120,6 +29826,7 @@ impl eframe::App for RequirementsApp {
         self.show_clone_requirement_dialog(ctx);
 
         // Show import database dialog (FR-0226)
+        #[cfg(not(target_arch = "wasm32"))]
         self.show_import_database_dialog(ctx);
 
         // Show filter dialogs

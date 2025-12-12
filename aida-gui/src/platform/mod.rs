@@ -12,7 +12,7 @@ mod native;
 pub use native::NativePlatform;
 
 #[cfg(target_arch = "wasm32")]
-mod web;
+pub mod web;
 #[cfg(target_arch = "wasm32")]
 pub use web::WebPlatform;
 
