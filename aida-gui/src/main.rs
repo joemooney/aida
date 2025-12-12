@@ -1,4 +1,5 @@
 mod app;
+mod platform;
 #[cfg(feature = "remote")]
 mod remote;
 
