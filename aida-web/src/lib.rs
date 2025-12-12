@@ -3,11 +3,14 @@
 //!
 //! This crate provides a WebAssembly-based browser client that connects
 //! to the AIDA server via gRPC-Web protocol.
+//!
+//! ## Architecture
+//! This crate uses shared proto types and UI components from `aida-gui`:
+//! - `proto` - Re-exported from `aida_gui::storage::proto` for type compatibility
+//! - `ui` - Shared UI components for consistent rendering
 
 pub mod app;
 pub mod client;
 
-/// Generated protobuf types and gRPC client
-pub mod proto {
-    include!("generated/aida.rs");
-}
+/// Re-export proto types from aida-gui for type compatibility with shared UI components
+pub use aida_gui::storage::proto;

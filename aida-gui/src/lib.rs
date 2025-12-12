@@ -8,7 +8,9 @@
 //! - `native`: Full native desktop GUI with local storage (default)
 //! - `web`: Web/WASM support with gRPC-Web storage client
 //!
-//! When used by `aida-web`, only the `storage` module is needed.
+//! ## Modules
+//! - `storage`: gRPC client that works on both native and WASM
+//! - `ui`: Shared UI components for rendering requirements (works on both platforms)
 
 // The app module requires many native-only types from aida-core
 #[cfg(feature = "native")]
@@ -24,6 +26,10 @@ mod remote;
 // Storage module is available for both native and web builds
 // It provides the GrpcStorageClient that works on both platforms
 pub mod storage;
+
+// Shared UI components - available for both native and web builds
+// These are pure egui rendering functions that work with proto types
+pub mod ui;
 
 #[cfg(feature = "native")]
 pub use app::RequirementsApp;

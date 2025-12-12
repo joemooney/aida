@@ -9,6 +9,21 @@ use egui::{Color32, RichText, ScrollArea, TextEdit, Ui};
 use crate::client::AidaClient;
 use crate::proto::*;
 
+// Import shared UI components from aida-gui
+// These functions provide consistent rendering between native and web
+use aida_gui::ui::{
+    // Formatters
+    format_status, format_priority, format_type,
+    // Badge colors
+    status_color, priority_color,
+    // List components
+    requirement_list_item, ListItemConfig,
+    // Form components
+    status_combo, priority_combo, type_combo,
+    // Comment components
+    comment_list, comment_input, CommentInputConfig,
+};
+
 /// Connection state to the server
 #[derive(Default, Clone)]
 pub enum ConnectionState {
@@ -409,6 +424,7 @@ impl AidaWebApp {
                 }
 
                 ScrollArea::vertical().show(ui, |ui| {
+                    let list_config = ListItemConfig::with_title();
                     for (idx, req) in items.iter().enumerate() {
                         let is_selected = self.selected_idx == Some(idx) && self.search_results.is_none();
                         let is_search_selected = self.search_results.is_some()
@@ -417,45 +433,14 @@ impl AidaWebApp {
 
                         let selected = is_selected || is_search_selected;
 
-                        ui.horizontal(|ui| {
-                            // Status indicator
-                            let status_color = match RequirementStatus::try_from(req.status) {
-                                Ok(RequirementStatus::Draft) => Color32::GRAY,
-                                Ok(RequirementStatus::Approved) => Color32::from_rgb(100, 200, 100),
-                                Ok(RequirementStatus::Planned) => Color32::from_rgb(100, 150, 200),
-                                Ok(RequirementStatus::InProgress) => Color32::from_rgb(200, 200, 100),
-                                Ok(RequirementStatus::Completed) => Color32::from_rgb(100, 255, 100),
-                                Ok(RequirementStatus::Rejected) => Color32::from_rgb(200, 100, 100),
-                                _ => Color32::GRAY,
-                            };
-
-                            ui.colored_label(status_color, "●");
-
-                            let response = ui.selectable_label(
-                                selected,
-                                RichText::new(&req.spec_id).monospace(),
-                            );
-
-                            if response.clicked() {
-                                // Find the actual index in requirements list
-                                if let Some(actual_idx) = self.requirements.iter().position(|r| r.id == req.id) {
-                                    self.selected_idx = Some(actual_idx);
-                                    self.current_view = View::Detail;
-                                }
+                        // Use shared list item component
+                        if requirement_list_item(ui, req, selected, &list_config) {
+                            // Find the actual index in requirements list
+                            if let Some(actual_idx) = self.requirements.iter().position(|r| r.id == req.id) {
+                                self.selected_idx = Some(actual_idx);
+                                self.current_view = View::Detail;
                             }
-                        });
-
-                        // Show title on next line
-                        if !req.title.is_empty() {
-                            ui.label(
-                                RichText::new(&req.title)
-                                    .small()
-                                    .weak()
-                                    .color(if selected { Color32::WHITE } else { Color32::GRAY }),
-                            );
                         }
-
-                        ui.add_space(4.0);
                     }
                 });
             });
@@ -557,42 +542,23 @@ impl AidaWebApp {
                         });
                     });
 
-                    // Comments section
+                    // Comments section - using shared components
                     ui.add_space(16.0);
                     egui::CollapsingHeader::new(format!("Comments ({})", req.comments.len()))
                         .default_open(true)
                         .show(ui, |ui| {
-                            for comment in &req.comments {
-                                ui.group(|ui| {
-                                    ui.horizontal(|ui| {
-                                        ui.label(RichText::new(&comment.author).strong());
-                                        ui.label(RichText::new("•").weak());
-                                        if let Some(ts) = &comment.created_at {
-                                            ui.label(RichText::new(format_timestamp(ts)).small().weak());
-                                        }
-                                    });
-                                    ui.label(&comment.content);
-                                });
-                                ui.add_space(4.0);
-                            }
-
-                            // Note: Comment input is outside ScrollArea due to borrow restrictions
+                            // Use shared comment list component
+                            comment_list(ui, &req.comments);
                         });
                 });
 
                 // Comment input outside the ScrollArea to avoid borrow conflicts
+                // Use shared comment input component
                 ui.separator();
-                ui.horizontal(|ui| {
-                    ui.add(
-                        TextEdit::singleline(&mut self.new_comment)
-                            .hint_text("Add a comment...")
-                            .desired_width(ui.available_width() - 80.0),
-                    );
-                    if ui.button("Add").clicked() && !self.new_comment.is_empty() {
-                        // TODO: Add comment via client
-                        self.new_comment.clear();
-                    }
-                });
+                if let Some(content) = comment_input(ui, &mut self.new_comment, &CommentInputConfig::default()) {
+                    // TODO: Add comment via client - for now just log
+                    log::info!("New comment: {}", content);
+                }
             }
         }
 
@@ -648,6 +614,7 @@ impl AidaWebApp {
     }
 
     /// Draw the requirement form (used for create and edit)
+    /// Uses shared combo box components for consistent rendering with native GUI
     fn draw_requirement_form(&mut self, ui: &mut Ui) {
         egui::Grid::new("form_grid")
             .num_columns(2)
@@ -670,40 +637,17 @@ impl AidaWebApp {
                 );
                 ui.end_row();
 
+                // Use shared combo box components
                 ui.label("Status:");
-                egui::ComboBox::from_id_salt("status_combo")
-                    .selected_text(format_status(self.form_status))
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.form_status, RequirementStatus::Draft.into(), "Draft");
-                        ui.selectable_value(&mut self.form_status, RequirementStatus::Approved.into(), "Approved");
-                        ui.selectable_value(&mut self.form_status, RequirementStatus::Planned.into(), "Planned");
-                        ui.selectable_value(&mut self.form_status, RequirementStatus::InProgress.into(), "In Progress");
-                        ui.selectable_value(&mut self.form_status, RequirementStatus::Completed.into(), "Completed");
-                        ui.selectable_value(&mut self.form_status, RequirementStatus::Rejected.into(), "Rejected");
-                    });
+                status_combo(ui, &mut self.form_status);
                 ui.end_row();
 
                 ui.label("Priority:");
-                egui::ComboBox::from_id_salt("priority_combo")
-                    .selected_text(format_priority(self.form_priority))
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.form_priority, RequirementPriority::High.into(), "High");
-                        ui.selectable_value(&mut self.form_priority, RequirementPriority::Medium.into(), "Medium");
-                        ui.selectable_value(&mut self.form_priority, RequirementPriority::Low.into(), "Low");
-                    });
+                priority_combo(ui, &mut self.form_priority);
                 ui.end_row();
 
                 ui.label("Type:");
-                egui::ComboBox::from_id_salt("type_combo")
-                    .selected_text(format_type(self.form_type))
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.form_type, RequirementType::Functional.into(), "Functional");
-                        ui.selectable_value(&mut self.form_type, RequirementType::NonFunctional.into(), "Non-Functional");
-                        ui.selectable_value(&mut self.form_type, RequirementType::Bug.into(), "Bug");
-                        ui.selectable_value(&mut self.form_type, RequirementType::Epic.into(), "Epic");
-                        ui.selectable_value(&mut self.form_type, RequirementType::Story.into(), "Story");
-                        ui.selectable_value(&mut self.form_type, RequirementType::Task.into(), "Task");
-                    });
+                type_combo(ui, &mut self.form_type);
                 ui.end_row();
             });
     }
@@ -750,75 +694,5 @@ fn get_server_url() -> Option<String> {
     }
 }
 
-fn format_status(status: i32) -> &'static str {
-    match RequirementStatus::try_from(status) {
-        Ok(RequirementStatus::Draft) => "Draft",
-        Ok(RequirementStatus::Approved) => "Approved",
-        Ok(RequirementStatus::Planned) => "Planned",
-        Ok(RequirementStatus::InProgress) => "In Progress",
-        Ok(RequirementStatus::Completed) => "Completed",
-        Ok(RequirementStatus::Rejected) => "Rejected",
-        _ => "Unknown",
-    }
-}
-
-fn status_color(status: i32) -> Color32 {
-    match RequirementStatus::try_from(status) {
-        Ok(RequirementStatus::Draft) => Color32::from_rgb(100, 100, 100),
-        Ok(RequirementStatus::Approved) => Color32::from_rgb(50, 120, 50),
-        Ok(RequirementStatus::Planned) => Color32::from_rgb(50, 100, 150),
-        Ok(RequirementStatus::InProgress) => Color32::from_rgb(150, 120, 50),
-        Ok(RequirementStatus::Completed) => Color32::from_rgb(50, 150, 50),
-        Ok(RequirementStatus::Rejected) => Color32::from_rgb(150, 50, 50),
-        _ => Color32::GRAY,
-    }
-}
-
-fn format_priority(priority: i32) -> &'static str {
-    match RequirementPriority::try_from(priority) {
-        Ok(RequirementPriority::High) => "High",
-        Ok(RequirementPriority::Medium) => "Medium",
-        Ok(RequirementPriority::Low) => "Low",
-        _ => "—",
-    }
-}
-
-fn priority_color(priority: i32) -> Color32 {
-    match RequirementPriority::try_from(priority) {
-        Ok(RequirementPriority::High) => Color32::from_rgb(180, 50, 50),
-        Ok(RequirementPriority::Medium) => Color32::from_rgb(180, 150, 50),
-        Ok(RequirementPriority::Low) => Color32::from_rgb(50, 150, 180),
-        _ => Color32::GRAY,
-    }
-}
-
-fn format_type(req_type: i32) -> &'static str {
-    match RequirementType::try_from(req_type) {
-        Ok(RequirementType::Functional) => "Functional",
-        Ok(RequirementType::NonFunctional) => "Non-Functional",
-        Ok(RequirementType::System) => "System",
-        Ok(RequirementType::User) => "User",
-        Ok(RequirementType::ChangeRequest) => "Change Request",
-        Ok(RequirementType::Bug) => "Bug",
-        Ok(RequirementType::Epic) => "Epic",
-        Ok(RequirementType::Story) => "Story",
-        Ok(RequirementType::Task) => "Task",
-        Ok(RequirementType::Spike) => "Spike",
-        Ok(RequirementType::Sprint) => "Sprint",
-        Ok(RequirementType::Folder) => "Folder",
-        _ => "—",
-    }
-}
-
-fn format_timestamp(ts: &Timestamp) -> String {
-    // Simple timestamp formatting
-    let secs = ts.seconds;
-    if secs > 0 {
-        // Convert to approximate date string
-        let days_since_epoch = secs / 86400;
-        let years = days_since_epoch / 365 + 1970;
-        format!("{}", years)
-    } else {
-        "—".to_string()
-    }
-}
+// Local helper functions (format_status, format_priority, etc.) have been moved to
+// the shared aida_gui::ui module for code reuse between native and web builds
