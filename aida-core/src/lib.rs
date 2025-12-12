@@ -3,11 +3,17 @@ pub mod db;
 pub mod export;
 pub mod import;
 pub mod models;
+#[cfg(feature = "native")]
 pub mod project;
+#[cfg(feature = "native")]
 pub mod registry;
+#[cfg(feature = "native")]
 pub mod report;
+#[cfg(feature = "native")]
 pub mod scaffolding;
+#[cfg(feature = "native")]
 pub mod storage;
+#[cfg(feature = "native")]
 pub mod templates;
 
 // Re-export commonly used types
@@ -71,18 +77,25 @@ pub use models::{
     META_PREFIX_VIEW,
     META_PREFIX_TEAM,
 };
+#[cfg(feature = "native")]
 pub use project::{check_migration_status, determine_requirements_path, MigrationCheck};
+#[cfg(feature = "native")]
 pub use registry::{get_config_dir, get_registry_path, get_templates_dir, Registry};
+#[cfg(feature = "native")]
 pub use scaffolding::{
     ProjectType, ScaffoldArtifact, ScaffoldConfig, ScaffoldError, ScaffoldPreview, Scaffolder,
 };
+#[cfg(feature = "native")]
 pub use storage::{
     AddResult, ConflictInfo, ConflictResolution, EditLock, FieldConflict, LockFileInfo, SaveResult,
     SessionInfo, Storage, StorageError,
 };
 pub use db::{
-    BackendType, DatabaseBackend, DatabaseConfig, SqliteBackend, UpdateResult, VersionConflict,
-    YamlBackend, create_backend, open_or_create,
+    BackendType, DatabaseBackend, DatabaseConfig, UpdateResult, VersionConflict,
+};
+#[cfg(feature = "native")]
+pub use db::{
+    YamlBackend, SqliteBackend, create_backend, open_or_create,
     migrate_yaml_to_sqlite, migrate_sqlite_to_yaml, export_to_json, import_from_json,
 };
 pub use import::{
@@ -90,6 +103,7 @@ pub use import::{
     IssueResolution, RawImportStore, create_backup, execute_import, validate_import_content,
     validate_import_file,
 };
+#[cfg(feature = "native")]
 pub use report::{
     AiIntegrationReport, AiPromptsSection, FileStatus, PromptCustomization, ReportFormat,
     ReportGenerator, ScaffoldStatus, TraceabilityStats, TypePromptCustomization,

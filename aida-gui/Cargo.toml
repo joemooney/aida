@@ -13,26 +13,29 @@ name = "aida-gui"
 path = "src/main.rs"
 
 [dependencies]
-aida-core = { path = "../aida-core" }
+# Core library - with native feature only for native builds
+aida-core = { path = "../aida-core", default-features = false }
 
-# GUI dependencies
+# GUI dependencies (cross-platform)
 eframe = { workspace = true }
 egui = { workspace = true }
 egui_extras = { workspace = true }
 egui_commonmark = "0.18"
 anyhow = { workspace = true }
 uuid = { workspace = true }
-env_logger = "0.11"
 chrono = { workspace = true }
 serde = { workspace = true }
 serde_yaml = { workspace = true }
-dirs = "5.0"
 url = "2"
-open = "5"
-arboard = "3"
-rfd = "0.15"
-hostname = "0.4"
 similar = { version = "2", features = ["inline"] }
+
+# Native-only dependencies (file dialogs, clipboard, etc.)
+env_logger = { version = "0.11", optional = true }
+dirs = { version = "5.0", optional = true }
+open = { version = "5", optional = true }
+arboard = { version = "3", optional = true }
+rfd = { version = "0.15", optional = true }
+hostname = { version = "0.4", optional = true }
 
 # gRPC client dependencies (optional)
 tonic = { workspace = true, optional = true }
@@ -58,10 +61,24 @@ web-sys = { version = "0.3", optional = true, features = [
 console_log = { version = "1", optional = true }
 console_error_panic_hook = { version = "0.1", optional = true }
 log = { version = "0.4", optional = true }
+# UUID needs js feature for WASM randomness
+getrandom = { version = "0.2", optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+uuid = { version = "1.4", features = ["v4", "serde", "js"] }
+getrandom = { version = "0.2", features = ["js"] }
 
 [features]
 default = ["native"]
-native = []  # Native platform features (file dialogs, clipboard, etc.)
+native = [
+    "aida-core/native",
+    "env_logger",
+    "dirs",
+    "open",
+    "arboard",
+    "rfd",
+    "hostname",
+]
 web = [
     "wasm-bindgen",
     "wasm-bindgen-futures",

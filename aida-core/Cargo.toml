@@ -5,7 +5,13 @@ edition.workspace = true
 authors.workspace = true
 description = "Core library for AIDA requirements management - shared between CLI and GUI"
 
+[features]
+default = ["native"]
+# Native platform features - file system, SQLite, etc.
+native = ["rusqlite", "fs2", "dirs"]
+
 [dependencies]
+# Core dependencies (all platforms)
 serde = { workspace = true }
 serde_yaml = { workspace = true }
 serde_json = { workspace = true }
@@ -13,12 +19,14 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
-dirs = { workspace = true }
-fs2 = { workspace = true }
-rusqlite = { workspace = true }
 regex = "1"
 pulldown-cmark = "0.9"
 once_cell = "1.19"
+
+# Native-only dependencies (optional)
+dirs = { workspace = true, optional = true }
+fs2 = { workspace = true, optional = true }
+rusqlite = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile = "3.8"

@@ -5,19 +5,28 @@
 //! while maintaining a consistent interface.
 
 mod traits;
+#[cfg(feature = "native")]
 mod yaml_backend;
+#[cfg(feature = "native")]
 mod sqlite_backend;
+#[cfg(feature = "native")]
 mod migration;
 
 pub use traits::{DatabaseBackend, BackendType, DatabaseConfig, UpdateResult, VersionConflict};
+#[cfg(feature = "native")]
 pub use yaml_backend::YamlBackend;
+#[cfg(feature = "native")]
 pub use sqlite_backend::SqliteBackend;
+#[cfg(feature = "native")]
 pub use migration::{migrate_yaml_to_sqlite, migrate_sqlite_to_yaml, export_to_json, import_from_json};
 
+#[cfg(feature = "native")]
 use anyhow::Result;
+#[cfg(feature = "native")]
 use std::path::Path;
 
 /// Creates a database backend based on the file extension or explicit type
+#[cfg(feature = "native")]
 pub fn create_backend(path: &Path, backend_type: Option<BackendType>) -> Result<Box<dyn DatabaseBackend>> {
     let bt = backend_type.unwrap_or_else(|| {
         // Infer from file extension
@@ -35,6 +44,7 @@ pub fn create_backend(path: &Path, backend_type: Option<BackendType>) -> Result<
 }
 
 /// Opens an existing database or creates a new one
+#[cfg(feature = "native")]
 pub fn open_or_create(path: &Path, backend_type: Option<BackendType>) -> Result<Box<dyn DatabaseBackend>> {
     create_backend(path, backend_type)
 }
