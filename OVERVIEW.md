@@ -12,7 +12,7 @@ Create a lightweight, file-based requirements management tool that is:
 
 ## Project Structure
 
-This is a Cargo workspace with four crates:
+This is a Cargo workspace with five crates:
 
 ```
 aida/
@@ -20,6 +20,7 @@ aida/
 ├── aida-cli/            # CLI tool (aida binary)
 ├── aida-gui/            # GUI application (aida-gui binary, egui-based)
 ├── aida-server/         # gRPC server for headless/remote operation
+├── aida-web/            # WASM browser client (WebAssembly)
 ├── proto/               # Protocol Buffers definitions
 ├── docs/                # User documentation (markdown + HTML)
 └── helper/              # Helper scripts for documentation generation
@@ -77,6 +78,22 @@ Define connections between requirements:
 - **GUI Remote Client**: Connect GUI to remote server with `aida-gui --server <addr>`
   - Requires `--features remote` at build time
   - StorageBackend abstraction for transparent local/remote switching
+- **gRPC-Web Support**: Server supports gRPC-Web protocol for browser clients
+- **REST API**: HTTP/JSON endpoints for external integration (port 8080)
+
+### WASM Browser Client (FR-0273)
+- **Web Client (`aida-web`)**: WebAssembly client running in browser
+- Built with `trunk` (Rust WASM build tool)
+- Uses `eframe`/`egui` for UI (same framework as native GUI)
+- Connects to server via gRPC-Web protocol using `tonic-web-wasm-client`
+- Features:
+  - View requirements list with search
+  - View requirement details
+  - Create new requirements
+  - Edit requirements (title, description, status)
+  - Add comments
+- Build: `make web-build` or `trunk build`
+- Serve: `make web-serve` (port 8088)
 
 ### GUI-Specific Features
 - Multiple view perspectives (Flat, Parent/Child, Verification, References)
@@ -96,12 +113,14 @@ Define connections between requirements:
 ## Technology Stack
 
 - **Language**: Rust
-- **GUI Framework**: egui (cross-platform)
+- **GUI Framework**: egui (cross-platform, native and WASM)
 - **Storage**: YAML (serde_yaml), SQLite (rusqlite)
 - **CLI Framework**: clap
 - **Interactive Prompts**: inquire
 - **gRPC/RPC**: tonic, prost (Protocol Buffers)
-- **Async Runtime**: tokio
+- **gRPC-Web**: tonic-web (server), tonic-web-wasm-client (browser)
+- **WASM Build Tool**: trunk
+- **Async Runtime**: tokio (native), browser-native (WASM)
 
 ## Data Storage
 
@@ -145,6 +164,11 @@ aida-gui                          # Launch graphical interface
 aida-server --port 50051          # Start gRPC server
 aida --server localhost:50051 server list  # Remote list
 aida --server localhost:50051 server ping  # Check connectivity
+
+# WASM browser client
+make web-deps                     # Install trunk and wasm32 target
+make web-build                    # Build WASM client
+make web-serve                    # Serve on http://localhost:8088
 
 # Build CLI with remote feature
 cargo build -p aida-cli --features remote
