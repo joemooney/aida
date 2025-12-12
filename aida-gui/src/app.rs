@@ -3770,6 +3770,19 @@ pub struct RequirementsApp {
     wasm_load_error: Rc<RefCell<Option<String>>>,                    // Error from async load
     #[cfg(target_arch = "wasm32")]
     wasm_loading: bool,                                              // True while loading from server
+    // WASM async save state - for create/update operations
+    #[cfg(target_arch = "wasm32")]
+    wasm_pending_created_req: Rc<RefCell<Option<(uuid::Uuid, Requirement)>>>,  // (local_id, server_response)
+    #[cfg(target_arch = "wasm32")]
+    wasm_create_error: Rc<RefCell<Option<String>>>,                  // Error from async create
+    #[cfg(target_arch = "wasm32")]
+    wasm_pending_updated_req: Rc<RefCell<Option<Requirement>>>,      // Pending update result from server
+    #[cfg(target_arch = "wasm32")]
+    wasm_update_error: Rc<RefCell<Option<String>>>,                  // Error from async update
+    #[cfg(target_arch = "wasm32")]
+    wasm_saving: bool,                                               // True while saving to server
+    #[cfg(target_arch = "wasm32")]
+    wasm_egui_ctx: egui::Context,                                    // egui context for async repaint requests
 }
 
 /// A timeline event representing a change to a requirement
@@ -5389,6 +5402,13 @@ impl RequirementsApp {
             wasm_pending_store,
             wasm_load_error,
             wasm_loading,
+            // WASM async save state
+            wasm_pending_created_req: Rc::new(RefCell::new(None)),
+            wasm_create_error: Rc::new(RefCell::new(None)),
+            wasm_pending_updated_req: Rc::new(RefCell::new(None)),
+            wasm_update_error: Rc::new(RefCell::new(None)),
+            wasm_saving: false,
+            wasm_egui_ctx: cc.egui_ctx.clone(),
         }
     }
 
@@ -6705,45 +6725,73 @@ impl RequirementsApp {
             }
         }
 
-        // WASM fallback: just add requirement directly without atomic guarantees
+        // WASM: Use async gRPC-Web to create requirement on server
+        // trace:FR-0281 | ai:claude:high
         #[cfg(target_arch = "wasm32")]
         {
-            // Note: On WASM we don't have atomic spec_id generation, so we just add the requirement
-            // The spec_id should already be set on the requirement object
-            self.store.add_requirement(req);
-            let spec_id = self.store.requirements.last()
-                .and_then(|r| r.spec_id.clone())
-                .unwrap_or_else(|| "unknown".to_string());
+            // Store parent_id for relationship creation after server responds
+            let _parent_id = parent_id;
 
-            // Create parent relationship if specified
-            if let Some(parent_id) = parent_id {
-                let _ = self.store.add_relationship_with_creator(
-                    &new_req_id,
-                    RelationshipType::Parent,
-                    &parent_id,
-                    true,
-                    Some(self.user_settings.display_name()),
-                );
-            }
+            // Check if we have a gRPC client
+            if let Some(ref client) = self.wasm_grpc_client {
+                // Clone references for the async closure
+                let client_clone = Rc::clone(client);
+                let pending_created = Rc::clone(&self.wasm_pending_created_req);
+                let create_error = Rc::clone(&self.wasm_create_error);
+                let ctx = self.wasm_egui_ctx.clone();
+                let local_req_id = new_req_id;
 
-            self.form_parent_id = None;
-            self.clear_form();
+                // Clear any previous errors
+                *create_error.borrow_mut() = None;
+                self.wasm_saving = true;
 
-            // Find the index of the newly added requirement and select it
-            if let Some(idx) = self
-                .store
-                .requirements
-                .iter()
-                .position(|r| r.id == new_req_id)
-            {
-                self.selected_idx = Some(idx);
-                self.scroll_to_requirement = Some(new_req_id);
-                self.current_view = View::Detail;
-            } else {
+                // Show saving message
+                self.message = Some(("Creating requirement on server...".to_string(), false));
+
+                // Spawn async task to create requirement on server
+                wasm_bindgen_futures::spawn_local(async move {
+                    log::info!("WASM: Starting async create requirement");
+                    match client_clone.create_requirement_async(&req).await {
+                        Ok(created_req) => {
+                            log::info!("WASM: Successfully created requirement with spec_id: {:?}",
+                                      created_req.spec_id);
+                            // Store the result: (local_id, server_response)
+                            *pending_created.borrow_mut() = Some((local_req_id, created_req));
+                        }
+                        Err(e) => {
+                            log::error!("WASM: Failed to create requirement: {}", e);
+                            *create_error.borrow_mut() = Some(format!("Failed to create: {}", e));
+                        }
+                    }
+                    // Request repaint to process the result
+                    ctx.request_repaint();
+                });
+
+                // Clear form immediately (optimistic UI)
+                self.form_parent_id = None;
+                self.clear_form();
                 self.current_view = View::List;
-            }
+            } else {
+                // No gRPC client - fall back to local-only (won't sync)
+                log::warn!("WASM: No gRPC client available, requirement will not sync to server");
+                self.store.add_requirement(req);
+                let spec_id = self.store.requirements.last()
+                    .and_then(|r| r.spec_id.clone())
+                    .unwrap_or_else(|| "N/A".to_string());
 
-            self.message = Some((format!("Requirement {} added successfully", &spec_id), false));
+                self.form_parent_id = None;
+                self.clear_form();
+
+                if let Some(idx) = self.store.requirements.iter().position(|r| r.id == new_req_id) {
+                    self.selected_idx = Some(idx);
+                    self.scroll_to_requirement = Some(new_req_id);
+                    self.current_view = View::Detail;
+                } else {
+                    self.current_view = View::List;
+                }
+
+                self.message = Some((format!("Requirement {} added (local only - not synced)", &spec_id), true));
+            }
         }
     }
 
@@ -6948,10 +6996,55 @@ impl RequirementsApp {
             #[cfg(not(target_arch = "wasm32"))]
             self.mark_requirement_modified(req_uuid);
 
-            self.save();
-            self.clear_form();
-            self.current_view = View::Detail;
-            self.message = Some(("Requirement updated successfully".to_string(), false));
+            // WASM: Use async gRPC-Web to update requirement on server
+            // trace:FR-0281 | ai:claude:high
+            #[cfg(target_arch = "wasm32")]
+            {
+                if let Some(ref client) = self.wasm_grpc_client {
+                    let client_clone = std::rc::Rc::clone(client);
+                    let pending_updated = std::rc::Rc::clone(&self.wasm_pending_updated_req);
+                    let update_error = std::rc::Rc::clone(&self.wasm_update_error);
+                    let ctx = self.wasm_egui_ctx.clone();
+                    let updated_req = req.clone();
+
+                    *update_error.borrow_mut() = None;
+                    self.wasm_saving = true;
+                    self.message = Some(("Updating requirement on server...".to_string(), false));
+
+                    wasm_bindgen_futures::spawn_local(async move {
+                        log::info!("WASM: Starting async update requirement {:?}", updated_req.spec_id);
+                        match client_clone.update_requirement_async(&updated_req).await {
+                            Ok(server_req) => {
+                                log::info!("WASM: Successfully updated requirement {:?}", server_req.spec_id);
+                                *pending_updated.borrow_mut() = Some(server_req);
+                            }
+                            Err(e) => {
+                                log::error!("WASM: Failed to update requirement: {}", e);
+                                *update_error.borrow_mut() = Some(format!("Failed to update: {}", e));
+                            }
+                        }
+                        ctx.request_repaint();
+                    });
+
+                    self.clear_form();
+                    self.current_view = View::Detail;
+                } else {
+                    // No gRPC client - just update locally (won't sync)
+                    log::warn!("WASM: No gRPC client available, update will not sync to server");
+                    self.clear_form();
+                    self.current_view = View::Detail;
+                    self.message = Some(("Updated locally (not synced to server)".to_string(), true));
+                }
+                return;
+            }
+
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                self.save();
+                self.clear_form();
+                self.current_view = View::Detail;
+                self.message = Some(("Requirement updated successfully".to_string(), false));
+            }
         }
     }
 
@@ -28142,6 +28235,57 @@ impl eframe::App for RequirementsApp {
             if let Some(error) = self.wasm_load_error.borrow_mut().take() {
                 log::error!("WASM: Load error displayed: {}", error);
                 self.wasm_loading = false;
+                self.message = Some((error, true));
+            }
+
+            // Check if async create requirement has completed (FR-0281)
+            if let Some((_local_id, created_req)) = self.wasm_pending_created_req.borrow_mut().take() {
+                log::info!("WASM: Applying created requirement with spec_id: {:?}", created_req.spec_id);
+                // Add the server-created requirement to our local store
+                self.store.requirements.push(created_req.clone());
+                self.wasm_saving = false;
+
+                // Select the newly created requirement
+                let new_idx = self.store.requirements.len() - 1;
+                self.selected_idx = Some(new_idx);
+                self.scroll_to_requirement = Some(created_req.id);
+                self.current_view = View::Detail;
+
+                // Show success message with server-assigned spec_id
+                let spec_id = created_req.spec_id.clone().unwrap_or_else(|| "N/A".to_string());
+                self.message = Some((
+                    format!("Requirement {} created successfully", spec_id),
+                    false
+                ));
+            }
+            // Check if async create failed with error
+            if let Some(error) = self.wasm_create_error.borrow_mut().take() {
+                log::error!("WASM: Create error displayed: {}", error);
+                self.wasm_saving = false;
+                self.message = Some((error, true));
+            }
+
+            // Check if async update requirement has completed (FR-0281)
+            if let Some(updated_req) = self.wasm_pending_updated_req.borrow_mut().take() {
+                log::info!("WASM: Applying updated requirement with spec_id: {:?}", updated_req.spec_id);
+                // Find and replace the requirement in our local store
+                if let Some(idx) = self.store.requirements.iter().position(|r| r.id == updated_req.id) {
+                    self.store.requirements[idx] = updated_req.clone();
+                    self.selected_idx = Some(idx);
+                }
+                self.wasm_saving = false;
+
+                // Show success message
+                let spec_id = updated_req.spec_id.clone().unwrap_or_else(|| "N/A".to_string());
+                self.message = Some((
+                    format!("Requirement {} updated successfully", spec_id),
+                    false
+                ));
+            }
+            // Check if async update failed with error
+            if let Some(error) = self.wasm_update_error.borrow_mut().take() {
+                log::error!("WASM: Update error displayed: {}", error);
+                self.wasm_saving = false;
                 self.message = Some((error, true));
             }
         }
