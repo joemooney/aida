@@ -31,6 +31,94 @@ pub mod proto {
 use proto::requirements_service_server::RequirementsServiceServer;
 use service::{AidaService, ServerState};
 
+/// Kill any process using the specified port
+fn kill_process_on_port(port: u16) -> Result<bool> {
+    use std::process::Command;
+
+    // Use lsof to find PID(s) using this port
+    let output = Command::new("lsof")
+        .args(["-t", "-i", &format!(":{}", port)])
+        .output();
+
+    match output {
+        Ok(output) if output.status.success() => {
+            let pids = String::from_utf8_lossy(&output.stdout);
+            let mut killed_any = false;
+            for pid_str in pids.lines() {
+                if let Ok(pid) = pid_str.trim().parse::<i32>() {
+                    // Send SIGTERM to gracefully stop the process
+                    let kill_result = Command::new("kill").arg(pid.to_string()).status();
+
+                    match kill_result {
+                        Ok(status) if status.success() => {
+                            info!("Killed existing process {} on port {}", pid, port);
+                            killed_any = true;
+                        }
+                        Ok(_) => {
+                            // Try SIGKILL if SIGTERM didn't work
+                            let _ = Command::new("kill")
+                                .args(["-9", &pid.to_string()])
+                                .status();
+                            info!("Force killed existing process {} on port {}", pid, port);
+                            killed_any = true;
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to kill process {}: {}", pid, e);
+                        }
+                    }
+                }
+            }
+            // Give the OS a moment to release the port
+            if killed_any {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            Ok(killed_any)
+        }
+        Ok(_) => Ok(false), // No process found on port
+        Err(e) => {
+            tracing::warn!("lsof command failed ({}), trying ss fallback", e);
+            // Fallback: try using ss (available on most Linux systems)
+            kill_process_on_port_ss(port)
+        }
+    }
+}
+
+/// Fallback using ss command (Linux)
+fn kill_process_on_port_ss(port: u16) -> Result<bool> {
+    use std::process::Command;
+
+    let output = Command::new("ss")
+        .args(["-tlnp", &format!("sport = :{}", port)])
+        .output();
+
+    match output {
+        Ok(output) if output.status.success() => {
+            let output_str = String::from_utf8_lossy(&output.stdout);
+            let mut killed_any = false;
+
+            // Parse ss output to find PIDs (format includes "pid=XXXX")
+            for line in output_str.lines() {
+                if let Some(pid_start) = line.find("pid=") {
+                    let pid_part = &line[pid_start + 4..];
+                    if let Some(pid_end) = pid_part.find(|c: char| !c.is_ascii_digit()) {
+                        if let Ok(pid) = pid_part[..pid_end].parse::<i32>() {
+                            let _ = Command::new("kill").arg(pid.to_string()).status();
+                            info!("Killed existing process {} on port {}", pid, port);
+                            killed_any = true;
+                        }
+                    }
+                }
+            }
+
+            if killed_any {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            Ok(killed_any)
+        }
+        _ => Ok(false),
+    }
+}
+
 /// AIDA gRPC Server
 #[derive(Parser, Debug)]
 #[command(name = "aida-server")]
@@ -64,11 +152,23 @@ struct Args {
     /// Allowed CORS origins (comma-separated, or '*' for all)
     #[arg(long, default_value = "*")]
     cors_origins: String,
+
+    /// Kill any existing process using the specified ports before starting
+    #[arg(short, long)]
+    force: bool,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
+
+    // Kill existing processes on ports if --force is specified
+    if args.force {
+        kill_process_on_port(args.port)?;
+        if args.rest_port > 0 {
+            kill_process_on_port(args.rest_port)?;
+        }
+    }
 
     // Initialize logging
     let log_level = match args.log_level.to_lowercase().as_str() {

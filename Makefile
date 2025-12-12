@@ -12,6 +12,9 @@
 DB ?= requirements.db
 SERVER_PORT ?= 50051
 REST_PORT ?= 8080
+# Set FORCE=1 to kill existing server processes before starting
+FORCE ?= 0
+FORCE_FLAG := $(if $(filter 1,$(FORCE)),--force,)
 
 # Colors for help output
 CYAN := \033[36m
@@ -120,11 +123,11 @@ run-gui: gui ## Run GUI application
 run-gui-remote: gui-remote ## Run GUI connected to remote server
 	./target/debug/aida-gui --server 127.0.0.1:$(SERVER_PORT)
 
-run-server: server ## Run gRPC/REST server (use DB=path for database)
-	./target/debug/aida-server --port $(SERVER_PORT) --rest-port $(REST_PORT) --database $(DB)
+run-server: server ## Run gRPC/REST server (use DB=path, FORCE=1 to kill existing)
+	./target/debug/aida-server --port $(SERVER_PORT) --rest-port $(REST_PORT) --database $(DB) $(FORCE_FLAG)
 
-run-server-bg: server ## Run server in background
-	@./target/debug/aida-server --port $(SERVER_PORT) --rest-port $(REST_PORT) --database $(DB) &
+run-server-bg: server ## Run server in background (use FORCE=1 to kill existing)
+	@./target/debug/aida-server --port $(SERVER_PORT) --rest-port $(REST_PORT) --database $(DB) $(FORCE_FLAG) &
 	@sleep 2
 	@echo "Server started on gRPC:$(SERVER_PORT) REST:$(REST_PORT)"
 
