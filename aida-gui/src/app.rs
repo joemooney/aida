@@ -27517,6 +27517,7 @@ impl eframe::App for RequirementsApp {
         let v_pressed = ctx.input(|i| i.key_pressed(egui::Key::V) && !i.modifiers.ctrl && !i.modifiers.alt && !i.modifiers.shift);
         if !in_form_view
             && !in_settings
+            && !text_input_focused
             && !self.show_view_picker
             && !self.show_keyboard_help
             && !self.show_delete_menu
@@ -27537,6 +27538,7 @@ impl eframe::App for RequirementsApp {
         });
         if !in_form_view
             && !in_settings
+            && !text_input_focused
             && !self.show_view_picker
             && !self.show_keyboard_help
             && !self.show_delete_menu
@@ -27553,6 +27555,7 @@ impl eframe::App for RequirementsApp {
         let d_pressed = ctx.input(|i| i.key_pressed(egui::Key::D) && !i.modifiers.ctrl && !i.modifiers.alt && !i.modifiers.shift);
         if !in_form_view
             && !in_settings
+            && !text_input_focused
             && !self.show_view_picker
             && !self.show_keyboard_help
             && !self.show_delete_menu
@@ -27573,6 +27576,7 @@ impl eframe::App for RequirementsApp {
         });
         if !in_form_view
             && !in_settings
+            && !text_input_focused
             && !self.show_view_picker
             && !self.show_keyboard_help
             && !self.show_delete_menu
@@ -27590,6 +27594,7 @@ impl eframe::App for RequirementsApp {
         let a_pressed = ctx.input(|i| i.key_pressed(egui::Key::A) && !i.modifiers.ctrl && !i.modifiers.alt && !i.modifiers.shift);
         if !in_form_view
             && !in_settings
+            && !text_input_focused
             && !self.show_view_picker
             && !self.show_keyboard_help
             && !self.show_delete_menu
@@ -27606,6 +27611,7 @@ impl eframe::App for RequirementsApp {
         let shift_a_pressed = ctx.input(|i| i.key_pressed(egui::Key::A) && !i.modifiers.ctrl && !i.modifiers.alt && i.modifiers.shift);
         if !in_form_view
             && !in_settings
+            && !text_input_focused
             && !self.show_view_picker
             && !self.show_keyboard_help
             && !self.show_delete_menu
@@ -27624,6 +27630,7 @@ impl eframe::App for RequirementsApp {
         let r_pressed = ctx.input(|i| i.key_pressed(egui::Key::R) && !i.modifiers.ctrl && !i.modifiers.alt && !i.modifiers.shift);
         if !in_form_view
             && !in_settings
+            && !text_input_focused
             && !self.show_view_picker
             && !self.show_keyboard_help
             && !self.show_delete_menu
@@ -27644,6 +27651,7 @@ impl eframe::App for RequirementsApp {
         let q_pressed = ctx.input(|i| i.key_pressed(egui::Key::Q) && !i.modifiers.ctrl && !i.modifiers.alt && !i.modifiers.shift);
         if !in_form_view
             && !in_settings
+            && !text_input_focused
             && !self.show_view_picker
             && !self.show_keyboard_help
             && !self.show_delete_menu
@@ -27664,6 +27672,7 @@ impl eframe::App for RequirementsApp {
         let shift_t_pressed = ctx.input(|i| i.key_pressed(egui::Key::T) && !i.modifiers.ctrl && !i.modifiers.alt && i.modifiers.shift);
         if !in_form_view
             && !in_settings
+            && !text_input_focused
             && !self.show_view_picker
             && !self.show_keyboard_help
             && !self.show_delete_menu
@@ -27686,6 +27695,7 @@ impl eframe::App for RequirementsApp {
         let w_pressed = ctx.input(|i| i.key_pressed(egui::Key::W) && !i.modifiers.ctrl && !i.modifiers.alt && !i.modifiers.shift);
         if !in_form_view
             && !in_settings
+            && !text_input_focused
             && !self.show_view_picker
             && !self.show_keyboard_help
             && !self.show_delete_menu
