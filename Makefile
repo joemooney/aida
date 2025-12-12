@@ -2,7 +2,7 @@
 # Makefile for building, testing, and running the application
 
 .PHONY: help build build-release build-all cli gui server \
-        cli-remote gui-remote run-cli run-gui run-server \
+        cli-remote gui-remote run-cli run-gui run-server run-server-force \
         test test-unit test-integration clean install \
         db-info db-migrate-sqlite db-migrate-yaml db-export \
         docs proto fmt lint check \
@@ -125,6 +125,9 @@ run-gui-remote: gui-remote ## Run GUI connected to remote server
 
 run-server: server ## Run gRPC/REST server (use DB=path, FORCE=1 to kill existing)
 	./target/debug/aida-server --port $(SERVER_PORT) --rest-port $(REST_PORT) --database $(DB) $(FORCE_FLAG)
+
+run-server-force: server ## Run server, killing any existing process on ports
+	./target/debug/aida-server --port $(SERVER_PORT) --rest-port $(REST_PORT) --database $(DB) --force
 
 run-server-bg: server ## Run server in background (use FORCE=1 to kill existing)
 	@./target/debug/aida-server --port $(SERVER_PORT) --rest-port $(REST_PORT) --database $(DB) $(FORCE_FLAG) &
