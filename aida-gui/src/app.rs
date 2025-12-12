@@ -264,32 +264,20 @@ fn show_text_context_menu(
 /// 1. CLIPBOARD - Used by Ctrl+C/Ctrl+V (handled by egui's ctx.copy_text())
 /// 2. PRIMARY - Filled by selecting text, pasted with middle-click
 ///
-/// egui only handles CLIPBOARD, so we use arboard to also copy to PRIMARY.
+/// egui only handles CLIPBOARD, so we use the platform abstraction to also copy to PRIMARY.
 /// This enables middle-click paste in other applications after copying from our app.
 ///
 /// This is a workaround until egui adds native PRIMARY selection support.
 /// See: https://github.com/emilk/egui/issues/5852
-#[cfg(target_os = "linux")]
 fn copy_to_primary_selection(text: &str) {
-    use arboard::SetExtLinux;
-    if let Ok(mut clipboard) = arboard::Clipboard::new() {
-        // Set to primary selection for middle-click paste
-        let _ = clipboard
-            .set()
-            .clipboard(arboard::LinuxClipboardKind::Primary)
-            .text(text.to_string());
-    }
+    use crate::platform::PlatformServices;
+    let _ = crate::platform::platform().copy_to_primary(text);
 }
-
-/// No-op on non-Linux platforms (PRIMARY selection is X11/Wayland specific)
-#[cfg(not(target_os = "linux"))]
-fn copy_to_primary_selection(_text: &str) {}
 
 /// Get text from the system clipboard (CLIPBOARD, not PRIMARY)
 fn get_clipboard_text() -> Option<String> {
-    arboard::Clipboard::new()
-        .ok()
-        .and_then(|mut c| c.get_text().ok())
+    use crate::platform::PlatformServices;
+    crate::platform::platform().get_clipboard()
 }
 
 /// Format a requirement as a prompt for Claude Code implementation
@@ -2363,27 +2351,27 @@ impl Default for UserSettings {
 impl UserSettings {
     /// Get the default settings file path
     fn settings_path() -> PathBuf {
-        let config_dir = dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join(".config")
-            .join("aida");
+        use crate::platform::PlatformServices;
+        let config_dir = crate::platform::platform()
+            .get_config_dir()
+            .unwrap_or_else(|| PathBuf::from("."));
 
         // Ensure the directory exists
-        let _ = std::fs::create_dir_all(&config_dir);
+        let _ = crate::platform::platform().create_dir_all(&config_dir);
 
         config_dir.join("aida_gui_settings.yaml")
     }
 
     /// Get the themes directory path
     pub fn themes_dir() -> PathBuf {
-        let themes_dir = dirs::home_dir()
+        use crate::platform::PlatformServices;
+        let themes_dir = crate::platform::platform()
+            .get_config_dir()
             .unwrap_or_else(|| PathBuf::from("."))
-            .join(".config")
-            .join("aida")
             .join("themes");
 
         // Ensure the directory exists
-        let _ = std::fs::create_dir_all(&themes_dir);
+        let _ = crate::platform::platform().create_dir_all(&themes_dir);
 
         themes_dir
     }
@@ -2502,8 +2490,9 @@ impl UserSettings {
 
     /// Populate name and email from git config and environment variables
     fn populate_from_git_and_env(settings: &mut Self) {
+        use crate::platform::PlatformServices;
         // Try to read from ~/.gitconfig
-        if let Some(home) = dirs::home_dir() {
+        if let Some(home) = crate::platform::platform().get_home_dir() {
             let gitconfig_path = home.join(".gitconfig");
             if gitconfig_path.exists() {
                 if let Ok(contents) = std::fs::read_to_string(&gitconfig_path) {
@@ -4398,10 +4387,9 @@ impl RequirementsApp {
         let initial_perspective = user_settings.preferred_perspective.clone();
 
         // Generate unique session ID and register session (collaborative awareness)
+        use crate::platform::PlatformServices;
         let session_id = format!("{}-{}", std::process::id(), Uuid::new_v4());
-        let hostname = hostname::get()
-            .map(|h| h.to_string_lossy().to_string())
-            .unwrap_or_else(|_| "unknown".to_string());
+        let hostname = crate::platform::platform().get_hostname();
 
         let session_info = SessionInfo {
             session_id: session_id.clone(),
@@ -5279,6 +5267,7 @@ impl RequirementsApp {
     }
 
     /// Save current requirements to a new file location
+    #[cfg(not(target_arch = "wasm32"))]
     fn save_as(&mut self) {
         // Use rfd for native file dialog
         if let Some(path) = rfd::FileDialog::new()
@@ -5314,8 +5303,15 @@ impl RequirementsApp {
         }
     }
 
+    /// Save current requirements to a new file location (WASM stub)
+    #[cfg(target_arch = "wasm32")]
+    fn save_as(&mut self) {
+        self.message = Some(("Save As is not supported in web mode".to_string(), true));
+    }
+
     // trace:REQ-0231 | ai:claude:high
     /// Export current database to a YAML file
+    #[cfg(not(target_arch = "wasm32"))]
     fn export_to_yaml(&mut self) {
         // Generate default filename based on current storage path
         let default_name = self.storage.path()
@@ -5349,7 +5345,15 @@ impl RequirementsApp {
     }
 
     // trace:REQ-0231 | ai:claude:high
+    /// Export current database to a YAML file (WASM stub)
+    #[cfg(target_arch = "wasm32")]
+    fn export_to_yaml(&mut self) {
+        self.message = Some(("Export to YAML is not supported in web mode".to_string(), true));
+    }
+
+    // trace:REQ-0231 | ai:claude:high
     /// Migrate current YAML database to SQLite for better concurrent access
+    #[cfg(not(target_arch = "wasm32"))]
     fn migrate_to_sqlite(&mut self) {
         let current_path = self.storage.path().to_path_buf();
 
@@ -5409,6 +5413,13 @@ impl RequirementsApp {
                 ));
             }
         }
+    }
+
+    // trace:REQ-0231 | ai:claude:high
+    /// Migrate current YAML database to SQLite (WASM stub)
+    #[cfg(target_arch = "wasm32")]
+    fn migrate_to_sqlite(&mut self) {
+        self.message = Some(("Migration to SQLite is not supported in web mode".to_string(), true));
     }
 
     // trace:FR-0153 | ai:claude:high
@@ -6350,6 +6361,7 @@ impl RequirementsApp {
                         self.show_switch_project_dialog = true;
                         ui.close_menu();
                     }
+                    #[cfg(not(target_arch = "wasm32"))]
                     if ui.button("📂 Open Project...").clicked() {
                         // Open a file dialog to select a project file
                         if let Some(path) = rfd::FileDialog::new()
@@ -6579,7 +6591,9 @@ impl RequirementsApp {
 
     /// Clear the new project form
     fn clear_new_project_form(&mut self) {
-        self.new_project_dir = dirs::home_dir()
+        use crate::platform::PlatformServices;
+        self.new_project_dir = crate::platform::platform()
+            .get_home_dir()
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_default();
         self.new_project_name = String::new();
@@ -7573,6 +7587,7 @@ impl RequirementsApp {
         }
 
         ui.horizontal(|ui| {
+            #[cfg(not(target_arch = "wasm32"))]
             if ui.button("📂 Browse...").clicked() {
                 if let Some(path) = rfd::FileDialog::new()
                     .add_filter("YAML Files", &["yaml", "yml"])
@@ -7582,6 +7597,10 @@ impl RequirementsApp {
                 {
                     self.import_source_path = Some(path);
                 }
+            }
+            #[cfg(target_arch = "wasm32")]
+            if ui.button("📂 Browse...").clicked() {
+                self.message = Some(("File browsing is not supported in web mode".to_string(), true));
             }
 
             if self.import_source_path.is_some() {
@@ -14683,9 +14702,11 @@ impl RequirementsApp {
             }
 
             // Show Open button if a report was generated successfully
+            #[cfg(not(target_arch = "wasm32"))]
             if let Some(ref path) = self.ai_report_generated_path {
                 if ui.button("🔗 Open Report").on_hover_text(format!("Open {}", path.display())).clicked() {
-                    if let Err(e) = open::that(path) {
+                    use crate::platform::PlatformServices;
+                    if let Err(e) = crate::platform::platform().open_file_external(path) {
                         self.ai_report_last_result = Some(format!("Error opening report: {}", e));
                     }
                 }
@@ -22798,7 +22819,8 @@ impl RequirementsApp {
                     };
 
                     if ui.link(link_text).on_hover_text(&url_link.url).clicked() {
-                        if let Err(e) = open::that(&url_link.url) {
+                        use crate::platform::PlatformServices;
+                        if let Err(e) = crate::platform::platform().open_url(&url_link.url) {
                             self.message = Some((format!("Failed to open URL: {}", e), true));
                         }
                     }
@@ -23874,6 +23896,7 @@ fn main() {
         ui.horizontal(|ui| {
             ui.heading("File Attachments");
             // Add file button using native file dialog
+            #[cfg(not(target_arch = "wasm32"))]
             if ui.button("➕ Add File").clicked() {
                 if let Some(path) = rfd::FileDialog::new().pick_file() {
                     // Store the attachment
@@ -23910,6 +23933,10 @@ fn main() {
                         }
                     }
                 }
+            }
+            #[cfg(target_arch = "wasm32")]
+            if ui.button("➕ Add File").clicked() {
+                self.message = Some(("File attachments are not supported in web mode".to_string(), true));
             }
         });
         ui.add_space(5.0);
@@ -23951,19 +23978,27 @@ fn main() {
                     };
 
                     // Clickable filename to open
-                    let full_path = self.storage.get_attachment_full_path(&attachment.stored_path);
-                    if ui
-                        .link(format!("{} {}", icon, attachment.filename))
-                        .on_hover_text(format!("Click to open: {}", full_path.display()))
-                        .clicked()
+                    #[cfg(not(target_arch = "wasm32"))]
                     {
-                        if full_path.exists() {
-                            if let Err(e) = open::that(&full_path) {
-                                self.message = Some((format!("Failed to open file: {}", e), true));
+                        let full_path = self.storage.get_attachment_full_path(&attachment.stored_path);
+                        if ui
+                            .link(format!("{} {}", icon, attachment.filename))
+                            .on_hover_text(format!("Click to open: {}", full_path.display()))
+                            .clicked()
+                        {
+                            if full_path.exists() {
+                                use crate::platform::PlatformServices;
+                                if let Err(e) = crate::platform::platform().open_file_external(&full_path) {
+                                    self.message = Some((format!("Failed to open file: {}", e), true));
+                                }
+                            } else {
+                                self.message = Some(("File not found on disk".to_string(), true));
                             }
-                        } else {
-                            self.message = Some(("File not found on disk".to_string(), true));
                         }
+                    }
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        ui.label(format!("{} {}", icon, attachment.filename));
                     }
 
                     // File size
