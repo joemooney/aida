@@ -2231,6 +2231,30 @@ impl KanBanClickAction {
     }
 }
 
+/// Entry in the user's personal work queue
+/// The queue is ordered by rank (lower = higher priority)
+/// When ranks are equal, requirement priority takes precedence
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct QueueEntry {
+    /// The requirement UUID
+    pub requirement_id: Uuid,
+    /// Rank in queue (1-100, lower = higher priority)
+    pub rank: u8,
+    /// When this was added to the queue
+    #[serde(default = "Utc::now")]
+    pub added_at: DateTime<Utc>,
+}
+
+impl QueueEntry {
+    pub fn new(requirement_id: Uuid, rank: u8) -> Self {
+        Self {
+            requirement_id,
+            rank,
+            added_at: Utc::now(),
+        }
+    }
+}
+
 /// User settings for the GUI application
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserSettings {
@@ -2285,6 +2309,9 @@ pub struct UserSettings {
     /// Whether to auto-reload when database changes externally (when not editing)
     #[serde(default = "default_db_auto_reload")]
     pub db_auto_reload: bool,
+    /// User's personal work queue - ordered list of requirements to work on
+    #[serde(default)]
+    pub queue: Vec<QueueEntry>,
 }
 
 fn default_font_size() -> f32 {
@@ -2328,6 +2355,7 @@ impl Default for UserSettings {
             wrap_search: default_wrap_search(),
             db_poll_interval_secs: default_db_poll_interval(),
             db_auto_reload: default_db_auto_reload(),
+            queue: Vec::new(),
         }
     }
 }
@@ -2536,6 +2564,128 @@ impl UserSettings {
         } else {
             "Unknown User".to_string()
         }
+    }
+
+    // =========================================================================
+    // Queue Management Methods
+    // =========================================================================
+
+    /// Check if a requirement is in the queue
+    pub fn is_in_queue(&self, req_id: &Uuid) -> bool {
+        self.queue.iter().any(|e| e.requirement_id == *req_id)
+    }
+
+    /// Get queue position (0-based index) for a requirement, if in queue
+    pub fn queue_position(&self, req_id: &Uuid) -> Option<usize> {
+        self.queue.iter().position(|e| e.requirement_id == *req_id)
+    }
+
+    /// Add requirement to top of queue (rank 1)
+    /// If already in queue, moves it to top
+    pub fn queue_add_top(&mut self, req_id: Uuid) {
+        // Remove if already present
+        self.queue.retain(|e| e.requirement_id != req_id);
+        // Insert at beginning with rank 1
+        self.queue.insert(0, QueueEntry::new(req_id, 1));
+        // Renumber ranks to maintain ordering
+        self.renumber_queue_ranks();
+    }
+
+    /// Add requirement to bottom of queue (highest rank)
+    /// If already in queue, moves it to bottom
+    pub fn queue_add_bottom(&mut self, req_id: Uuid) {
+        // Remove if already present
+        self.queue.retain(|e| e.requirement_id != req_id);
+        // Append with max rank
+        let rank = if self.queue.is_empty() { 50 } else { 100 };
+        self.queue.push(QueueEntry::new(req_id, rank));
+        // Renumber ranks to maintain ordering
+        self.renumber_queue_ranks();
+    }
+
+    /// Add requirement to middle of queue
+    /// If already in queue, moves it to middle
+    pub fn queue_add_middle(&mut self, req_id: Uuid) {
+        // Remove if already present
+        self.queue.retain(|e| e.requirement_id != req_id);
+        // Insert at middle position
+        let mid = self.queue.len() / 2;
+        self.queue.insert(mid, QueueEntry::new(req_id, 50));
+        // Renumber ranks to maintain ordering
+        self.renumber_queue_ranks();
+    }
+
+    /// Remove requirement from queue
+    pub fn queue_remove(&mut self, req_id: &Uuid) {
+        self.queue.retain(|e| e.requirement_id != *req_id);
+        self.renumber_queue_ranks();
+    }
+
+    /// Move requirement up in queue (decrease index)
+    pub fn queue_move_up(&mut self, req_id: &Uuid) {
+        if let Some(pos) = self.queue_position(req_id) {
+            if pos > 0 {
+                self.queue.swap(pos, pos - 1);
+                self.renumber_queue_ranks();
+            }
+        }
+    }
+
+    /// Move requirement down in queue (increase index)
+    pub fn queue_move_down(&mut self, req_id: &Uuid) {
+        if let Some(pos) = self.queue_position(req_id) {
+            if pos < self.queue.len() - 1 {
+                self.queue.swap(pos, pos + 1);
+                self.renumber_queue_ranks();
+            }
+        }
+    }
+
+    /// Renumber queue ranks to be evenly spaced 1-100
+    fn renumber_queue_ranks(&mut self) {
+        let count = self.queue.len();
+        if count == 0 {
+            return;
+        }
+        // Distribute ranks evenly from 1 to 100
+        for (i, entry) in self.queue.iter_mut().enumerate() {
+            entry.rank = ((i as f32 / count as f32) * 99.0 + 1.0) as u8;
+        }
+    }
+
+    /// Get sorted queue entries (by rank, then by priority using requirement lookup)
+    /// Returns Vec of (QueueEntry, Option<&Requirement>) for display
+    pub fn get_sorted_queue<'a>(&'a self, requirements: &'a [Requirement]) -> Vec<(&'a QueueEntry, Option<&'a Requirement>)> {
+        let mut entries: Vec<_> = self.queue.iter()
+            .map(|e| {
+                let req = requirements.iter().find(|r| r.id == e.requirement_id);
+                (e, req)
+            })
+            .collect();
+
+        // Sort by rank first, then by priority (High < Medium < Low)
+        entries.sort_by(|(a, a_req), (b, b_req)| {
+            match a.rank.cmp(&b.rank) {
+                std::cmp::Ordering::Equal => {
+                    // When ranks are equal, sort by requirement priority
+                    let a_pri = a_req.map(|r| &r.priority).unwrap_or(&RequirementPriority::Low);
+                    let b_pri = b_req.map(|r| &r.priority).unwrap_or(&RequirementPriority::Low);
+                    // High < Medium < Low (High should come first)
+                    match (a_pri, b_pri) {
+                        (RequirementPriority::High, RequirementPriority::High) => std::cmp::Ordering::Equal,
+                        (RequirementPriority::High, _) => std::cmp::Ordering::Less,
+                        (_, RequirementPriority::High) => std::cmp::Ordering::Greater,
+                        (RequirementPriority::Medium, RequirementPriority::Medium) => std::cmp::Ordering::Equal,
+                        (RequirementPriority::Medium, _) => std::cmp::Ordering::Less,
+                        (_, RequirementPriority::Medium) => std::cmp::Ordering::Greater,
+                        (RequirementPriority::Low, RequirementPriority::Low) => std::cmp::Ordering::Equal,
+                    }
+                }
+                other => other,
+            }
+        });
+
+        entries
     }
 }
 
@@ -2775,6 +2925,7 @@ enum View {
     Baselines, // Baseline management view
     Timeline,  // Timeline view showing requirement changes over time
     Planning,  // Sprint planning view for assigning items to Sprints
+    Queue,     // Personal work queue view
 }
 
 /// Layout mode defines the panel arrangement (cycles through 5 predefined layouts)
@@ -3314,6 +3465,12 @@ pub struct RequirementsApp {
     // Detail tab menu popup (triggered by 'r' - shows detail tabs: AI, Description, Comments, Links, History)
     show_detail_tab_menu: bool,
     detail_tab_menu_selected: usize,  // Currently selected index in detail tab menu (for arrow navigation)
+
+    // Queue action menu popup (triggered by 'q' key - shows queue actions: top/middle/bottom/delete/view)
+    show_queue_menu: bool,
+    queue_menu_selected: usize,  // Currently selected index in queue menu (for arrow navigation)
+    // Queue view state
+    queue_selected_idx: usize,   // Currently selected index in queue view
 
     // Type picker popup (triggered by 'T' / shift+t - change requirement type with fuzzy search)
     show_type_picker: bool,
@@ -3949,6 +4106,9 @@ impl RequirementsApp {
             action_menu_selected: 0,
             show_detail_tab_menu: false,
             detail_tab_menu_selected: 0,
+            show_queue_menu: false,
+            queue_menu_selected: 0,
+            queue_selected_idx: 0,
             show_type_picker: false,
             type_picker_search: String::new(),
             type_picker_selected: 0,
@@ -4464,6 +4624,9 @@ impl RequirementsApp {
             action_menu_selected: 0,
             show_detail_tab_menu: false,
             detail_tab_menu_selected: 0,
+            show_queue_menu: false,
+            queue_menu_selected: 0,
+            queue_selected_idx: 0,
             show_type_picker: false,
             type_picker_search: String::new(),
             type_picker_selected: 0,
@@ -12753,6 +12916,231 @@ impl RequirementsApp {
         items
     }
 
+    /// Show the personal work queue view
+    fn show_queue_view(&mut self, ui: &mut egui::Ui) {
+        // Header with controls
+        ui.horizontal(|ui| {
+            ui.heading("📋 My Queue");
+
+            ui.separator();
+
+            let queue_len = self.user_settings.queue.len();
+            ui.label(format!("{} item{}", queue_len, if queue_len == 1 { "" } else { "s" }));
+
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button("📋 Back to List").clicked() {
+                    self.pending_view_change = Some(View::List);
+                }
+            });
+        });
+
+        ui.separator();
+
+        // Handle keyboard navigation for queue view
+        let (nav_up, nav_down, ctrl_up, ctrl_down, enter_pressed, delete_pressed) = ui.input(|i| {
+            let ctrl = i.modifiers.ctrl || i.modifiers.mac_cmd;
+            (
+                i.key_pressed(egui::Key::ArrowUp) || i.key_pressed(egui::Key::K),
+                i.key_pressed(egui::Key::ArrowDown) || i.key_pressed(egui::Key::J),
+                ctrl && (i.key_pressed(egui::Key::ArrowUp) || i.key_pressed(egui::Key::K)),
+                ctrl && (i.key_pressed(egui::Key::ArrowDown) || i.key_pressed(egui::Key::J)),
+                i.key_pressed(egui::Key::Enter),
+                i.key_pressed(egui::Key::D) || i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace),
+            )
+        });
+
+        // Pre-collect queue display data into owned types to avoid borrow issues
+        // Format: (req_id, spec_id, title, status, priority, store_idx)
+        let queue_display_data: Vec<(Uuid, String, String, String, String, Option<usize>)> = {
+            let queue_entries = self.user_settings.get_sorted_queue(&self.store.requirements);
+            queue_entries.iter().map(|(entry, maybe_req)| {
+                let (spec_id, title, status, priority) = if let Some(req) = maybe_req {
+                    (
+                        req.spec_id.clone().unwrap_or_default(),
+                        req.title.clone(),
+                        req.effective_status(),
+                        format!("{:?}", req.priority),
+                    )
+                } else {
+                    (
+                        String::new(),
+                        format!("(Missing requirement: {:?})", entry.requirement_id),
+                        "Unknown".to_string(),
+                        "Unknown".to_string(),
+                    )
+                };
+                let store_idx = self.store.requirements.iter().position(|r| r.id == entry.requirement_id);
+                (entry.requirement_id, spec_id, title, status, priority, store_idx)
+            }).collect()
+        };
+        let queue_len = queue_display_data.len();
+
+        if queue_len == 0 {
+            ui.vertical_centered(|ui| {
+                ui.add_space(50.0);
+                ui.label(egui::RichText::new("Your queue is empty").size(18.0).weak());
+                ui.add_space(10.0);
+                ui.label("Press 'q' on any requirement to add it to your queue.");
+                ui.add_space(10.0);
+                if ui.button("📋 Go to Requirements List").clicked() {
+                    self.pending_view_change = Some(View::List);
+                }
+            });
+            return;
+        }
+
+        // Handle navigation
+        if nav_up && !ctrl_up && queue_len > 0 {
+            if self.queue_selected_idx > 0 {
+                self.queue_selected_idx -= 1;
+            } else {
+                self.queue_selected_idx = queue_len - 1;
+            }
+        }
+        if nav_down && !ctrl_down && queue_len > 0 {
+            if self.queue_selected_idx < queue_len - 1 {
+                self.queue_selected_idx += 1;
+            } else {
+                self.queue_selected_idx = 0;
+            }
+        }
+
+        // Handle Ctrl+Up/Down for reordering
+        if ctrl_up && self.queue_selected_idx < queue_len {
+            let req_id = queue_display_data[self.queue_selected_idx].0;
+            self.user_settings.queue_move_up(&req_id);
+            if self.queue_selected_idx > 0 {
+                self.queue_selected_idx -= 1;
+            }
+            if let Err(e) = self.user_settings.save() {
+                self.message = Some((format!("Failed to save queue: {}", e), true));
+            }
+        }
+        if ctrl_down && self.queue_selected_idx < queue_len {
+            let req_id = queue_display_data[self.queue_selected_idx].0;
+            self.user_settings.queue_move_down(&req_id);
+            if self.queue_selected_idx < queue_len - 1 {
+                self.queue_selected_idx += 1;
+            }
+            if let Err(e) = self.user_settings.save() {
+                self.message = Some((format!("Failed to save queue: {}", e), true));
+            }
+        }
+
+        // Handle delete key to remove from queue
+        if delete_pressed && self.queue_selected_idx < queue_len {
+            let req_id = queue_display_data[self.queue_selected_idx].0;
+            self.user_settings.queue_remove(&req_id);
+            // Adjust selected index if needed
+            let new_len = self.user_settings.queue.len();
+            if self.queue_selected_idx >= new_len && new_len > 0 {
+                self.queue_selected_idx = new_len - 1;
+            }
+            if let Err(e) = self.user_settings.save() {
+                self.message = Some((format!("Failed to save queue: {}", e), true));
+            }
+            self.message = Some(("Removed from queue".to_string(), false));
+        }
+
+        // Clamp selection to valid range
+        if self.queue_selected_idx >= queue_len {
+            self.queue_selected_idx = if queue_len > 0 { queue_len - 1 } else { 0 };
+        }
+
+        // Handle Enter to select requirement for detail view
+        let mut selected_req_idx: Option<usize> = None;
+        if enter_pressed && self.queue_selected_idx < queue_len {
+            selected_req_idx = queue_display_data[self.queue_selected_idx].5;
+        }
+
+        // Track which item to remove (deferred to avoid borrow issues in closure)
+        let mut remove_req_id: Option<Uuid> = None;
+
+        // Show queue list
+        egui::ScrollArea::vertical()
+            .auto_shrink([false; 2])
+            .show(ui, |ui| {
+                for (idx, (req_id, spec_id, title, status, priority, store_idx)) in queue_display_data.iter().enumerate() {
+                    let is_selected = idx == self.queue_selected_idx;
+
+                    // Create a frame for the queue item
+                    let frame = if is_selected {
+                        egui::Frame::none()
+                            .fill(ui.visuals().selection.bg_fill)
+                            .inner_margin(4.0)
+                    } else {
+                        egui::Frame::none()
+                            .inner_margin(4.0)
+                    };
+
+                    frame.show(ui, |ui| {
+                        let response = ui.horizontal(|ui| {
+                            // Queue position indicator
+                            ui.label(egui::RichText::new(format!("#{}", idx + 1)).weak().monospace());
+
+                            ui.separator();
+
+                            // Priority indicator
+                            let priority_color = match priority.as_str() {
+                                "High" => egui::Color32::from_rgb(255, 100, 100),
+                                "Medium" => egui::Color32::from_rgb(255, 200, 100),
+                                _ => egui::Color32::from_rgb(100, 200, 100),
+                            };
+                            ui.label(egui::RichText::new("●").color(priority_color));
+
+                            // Spec ID
+                            if !spec_id.is_empty() {
+                                ui.label(egui::RichText::new(spec_id).monospace().strong());
+                            }
+
+                            // Title
+                            ui.label(title);
+
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                // Status badge
+                                ui.label(egui::RichText::new(status).weak().italics());
+
+                                // Remove button
+                                if ui.small_button("✕").on_hover_text("Remove from queue").clicked() {
+                                    remove_req_id = Some(*req_id);
+                                }
+                            });
+                        }).response;
+
+                        // Handle click to select
+                        if response.clicked() {
+                            self.queue_selected_idx = idx;
+                            if let Some(sidx) = store_idx {
+                                selected_req_idx = Some(*sidx);
+                            }
+                        }
+                    });
+                }
+
+                // Help text at bottom
+                ui.add_space(10.0);
+                ui.separator();
+                ui.horizontal(|ui| {
+                    ui.small("↑↓/jk nav • Ctrl+↑/↓ reorder • Enter select • d/Del remove • q add more");
+                });
+            });
+
+        // Process deferred removal
+        if let Some(req_id) = remove_req_id {
+            self.user_settings.queue_remove(&req_id);
+            if let Err(e) = self.user_settings.save() {
+                self.message = Some((format!("Failed to save queue: {}", e), true));
+            } else {
+                self.message = Some(("Removed from queue".to_string(), false));
+            }
+        }
+
+        // Update selected requirement for detail panel
+        if let Some(idx) = selected_req_idx {
+            self.selected_idx = Some(idx);
+        }
+    }
+
     /// Show the Sprint Planning view
     fn show_planning_view(&mut self, ui: &mut egui::Ui) {
         // Header with controls
@@ -18839,7 +19227,7 @@ impl RequirementsApp {
 
     /// Show view picker popup (triggered by 'v' key - two-key sequence)
     /// Allows quick view switching with keyboard shortcuts:
-    /// v k - Kanban, v t - Timeline, v b - Baselines, v o - Org Chart, v r - Requirements, v s - Sprint Planning
+    /// v k - Kanban, v t - Timeline, v b - Baselines, v o - Org Chart, v r - Requirements, v s - Sprint Planning, v q - Queue
     fn show_view_picker_popup(&mut self, ctx: &egui::Context) {
         if !self.show_view_picker {
             return;
@@ -18849,6 +19237,7 @@ impl RequirementsApp {
         // Kanban uses 'K' (Shift+K) to deconflict with 'k' (vim up navigation)
         let view_options: Vec<(char, &str, View)> = vec![
             ('r', "Requirements", View::List),
+            ('q', "Queue", View::Queue),
             ('t', "Timeline", View::Timeline),
             ('b', "Baselines", View::Baselines),
             ('o', "Org Chart", View::OrgChart),
@@ -18884,6 +19273,8 @@ impl RequirementsApp {
             // Shift+K for Kanban to deconflict with 'k' (vim up)
             if i.key_pressed(egui::Key::R) && !i.modifiers.shift {
                 selected_view = Some(View::List);
+            } else if i.key_pressed(egui::Key::Q) && !i.modifiers.shift {
+                selected_view = Some(View::Queue);
             } else if i.key_pressed(egui::Key::T) && !i.modifiers.shift {
                 selected_view = Some(View::Timeline);
             } else if i.key_pressed(egui::Key::B) && !i.modifiers.shift {
@@ -18966,6 +19357,7 @@ impl RequirementsApp {
                                 (View::Baselines, View::Baselines) => true,
                                 (View::OrgChart, View::OrgChart) => true,
                                 (View::Planning, View::Planning) => true,
+                                (View::Queue, View::Queue) => true,
                                 _ => false,
                             };
 
@@ -19635,6 +20027,266 @@ impl RequirementsApp {
                 if !popup_rect.contains(pos) {
                     self.show_detail_tab_menu = false;
                     self.detail_tab_menu_selected = 0;
+                }
+            }
+        }
+    }
+
+    /// Show queue menu popup (triggered by 'q' key)
+    /// Allows adding/removing requirements from personal work queue
+    fn show_queue_menu_popup(&mut self, ctx: &egui::Context) {
+        if !self.show_queue_menu {
+            return;
+        }
+
+        // Ensure we have a selected requirement
+        let req_idx = match self.selected_idx {
+            Some(idx) => idx,
+            None => {
+                self.show_queue_menu = false;
+                return;
+            }
+        };
+
+        let req_id = match self.store.requirements.get(req_idx) {
+            Some(req) => req.id,
+            None => {
+                self.show_queue_menu = false;
+                return;
+            }
+        };
+
+        let is_in_queue = self.user_settings.is_in_queue(&req_id);
+        let queue_position = self.user_settings.queue_position(&req_id);
+
+        // Define queue action options
+        // Format: (key, label, description, requires_in_queue)
+        let queue_options: Vec<(char, &str, &str, bool)> = vec![
+            ('t', "Add to Top", "Add to top of your queue (highest priority)", false),
+            ('m', "Add to Middle", "Add to middle of your queue", false),
+            ('b', "Add to Bottom", "Add to bottom of your queue (lowest priority)", false),
+            ('d', "Remove from Queue", "Remove this item from your queue", true),
+            ('v', "View Queue", "Switch to queue view", false),
+        ];
+        let num_options = queue_options.len();
+
+        // Handle keyboard input for the popup
+        let mut close_popup = false;
+        let mut action: Option<char> = None;
+        let mut nav_up = false;
+        let mut nav_down = false;
+        let mut confirm = false;
+
+        ctx.input(|i| {
+            // Escape to close
+            if i.key_pressed(egui::Key::Escape) {
+                close_popup = true;
+            }
+            // Arrow key navigation
+            if i.key_pressed(egui::Key::ArrowUp) || i.key_pressed(egui::Key::K) {
+                nav_up = true;
+            }
+            if i.key_pressed(egui::Key::ArrowDown) || i.key_pressed(egui::Key::J) {
+                nav_down = true;
+            }
+            // Enter to confirm selection
+            if i.key_pressed(egui::Key::Enter) {
+                confirm = true;
+            }
+            // Shortcut keys for direct selection
+            if i.key_pressed(egui::Key::T) && !i.modifiers.shift {
+                action = Some('t');
+            } else if i.key_pressed(egui::Key::M) {
+                action = Some('m');
+            } else if i.key_pressed(egui::Key::B) {
+                action = Some('b');
+            } else if i.key_pressed(egui::Key::D) {
+                action = Some('d');
+            } else if i.key_pressed(egui::Key::V) {
+                action = Some('v');
+            }
+        });
+
+        if close_popup {
+            self.show_queue_menu = false;
+            self.queue_menu_selected = 0;
+            return;
+        }
+
+        // Handle arrow navigation
+        if nav_up {
+            if self.queue_menu_selected > 0 {
+                self.queue_menu_selected -= 1;
+            } else {
+                self.queue_menu_selected = num_options - 1;
+            }
+        }
+        if nav_down {
+            if self.queue_menu_selected < num_options - 1 {
+                self.queue_menu_selected += 1;
+            } else {
+                self.queue_menu_selected = 0;
+            }
+        }
+
+        // Enter confirms the currently selected option
+        if confirm {
+            action = Some(queue_options[self.queue_menu_selected].0);
+        }
+
+        // Handle selected action
+        if let Some(a) = action {
+            let mut settings_changed = false;
+            match a {
+                't' => {
+                    self.user_settings.queue_add_top(req_id);
+                    settings_changed = true;
+                    let pos_msg = if let Some(pos) = self.user_settings.queue_position(&req_id) {
+                        format!(" (position {})", pos + 1)
+                    } else {
+                        String::new()
+                    };
+                    self.message = Some((format!("Added to top of queue{}", pos_msg), false));
+                }
+                'm' => {
+                    self.user_settings.queue_add_middle(req_id);
+                    settings_changed = true;
+                    let pos_msg = if let Some(pos) = self.user_settings.queue_position(&req_id) {
+                        format!(" (position {})", pos + 1)
+                    } else {
+                        String::new()
+                    };
+                    self.message = Some((format!("Added to middle of queue{}", pos_msg), false));
+                }
+                'b' => {
+                    self.user_settings.queue_add_bottom(req_id);
+                    settings_changed = true;
+                    let pos_msg = if let Some(pos) = self.user_settings.queue_position(&req_id) {
+                        format!(" (position {})", pos + 1)
+                    } else {
+                        String::new()
+                    };
+                    self.message = Some((format!("Added to bottom of queue{}", pos_msg), false));
+                }
+                'd' => {
+                    if is_in_queue {
+                        self.user_settings.queue_remove(&req_id);
+                        settings_changed = true;
+                        self.message = Some(("Removed from queue".to_string(), false));
+                    }
+                }
+                'v' => {
+                    self.pending_view_change = Some(View::Queue);
+                }
+                _ => {}
+            }
+
+            if settings_changed {
+                if let Err(e) = self.user_settings.save() {
+                    self.message = Some((format!("Failed to save queue: {}", e), true));
+                }
+            }
+
+            self.show_queue_menu = false;
+            self.queue_menu_selected = 0;
+            return;
+        }
+
+        // Center the popup on screen
+        let screen_rect = ctx.screen_rect();
+        let popup_size = egui::vec2(280.0, 200.0);
+        let popup_pos = egui::pos2(
+            (screen_rect.width() - popup_size.x) / 2.0,
+            (screen_rect.height() - popup_size.y) / 2.0,
+        );
+
+        egui::Area::new(egui::Id::new("queue_menu_popup"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(popup_pos)
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style())
+                    .inner_margin(8.0)
+                    .show(ui, |ui| {
+                        ui.set_min_width(popup_size.x - 16.0);
+
+                        // Show queue status
+                        if is_in_queue {
+                            let pos_text = queue_position.map(|p| format!(" #{}", p + 1)).unwrap_or_default();
+                            ui.label(egui::RichText::new(format!("Queue Actions (in queue{})", pos_text)).strong());
+                        } else {
+                            ui.label(egui::RichText::new("Queue Actions").strong());
+                        }
+                        ui.separator();
+
+                        for (idx, (key, label, description, requires_in_queue)) in queue_options.iter().enumerate() {
+                            let is_selected = idx == self.queue_menu_selected;
+                            let is_disabled = *requires_in_queue && !is_in_queue;
+
+                            // Show selection highlight
+                            let text = format!("{}  {}", key, label);
+
+                            if is_disabled {
+                                ui.add_enabled(false, egui::SelectableLabel::new(is_selected, &text));
+                            } else {
+                                let response = ui.selectable_label(is_selected, &text);
+                                let was_clicked = response.clicked();
+                                response.on_hover_text(*description);
+                                if was_clicked {
+                                    // Handle click same as keyboard
+                                    let mut settings_changed = false;
+                                    match *key {
+                                        't' => {
+                                            self.user_settings.queue_add_top(req_id);
+                                            settings_changed = true;
+                                            self.message = Some(("Added to top of queue".to_string(), false));
+                                        }
+                                        'm' => {
+                                            self.user_settings.queue_add_middle(req_id);
+                                            settings_changed = true;
+                                            self.message = Some(("Added to middle of queue".to_string(), false));
+                                        }
+                                        'b' => {
+                                            self.user_settings.queue_add_bottom(req_id);
+                                            settings_changed = true;
+                                            self.message = Some(("Added to bottom of queue".to_string(), false));
+                                        }
+                                        'd' => {
+                                            if is_in_queue {
+                                                self.user_settings.queue_remove(&req_id);
+                                                settings_changed = true;
+                                                self.message = Some(("Removed from queue".to_string(), false));
+                                            }
+                                        }
+                                        'v' => {
+                                            self.pending_view_change = Some(View::Queue);
+                                        }
+                                        _ => {}
+                                    }
+                                    if settings_changed {
+                                        if let Err(e) = self.user_settings.save() {
+                                            self.message = Some((format!("Failed to save queue: {}", e), true));
+                                        }
+                                    }
+                                    self.show_queue_menu = false;
+                                    self.queue_menu_selected = 0;
+                                }
+                            }
+                        }
+
+                        ui.separator();
+                        ui.horizontal(|ui| {
+                            ui.small("↑↓/jk nav • Enter/key select • Esc close");
+                        });
+                    });
+            });
+
+        // Close on click outside
+        if ctx.input(|i| i.pointer.any_click()) {
+            let popup_rect = egui::Rect::from_min_size(popup_pos, popup_size);
+            if let Some(pos) = ctx.input(|i| i.pointer.interact_pos()) {
+                if !popup_rect.contains(pos) {
+                    self.show_queue_menu = false;
+                    self.queue_menu_selected = 0;
                 }
             }
         }
@@ -26712,6 +27364,7 @@ impl eframe::App for RequirementsApp {
                 View::Baselines => KeyContext::RequirementsList, // Use same context for baselines
                 View::Timeline => KeyContext::RequirementsList, // Use same context for timeline
                 View::Planning => KeyContext::RequirementsList, // Use same context for planning
+                View::Queue => KeyContext::RequirementsList,    // Use same context for queue
             }
         };
 
@@ -26963,12 +27616,33 @@ impl eframe::App for RequirementsApp {
             && !self.show_action_menu
             && !self.show_detail_tab_menu
             && !self.show_type_picker
+            && !self.show_queue_menu
             && self.quick_change_field.is_none()
             && self.pending_delete_confirm.is_none()
             && self.selected_idx.is_some()  // Need a selected requirement
             && r_pressed
         {
             self.show_detail_tab_menu = true;
+        }
+
+        // 'q' to open queue menu (add to top/middle/bottom, remove, view queue)
+        let q_pressed = ctx.input(|i| i.key_pressed(egui::Key::Q) && !i.modifiers.ctrl && !i.modifiers.alt && !i.modifiers.shift);
+        if !in_form_view
+            && !in_settings
+            && !self.show_view_picker
+            && !self.show_keyboard_help
+            && !self.show_delete_menu
+            && !self.show_add_menu
+            && !self.show_action_menu
+            && !self.show_detail_tab_menu
+            && !self.show_type_picker
+            && !self.show_queue_menu
+            && self.quick_change_field.is_none()
+            && self.pending_delete_confirm.is_none()
+            && self.selected_idx.is_some()  // Need a selected requirement
+            && q_pressed
+        {
+            self.show_queue_menu = true;
         }
 
         // 'T' (Shift+T) to open type picker (change requirement type with fuzzy search)
@@ -26982,6 +27656,7 @@ impl eframe::App for RequirementsApp {
             && !self.show_action_menu
             && !self.show_detail_tab_menu
             && !self.show_type_picker
+            && !self.show_queue_menu
             && self.quick_change_field.is_none()
             && self.pending_delete_confirm.is_none()
             && self.selected_idx.is_some()  // Need a selected requirement
@@ -27003,6 +27678,7 @@ impl eframe::App for RequirementsApp {
             && !self.show_action_menu
             && !self.show_detail_tab_menu
             && !self.show_type_picker
+            && !self.show_queue_menu
             && !self.show_weight_picker
             && self.quick_change_field.is_none()
             && self.pending_delete_confirm.is_none()
@@ -27921,6 +28597,21 @@ impl eframe::App for RequirementsApp {
                     });
                 });
             });
+        } else if self.current_view == View::Queue {
+            // Queue view with queue on left, detail panel on right (consistent with List view)
+            egui::CentralPanel::default().show(ctx, |ui| {
+                ui.columns(2, |columns| {
+                    // Left column - Queue view
+                    columns[0].vertical(|ui| {
+                        self.show_queue_view(ui);
+                    });
+
+                    // Right column - Detail panel (for selected item)
+                    columns[1].vertical(|ui| {
+                        self.show_detail_view_with_close(ui);
+                    });
+                });
+            });
         } else {
             // In List/Detail view, use layout mode
             match self.layout_mode {
@@ -28131,6 +28822,9 @@ impl eframe::App for RequirementsApp {
 
         // Show detail tab menu popup (triggered by 'r' key)
         self.show_detail_tab_menu_popup(ctx);
+
+        // Show queue menu popup (triggered by 'q' key)
+        self.show_queue_menu_popup(ctx);
 
         // Show type picker popup (triggered by 'T'/shift+t key)
         self.show_type_picker_popup(ctx);

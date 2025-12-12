@@ -1437,3 +1437,45 @@ A chronological record of development sessions and changes made to the Requireme
   - When not editing: auto-reload if enabled, else show toast
   - When editing: show toast "Database changed externally, reload pending"
   - Selection is preserved across reloads by matching requirement IDs
+
+
+### Personal Work Queue Feature
+- **Prompt**: "I would like a user queue. This is like an inbox that the user can self manage in terms of relative ranking. So we have a ranking say an integer 1-100 with lower number higher in rank."
+- **Requirements**:
+  - User-managed work queue (not requirement metadata)
+  - Rankings 1-100 (lower = higher priority)
+  - Same-rank items use requirement priority as tiebreaker
+  - Hotkeys: 'q t' (top), 'q b' (bottom), 'q m' (middle), 'q d' (remove), 'q v' (view queue)
+  - Queue view also accessible via 'v q'
+  - Reorder in queue view with Ctrl+Up/Down or Ctrl+k/j
+- **Implementation**:
+  - Added `QueueEntry` struct in `aida-gui/src/app.rs`:
+    - `requirement_id: Uuid` - reference to the requirement
+    - `rank: u8` - priority ranking (1-100)
+    - `added_at: DateTime<Utc>` - timestamp
+  - Added `queue: Vec<QueueEntry>` field to `UserSettings`
+  - Added queue management methods to `UserSettings`:
+    - `is_in_queue()`, `queue_position()` - queries
+    - `queue_add_top()`, `queue_add_middle()`, `queue_add_bottom()` - add operations
+    - `queue_remove()`, `queue_move_up()`, `queue_move_down()` - remove/reorder
+    - `renumber_queue_ranks()`, `get_sorted_queue()` - utility methods
+  - Added `View::Queue` to View enum
+  - Added state fields: `show_queue_menu`, `queue_menu_selected`, `queue_selected_idx`
+  - Added 'q' key handler for queue popup menu
+  - Added queue to view picker ('v q')
+  - Added `show_queue_menu_popup()` function for queue action menu
+  - Added `show_queue_view()` function for queue list display
+  - Queue stored per-user in settings (~/.config/aida/aida_gui_settings.yaml)
+- **Key Bindings**:
+  - 'q' -> opens queue menu
+    - 't' -> add to top of queue
+    - 'm' -> add to middle of queue
+    - 'b' -> add to bottom of queue
+    - 'd' -> remove from queue
+    - 'v' -> view queue
+  - 'v q' -> view queue (via view picker)
+  - In queue view:
+    - Arrow keys / j/k -> navigate
+    - Ctrl+Up/Down or Ctrl+k/j -> reorder item
+    - d/Delete/Backspace -> remove from queue
+    - Enter -> select item for detail view

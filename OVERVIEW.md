@@ -85,6 +85,13 @@ Define connections between requirements:
 - Zoom controls (Ctrl+MouseWheel, keyboard shortcuts)
 - Collapsible comment trees
 - Tabbed interface (Description, Comments, Links, History)
+- **Personal Work Queue**: User-managed priority inbox
+  - Rankings 1-100 (lower = higher priority)
+  - Same-rank items use requirement priority as tiebreaker
+  - Hotkeys: `q t` (top), `q m` (middle), `q b` (bottom), `q d` (remove)
+  - Queue view: `q v` or `v q`
+  - Reorder: `Ctrl+Up/Down` or `Ctrl+k/j` in queue view
+  - Stored per-user in settings (~/.config/aida/aida_gui_settings.yaml)
 
 ## Technology Stack
 
