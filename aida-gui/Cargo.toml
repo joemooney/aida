@@ -40,14 +40,16 @@ libc = { version = "0.2", optional = true }
 
 # gRPC client dependencies
 # Native: Uses tonic with full transport and tokio runtime
-# WASM: Uses tonic-web-wasm-client (browser handles async)
+# WASM: Uses tonic (no transport) + tonic-web-wasm-client
 prost = { workspace = true }
 
-# Native gRPC (tonic with transport requires tokio)
+# Tonic gRPC types - always included but with different features per platform
+# Native: Uses workspace config (full transport + tokio)
+# WASM: Uses minimal features (prost + codegen only, no transport)
 tonic = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 
-# WASM gRPC-Web client
+# WASM gRPC-Web client (provides the actual transport for WASM)
 tonic-web-wasm-client = { version = "0.6", optional = true }
 
 # Web/WASM dependencies (optional)
@@ -75,6 +77,8 @@ getrandom = { version = "0.2", optional = true }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 uuid = { version = "1.4", features = ["v4", "serde", "js"] }
 getrandom = { version = "0.2", features = ["js"] }
+# WASM-compatible tonic with minimal features (no transport, no tokio)
+tonic = { version = "0.12", default-features = false, features = ["prost", "codegen"] }
 
 [features]
 default = ["native"]

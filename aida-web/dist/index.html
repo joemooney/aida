@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>AIDA - Requirements Management</title>
     
-<script type="module" nonce="WCR3fPxT/3yHZiWMcSGqWA==">
-import init, * as bindings from '/aida-web-9ecf558982ee105.js';
-const wasm = await init('/aida-web-9ecf558982ee105_bg.wasm');
+<script type="module">
+import init, * as bindings from '/aida-web-c85d733bfb0117b8.js';
+const wasm = await init({ module_or_path: '/aida-web-c85d733bfb0117b8_bg.wasm' });
 
 
 window.wasmBindings = bindings;
@@ -55,7 +55,7 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
             100% { transform: rotate(360deg); }
         }
     </style>
-<link rel="modulepreload" href="/aida-web-9ecf558982ee105.js" crossorigin=anonymous integrity="sha384-TZCnwvvEPOQsBY/MYr3X5Nyu26B435M88y59q4IY3/e4QFhgSQ1zsPwBQsAY0Hig"><link rel="preload" href="/aida-web-9ecf558982ee105_bg.wasm" crossorigin=anonymous integrity="sha384-uUcRV2DFcwhjSoWk+rU29TQy2vVm78GpHbAMzjEDP71u+M6UBnpPdSoIoXv217pg" as="fetch" type="application/wasm"></head>
+<link rel="modulepreload" href="/aida-web-c85d733bfb0117b8.js" crossorigin="anonymous" integrity="sha384-LI89THTJcmvNeu/SIjLzVyHZLXi6dCuwks2btYaJ6Gla1u7C9D6VEZhvTVbql0sc"><link rel="preload" href="/aida-web-c85d733bfb0117b8_bg.wasm" crossorigin="anonymous" integrity="sha384-06frJaG8sqHzPoTaVi66kS7gfrkxoQ2BacQ7XGcVC/1fMdhN395B0Dhev/8IXoHT" as="fetch" type="application/wasm"></head>
 <body>
     <div id="loading">
         <div class="spinner"></div>

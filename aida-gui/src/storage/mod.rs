@@ -25,6 +25,15 @@ pub use grpc_client::GrpcStorageClient;
 #[cfg(feature = "native")]
 pub use embedded::EmbeddedServer;
 
+// Re-export proto module for use by aida-web
+pub use grpc_client::proto;
+
+// Re-export conversion functions for external use
+pub use grpc_client::{
+    proto_to_store, proto_to_requirement, proto_to_comment,
+    requirement_to_create_request, requirement_to_update_request,
+};
+
 use anyhow::Result;
 
 /// Create a storage client for the given configuration

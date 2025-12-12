@@ -49,9 +49,14 @@ impl GrpcStorageClient {
 
         let addr = normalize_addr(server_addr);
 
-        // Try to connect
+        // Connect using tonic transport (native only)
         let client = runtime.block_on(async {
-            RequirementsServiceClient::connect(addr).await
+            let channel = Channel::from_shared(addr)
+                .context("Invalid server address")?
+                .connect()
+                .await
+                .context("Failed to connect to server")?;
+            Ok::<_, anyhow::Error>(RequirementsServiceClient::new(channel))
         }).context("Failed to connect to AIDA server")?;
 
         Ok(GrpcStorageClient {

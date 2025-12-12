@@ -109,9 +109,14 @@ impl RemoteStorage {
 
         let addr = normalize_addr(server_addr);
 
-        // Try to connect
+        // Connect using tonic transport (native only)
         let client = runtime.block_on(async {
-            RequirementsServiceClient::connect(addr).await
+            let channel = Channel::from_shared(addr)
+                .context("Invalid server address")?
+                .connect()
+                .await
+                .context("Failed to connect to server")?;
+            Ok::<_, anyhow::Error>(RequirementsServiceClient::new(channel))
         }).context("Failed to connect to AIDA server")?;
 
         Ok(RemoteStorage {
@@ -473,6 +478,7 @@ fn proto_to_requirement(req: &proto::Requirement) -> Option<aida_core::Requireme
         req_type: proto_to_req_type(type_enum),
         dependencies: req.dependency_ids.iter().filter_map(|id| Uuid::parse_str(id).ok()).collect(),
         tags: req.tags.iter().cloned().collect(),
+        weight: None, // Not exposed via proto
         relationships: req.relationships.iter().filter_map(proto_to_relationship).collect(),
         comments: req.comments.iter().filter_map(proto_to_comment).collect(),
         history: Vec::new(),
@@ -481,6 +487,9 @@ fn proto_to_requirement(req: &proto::Requirement) -> Option<aida_core::Requireme
         custom_priority: if req.custom_priority.is_empty() { None } else { Some(req.custom_priority.clone()) },
         custom_fields: req.custom_fields.clone(),
         urls: req.urls.iter().map(proto_to_url_link).collect(),
+        attachments: Vec::new(), // Not exposed via proto
+        trace_links: Vec::new(), // Not exposed via proto
+        implementation_info: None, // Not exposed via proto
         ai_evaluation: None,
         version: 0, // Remote doesn't track versions locally
     })
@@ -506,6 +515,8 @@ fn proto_to_status(status: proto::RequirementStatus) -> aida_core::RequirementSt
         proto::RequirementStatus::Approved => Approved,
         proto::RequirementStatus::Completed => Completed,
         proto::RequirementStatus::Rejected => Rejected,
+        proto::RequirementStatus::Planned => Planned,
+        proto::RequirementStatus::InProgress => InProgress,
         proto::RequirementStatus::Unspecified => Draft,
     }
 }
@@ -662,6 +673,8 @@ fn status_to_proto(status: &aida_core::RequirementStatus) -> proto::RequirementS
         Approved => proto::RequirementStatus::Approved,
         Completed => proto::RequirementStatus::Completed,
         Rejected => proto::RequirementStatus::Rejected,
+        Planned => proto::RequirementStatus::Planned,
+        InProgress => proto::RequirementStatus::InProgress,
     }
 }
 

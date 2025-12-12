@@ -1,10 +1,17 @@
 // trace:FR-0273 | ai:claude:high
 //! gRPC-Web client for communicating with the AIDA server
+//!
+//! This module wraps the shared GrpcStorageClient from aida-gui for use
+//! in the web application. It provides a simplified async interface
+//! for the WASM environment.
 
 use tonic_web_wasm_client::Client;
 
 use crate::proto::requirements_service_client::RequirementsServiceClient;
 use crate::proto::*;
+
+// Re-export shared storage types from aida-gui
+pub use aida_gui::storage::{GrpcStorageClient, proto as shared_proto};
 
 /// AIDA gRPC-Web client wrapper
 pub struct AidaClient {
@@ -19,6 +26,12 @@ impl AidaClient {
         Self {
             client: RequirementsServiceClient::new(client),
         }
+    }
+
+    /// Create a new client using the shared GrpcStorageClient from aida-gui
+    /// This provides access to the shared proto conversion functions
+    pub fn new_shared(server_url: &str) -> Result<GrpcStorageClient, anyhow::Error> {
+        GrpcStorageClient::connect(server_url)
     }
 
     /// Get the full requirements store

@@ -3,17 +3,35 @@
 //!
 //! This library provides the core GUI components for AIDA requirements management.
 //! It can be compiled for both native desktop and WebAssembly (browser) targets.
+//!
+//! ## Feature Flags
+//! - `native`: Full native desktop GUI with local storage (default)
+//! - `web`: Web/WASM support with gRPC-Web storage client
+//!
+//! When used by `aida-web`, only the `storage` module is needed.
 
+// The app module requires many native-only types from aida-core
+#[cfg(feature = "native")]
 mod app;
+
+// Platform module for native/web abstractions
+#[cfg(feature = "native")]
 pub mod platform;
+
 #[cfg(feature = "remote")]
 mod remote;
-mod storage;
 
+// Storage module is available for both native and web builds
+// It provides the GrpcStorageClient that works on both platforms
+pub mod storage;
+
+#[cfg(feature = "native")]
 pub use app::RequirementsApp;
 
-// Web entry point for WASM builds
-#[cfg(target_arch = "wasm32")]
+// Web entry point for WASM builds of aida-gui itself (full GUI)
+// Requires both native types (from aida-core) and web features
+// This is NOT used when aida-web imports aida-gui for just the storage module
+#[cfg(all(target_arch = "wasm32", feature = "native"))]
 mod web_entry {
     use super::*;
     use wasm_bindgen::prelude::*;
