@@ -1656,3 +1656,31 @@ A chronological record of development sessions and changes made to the Requireme
   - Nearly identical UI on both platforms
   - Reduced maintenance burden
   - aida-web remains available as lightweight alternative
+
+### WASM Browser Client Testing (2025-12-12)
+- **Prompt**: Continue testing WASM client in browser with server
+- **Goal**: Verify dual-target WASM build works in browser environment
+- **Testing Steps**:
+  1. Built WASM client: `cd aida-gui && trunk build`
+  2. Started aida-server with gRPC-Web support: port 50051 (gRPC), port 8080 (REST)
+  3. Started trunk serve: `trunk serve --port 8088`
+  4. Verified web client accessible at http://localhost:8088 (HTTP 200)
+  5. Confirmed WASM module loading: `aida-gui-7f1acc2a63f43ac1_bg.wasm` (24.4 MB)
+- **Build Artifacts**:
+  - `aida-gui/dist/aida-gui-7f1acc2a63f43ac1_bg.wasm` - WASM binary (24.4 MB)
+  - `aida-gui/dist/aida-gui-7f1acc2a63f43ac1.js` - JS bindings (81 KB)
+- **Additional Changes**:
+  - Added `.gitignore` entries for WASM dist folders
+- **Testing Commands**:
+  ```bash
+  # Start server
+  make run-server FORCE=1
+
+  # Build and serve WASM client
+  make web-build
+  make web-serve
+
+  # Access browser client
+  http://localhost:8088
+  ```
+- **Status**: Complete - WASM build compiles and serves successfully

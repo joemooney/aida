@@ -35,3 +35,8 @@ requirements.db
 # Test files
 test_*.yaml
 .requirements-mapping.yaml
+
+# WASM build artifacts
+**/dist/
+aida-gui/dist/
+aida-web/dist/
