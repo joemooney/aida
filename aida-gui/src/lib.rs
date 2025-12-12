@@ -8,6 +8,7 @@ mod app;
 pub mod platform;
 #[cfg(feature = "remote")]
 mod remote;
+mod storage;
 
 pub use app::RequirementsApp;
 

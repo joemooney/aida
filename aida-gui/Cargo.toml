@@ -36,11 +36,12 @@ open = { version = "5", optional = true }
 arboard = { version = "3", optional = true }
 rfd = { version = "0.15", optional = true }
 hostname = { version = "0.4", optional = true }
+libc = { version = "0.2", optional = true }
 
-# gRPC client dependencies (optional)
-tonic = { workspace = true, optional = true }
-prost = { workspace = true, optional = true }
-tokio = { workspace = true, optional = true }
+# gRPC client dependencies (always available for storage module)
+tonic = { workspace = true }
+prost = { workspace = true }
+tokio = { workspace = true }
 
 # Web/WASM dependencies (optional)
 wasm-bindgen = { version = "0.2", optional = true }
@@ -78,6 +79,7 @@ native = [
     "arboard",
     "rfd",
     "hostname",
+    "libc",
 ]
 web = [
     "wasm-bindgen",
@@ -88,7 +90,8 @@ web = [
     "console_error_panic_hook",
     "log",
 ]
-remote = ["tonic", "prost", "tokio", "tonic-build"]
+# Legacy feature - gRPC is now always available
+remote = []
 
 [build-dependencies]
-tonic-build = { workspace = true, optional = true }
+tonic-build = { workspace = true }
