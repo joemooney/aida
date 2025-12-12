@@ -101,7 +101,7 @@ async fn main() -> Result<()> {
     let storage = Storage::new(&db_path);
     let state = Arc::new(ServerState::new(storage)?);
 
-    // Build CORS layer
+    // Build CORS layer - allows gRPC-Web requests from browser clients
     let cors = CorsLayer::new()
         .allow_methods([
             Method::GET,
@@ -115,12 +115,17 @@ async fn main() -> Result<()> {
             header::AUTHORIZATION,
             header::ACCEPT,
             header::HeaderName::from_static("x-grpc-web"),
+            header::HeaderName::from_static("x-user-agent"),
             header::HeaderName::from_static("grpc-timeout"),
+            header::HeaderName::from_static("grpc-accept-encoding"),
+            header::HeaderName::from_static("grpc-encoding"),
         ])
         .allow_origin(Any)
         .expose_headers([
             header::HeaderName::from_static("grpc-status"),
             header::HeaderName::from_static("grpc-message"),
+            header::HeaderName::from_static("grpc-encoding"),
+            header::HeaderName::from_static("grpc-accept-encoding"),
         ]);
 
     // Build the gRPC server address
