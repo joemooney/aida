@@ -108,8 +108,7 @@ impl Drop for EmbeddedServer {
         // Attempt graceful shutdown first
         #[cfg(unix)]
         {
-            use std::os::unix::process::CommandExt;
-            // Send SIGTERM
+            // Send SIGTERM for graceful shutdown
             unsafe {
                 libc::kill(self.process.id() as i32, libc::SIGTERM);
             }
@@ -124,6 +123,7 @@ impl Drop for EmbeddedServer {
 }
 
 /// Find an available port for the embedded server
+#[allow(dead_code)]
 fn find_available_port() -> Result<u16> {
     // Bind to port 0 to get a random available port
     let listener = TcpListener::bind("127.0.0.1:0")
@@ -136,6 +136,7 @@ fn find_available_port() -> Result<u16> {
 }
 
 /// Find the aida-server binary
+#[allow(dead_code)]
 fn find_server_binary() -> Result<PathBuf> {
     // Try several locations
     let candidates = [
@@ -175,6 +176,7 @@ fn find_server_binary() -> Result<PathBuf> {
 }
 
 /// Try to find aida-server in PATH
+#[allow(dead_code)]
 fn which_aida_server() -> Option<PathBuf> {
     std::env::var_os("PATH").and_then(|paths| {
         std::env::split_paths(&paths)

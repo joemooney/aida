@@ -7,6 +7,9 @@ use aida_core::{
     RelationshipType, Requirement, RequirementPriority, RequirementStatus, RequirementType,
     RequirementsStore, SaveResult, SessionInfo, Storage, StoredAiEvaluation, UrlLink,
 };
+use crate::storage::StorageClient;
+#[cfg(feature = "remote")]
+use crate::storage::create_storage_client;
 use eframe::egui;
 use similar::{ChangeTag, TextDiff};
 use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
@@ -3228,7 +3231,9 @@ impl ViewPreset {
 pub struct RequirementsApp {
     storage: Storage,
     store: RequirementsStore,
-    /// Remote server address (if connected to a server)
+    /// Unified storage client for gRPC-based access (local or remote)
+    storage_client: Option<Box<dyn StorageClient>>,
+    /// Remote server address (if connected to a server) - LEGACY, use storage_client
     #[cfg(feature = "remote")]
     remote_client: Option<crate::remote::StorageBackend>,
     /// Server address string for display
@@ -3923,10 +3928,20 @@ impl RequirementsApp {
         // Generate unique session ID (no heartbeat for remote)
         let session_id = format!("{}-{}", std::process::id(), Uuid::new_v4());
 
+        // Create unified storage client using the new storage module
+        let storage_client: Option<Box<dyn StorageClient>> = match create_storage_client(Some(server_addr), None) {
+            Ok(client) => Some(client),
+            Err(e) => {
+                eprintln!("WARNING: Failed to create unified storage client: {}. Using legacy remote_client.", e);
+                None
+            }
+        };
+
         // Create a minimal app with remote backend
         Self {
             storage,
             store,
+            storage_client,
             #[cfg(feature = "remote")]
             remote_client: Some(remote_backend),
             server_addr: Some(server_addr.to_string()),
@@ -4444,6 +4459,7 @@ impl RequirementsApp {
         Self {
             storage,
             store,
+            storage_client: None, // Local file mode doesn't use gRPC client yet
             #[cfg(feature = "remote")]
             remote_client: None,
             server_addr: None,
@@ -5424,7 +5440,27 @@ impl RequirementsApp {
 
     // trace:FR-0153 | ai:claude:high
     fn save(&mut self) {
-        // Check if we're connected to a remote server
+        // Check if we have a unified storage client (preferred path)
+        if let Some(ref client) = self.storage_client {
+            match client.save(&self.store) {
+                Ok(()) => {
+                    self.original_timestamps = Storage::get_requirement_timestamps(&self.store);
+                    self.modified_requirement_ids.clear();
+                    let msg = if client.is_remote() {
+                        "Saved to server successfully"
+                    } else {
+                        "Saved successfully"
+                    };
+                    self.message = Some((msg.to_string(), false));
+                }
+                Err(e) => {
+                    self.message = Some((format!("Error saving: {}", e), true));
+                }
+            }
+            return;
+        }
+
+        // Legacy: Check if we're connected to a remote server via old remote_client
         #[cfg(feature = "remote")]
         if let Some(ref remote) = self.remote_client {
             // Use remote save

@@ -19,6 +19,7 @@ mod grpc_client;
 #[cfg(feature = "native")]
 mod embedded;
 
+#[allow(unused_imports)]
 pub use traits::{StorageClient, ServerStatus, StorageError};
 pub use grpc_client::GrpcStorageClient;
 #[cfg(feature = "native")]
