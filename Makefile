@@ -6,7 +6,7 @@
         test test-unit test-integration clean install \
         db-info db-migrate-sqlite db-migrate-yaml db-export \
         docs proto fmt lint check \
-        web-build web-build-release web-serve web-clean web-deps
+        web-build web-build-release web-serve web-serve-force web-clean web-deps
 
 # Default database path
 DB ?= requirements.db
@@ -269,6 +269,11 @@ web-build-release: ## Build WASM web client (release/optimized)
 	cd aida-web && trunk build --release
 
 web-serve: ## Serve WASM web client for development (port 8088)
+	cd aida-web && trunk serve --port $(WEB_PORT)
+
+web-serve-force: ## Serve web client, killing any existing process on port
+	@-lsof -t -i:$(WEB_PORT) | xargs -r kill 2>/dev/null || true
+	@sleep 0.1
 	cd aida-web && trunk serve --port $(WEB_PORT)
 
 web-clean: ## Clean web build artifacts
