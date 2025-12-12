@@ -359,6 +359,8 @@ impl AidaWebApp {
     fn draw_left_panel(&mut self, ctx: &egui::Context) {
         egui::SidePanel::left("left_panel")
             .default_width(280.0)
+            .width_range(200.0..=400.0)
+            .resizable(true)
             .show(ctx, |ui| {
                 // Search bar
                 ui.horizontal(|ui| {
