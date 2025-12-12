@@ -2469,46 +2469,77 @@ impl UserSettings {
     }
 
     /// Load settings from file, or return defaults if not found
-    /// Also loads themes from the themes directory
-    /// For new users, attempts to populate name/email from git config and environment
+    /// Also loads themes from the themes directory (native only)
+    /// For new users, attempts to populate name/email from git config and environment (native only)
+    /// On WASM: loads from localStorage
+    /// trace:FR-0283 | ai:claude:high
     pub fn load() -> Self {
-        let path = Self::settings_path();
-        let mut settings = if path.exists() {
-            if let Ok(contents) = std::fs::read_to_string(&path) {
-                serde_yaml::from_str(&contents).unwrap_or_default()
+        // WASM: Load from localStorage
+        #[cfg(target_arch = "wasm32")]
+        {
+            use crate::platform::PlatformServices;
+            let platform = crate::platform::platform();
+
+            let mut settings = if let Some(yaml_str) = platform.load_setting("aida_gui_settings") {
+                serde_yaml::from_str(&yaml_str).unwrap_or_default()
             } else {
                 Self::default()
-            }
-        } else {
-            Self::default()
-        };
+            };
 
-        // Migrate keybindings: ensure all KeyAction variants have bindings
-        // This handles new actions added in updates - they get their default binding
-        let default_bindings = KeyBindings::default();
-        for action in KeyAction::all() {
-            if !settings.keybindings.bindings.contains_key(action) {
-                if let Some(binding) = default_bindings.bindings.get(action) {
-                    settings.keybindings.bindings.insert(*action, binding.clone());
+            // Migrate keybindings: ensure all KeyAction variants have bindings
+            let default_bindings = KeyBindings::default();
+            for action in KeyAction::all() {
+                if !settings.keybindings.bindings.contains_key(action) {
+                    if let Some(binding) = default_bindings.bindings.get(action) {
+                        settings.keybindings.bindings.insert(*action, binding.clone());
+                    }
                 }
             }
+
+            return settings;
         }
 
-        // For new users, try to get name/email from git config and environment
-        if settings.name.is_empty() || settings.email.is_empty() {
-            Self::populate_from_git_and_env(&mut settings);
-        }
+        // Native: Load from file
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let path = Self::settings_path();
+            let mut settings = if path.exists() {
+                if let Ok(contents) = std::fs::read_to_string(&path) {
+                    serde_yaml::from_str(&contents).unwrap_or_default()
+                } else {
+                    Self::default()
+                }
+            } else {
+                Self::default()
+            };
 
-        // Load themes from files and merge with embedded custom themes
-        let file_themes = Self::load_file_themes();
-        for file_theme in file_themes {
-            // Only add if not already present (embedded themes take precedence by name)
-            if !settings.custom_themes.iter().any(|t| t.name == file_theme.name) {
-                settings.custom_themes.push(file_theme);
+            // Migrate keybindings: ensure all KeyAction variants have bindings
+            // This handles new actions added in updates - they get their default binding
+            let default_bindings = KeyBindings::default();
+            for action in KeyAction::all() {
+                if !settings.keybindings.bindings.contains_key(action) {
+                    if let Some(binding) = default_bindings.bindings.get(action) {
+                        settings.keybindings.bindings.insert(*action, binding.clone());
+                    }
+                }
             }
-        }
 
-        settings
+            // For new users, try to get name/email from git config and environment
+            if settings.name.is_empty() || settings.email.is_empty() {
+                Self::populate_from_git_and_env(&mut settings);
+            }
+
+            // Load themes from files and merge with embedded custom themes
+            let file_themes = Self::load_file_themes();
+            for file_theme in file_themes {
+                // Only add if not already present (embedded themes take precedence by name)
+                if !settings.custom_themes.iter().any(|t| t.name == file_theme.name) {
+                    settings.custom_themes.push(file_theme);
+                }
+            }
+
+            settings
+        }
     }
 
     /// Populate name and email from git config and environment variables
@@ -2557,13 +2588,27 @@ impl UserSettings {
         }
     }
 
-    /// Save settings to file
+    /// Save settings to file (native) or localStorage (WASM)
+    /// trace:FR-0283 | ai:claude:high
     pub fn save(&self) -> Result<(), String> {
-        let path = Self::settings_path();
         let yaml = serde_yaml::to_string(self)
             .map_err(|e| format!("Failed to serialize settings: {}", e))?;
-        std::fs::write(&path, yaml).map_err(|e| format!("Failed to write settings file: {}", e))?;
-        Ok(())
+
+        // WASM: Save to localStorage
+        #[cfg(target_arch = "wasm32")]
+        {
+            use crate::platform::PlatformServices;
+            let platform = crate::platform::platform();
+            return platform.save_setting("aida_gui_settings", &yaml);
+        }
+
+        // Native: Save to file
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let path = Self::settings_path();
+            std::fs::write(&path, yaml).map_err(|e| format!("Failed to write settings file: {}", e))?;
+            Ok(())
+        }
     }
 
     /// Get the display name for use in comments/history
