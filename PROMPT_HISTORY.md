@@ -1599,3 +1599,18 @@ A chronological record of development sessions and changes made to the Requireme
   - Shared proto types ensure type compatibility
   - Easy to add more shared components incrementally
 - **Status**: Complete - both native (cargo build -p aida-gui) and WASM (trunk build) compile successfully
+
+### Server --force Option for Port Conflicts (2025-12-12)
+- **Prompt**: Add --force option to aida-server to kill existing processes on ports
+- **Problem**: "Address already in use (os error 98)" when starting server with existing process on port
+- **Solution**: Add `--force/-f` CLI option that kills processes using the specified ports before binding
+- **Implementation**:
+  - Added `--force` flag to Args struct in `aida-server/src/main.rs`
+  - Created `kill_process_on_port()` function using `lsof -t -i:PORT` to find PIDs
+  - Created `kill_process_on_port_ss()` fallback using `ss` command for Linux systems without lsof
+  - Process termination uses SIGTERM first, then SIGKILL if needed
+  - Added 100ms delay after killing to allow OS to release ports
+  - Updated Makefile with `FORCE=1` variable for easy usage: `make run-server FORCE=1`
+- **Commits**:
+  - ac74f49: feat: add --force option to aida-server to kill existing processes
+- **Status**: Complete
