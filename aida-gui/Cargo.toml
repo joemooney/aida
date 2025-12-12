@@ -5,6 +5,9 @@ edition.workspace = true
 authors.workspace = true
 description = "GUI for AIDA requirements management (egui-based)"
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [[bin]]
 name = "aida-gui"
 path = "src/main.rs"

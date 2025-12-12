@@ -1,0 +1,24 @@
+# Trunk configuration for WASM builds
+# Build with: cd aida-gui && trunk build --release
+# Serve with: cd aida-gui && trunk serve --port 8088
+
+[build]
+# Target index.html
+target = "index.html"
+# Output directory
+dist = "dist"
+
+[watch]
+# Watch these directories for changes
+watch = ["src"]
+
+[serve]
+# Development server port
+port = 8088
+# Open browser automatically
+open = false
+
+[[hooks]]
+stage = "build"
+command = "sh"
+command_arguments = ["-c", "echo 'Building AIDA GUI for web...'"]

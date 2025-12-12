@@ -1,8 +1,7 @@
-mod app;
-mod platform;
-#[cfg(feature = "remote")]
-mod remote;
+// Native entry point - for desktop builds
+// The lib.rs handles module definitions and WASM entry point
 
+use aida_gui::RequirementsApp;
 use eframe::egui;
 use std::env;
 
@@ -101,7 +100,7 @@ fn main() -> Result<(), eframe::Error> {
         &title,
         options,
         Box::new(move |cc| {
-            Ok(Box::new(app::RequirementsApp::new_with_config(
+            Ok(Box::new(RequirementsApp::new_with_config(
                 cc,
                 cli.file_path.clone(),
                 cli.server.clone(),
