@@ -1614,3 +1614,45 @@ A chronological record of development sessions and changes made to the Requireme
 - **Commits**:
   - ac74f49: feat: add --force option to aida-server to kill existing processes
 - **Status**: Complete
+
+### Dual-Target GUI Compilation (Native + WASM) (2025-12-12)
+- **Prompt**: Make aida-gui compile for both native desktop and WASM browser targets
+- **Goal**: Provide nearly identical user experience for core requirements management on both platforms
+- **Problem**: aida-gui had ~30k lines with native-only dependencies (threads, filesystem, SQLite)
+- **Solution**: Add conditional compilation to gate native-only features while preserving shared UI
+- **Implementation**:
+  - **Phase 1: Conditional Thread Spawning**
+    - Gate heartbeat thread, AI evaluation thread, duplicate detection thread
+    - Use `#[cfg(not(target_arch = "wasm32"))]` for native-only code
+  - **Phase 2: Struct Field Gating**
+    - Gate native-only struct fields (storage, ai_client, edit_lock, etc.)
+    - Add separate initialization for WASM builds
+  - **Phase 3: Type and Import Gating**
+    - Split imports into cross-platform and native-only sections
+    - Gate types like `Storage`, `EditLock`, `ConflictInfo`, `MigrationCheck`
+  - **Phase 4: Entry Point Configuration**
+    - Update `lib.rs` with wasm_bindgen(start) entry point
+    - Update `main.rs` with cfg-gated native/WASM main functions
+    - Configure `index.html` with trunk build options
+  - **Phase 5: Makefile Updates**
+    - Update web-* targets to use aida-gui (full-featured)
+    - Add web-*-lite targets for aida-web (lightweight alternative)
+- **Key Files Modified**:
+  - `aida-gui/src/app.rs` - Extensive conditional compilation (~1000+ lines changed)
+  - `aida-gui/src/lib.rs` - WASM entry point with canvas setup
+  - `aida-gui/src/main.rs` - Cfg-gated native/WASM main functions
+  - `aida-gui/Cargo.toml` - Added web-sys features (HtmlCanvasElement, Element)
+  - `aida-gui/index.html` - Trunk build configuration
+  - `aida-core/Cargo.toml` - WASM uuid/getrandom with js feature
+  - `Makefile` - Updated web build targets
+- **Build Commands**:
+  - Native: `cargo build -p aida-gui`
+  - WASM: `cd aida-gui && trunk build` (or `make web-build`)
+- **Commits**:
+  - 2453be9: feat: enable aida-gui dual-target compilation for native and WASM
+- **Status**: Complete - both native and WASM builds compile successfully
+- **Benefits**:
+  - Same codebase for desktop and browser
+  - Nearly identical UI on both platforms
+  - Reduced maintenance burden
+  - aida-web remains available as lightweight alternative

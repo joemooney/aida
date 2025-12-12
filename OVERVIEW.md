@@ -18,9 +18,9 @@ This is a Cargo workspace with five crates:
 aida/
 ├── aida-core/           # Shared library - models, storage, business logic
 ├── aida-cli/            # CLI tool (aida binary)
-├── aida-gui/            # GUI application (aida-gui binary, egui-based)
+├── aida-gui/            # GUI application (native + WASM dual-target, egui-based)
 ├── aida-server/         # gRPC server for headless/remote operation
-├── aida-web/            # WASM browser client (WebAssembly)
+├── aida-web/            # Lightweight WASM browser client (alternative)
 ├── proto/               # Protocol Buffers definitions
 ├── docs/                # User documentation (markdown + HTML)
 └── helper/              # Helper scripts for documentation generation
@@ -99,18 +99,21 @@ Define connections between requirements:
   - Server handles all database operations (YAML/SQLite)
 
 ### WASM Browser Client (FR-0273)
-- **Web Client (`aida-web`)**: WebAssembly client running in browser
-- Built with `trunk` (Rust WASM build tool)
-- Uses `eframe`/`egui` for UI (same framework as native GUI)
-- Connects to server via gRPC-Web protocol using `tonic-web-wasm-client`
-- Features:
-  - View requirements list with search
-  - View requirement details
-  - Create new requirements
-  - Edit requirements (title, description, status)
-  - Add comments
-- Build: `make web-build` or `trunk build`
-- Serve: `make web-serve` (port 8088)
+- **Dual-Target GUI (`aida-gui`)**: Same codebase for native desktop and WASM browser
+  - Full-featured web client with nearly identical UI to desktop
+  - Uses conditional compilation to gate native-only features
+  - Native-only: threads, file system, AI evaluation, edit locks
+  - Web: uses gRPC-Web protocol via `tonic-web-wasm-client`
+  - Build: `make web-build` or `cd aida-gui && trunk build`
+  - Serve: `make web-serve` (port 8088)
+- **Lightweight Client (`aida-web`)**: Alternative simplified browser client
+  - Separate crate for minimal WASM bundle size
+  - Build: `make web-build-lite`
+  - Serve: `make web-serve-lite`
+- Both clients:
+  - Built with `trunk` (Rust WASM build tool)
+  - Use `eframe`/`egui` for UI (same framework as native GUI)
+  - Connect to server via gRPC-Web protocol
 
 ### Shared UI Components
 - **Reusable egui components** in `aida-gui/src/ui/` for native and WASM
