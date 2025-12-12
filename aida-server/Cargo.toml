@@ -14,14 +14,24 @@ aida-core = { path = "../aida-core" }
 
 # gRPC dependencies
 tonic = { workspace = true }
+tonic-web = { workspace = true }
 prost = { workspace = true }
 prost-types = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 
+# HTTP/REST dependencies
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+http = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true }
+
 # Other dependencies
 anyhow = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
