@@ -219,6 +219,14 @@ impl Storage {
         &self.lock_file_path
     }
 
+    /// Returns true if the storage file is a SQLite database (based on extension)
+    pub fn is_sqlite(&self) -> bool {
+        matches!(
+            self.file_path.extension().and_then(|e| e.to_str()),
+            Some("db") | Some("sqlite") | Some("sqlite3")
+        )
+    }
+
     /// Read the current lock file info (session tracking)
     pub fn read_lock_info(&self) -> Result<LockFileInfo> {
         if !self.lock_file_path.exists() {
@@ -969,10 +977,16 @@ impl Storage {
     pub fn add_requirement_atomic(
         &self,
         local_store: &RequirementsStore,
-        mut new_req: Requirement,
+        new_req: Requirement,
         feature_prefix: Option<&str>,
         type_prefix: Option<&str>,
     ) -> Result<AddResult> {
+        // Use appropriate backend based on file extension
+        if self.is_sqlite() {
+            return self.add_requirement_atomic_sqlite(local_store, new_req, feature_prefix, type_prefix);
+        }
+
+        // YAML implementation follows
         // Acquire exclusive lock
         let mut lock_file = self.acquire_write_lock()?;
 
@@ -1031,8 +1045,94 @@ impl Storage {
             .unwrap_or_default();
 
         // Save the updated store
-        let yaml = serde_yaml::to_string(&disk_store)?;
+        let yaml = serde_yaml::to_string(&disk_store).map_err(|e| {
+            // Log which field might contain control characters for debugging
+            let check_ctrl = |s: &str, name: &str| {
+                for (i, c) in s.chars().enumerate() {
+                    if c.is_control() && c != '\n' && c != '\t' && c != '\r' {
+                        eprintln!("Control char in {}: position {}, char code {}", name, i, c as u32);
+                    }
+                }
+            };
+            check_ctrl(&disk_store.name, "store.name");
+            check_ctrl(&disk_store.title, "store.title");
+            check_ctrl(&disk_store.description, "store.description");
+            if let Some(req) = disk_store.requirements.last() {
+                check_ctrl(&req.title, "new_req.title");
+                check_ctrl(&req.description, "new_req.description");
+                check_ctrl(&req.owner, "new_req.owner");
+                check_ctrl(&req.feature, "new_req.feature");
+                if let Some(ref created_by) = req.created_by {
+                    check_ctrl(created_by, "new_req.created_by");
+                }
+            }
+            e
+        })?;
         fs::write(&self.file_path, yaml)?;
+
+        Ok(AddResult {
+            store: disk_store,
+            external_changes_merged,
+            spec_id,
+        })
+    }
+
+    /// SQLite implementation of add_requirement_atomic
+    /// Uses JSON serialization (via SQLite backend) instead of YAML
+    fn add_requirement_atomic_sqlite(
+        &self,
+        local_store: &RequirementsStore,
+        new_req: Requirement,
+        feature_prefix: Option<&str>,
+        type_prefix: Option<&str>,
+    ) -> Result<AddResult> {
+        use crate::db::{SqliteBackend, DatabaseBackend};
+
+        let backend = SqliteBackend::new(&self.file_path)?;
+
+        // Load fresh data from database
+        let mut disk_store = backend.load()?;
+
+        // Count external requirement additions (requirements in disk but not in local)
+        let local_req_ids: std::collections::HashSet<Uuid> = local_store
+            .requirements
+            .iter()
+            .map(|r| r.id)
+            .collect();
+        let external_changes_merged = disk_store
+            .requirements
+            .iter()
+            .filter(|r| !local_req_ids.contains(&r.id))
+            .count();
+
+        // Apply local non-requirement changes to the fresh disk store
+        // (users, features, config, etc. - these are simpler to just overwrite)
+        disk_store.name = local_store.name.clone();
+        disk_store.title = local_store.title.clone();
+        disk_store.description = local_store.description.clone();
+        disk_store.users = local_store.users.clone();
+        disk_store.id_config = local_store.id_config.clone();
+        disk_store.features = local_store.features.clone();
+        disk_store.relationship_definitions = local_store.relationship_definitions.clone();
+        disk_store.reaction_definitions = local_store.reaction_definitions.clone();
+        disk_store.type_definitions = local_store.type_definitions.clone();
+        disk_store.ai_prompts = local_store.ai_prompts.clone();
+        disk_store.allowed_prefixes = local_store.allowed_prefixes.clone();
+        disk_store.restrict_prefixes = local_store.restrict_prefixes;
+
+        // Generate SPEC-ID using the fresh disk store state (which has all existing IDs)
+        // This ensures we don't create duplicates
+        disk_store.add_requirement_with_id(new_req, feature_prefix, type_prefix);
+
+        // Get the SPEC-ID from the added requirement (last one in store)
+        let spec_id = disk_store
+            .requirements
+            .last()
+            .and_then(|r| r.spec_id.clone())
+            .unwrap_or_default();
+
+        // Save the updated store to SQLite
+        backend.save(&disk_store)?;
 
         Ok(AddResult {
             store: disk_store,

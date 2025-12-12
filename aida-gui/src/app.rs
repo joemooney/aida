@@ -5974,8 +5974,8 @@ impl RequirementsApp {
             .iter()
             .map(|(k, v)| (sanitize_text(k), sanitize_text(v)))
             .collect();
-        // Set created_by to current user
-        req.created_by = Some(self.user_settings.display_name());
+        // Set created_by to current user (sanitized)
+        req.created_by = Some(sanitize_text(&self.user_settings.display_name()));
 
         // Set prefix override if specified
         let prefix_trimmed = self.form_prefix.trim();
