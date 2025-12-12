@@ -5,7 +5,8 @@
         cli-remote gui-remote run-cli run-gui run-server \
         test test-unit test-integration clean install \
         db-info db-migrate-sqlite db-migrate-yaml db-export \
-        docs proto fmt lint check
+        docs proto fmt lint check \
+        web-build web-build-release web-serve web-clean web-deps
 
 # Default database path
 DB ?= requirements.db
@@ -47,10 +48,15 @@ help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; /^(docs|proto)/ {printf "  $(GREEN)%-20s$(RESET) %s\n", $$1, $$2}'
 	@echo ""
+	@echo "$(CYAN)Web/WASM:$(RESET)"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+		awk 'BEGIN {FS = ":.*?## "}; /^web/ {printf "  $(GREEN)%-20s$(RESET) %s\n", $$1, $$2}'
+	@echo ""
 	@echo "$(YELLOW)Variables:$(RESET)"
 	@echo "  DB=<path>           Database file (default: requirements.db)"
 	@echo "  SERVER_PORT=<port>  gRPC server port (default: 50051)"
 	@echo "  REST_PORT=<port>    REST API port (default: 8080)"
+	@echo "  WEB_PORT=<port>     Web client port (default: 8088)"
 	@echo ""
 	@echo "$(YELLOW)Examples:$(RESET)"
 	@echo "  make build                    # Build all packages (debug)"
@@ -243,3 +249,29 @@ test-rest-list: ## Test REST API list requirements
 
 test-grpc-ping: cli-remote ## Test gRPC ping
 	./target/debug/aida --server 127.0.0.1:$(SERVER_PORT) server ping
+
+#==============================================================================
+# WASM WEB CLIENT TARGETS
+#==============================================================================
+
+WEB_PORT ?= 8088
+
+web-build: ## Build WASM web client (requires trunk)
+	cd aida-web && trunk build
+
+web-build-release: ## Build WASM web client (release/optimized)
+	cd aida-web && trunk build --release
+
+web-serve: ## Serve WASM web client for development (port 8088)
+	cd aida-web && trunk serve --port $(WEB_PORT)
+
+web-clean: ## Clean web build artifacts
+	rm -rf aida-web/dist
+
+web-deps: ## Install WASM build dependencies
+	rustup target add wasm32-unknown-unknown
+	cargo install --locked trunk
+	@echo "WASM dependencies installed"
+
+web-proto: ## Regenerate proto code for web client
+	cd aida-web && cargo build

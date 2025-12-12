@@ -5,6 +5,7 @@ members = [
     "aida-cli",
     "aida-gui",
     "aida-server",
+    "aida-web",
 ]
 
 [workspace.package]
