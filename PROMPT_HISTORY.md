@@ -1535,3 +1535,32 @@ A chronological record of development sessions and changes made to the Requireme
   make web-serve               # Serve WASM client on http://localhost:8088
   ```
 - **Status**: FR-0273 marked as Completed
+
+---
+
+### Unified Storage Architecture Integration (FR-0278)
+- **Prompt**: Continue with unified storage abstraction integration into aida-gui
+- **Problem**: GUI has separate code paths for local (Storage) and remote (remote_client) operations
+- **Solution**: Created unified StorageClient trait and integrated into RequirementsApp
+- **Implementation**:
+  - Created `aida-gui/src/storage/` module:
+    - `traits.rs` - StorageClient trait, ServerStatus, StorageError types
+    - `grpc_client.rs` - GrpcStorageClient implementing StorageClient via tonic
+    - `embedded.rs` - EmbeddedServer wrapper for spawning local aida-server subprocess
+    - `mod.rs` - Factory function `create_storage_client()`
+  - Updated `aida-gui/Cargo.toml`:
+    - Made tonic, prost, tokio always available (not optional)
+    - Added libc for native Unix signal handling
+  - Updated `aida-gui/src/app.rs`:
+    - Added `storage_client: Option<Box<dyn StorageClient>>` field
+    - Updated `new_with_server()` to create storage_client via `create_storage_client()`
+    - Updated `save()` to prefer storage_client over legacy remote_client
+- **Architecture Benefits**:
+  - Consistent interface for both local and remote storage
+  - Reduced conditional compilation in business logic
+  - Path toward full gRPC-based storage (even for local)
+  - EmbeddedServer will spawn aida-server subprocess for local storage
+- **Commits**:
+  - 527848a: feat: add unified storage abstraction with StorageClient trait
+  - 402be3c: feat: integrate storage_client into RequirementsApp
+- **Status**: Phase 1 complete - storage_client integrated, legacy code preserved for compatibility

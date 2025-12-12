@@ -81,6 +81,23 @@ Define connections between requirements:
 - **gRPC-Web Support**: Server supports gRPC-Web protocol for browser clients
 - **REST API**: HTTP/JSON endpoints for external integration (port 8080)
 
+### Unified Storage Architecture (FR-0278)
+- **StorageClient Trait**: Unified interface for both local and remote storage access
+  - `load()`, `save()`, `create_requirement()`, `update_requirement()`, `delete_requirement()`
+  - `add_comment()`, `add_relationship()`, `get_server_status()`
+- **GrpcStorageClient**: gRPC-based implementation of StorageClient
+  - Connects to aida-server via tonic gRPC client
+  - Converts between Rust types and Protocol Buffer messages
+  - Blocking async operations using tokio runtime
+- **EmbeddedServer**: Native desktop wrapper for local storage (native feature)
+  - Spawns aida-server as subprocess on localhost
+  - Auto-discovers available port
+  - Graceful shutdown on drop (SIGTERM)
+- **Architecture Benefits**:
+  - Consistent storage interface across native/web platforms
+  - Reduced conditional compilation in business logic
+  - Server handles all database operations (YAML/SQLite)
+
 ### WASM Browser Client (FR-0273)
 - **Web Client (`aida-web`)**: WebAssembly client running in browser
 - Built with `trunk` (Rust WASM build tool)
