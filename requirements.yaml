@@ -1,3 +1,6 @@
+# This file is an export. The primary database is: requirements.db
+migrated_to: requirements.db
+
 name: Aida
 title: AI Design Assistant
 description: ''

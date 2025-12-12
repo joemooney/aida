@@ -2696,6 +2696,7 @@ enum DetailTab {
     Description,
     Comments,
     Links,
+    Attachments,
     History,
 }
 
@@ -19911,6 +19912,7 @@ impl RequirementsApp {
             ('d', "Description", "View/edit description and notes", DetailTab::Description),
             ('c', "Comments", "View comments and history notes", DetailTab::Comments),
             ('l', "Links", "View relationships and URL links", DetailTab::Links),
+            ('t', "Attachments", "View file attachments", DetailTab::Attachments),
             ('h', "History", "View change history", DetailTab::History),
         ];
         let num_options = tab_options.len();
@@ -19947,6 +19949,8 @@ impl RequirementsApp {
                 selected_tab = Some(DetailTab::Comments);
             } else if i.key_pressed(egui::Key::L) {
                 selected_tab = Some(DetailTab::Links);
+            } else if i.key_pressed(egui::Key::T) {
+                selected_tab = Some(DetailTab::Attachments);
             } else if i.key_pressed(egui::Key::H) {
                 selected_tab = Some(DetailTab::History);
             }
@@ -22302,6 +22306,11 @@ impl RequirementsApp {
                                 );
                                 ui.selectable_value(
                                     &mut self.active_tab,
+                                    DetailTab::Attachments,
+                                    format!("📎 Attachments ({})", req.attachments.len()),
+                                );
+                                ui.selectable_value(
+                                    &mut self.active_tab,
                                     DetailTab::History,
                                     format!("📜 History ({})", req.history.len()),
                                 );
@@ -22325,6 +22334,9 @@ impl RequirementsApp {
                                     }
                                     DetailTab::Links => {
                                         self.show_links_tab(ui, &req, req_id);
+                                    }
+                                    DetailTab::Attachments => {
+                                        self.show_attachments_tab(ui, &req, req_id);
                                     }
                                     DetailTab::History => {
                                         self.show_history_tab(ui, &req);
@@ -22427,6 +22439,11 @@ impl RequirementsApp {
                         );
                         ui.selectable_value(
                             &mut self.active_tab,
+                            DetailTab::Attachments,
+                            format!("📎 Attachments ({})", req.attachments.len()),
+                        );
+                        ui.selectable_value(
+                            &mut self.active_tab,
                             DetailTab::History,
                             format!("📜 History ({})", req.history.len()),
                         );
@@ -22448,6 +22465,9 @@ impl RequirementsApp {
                         }
                         DetailTab::Links => {
                             self.show_links_tab(ui, &req, req_id);
+                        }
+                        DetailTab::Attachments => {
+                            self.show_attachments_tab(ui, &req, req_id);
                         }
                         DetailTab::History => {
                             self.show_history_tab(ui, &req);
@@ -23846,6 +23866,135 @@ fn main() {
                         });
                     });
             });
+    }
+
+    fn show_attachments_tab(&mut self, ui: &mut egui::Ui, req: &Requirement, req_id: Uuid) {
+        let spec_id = req.spec_id.clone().unwrap_or_else(|| req.id.to_string());
+
+        ui.horizontal(|ui| {
+            ui.heading("File Attachments");
+            // Add file button using native file dialog
+            if ui.button("➕ Add File").clicked() {
+                if let Some(path) = rfd::FileDialog::new().pick_file() {
+                    // Store the attachment
+                    match self.storage.store_attachment_file(&spec_id, &path) {
+                        Ok((stored_path, size)) => {
+                            let filename = path
+                                .file_name()
+                                .map(|f| f.to_string_lossy().to_string())
+                                .unwrap_or_else(|| "unknown".to_string());
+
+                            let user_handle = if self.user_settings.handle.is_empty() {
+                                None
+                            } else {
+                                Some(self.user_settings.handle.clone())
+                            };
+
+                            let attachment = aida_core::models::Attachment::new(
+                                filename.clone(),
+                                stored_path,
+                                size,
+                                user_handle,
+                            );
+
+                            // Add attachment to requirement
+                            if let Some(r) = self.store.requirements.iter_mut().find(|r| r.id == req_id) {
+                                r.attachments.push(attachment);
+                                r.modified_at = chrono::Utc::now();
+                                self.pending_save = true;
+                                self.message = Some((format!("Attached: {}", filename), false));
+                            }
+                        }
+                        Err(e) => {
+                            self.message = Some((format!("Failed to attach file: {}", e), true));
+                        }
+                    }
+                }
+            }
+        });
+        ui.add_space(5.0);
+
+        if req.attachments.is_empty() {
+            ui.vertical_centered(|ui| {
+                ui.add_space(20.0);
+                ui.label("No attachments");
+                ui.add_space(10.0);
+                ui.label("Drag files here or click 'Add File' to attach");
+                ui.add_space(20.0);
+            });
+        } else {
+            let attachments = req.attachments.clone();
+            let mut attachment_to_remove: Option<uuid::Uuid> = None;
+
+            for attachment in &attachments {
+                ui.horizontal(|ui| {
+                    // Remove button
+                    if ui.small_button("x").on_hover_text("Remove attachment").clicked() {
+                        attachment_to_remove = Some(attachment.id);
+                    }
+
+                    // File icon based on extension
+                    let icon = match std::path::Path::new(&attachment.filename)
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .unwrap_or("")
+                        .to_lowercase()
+                        .as_str()
+                    {
+                        "pdf" => "📕",
+                        "doc" | "docx" => "📘",
+                        "xls" | "xlsx" => "📗",
+                        "png" | "jpg" | "jpeg" | "gif" | "bmp" => "🖼",
+                        "txt" | "md" => "📄",
+                        "zip" | "tar" | "gz" | "rar" => "📦",
+                        _ => "📎",
+                    };
+
+                    // Clickable filename to open
+                    let full_path = self.storage.get_attachment_full_path(&attachment.stored_path);
+                    if ui
+                        .link(format!("{} {}", icon, attachment.filename))
+                        .on_hover_text(format!("Click to open: {}", full_path.display()))
+                        .clicked()
+                    {
+                        if full_path.exists() {
+                            if let Err(e) = open::that(&full_path) {
+                                self.message = Some((format!("Failed to open file: {}", e), true));
+                            }
+                        } else {
+                            self.message = Some(("File not found on disk".to_string(), true));
+                        }
+                    }
+
+                    // File size
+                    ui.label(attachment.format_size());
+
+                    // Added by and date
+                    if let Some(ref by) = attachment.added_by {
+                        ui.label(format!("by @{}", by));
+                    }
+                    ui.label(attachment.added_at.format("%Y-%m-%d").to_string());
+                });
+            }
+
+            // Handle remove
+            if let Some(id) = attachment_to_remove {
+                if let Some(attachment) = attachments.iter().find(|a| a.id == id) {
+                    // Remove file from disk
+                    if let Err(e) = self.storage.remove_attachment_file(&spec_id, &attachment.stored_path) {
+                        self.message = Some((format!("Warning: Could not remove file: {}", e), true));
+                    }
+
+                    // Remove from requirement
+                    if let Some(r) = self.store.requirements.iter_mut().find(|r| r.id == req_id) {
+                        r.attachments.retain(|a| a.id != id);
+                        r.modified_at = chrono::Utc::now();
+                        self.pending_save = true;
+                        self.message = Some(("Attachment removed".to_string(), false));
+                    }
+                }
+            }
+        }
     }
 
     fn show_history_tab(&self, ui: &mut egui::Ui, req: &Requirement) {

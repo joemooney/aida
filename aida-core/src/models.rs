@@ -1643,6 +1643,84 @@ impl UrlLink {
     }
 }
 
+/// Represents a file attachment on a requirement
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Attachment {
+    /// Unique identifier for the attachment
+    pub id: Uuid,
+
+    /// Original filename
+    pub filename: String,
+
+    /// Relative path to the stored file (e.g., "attachments/FR-0042/document.pdf")
+    pub stored_path: String,
+
+    /// Optional MIME type
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mime_type: Option<String>,
+
+    /// File size in bytes
+    pub size_bytes: u64,
+
+    /// When the attachment was added
+    pub added_at: DateTime<Utc>,
+
+    /// Who added the attachment (user handle)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub added_by: Option<String>,
+
+    /// Optional description of the attachment
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+impl Attachment {
+    /// Creates a new attachment
+    pub fn new(
+        filename: impl Into<String>,
+        stored_path: impl Into<String>,
+        size_bytes: u64,
+        added_by: Option<String>,
+    ) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            filename: filename.into(),
+            stored_path: stored_path.into(),
+            mime_type: None,
+            size_bytes,
+            added_at: Utc::now(),
+            added_by,
+            description: None,
+        }
+    }
+
+    /// Sets the MIME type
+    pub fn with_mime_type(mut self, mime_type: impl Into<String>) -> Self {
+        self.mime_type = Some(mime_type.into());
+        self
+    }
+
+    /// Sets the description
+    pub fn with_description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
+
+    /// Formats the file size as a human-readable string
+    pub fn format_size(&self) -> String {
+        let bytes = self.size_bytes;
+        if bytes < 1024 {
+            format!("{} B", bytes)
+        } else if bytes < 1024 * 1024 {
+            format!("{:.1} KB", bytes as f64 / 1024.0)
+        } else if bytes < 1024 * 1024 * 1024 {
+            format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+        } else {
+            format!("{:.1} GB", bytes as f64 / (1024.0 * 1024.0 * 1024.0))
+        }
+    }
+}
+
 // trace:REQ-0243 | ai:claude:high
 /// Represents the type of artifact being traced
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -2449,6 +2527,10 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub urls: Vec<UrlLink>,
 
+    /// File attachments on this requirement
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<Attachment>,
+
     // trace:REQ-0243 | ai:claude:high
     /// Trace links to code artifacts implementing this requirement
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -2504,6 +2586,7 @@ impl Requirement {
             custom_priority: None,
             custom_fields: std::collections::HashMap::new(),
             urls: Vec::new(),
+            attachments: Vec::new(),
             trace_links: Vec::new(),
             implementation_info: None,
             version: 1,

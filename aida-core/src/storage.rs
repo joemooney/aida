@@ -1140,6 +1140,161 @@ impl Storage {
             spec_id,
         })
     }
+
+    /// Returns the directory for storing attachments for a given spec_id
+    /// Creates the directory if it doesn't exist
+    pub fn get_attachments_dir(&self, spec_id: &str) -> Result<PathBuf> {
+        let parent = self.file_path.parent().unwrap_or(Path::new("."));
+        let attachments_dir = parent.join("attachments").join(spec_id);
+
+        if !attachments_dir.exists() {
+            fs::create_dir_all(&attachments_dir)
+                .with_context(|| format!("Failed to create attachments directory: {:?}", attachments_dir))?;
+        }
+
+        Ok(attachments_dir)
+    }
+
+    /// Copies a file to the attachments directory for a requirement
+    /// Returns the relative path to the stored file and the file size
+    pub fn store_attachment_file(&self, spec_id: &str, source_path: &Path) -> Result<(String, u64)> {
+        let attachments_dir = self.get_attachments_dir(spec_id)?;
+
+        // Get the filename from the source path
+        let filename = source_path
+            .file_name()
+            .ok_or_else(|| anyhow::anyhow!("Invalid source path: no filename"))?
+            .to_string_lossy()
+            .to_string();
+
+        // Handle potential filename conflicts by adding a suffix
+        let dest_path = {
+            let initial_path = attachments_dir.join(&filename);
+            if !initial_path.exists() {
+                initial_path
+            } else {
+                // Find a unique filename
+                let stem = source_path
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "file".to_string());
+                let ext = source_path
+                    .extension()
+                    .map(|s| format!(".{}", s.to_string_lossy()))
+                    .unwrap_or_default();
+
+                let mut counter = 1;
+                loop {
+                    let new_name = format!("{}_{}{}", stem, counter, ext);
+                    let new_path = attachments_dir.join(&new_name);
+                    if !new_path.exists() {
+                        break new_path;
+                    }
+                    counter += 1;
+                }
+            }
+        };
+
+        // Copy the file
+        fs::copy(source_path, &dest_path)
+            .with_context(|| format!("Failed to copy file to {:?}", dest_path))?;
+
+        // Get file size
+        let metadata = fs::metadata(&dest_path)
+            .with_context(|| format!("Failed to read file metadata: {:?}", dest_path))?;
+        let size = metadata.len();
+
+        // Build relative path
+        let rel_path = format!(
+            "attachments/{}/{}",
+            spec_id,
+            dest_path.file_name().unwrap().to_string_lossy()
+        );
+
+        Ok((rel_path, size))
+    }
+
+    /// Stores attachment data from bytes (for drag-drop where path isn't available)
+    pub fn store_attachment_bytes(&self, spec_id: &str, filename: &str, data: &[u8]) -> Result<(String, u64)> {
+        let attachments_dir = self.get_attachments_dir(spec_id)?;
+
+        // Handle potential filename conflicts
+        let dest_path = {
+            let initial_path = attachments_dir.join(filename);
+            if !initial_path.exists() {
+                initial_path
+            } else {
+                // Find a unique filename
+                let path = Path::new(filename);
+                let stem = path
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "file".to_string());
+                let ext = path
+                    .extension()
+                    .map(|s| format!(".{}", s.to_string_lossy()))
+                    .unwrap_or_default();
+
+                let mut counter = 1;
+                loop {
+                    let new_name = format!("{}_{}{}", stem, counter, ext);
+                    let new_path = attachments_dir.join(&new_name);
+                    if !new_path.exists() {
+                        break new_path;
+                    }
+                    counter += 1;
+                }
+            }
+        };
+
+        // Write the file
+        fs::write(&dest_path, data)
+            .with_context(|| format!("Failed to write attachment file: {:?}", dest_path))?;
+
+        // Build relative path
+        let rel_path = format!(
+            "attachments/{}/{}",
+            spec_id,
+            dest_path.file_name().unwrap().to_string_lossy()
+        );
+
+        Ok((rel_path, data.len() as u64))
+    }
+
+    /// Removes an attachment file from disk
+    pub fn remove_attachment_file(&self, spec_id: &str, stored_path: &str) -> Result<()> {
+        let parent = self.file_path.parent().unwrap_or(Path::new("."));
+        let full_path = parent.join(stored_path);
+
+        if full_path.exists() {
+            fs::remove_file(&full_path)
+                .with_context(|| format!("Failed to remove attachment file: {:?}", full_path))?;
+        }
+
+        // Try to clean up empty directories
+        let attachments_dir = parent.join("attachments").join(spec_id);
+        if attachments_dir.exists() {
+            // Only remove if empty
+            if let Ok(mut entries) = fs::read_dir(&attachments_dir) {
+                if entries.next().is_none() {
+                    let _ = fs::remove_dir(&attachments_dir);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Gets the full path to an attachment file
+    pub fn get_attachment_full_path(&self, stored_path: &str) -> PathBuf {
+        let parent = self.file_path.parent().unwrap_or(Path::new("."));
+        parent.join(stored_path)
+    }
+
+    /// Checks if an attachment file exists
+    pub fn attachment_exists(&self, stored_path: &str) -> bool {
+        self.get_attachment_full_path(stored_path).exists()
+    }
 }
 
 #[cfg(test)]

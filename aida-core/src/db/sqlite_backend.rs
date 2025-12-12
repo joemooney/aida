@@ -354,6 +354,7 @@ impl SqliteBackend {
                 custom_priority,
                 custom_fields,
                 urls,
+                attachments: Vec::new(),  // TODO: Add attachments column to schema
                 trace_links,
                 implementation_info,
                 ai_evaluation,
@@ -929,6 +930,7 @@ impl DatabaseBackend for SqliteBackend {
                     custom_priority,
                     custom_fields,
                     urls,
+                    attachments: Vec::new(),  // TODO: Add attachments column to schema
                     trace_links,
                     implementation_info,
                     ai_evaluation,

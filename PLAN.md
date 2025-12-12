@@ -1,133 +1,159 @@
-# REQ-0231: Concurrent Edit Protection Implementation Plan
+# Drag-and-Drop Attachments Feature Plan
 
-## Problem Analysis
+## Overview
 
-Currently, when the GUI and CLI/server access the same `requirements.yaml` file:
-1. Both load the entire file into memory
-2. Each makes changes independently
-3. Whichever saves last overwrites all changes from the other
+Add the ability to attach files to requirements via drag-and-drop in the GUI. Files are stored in an `attachments/<spec_id>/` directory structure.
 
-While there IS file locking (`fs2::FileExt`) during load/save operations, the locks are short-lived. The real issue is that both processes hold stale copies in memory and don't detect external changes before overwriting.
+## Requirements
 
-## Proposed Solution: SQLite as Primary Storage
+1. Drag a file over the Detail View panel → highlight panel with visual feedback
+2. Drop file → copy to `attachments/<spec_id>/` folder
+3. Store attachment metadata in the requirement
+4. Display attachments in a new "Attachments" tab
+5. Optionally git add/commit the attachment if in a git repo
 
-Switch to SQLite as the primary storage backend with per-record versioning. YAML becomes an export/import format only.
+## Implementation Plan
 
-### Why SQLite?
+### Phase 1: Data Model Updates (aida-core/src/models.rs)
 
-1. **Built-in concurrency**: WAL mode allows concurrent readers with one writer
-2. **Per-record locking**: Only lock what you're modifying, not the whole database
-3. **Optimistic locking**: Easy with a `version` column - increment on each update
-4. **ACID transactions**: Guaranteed consistency
-5. **Already implemented**: `SqliteBackend` exists but isn't the default
-
-### Key Changes
-
-#### 1. Add Version Column to SQLite Schema (schema_v2.sql)
-```sql
--- Add version column for optimistic locking
-ALTER TABLE requirements ADD COLUMN version INTEGER NOT NULL DEFAULT 1;
-ALTER TABLE users ADD COLUMN version INTEGER NOT NULL DEFAULT 1;
-ALTER TABLE metadata ADD COLUMN store_version INTEGER NOT NULL DEFAULT 1;
-```
-
-#### 2. Implement Optimistic Locking in SqliteBackend
-
-When updating a requirement:
+1. Add `Attachment` struct (similar to existing `UrlLink`):
 ```rust
-fn update_requirement(&self, req: &Requirement, expected_version: i64) -> Result<(), StorageError> {
-    let rows = conn.execute(
-        "UPDATE requirements SET ..., version = version + 1
-         WHERE id = ? AND version = ?",
-        params![req.id.to_string(), expected_version]
-    )?;
-
-    if rows == 0 {
-        return Err(StorageError::VersionConflict {
-            id: req.id,
-            expected_version,
-            current_version: self.get_current_version(req.id)?
-        });
-    }
-    Ok(())
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Attachment {
+    pub id: Uuid,
+    pub filename: String,           // Original filename
+    pub stored_path: String,        // Relative path: attachments/<spec_id>/<filename>
+    pub mime_type: Option<String>,  // Optional MIME type
+    pub size_bytes: u64,            // File size
+    pub added_at: DateTime<Utc>,
+    pub added_by: Option<String>,   // User handle
+    pub description: Option<String>,
 }
 ```
 
-#### 3. Migrate GUI to Use SQLite Backend
+2. Add `attachments: Vec<Attachment>` field to `Requirement` struct
 
-Update `aida-gui/src/app.rs`:
-- Change default backend from YAML to SQLite (`.aida.db`)
-- Store version with each loaded requirement
-- On save, check version and handle conflicts
-- Provide "Export to YAML" option in File menu
+3. Add `Attachment::new()` constructor
 
-#### 4. Update CLI to Default to SQLite
+### Phase 2: Storage Updates (aida-core/src/storage.rs)
 
-Update `aida-cli/src/main.rs`:
-- Default to `.aida.db` if no path specified
-- Support `--format yaml|sqlite` flag for explicit choice
-- Auto-migrate YAML to SQLite on first use (with backup)
+1. Add helper method `get_attachments_dir(&self, spec_id: &str) -> PathBuf`
+   - Returns `<db_parent>/attachments/<spec_id>/`
+   - Creates directory if it doesn't exist
 
-#### 5. Add File Change Detection for GUI
+2. Add `add_attachment(&mut self, spec_id: &str, source_path: &Path) -> Result<Attachment>`
+   - Creates attachments directory
+   - Copies file to destination
+   - Returns Attachment metadata
 
-Even with SQLite, the GUI should detect if another process modified the database:
-- Poll `store_version` in metadata table periodically
-- Show notification when external changes detected
-- Offer to reload (merge or replace)
+3. Add `remove_attachment(&mut self, spec_id: &str, attachment_id: &Uuid) -> Result<()>`
+   - Removes file from disk
+   - Cleans up empty directories
 
-## Implementation Steps
+### Phase 3: SQLite Backend Updates (aida-core/src/db/sqlite_backend.rs)
 
-### Phase 1: Schema and Backend Updates
-1. Create schema_v2.sql with version columns
-2. Add migration logic in SqliteBackend::init_schema()
-3. Add `version` field to Requirement and User models
-4. Implement versioned update/save in SqliteBackend
+- The `attachments` field will be stored as JSON (like comments, history)
+- No schema changes needed - just ensure serialization handles the new field
 
-### Phase 2: Conflict Detection
-1. Add `VersionConflict` variant to StorageError
-2. Implement `update_with_version()` method
-3. Add `get_current_version()` helper
-4. Create conflict resolution UI components
+### Phase 4: GUI - Drag-and-Drop Detection (aida-gui/src/app.rs)
 
-### Phase 3: GUI Migration
-1. Change default storage to SQLite
-2. Add "Export to YAML" menu option
-3. Add "Import from YAML" menu option
-4. Add periodic version check (every 2 seconds)
-5. Show conflict dialog when version mismatch detected
+1. Add `DetailTab::Attachments` variant to the enum
 
-### Phase 4: CLI Migration
-1. Update default file detection
-2. Add migration command: `aida migrate --from yaml --to sqlite`
-3. Auto-backup YAML before migration
+2. Add state tracking for drag-hover:
+```rust
+detail_panel_drag_hover: bool,
+```
 
-### Phase 5: Testing
-1. Unit tests for optimistic locking
-2. Integration tests for concurrent updates
-3. Manual testing with GUI + CLI simultaneously
+3. In `draw_detail_view()`:
+   - Check `ctx.input(|i| !i.raw.hovered_files.is_empty())` for hover state
+   - Check `ctx.input(|i| i.raw.dropped_files.clone())` for drops
+   - When hovering over detail panel, set `detail_panel_drag_hover = true`
+   - Draw highlight overlay when `detail_panel_drag_hover` is true
 
-## Migration Strategy
+4. Handle file drop:
+   - Get `DroppedFile` from `dropped_files`
+   - Get file path or bytes
+   - Call storage method to save attachment
+   - Add attachment to requirement
+   - Save requirement
+   - Show success notification
 
-For existing users:
-1. First run with SQLite: detect existing `requirements.yaml`
-2. Prompt: "Migrate to SQLite for better concurrency? (YAML will be backed up)"
-3. If yes: copy to `requirements.yaml.bak`, migrate to `requirements.db`
-4. If no: continue using YAML (with current limitations)
+### Phase 5: GUI - Attachments Tab (aida-gui/src/app.rs)
+
+1. Add "Attachments" tab to `show_detail_tab_menu_popup()`
+
+2. Implement `draw_attachments_tab()`:
+   - List attachments with filename, size, date
+   - "Open" button to open in system default app
+   - "Remove" button with confirmation
+   - Drag-drop zone indicator when empty
+
+3. Add hotkey 'A' (with Shift) or use 't a' to switch to Attachments tab
+
+### Phase 6: Git Integration (Optional)
+
+1. Check if db directory is a git repo: `git rev-parse --git-dir`
+
+2. After adding attachment:
+   - `git add attachments/<spec_id>/<filename>`
+   - `git commit -m "Attach <filename> to <spec_id>"`
+
+3. Make git integration configurable (setting in GUI preferences)
 
 ## Files to Modify
 
-- `aida-core/src/db/schema.sql` → Add version columns
-- `aida-core/src/db/sqlite_backend.rs` → Implement versioned updates
-- `aida-core/src/db/traits.rs` → Add version-aware methods
-- `aida-core/src/models.rs` → Add version field to Requirement/User
-- `aida-core/src/storage.rs` → Add VersionConflict error type
-- `aida-gui/src/app.rs` → Switch to SQLite, add polling
-- `aida-cli/src/main.rs` → Switch to SQLite default
-- New: `aida-core/src/db/migration_v2.rs` → YAML→SQLite migration
+1. `aida-core/src/models.rs`
+   - Add `Attachment` struct
+   - Add `attachments` field to `Requirement`
 
-## Rollback Plan
+2. `aida-core/src/storage.rs`
+   - Add `get_attachments_dir()`
+   - Add `add_attachment()`
+   - Add `remove_attachment()`
 
-If issues arise:
-1. SQLite file can always be exported to YAML
-2. YAML backend remains fully functional
-3. User can switch back with `--format yaml`
+3. `aida-gui/src/app.rs`
+   - Add `DetailTab::Attachments`
+   - Add drag-hover state
+   - Implement drag-drop detection in `draw_detail_view()`
+   - Implement `draw_attachments_tab()`
+   - Add tab menu entry
+
+## Visual Design
+
+### Drag Hover State
+- Semi-transparent blue overlay on detail panel
+- Text: "📎 Drop file to attach"
+- Border highlight
+
+### Attachments Tab
+```
+┌─────────────────────────────────────────┐
+│ 📎 Attachments (3)                      │
+├─────────────────────────────────────────┤
+│ ├── spec_document.pdf    1.2 MB  [Open] │
+│ │   Added 2024-01-15 by @joe            │
+│ ├── screenshot.png       245 KB  [Open] │
+│ │   Added 2024-01-16 by @joe            │
+│ └── notes.txt            12 KB   [Open] │
+│     Added 2024-01-17 by @joe            │
+├─────────────────────────────────────────┤
+│ Drag files here or click [Add File]     │
+└─────────────────────────────────────────┘
+```
+
+## Implementation Order
+
+1. Phase 1: `Attachment` struct in models.rs
+2. Phase 2: Storage methods
+3. Phase 3: SQLite serialization verification
+4. Phase 4: Drag-drop detection and visual feedback
+5. Phase 5: Attachments tab UI
+6. Phase 6: Git integration (optional)
+
+## Testing
+
+1. Unit test: `Attachment` serialization/deserialization
+2. Integration test: Add/remove attachment via storage
+3. Manual test: Drag file onto detail view in GUI
+4. Manual test: Open attachment from tab
+5. Manual test: Git commit (if enabled)
