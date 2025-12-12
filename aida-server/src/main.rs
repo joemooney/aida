@@ -156,10 +156,11 @@ async fn main() -> Result<()> {
     };
 
     // Create and run the gRPC server with gRPC-Web support
+    // Using tonic_web::enable() on the service wraps it with gRPC-Web support
+    // CORS layer handles browser cross-origin requests
     Server::builder()
         .accept_http1(true) // Required for gRPC-Web
         .layer(cors)
-        .layer(tonic_web::GrpcWebLayer::new())
         .concurrency_limit_per_connection(args.max_connections)
         .add_service(grpc_web_service)
         .serve_with_shutdown(grpc_addr, async move {
