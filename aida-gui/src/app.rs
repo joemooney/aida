@@ -2999,6 +2999,7 @@ enum View {
     Timeline,  // Timeline view showing requirement changes over time
     Planning,  // Sprint planning view for assigning items to Sprints
     Queue,     // Personal work queue view
+    UserQueue(String), // View another user's items (by user handle)
 }
 
 /// Layout mode defines the panel arrangement (cycles through 5 predefined layouts)
@@ -3547,6 +3548,12 @@ pub struct RequirementsApp {
     queue_menu_selected: usize,  // Currently selected index in queue menu (for arrow navigation)
     // Queue view state
     queue_selected_idx: usize,   // Currently selected index in queue view
+
+    // User queue picker popup (triggered by 'q u' - select a user to view their queue/items)
+    show_user_queue_picker: bool,
+    user_queue_picker_search: String,     // Search text for fuzzy filtering
+    user_queue_picker_selected: usize,    // Currently selected index in user list
+    user_queue_selected_idx: usize,       // Currently selected index in user queue view
 
     // Type picker popup (triggered by 'T' / shift+t - change requirement type with fuzzy search)
     show_type_picker: bool,
@@ -4261,6 +4268,10 @@ impl RequirementsApp {
             show_queue_menu: false,
             queue_menu_selected: 0,
             queue_selected_idx: 0,
+            show_user_queue_picker: false,
+            user_queue_picker_search: String::new(),
+            user_queue_picker_selected: 0,
+            user_queue_selected_idx: 0,
             show_type_picker: false,
             type_picker_search: String::new(),
             type_picker_selected: 0,
@@ -4795,6 +4806,10 @@ impl RequirementsApp {
             show_queue_menu: false,
             queue_menu_selected: 0,
             queue_selected_idx: 0,
+            show_user_queue_picker: false,
+            user_queue_picker_search: String::new(),
+            user_queue_picker_selected: 0,
+            user_queue_selected_idx: 0,
             show_type_picker: false,
             type_picker_search: String::new(),
             type_picker_selected: 0,
@@ -5321,6 +5336,10 @@ impl RequirementsApp {
             show_queue_menu: false,
             queue_menu_selected: 0,
             queue_selected_idx: 0,
+            show_user_queue_picker: false,
+            user_queue_picker_search: String::new(),
+            user_queue_picker_selected: 0,
+            user_queue_selected_idx: 0,
             show_type_picker: false,
             type_picker_search: String::new(),
             type_picker_selected: 0,
@@ -14146,6 +14165,175 @@ impl RequirementsApp {
         }
     }
 
+    /// Show another user's owned items view
+    fn show_user_queue_view(&mut self, ui: &mut egui::Ui, user_handle: &str) {
+        // Find user info for display
+        let user_display = self.store.users.iter()
+            .find(|u| u.handle == user_handle)
+            .map(|u| {
+                if !u.name.is_empty() {
+                    format!("{} (@{})", u.name, user_handle)
+                } else {
+                    format!("@{}", user_handle)
+                }
+            })
+            .unwrap_or_else(|| format!("@{}", user_handle));
+
+        // Header with controls
+        ui.horizontal(|ui| {
+            ui.heading(format!("👤 {}", user_display));
+
+            ui.separator();
+
+            // Get count of owned items (match owner field against handle)
+            let owned_count = self.store.requirements.iter()
+                .filter(|r| !r.archived && r.owner == user_handle)
+                .count();
+            ui.label(format!("{} item{}", owned_count, if owned_count == 1 { "" } else { "s" }));
+
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button("📋 Back to List").clicked() {
+                    self.pending_view_change = Some(View::List);
+                }
+                if ui.button("🔄 My Queue").clicked() {
+                    self.pending_view_change = Some(View::Queue);
+                }
+                if ui.button("👥 Switch User").clicked() {
+                    self.show_user_queue_picker = true;
+                    self.user_queue_picker_search.clear();
+                    self.user_queue_picker_selected = 0;
+                }
+            });
+        });
+
+        ui.separator();
+
+        // Handle keyboard navigation for user queue view
+        let (nav_up, nav_down, enter_pressed) = ui.input(|i| {
+            (
+                i.key_pressed(egui::Key::ArrowUp) || i.key_pressed(egui::Key::K),
+                i.key_pressed(egui::Key::ArrowDown) || i.key_pressed(egui::Key::J),
+                i.key_pressed(egui::Key::Enter),
+            )
+        });
+
+        // Collect requirements owned by this user
+        let owned_items: Vec<(usize, String, String, String, String)> = self.store.requirements.iter()
+            .enumerate()
+            .filter(|(_, r)| !r.archived && r.owner == user_handle)
+            .map(|(idx, r)| {
+                let spec_id = r.spec_id.clone().unwrap_or_default();
+                let title = r.title.clone();
+                let status = r.effective_status();
+                let priority = format!("{:?}", r.priority);
+                (idx, spec_id, title, status, priority)
+            })
+            .collect();
+
+        let items_len = owned_items.len();
+
+        if items_len == 0 {
+            ui.vertical_centered(|ui| {
+                ui.add_space(50.0);
+                ui.label(egui::RichText::new(format!("No items owned by {}", user_display)).size(18.0).weak());
+                ui.add_space(10.0);
+                if ui.button("📋 Go to Requirements List").clicked() {
+                    self.pending_view_change = Some(View::List);
+                }
+            });
+            return;
+        }
+
+        // Handle navigation
+        if nav_up && items_len > 0 {
+            if self.user_queue_selected_idx > 0 {
+                self.user_queue_selected_idx -= 1;
+            } else {
+                self.user_queue_selected_idx = items_len - 1;
+            }
+        }
+        if nav_down && items_len > 0 {
+            if self.user_queue_selected_idx < items_len - 1 {
+                self.user_queue_selected_idx += 1;
+            } else {
+                self.user_queue_selected_idx = 0;
+            }
+        }
+
+        // Clamp selection to valid range
+        if self.user_queue_selected_idx >= items_len {
+            self.user_queue_selected_idx = if items_len > 0 { items_len - 1 } else { 0 };
+        }
+
+        // Handle Enter to select requirement for detail view
+        let mut selected_req_idx: Option<usize> = None;
+        if enter_pressed && self.user_queue_selected_idx < items_len {
+            selected_req_idx = Some(owned_items[self.user_queue_selected_idx].0);
+        }
+
+        // Show items list
+        egui::ScrollArea::vertical()
+            .auto_shrink([false; 2])
+            .show(ui, |ui| {
+                for (list_idx, (store_idx, spec_id, title, status, priority)) in owned_items.iter().enumerate() {
+                    let is_selected = list_idx == self.user_queue_selected_idx;
+
+                    // Create a frame for the item
+                    let frame = if is_selected {
+                        egui::Frame::none()
+                            .fill(ui.visuals().selection.bg_fill)
+                            .inner_margin(4.0)
+                    } else {
+                        egui::Frame::none()
+                            .inner_margin(4.0)
+                    };
+
+                    frame.show(ui, |ui| {
+                        let response = ui.horizontal(|ui| {
+                            // Priority indicator
+                            let priority_color = match priority.as_str() {
+                                "High" => egui::Color32::from_rgb(255, 100, 100),
+                                "Medium" => egui::Color32::from_rgb(255, 200, 100),
+                                _ => egui::Color32::from_rgb(100, 200, 100),
+                            };
+                            ui.label(egui::RichText::new("●").color(priority_color));
+
+                            // Spec ID
+                            if !spec_id.is_empty() {
+                                ui.label(egui::RichText::new(spec_id).monospace().strong());
+                            }
+
+                            // Title
+                            ui.label(title);
+
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                // Status badge
+                                ui.label(egui::RichText::new(status).weak().italics());
+                            });
+                        }).response;
+
+                        // Handle click to select
+                        if response.clicked() {
+                            self.user_queue_selected_idx = list_idx;
+                            selected_req_idx = Some(*store_idx);
+                        }
+                    });
+                }
+
+                // Help text at bottom
+                ui.add_space(10.0);
+                ui.separator();
+                ui.horizontal(|ui| {
+                    ui.small("↑↓/jk nav • Enter select • u switch user");
+                });
+            });
+
+        // Update selected requirement for detail panel
+        if let Some(idx) = selected_req_idx {
+            self.selected_idx = Some(idx);
+        }
+    }
+
     /// Show the Sprint Planning view
     fn show_planning_view(&mut self, ui: &mut egui::Ui) {
         // Header with controls
@@ -21124,6 +21312,7 @@ impl RequirementsApp {
             ('b', "Add to Bottom", "Add to bottom of your queue (lowest priority)", false),
             ('d', "Remove from Queue", "Remove this item from your queue", true),
             ('v', "View Queue", "Switch to queue view", false),
+            ('u', "User Queue", "View another user's items", false),
         ];
         let num_options = queue_options.len();
 
@@ -21161,6 +21350,8 @@ impl RequirementsApp {
                 action = Some('d');
             } else if i.key_pressed(egui::Key::V) {
                 action = Some('v');
+            } else if i.key_pressed(egui::Key::U) {
+                action = Some('u');
             }
         });
 
@@ -21248,6 +21439,12 @@ impl RequirementsApp {
                 }
                 'v' => {
                     self.pending_view_change = Some(View::Queue);
+                }
+                'u' => {
+                    // Open the user queue picker popup
+                    self.show_user_queue_picker = true;
+                    self.user_queue_picker_search.clear();
+                    self.user_queue_picker_selected = 0;
                 }
                 _ => {}
             }
@@ -21585,6 +21782,176 @@ impl RequirementsApp {
             self.pending_save = true;
             // Also update modified_at
             req.modified_at = chrono::Utc::now();
+        }
+    }
+
+    // trace:FR-0273 | ai:claude:high
+    /// Show user queue picker popup (triggered by 'q u' - select a user to view their items)
+    fn show_user_queue_picker_popup(&mut self, ctx: &egui::Context) {
+        if !self.show_user_queue_picker {
+            return;
+        }
+
+        // Get all active users with their owned requirements count
+        let users_with_counts: Vec<(String, String, usize)> = self.store.users.iter()
+            .filter(|u| !u.archived)
+            .map(|u| {
+                let handle = u.handle.clone();
+                let display_name = if !u.name.is_empty() {
+                    format!("{} (@{})", u.name, handle)
+                } else {
+                    format!("@{}", handle)
+                };
+                let owned_count = self.store.requirements.iter()
+                    .filter(|r| !r.archived || self.show_archived)
+                    .filter(|r| r.owner == handle)
+                    .count();
+                (handle, display_name, owned_count)
+            })
+            .collect();
+
+        // Filter based on search text (fuzzy matching)
+        let search_lower = self.user_queue_picker_search.to_lowercase();
+        let filtered_users: Vec<&(String, String, usize)> = if search_lower.is_empty() {
+            users_with_counts.iter().collect()
+        } else {
+            users_with_counts.iter()
+                .filter(|(handle, display, _)| {
+                    handle.to_lowercase().contains(&search_lower) ||
+                    display.to_lowercase().contains(&search_lower)
+                })
+                .collect()
+        };
+
+        let num_options = filtered_users.len();
+
+        // Handle keyboard input for the popup
+        let mut close_popup = false;
+        let mut apply_selection = false;
+
+        ctx.input(|i| {
+            // Escape to close
+            if i.key_pressed(egui::Key::Escape) {
+                close_popup = true;
+            }
+            // Enter to apply (if we have options)
+            if i.key_pressed(egui::Key::Enter) && num_options > 0 {
+                apply_selection = true;
+            }
+            // Up/Down to navigate
+            if i.key_pressed(egui::Key::ArrowUp) || i.key_pressed(egui::Key::K) {
+                if self.user_queue_picker_selected > 0 {
+                    self.user_queue_picker_selected -= 1;
+                } else if num_options > 0 {
+                    self.user_queue_picker_selected = num_options - 1; // Wrap to bottom
+                }
+            }
+            if i.key_pressed(egui::Key::ArrowDown) || i.key_pressed(egui::Key::J) {
+                if num_options > 0 {
+                    if self.user_queue_picker_selected < num_options - 1 {
+                        self.user_queue_picker_selected += 1;
+                    } else {
+                        self.user_queue_picker_selected = 0; // Wrap to top
+                    }
+                }
+            }
+        });
+
+        if close_popup {
+            self.show_user_queue_picker = false;
+            self.user_queue_picker_search.clear();
+            self.user_queue_picker_selected = 0;
+            return;
+        }
+
+        // Apply the selection - switch to user queue view
+        if apply_selection {
+            if let Some((handle, _, _)) = filtered_users.get(self.user_queue_picker_selected) {
+                self.pending_view_change = Some(View::UserQueue(handle.clone()));
+                self.user_queue_selected_idx = 0;
+            }
+            self.show_user_queue_picker = false;
+            self.show_queue_menu = false;
+            self.user_queue_picker_search.clear();
+            self.user_queue_picker_selected = 0;
+            return;
+        }
+
+        // Ensure selected index is valid after filtering
+        if self.user_queue_picker_selected >= num_options && num_options > 0 {
+            self.user_queue_picker_selected = num_options - 1;
+        }
+
+        // Center the popup on screen
+        let screen_rect = ctx.screen_rect();
+        let popup_size = egui::vec2(300.0, 350.0);
+        let popup_pos = egui::pos2(
+            (screen_rect.width() - popup_size.x) / 2.0,
+            (screen_rect.height() - popup_size.y) / 2.0,
+        );
+
+        egui::Area::new(egui::Id::new("user_queue_picker_popup"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(popup_pos)
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style())
+                    .inner_margin(8.0)
+                    .show(ui, |ui| {
+                        ui.set_min_width(popup_size.x - 16.0);
+                        ui.label(egui::RichText::new("View User's Items").strong());
+                        ui.separator();
+
+                        // Search input
+                        let response = ui.add(
+                            egui::TextEdit::singleline(&mut self.user_queue_picker_search)
+                                .hint_text("Search users...")
+                                .desired_width(ui.available_width())
+                        );
+                        // Auto-focus the search field
+                        response.request_focus();
+
+                        ui.separator();
+
+                        // Scrollable list of users
+                        egui::ScrollArea::vertical()
+                            .max_height(220.0)
+                            .show(ui, |ui| {
+                                if filtered_users.is_empty() {
+                                    ui.weak("No users found");
+                                } else {
+                                    for (idx, (handle, display_name, count)) in filtered_users.iter().enumerate() {
+                                        let is_selected = idx == self.user_queue_picker_selected;
+                                        let text = format!("👤 {} ({} items)", display_name, count);
+                                        let response = ui.selectable_label(is_selected, &text);
+                                        if response.clicked() {
+                                            self.pending_view_change = Some(View::UserQueue(handle.clone()));
+                                            self.user_queue_selected_idx = 0;
+                                            self.show_user_queue_picker = false;
+                                            self.show_queue_menu = false;
+                                            self.user_queue_picker_search.clear();
+                                            self.user_queue_picker_selected = 0;
+                                        }
+                                    }
+                                }
+                            });
+
+                        ui.separator();
+                        ui.horizontal(|ui| {
+                            ui.small("↑↓/jk nav • Enter select • Esc cancel");
+                        });
+                    });
+            });
+
+        // Close on click outside
+        if ctx.input(|i| i.pointer.any_click()) {
+            let popup_rect = egui::Rect::from_min_size(popup_pos, popup_size);
+            if let Some(pos) = ctx.input(|i| i.pointer.interact_pos()) {
+                if !popup_rect.contains(pos) {
+                    self.show_user_queue_picker = false;
+                    self.user_queue_picker_search.clear();
+                    self.user_queue_picker_selected = 0;
+                }
+            }
         }
     }
 
@@ -28948,6 +29315,7 @@ impl eframe::App for RequirementsApp {
                 View::Timeline => KeyContext::RequirementsList, // Use same context for timeline
                 View::Planning => KeyContext::RequirementsList, // Use same context for planning
                 View::Queue => KeyContext::RequirementsList,    // Use same context for queue
+                View::UserQueue(_) => KeyContext::RequirementsList, // Use same context for user queue view
             }
         };
 
@@ -30245,6 +30613,22 @@ impl eframe::App for RequirementsApp {
                     });
                 });
             });
+        } else if let View::UserQueue(ref handle) = self.current_view {
+            // User queue view - show items owned by a specific user
+            let handle_clone = handle.clone();
+            egui::CentralPanel::default().show(ctx, |ui| {
+                ui.columns(2, |columns| {
+                    // Left column - User queue view
+                    columns[0].vertical(|ui| {
+                        self.show_user_queue_view(ui, &handle_clone);
+                    });
+
+                    // Right column - Detail panel (for selected item)
+                    columns[1].vertical(|ui| {
+                        self.show_detail_view_with_close(ui);
+                    });
+                });
+            });
         } else {
             // In List/Detail view, use layout mode
             match self.layout_mode {
@@ -30467,6 +30851,9 @@ impl eframe::App for RequirementsApp {
 
         // Show goto picker popup (triggered by 'g' key)
         self.show_goto_picker_popup(ctx);
+
+        // Show user queue picker popup (triggered by 'q u')
+        self.show_user_queue_picker_popup(ctx);
 
         // Show tag picker popup (triggered by 't' key)
         self.show_tag_picker_popup(ctx);
