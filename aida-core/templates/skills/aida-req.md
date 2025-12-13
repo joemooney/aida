@@ -23,12 +23,14 @@ Ask the user for the following information (in conversational style):
    - A question or idea to be formalized
    - A rough note that needs refinement
 
-2. **Type** (optional, default: Functional):
-   - Functional (FR) - System behaviors
-   - NonFunctional (NFR) - Quality attributes (performance, security)
-   - User (UR) - User needs/goals
-   - System (SR) - Technical constraints
-   - ChangeRequest (CR) - Modifications to existing features
+2. **Type** (optional, default: functional):
+   - `functional` (FR) - System behaviors and features
+   - `non-functional` (NFR) - Quality attributes (performance, security)
+   - `user` (UR) - User needs/goals
+   - `system` (SR) - Technical constraints
+
+   Note: Use lowercase with hyphen for non-functional. "Feature" is NOT a type -
+   use `--feature <name>` to assign a feature category.
 
 3. **Priority** (optional, default: Medium):
    - High, Medium, Low
