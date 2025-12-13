@@ -632,6 +632,33 @@ pub fn default_type_definitions() -> Vec<CustomTypeDefinition> {
                     .with_description("Estimated story points")
                     .with_order(3),
             ),
+        // trace:FR-0309 | ai:claude:high
+        CustomTypeDefinition::built_in("Story", "Story")
+            .with_prefix("STORY")
+            .with_description("User story for agile development")
+            .with_statuses(vec![
+                "Draft",
+                "Ready",
+                "In Progress",
+                "In Review",
+                "Done",
+            ])
+            .with_color("#10b981")
+            .with_field(
+                CustomFieldDefinition::textarea("acceptance_criteria", "Acceptance Criteria")
+                    .with_description("Criteria that must be met for the story to be complete")
+                    .with_order(1),
+            )
+            .with_field(
+                CustomFieldDefinition::number("story_points", "Story Points")
+                    .with_description("Estimated story points")
+                    .with_order(2),
+            )
+            .with_field(
+                CustomFieldDefinition::user_ref("assignee", "Assignee")
+                    .with_description("Person assigned to this story")
+                    .with_order(3),
+            ),
         CustomTypeDefinition::built_in("Task", "Task")
             .with_prefix("TASK")
             .with_description("Implementation task or work item")
@@ -3823,6 +3850,28 @@ impl RequirementsStore {
                     self.type_definitions.push(default_type);
                     added = true;
                 }
+            }
+        }
+
+        added
+    }
+
+    /// Migrates id_config.requirement_types by adding any missing built-in types
+    /// This ensures CLI type list shows all built-in types
+    /// Returns true if any types were added
+    // trace:FR-0309 | ai:claude:high
+    pub fn migrate_id_config_types(&mut self) -> bool {
+        let defaults = default_requirement_types();
+        let mut added = false;
+
+        for default_type in defaults {
+            let exists = self.id_config.requirement_types.iter().any(|t| {
+                t.name.to_lowercase() == default_type.name.to_lowercase()
+                    || t.prefix == default_type.prefix
+            });
+            if !exists {
+                self.id_config.requirement_types.push(default_type);
+                added = true;
             }
         }
 

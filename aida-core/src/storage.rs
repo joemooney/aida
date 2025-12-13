@@ -442,6 +442,10 @@ impl Storage {
         // Add any missing built-in type definitions
         let had_missing_types = store.migrate_type_definitions();
 
+        // Add any missing built-in types to id_config.requirement_types
+        // trace:FR-0309 | ai:claude:high
+        let had_missing_id_config_types = store.migrate_id_config_types();
+
         // Repair any duplicate SPEC-IDs (auto-fix corruption)
         let repaired_duplicates = store.repair_duplicate_spec_ids();
 
@@ -449,7 +453,7 @@ impl Storage {
         drop(_lock);
 
         // Save back if we assigned any SPEC-IDs, added missing types, or repaired duplicates
-        if had_missing_spec_ids || had_missing_user_spec_ids || had_missing_types || repaired_duplicates > 0 {
+        if had_missing_spec_ids || had_missing_user_spec_ids || had_missing_types || had_missing_id_config_types || repaired_duplicates > 0 {
             self.save(&store)?;
         }
 
@@ -473,10 +477,12 @@ impl Storage {
         let had_missing_user_spec_ids = store.users.iter().any(|u| u.spec_id.is_none());
         store.migrate_users_to_spec_ids();
         let had_missing_types = store.migrate_type_definitions();
+        // trace:FR-0309 | ai:claude:high
+        let had_missing_id_config_types = store.migrate_id_config_types();
         let repaired_duplicates = store.repair_duplicate_spec_ids();
 
         // Save back if we made any changes
-        if had_missing_spec_ids || had_missing_user_spec_ids || had_missing_types || repaired_duplicates > 0 {
+        if had_missing_spec_ids || had_missing_user_spec_ids || had_missing_types || had_missing_id_config_types || repaired_duplicates > 0 {
             backend.save(&store)?;
         }
 
