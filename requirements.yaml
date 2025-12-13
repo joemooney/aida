@@ -1,6 +1,3 @@
-# This file is an export. The primary database is: requirements.db
-migrated_to: requirements.db
-
 name: Aida
 title: AI Design Assistant
 description: ''
@@ -1257,6 +1254,10 @@ requirements:
     target_id: 37be9566-a051-430b-b47b-1890a395a524
   - rel_type: Child
     target_id: 5752a059-7bdc-4320-8b01-74b8cb11ad77
+  - rel_type: Child
+    target_id: 1d40d398-4b14-447d-9a2d-06ba786c8f2e
+    created_at: 2025-12-12T06:28:19.726160174Z
+    created_by: Joe Mooney
   history:
   - id: 03c2768f-ba06-4cd3-b6f1-d3055c8d7b07
     author: '@joe'
@@ -9714,13 +9715,13 @@ requirements:
     - All existing CLI operations work against remote server
     - Server persists data to configured YAML/SQLite backend
     - Graceful shutdown with in-flight request completion
-  status: Approved
+  status: Completed
   priority: Medium
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-12-09T03:45:33.056070495Z
   created_by: Joe Mooney
-  modified_at: 2025-12-09T15:55:11.054199097Z
+  modified_at: 2025-12-12T07:04:42.872763092Z
   req_type: Functional
   relationships:
   - rel_type: Parent
@@ -9813,6 +9814,13 @@ requirements:
     - field_name: status
       old_value: Draft
       new_value: Approved
+  - id: f36a0229-3798-4aa7-8497-1882a2af6fab
+    author: CLI
+    timestamp: 2025-12-12T07:04:42.872761457Z
+    changes:
+    - field_name: status
+      old_value: Approved
+      new_value: Completed
   trace_links:
   - id: 7d9d9c55-acdf-468a-8a49-47f502ad2214
     artifact_type: SourceCode
@@ -10231,13 +10239,21 @@ requirements:
     - Weight displayed in detail view metadata when set (similar to tags)
     - Input validation for numeric values
     - Clear button to remove weight
-  status: Completed
+  status: Approved
   priority: Medium
   owner: ''
   feature: 129-Uncategorized
   created_at: 2025-12-10T07:08:01.426410572Z
-  modified_at: 2025-12-10T07:08:01.426410572Z
+  modified_at: 2025-12-12T16:54:54.537738305Z
   req_type: Functional
+  history:
+  - id: 1a371f83-7571-4533-9af6-d94473179c4c
+    author: web-user
+    timestamp: 2025-12-12T16:54:54.537735077Z
+    changes:
+    - field_name: status
+      old_value: Completed
+      new_value: Approved
 - id: 893da355-e72c-4b75-9d76-ee4fb19d91b0
   spec_id: FR-0240
   title: Multi-column keyboard shortcuts help
@@ -10353,7 +10369,7 @@ requirements:
   owner: ''
   feature: 134-traceability
   created_at: 2025-12-11T00:37:30.564686252Z
-  modified_at: 2025-12-11T00:37:30.564686252Z
+  modified_at: 2025-12-12T23:56:02.940152469Z
   req_type: Story
   trace_links:
   - id: 2e9105f6-7d8a-460a-bd50-e297c7358102
@@ -10857,9 +10873,440 @@ requirements:
   status: Draft
   priority: Medium
   owner: ai:claude:joe
-  feature: release
+  feature: 158-release
   created_at: 2025-12-11T06:34:46.780073412Z
   modified_at: 2025-12-11T06:34:46.780073412Z
+  req_type: Functional
+- id: b124046c-6637-4f1b-80cb-fab3ea4ef2ff
+  spec_id: FR-0269
+  title: Template externalization with compile-time embedding
+  description: |-
+    ## Overview
+    External template files as single source of truth, with build.rs compile-time embedding for self-contained release binaries.
+
+    ## Features
+    - Templates stored in aida-core/templates/ directory structure
+    - build.rs generates embedded_templates.rs with include_str! macros at compile time
+    - TemplateLoader provides fallback chain: project-local (.aida/templates/) → user config (~/.config/aida/templates/) → embedded
+    - aida scaffold extract command to extract embedded templates for customization
+
+    ## Benefits
+    - Easy template editing during development (edit files, rebuild picks up changes)
+    - Self-contained release binaries (templates embedded, no external files needed)
+    - User customization via ~/.config/aida/templates/ directory
+    - Protection against scaffolding overwriting user-modified skill files
+
+    ## Implementation
+    - aida-core/build.rs - compile-time template embedding
+    - aida-core/src/templates.rs - TemplateLoader module
+    - aida-core/templates/ - template source files
+    - aida-cli/src/main.rs - scaffold extract command handler
+  status: Completed
+  priority: Medium
+  owner: joe
+  feature: 159-scaffolding
+  created_at: 2025-12-11T07:07:49.970461176Z
+  modified_at: 2025-12-11T07:07:49.970461176Z
+  req_type: Functional
+  relationships:
+  - rel_type: Parent
+    target_id: 57e4297c-c8f7-4d48-8f1b-66fd7de5789d
+    created_at: 2025-12-11T07:08:01.427239704Z
+- id: 1d40d398-4b14-447d-9a2d-06ba786c8f2e
+  spec_id: FR-0270
+  title: ''
+  description: "Drag and Drop attachment\n\nI want to be able to add attachments to a req. If I drag a document into a requirement Detail View if possible I would like it to highlight the panel and indicate that we are about to an attachment. The attachment should be stored in an attachments folder, create one if it does not exist. Maybe we create a directory by the name of the req ID. Maybe if it is a git repo we add/commit. Not sure if there is any egui support for this type of behavior?  "
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 97-Uncategorized
+  created_at: 2025-12-12T06:28:19.497780296Z
+  created_by: Joe Mooney
+  modified_at: 2025-12-12T06:28:19.497780296Z
+  req_type: Functional
+  relationships:
+  - rel_type: Parent
+    target_id: 2fd609e9-d194-47a3-adbd-417f6306190c
+    created_at: 2025-12-12T06:28:19.726160174Z
+    created_by: Joe Mooney
+- id: 15b13fe5-9573-4d42-a530-122e098ecfd7
+  spec_id: FR-0271
+  title: File attachments for requirements
+  description: |-
+    Add the ability to attach files to requirements via the GUI.
+
+    **Implemented Features:**
+    - Attachment struct with metadata (filename, path, size, mime type, added_by)
+    - Storage methods for managing files in attachments/<spec_id>/ directory
+    - Attachments tab in GUI detail view
+    - File picker button to add attachments
+    - Click to open in system default application
+    - Remove attachment functionality
+    - Keyboard shortcut 't' to switch to Attachments tab
+
+    **Deferred:**
+    - Drag-and-drop visual feedback overlay
+    - Git auto-commit for attachments
+  status: Completed
+  priority: Medium
+  owner: joe
+  feature: 160-Uncategorized
+  created_at: 2025-12-12T07:04:52.929707205Z
+  modified_at: 2025-12-12T07:04:52.929707205Z
+  req_type: Functional
+- id: d3a78c9d-5a60-48d7-96f6-862cb82faf7d
+  spec_id: FR-0272
+  title: gRPC-Web and REST API support
+  description: "Extend the headless server (FR-0227) with multi-protocol support for browser and general HTTP clients.\n\n**Implemented Features:**\n- tonic-web layer for gRPC-Web browser clients (WASM support)\n- REST/JSON API on separate configurable port (default 8080)\n- CORS headers for cross-origin browser requests\n- JSON serialization via serde on protobuf types\n\n**REST API Endpoints:**\n- GET /api/ping - Health check\n- GET /api/status - Server status and version\n- GET /api/store - Full store data\n- GET /api/store/metadata - Store metadata  \n- GET /api/requirements - List with filtering\n- GET /api/requirements/:id - Get single requirement\n- POST /api/requirements - Create requirement\n- PUT /api/requirements/:id - Update requirement\n- DELETE /api/requirements/:id - Delete requirement\n- POST /api/requirements/:id/comments - Add comment\n- GET /api/search - Search requirements\n\n**Usage:**\naida-server --port 50051 --rest-port 8080 --database reqs.db"
+  status: Completed
+  priority: Medium
+  owner: joe
+  feature: 161-Uncategorized
+  created_at: 2025-12-12T07:05:02.625568611Z
+  modified_at: 2025-12-12T07:05:02.625568611Z
+  req_type: Functional
+  relationships:
+  - rel_type: References
+    target_id: 8cfe1327-da2d-49fa-907e-91281dbd4013
+    created_at: 2025-12-12T07:05:09.206387892Z
+- id: cbc2b6b3-a9c3-4f5a-887a-bb4d0ce92d06
+  spec_id: REQ-0273
+  title: '''q v'' opens queue view but the pop-up remains open'
+  description: '''q v'' opens queue view but the pop-up remains open'
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 97-Uncategorized
+  created_at: 2025-12-12T17:55:41.528538900Z
+  created_by: Joe Mooney
+  modified_at: 2025-12-12T17:55:51.762578857Z
+  req_type: Bug
+  custom_status: New
+- id: 0d4f46d6-792d-4790-83fc-5d2307742fb1
+  spec_id: FR-0274
+  title: when req is added to queue, display toaster
+  description: |-
+    when req is added to queue, display toaster
+
+    when we make changes to the queue and updates in general we should typically display a toaster, currently we silently make updates, we should have this as a configurable option
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 97-Uncategorized
+  created_at: 2025-12-12T17:57:17.695805390Z
+  created_by: Joe Mooney
+  modified_at: 2025-12-13T06:58:34.365644829Z
+  req_type: Functional
+  history:
+  - id: e3ffc612-becf-4ed0-a12d-64b624724950
+    author: system
+    timestamp: 2025-12-13T06:58:34.365642423Z
+    changes:
+    - field_name: description
+      old_value: |-
+        when req is added to queue, display toaster
+
+        when we make changes not just to the queue we should typically display a toaster, currently we silently make updates, we should have this as a configurable option
+      new_value: |-
+        when req is added to queue, display toaster
+
+        when we make changes to the queue and updates in general we should typically display a toaster, currently we silently make updates, we should have this as a configurable option
+- id: d441475c-aebc-4743-8298-e5f37cdf0fa8
+  spec_id: FR-0275
+  title: '''q t'' adds req to queue top but also opens tags...'
+  description: |-
+    'q t' adds req to queue top but also opens tags pop-up
+
+    when a secondary key of a picker is pressed it should not also open the associated hotkey pop-up, `q t` is doing both the `q` action and the `t` tags pop-up, I assume this is happening elsewhere
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 97-Uncategorized
+  created_at: 2025-12-12T18:00:11.194457964Z
+  created_by: Joe Mooney
+  modified_at: 2025-12-12T18:00:11.194457964Z
+  req_type: Functional
+- id: 7adc1976-7512-40a7-a01f-4908b6136514
+  spec_id: FR-0276
+  title: Ctrl+left should move a req up to be a slbling ...
+  description: Ctrl+left should move a req up to be a slbling of its parent (if there is one)
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 97-Uncategorized
+  created_at: 2025-12-12T18:01:33.625925840Z
+  created_by: Joe Mooney
+  modified_at: 2025-12-13T06:59:23.333046994Z
+  req_type: Functional
+- id: e0825afb-fabe-4fd2-8369-80e09bfd338c
+  spec_id: FR-0277
+  title: Queue view arrow/j/k keys are returning us to r...
+  description: Queue view arrow/j/k keys are returning us to requirements list view
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 97-Uncategorized
+  created_at: 2025-12-12T18:15:17.625059928Z
+  created_by: Joe Mooney
+  modified_at: 2025-12-12T18:15:17.625059928Z
+  req_type: Functional
+- id: 54284ee2-6495-4e1a-aeab-eba0430cd407
+  spec_id: FR-0278
+  title: Shared UI components for native/WASM code reuse
+  description: 'Create reusable egui rendering components in aida-gui/src/ui/ that work with proto types on both native desktop and WASM browser targets. Components include: formatters (status/priority/type/timestamp text), badges (colored status/priority indicators), list_item (requirement list rendering), requirement_form (combo boxes for status/priority/type), comment_list (comment rendering and input), detail_view (full requirement detail view). aida-web re-exports proto types from aida-gui for type compatibility. Enables consistent UI rendering and reduces code duplication.'
+  status: Completed
+  priority: Medium
+  owner: joe
+  feature: 162-Uncategorized
+  created_at: 2025-12-12T18:52:30.432849721Z
+  modified_at: 2025-12-12T18:52:30.432849721Z
+  req_type: Functional
+- id: 0f0ac31b-d621-447c-9059-b68bc9d402d7
+  spec_id: FR-0279
+  title: WASM GUI cross-platform time compatibility
+  description: The WASM build of aida-gui uses the web-time crate instead of std::time for Instant and Duration types. This enables the GUI to compile and run in browser environments where std::time::Instant panics due to lack of monotonic clock support. The fix replaces all std::time::Instant with web_time::Instant which uses performance.now() on WASM and std::time on native.
+  status: Completed
+  priority: Medium
+  owner: joe
+  feature: 163-web-client
+  created_at: 2025-12-12T23:05:47.858869607Z
+  modified_at: 2025-12-12T23:05:47.858869607Z
+  req_type: Functional
+- id: b75d1db6-294a-43c5-b4b8-dbf7d6469ffa
+  spec_id: FR-0280
+  title: Server graceful shutdown with REST API
+  description: The aida-server now properly handles Ctrl+C (SIGINT) by gracefully shutting down both the gRPC server and the REST API server. Uses tokio::sync::watch channel to share shutdown signal between servers. The REST server uses axum's with_graceful_shutdown() to properly close connections before exit.
+  status: Completed
+  priority: Medium
+  owner: joe
+  feature: 164-server
+  created_at: 2025-12-12T23:05:55.560560714Z
+  modified_at: 2025-12-12T23:05:55.560560714Z
+  req_type: Functional
+  relationships:
+  - rel_type: Parent
+    target_id: d3a78c9d-5a60-48d7-96f6-862cb82faf7d
+    created_at: 2025-12-12T23:06:15.199304981Z
+- id: 706d9b64-226e-48bb-a1ff-3ed0131c105b
+  spec_id: FR-0281
+  title: WASM gRPC-Web client connection to server
+  description: Connect the WASM browser client to the aida-server via gRPC-Web protocol. The new_wasm() function currently creates an empty RequirementsStore. It should initialize the tonic-web-wasm-client gRPC client and fetch requirements from the server on startup. This enables the browser-based GUI to display and manage requirements stored in the server database.
+  status: InProgress
+  priority: High
+  owner: joe
+  feature: 165-web-client
+  created_at: 2025-12-12T23:06:04.598091806Z
+  modified_at: 2025-12-12T23:26:42.152589119Z
+  req_type: Functional
+  comments:
+  - id: 907b4c77-ee19-4d0b-94f8-fe7bc5cf72f0
+    author: joe
+    content: Implemented WASM gRPC-Web client connection. Added WASM-specific state fields for async loading (GrpcStorageClient, pending_store, load_error, loading flag). Modified new_wasm() to create gRPC-Web client and spawn async load task. Server address configurable via URL query param (?server=...). Uses Rc<RefCell<>> pattern for shared state between async task and UI. Code in update() applies loaded requirements when async completes.
+    created_at: 2025-12-12T23:26:42.152578817Z
+    modified_at: 2025-12-12T23:26:42.152578817Z
+  history:
+  - id: 23a71896-c2cd-4d60-8a6d-edb25fbd38e5
+    author: CLI
+    timestamp: 2025-12-12T23:26:33.559147876Z
+    changes:
+    - field_name: status
+      old_value: Draft
+      new_value: InProgress
+- id: 66918b2a-8230-4091-a387-94d40e686f47
+  spec_id: FR-0282
+  title: '''G'' to go to end of list'
+  description: '''G'' to go to end of list'
+  status: Draft
+  priority: High
+  owner: ''
+  feature: 97-Uncategorized
+  created_at: 2025-12-12T23:43:09.168375451Z
+  created_by: Unknown User
+  modified_at: 2025-12-12T23:43:09.168375451Z
+  req_type: Functional
+- id: e2255679-b29c-4c37-9978-d089ffaac919
+  spec_id: FR-0283
+  title: WASM browser client user settings persistence via localStorage
+  description: 'The WASM browser client previously showed error ''Failed to save user settings: operation not supported on this platform'' when trying to save settings changes. User settings (display name, theme, preferences, etc.) are now persisted in the browser using localStorage instead of the file system. Implemented platform-specific settings storage abstraction: on WASM uses localStorage via PlatformServices trait, on native uses file system.'
+  status: InProgress
+  priority: Medium
+  owner: joe
+  feature: 166-web-client
+  created_at: 2025-12-12T23:57:48.260973349Z
+  modified_at: 2025-12-12T23:57:48.260973349Z
+  req_type: Functional
+- id: 06b5b53a-1f3e-4b34-8210-e5dd9b0c8e34
+  spec_id: FR-0284
+  title: ''
+  description: ''
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 97-Uncategorized
+  created_at: 2025-12-13T18:04:49.986385733Z
+  created_by: Unknown User
+  modified_at: 2025-12-13T18:04:49.986385733Z
+  req_type: Functional
+- id: dda2b1f7-70b5-485c-8caa-36b31e2aaa6e
+  spec_id: FR-0285
+  title: '''s'' quick pick, if you type the first letter (n...'
+  description: '''s'' quick pick, if you type the first letter (not j or k) of a Status then automatically set the status to that, so ''s d'' will set to draft (no need for a textbox, just a shortcut if the user types the first letter of a Status then accept that status if there is only one, if there is more than one starting with that letter then highlight that one and if the user then presses ENTER that one is chose, if they enter the same letter again then move on to the second occurence.'
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 97-Uncategorized
+  created_at: 2025-12-13T18:08:20.811808894Z
+  created_by: Unknown User
+  modified_at: 2025-12-13T18:08:20.811808894Z
+  req_type: Functional
+- id: afecc56f-a9b2-4168-9df4-30a1a631cc91
+  spec_id: FR-0286
+  title: Reload req from database before editing
+  description: "Reload req from database before editing\n\nI noticed that I edited in one window and saved, but the edits did not show up in another when when I clicked edit. "
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 97-Uncategorized
+  created_at: 2025-12-13T18:17:17.709095532Z
+  created_by: Joe Mooney
+  modified_at: 2025-12-13T18:17:17.709095532Z
+  req_type: Functional
+- id: 9bd414d9-f9b5-4595-8efc-86b8a80f7694
+  spec_id: FR-0287
+  title: F5 to refresh the view
+  description: |-
+    F5 to refresh the view
+
+    I notice that reload does not refresh the req list. F5 should do that and Menu/Reload should imply a refresh. As the size of a database grows we need to be careful about performance, we we need to make sure that we have configurable options in the Settings to help tune performance.
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 97-Uncategorized
+  created_at: 2025-12-13T18:20:24.641488583Z
+  created_by: Joe Mooney
+  modified_at: 2025-12-13T18:20:24.641488583Z
+  req_type: Functional
+- id: 20196f8e-d69c-41e3-844b-55929b536fe4
+  spec_id: EPIC-0288
+  title: 'Authentication Epic: User Authentication & Authorization'
+  description: Parent epic for all authentication and authorization features. This includes basic PIN-based auth (implemented), session management, and future enhancements like proper password authentication, role-based access control, and token-based API authentication.
+  status: InProgress
+  priority: Medium
+  owner: joe
+  feature: 167-auth
+  created_at: 2025-12-13T18:21:16.556138498Z
+  modified_at: 2025-12-13T18:21:16.556138498Z
+  req_type: Epic
+- id: 43af56ec-fecd-4ca0-bf74-b4d46417386f
+  spec_id: AUTH-0289
+  prefix_override: AUTH
+  title: PIN-based Web Client Authentication
+  description: Basic authentication for WASM web client using handle/username and PIN. PIN stored as SHA-256 hash. Session persisted in browser local storage. Includes login UI, logout functionality, and session restoration on page load.
+  status: Completed
+  priority: Medium
+  owner: joe
+  feature: 168-auth
+  created_at: 2025-12-13T18:21:30.649751986Z
+  modified_at: 2025-12-13T18:21:30.649751986Z
+  req_type: Functional
+  relationships:
+  - rel_type: Parent
+    target_id: 20196f8e-d69c-41e3-844b-55929b536fe4
+    created_at: 2025-12-13T18:21:52.222789985Z
+- id: 1cc8912b-7b9a-4e26-b11c-3b34b0dc2883
+  spec_id: AUTH-0290
+  prefix_override: AUTH
+  title: Password Authentication
+  description: Replace simple PIN with proper password authentication. Implement password strength validation, secure password hashing (argon2 or bcrypt), and password reset functionality.
+  status: Draft
+  priority: Medium
+  owner: joe
+  feature: 169-auth
+  created_at: 2025-12-13T18:21:42.785466173Z
+  modified_at: 2025-12-13T18:21:42.785466173Z
+  req_type: Functional
+  relationships:
+  - rel_type: Parent
+    target_id: 20196f8e-d69c-41e3-844b-55929b536fe4
+    created_at: 2025-12-13T18:21:52.499627027Z
+- id: 93ddae37-1bc1-464c-9f40-6d75f2d9c6a1
+  spec_id: AUTH-0291
+  prefix_override: AUTH
+  title: Session Token Authentication
+  description: Implement JWT or session tokens for API authentication instead of storing user object in local storage. Include token refresh, expiration handling, and secure token storage.
+  status: Draft
+  priority: Medium
+  owner: joe
+  feature: 170-auth
+  created_at: 2025-12-13T18:21:43.076989778Z
+  modified_at: 2025-12-13T18:21:43.076989778Z
+  req_type: Functional
+  relationships:
+  - rel_type: Parent
+    target_id: 20196f8e-d69c-41e3-844b-55929b536fe4
+    created_at: 2025-12-13T18:21:52.758261298Z
+- id: 5bc33a59-c7b9-47d3-b57f-5c95cf19ed88
+  spec_id: AUTH-0292
+  prefix_override: AUTH
+  title: Role-Based Access Control (RBAC)
+  description: Implement role-based permissions system. Define roles (admin, editor, viewer), permissions per role, and apply authorization checks to API endpoints and UI actions.
+  status: Draft
+  priority: Medium
+  owner: joe
+  feature: 171-auth
+  created_at: 2025-12-13T18:21:43.344717833Z
+  modified_at: 2025-12-13T18:21:43.344717833Z
+  req_type: Functional
+  relationships:
+  - rel_type: Parent
+    target_id: 20196f8e-d69c-41e3-844b-55929b536fe4
+    created_at: 2025-12-13T18:21:53.026516485Z
+- id: 7f4c22b6-54d6-47c0-8efd-a8be3d004862
+  spec_id: AUTH-0293
+  prefix_override: AUTH
+  title: User Management UI
+  description: 'Admin interface for managing users: create/edit/delete users, assign roles, reset passwords/PINs, and view user activity.'
+  status: Draft
+  priority: Medium
+  owner: joe
+  feature: 172-auth
+  created_at: 2025-12-13T18:21:43.645599964Z
+  modified_at: 2025-12-13T18:21:43.645599964Z
+  req_type: Functional
+  relationships:
+  - rel_type: Parent
+    target_id: 20196f8e-d69c-41e3-844b-55929b536fe4
+    created_at: 2025-12-13T18:21:53.284662180Z
+- id: 93ad5f8b-46ae-4856-801d-d277914a671b
+  spec_id: AUTH-0294
+  prefix_override: AUTH
+  title: Native GUI Authentication
+  description: Add authentication to native desktop GUI client similar to web client. Handle session persistence appropriate for desktop environment.
+  status: Draft
+  priority: Medium
+  owner: joe
+  feature: 173-auth
+  created_at: 2025-12-13T18:21:43.896059713Z
+  modified_at: 2025-12-13T18:21:43.896059713Z
+  req_type: Functional
+  relationships:
+  - rel_type: Parent
+    target_id: 20196f8e-d69c-41e3-844b-55929b536fe4
+    created_at: 2025-12-13T18:21:53.543642931Z
+- id: bf646b67-bfa2-49bb-93dd-1eb49f4a085a
+  spec_id: FR-0295
+  title: Edit req should show the tabs same as Detail view
+  description: |-
+    Edit req should show the tabs same as Detail view
+
+    ponder this one before implementing.
+  status: Draft
+  priority: Medium
+  owner: ''
+  feature: 97-Uncategorized
+  created_at: 2025-12-13T18:21:49.207935908Z
+  created_by: Joe Mooney
+  modified_at: 2025-12-13T18:21:49.207935908Z
   req_type: Functional
 users:
 - id: 150164ef-32ed-4d61-8cec-e887ac78cfd7
@@ -10958,8 +11405,8 @@ id_config:
     prefix: SPIKE
     description: Research or investigation task to reduce uncertainty or explore technical approaches
 features: []
-next_feature_number: 158
-next_spec_number: 269
+next_feature_number: 174
+next_spec_number: 296
 prefix_counters: {}
 relationship_definitions:
 - name: parent
@@ -11249,8 +11696,8 @@ reaction_definitions:
   description: Scary boo
   built_in: false
 meta_counters:
-  $TEAM: 4
   $USER: 7
+  $TEAM: 4
 type_definitions:
 - name: Functional
   display_name: Functional
