@@ -1,27 +1,237 @@
 <!DOCTYPE html>
-<html lang="en">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AIDA Developer's Guide</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>AIDA Developer Guide</title>
+  <style>
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      background-color: #1a1a1a;
+      border: none;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+    /* CSS for syntax highlighting */
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { color: #008000; } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { color: #008000; font-weight: bold; } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
 </head>
 <body>
-    <nav class="nav-header">
-        <div class="nav-content">
-            <div class="nav-links">
-                <a href="user-guide.html">User Guide</a>
-                <a href="DEVELOPER_GUIDE.html" class="active">Developer's Guide</a>
-                <a href="admin-guide.html">Admin Guide</a>
-            </div>
-            <button class="theme-toggle" onclick="toggleTheme()">
-                <span id="theme-icon">&#9790;</span>
-                <span id="theme-text">Toggle Theme</span>
-            </button>
-        </div>
-    </nav>
-
-    <div class="container">
+<header id="title-block-header">
+<h1 class="title">AIDA Developer Guide</h1>
+</header>
 <h1 id="aida-developers-guide">AIDA Developer’s Guide</h1>
 <p>A comprehensive guide for developers maintaining and extending the
 AIDA (AI Design Assistant) requirements management system.</p>
@@ -138,249 +348,261 @@ aida-cli ──depends──&gt; aida-core</code></pre>
 <h2 id="core-data-model">3. Core Data Model</h2>
 <h3 id="requirement-structure">3.1 Requirement Structure</h3>
 <p>Located in <code>aida-core/src/models.rs</code>:</p>
-<pre class="rust"><code>pub struct Requirement {
-    pub id: Uuid,                              // Primary key
-    pub spec_id: Option&lt;String&gt;,               // Human-readable ID (e.g., &quot;FR-0001&quot;)
-    pub title: String,
-    pub description: String,
-    pub status: RequirementStatus,             // Draft, Approved, Completed, Rejected
-    pub priority: RequirementPriority,         // High, Medium, Low
-    pub req_type: RequirementType,             // Functional, Story, Epic, etc.
-    pub owner: String,
-    pub feature: String,                       // Grouping/categorization
-    pub tags: HashSet&lt;String&gt;,
-    pub dependencies: Vec&lt;Uuid&gt;,               // Legacy - use relationships instead
-    pub relationships: Vec&lt;Relationship&gt;,      // Parent/Child/Verifies/etc.
-    pub comments: Vec&lt;Comment&gt;,                // Threaded comments
-    pub history: Vec&lt;ChangeRecord&gt;,            // Audit trail
-    pub urls: Vec&lt;UrlLink&gt;,                    // External links
-    pub custom_fields: HashMap&lt;String, String&gt;,
-    pub created_at: DateTime&lt;Local&gt;,
-    pub modified_at: DateTime&lt;Local&gt;,
-    pub created_by: Option&lt;String&gt;,
-    pub archived: bool,
-}</code></pre>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> Requirement <span class="op">{</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> id<span class="op">:</span> Uuid<span class="op">,</span>                              <span class="co">// Primary key</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> spec_id<span class="op">:</span> <span class="dt">Option</span><span class="op">&lt;</span><span class="dt">String</span><span class="op">&gt;,</span>               <span class="co">// Human-readable ID (e.g., &quot;FR-0001&quot;)</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> title<span class="op">:</span> <span class="dt">String</span><span class="op">,</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> description<span class="op">:</span> <span class="dt">String</span><span class="op">,</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> status<span class="op">:</span> RequirementStatus<span class="op">,</span>             <span class="co">// Draft, Approved, Completed, Rejected</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> priority<span class="op">:</span> RequirementPriority<span class="op">,</span>         <span class="co">// High, Medium, Low</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> req_type<span class="op">:</span> RequirementType<span class="op">,</span>             <span class="co">// Functional, Story, Epic, etc.</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> owner<span class="op">:</span> <span class="dt">String</span><span class="op">,</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> feature<span class="op">:</span> <span class="dt">String</span><span class="op">,</span>                       <span class="co">// Grouping/categorization</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> tags<span class="op">:</span> HashSet<span class="op">&lt;</span><span class="dt">String</span><span class="op">&gt;,</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> dependencies<span class="op">:</span> <span class="dt">Vec</span><span class="op">&lt;</span>Uuid<span class="op">&gt;,</span>               <span class="co">// Legacy - use relationships instead</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> relationships<span class="op">:</span> <span class="dt">Vec</span><span class="op">&lt;</span>Relationship<span class="op">&gt;,</span>      <span class="co">// Parent/Child/Verifies/etc.</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> comments<span class="op">:</span> <span class="dt">Vec</span><span class="op">&lt;</span>Comment<span class="op">&gt;,</span>                <span class="co">// Threaded comments</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> history<span class="op">:</span> <span class="dt">Vec</span><span class="op">&lt;</span>ChangeRecord<span class="op">&gt;,</span>            <span class="co">// Audit trail</span></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> urls<span class="op">:</span> <span class="dt">Vec</span><span class="op">&lt;</span>UrlLink<span class="op">&gt;,</span>                    <span class="co">// External links</span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> custom_fields<span class="op">:</span> HashMap<span class="op">&lt;</span><span class="dt">String</span><span class="op">,</span> <span class="dt">String</span><span class="op">&gt;,</span></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> created_at<span class="op">:</span> DateTime<span class="op">&lt;</span>Local<span class="op">&gt;,</span></span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> modified_at<span class="op">:</span> DateTime<span class="op">&lt;</span>Local<span class="op">&gt;,</span></span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> created_by<span class="op">:</span> <span class="dt">Option</span><span class="op">&lt;</span><span class="dt">String</span><span class="op">&gt;,</span></span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> archived<span class="op">:</span> <span class="dt">bool</span><span class="op">,</span></span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <h3 id="requirement-types">3.2 Requirement Types</h3>
-<pre class="rust"><code>pub enum RequirementType {
-    // Traditional
-    Functional,      // FR-xxxx
-    NonFunctional,   // NFR-xxxx
-    System,          // SR-xxxx
-    User,            // UR-xxxx
-
-    // Project Management
-    ChangeRequest,   // CR-xxxx
-    Bug,             // BUG-xxxx
-
-    // Agile
-    Epic,            // EPIC-xxxx
-    Story,           // STORY-xxxx
-    Task,            // TASK-xxxx
-    Spike,           // SPIKE-xxxx
-}</code></pre>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">enum</span> RequirementType <span class="op">{</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Traditional</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    Functional<span class="op">,</span>      <span class="co">// FR-xxxx</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    NonFunctional<span class="op">,</span>   <span class="co">// NFR-xxxx</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    System<span class="op">,</span>          <span class="co">// SR-xxxx</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    User<span class="op">,</span>            <span class="co">// UR-xxxx</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Project Management</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>    ChangeRequest<span class="op">,</span>   <span class="co">// CR-xxxx</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>    Bug<span class="op">,</span>             <span class="co">// </span><span class="al">BUG</span><span class="co">-xxxx</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Agile</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>    Epic<span class="op">,</span>            <span class="co">// EPIC-xxxx</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>    Story<span class="op">,</span>           <span class="co">// STORY-xxxx</span></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>    Task<span class="op">,</span>            <span class="co">// </span><span class="al">TASK</span><span class="co">-xxxx</span></span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>    Spike<span class="op">,</span>           <span class="co">// SPIKE-xxxx</span></span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <h3 id="relationships">3.3 Relationships</h3>
-<pre class="rust"><code>pub struct Relationship {
-    pub relationship_type: RelationshipType,
-    pub target_id: Uuid,
-}
-
-pub enum RelationshipType {
-    Parent,
-    Child,
-    Duplicate,
-    Verifies,
-    VerifiedBy,
-    References,
-    Custom(String),  // User-defined
-}</code></pre>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> Relationship <span class="op">{</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> relationship_type<span class="op">:</span> RelationshipType<span class="op">,</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> target_id<span class="op">:</span> Uuid<span class="op">,</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">enum</span> RelationshipType <span class="op">{</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>    Parent<span class="op">,</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>    Child<span class="op">,</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>    Duplicate<span class="op">,</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>    Verifies<span class="op">,</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>    VerifiedBy<span class="op">,</span></span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>    References<span class="op">,</span></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>    Custom(<span class="dt">String</span>)<span class="op">,</span>  <span class="co">// User-defined</span></span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <h3 id="requirementsstore">3.4 RequirementsStore</h3>
 <p>The container for all project data:</p>
-<pre class="rust"><code>pub struct RequirementsStore {
-    pub name: String,
-    pub title: String,
-    pub description: String,
-    pub requirements: Vec&lt;Requirement&gt;,
-    pub users: Vec&lt;User&gt;,
-    pub features: Vec&lt;Feature&gt;,
-    pub relationship_definitions: Vec&lt;RelationshipDefinition&gt;,
-    pub type_definitions: Vec&lt;CustomTypeDefinition&gt;,
-    pub id_config: IdConfiguration,
-    pub next_feature_number: u32,
-    pub next_spec_number: u32,
-    pub prefix_counters: HashMap&lt;String, u32&gt;,
-    // ... more fields
-}</code></pre>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> RequirementsStore <span class="op">{</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> name<span class="op">:</span> <span class="dt">String</span><span class="op">,</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> title<span class="op">:</span> <span class="dt">String</span><span class="op">,</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> description<span class="op">:</span> <span class="dt">String</span><span class="op">,</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> requirements<span class="op">:</span> <span class="dt">Vec</span><span class="op">&lt;</span>Requirement<span class="op">&gt;,</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> users<span class="op">:</span> <span class="dt">Vec</span><span class="op">&lt;</span>User<span class="op">&gt;,</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> features<span class="op">:</span> <span class="dt">Vec</span><span class="op">&lt;</span>Feature<span class="op">&gt;,</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> relationship_definitions<span class="op">:</span> <span class="dt">Vec</span><span class="op">&lt;</span>RelationshipDefinition<span class="op">&gt;,</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> type_definitions<span class="op">:</span> <span class="dt">Vec</span><span class="op">&lt;</span>CustomTypeDefinition<span class="op">&gt;,</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> id_config<span class="op">:</span> IdConfiguration<span class="op">,</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> next_feature_number<span class="op">:</span> <span class="dt">u32</span><span class="op">,</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> next_spec_number<span class="op">:</span> <span class="dt">u32</span><span class="op">,</span></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> prefix_counters<span class="op">:</span> HashMap<span class="op">&lt;</span><span class="dt">String</span><span class="op">,</span> <span class="dt">u32</span><span class="op">&gt;,</span></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ... more fields</span></span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <hr />
 <h2 id="gui-architecture">4. GUI Architecture</h2>
 <h3 id="application-entry-point">4.1 Application Entry Point</h3>
 <p><code>aida-gui/src/main.rs</code>:</p>
-<pre class="rust"><code>fn main() -&gt; eframe::Result&lt;()&gt; {
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1400.0, 900.0])
-            .with_min_inner_size([800.0, 600.0]),
-        ..Default::default()
-    };
-    eframe::run_native(
-        &quot;Aida - AI Design Assistant&quot;,
-        options,
-        Box::new(|cc| Ok(Box::new(RequirementsApp::new(cc)))),
-    )
-}</code></pre>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">fn</span> main() <span class="op">-&gt;</span> <span class="pp">eframe::</span><span class="dt">Result</span><span class="op">&lt;</span>()<span class="op">&gt;</span> <span class="op">{</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> options <span class="op">=</span> <span class="pp">eframe::</span>NativeOptions <span class="op">{</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>        viewport<span class="op">:</span> <span class="pp">egui::ViewportBuilder::</span><span class="kw">default</span>()</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>            <span class="op">.</span>with_inner_size([<span class="dv">1400.0</span><span class="op">,</span> <span class="dv">900.0</span>])</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>            <span class="op">.</span>with_min_inner_size([<span class="dv">800.0</span><span class="op">,</span> <span class="dv">600.0</span>])<span class="op">,</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>        <span class="op">..</span><span class="bu">Default</span><span class="pp">::</span><span class="kw">default</span>()</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>    <span class="op">};</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>    <span class="pp">eframe::</span>run_native(</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;Aida - AI Design Assistant&quot;</span><span class="op">,</span></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>        options<span class="op">,</span></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>        <span class="dt">Box</span><span class="pp">::</span>new(<span class="op">|</span>cc<span class="op">|</span> <span class="cn">Ok</span>(<span class="dt">Box</span><span class="pp">::</span>new(<span class="pp">RequirementsApp::</span>new(cc))))<span class="op">,</span></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <h3 id="requirementsapp-structure">4.2 RequirementsApp Structure</h3>
 <p>The main application struct (<code>aida-gui/src/app.rs</code>)
 contains 200+ fields organized into logical groups:</p>
-<pre class="rust"><code>pub struct RequirementsApp {
-    // === Core State ===
-    storage: Storage,
-    store: RequirementsStore,
-    current_view: View,
-    selected_idx: Option&lt;usize&gt;,
-
-    // === Layout ===
-    layout_mode: LayoutMode,
-
-    // === Form State ===
-    form_title: String,
-    form_description: String,
-    form_status: RequirementStatus,
-    // ... many more form fields
-
-    // === Filtering ===
-    filter_types: HashSet&lt;RequirementType&gt;,
-    filter_features: HashSet&lt;String&gt;,
-    filter_text: String,
-    // ... filter fields for both root and children
-
-    // === Settings ===
-    user_settings: UserSettings,
-
-    // === Pending Operations ===
-    pending_delete: Option&lt;usize&gt;,
-    pending_view_change: Option&lt;View&gt;,
-    pending_save: bool,
-    // ... more pending operations
-
-    // === UI State ===
-    show_settings: bool,
-    show_filter_dialog: bool,
-    tree_collapsed: HashMap&lt;Uuid, bool&gt;,
-    // ... UI state fields
-}</code></pre>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> RequirementsApp <span class="op">{</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// === Core State ===</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>    storage<span class="op">:</span> Storage<span class="op">,</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>    store<span class="op">:</span> RequirementsStore<span class="op">,</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>    current_view<span class="op">:</span> View<span class="op">,</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>    selected_idx<span class="op">:</span> <span class="dt">Option</span><span class="op">&lt;</span><span class="dt">usize</span><span class="op">&gt;,</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>    <span class="co">// === Layout ===</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>    layout_mode<span class="op">:</span> LayoutMode<span class="op">,</span></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>    <span class="co">// === Form State ===</span></span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>    form_title<span class="op">:</span> <span class="dt">String</span><span class="op">,</span></span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>    form_description<span class="op">:</span> <span class="dt">String</span><span class="op">,</span></span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a>    form_status<span class="op">:</span> RequirementStatus<span class="op">,</span></span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ... many more form fields</span></span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>    <span class="co">// === Filtering ===</span></span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a>    filter_types<span class="op">:</span> HashSet<span class="op">&lt;</span>RequirementType<span class="op">&gt;,</span></span>
+<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a>    filter_features<span class="op">:</span> HashSet<span class="op">&lt;</span><span class="dt">String</span><span class="op">&gt;,</span></span>
+<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a>    filter_text<span class="op">:</span> <span class="dt">String</span><span class="op">,</span></span>
+<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ... filter fields for both root and children</span></span>
+<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a>    <span class="co">// === Settings ===</span></span>
+<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a>    user_settings<span class="op">:</span> UserSettings<span class="op">,</span></span>
+<span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-26"><a href="#cb8-26" aria-hidden="true" tabindex="-1"></a>    <span class="co">// === Pending Operations ===</span></span>
+<span id="cb8-27"><a href="#cb8-27" aria-hidden="true" tabindex="-1"></a>    pending_delete<span class="op">:</span> <span class="dt">Option</span><span class="op">&lt;</span><span class="dt">usize</span><span class="op">&gt;,</span></span>
+<span id="cb8-28"><a href="#cb8-28" aria-hidden="true" tabindex="-1"></a>    pending_view_change<span class="op">:</span> <span class="dt">Option</span><span class="op">&lt;</span>View<span class="op">&gt;,</span></span>
+<span id="cb8-29"><a href="#cb8-29" aria-hidden="true" tabindex="-1"></a>    pending_save<span class="op">:</span> <span class="dt">bool</span><span class="op">,</span></span>
+<span id="cb8-30"><a href="#cb8-30" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ... more pending operations</span></span>
+<span id="cb8-31"><a href="#cb8-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-32"><a href="#cb8-32" aria-hidden="true" tabindex="-1"></a>    <span class="co">// === UI State ===</span></span>
+<span id="cb8-33"><a href="#cb8-33" aria-hidden="true" tabindex="-1"></a>    show_settings<span class="op">:</span> <span class="dt">bool</span><span class="op">,</span></span>
+<span id="cb8-34"><a href="#cb8-34" aria-hidden="true" tabindex="-1"></a>    show_filter_dialog<span class="op">:</span> <span class="dt">bool</span><span class="op">,</span></span>
+<span id="cb8-35"><a href="#cb8-35" aria-hidden="true" tabindex="-1"></a>    tree_collapsed<span class="op">:</span> HashMap<span class="op">&lt;</span>Uuid<span class="op">,</span> <span class="dt">bool</span><span class="op">&gt;,</span></span>
+<span id="cb8-36"><a href="#cb8-36" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ... UI state fields</span></span>
+<span id="cb8-37"><a href="#cb8-37" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <h3 id="view-enum">4.3 View Enum</h3>
-<pre class="rust"><code>pub enum View {
-    List,    // Requirements list (default)
-    Detail,  // Single requirement details
-    Add,     // New requirement form
-    Edit,    // Edit existing requirement
-}</code></pre>
+<div class="sourceCode" id="cb9"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">enum</span> View <span class="op">{</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    List<span class="op">,</span>    <span class="co">// Requirements list (default)</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    Detail<span class="op">,</span>  <span class="co">// Single requirement details</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>    <span class="bu">Add</span><span class="op">,</span>     <span class="co">// New requirement form</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    Edit<span class="op">,</span>    <span class="co">// Edit existing requirement</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <h3 id="main-update-loop">4.4 Main Update Loop</h3>
 <p>The <code>eframe::App::update()</code> method follows this
 pattern:</p>
-<pre class="rust"><code>impl eframe::App for RequirementsApp {
-    fn update(&amp;mut self, ctx: &amp;egui::Context, _frame: &amp;mut eframe::Frame) {
-        // 1. Apply theme and styles
-        self.user_settings.theme.apply(ctx);
-        self.configure_font_sizes(ctx);
-
-        // 2. Handle keyboard input
-        self.handle_keyboard_input(ctx);
-
-        // 3. Process pending operations
-        self.process_pending_operations();
-
-        // 4. Render UI based on layout mode
-        match self.layout_mode {
-            LayoutMode::ListDetailsSide =&gt; self.render_side_layout(ctx),
-            LayoutMode::ListDetailsStacked =&gt; self.render_stacked_layout(ctx),
-            LayoutMode::SplitListDetails =&gt; self.render_split_layout(ctx),
-            LayoutMode::SplitListOnly =&gt; self.render_split_list_only(ctx),
-            LayoutMode::ListOnly =&gt; self.render_list_only(ctx),
-        }
-
-        // 5. Render dialogs/modals
-        self.render_dialogs(ctx);
-    }
-}</code></pre>
+<div class="sourceCode" id="cb10"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">impl</span> <span class="pp">eframe::</span>App <span class="cf">for</span> RequirementsApp <span class="op">{</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">fn</span> update(<span class="op">&amp;</span><span class="kw">mut</span> <span class="kw">self</span><span class="op">,</span> ctx<span class="op">:</span> <span class="op">&amp;</span><span class="pp">egui::</span>Context<span class="op">,</span> _frame<span class="op">:</span> <span class="op">&amp;</span><span class="kw">mut</span> <span class="pp">eframe::</span>Frame) <span class="op">{</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>        <span class="co">// 1. Apply theme and styles</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>        <span class="kw">self</span><span class="op">.</span>user_settings<span class="op">.</span>theme<span class="op">.</span>apply(ctx)<span class="op">;</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>        <span class="kw">self</span><span class="op">.</span>configure_font_sizes(ctx)<span class="op">;</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>        <span class="co">// 2. Handle keyboard input</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>        <span class="kw">self</span><span class="op">.</span>handle_keyboard_input(ctx)<span class="op">;</span></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>        <span class="co">// 3. Process pending operations</span></span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>        <span class="kw">self</span><span class="op">.</span>process_pending_operations()<span class="op">;</span></span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>        <span class="co">// 4. Render UI based on layout mode</span></span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>        <span class="cf">match</span> <span class="kw">self</span><span class="op">.</span>layout_mode <span class="op">{</span></span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>            <span class="pp">LayoutMode::</span>ListDetailsSide <span class="op">=&gt;</span> <span class="kw">self</span><span class="op">.</span>render_side_layout(ctx)<span class="op">,</span></span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>            <span class="pp">LayoutMode::</span>ListDetailsStacked <span class="op">=&gt;</span> <span class="kw">self</span><span class="op">.</span>render_stacked_layout(ctx)<span class="op">,</span></span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a>            <span class="pp">LayoutMode::</span>SplitListDetails <span class="op">=&gt;</span> <span class="kw">self</span><span class="op">.</span>render_split_layout(ctx)<span class="op">,</span></span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a>            <span class="pp">LayoutMode::</span>SplitListOnly <span class="op">=&gt;</span> <span class="kw">self</span><span class="op">.</span>render_split_list_only(ctx)<span class="op">,</span></span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>            <span class="pp">LayoutMode::</span>ListOnly <span class="op">=&gt;</span> <span class="kw">self</span><span class="op">.</span>render_list_only(ctx)<span class="op">,</span></span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a>        <span class="co">// 5. Render dialogs/modals</span></span>
+<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a>        <span class="kw">self</span><span class="op">.</span>render_dialogs(ctx)<span class="op">;</span></span>
+<span id="cb10-24"><a href="#cb10-24" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb10-25"><a href="#cb10-25" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <hr />
 <h2 id="layout-system">5. Layout System</h2>
 <h3 id="layout-modes">5.1 Layout Modes</h3>
 <p>AIDA supports 5 distinct layout configurations:</p>
-<pre class="rust"><code>pub enum LayoutMode {
-    ListDetailsSide,    // List left, Details right (default)
-    ListDetailsStacked, // List top, Details bottom
-    SplitListDetails,   // Two lists top, Details bottom
-    SplitListOnly,      // Two lists side-by-side
-    ListOnly,           // Single list, no details
-}</code></pre>
+<div class="sourceCode" id="cb11"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">enum</span> LayoutMode <span class="op">{</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>    ListDetailsSide<span class="op">,</span>    <span class="co">// List left, Details right (default)</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>    ListDetailsStacked<span class="op">,</span> <span class="co">// List top, Details bottom</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>    SplitListDetails<span class="op">,</span>   <span class="co">// Two lists top, Details bottom</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    SplitListOnly<span class="op">,</span>      <span class="co">// Two lists side-by-side</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>    ListOnly<span class="op">,</span>           <span class="co">// Single list, no details</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <h3 id="layout-implementation-patterns">5.2 Layout Implementation
 Patterns</h3>
 <h4 id="side-by-side-layout-listdetailsside">Side-by-Side Layout
 (ListDetailsSide)</h4>
 <p>Uses <code>ui.columns()</code> for equal-width columns:</p>
-<pre class="rust"><code>fn render_side_layout(&amp;mut self, ctx: &amp;egui::Context) {
-    egui::CentralPanel::default().show(ctx, |ui| {
-        ui.columns(2, |columns| {
-            // Left column: List
-            columns[0].push_id(&quot;list_column&quot;, |ui| {
-                self.show_list_panel(ui);
-            });
-
-            // Right column: Details
-            columns[1].push_id(&quot;detail_column&quot;, |ui| {
-                self.show_detail_view_internal(ui, false);
-            });
-        });
-    });
-}</code></pre>
+<div class="sourceCode" id="cb12"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">fn</span> render_side_layout(<span class="op">&amp;</span><span class="kw">mut</span> <span class="kw">self</span><span class="op">,</span> ctx<span class="op">:</span> <span class="op">&amp;</span><span class="pp">egui::</span>Context) <span class="op">{</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    <span class="pp">egui::CentralPanel::</span><span class="kw">default</span>()<span class="op">.</span>show(ctx<span class="op">,</span> <span class="op">|</span>ui<span class="op">|</span> <span class="op">{</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>        ui<span class="op">.</span>columns(<span class="dv">2</span><span class="op">,</span> <span class="op">|</span>columns<span class="op">|</span> <span class="op">{</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>            <span class="co">// Left column: List</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>            columns[<span class="dv">0</span>]<span class="op">.</span>push_id(<span class="st">&quot;list_column&quot;</span><span class="op">,</span> <span class="op">|</span>ui<span class="op">|</span> <span class="op">{</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>                <span class="kw">self</span><span class="op">.</span>show_list_panel(ui)<span class="op">;</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>            <span class="op">}</span>)<span class="op">;</span></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>            <span class="co">// Right column: Details</span></span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>            columns[<span class="dv">1</span>]<span class="op">.</span>push_id(<span class="st">&quot;detail_column&quot;</span><span class="op">,</span> <span class="op">|</span>ui<span class="op">|</span> <span class="op">{</span></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>                <span class="kw">self</span><span class="op">.</span>show_detail_view_internal(ui<span class="op">,</span> <span class="cn">false</span>)<span class="op">;</span></span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>            <span class="op">}</span>)<span class="op">;</span></span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span>)<span class="op">;</span></span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span>)<span class="op">;</span></span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <h4 id="stacked-layout-listdetailsstacked">Stacked Layout
 (ListDetailsStacked)</h4>
 <p>Uses <code>TopBottomPanel</code> for resizable vertical split:</p>
-<pre class="rust"><code>fn render_stacked_layout(&amp;mut self, ctx: &amp;egui::Context) {
-    // Top panel: List (resizable, 40% default)
-    egui::TopBottomPanel::top(&quot;list_panel&quot;)
-        .resizable(true)
-        .default_height(ctx.screen_rect().height() * 0.4)
-        .min_height(100.0)
-        .show(ctx, |ui| {
-            self.show_list_panel(ui);
-        });
-
-    // Central panel: Details (remaining space)
-    egui::CentralPanel::default().show(ctx, |ui| {
-        self.show_detail_view_internal(ui, true); // stacked=true
-    });
-}</code></pre>
+<div class="sourceCode" id="cb13"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="kw">fn</span> render_stacked_layout(<span class="op">&amp;</span><span class="kw">mut</span> <span class="kw">self</span><span class="op">,</span> ctx<span class="op">:</span> <span class="op">&amp;</span><span class="pp">egui::</span>Context) <span class="op">{</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Top panel: List (resizable, 40% default)</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    <span class="pp">egui::TopBottomPanel::</span>top(<span class="st">&quot;list_panel&quot;</span>)</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>        <span class="op">.</span>resizable(<span class="cn">true</span>)</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>        <span class="op">.</span>default_height(ctx<span class="op">.</span>screen_rect()<span class="op">.</span>height() <span class="op">*</span> <span class="dv">0.4</span>)</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>        <span class="op">.</span>min_height(<span class="dv">100.0</span>)</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>        <span class="op">.</span>show(ctx<span class="op">,</span> <span class="op">|</span>ui<span class="op">|</span> <span class="op">{</span></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>            <span class="kw">self</span><span class="op">.</span>show_list_panel(ui)<span class="op">;</span></span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span>)<span class="op">;</span></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Central panel: Details (remaining space)</span></span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>    <span class="pp">egui::CentralPanel::</span><span class="kw">default</span>()<span class="op">.</span>show(ctx<span class="op">,</span> <span class="op">|</span>ui<span class="op">|</span> <span class="op">{</span></span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>        <span class="kw">self</span><span class="op">.</span>show_detail_view_internal(ui<span class="op">,</span> <span class="cn">true</span>)<span class="op">;</span> <span class="co">// stacked=true</span></span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span>)<span class="op">;</span></span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <h3 id="stacked-detail-view-layout">5.3 Stacked Detail View Layout</h3>
 <p>When <code>stacked=true</code>, the detail view uses a horizontal
 split:</p>
-<pre class="rust"><code>fn show_detail_view_internal(&amp;mut self, ui: &amp;mut egui::Ui, stacked: bool) {
-    // Title bar with styled background
-    egui::Frame::none()
-        .fill(self.user_settings.theme.title_bar_bg())
-        .show(ui, |ui| {
-            // Title and action buttons
-        });
-
-    if stacked {
-        // LEFT: Metadata panel (25% width, resizable)
-        egui::SidePanel::left(&quot;detail_metadata_panel&quot;)
-            .resizable(true)
-            .default_width(available_width * 0.25)
-            .show_inside(ui, |ui| {
-                // ID, Status, Priority, Type, etc.
-            });
-
-        // RIGHT: Tabs and content (75% width)
-        egui::CentralPanel::default()
-            .show_inside(ui, |ui| {
-                // Tab bar: Description, Comments, Links, History
-                // Tab content with ScrollArea
-            });
-    } else {
-        // Vertical layout: metadata grid, then tabs below
-    }
-}</code></pre>
+<div class="sourceCode" id="cb14"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="kw">fn</span> show_detail_view_internal(<span class="op">&amp;</span><span class="kw">mut</span> <span class="kw">self</span><span class="op">,</span> ui<span class="op">:</span> <span class="op">&amp;</span><span class="kw">mut</span> <span class="pp">egui::</span>Ui<span class="op">,</span> stacked<span class="op">:</span> <span class="dt">bool</span>) <span class="op">{</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Title bar with styled background</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>    <span class="pp">egui::Frame::</span>none()</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>        <span class="op">.</span>fill(<span class="kw">self</span><span class="op">.</span>user_settings<span class="op">.</span>theme<span class="op">.</span>title_bar_bg())</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>        <span class="op">.</span>show(ui<span class="op">,</span> <span class="op">|</span>ui<span class="op">|</span> <span class="op">{</span></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>            <span class="co">// Title and action buttons</span></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span>)<span class="op">;</span></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> stacked <span class="op">{</span></span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>        <span class="co">// LEFT: Metadata panel (25% width, resizable)</span></span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>        <span class="pp">egui::SidePanel::</span>left(<span class="st">&quot;detail_metadata_panel&quot;</span>)</span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>            <span class="op">.</span>resizable(<span class="cn">true</span>)</span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a>            <span class="op">.</span>default_width(available_width <span class="op">*</span> <span class="dv">0.25</span>)</span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a>            <span class="op">.</span>show_inside(ui<span class="op">,</span> <span class="op">|</span>ui<span class="op">|</span> <span class="op">{</span></span>
+<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a>                <span class="co">// ID, Status, Priority, Type, etc.</span></span>
+<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a>            <span class="op">}</span>)<span class="op">;</span></span>
+<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-18"><a href="#cb14-18" aria-hidden="true" tabindex="-1"></a>        <span class="co">// RIGHT: Tabs and content (75% width)</span></span>
+<span id="cb14-19"><a href="#cb14-19" aria-hidden="true" tabindex="-1"></a>        <span class="pp">egui::CentralPanel::</span><span class="kw">default</span>()</span>
+<span id="cb14-20"><a href="#cb14-20" aria-hidden="true" tabindex="-1"></a>            <span class="op">.</span>show_inside(ui<span class="op">,</span> <span class="op">|</span>ui<span class="op">|</span> <span class="op">{</span></span>
+<span id="cb14-21"><a href="#cb14-21" aria-hidden="true" tabindex="-1"></a>                <span class="co">// Tab bar: Description, Comments, Links, History</span></span>
+<span id="cb14-22"><a href="#cb14-22" aria-hidden="true" tabindex="-1"></a>                <span class="co">// Tab content with ScrollArea</span></span>
+<span id="cb14-23"><a href="#cb14-23" aria-hidden="true" tabindex="-1"></a>            <span class="op">}</span>)<span class="op">;</span></span>
+<span id="cb14-24"><a href="#cb14-24" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span> <span class="cf">else</span> <span class="op">{</span></span>
+<span id="cb14-25"><a href="#cb14-25" aria-hidden="true" tabindex="-1"></a>        <span class="co">// Vertical layout: metadata grid, then tabs below</span></span>
+<span id="cb14-26"><a href="#cb14-26" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb14-27"><a href="#cb14-27" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <h3 id="panel-types-reference">5.4 Panel Types Reference</h3>
 <table>
 <thead>
@@ -416,88 +638,92 @@ split:</p>
 Overflow</h3>
 <p>When using <code>columns()</code>, set clip rectangles to prevent
 overflow:</p>
-<pre class="rust"><code>ui.columns(2, |columns| {
-    let clip_rect = columns[0].clip_rect();
-    columns[0].set_clip_rect(clip_rect);
-
-    // Render content that respects boundaries
-});</code></pre>
+<div class="sourceCode" id="cb15"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>ui<span class="op">.</span>columns(<span class="dv">2</span><span class="op">,</span> <span class="op">|</span>columns<span class="op">|</span> <span class="op">{</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> clip_rect <span class="op">=</span> columns[<span class="dv">0</span>]<span class="op">.</span>clip_rect()<span class="op">;</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>    columns[<span class="dv">0</span>]<span class="op">.</span>set_clip_rect(clip_rect)<span class="op">;</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Render content that respects boundaries</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span>)<span class="op">;</span></span></code></pre></div>
 <hr />
 <h2 id="theme-system">6. Theme System</h2>
 <h3 id="theme-enum">6.1 Theme Enum</h3>
-<pre class="rust"><code>pub enum Theme {
-    Dark,                        // Default dark theme
-    Light,                       // Light theme
-    HighContrastDark,            // High contrast for accessibility
-    SolarizedDark,               // Solarized color scheme
-    Nord,                        // Nord color scheme
-    Custom(Box&lt;CustomTheme&gt;),    // Fully customizable
-}</code></pre>
+<div class="sourceCode" id="cb16"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">enum</span> Theme <span class="op">{</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>    Dark<span class="op">,</span>                        <span class="co">// Default dark theme</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>    Light<span class="op">,</span>                       <span class="co">// Light theme</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>    HighContrastDark<span class="op">,</span>            <span class="co">// High contrast for accessibility</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>    SolarizedDark<span class="op">,</span>               <span class="co">// Solarized color scheme</span></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>    Nord<span class="op">,</span>                        <span class="co">// Nord color scheme</span></span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>    Custom(<span class="dt">Box</span><span class="op">&lt;</span>CustomTheme<span class="op">&gt;</span>)<span class="op">,</span>    <span class="co">// Fully customizable</span></span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <h3 id="customtheme-structure">6.2 CustomTheme Structure</h3>
-<pre class="rust"><code>pub struct CustomTheme {
-    // Background colors
-    pub window_fill: ThemeColor,
-    pub panel_fill: ThemeColor,
-    pub extreme_bg: ThemeColor,
-    pub faint_bg: ThemeColor,
-
-    // Text colors
-    pub text_color: ThemeColor,
-    pub hyperlink_color: ThemeColor,
-    pub warn_fg: ThemeColor,
-    pub error_fg: ThemeColor,
-
-    // Widget colors (multiple states)
-    pub widget_bg: ThemeColor,
-    pub widget_inactive_bg: ThemeColor,
-    pub widget_hovered_bg: ThemeColor,
-    pub widget_active_bg: ThemeColor,
-
-    // Selection
-    pub selection_bg: ThemeColor,
-    pub selection_fg: ThemeColor,
-
-    // Strokes and borders
-    pub widget_stroke_width: f32,
-    pub widget_stroke_color: ThemeColor,
-
-    // Visual properties
-    pub widget_rounding: f32,
-    pub window_rounding: f32,
-    pub item_spacing: (f32, f32),
-
-    // Detail view title bar
-    pub title_bar_bg: ThemeColor,
-    pub title_bar_text: Option&lt;ThemeColor&gt;,
-    pub title_bar_font_size: f32,
-
-    pub dark_mode: bool,
-}</code></pre>
+<div class="sourceCode" id="cb17"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> CustomTheme <span class="op">{</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Background colors</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> window_fill<span class="op">:</span> ThemeColor<span class="op">,</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> panel_fill<span class="op">:</span> ThemeColor<span class="op">,</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> extreme_bg<span class="op">:</span> ThemeColor<span class="op">,</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> faint_bg<span class="op">:</span> ThemeColor<span class="op">,</span></span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Text colors</span></span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> text_color<span class="op">:</span> ThemeColor<span class="op">,</span></span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> hyperlink_color<span class="op">:</span> ThemeColor<span class="op">,</span></span>
+<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> warn_fg<span class="op">:</span> ThemeColor<span class="op">,</span></span>
+<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> error_fg<span class="op">:</span> ThemeColor<span class="op">,</span></span>
+<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Widget colors (multiple states)</span></span>
+<span id="cb17-15"><a href="#cb17-15" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> widget_bg<span class="op">:</span> ThemeColor<span class="op">,</span></span>
+<span id="cb17-16"><a href="#cb17-16" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> widget_inactive_bg<span class="op">:</span> ThemeColor<span class="op">,</span></span>
+<span id="cb17-17"><a href="#cb17-17" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> widget_hovered_bg<span class="op">:</span> ThemeColor<span class="op">,</span></span>
+<span id="cb17-18"><a href="#cb17-18" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> widget_active_bg<span class="op">:</span> ThemeColor<span class="op">,</span></span>
+<span id="cb17-19"><a href="#cb17-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-20"><a href="#cb17-20" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Selection</span></span>
+<span id="cb17-21"><a href="#cb17-21" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> selection_bg<span class="op">:</span> ThemeColor<span class="op">,</span></span>
+<span id="cb17-22"><a href="#cb17-22" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> selection_fg<span class="op">:</span> ThemeColor<span class="op">,</span></span>
+<span id="cb17-23"><a href="#cb17-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-24"><a href="#cb17-24" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Strokes and borders</span></span>
+<span id="cb17-25"><a href="#cb17-25" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> widget_stroke_width<span class="op">:</span> <span class="dt">f32</span><span class="op">,</span></span>
+<span id="cb17-26"><a href="#cb17-26" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> widget_stroke_color<span class="op">:</span> ThemeColor<span class="op">,</span></span>
+<span id="cb17-27"><a href="#cb17-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-28"><a href="#cb17-28" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Visual properties</span></span>
+<span id="cb17-29"><a href="#cb17-29" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> widget_rounding<span class="op">:</span> <span class="dt">f32</span><span class="op">,</span></span>
+<span id="cb17-30"><a href="#cb17-30" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> window_rounding<span class="op">:</span> <span class="dt">f32</span><span class="op">,</span></span>
+<span id="cb17-31"><a href="#cb17-31" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> item_spacing<span class="op">:</span> (<span class="dt">f32</span><span class="op">,</span> <span class="dt">f32</span>)<span class="op">,</span></span>
+<span id="cb17-32"><a href="#cb17-32" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-33"><a href="#cb17-33" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Detail view title bar</span></span>
+<span id="cb17-34"><a href="#cb17-34" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> title_bar_bg<span class="op">:</span> ThemeColor<span class="op">,</span></span>
+<span id="cb17-35"><a href="#cb17-35" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> title_bar_text<span class="op">:</span> <span class="dt">Option</span><span class="op">&lt;</span>ThemeColor<span class="op">&gt;,</span></span>
+<span id="cb17-36"><a href="#cb17-36" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> title_bar_font_size<span class="op">:</span> <span class="dt">f32</span><span class="op">,</span></span>
+<span id="cb17-37"><a href="#cb17-37" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-38"><a href="#cb17-38" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> dark_mode<span class="op">:</span> <span class="dt">bool</span><span class="op">,</span></span>
+<span id="cb17-39"><a href="#cb17-39" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <h3 id="theme-application">6.3 Theme Application</h3>
 <p>Themes are applied each frame in the update loop:</p>
-<pre class="rust"><code>impl Theme {
-    pub fn apply(&amp;self, ctx: &amp;egui::Context) {
-        match self {
-            Theme::Dark =&gt; ctx.set_visuals(egui::Visuals::dark()),
-            Theme::Light =&gt; ctx.set_visuals(egui::Visuals::light()),
-            Theme::Custom(custom) =&gt; {
-                let mut visuals = if custom.dark_mode {
-                    egui::Visuals::dark()
-                } else {
-                    egui::Visuals::light()
-                };
-
-                // Apply all custom colors
-                visuals.window_fill = custom.window_fill.to_egui();
-                visuals.panel_fill = custom.panel_fill.to_egui();
-                // ... apply all properties
-
-                ctx.set_visuals(visuals);
-            }
-            // Other themes...
-        }
-    }
-}</code></pre>
+<div class="sourceCode" id="cb18"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="kw">impl</span> Theme <span class="op">{</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> <span class="kw">fn</span> apply(<span class="op">&amp;</span><span class="kw">self</span><span class="op">,</span> ctx<span class="op">:</span> <span class="op">&amp;</span><span class="pp">egui::</span>Context) <span class="op">{</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>        <span class="cf">match</span> <span class="kw">self</span> <span class="op">{</span></span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>            <span class="pp">Theme::</span>Dark <span class="op">=&gt;</span> ctx<span class="op">.</span>set_visuals(<span class="pp">egui::Visuals::</span>dark())<span class="op">,</span></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>            <span class="pp">Theme::</span>Light <span class="op">=&gt;</span> ctx<span class="op">.</span>set_visuals(<span class="pp">egui::Visuals::</span>light())<span class="op">,</span></span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>            <span class="pp">Theme::</span>Custom(custom) <span class="op">=&gt;</span> <span class="op">{</span></span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>                <span class="kw">let</span> <span class="kw">mut</span> visuals <span class="op">=</span> <span class="cf">if</span> custom<span class="op">.</span>dark_mode <span class="op">{</span></span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>                    <span class="pp">egui::Visuals::</span>dark()</span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>                <span class="op">}</span> <span class="cf">else</span> <span class="op">{</span></span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a>                    <span class="pp">egui::Visuals::</span>light()</span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a>                <span class="op">};</span></span>
+<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-13"><a href="#cb18-13" aria-hidden="true" tabindex="-1"></a>                <span class="co">// Apply all custom colors</span></span>
+<span id="cb18-14"><a href="#cb18-14" aria-hidden="true" tabindex="-1"></a>                visuals<span class="op">.</span>window_fill <span class="op">=</span> custom<span class="op">.</span>window_fill<span class="op">.</span>to_egui()<span class="op">;</span></span>
+<span id="cb18-15"><a href="#cb18-15" aria-hidden="true" tabindex="-1"></a>                visuals<span class="op">.</span>panel_fill <span class="op">=</span> custom<span class="op">.</span>panel_fill<span class="op">.</span>to_egui()<span class="op">;</span></span>
+<span id="cb18-16"><a href="#cb18-16" aria-hidden="true" tabindex="-1"></a>                <span class="co">// ... apply all properties</span></span>
+<span id="cb18-17"><a href="#cb18-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-18"><a href="#cb18-18" aria-hidden="true" tabindex="-1"></a>                ctx<span class="op">.</span>set_visuals(visuals)<span class="op">;</span></span>
+<span id="cb18-19"><a href="#cb18-19" aria-hidden="true" tabindex="-1"></a>            <span class="op">}</span></span>
+<span id="cb18-20"><a href="#cb18-20" aria-hidden="true" tabindex="-1"></a>            <span class="co">// Other themes...</span></span>
+<span id="cb18-21"><a href="#cb18-21" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb18-22"><a href="#cb18-22" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb18-23"><a href="#cb18-23" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <h3 id="adding-a-new-built-in-theme">6.4 Adding a New Built-in
 Theme</h3>
 <ol type="1">
@@ -506,166 +732,173 @@ Theme</h3>
 <li>Add to theme selection UI in settings</li>
 <li>Implement helper methods (<code>title_bar_bg()</code>, etc.)</li>
 </ol>
-<pre class="rust"><code>// Example: Adding a &quot;Monokai&quot; theme
-pub enum Theme {
-    // ... existing
-    Monokai,
-}
-
-impl Theme {
-    pub fn apply(&amp;self, ctx: &amp;egui::Context) {
-        match self {
-            Theme::Monokai =&gt; {
-                let mut visuals = egui::Visuals::dark();
-                visuals.window_fill = egui::Color32::from_rgb(39, 40, 34);
-                visuals.panel_fill = egui::Color32::from_rgb(39, 40, 34);
-                // ... set Monokai colors
-                ctx.set_visuals(visuals);
-            }
-            // ...
-        }
-    }
-
-    fn title_bar_bg(&amp;self) -&gt; egui::Color32 {
-        match self {
-            Theme::Monokai =&gt; egui::Color32::from_rgb(49, 50, 44),
-            // ...
-        }
-    }
-}</code></pre>
+<div class="sourceCode" id="cb19"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Example: Adding a &quot;Monokai&quot; theme</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">enum</span> Theme <span class="op">{</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ... existing</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>    Monokai<span class="op">,</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a><span class="kw">impl</span> Theme <span class="op">{</span></span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> <span class="kw">fn</span> apply(<span class="op">&amp;</span><span class="kw">self</span><span class="op">,</span> ctx<span class="op">:</span> <span class="op">&amp;</span><span class="pp">egui::</span>Context) <span class="op">{</span></span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>        <span class="cf">match</span> <span class="kw">self</span> <span class="op">{</span></span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a>            <span class="pp">Theme::</span>Monokai <span class="op">=&gt;</span> <span class="op">{</span></span>
+<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a>                <span class="kw">let</span> <span class="kw">mut</span> visuals <span class="op">=</span> <span class="pp">egui::Visuals::</span>dark()<span class="op">;</span></span>
+<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a>                visuals<span class="op">.</span>window_fill <span class="op">=</span> <span class="pp">egui::Color32::</span>from_rgb(<span class="dv">39</span><span class="op">,</span> <span class="dv">40</span><span class="op">,</span> <span class="dv">34</span>)<span class="op">;</span></span>
+<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a>                visuals<span class="op">.</span>panel_fill <span class="op">=</span> <span class="pp">egui::Color32::</span>from_rgb(<span class="dv">39</span><span class="op">,</span> <span class="dv">40</span><span class="op">,</span> <span class="dv">34</span>)<span class="op">;</span></span>
+<span id="cb19-14"><a href="#cb19-14" aria-hidden="true" tabindex="-1"></a>                <span class="co">// ... set Monokai colors</span></span>
+<span id="cb19-15"><a href="#cb19-15" aria-hidden="true" tabindex="-1"></a>                ctx<span class="op">.</span>set_visuals(visuals)<span class="op">;</span></span>
+<span id="cb19-16"><a href="#cb19-16" aria-hidden="true" tabindex="-1"></a>            <span class="op">}</span></span>
+<span id="cb19-17"><a href="#cb19-17" aria-hidden="true" tabindex="-1"></a>            <span class="co">// ...</span></span>
+<span id="cb19-18"><a href="#cb19-18" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb19-19"><a href="#cb19-19" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb19-20"><a href="#cb19-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-21"><a href="#cb19-21" aria-hidden="true" tabindex="-1"></a>    <span class="kw">fn</span> title_bar_bg(<span class="op">&amp;</span><span class="kw">self</span>) <span class="op">-&gt;</span> <span class="pp">egui::</span>Color32 <span class="op">{</span></span>
+<span id="cb19-22"><a href="#cb19-22" aria-hidden="true" tabindex="-1"></a>        <span class="cf">match</span> <span class="kw">self</span> <span class="op">{</span></span>
+<span id="cb19-23"><a href="#cb19-23" aria-hidden="true" tabindex="-1"></a>            <span class="pp">Theme::</span>Monokai <span class="op">=&gt;</span> <span class="pp">egui::Color32::</span>from_rgb(<span class="dv">49</span><span class="op">,</span> <span class="dv">50</span><span class="op">,</span> <span class="dv">44</span>)<span class="op">,</span></span>
+<span id="cb19-24"><a href="#cb19-24" aria-hidden="true" tabindex="-1"></a>            <span class="co">// ...</span></span>
+<span id="cb19-25"><a href="#cb19-25" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb19-26"><a href="#cb19-26" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb19-27"><a href="#cb19-27" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <hr />
 <h2 id="state-management">7. State Management</h2>
 <h3 id="pending-operations-pattern">7.1 Pending Operations Pattern</h3>
 <p>To avoid borrow checker conflicts during the update loop, mutations
 are queued:</p>
-<pre class="rust"><code>// Instead of immediate mutation:
-// self.store.requirements.remove(idx);  // Can&#39;t borrow mutably while iterating
-
-// Queue the operation:
-self.pending_delete = Some(idx);
-
-// Process after UI rendering:
-fn process_pending_operations(&amp;mut self) {
-    if let Some(idx) = self.pending_delete.take() {
-        self.store.requirements.remove(idx);
-        self.save();
-    }
-
-    if let Some(view) = self.pending_view_change.take() {
-        self.current_view = view;
-    }
-
-    if self.pending_save {
-        self.pending_save = false;
-        self.save();
-    }
-}</code></pre>
+<div class="sourceCode" id="cb20"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Instead of immediate mutation:</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="co">// self.store.requirements.remove(idx);  // Can&#39;t borrow mutably while iterating</span></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a><span class="co">// Queue the operation:</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a><span class="kw">self</span><span class="op">.</span>pending_delete <span class="op">=</span> <span class="cn">Some</span>(idx)<span class="op">;</span></span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a><span class="co">// Process after UI rendering:</span></span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a><span class="kw">fn</span> process_pending_operations(<span class="op">&amp;</span><span class="kw">mut</span> <span class="kw">self</span>) <span class="op">{</span></span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">let</span> <span class="cn">Some</span>(idx) <span class="op">=</span> <span class="kw">self</span><span class="op">.</span>pending_delete<span class="op">.</span>take() <span class="op">{</span></span>
+<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a>        <span class="kw">self</span><span class="op">.</span>store<span class="op">.</span>requirements<span class="op">.</span>remove(idx)<span class="op">;</span></span>
+<span id="cb20-11"><a href="#cb20-11" aria-hidden="true" tabindex="-1"></a>        <span class="kw">self</span><span class="op">.</span>save()<span class="op">;</span></span>
+<span id="cb20-12"><a href="#cb20-12" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb20-13"><a href="#cb20-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-14"><a href="#cb20-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">let</span> <span class="cn">Some</span>(view) <span class="op">=</span> <span class="kw">self</span><span class="op">.</span>pending_view_change<span class="op">.</span>take() <span class="op">{</span></span>
+<span id="cb20-15"><a href="#cb20-15" aria-hidden="true" tabindex="-1"></a>        <span class="kw">self</span><span class="op">.</span>current_view <span class="op">=</span> view<span class="op">;</span></span>
+<span id="cb20-16"><a href="#cb20-16" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb20-17"><a href="#cb20-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-18"><a href="#cb20-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">self</span><span class="op">.</span>pending_save <span class="op">{</span></span>
+<span id="cb20-19"><a href="#cb20-19" aria-hidden="true" tabindex="-1"></a>        <span class="kw">self</span><span class="op">.</span>pending_save <span class="op">=</span> <span class="cn">false</span><span class="op">;</span></span>
+<span id="cb20-20"><a href="#cb20-20" aria-hidden="true" tabindex="-1"></a>        <span class="kw">self</span><span class="op">.</span>save()<span class="op">;</span></span>
+<span id="cb20-21"><a href="#cb20-21" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb20-22"><a href="#cb20-22" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <h3 id="form-state-management">7.2 Form State Management</h3>
-<pre class="rust"><code>// Load requirement into form
-fn load_form_from_requirement(&amp;mut self, idx: usize) {
-    if let Some(req) = self.store.requirements.get(idx) {
-        self.form_title = req.title.clone();
-        self.form_description = req.description.clone();
-        self.form_status = req.status.clone();
-        // ... copy all fields
-
-        self.store_original_form_values(); // For cancel/undo
-    }
-}
-
-// Clear form for new requirement
-fn clear_form(&amp;mut self) {
-    self.form_title = String::new();
-    self.form_description = String::new();
-    self.form_status = RequirementStatus::Draft;
-    // ... reset all fields
-}
-
-// Save form to requirement
-fn save_form_to_requirement(&amp;mut self, idx: usize) {
-    if let Some(req) = self.store.requirements.get_mut(idx) {
-        req.title = self.form_title.clone();
-        req.description = self.form_description.clone();
-        // ... copy all fields
-        req.modified_at = Local::now();
-    }
-}</code></pre>
+<div class="sourceCode" id="cb21"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Load requirement into form</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a><span class="kw">fn</span> load_form_from_requirement(<span class="op">&amp;</span><span class="kw">mut</span> <span class="kw">self</span><span class="op">,</span> idx<span class="op">:</span> <span class="dt">usize</span>) <span class="op">{</span></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">let</span> <span class="cn">Some</span>(req) <span class="op">=</span> <span class="kw">self</span><span class="op">.</span>store<span class="op">.</span>requirements<span class="op">.</span>get(idx) <span class="op">{</span></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>        <span class="kw">self</span><span class="op">.</span>form_title <span class="op">=</span> req<span class="op">.</span>title<span class="op">.</span>clone()<span class="op">;</span></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>        <span class="kw">self</span><span class="op">.</span>form_description <span class="op">=</span> req<span class="op">.</span>description<span class="op">.</span>clone()<span class="op">;</span></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>        <span class="kw">self</span><span class="op">.</span>form_status <span class="op">=</span> req<span class="op">.</span>status<span class="op">.</span>clone()<span class="op">;</span></span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>        <span class="co">// ... copy all fields</span></span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>        <span class="kw">self</span><span class="op">.</span>store_original_form_values()<span class="op">;</span> <span class="co">// For cancel/undo</span></span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a><span class="co">// Clear form for new requirement</span></span>
+<span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a><span class="kw">fn</span> clear_form(<span class="op">&amp;</span><span class="kw">mut</span> <span class="kw">self</span>) <span class="op">{</span></span>
+<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a>    <span class="kw">self</span><span class="op">.</span>form_title <span class="op">=</span> <span class="dt">String</span><span class="pp">::</span>new()<span class="op">;</span></span>
+<span id="cb21-16"><a href="#cb21-16" aria-hidden="true" tabindex="-1"></a>    <span class="kw">self</span><span class="op">.</span>form_description <span class="op">=</span> <span class="dt">String</span><span class="pp">::</span>new()<span class="op">;</span></span>
+<span id="cb21-17"><a href="#cb21-17" aria-hidden="true" tabindex="-1"></a>    <span class="kw">self</span><span class="op">.</span>form_status <span class="op">=</span> <span class="pp">RequirementStatus::</span>Draft<span class="op">;</span></span>
+<span id="cb21-18"><a href="#cb21-18" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ... reset all fields</span></span>
+<span id="cb21-19"><a href="#cb21-19" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb21-20"><a href="#cb21-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-21"><a href="#cb21-21" aria-hidden="true" tabindex="-1"></a><span class="co">// Save form to requirement</span></span>
+<span id="cb21-22"><a href="#cb21-22" aria-hidden="true" tabindex="-1"></a><span class="kw">fn</span> save_form_to_requirement(<span class="op">&amp;</span><span class="kw">mut</span> <span class="kw">self</span><span class="op">,</span> idx<span class="op">:</span> <span class="dt">usize</span>) <span class="op">{</span></span>
+<span id="cb21-23"><a href="#cb21-23" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">let</span> <span class="cn">Some</span>(req) <span class="op">=</span> <span class="kw">self</span><span class="op">.</span>store<span class="op">.</span>requirements<span class="op">.</span>get_mut(idx) <span class="op">{</span></span>
+<span id="cb21-24"><a href="#cb21-24" aria-hidden="true" tabindex="-1"></a>        req<span class="op">.</span>title <span class="op">=</span> <span class="kw">self</span><span class="op">.</span>form_title<span class="op">.</span>clone()<span class="op">;</span></span>
+<span id="cb21-25"><a href="#cb21-25" aria-hidden="true" tabindex="-1"></a>        req<span class="op">.</span>description <span class="op">=</span> <span class="kw">self</span><span class="op">.</span>form_description<span class="op">.</span>clone()<span class="op">;</span></span>
+<span id="cb21-26"><a href="#cb21-26" aria-hidden="true" tabindex="-1"></a>        <span class="co">// ... copy all fields</span></span>
+<span id="cb21-27"><a href="#cb21-27" aria-hidden="true" tabindex="-1"></a>        req<span class="op">.</span>modified_at <span class="op">=</span> <span class="pp">Local::</span>now()<span class="op">;</span></span>
+<span id="cb21-28"><a href="#cb21-28" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb21-29"><a href="#cb21-29" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <h3 id="selection-state">7.3 Selection State</h3>
-<pre class="rust"><code>// Primary list selection
-selected_idx: Option&lt;usize&gt;,
-
-// Split view: second list selection
-split_selected_idx: Option&lt;usize&gt;,
-
-// Which list has keyboard focus
-focused_list: FocusedList,  // List1 or List2
-
-// Lock navigation between lists
-navigation_locked: bool,</code></pre>
+<div class="sourceCode" id="cb22"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Primary list selection</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>selected_idx<span class="op">:</span> <span class="dt">Option</span><span class="op">&lt;</span><span class="dt">usize</span><span class="op">&gt;,</span></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a><span class="co">// Split view: second list selection</span></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>split_selected_idx<span class="op">:</span> <span class="dt">Option</span><span class="op">&lt;</span><span class="dt">usize</span><span class="op">&gt;,</span></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a><span class="co">// Which list has keyboard focus</span></span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>focused_list<span class="op">:</span> FocusedList<span class="op">,</span>  <span class="co">// List1 or List2</span></span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a><span class="co">// Lock navigation between lists</span></span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a>navigation_locked<span class="op">:</span> <span class="dt">bool</span><span class="op">,</span></span></code></pre></div>
 <hr />
 <h2 id="keyboard-system">8. Keyboard System</h2>
 <h3 id="key-context">8.1 Key Context</h3>
-<pre class="rust"><code>pub enum KeyContext {
-    Global,           // Always active
-    RequirementsList, // When viewing list
-    DetailView,       // When viewing details
-    Form,             // When in add/edit form
-}</code></pre>
+<div class="sourceCode" id="cb23"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">enum</span> KeyContext <span class="op">{</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>    Global<span class="op">,</span>           <span class="co">// Always active</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>    RequirementsList<span class="op">,</span> <span class="co">// When viewing list</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>    DetailView<span class="op">,</span>       <span class="co">// When viewing details</span></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>    Form<span class="op">,</span>             <span class="co">// When in add/edit form</span></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <h3 id="key-actions">8.2 Key Actions</h3>
-<pre class="rust"><code>pub enum KeyAction {
-    // Navigation
-    NavigateUp, NavigateDown,
-    PageUp, PageDown,
-    Home, End,
-
-    // Views
-    EnterList, EnterDetail, EnterAdd, EnterEdit,
-    CloseDetail,
-
-    // Actions
-    Save, Delete, Archive,
-
-    // Layout
-    CycleLayout, ToggleFilterPanel,
-
-    // Zoom
-    ZoomIn, ZoomOut, ResetZoom,
-    // ... more actions
-}</code></pre>
+<div class="sourceCode" id="cb24"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">enum</span> KeyAction <span class="op">{</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Navigation</span></span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>    NavigateUp<span class="op">,</span> NavigateDown<span class="op">,</span></span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>    PageUp<span class="op">,</span> PageDown<span class="op">,</span></span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>    Home<span class="op">,</span> End<span class="op">,</span></span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Views</span></span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a>    EnterList<span class="op">,</span> EnterDetail<span class="op">,</span> EnterAdd<span class="op">,</span> EnterEdit<span class="op">,</span></span>
+<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a>    CloseDetail<span class="op">,</span></span>
+<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Actions</span></span>
+<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a>    Save<span class="op">,</span> Delete<span class="op">,</span> Archive<span class="op">,</span></span>
+<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-14"><a href="#cb24-14" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Layout</span></span>
+<span id="cb24-15"><a href="#cb24-15" aria-hidden="true" tabindex="-1"></a>    CycleLayout<span class="op">,</span> ToggleFilterPanel<span class="op">,</span></span>
+<span id="cb24-16"><a href="#cb24-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-17"><a href="#cb24-17" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Zoom</span></span>
+<span id="cb24-18"><a href="#cb24-18" aria-hidden="true" tabindex="-1"></a>    ZoomIn<span class="op">,</span> ZoomOut<span class="op">,</span> ResetZoom<span class="op">,</span></span>
+<span id="cb24-19"><a href="#cb24-19" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ... more actions</span></span>
+<span id="cb24-20"><a href="#cb24-20" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <h3 id="keybinding-structure">8.3 KeyBinding Structure</h3>
-<pre class="rust"><code>pub struct KeyBinding {
-    pub key: Option&lt;egui::Key&gt;,
-    pub ctrl: bool,
-    pub shift: bool,
-    pub context: KeyContext,
-}
-
-impl KeyBinding {
-    pub fn key(key: egui::Key, context: KeyContext) -&gt; Self {
-        Self { key: Some(key), ctrl: false, shift: false, context }
-    }
-
-    pub fn with_ctrl(mut self) -&gt; Self {
-        self.ctrl = true;
-        self
-    }
-
-    pub fn matches(&amp;self, input: &amp;egui::InputState, current_context: KeyContext) -&gt; bool {
-        // Check context compatibility
-        if !self.context_matches(current_context) {
-            return false;
-        }
-
-        // Check key and modifiers
-        if let Some(key) = self.key {
-            input.key_pressed(key)
-                &amp;&amp; input.modifiers.ctrl == self.ctrl
-                &amp;&amp; input.modifiers.shift == self.shift
-        } else {
-            false
-        }
-    }
-}</code></pre>
+<div class="sourceCode" id="cb25"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> KeyBinding <span class="op">{</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> key<span class="op">:</span> <span class="dt">Option</span><span class="op">&lt;</span><span class="pp">egui::</span>Key<span class="op">&gt;,</span></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> ctrl<span class="op">:</span> <span class="dt">bool</span><span class="op">,</span></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> shift<span class="op">:</span> <span class="dt">bool</span><span class="op">,</span></span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> context<span class="op">:</span> KeyContext<span class="op">,</span></span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a><span class="kw">impl</span> KeyBinding <span class="op">{</span></span>
+<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> <span class="kw">fn</span> key(key<span class="op">:</span> <span class="pp">egui::</span>Key<span class="op">,</span> context<span class="op">:</span> KeyContext) <span class="op">-&gt;</span> <span class="dt">Self</span> <span class="op">{</span></span>
+<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>        <span class="dt">Self</span> <span class="op">{</span> key<span class="op">:</span> <span class="cn">Some</span>(key)<span class="op">,</span> ctrl<span class="op">:</span> <span class="cn">false</span><span class="op">,</span> shift<span class="op">:</span> <span class="cn">false</span><span class="op">,</span> context <span class="op">}</span></span>
+<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> <span class="kw">fn</span> with_ctrl(<span class="kw">mut</span> <span class="kw">self</span>) <span class="op">-&gt;</span> <span class="dt">Self</span> <span class="op">{</span></span>
+<span id="cb25-14"><a href="#cb25-14" aria-hidden="true" tabindex="-1"></a>        <span class="kw">self</span><span class="op">.</span>ctrl <span class="op">=</span> <span class="cn">true</span><span class="op">;</span></span>
+<span id="cb25-15"><a href="#cb25-15" aria-hidden="true" tabindex="-1"></a>        <span class="kw">self</span></span>
+<span id="cb25-16"><a href="#cb25-16" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb25-17"><a href="#cb25-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-18"><a href="#cb25-18" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> <span class="kw">fn</span> matches(<span class="op">&amp;</span><span class="kw">self</span><span class="op">,</span> input<span class="op">:</span> <span class="op">&amp;</span><span class="pp">egui::</span>InputState<span class="op">,</span> current_context<span class="op">:</span> KeyContext) <span class="op">-&gt;</span> <span class="dt">bool</span> <span class="op">{</span></span>
+<span id="cb25-19"><a href="#cb25-19" aria-hidden="true" tabindex="-1"></a>        <span class="co">// Check context compatibility</span></span>
+<span id="cb25-20"><a href="#cb25-20" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="op">!</span><span class="kw">self</span><span class="op">.</span>context_matches(current_context) <span class="op">{</span></span>
+<span id="cb25-21"><a href="#cb25-21" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> <span class="cn">false</span><span class="op">;</span></span>
+<span id="cb25-22"><a href="#cb25-22" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb25-23"><a href="#cb25-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-24"><a href="#cb25-24" aria-hidden="true" tabindex="-1"></a>        <span class="co">// Check key and modifiers</span></span>
+<span id="cb25-25"><a href="#cb25-25" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="kw">let</span> <span class="cn">Some</span>(key) <span class="op">=</span> <span class="kw">self</span><span class="op">.</span>key <span class="op">{</span></span>
+<span id="cb25-26"><a href="#cb25-26" aria-hidden="true" tabindex="-1"></a>            input<span class="op">.</span>key_pressed(key)</span>
+<span id="cb25-27"><a href="#cb25-27" aria-hidden="true" tabindex="-1"></a>                <span class="op">&amp;&amp;</span> input<span class="op">.</span>modifiers<span class="op">.</span>ctrl <span class="op">==</span> <span class="kw">self</span><span class="op">.</span>ctrl</span>
+<span id="cb25-28"><a href="#cb25-28" aria-hidden="true" tabindex="-1"></a>                <span class="op">&amp;&amp;</span> input<span class="op">.</span>modifiers<span class="op">.</span>shift <span class="op">==</span> <span class="kw">self</span><span class="op">.</span>shift</span>
+<span id="cb25-29"><a href="#cb25-29" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span> <span class="cf">else</span> <span class="op">{</span></span>
+<span id="cb25-30"><a href="#cb25-30" aria-hidden="true" tabindex="-1"></a>            <span class="cn">false</span></span>
+<span id="cb25-31"><a href="#cb25-31" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb25-32"><a href="#cb25-32" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb25-33"><a href="#cb25-33" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <h3 id="adding-a-new-keyboard-shortcut">8.4 Adding a New Keyboard
 Shortcut</h3>
 <ol type="1">
@@ -673,181 +906,189 @@ Shortcut</h3>
 <li>Add default binding in <code>KeyBindings::default()</code></li>
 <li>Handle the action in keyboard input processing</li>
 </ol>
-<pre class="rust"><code>// 1. Add action
-pub enum KeyAction {
-    // ...
-    ToggleDarkMode,
-}
-
-// 2. Add default binding
-impl Default for KeyBindings {
-    fn default() -&gt; Self {
-        let mut bindings = HashMap::new();
-        // ...
-        bindings.insert(
-            KeyAction::ToggleDarkMode,
-            KeyBinding::key(egui::Key::D, KeyContext::Global).with_ctrl()
-        );
-        Self { bindings }
-    }
-}
-
-// 3. Handle in update loop
-fn handle_keyboard_input(&amp;mut self, ctx: &amp;egui::Context) {
-    let input = ctx.input(|i| i.clone());
-    let context = self.current_key_context();
-
-    if self.user_settings.keybindings.is_pressed(KeyAction::ToggleDarkMode, &amp;input, context) {
-        self.toggle_dark_mode();
-    }
-}</code></pre>
+<div class="sourceCode" id="cb26"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="co">// 1. Add action</span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">enum</span> KeyAction <span class="op">{</span></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>    ToggleDarkMode<span class="op">,</span></span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a><span class="co">// 2. Add default binding</span></span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a><span class="kw">impl</span> <span class="bu">Default</span> <span class="cf">for</span> KeyBindings <span class="op">{</span></span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>    <span class="kw">fn</span> default() <span class="op">-&gt;</span> <span class="dt">Self</span> <span class="op">{</span></span>
+<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a>        <span class="kw">let</span> <span class="kw">mut</span> bindings <span class="op">=</span> <span class="pp">HashMap::</span>new()<span class="op">;</span></span>
+<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a>        <span class="co">// ...</span></span>
+<span id="cb26-12"><a href="#cb26-12" aria-hidden="true" tabindex="-1"></a>        bindings<span class="op">.</span>insert(</span>
+<span id="cb26-13"><a href="#cb26-13" aria-hidden="true" tabindex="-1"></a>            <span class="pp">KeyAction::</span>ToggleDarkMode<span class="op">,</span></span>
+<span id="cb26-14"><a href="#cb26-14" aria-hidden="true" tabindex="-1"></a>            <span class="pp">KeyBinding::</span>key(<span class="pp">egui::Key::</span>D<span class="op">,</span> <span class="pp">KeyContext::</span>Global)<span class="op">.</span>with_ctrl()</span>
+<span id="cb26-15"><a href="#cb26-15" aria-hidden="true" tabindex="-1"></a>        )<span class="op">;</span></span>
+<span id="cb26-16"><a href="#cb26-16" aria-hidden="true" tabindex="-1"></a>        <span class="dt">Self</span> <span class="op">{</span> bindings <span class="op">}</span></span>
+<span id="cb26-17"><a href="#cb26-17" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb26-18"><a href="#cb26-18" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb26-19"><a href="#cb26-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-20"><a href="#cb26-20" aria-hidden="true" tabindex="-1"></a><span class="co">// 3. Handle in update loop</span></span>
+<span id="cb26-21"><a href="#cb26-21" aria-hidden="true" tabindex="-1"></a><span class="kw">fn</span> handle_keyboard_input(<span class="op">&amp;</span><span class="kw">mut</span> <span class="kw">self</span><span class="op">,</span> ctx<span class="op">:</span> <span class="op">&amp;</span><span class="pp">egui::</span>Context) <span class="op">{</span></span>
+<span id="cb26-22"><a href="#cb26-22" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> input <span class="op">=</span> ctx<span class="op">.</span>input(<span class="op">|</span>i<span class="op">|</span> i<span class="op">.</span>clone())<span class="op">;</span></span>
+<span id="cb26-23"><a href="#cb26-23" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> context <span class="op">=</span> <span class="kw">self</span><span class="op">.</span>current_key_context()<span class="op">;</span></span>
+<span id="cb26-24"><a href="#cb26-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-25"><a href="#cb26-25" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">self</span><span class="op">.</span>user_settings<span class="op">.</span>keybindings<span class="op">.</span>is_pressed(<span class="pp">KeyAction::</span>ToggleDarkMode<span class="op">,</span> <span class="op">&amp;</span>input<span class="op">,</span> context) <span class="op">{</span></span>
+<span id="cb26-26"><a href="#cb26-26" aria-hidden="true" tabindex="-1"></a>        <span class="kw">self</span><span class="op">.</span>toggle_dark_mode()<span class="op">;</span></span>
+<span id="cb26-27"><a href="#cb26-27" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb26-28"><a href="#cb26-28" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <hr />
 <h2 id="filtering-perspectives">9. Filtering &amp; Perspectives</h2>
 <h3 id="perspective-system">9.1 Perspective System</h3>
-<pre class="rust"><code>pub enum Perspective {
-    Flat,         // Simple list, no hierarchy
-    ParentChild,  // Tree based on Parent/Child relationships
-    Verification, // Tree based on Verifies/VerifiedBy
-    References,   // Tree based on References relationships
-}
-
-pub enum PerspectiveDirection {
-    TopDown,  // Parents at top, children below
-    BottomUp, // Children at top, parents below
-}</code></pre>
+<div class="sourceCode" id="cb27"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">enum</span> Perspective <span class="op">{</span></span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>    Flat<span class="op">,</span>         <span class="co">// Simple list, no hierarchy</span></span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>    ParentChild<span class="op">,</span>  <span class="co">// Tree based on Parent/Child relationships</span></span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>    Verification<span class="op">,</span> <span class="co">// Tree based on Verifies/VerifiedBy</span></span>
+<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a>    References<span class="op">,</span>   <span class="co">// Tree based on References relationships</span></span>
+<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">enum</span> PerspectiveDirection <span class="op">{</span></span>
+<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a>    TopDown<span class="op">,</span>  <span class="co">// Parents at top, children below</span></span>
+<span id="cb27-10"><a href="#cb27-10" aria-hidden="true" tabindex="-1"></a>    BottomUp<span class="op">,</span> <span class="co">// Children at top, parents below</span></span>
+<span id="cb27-11"><a href="#cb27-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <h3 id="two-level-filtering">9.2 Two-Level Filtering</h3>
 <p>AIDA supports independent filters for root and child
 requirements:</p>
-<pre class="rust"><code>// Root-level filters (top-level requirements in tree)
-filter_types: HashSet&lt;RequirementType&gt;,
-filter_features: HashSet&lt;String&gt;,
-filter_prefixes: HashSet&lt;String&gt;,
-filter_statuses: HashSet&lt;RequirementStatus&gt;,
-filter_priorities: HashSet&lt;RequirementPriority&gt;,
-
-// Child-level filters
-children_filter_types: HashSet&lt;RequirementType&gt;,
-children_filter_features: HashSet&lt;String&gt;,
-// ... same fields with children_ prefix
-
-// Option to use same filters for children
-children_same_as_root: bool,</code></pre>
+<div class="sourceCode" id="cb28"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Root-level filters (top-level requirements in tree)</span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>filter_types<span class="op">:</span> HashSet<span class="op">&lt;</span>RequirementType<span class="op">&gt;,</span></span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>filter_features<span class="op">:</span> HashSet<span class="op">&lt;</span><span class="dt">String</span><span class="op">&gt;,</span></span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>filter_prefixes<span class="op">:</span> HashSet<span class="op">&lt;</span><span class="dt">String</span><span class="op">&gt;,</span></span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>filter_statuses<span class="op">:</span> HashSet<span class="op">&lt;</span>RequirementStatus<span class="op">&gt;,</span></span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>filter_priorities<span class="op">:</span> HashSet<span class="op">&lt;</span>RequirementPriority<span class="op">&gt;,</span></span>
+<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a><span class="co">// Child-level filters</span></span>
+<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a>children_filter_types<span class="op">:</span> HashSet<span class="op">&lt;</span>RequirementType<span class="op">&gt;,</span></span>
+<span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a>children_filter_features<span class="op">:</span> HashSet<span class="op">&lt;</span><span class="dt">String</span><span class="op">&gt;,</span></span>
+<span id="cb28-11"><a href="#cb28-11" aria-hidden="true" tabindex="-1"></a><span class="co">// ... same fields with children_ prefix</span></span>
+<span id="cb28-12"><a href="#cb28-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-13"><a href="#cb28-13" aria-hidden="true" tabindex="-1"></a><span class="co">// Option to use same filters for children</span></span>
+<span id="cb28-14"><a href="#cb28-14" aria-hidden="true" tabindex="-1"></a>children_same_as_root<span class="op">:</span> <span class="dt">bool</span><span class="op">,</span></span></code></pre></div>
 <h3 id="filter-application">9.3 Filter Application</h3>
-<pre class="rust"><code>fn passes_filters(&amp;self, req: &amp;Requirement, is_root: bool) -&gt; bool {
-    let (types, features, statuses, priorities) = if is_root || self.children_same_as_root {
-        (&amp;self.filter_types, &amp;self.filter_features,
-         &amp;self.filter_statuses, &amp;self.filter_priorities)
-    } else {
-        (&amp;self.children_filter_types, &amp;self.children_filter_features,
-         &amp;self.children_filter_statuses, &amp;self.children_filter_priorities)
-    };
-
-    // Check each filter
-    (types.is_empty() || types.contains(&amp;req.req_type))
-        &amp;&amp; (features.is_empty() || features.contains(&amp;req.feature))
-        &amp;&amp; (statuses.is_empty() || statuses.contains(&amp;req.status))
-        &amp;&amp; (priorities.is_empty() || priorities.contains(&amp;req.priority))
-        &amp;&amp; self.passes_text_filter(req)
-        &amp;&amp; (self.show_archived || !req.archived)
-}</code></pre>
+<div class="sourceCode" id="cb29"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="kw">fn</span> passes_filters(<span class="op">&amp;</span><span class="kw">self</span><span class="op">,</span> req<span class="op">:</span> <span class="op">&amp;</span>Requirement<span class="op">,</span> is_root<span class="op">:</span> <span class="dt">bool</span>) <span class="op">-&gt;</span> <span class="dt">bool</span> <span class="op">{</span></span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> (types<span class="op">,</span> features<span class="op">,</span> statuses<span class="op">,</span> priorities) <span class="op">=</span> <span class="cf">if</span> is_root <span class="op">||</span> <span class="kw">self</span><span class="op">.</span>children_same_as_root <span class="op">{</span></span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>        (<span class="op">&amp;</span><span class="kw">self</span><span class="op">.</span>filter_types<span class="op">,</span> <span class="op">&amp;</span><span class="kw">self</span><span class="op">.</span>filter_features<span class="op">,</span></span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>         <span class="op">&amp;</span><span class="kw">self</span><span class="op">.</span>filter_statuses<span class="op">,</span> <span class="op">&amp;</span><span class="kw">self</span><span class="op">.</span>filter_priorities)</span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span> <span class="cf">else</span> <span class="op">{</span></span>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>        (<span class="op">&amp;</span><span class="kw">self</span><span class="op">.</span>children_filter_types<span class="op">,</span> <span class="op">&amp;</span><span class="kw">self</span><span class="op">.</span>children_filter_features<span class="op">,</span></span>
+<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a>         <span class="op">&amp;</span><span class="kw">self</span><span class="op">.</span>children_filter_statuses<span class="op">,</span> <span class="op">&amp;</span><span class="kw">self</span><span class="op">.</span>children_filter_priorities)</span>
+<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a>    <span class="op">};</span></span>
+<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Check each filter</span></span>
+<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a>    (types<span class="op">.</span>is_empty() <span class="op">||</span> types<span class="op">.</span>contains(<span class="op">&amp;</span>req<span class="op">.</span>req_type))</span>
+<span id="cb29-12"><a href="#cb29-12" aria-hidden="true" tabindex="-1"></a>        <span class="op">&amp;&amp;</span> (features<span class="op">.</span>is_empty() <span class="op">||</span> features<span class="op">.</span>contains(<span class="op">&amp;</span>req<span class="op">.</span>feature))</span>
+<span id="cb29-13"><a href="#cb29-13" aria-hidden="true" tabindex="-1"></a>        <span class="op">&amp;&amp;</span> (statuses<span class="op">.</span>is_empty() <span class="op">||</span> statuses<span class="op">.</span>contains(<span class="op">&amp;</span>req<span class="op">.</span>status))</span>
+<span id="cb29-14"><a href="#cb29-14" aria-hidden="true" tabindex="-1"></a>        <span class="op">&amp;&amp;</span> (priorities<span class="op">.</span>is_empty() <span class="op">||</span> priorities<span class="op">.</span>contains(<span class="op">&amp;</span>req<span class="op">.</span>priority))</span>
+<span id="cb29-15"><a href="#cb29-15" aria-hidden="true" tabindex="-1"></a>        <span class="op">&amp;&amp;</span> <span class="kw">self</span><span class="op">.</span>passes_text_filter(req)</span>
+<span id="cb29-16"><a href="#cb29-16" aria-hidden="true" tabindex="-1"></a>        <span class="op">&amp;&amp;</span> (<span class="kw">self</span><span class="op">.</span>show_archived <span class="op">||</span> <span class="op">!</span>req<span class="op">.</span>archived)</span>
+<span id="cb29-17"><a href="#cb29-17" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <h3 id="tree-rendering">9.4 Tree Rendering</h3>
-<pre class="rust"><code>fn show_tree_list(&amp;mut self, ui: &amp;mut egui::Ui) {
-    // Find root requirements (no parents in current perspective)
-    let roots = self.find_tree_roots();
-
-    for root_idx in roots {
-        if self.passes_filters(&amp;self.store.requirements[root_idx], true) {
-            self.show_tree_node(ui, root_idx, 0); // depth=0
-        }
-    }
-}
-
-fn show_tree_node(&amp;mut self, ui: &amp;mut egui::Ui, idx: usize, depth: usize) {
-    let req = &amp;self.store.requirements[idx];
-    let children = self.get_children(idx);
-    let has_children = !children.is_empty();
-
-    // Indentation
-    ui.add_space(depth as f32 * self.user_settings.theme.indent());
-
-    // Collapse/expand toggle
-    if has_children {
-        let collapsed = self.tree_collapsed.get(&amp;req.id).copied().unwrap_or(false);
-        if ui.button(if collapsed { &quot;▶&quot; } else { &quot;▼&quot; }).clicked() {
-            self.tree_collapsed.insert(req.id, !collapsed);
-        }
-    }
-
-    // Render requirement item
-    self.show_requirement_item(ui, idx);
-
-    // Render children if expanded
-    if has_children &amp;&amp; !self.tree_collapsed.get(&amp;req.id).copied().unwrap_or(false) {
-        for child_idx in children {
-            if self.passes_filters(&amp;self.store.requirements[child_idx], false) {
-                self.show_tree_node(ui, child_idx, depth + 1);
-            }
-        }
-    }
-}</code></pre>
+<div class="sourceCode" id="cb30"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="kw">fn</span> show_tree_list(<span class="op">&amp;</span><span class="kw">mut</span> <span class="kw">self</span><span class="op">,</span> ui<span class="op">:</span> <span class="op">&amp;</span><span class="kw">mut</span> <span class="pp">egui::</span>Ui) <span class="op">{</span></span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Find root requirements (no parents in current perspective)</span></span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> roots <span class="op">=</span> <span class="kw">self</span><span class="op">.</span>find_tree_roots()<span class="op">;</span></span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> root_idx <span class="kw">in</span> roots <span class="op">{</span></span>
+<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="kw">self</span><span class="op">.</span>passes_filters(<span class="op">&amp;</span><span class="kw">self</span><span class="op">.</span>store<span class="op">.</span>requirements[root_idx]<span class="op">,</span> <span class="cn">true</span>) <span class="op">{</span></span>
+<span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a>            <span class="kw">self</span><span class="op">.</span>show_tree_node(ui<span class="op">,</span> root_idx<span class="op">,</span> <span class="dv">0</span>)<span class="op">;</span> <span class="co">// depth=0</span></span>
+<span id="cb30-8"><a href="#cb30-8" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb30-9"><a href="#cb30-9" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb30-10"><a href="#cb30-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb30-11"><a href="#cb30-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-12"><a href="#cb30-12" aria-hidden="true" tabindex="-1"></a><span class="kw">fn</span> show_tree_node(<span class="op">&amp;</span><span class="kw">mut</span> <span class="kw">self</span><span class="op">,</span> ui<span class="op">:</span> <span class="op">&amp;</span><span class="kw">mut</span> <span class="pp">egui::</span>Ui<span class="op">,</span> idx<span class="op">:</span> <span class="dt">usize</span><span class="op">,</span> depth<span class="op">:</span> <span class="dt">usize</span>) <span class="op">{</span></span>
+<span id="cb30-13"><a href="#cb30-13" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> req <span class="op">=</span> <span class="op">&amp;</span><span class="kw">self</span><span class="op">.</span>store<span class="op">.</span>requirements[idx]<span class="op">;</span></span>
+<span id="cb30-14"><a href="#cb30-14" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> children <span class="op">=</span> <span class="kw">self</span><span class="op">.</span>get_children(idx)<span class="op">;</span></span>
+<span id="cb30-15"><a href="#cb30-15" aria-hidden="true" tabindex="-1"></a>    <span class="kw">let</span> has_children <span class="op">=</span> <span class="op">!</span>children<span class="op">.</span>is_empty()<span class="op">;</span></span>
+<span id="cb30-16"><a href="#cb30-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-17"><a href="#cb30-17" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Indentation</span></span>
+<span id="cb30-18"><a href="#cb30-18" aria-hidden="true" tabindex="-1"></a>    ui<span class="op">.</span>add_space(depth <span class="kw">as</span> <span class="dt">f32</span> <span class="op">*</span> <span class="kw">self</span><span class="op">.</span>user_settings<span class="op">.</span>theme<span class="op">.</span>indent())<span class="op">;</span></span>
+<span id="cb30-19"><a href="#cb30-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-20"><a href="#cb30-20" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Collapse/expand toggle</span></span>
+<span id="cb30-21"><a href="#cb30-21" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> has_children <span class="op">{</span></span>
+<span id="cb30-22"><a href="#cb30-22" aria-hidden="true" tabindex="-1"></a>        <span class="kw">let</span> collapsed <span class="op">=</span> <span class="kw">self</span><span class="op">.</span>tree_collapsed<span class="op">.</span>get(<span class="op">&amp;</span>req<span class="op">.</span>id)<span class="op">.</span>copied()<span class="op">.</span>unwrap_or(<span class="cn">false</span>)<span class="op">;</span></span>
+<span id="cb30-23"><a href="#cb30-23" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> ui<span class="op">.</span>button(<span class="cf">if</span> collapsed <span class="op">{</span> <span class="st">&quot;▶&quot;</span> <span class="op">}</span> <span class="cf">else</span> <span class="op">{</span> <span class="st">&quot;▼&quot;</span> <span class="op">}</span>)<span class="op">.</span>clicked() <span class="op">{</span></span>
+<span id="cb30-24"><a href="#cb30-24" aria-hidden="true" tabindex="-1"></a>            <span class="kw">self</span><span class="op">.</span>tree_collapsed<span class="op">.</span>insert(req<span class="op">.</span>id<span class="op">,</span> <span class="op">!</span>collapsed)<span class="op">;</span></span>
+<span id="cb30-25"><a href="#cb30-25" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb30-26"><a href="#cb30-26" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb30-27"><a href="#cb30-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-28"><a href="#cb30-28" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Render requirement item</span></span>
+<span id="cb30-29"><a href="#cb30-29" aria-hidden="true" tabindex="-1"></a>    <span class="kw">self</span><span class="op">.</span>show_requirement_item(ui<span class="op">,</span> idx)<span class="op">;</span></span>
+<span id="cb30-30"><a href="#cb30-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-31"><a href="#cb30-31" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Render children if expanded</span></span>
+<span id="cb30-32"><a href="#cb30-32" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> has_children <span class="op">&amp;&amp;</span> <span class="op">!</span><span class="kw">self</span><span class="op">.</span>tree_collapsed<span class="op">.</span>get(<span class="op">&amp;</span>req<span class="op">.</span>id)<span class="op">.</span>copied()<span class="op">.</span>unwrap_or(<span class="cn">false</span>) <span class="op">{</span></span>
+<span id="cb30-33"><a href="#cb30-33" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> child_idx <span class="kw">in</span> children <span class="op">{</span></span>
+<span id="cb30-34"><a href="#cb30-34" aria-hidden="true" tabindex="-1"></a>            <span class="cf">if</span> <span class="kw">self</span><span class="op">.</span>passes_filters(<span class="op">&amp;</span><span class="kw">self</span><span class="op">.</span>store<span class="op">.</span>requirements[child_idx]<span class="op">,</span> <span class="cn">false</span>) <span class="op">{</span></span>
+<span id="cb30-35"><a href="#cb30-35" aria-hidden="true" tabindex="-1"></a>                <span class="kw">self</span><span class="op">.</span>show_tree_node(ui<span class="op">,</span> child_idx<span class="op">,</span> depth <span class="op">+</span> <span class="dv">1</span>)<span class="op">;</span></span>
+<span id="cb30-36"><a href="#cb30-36" aria-hidden="true" tabindex="-1"></a>            <span class="op">}</span></span>
+<span id="cb30-37"><a href="#cb30-37" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb30-38"><a href="#cb30-38" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb30-39"><a href="#cb30-39" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <hr />
 <h2 id="configuration-persistence">10. Configuration &amp;
 Persistence</h2>
 <h3 id="user-settings">10.1 User Settings</h3>
 <p><strong>Location</strong>:
 <code>~/.local/share/aida-gui/settings.yaml</code> (XDG compliant)</p>
-<pre class="rust"><code>pub struct UserSettings {
-    pub name: String,
-    pub email: String,
-    pub handle: String,
-    pub font_size: f32,           // Base font size (default 14.0)
-    pub ui_heading_level: u8,     // 1-6 for UI headings
-    pub perspective: Perspective,
-    pub theme: Theme,
-    pub keybindings: KeyBindings,
-    pub show_status_icons: bool,
-    pub status_icons: StatusIconConfig,
-    pub priority_icons: PriorityIconConfig,
-    pub view_presets: Vec&lt;ViewPreset&gt;,
-}</code></pre>
+<div class="sourceCode" id="cb31"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> UserSettings <span class="op">{</span></span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> name<span class="op">:</span> <span class="dt">String</span><span class="op">,</span></span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> email<span class="op">:</span> <span class="dt">String</span><span class="op">,</span></span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> handle<span class="op">:</span> <span class="dt">String</span><span class="op">,</span></span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> font_size<span class="op">:</span> <span class="dt">f32</span><span class="op">,</span>           <span class="co">// Base font size (default 14.0)</span></span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> ui_heading_level<span class="op">:</span> <span class="dt">u8</span><span class="op">,</span>     <span class="co">// 1-6 for UI headings</span></span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> perspective<span class="op">:</span> Perspective<span class="op">,</span></span>
+<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> theme<span class="op">:</span> Theme<span class="op">,</span></span>
+<span id="cb31-9"><a href="#cb31-9" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> keybindings<span class="op">:</span> KeyBindings<span class="op">,</span></span>
+<span id="cb31-10"><a href="#cb31-10" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> show_status_icons<span class="op">:</span> <span class="dt">bool</span><span class="op">,</span></span>
+<span id="cb31-11"><a href="#cb31-11" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> status_icons<span class="op">:</span> StatusIconConfig<span class="op">,</span></span>
+<span id="cb31-12"><a href="#cb31-12" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> priority_icons<span class="op">:</span> PriorityIconConfig<span class="op">,</span></span>
+<span id="cb31-13"><a href="#cb31-13" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> view_presets<span class="op">:</span> <span class="dt">Vec</span><span class="op">&lt;</span>ViewPreset<span class="op">&gt;,</span></span>
+<span id="cb31-14"><a href="#cb31-14" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <h3 id="requirements-storage">10.2 Requirements Storage</h3>
 <p><strong>Format</strong>: YAML file (typically
 <code>requirements.yaml</code>)</p>
-<pre class="yaml"><code>name: &quot;project-name&quot;
-title: &quot;Project Title&quot;
-description: &quot;Project description&quot;
-
-requirements:
-  - id: &quot;550e8400-e29b-41d4-a716-446655440000&quot;
-    spec_id: &quot;FR-0001&quot;
-    title: &quot;User Authentication&quot;
-    description: &quot;Users must be able to log in&quot;
-    status: Draft
-    priority: High
-    req_type: Functional
-    # ... more fields
-
-users:
-  - name: &quot;John Doe&quot;
-    email: &quot;john@example.com&quot;
-
-type_definitions:
-  - name: &quot;Functional&quot;
-    display_name: &quot;Functional&quot;
-    prefix: &quot;FR&quot;
-    statuses: [Draft, Approved, Completed, Rejected]
-    built_in: true</code></pre>
+<div class="sourceCode" id="cb32"><pre
+class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="fu">name</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;project-name&quot;</span></span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a><span class="fu">title</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Project Title&quot;</span></span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a><span class="fu">description</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Project description&quot;</span></span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a><span class="fu">requirements</span><span class="kw">:</span></span>
+<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">id</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;550e8400-e29b-41d4-a716-446655440000&quot;</span></span>
+<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">spec_id</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;FR-0001&quot;</span></span>
+<span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">title</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;User Authentication&quot;</span></span>
+<span id="cb32-9"><a href="#cb32-9" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">description</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Users must be able to log in&quot;</span></span>
+<span id="cb32-10"><a href="#cb32-10" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">status</span><span class="kw">:</span><span class="at"> Draft</span></span>
+<span id="cb32-11"><a href="#cb32-11" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">priority</span><span class="kw">:</span><span class="at"> High</span></span>
+<span id="cb32-12"><a href="#cb32-12" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">req_type</span><span class="kw">:</span><span class="at"> Functional</span></span>
+<span id="cb32-13"><a href="#cb32-13" aria-hidden="true" tabindex="-1"></a><span class="co">    # ... more fields</span></span>
+<span id="cb32-14"><a href="#cb32-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-15"><a href="#cb32-15" aria-hidden="true" tabindex="-1"></a><span class="fu">users</span><span class="kw">:</span></span>
+<span id="cb32-16"><a href="#cb32-16" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">name</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;John Doe&quot;</span></span>
+<span id="cb32-17"><a href="#cb32-17" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">email</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;john@example.com&quot;</span></span>
+<span id="cb32-18"><a href="#cb32-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-19"><a href="#cb32-19" aria-hidden="true" tabindex="-1"></a><span class="fu">type_definitions</span><span class="kw">:</span></span>
+<span id="cb32-20"><a href="#cb32-20" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="kw">-</span><span class="at"> </span><span class="fu">name</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Functional&quot;</span></span>
+<span id="cb32-21"><a href="#cb32-21" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">display_name</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Functional&quot;</span></span>
+<span id="cb32-22"><a href="#cb32-22" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">prefix</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;FR&quot;</span></span>
+<span id="cb32-23"><a href="#cb32-23" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">statuses</span><span class="kw">:</span><span class="at"> </span><span class="kw">[</span><span class="at">Draft</span><span class="kw">,</span><span class="at"> Approved</span><span class="kw">,</span><span class="at"> Completed</span><span class="kw">,</span><span class="at"> Rejected</span><span class="kw">]</span></span>
+<span id="cb32-24"><a href="#cb32-24" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">built_in</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span></code></pre></div>
 <h3 id="project-registry">10.3 Project Registry</h3>
 <p><strong>Location</strong>: <code>~/.requirements.config</code></p>
-<pre class="yaml"><code>projects:
-  my-project:
-    path: /home/user/projects/my-project/requirements.yaml
-    description: &quot;My awesome project&quot;
-  another-project:
-    path: /path/to/another/requirements.yaml
-    description: &quot;Another project&quot;
-
-default_project: my-project</code></pre>
+<div class="sourceCode" id="cb33"><pre
+class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="fu">projects</span><span class="kw">:</span></span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">my-project</span><span class="kw">:</span></span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">path</span><span class="kw">:</span><span class="at"> /home/user/projects/my-project/requirements.yaml</span></span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">description</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;My awesome project&quot;</span></span>
+<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">another-project</span><span class="kw">:</span></span>
+<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">path</span><span class="kw">:</span><span class="at"> /path/to/another/requirements.yaml</span></span>
+<span id="cb33-7"><a href="#cb33-7" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">description</span><span class="kw">:</span><span class="at"> </span><span class="st">&quot;Another project&quot;</span></span>
+<span id="cb33-8"><a href="#cb33-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-9"><a href="#cb33-9" aria-hidden="true" tabindex="-1"></a><span class="fu">default_project</span><span class="kw">:</span><span class="at"> my-project</span></span></code></pre></div>
 <hr />
 <h2 id="common-development-tasks">11. Common Development Tasks</h2>
 <h3 id="adding-a-new-requirement-field">11.1 Adding a New Requirement
@@ -856,132 +1097,145 @@ Field</h3>
 <li><strong>Add to Requirement struct</strong>
 (<code>aida-core/src/models.rs</code>):</li>
 </ol>
-<pre class="rust"><code>pub struct Requirement {
-    // ...
-    pub new_field: String,
-}</code></pre>
+<div class="sourceCode" id="cb34"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> Requirement <span class="op">{</span></span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> new_field<span class="op">:</span> <span class="dt">String</span><span class="op">,</span></span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <ol start="2" type="1">
 <li><p><strong>Update serialization</strong> (if needed, serde handles
 it automatically)</p></li>
 <li><p><strong>Add to form state</strong>
 (<code>aida-gui/src/app.rs</code>):</p></li>
 </ol>
-<pre class="rust"><code>pub struct RequirementsApp {
-    // ...
-    form_new_field: String,
-}</code></pre>
+<div class="sourceCode" id="cb35"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> RequirementsApp <span class="op">{</span></span>
+<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a>    form_new_field<span class="op">:</span> <span class="dt">String</span><span class="op">,</span></span>
+<span id="cb35-4"><a href="#cb35-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <ol start="4" type="1">
 <li><strong>Update form loading/saving</strong>:</li>
 </ol>
-<pre class="rust"><code>fn load_form_from_requirement(&amp;mut self, idx: usize) {
-    // ...
-    self.form_new_field = req.new_field.clone();
-}
-
-fn save_form_to_requirement(&amp;mut self, idx: usize) {
-    // ...
-    req.new_field = self.form_new_field.clone();
-}</code></pre>
+<div class="sourceCode" id="cb36"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="kw">fn</span> load_form_from_requirement(<span class="op">&amp;</span><span class="kw">mut</span> <span class="kw">self</span><span class="op">,</span> idx<span class="op">:</span> <span class="dt">usize</span>) <span class="op">{</span></span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">self</span><span class="op">.</span>form_new_field <span class="op">=</span> req<span class="op">.</span>new_field<span class="op">.</span>clone()<span class="op">;</span></span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a><span class="kw">fn</span> save_form_to_requirement(<span class="op">&amp;</span><span class="kw">mut</span> <span class="kw">self</span><span class="op">,</span> idx<span class="op">:</span> <span class="dt">usize</span>) <span class="op">{</span></span>
+<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb36-8"><a href="#cb36-8" aria-hidden="true" tabindex="-1"></a>    req<span class="op">.</span>new_field <span class="op">=</span> <span class="kw">self</span><span class="op">.</span>form_new_field<span class="op">.</span>clone()<span class="op">;</span></span>
+<span id="cb36-9"><a href="#cb36-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <ol start="5" type="1">
 <li><strong>Add to form UI</strong>:</li>
 </ol>
-<pre class="rust"><code>fn show_form(&amp;mut self, ui: &amp;mut egui::Ui) {
-    // ...
-    ui.label(&quot;New Field:&quot;);
-    ui.text_edit_singleline(&amp;mut self.form_new_field);
-}</code></pre>
+<div class="sourceCode" id="cb37"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="kw">fn</span> show_form(<span class="op">&amp;</span><span class="kw">mut</span> <span class="kw">self</span><span class="op">,</span> ui<span class="op">:</span> <span class="op">&amp;</span><span class="kw">mut</span> <span class="pp">egui::</span>Ui) <span class="op">{</span></span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a>    ui<span class="op">.</span>label(<span class="st">&quot;New Field:&quot;</span>)<span class="op">;</span></span>
+<span id="cb37-4"><a href="#cb37-4" aria-hidden="true" tabindex="-1"></a>    ui<span class="op">.</span>text_edit_singleline(<span class="op">&amp;</span><span class="kw">mut</span> <span class="kw">self</span><span class="op">.</span>form_new_field)<span class="op">;</span></span>
+<span id="cb37-5"><a href="#cb37-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <ol start="6" type="1">
 <li><strong>Add to detail view</strong> (if visible):</li>
 </ol>
-<pre class="rust"><code>fn show_detail_view_internal(&amp;mut self, ui: &amp;mut egui::Ui, stacked: bool) {
-    // In metadata grid:
-    ui.label(&quot;New Field:&quot;);
-    ui.label(&amp;req.new_field);
-    ui.end_row();
-}</code></pre>
+<div class="sourceCode" id="cb38"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="kw">fn</span> show_detail_view_internal(<span class="op">&amp;</span><span class="kw">mut</span> <span class="kw">self</span><span class="op">,</span> ui<span class="op">:</span> <span class="op">&amp;</span><span class="kw">mut</span> <span class="pp">egui::</span>Ui<span class="op">,</span> stacked<span class="op">:</span> <span class="dt">bool</span>) <span class="op">{</span></span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// In metadata grid:</span></span>
+<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a>    ui<span class="op">.</span>label(<span class="st">&quot;New Field:&quot;</span>)<span class="op">;</span></span>
+<span id="cb38-4"><a href="#cb38-4" aria-hidden="true" tabindex="-1"></a>    ui<span class="op">.</span>label(<span class="op">&amp;</span>req<span class="op">.</span>new_field)<span class="op">;</span></span>
+<span id="cb38-5"><a href="#cb38-5" aria-hidden="true" tabindex="-1"></a>    ui<span class="op">.</span>end_row()<span class="op">;</span></span>
+<span id="cb38-6"><a href="#cb38-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <h3 id="adding-a-new-layout-mode">11.2 Adding a New Layout Mode</h3>
 <ol type="1">
 <li><strong>Add to LayoutMode enum</strong>:</li>
 </ol>
-<pre class="rust"><code>pub enum LayoutMode {
-    // ...
-    NewLayout,
-}</code></pre>
+<div class="sourceCode" id="cb39"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">enum</span> LayoutMode <span class="op">{</span></span>
+<span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a>    NewLayout<span class="op">,</span></span>
+<span id="cb39-4"><a href="#cb39-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <ol start="2" type="1">
 <li><strong>Update cycle_layout()</strong>:</li>
 </ol>
-<pre class="rust"><code>fn cycle_layout(&amp;mut self) {
-    self.layout_mode = match self.layout_mode {
-        // ...
-        LayoutMode::ListOnly =&gt; LayoutMode::NewLayout,
-        LayoutMode::NewLayout =&gt; LayoutMode::ListDetailsSide,
-    };
-}</code></pre>
+<div class="sourceCode" id="cb40"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="kw">fn</span> cycle_layout(<span class="op">&amp;</span><span class="kw">mut</span> <span class="kw">self</span>) <span class="op">{</span></span>
+<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">self</span><span class="op">.</span>layout_mode <span class="op">=</span> <span class="cf">match</span> <span class="kw">self</span><span class="op">.</span>layout_mode <span class="op">{</span></span>
+<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a>        <span class="co">// ...</span></span>
+<span id="cb40-4"><a href="#cb40-4" aria-hidden="true" tabindex="-1"></a>        <span class="pp">LayoutMode::</span>ListOnly <span class="op">=&gt;</span> <span class="pp">LayoutMode::</span>NewLayout<span class="op">,</span></span>
+<span id="cb40-5"><a href="#cb40-5" aria-hidden="true" tabindex="-1"></a>        <span class="pp">LayoutMode::</span>NewLayout <span class="op">=&gt;</span> <span class="pp">LayoutMode::</span>ListDetailsSide<span class="op">,</span></span>
+<span id="cb40-6"><a href="#cb40-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">};</span></span>
+<span id="cb40-7"><a href="#cb40-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <ol start="3" type="1">
 <li><strong>Add rendering function</strong>:</li>
 </ol>
-<pre class="rust"><code>fn render_new_layout(&amp;mut self, ctx: &amp;egui::Context) {
-    // Implement layout using egui panels
-}</code></pre>
+<div class="sourceCode" id="cb41"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a><span class="kw">fn</span> render_new_layout(<span class="op">&amp;</span><span class="kw">mut</span> <span class="kw">self</span><span class="op">,</span> ctx<span class="op">:</span> <span class="op">&amp;</span><span class="pp">egui::</span>Context) <span class="op">{</span></span>
+<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Implement layout using egui panels</span></span>
+<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <ol start="4" type="1">
 <li><strong>Add to update() match</strong>:</li>
 </ol>
-<pre class="rust"><code>match self.layout_mode {
-    // ...
-    LayoutMode::NewLayout =&gt; self.render_new_layout(ctx),
-}</code></pre>
+<div class="sourceCode" id="cb42"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="cf">match</span> <span class="kw">self</span><span class="op">.</span>layout_mode <span class="op">{</span></span>
+<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a>    <span class="pp">LayoutMode::</span>NewLayout <span class="op">=&gt;</span> <span class="kw">self</span><span class="op">.</span>render_new_layout(ctx)<span class="op">,</span></span>
+<span id="cb42-4"><a href="#cb42-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <ol start="5" type="1">
 <li><strong>Update layout icon/tooltip</strong>:</li>
 </ol>
-<pre class="rust"><code>fn layout_icon(&amp;self) -&gt; &amp;str {
-    match self.layout_mode {
-        // ...
-        LayoutMode::NewLayout =&gt; &quot;🆕&quot;,
-    }
-}</code></pre>
+<div class="sourceCode" id="cb43"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a><span class="kw">fn</span> layout_icon(<span class="op">&amp;</span><span class="kw">self</span>) <span class="op">-&gt;</span> <span class="op">&amp;</span><span class="dt">str</span> <span class="op">{</span></span>
+<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">match</span> <span class="kw">self</span><span class="op">.</span>layout_mode <span class="op">{</span></span>
+<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a>        <span class="co">// ...</span></span>
+<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a>        <span class="pp">LayoutMode::</span>NewLayout <span class="op">=&gt;</span> <span class="st">&quot;🆕&quot;</span><span class="op">,</span></span>
+<span id="cb43-5"><a href="#cb43-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb43-6"><a href="#cb43-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <h3 id="adding-a-new-dialog">11.3 Adding a New Dialog</h3>
 <ol type="1">
 <li><strong>Add state fields</strong>:</li>
 </ol>
-<pre class="rust"><code>pub struct RequirementsApp {
-    show_new_dialog: bool,
-    new_dialog_field: String,
-}</code></pre>
+<div class="sourceCode" id="cb44"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> RequirementsApp <span class="op">{</span></span>
+<span id="cb44-2"><a href="#cb44-2" aria-hidden="true" tabindex="-1"></a>    show_new_dialog<span class="op">:</span> <span class="dt">bool</span><span class="op">,</span></span>
+<span id="cb44-3"><a href="#cb44-3" aria-hidden="true" tabindex="-1"></a>    new_dialog_field<span class="op">:</span> <span class="dt">String</span><span class="op">,</span></span>
+<span id="cb44-4"><a href="#cb44-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <ol start="2" type="1">
 <li><strong>Create rendering function</strong>:</li>
 </ol>
-<pre class="rust"><code>fn show_new_dialog(&amp;mut self, ctx: &amp;egui::Context) {
-    if !self.show_new_dialog {
-        return;
-    }
-
-    egui::Window::new(&quot;New Dialog&quot;)
-        .collapsible(false)
-        .resizable(true)
-        .show(ctx, |ui| {
-            ui.label(&quot;Field:&quot;);
-            ui.text_edit_singleline(&amp;mut self.new_dialog_field);
-
-            ui.horizontal(|ui| {
-                if ui.button(&quot;OK&quot;).clicked() {
-                    // Process
-                    self.show_new_dialog = false;
-                }
-                if ui.button(&quot;Cancel&quot;).clicked() {
-                    self.show_new_dialog = false;
-                }
-            });
-        });
-}</code></pre>
+<div class="sourceCode" id="cb45"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a><span class="kw">fn</span> show_new_dialog(<span class="op">&amp;</span><span class="kw">mut</span> <span class="kw">self</span><span class="op">,</span> ctx<span class="op">:</span> <span class="op">&amp;</span><span class="pp">egui::</span>Context) <span class="op">{</span></span>
+<span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="op">!</span><span class="kw">self</span><span class="op">.</span>show_new_dialog <span class="op">{</span></span>
+<span id="cb45-3"><a href="#cb45-3" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span><span class="op">;</span></span>
+<span id="cb45-4"><a href="#cb45-4" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb45-5"><a href="#cb45-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-6"><a href="#cb45-6" aria-hidden="true" tabindex="-1"></a>    <span class="pp">egui::Window::</span>new(<span class="st">&quot;New Dialog&quot;</span>)</span>
+<span id="cb45-7"><a href="#cb45-7" aria-hidden="true" tabindex="-1"></a>        <span class="op">.</span>collapsible(<span class="cn">false</span>)</span>
+<span id="cb45-8"><a href="#cb45-8" aria-hidden="true" tabindex="-1"></a>        <span class="op">.</span>resizable(<span class="cn">true</span>)</span>
+<span id="cb45-9"><a href="#cb45-9" aria-hidden="true" tabindex="-1"></a>        <span class="op">.</span>show(ctx<span class="op">,</span> <span class="op">|</span>ui<span class="op">|</span> <span class="op">{</span></span>
+<span id="cb45-10"><a href="#cb45-10" aria-hidden="true" tabindex="-1"></a>            ui<span class="op">.</span>label(<span class="st">&quot;Field:&quot;</span>)<span class="op">;</span></span>
+<span id="cb45-11"><a href="#cb45-11" aria-hidden="true" tabindex="-1"></a>            ui<span class="op">.</span>text_edit_singleline(<span class="op">&amp;</span><span class="kw">mut</span> <span class="kw">self</span><span class="op">.</span>new_dialog_field)<span class="op">;</span></span>
+<span id="cb45-12"><a href="#cb45-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-13"><a href="#cb45-13" aria-hidden="true" tabindex="-1"></a>            ui<span class="op">.</span>horizontal(<span class="op">|</span>ui<span class="op">|</span> <span class="op">{</span></span>
+<span id="cb45-14"><a href="#cb45-14" aria-hidden="true" tabindex="-1"></a>                <span class="cf">if</span> ui<span class="op">.</span>button(<span class="st">&quot;OK&quot;</span>)<span class="op">.</span>clicked() <span class="op">{</span></span>
+<span id="cb45-15"><a href="#cb45-15" aria-hidden="true" tabindex="-1"></a>                    <span class="co">// Process</span></span>
+<span id="cb45-16"><a href="#cb45-16" aria-hidden="true" tabindex="-1"></a>                    <span class="kw">self</span><span class="op">.</span>show_new_dialog <span class="op">=</span> <span class="cn">false</span><span class="op">;</span></span>
+<span id="cb45-17"><a href="#cb45-17" aria-hidden="true" tabindex="-1"></a>                <span class="op">}</span></span>
+<span id="cb45-18"><a href="#cb45-18" aria-hidden="true" tabindex="-1"></a>                <span class="cf">if</span> ui<span class="op">.</span>button(<span class="st">&quot;Cancel&quot;</span>)<span class="op">.</span>clicked() <span class="op">{</span></span>
+<span id="cb45-19"><a href="#cb45-19" aria-hidden="true" tabindex="-1"></a>                    <span class="kw">self</span><span class="op">.</span>show_new_dialog <span class="op">=</span> <span class="cn">false</span><span class="op">;</span></span>
+<span id="cb45-20"><a href="#cb45-20" aria-hidden="true" tabindex="-1"></a>                <span class="op">}</span></span>
+<span id="cb45-21"><a href="#cb45-21" aria-hidden="true" tabindex="-1"></a>            <span class="op">}</span>)<span class="op">;</span></span>
+<span id="cb45-22"><a href="#cb45-22" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span>)<span class="op">;</span></span>
+<span id="cb45-23"><a href="#cb45-23" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <ol start="3" type="1">
 <li><strong>Call from update()</strong>:</li>
 </ol>
-<pre class="rust"><code>fn update(&amp;mut self, ctx: &amp;egui::Context, _frame: &amp;mut eframe::Frame) {
-    // ... main UI rendering
-
-    // Dialogs (render last, on top)
-    self.show_new_dialog(ctx);
-}</code></pre>
+<div class="sourceCode" id="cb46"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a><span class="kw">fn</span> update(<span class="op">&amp;</span><span class="kw">mut</span> <span class="kw">self</span><span class="op">,</span> ctx<span class="op">:</span> <span class="op">&amp;</span><span class="pp">egui::</span>Context<span class="op">,</span> _frame<span class="op">:</span> <span class="op">&amp;</span><span class="kw">mut</span> <span class="pp">eframe::</span>Frame) <span class="op">{</span></span>
+<span id="cb46-2"><a href="#cb46-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ... main UI rendering</span></span>
+<span id="cb46-3"><a href="#cb46-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb46-4"><a href="#cb46-4" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Dialogs (render last, on top)</span></span>
+<span id="cb46-5"><a href="#cb46-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">self</span><span class="op">.</span>show_new_dialog(ctx)<span class="op">;</span></span>
+<span id="cb46-6"><a href="#cb46-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <ol start="4" type="1">
 <li><strong>Add trigger</strong> (button, menu item, or keyboard
 shortcut)</li>
@@ -992,74 +1246,78 @@ Conventions</h2>
 <h3 id="egui-immediate-mode-pattern">12.1 egui Immediate Mode
 Pattern</h3>
 <p>egui uses immediate mode - UI is rebuilt every frame:</p>
-<pre class="rust"><code>// BAD: Storing widget state externally
-if self.button_was_clicked {
-    do_something();
-}
-
-// GOOD: Check response immediately
-if ui.button(&quot;Click me&quot;).clicked() {
-    do_something();
-}</code></pre>
+<div class="sourceCode" id="cb47"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a><span class="co">// BAD: Storing widget state externally</span></span>
+<span id="cb47-2"><a href="#cb47-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="kw">self</span><span class="op">.</span>button_was_clicked <span class="op">{</span></span>
+<span id="cb47-3"><a href="#cb47-3" aria-hidden="true" tabindex="-1"></a>    do_something()<span class="op">;</span></span>
+<span id="cb47-4"><a href="#cb47-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb47-5"><a href="#cb47-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb47-6"><a href="#cb47-6" aria-hidden="true" tabindex="-1"></a><span class="co">// GOOD: Check response immediately</span></span>
+<span id="cb47-7"><a href="#cb47-7" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> ui<span class="op">.</span>button(<span class="st">&quot;Click me&quot;</span>)<span class="op">.</span>clicked() <span class="op">{</span></span>
+<span id="cb47-8"><a href="#cb47-8" aria-hidden="true" tabindex="-1"></a>    do_something()<span class="op">;</span></span>
+<span id="cb47-9"><a href="#cb47-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <h3 id="borrowing-patterns">12.2 Borrowing Patterns</h3>
-<pre class="rust"><code>// BAD: Can&#39;t borrow mutably while iterating
-for req in &amp;self.store.requirements {
-    if ui.button(&quot;Delete&quot;).clicked() {
-        self.delete_requirement(req.id); // Borrow conflict!
-    }
-}
-
-// GOOD: Collect indices, mutate after
-let mut to_delete = None;
-for (idx, req) in self.store.requirements.iter().enumerate() {
-    if ui.button(&quot;Delete&quot;).clicked() {
-        to_delete = Some(idx);
-    }
-}
-if let Some(idx) = to_delete {
-    self.store.requirements.remove(idx);
-}
-
-// BEST: Use pending operations pattern
-if ui.button(&quot;Delete&quot;).clicked() {
-    self.pending_delete = Some(idx);
-}</code></pre>
+<div class="sourceCode" id="cb48"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb48-1"><a href="#cb48-1" aria-hidden="true" tabindex="-1"></a><span class="co">// BAD: Can&#39;t borrow mutably while iterating</span></span>
+<span id="cb48-2"><a href="#cb48-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> req <span class="kw">in</span> <span class="op">&amp;</span><span class="kw">self</span><span class="op">.</span>store<span class="op">.</span>requirements <span class="op">{</span></span>
+<span id="cb48-3"><a href="#cb48-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> ui<span class="op">.</span>button(<span class="st">&quot;Delete&quot;</span>)<span class="op">.</span>clicked() <span class="op">{</span></span>
+<span id="cb48-4"><a href="#cb48-4" aria-hidden="true" tabindex="-1"></a>        <span class="kw">self</span><span class="op">.</span>delete_requirement(req<span class="op">.</span>id)<span class="op">;</span> <span class="co">// Borrow conflict!</span></span>
+<span id="cb48-5"><a href="#cb48-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb48-6"><a href="#cb48-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb48-7"><a href="#cb48-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb48-8"><a href="#cb48-8" aria-hidden="true" tabindex="-1"></a><span class="co">// GOOD: Collect indices, mutate after</span></span>
+<span id="cb48-9"><a href="#cb48-9" aria-hidden="true" tabindex="-1"></a><span class="kw">let</span> <span class="kw">mut</span> to_delete <span class="op">=</span> <span class="cn">None</span><span class="op">;</span></span>
+<span id="cb48-10"><a href="#cb48-10" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (idx<span class="op">,</span> req) <span class="kw">in</span> <span class="kw">self</span><span class="op">.</span>store<span class="op">.</span>requirements<span class="op">.</span>iter()<span class="op">.</span>enumerate() <span class="op">{</span></span>
+<span id="cb48-11"><a href="#cb48-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> ui<span class="op">.</span>button(<span class="st">&quot;Delete&quot;</span>)<span class="op">.</span>clicked() <span class="op">{</span></span>
+<span id="cb48-12"><a href="#cb48-12" aria-hidden="true" tabindex="-1"></a>        to_delete <span class="op">=</span> <span class="cn">Some</span>(idx)<span class="op">;</span></span>
+<span id="cb48-13"><a href="#cb48-13" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb48-14"><a href="#cb48-14" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb48-15"><a href="#cb48-15" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="kw">let</span> <span class="cn">Some</span>(idx) <span class="op">=</span> to_delete <span class="op">{</span></span>
+<span id="cb48-16"><a href="#cb48-16" aria-hidden="true" tabindex="-1"></a>    <span class="kw">self</span><span class="op">.</span>store<span class="op">.</span>requirements<span class="op">.</span>remove(idx)<span class="op">;</span></span>
+<span id="cb48-17"><a href="#cb48-17" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb48-18"><a href="#cb48-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb48-19"><a href="#cb48-19" aria-hidden="true" tabindex="-1"></a><span class="co">// BEST: Use pending operations pattern</span></span>
+<span id="cb48-20"><a href="#cb48-20" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> ui<span class="op">.</span>button(<span class="st">&quot;Delete&quot;</span>)<span class="op">.</span>clicked() <span class="op">{</span></span>
+<span id="cb48-21"><a href="#cb48-21" aria-hidden="true" tabindex="-1"></a>    <span class="kw">self</span><span class="op">.</span>pending_delete <span class="op">=</span> <span class="cn">Some</span>(idx)<span class="op">;</span></span>
+<span id="cb48-22"><a href="#cb48-22" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <h3 id="id-management">12.3 ID Management</h3>
-<pre class="rust"><code>// Use push_id for widgets that might have duplicate labels
-ui.push_id(req.id, |ui| {
-    if ui.button(&quot;Edit&quot;).clicked() {
-        // This button is uniquely identified
-    }
-});
-
-// Or use id_salt for scroll areas, grids, etc.
-egui::ScrollArea::vertical()
-    .id_salt(&quot;unique_scroll_area_name&quot;)
-    .show(ui, |ui| { /* ... */ });</code></pre>
+<div class="sourceCode" id="cb49"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Use push_id for widgets that might have duplicate labels</span></span>
+<span id="cb49-2"><a href="#cb49-2" aria-hidden="true" tabindex="-1"></a>ui<span class="op">.</span>push_id(req<span class="op">.</span>id<span class="op">,</span> <span class="op">|</span>ui<span class="op">|</span> <span class="op">{</span></span>
+<span id="cb49-3"><a href="#cb49-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> ui<span class="op">.</span>button(<span class="st">&quot;Edit&quot;</span>)<span class="op">.</span>clicked() <span class="op">{</span></span>
+<span id="cb49-4"><a href="#cb49-4" aria-hidden="true" tabindex="-1"></a>        <span class="co">// This button is uniquely identified</span></span>
+<span id="cb49-5"><a href="#cb49-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb49-6"><a href="#cb49-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span>)<span class="op">;</span></span>
+<span id="cb49-7"><a href="#cb49-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb49-8"><a href="#cb49-8" aria-hidden="true" tabindex="-1"></a><span class="co">// Or use id_salt for scroll areas, grids, etc.</span></span>
+<span id="cb49-9"><a href="#cb49-9" aria-hidden="true" tabindex="-1"></a><span class="pp">egui::ScrollArea::</span>vertical()</span>
+<span id="cb49-10"><a href="#cb49-10" aria-hidden="true" tabindex="-1"></a>    <span class="op">.</span>id_salt(<span class="st">&quot;unique_scroll_area_name&quot;</span>)</span>
+<span id="cb49-11"><a href="#cb49-11" aria-hidden="true" tabindex="-1"></a>    <span class="op">.</span>show(ui<span class="op">,</span> <span class="op">|</span>ui<span class="op">|</span> <span class="op">{</span> <span class="co">/* ... */</span> <span class="op">}</span>)<span class="op">;</span></span></code></pre></div>
 <h3 id="layout-building">12.4 Layout Building</h3>
-<pre class="rust"><code>// Horizontal layout
-ui.horizontal(|ui| {
-    ui.label(&quot;Label:&quot;);
-    ui.text_edit_singleline(&amp;mut self.field);
-    if ui.button(&quot;Submit&quot;).clicked() { /* ... */ }
-});
-
-// Vertical layout (default)
-ui.vertical(|ui| {
-    ui.label(&quot;Line 1&quot;);
-    ui.label(&quot;Line 2&quot;);
-});
-
-// Grid layout
-egui::Grid::new(&quot;my_grid&quot;)
-    .num_columns(2)
-    .spacing([10.0, 6.0])
-    .striped(true)
-    .show(ui, |ui| {
-        ui.label(&quot;Key:&quot;);
-        ui.label(&quot;Value&quot;);
-        ui.end_row();
-    });</code></pre>
+<div class="sourceCode" id="cb50"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb50-1"><a href="#cb50-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Horizontal layout</span></span>
+<span id="cb50-2"><a href="#cb50-2" aria-hidden="true" tabindex="-1"></a>ui<span class="op">.</span>horizontal(<span class="op">|</span>ui<span class="op">|</span> <span class="op">{</span></span>
+<span id="cb50-3"><a href="#cb50-3" aria-hidden="true" tabindex="-1"></a>    ui<span class="op">.</span>label(<span class="st">&quot;Label:&quot;</span>)<span class="op">;</span></span>
+<span id="cb50-4"><a href="#cb50-4" aria-hidden="true" tabindex="-1"></a>    ui<span class="op">.</span>text_edit_singleline(<span class="op">&amp;</span><span class="kw">mut</span> <span class="kw">self</span><span class="op">.</span>field)<span class="op">;</span></span>
+<span id="cb50-5"><a href="#cb50-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> ui<span class="op">.</span>button(<span class="st">&quot;Submit&quot;</span>)<span class="op">.</span>clicked() <span class="op">{</span> <span class="co">/* ... */</span> <span class="op">}</span></span>
+<span id="cb50-6"><a href="#cb50-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span>)<span class="op">;</span></span>
+<span id="cb50-7"><a href="#cb50-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb50-8"><a href="#cb50-8" aria-hidden="true" tabindex="-1"></a><span class="co">// Vertical layout (default)</span></span>
+<span id="cb50-9"><a href="#cb50-9" aria-hidden="true" tabindex="-1"></a>ui<span class="op">.</span>vertical(<span class="op">|</span>ui<span class="op">|</span> <span class="op">{</span></span>
+<span id="cb50-10"><a href="#cb50-10" aria-hidden="true" tabindex="-1"></a>    ui<span class="op">.</span>label(<span class="st">&quot;Line 1&quot;</span>)<span class="op">;</span></span>
+<span id="cb50-11"><a href="#cb50-11" aria-hidden="true" tabindex="-1"></a>    ui<span class="op">.</span>label(<span class="st">&quot;Line 2&quot;</span>)<span class="op">;</span></span>
+<span id="cb50-12"><a href="#cb50-12" aria-hidden="true" tabindex="-1"></a><span class="op">}</span>)<span class="op">;</span></span>
+<span id="cb50-13"><a href="#cb50-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb50-14"><a href="#cb50-14" aria-hidden="true" tabindex="-1"></a><span class="co">// Grid layout</span></span>
+<span id="cb50-15"><a href="#cb50-15" aria-hidden="true" tabindex="-1"></a><span class="pp">egui::Grid::</span>new(<span class="st">&quot;my_grid&quot;</span>)</span>
+<span id="cb50-16"><a href="#cb50-16" aria-hidden="true" tabindex="-1"></a>    <span class="op">.</span>num_columns(<span class="dv">2</span>)</span>
+<span id="cb50-17"><a href="#cb50-17" aria-hidden="true" tabindex="-1"></a>    <span class="op">.</span>spacing([<span class="dv">10.0</span><span class="op">,</span> <span class="dv">6.0</span>])</span>
+<span id="cb50-18"><a href="#cb50-18" aria-hidden="true" tabindex="-1"></a>    <span class="op">.</span>striped(<span class="cn">true</span>)</span>
+<span id="cb50-19"><a href="#cb50-19" aria-hidden="true" tabindex="-1"></a>    <span class="op">.</span>show(ui<span class="op">,</span> <span class="op">|</span>ui<span class="op">|</span> <span class="op">{</span></span>
+<span id="cb50-20"><a href="#cb50-20" aria-hidden="true" tabindex="-1"></a>        ui<span class="op">.</span>label(<span class="st">&quot;Key:&quot;</span>)<span class="op">;</span></span>
+<span id="cb50-21"><a href="#cb50-21" aria-hidden="true" tabindex="-1"></a>        ui<span class="op">.</span>label(<span class="st">&quot;Value&quot;</span>)<span class="op">;</span></span>
+<span id="cb50-22"><a href="#cb50-22" aria-hidden="true" tabindex="-1"></a>        ui<span class="op">.</span>end_row()<span class="op">;</span></span>
+<span id="cb50-23"><a href="#cb50-23" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span>)<span class="op">;</span></span></code></pre></div>
 <hr />
 <h2 id="troubleshooting">13. Troubleshooting</h2>
 <h3 id="common-issues">13.1 Common Issues</h3>
@@ -1067,27 +1325,29 @@ egui::Grid::new(&quot;my_grid&quot;)
 <p><strong>Problem</strong>: Content is cut off or not visible</p>
 <p><strong>Solution</strong>: Check for constraining wrappers like
 <code>ui.horizontal()</code> around panels:</p>
-<pre class="rust"><code>// BAD: horizontal() constrains height to single row
-ui.horizontal(|ui| {
-    egui::SidePanel::left(&quot;panel&quot;).show_inside(ui, |ui| {
-        // Content clipped!
-    });
-});
-
-// GOOD: Panels don&#39;t need horizontal wrapper
-egui::SidePanel::left(&quot;panel&quot;).show_inside(ui, |ui| {
-    // Full height available
-});</code></pre>
+<div class="sourceCode" id="cb51"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a><span class="co">// BAD: horizontal() constrains height to single row</span></span>
+<span id="cb51-2"><a href="#cb51-2" aria-hidden="true" tabindex="-1"></a>ui<span class="op">.</span>horizontal(<span class="op">|</span>ui<span class="op">|</span> <span class="op">{</span></span>
+<span id="cb51-3"><a href="#cb51-3" aria-hidden="true" tabindex="-1"></a>    <span class="pp">egui::SidePanel::</span>left(<span class="st">&quot;panel&quot;</span>)<span class="op">.</span>show_inside(ui<span class="op">,</span> <span class="op">|</span>ui<span class="op">|</span> <span class="op">{</span></span>
+<span id="cb51-4"><a href="#cb51-4" aria-hidden="true" tabindex="-1"></a>        <span class="co">// Content clipped!</span></span>
+<span id="cb51-5"><a href="#cb51-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span>)<span class="op">;</span></span>
+<span id="cb51-6"><a href="#cb51-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span>)<span class="op">;</span></span>
+<span id="cb51-7"><a href="#cb51-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb51-8"><a href="#cb51-8" aria-hidden="true" tabindex="-1"></a><span class="co">// GOOD: Panels don&#39;t need horizontal wrapper</span></span>
+<span id="cb51-9"><a href="#cb51-9" aria-hidden="true" tabindex="-1"></a><span class="pp">egui::SidePanel::</span>left(<span class="st">&quot;panel&quot;</span>)<span class="op">.</span>show_inside(ui<span class="op">,</span> <span class="op">|</span>ui<span class="op">|</span> <span class="op">{</span></span>
+<span id="cb51-10"><a href="#cb51-10" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Full height available</span></span>
+<span id="cb51-11"><a href="#cb51-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span>)<span class="op">;</span></span></code></pre></div>
 <h4 id="duplicate-widget-ids">Duplicate Widget IDs</h4>
 <p><strong>Problem</strong>: Widgets don’t respond or behave
 strangely</p>
 <p><strong>Solution</strong>: Ensure unique IDs:</p>
-<pre class="rust"><code>// Use push_id with unique value
-for (i, item) in items.iter().enumerate() {
-    ui.push_id(i, |ui| {
-        ui.button(&quot;Click&quot;); // Now unique per iteration
-    });
-}</code></pre>
+<div class="sourceCode" id="cb52"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb52-1"><a href="#cb52-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Use push_id with unique value</span></span>
+<span id="cb52-2"><a href="#cb52-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (i<span class="op">,</span> item) <span class="kw">in</span> items<span class="op">.</span>iter()<span class="op">.</span>enumerate() <span class="op">{</span></span>
+<span id="cb52-3"><a href="#cb52-3" aria-hidden="true" tabindex="-1"></a>    ui<span class="op">.</span>push_id(i<span class="op">,</span> <span class="op">|</span>ui<span class="op">|</span> <span class="op">{</span></span>
+<span id="cb52-4"><a href="#cb52-4" aria-hidden="true" tabindex="-1"></a>        ui<span class="op">.</span>button(<span class="st">&quot;Click&quot;</span>)<span class="op">;</span> <span class="co">// Now unique per iteration</span></span>
+<span id="cb52-5"><a href="#cb52-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span>)<span class="op">;</span></span>
+<span id="cb52-6"><a href="#cb52-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <h4 id="borrow-checker-conflicts">Borrow Checker Conflicts</h4>
 <p><strong>Problem</strong>: Cannot borrow <code>self</code> mutably
 while iterating</p>
@@ -1100,16 +1360,18 @@ while iterating</p>
 <li><p><strong>egui Inspector</strong>: Enable egui’s built-in debug
 tools:</p></li>
 </ol>
-<pre class="rust"><code>ctx.set_debug_on_hover(true);</code></pre>
+<div class="sourceCode" id="cb53"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a>ctx<span class="op">.</span>set_debug_on_hover(<span class="cn">true</span>)<span class="op">;</span></span></code></pre></div>
 <ol start="3" type="1">
 <li><strong>Visual Debugging</strong>: Add colored frames to see layout
 boundaries:</li>
 </ol>
-<pre class="rust"><code>egui::Frame::none()
-    .fill(egui::Color32::RED.linear_multiply(0.1))
-    .show(ui, |ui| {
-        // Content to debug
-    });</code></pre>
+<div class="sourceCode" id="cb54"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb54-1"><a href="#cb54-1" aria-hidden="true" tabindex="-1"></a><span class="pp">egui::Frame::</span>none()</span>
+<span id="cb54-2"><a href="#cb54-2" aria-hidden="true" tabindex="-1"></a>    <span class="op">.</span>fill(<span class="pp">egui::Color32::</span>RED<span class="op">.</span>linear_multiply(<span class="dv">0.1</span>))</span>
+<span id="cb54-3"><a href="#cb54-3" aria-hidden="true" tabindex="-1"></a>    <span class="op">.</span>show(ui<span class="op">,</span> <span class="op">|</span>ui<span class="op">|</span> <span class="op">{</span></span>
+<span id="cb54-4"><a href="#cb54-4" aria-hidden="true" tabindex="-1"></a>        <span class="co">// Content to debug</span></span>
+<span id="cb54-5"><a href="#cb54-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span>)<span class="op">;</span></span></code></pre></div>
 <h3 id="performance-considerations">13.3 Performance Considerations</h3>
 <ol type="1">
 <li><strong>Avoid cloning large data</strong> in the render loop</li>
@@ -1125,10 +1387,11 @@ hooks to validate them.</p>
 <h3 id="trace-comment-format">14.1 Trace Comment Format</h3>
 <p>When implementing requirements, add inline trace comments to link
 code back to requirement IDs:</p>
-<pre class="rust"><code>// trace:FR-0042 | ai:claude:high
-fn implement_feature() {
-    // Implementation
-}</code></pre>
+<div class="sourceCode" id="cb55"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a><span class="co">// trace:FR-0042 | ai:claude:high</span></span>
+<span id="cb55-2"><a href="#cb55-2" aria-hidden="true" tabindex="-1"></a><span class="kw">fn</span> implement_feature() <span class="op">{</span></span>
+<span id="cb55-3"><a href="#cb55-3" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Implementation</span></span>
+<span id="cb55-4"><a href="#cb55-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <p><strong>Format:</strong>
 <code>// trace:&lt;SPEC-ID&gt; | ai:&lt;tool&gt;:&lt;confidence&gt;</code></p>
 <table>
@@ -1172,13 +1435,13 @@ traceability.</p>
 comments:</p>
 <ul>
 <li><strong>Warns</strong> if staged files have trace comments but
-commit lacks <code>[AI:tool:conf]</code> tag</li>
+commit lacks <code>[AI:tool]</code> tag</li>
 <li><strong>Suggests</strong> adding <code>Trace: SPEC-ID</code> for
 requirements referenced in staged files</li>
 <li><strong>Non-blocking</strong> by default (warnings only)</li>
 </ul>
 <p><strong>Suggested commit message format:</strong></p>
-<pre><code>[AI:claude:high] feat(auth): add JWT refresh endpoint
+<pre><code>[AI:claude] feat(auth): add JWT refresh endpoint
 
 Trace: FR-0042, FR-0043</code></pre>
 <h4 id="pre-commit-hook">pre-commit Hook</h4>
@@ -1200,18 +1463,19 @@ AIDA database</li>
 <li>Click <strong>“Apply”</strong></li>
 </ol>
 <p>Or use the <code>ScaffoldConfig</code> programmatically:</p>
-<pre class="rust"><code>use aida_core::scaffolding::{ScaffoldConfig, Scaffolder};
-
-let config = ScaffoldConfig {
-    generate_git_hooks: true,
-    include_commit_msg_hook: true,
-    include_pre_commit_hook: true,
-    ..Default::default()
-};
-
-let scaffolder = Scaffolder::new(project_root, config);
-let preview = scaffolder.preview(&amp;store);
-scaffolder.apply(&amp;preview)?;</code></pre>
+<div class="sourceCode" id="cb57"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb57-1"><a href="#cb57-1" aria-hidden="true" tabindex="-1"></a><span class="kw">use</span> <span class="pp">aida_core::scaffolding::</span><span class="op">{</span>ScaffoldConfig<span class="op">,</span> Scaffolder<span class="op">};</span></span>
+<span id="cb57-2"><a href="#cb57-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb57-3"><a href="#cb57-3" aria-hidden="true" tabindex="-1"></a><span class="kw">let</span> config <span class="op">=</span> ScaffoldConfig <span class="op">{</span></span>
+<span id="cb57-4"><a href="#cb57-4" aria-hidden="true" tabindex="-1"></a>    generate_git_hooks<span class="op">:</span> <span class="cn">true</span><span class="op">,</span></span>
+<span id="cb57-5"><a href="#cb57-5" aria-hidden="true" tabindex="-1"></a>    include_commit_msg_hook<span class="op">:</span> <span class="cn">true</span><span class="op">,</span></span>
+<span id="cb57-6"><a href="#cb57-6" aria-hidden="true" tabindex="-1"></a>    include_pre_commit_hook<span class="op">:</span> <span class="cn">true</span><span class="op">,</span></span>
+<span id="cb57-7"><a href="#cb57-7" aria-hidden="true" tabindex="-1"></a>    <span class="op">..</span><span class="bu">Default</span><span class="pp">::</span><span class="kw">default</span>()</span>
+<span id="cb57-8"><a href="#cb57-8" aria-hidden="true" tabindex="-1"></a><span class="op">};</span></span>
+<span id="cb57-9"><a href="#cb57-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb57-10"><a href="#cb57-10" aria-hidden="true" tabindex="-1"></a><span class="kw">let</span> scaffolder <span class="op">=</span> <span class="pp">Scaffolder::</span>new(project_root<span class="op">,</span> config)<span class="op">;</span></span>
+<span id="cb57-11"><a href="#cb57-11" aria-hidden="true" tabindex="-1"></a><span class="kw">let</span> preview <span class="op">=</span> scaffolder<span class="op">.</span>preview(<span class="op">&amp;</span>store)<span class="op">;</span></span>
+<span id="cb57-12"><a href="#cb57-12" aria-hidden="true" tabindex="-1"></a>scaffolder<span class="op">.</span>apply(<span class="op">&amp;</span>preview)<span class="op">?;</span></span></code></pre></div>
 <h3 id="hook-configuration">14.4 Hook Configuration</h3>
 <p>The generated hooks are located in <code>.git/hooks/</code> and are
 non-blocking by default. To make them blocking:</p>
@@ -1221,18 +1485,19 @@ indicated.</p>
 <p><strong>pre-commit:</strong> Edit <code>.git/hooks/pre-commit</code>
 and uncomment the blocking exit logic.</p>
 <h3 id="scaffoldconfig-options">14.5 ScaffoldConfig Options</h3>
-<pre class="rust"><code>pub struct ScaffoldConfig {
-    // ... other fields ...
-
-    /// Generate git hooks for traceability validation
-    pub generate_git_hooks: bool,        // default: true
-
-    /// Include commit-msg hook for AI attribution validation
-    pub include_commit_msg_hook: bool,   // default: true
-
-    /// Include pre-commit hook for trace comment validation
-    pub include_pre_commit_hook: bool,   // default: false (optional)
-}</code></pre>
+<div class="sourceCode" id="cb58"><pre
+class="sourceCode rust"><code class="sourceCode rust"><span id="cb58-1"><a href="#cb58-1" aria-hidden="true" tabindex="-1"></a><span class="kw">pub</span> <span class="kw">struct</span> ScaffoldConfig <span class="op">{</span></span>
+<span id="cb58-2"><a href="#cb58-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ... other fields ...</span></span>
+<span id="cb58-3"><a href="#cb58-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb58-4"><a href="#cb58-4" aria-hidden="true" tabindex="-1"></a>    <span class="co">/// Generate git hooks for traceability validation</span></span>
+<span id="cb58-5"><a href="#cb58-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> generate_git_hooks<span class="op">:</span> <span class="dt">bool</span><span class="op">,</span>        <span class="co">// default: true</span></span>
+<span id="cb58-6"><a href="#cb58-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb58-7"><a href="#cb58-7" aria-hidden="true" tabindex="-1"></a>    <span class="co">/// Include commit-msg hook for AI attribution validation</span></span>
+<span id="cb58-8"><a href="#cb58-8" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> include_commit_msg_hook<span class="op">:</span> <span class="dt">bool</span><span class="op">,</span>   <span class="co">// default: true</span></span>
+<span id="cb58-9"><a href="#cb58-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb58-10"><a href="#cb58-10" aria-hidden="true" tabindex="-1"></a>    <span class="co">/// Include pre-commit hook for trace comment validation</span></span>
+<span id="cb58-11"><a href="#cb58-11" aria-hidden="true" tabindex="-1"></a>    <span class="kw">pub</span> include_pre_commit_hook<span class="op">:</span> <span class="dt">bool</span><span class="op">,</span>   <span class="co">// default: false (optional)</span></span>
+<span id="cb58-12"><a href="#cb58-12" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <p><strong>Note:</strong> Git hooks are only generated if a
 <code>.git</code> directory exists in the project root.</p>
 <hr />
@@ -1322,38 +1587,5 @@ Line Number Reference (app.rs)</h2>
 </table>
 <hr />
 <p><em>Last Updated: December 2025</em> <em>AIDA Version: 0.1.0</em></p>
-    </div>
-
-    <script>
-        function toggleTheme() {
-            const body = document.body;
-            const icon = document.getElementById('theme-icon');
-            
-            if (body.classList.contains('dark-mode')) {
-                body.classList.remove('dark-mode');
-                body.classList.add('light-mode');
-                icon.innerHTML = '&#9790;'; // Moon
-                localStorage.setItem('theme', 'light');
-            } else {
-                body.classList.remove('light-mode');
-                body.classList.add('dark-mode');
-                icon.innerHTML = '&#9788;'; // Sun
-                localStorage.setItem('theme', 'dark');
-            }
-        }
-
-        // Load saved theme preference
-        (function() {
-            const saved = localStorage.getItem('theme');
-            const icon = document.getElementById('theme-icon');
-            if (saved === 'dark') {
-                document.body.classList.add('dark-mode');
-                icon.innerHTML = '&#9788;';
-            } else if (saved === 'light') {
-                document.body.classList.add('light-mode');
-                icon.innerHTML = '&#9790;';
-            }
-        })();
-    </script>
 </body>
 </html>

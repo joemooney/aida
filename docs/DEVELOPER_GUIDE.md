@@ -1282,13 +1282,13 @@ AIDA scaffolding can generate Git hooks to validate code traceability.
 
 Validates commit messages when committing files with trace comments:
 
-- **Warns** if staged files have trace comments but commit lacks `[AI:tool:conf]` tag
+- **Warns** if staged files have trace comments but commit lacks `[AI:tool]` tag
 - **Suggests** adding `Trace: SPEC-ID` for requirements referenced in staged files
 - **Non-blocking** by default (warnings only)
 
 **Suggested commit message format:**
 ```
-[AI:claude:high] feat(auth): add JWT refresh endpoint
+[AI:claude] feat(auth): add JWT refresh endpoint
 
 Trace: FR-0042, FR-0043
 ```

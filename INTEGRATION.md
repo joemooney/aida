@@ -138,7 +138,7 @@ ai-prov trace-matrix --format md
 
 ```bash
 # Code is implemented and committed with ai-prov
-ai-prov commit -m "[AI:claude:high] feat: complete auth" --trace SPEC-089
+ai-prov commit -m "[AI:claude] feat: complete auth" --trace SPEC-089
 
 # Update requirement status
 requirements-manager edit <uuid> --status Completed

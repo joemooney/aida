@@ -2230,8 +2230,9 @@ YELLOW='\033[1;33m'
 GREEN='\033[0;32m'
 NC='\033[0m' # No Color
 
-# Check if commit message contains AI attribution tag [AI:tool:conf]
-AI_TAG_PATTERN='\[AI:[a-zA-Z]+:(high|med|low)\]'
+# Check if commit message contains AI attribution tag [AI:tool] or [AI:tool:conf]
+# [AI:tool] implies high confidence, [AI:tool:med] or [AI:tool:low] for others
+AI_TAG_PATTERN='\[AI:[a-zA-Z]+(:(med|low))?\]'
 
 # Check for files with trace comments in this commit
 STAGED_FILES=$(git diff --cached --name-only)
@@ -2262,9 +2263,9 @@ done
 # If staged files have trace comments but commit lacks AI tag, warn
 if [ "$HAS_TRACE_FILES" = true ]; then
     if ! echo "$COMMIT_MSG" | grep -qE "$AI_TAG_PATTERN"; then
-        echo -e "${YELLOW}⚠ Warning: Commit includes files with AI trace comments but no [AI:tool:conf] tag in commit message.${NC}"
-        echo -e "${YELLOW}  Consider using format: [AI:claude:high] feat: description${NC}"
-        echo -e "${YELLOW}  Confidence levels: high (>80% AI), med (40-80%), low (<40%)${NC}"
+        echo -e "${YELLOW}⚠ Warning: Commit includes files with AI trace comments but no [AI:tool] tag in commit message.${NC}"
+        echo -e "${YELLOW}  Consider using format: [AI:claude] feat: description${NC}"
+        echo -e "${YELLOW}  Confidence: [AI:tool] = high (implied), [AI:tool:med] = medium, [AI:tool:low] = low${NC}"
         echo ""
     fi
 fi
