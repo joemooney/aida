@@ -160,6 +160,12 @@ pub struct ScaffoldConfig {
     pub include_aida_docs_skill: bool,
     /// Include aida-release skill for release management
     pub include_aida_release_skill: bool,
+    /// Include aida-evaluate skill for requirement quality evaluation
+    pub include_aida_evaluate_skill: bool,
+    /// Include aida-commit skill for commit with requirement linking
+    pub include_aida_commit_skill: bool,
+    /// Include aida-sync skill for template synchronization
+    pub include_aida_sync_skill: bool,
     /// Generate git hooks for traceability validation
     pub generate_git_hooks: bool,
     /// Include commit-msg hook for AI attribution validation
@@ -184,6 +190,9 @@ impl Default for ScaffoldConfig {
             include_aida_capture_skill: true,
             include_aida_docs_skill: true,
             include_aida_release_skill: true,
+            include_aida_evaluate_skill: true,
+            include_aida_commit_skill: true,
+            include_aida_sync_skill: true,
             generate_git_hooks: true,
             include_commit_msg_hook: true,
             include_pre_commit_hook: false, // Optional, disabled by default
@@ -527,6 +536,66 @@ impl Scaffolder {
                     path.clone(),
                     self.generate_aida_release_skill(),
                     "Skill for release management and version bumping".to_string(),
+                    false,
+                );
+
+                match &artifact.file_status {
+                    FileStatus::New => new_files.push(path),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
+                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+                }
+
+                artifacts.push(artifact);
+            }
+
+            // Add aida-evaluate skill
+            if self.config.include_aida_evaluate_skill {
+                let path = PathBuf::from(".claude/skills/aida-evaluate.md");
+                let artifact = self.create_artifact(
+                    path.clone(),
+                    self.generate_aida_evaluate_skill(),
+                    "Skill for evaluating requirement quality".to_string(),
+                    false,
+                );
+
+                match &artifact.file_status {
+                    FileStatus::New => new_files.push(path),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
+                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+                }
+
+                artifacts.push(artifact);
+            }
+
+            // Add aida-commit skill
+            if self.config.include_aida_commit_skill {
+                let path = PathBuf::from(".claude/skills/aida-commit.md");
+                let artifact = self.create_artifact(
+                    path.clone(),
+                    self.generate_aida_commit_skill(),
+                    "Skill for committing with requirement linking".to_string(),
+                    false,
+                );
+
+                match &artifact.file_status {
+                    FileStatus::New => new_files.push(path),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
+                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+                }
+
+                artifacts.push(artifact);
+            }
+
+            // Add aida-sync skill
+            if self.config.include_aida_sync_skill {
+                let path = PathBuf::from(".claude/skills/aida-sync.md");
+                let artifact = self.create_artifact(
+                    path.clone(),
+                    self.generate_aida_sync_skill(),
+                    "Skill for template synchronization".to_string(),
                     false,
                 );
 
@@ -1103,6 +1172,91 @@ Use at end of conversational sessions as a safety net.
             "aida-capture".to_string(),
             aida_capture_cmd,
             "Capture missed requirements from session".to_string(),
+        ));
+
+        // Add aida-evaluate command
+        let aida_evaluate_cmd = r#"# Evaluate Requirement
+
+Evaluate a requirement's quality using AI analysis.
+
+## Usage
+
+```
+/aida-evaluate <SPEC-ID>
+```
+
+## Instructions
+
+Follow the workflow in `.claude/skills/aida-evaluate.md`:
+
+1. Load the requirement from the database
+2. Assess clarity, testability, completeness, and consistency
+3. Generate quality score (1-10) with detailed feedback
+4. Offer follow-up actions: improve, split, or accept
+"#
+        .to_string();
+
+        commands.push((
+            "aida-evaluate".to_string(),
+            aida_evaluate_cmd,
+            "Evaluate requirement quality with AI".to_string(),
+        ));
+
+        // Add aida-commit command
+        let aida_commit_cmd = r#"# Commit with Requirements
+
+Commit changes with automatic requirement linking.
+
+## Usage
+
+```
+/aida-commit
+```
+
+## Instructions
+
+Follow the workflow in `.claude/skills/aida-commit.md`:
+
+1. Analyze staged changes for requirement traces
+2. Identify untraced implementation code
+3. Prompt to create requirements for untracked work
+4. Create commit with requirement references
+5. Update linked requirement statuses
+"#
+        .to_string();
+
+        commands.push((
+            "aida-commit".to_string(),
+            aida_commit_cmd,
+            "Commit with requirement linking".to_string(),
+        ));
+
+        // Add aida-sync command
+        let aida_sync_cmd = r#"# AIDA Sync
+
+Sync AIDA templates and scaffolding across projects.
+
+## Usage
+
+```
+/aida-sync
+```
+
+## Instructions
+
+Follow the workflow in `.claude/skills/aida-sync.md`:
+
+1. Detect if we're in the AIDA source repo or a scaffolded project
+2. For AIDA repo: Check template integrity and propagation needs
+3. For other projects: Check scaffold status and offer updates
+4. Ensure templates, CLAUDE.md, and skills are consistent
+"#
+        .to_string();
+
+        commands.push((
+            "aida-sync".to_string(),
+            aida_sync_cmd,
+            "Sync templates and scaffolding".to_string(),
         ));
 
         commands
@@ -2212,6 +2366,95 @@ git push --tags                     # Push tags
 - Updates version in Cargo.toml or package.json
 "#
         .to_string()
+    }
+
+    /// Generate aida-evaluate skill content (loads from embedded template)
+    fn generate_aida_evaluate_skill(&self) -> String {
+        // Load from embedded templates at compile time
+        use crate::templates::EMBEDDED_TEMPLATES;
+        EMBEDDED_TEMPLATES.get("skills/aida-evaluate.md")
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| {
+                r#"# AIDA Requirement Evaluation Skill
+
+## Purpose
+
+Evaluate a requirement's quality using AI analysis.
+
+## When to Use
+
+Use this skill when:
+- User wants to evaluate a specific requirement's quality
+- User asks to "evaluate", "assess", or "review" a requirement
+
+## Workflow
+
+1. Load the requirement from database: `aida show <SPEC-ID>`
+2. Run AI evaluation for clarity, testability, completeness, consistency
+3. Display quality score and issues found
+4. Offer follow-up actions: improve, split, or accept
+"#.to_string()
+            })
+    }
+
+    /// Generate aida-commit skill content (loads from embedded template)
+    fn generate_aida_commit_skill(&self) -> String {
+        // Load from embedded templates at compile time
+        use crate::templates::EMBEDDED_TEMPLATES;
+        EMBEDDED_TEMPLATES.get("skills/aida-commit.md")
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| {
+                r#"# AIDA Commit Skill
+
+## Purpose
+
+Create git commits with automatic requirement linkage.
+
+## When to Use
+
+Use this skill when:
+- User wants to commit changes with requirement traceability
+- User says "commit" after implementing features
+
+## Workflow
+
+1. Analyze staged changes and extract requirement traces
+2. Check for untraced implementation code
+3. Offer to create requirements for untraced work
+4. Create commit with requirement links
+5. Update linked requirement statuses
+"#.to_string()
+            })
+    }
+
+    /// Generate aida-sync skill content (loads from embedded template)
+    fn generate_aida_sync_skill(&self) -> String {
+        // Load from embedded templates at compile time
+        use crate::templates::EMBEDDED_TEMPLATES;
+        EMBEDDED_TEMPLATES.get("skills/aida-sync.md")
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| {
+                r#"# AIDA Sync Skill
+
+## Purpose
+
+Maintain consistency between AIDA templates and scaffolded projects.
+
+## When to Use
+
+Use this skill when:
+- You've modified templates in `aida-core/templates/`
+- You want to check scaffold status
+- At the end of an AIDA development session
+
+## Workflow
+
+1. Detect environment (AIDA repo vs scaffolded project)
+2. For AIDA repo: Check template integrity
+3. For other projects: Check scaffold status
+4. Ensure templates and skills are consistent
+"#.to_string()
+            })
     }
 
     /// Generate commit-msg git hook content
