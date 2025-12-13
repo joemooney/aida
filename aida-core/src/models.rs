@@ -4001,24 +4001,29 @@ impl RequirementsStore {
     }
 
     /// Get the type prefix for a RequirementType enum value
+    /// Falls back to built-in defaults if the type is not in the database
+    // trace:BUG-0308 | ai:claude:high
     pub fn get_type_prefix(&self, req_type: &RequirementType) -> Option<String> {
-        let type_name = match req_type {
-            RequirementType::Functional => "Functional",
-            RequirementType::NonFunctional => "Non-Functional",
-            RequirementType::System => "System",
-            RequirementType::User => "User",
-            RequirementType::ChangeRequest => "Change Request",
-            RequirementType::Bug => "Bug",
-            RequirementType::Epic => "Epic",
-            RequirementType::Story => "Story",
-            RequirementType::Task => "Task",
-            RequirementType::Spike => "Spike",
-            RequirementType::Sprint => "Sprint",
-            RequirementType::Folder => "Folder",
+        // Map enum to type name and fallback prefix
+        let (type_name, fallback_prefix) = match req_type {
+            RequirementType::Functional => ("Functional", "FR"),
+            RequirementType::NonFunctional => ("Non-Functional", "NFR"),
+            RequirementType::System => ("System", "SR"),
+            RequirementType::User => ("User", "UR"),
+            RequirementType::ChangeRequest => ("Change Request", "CR"),
+            RequirementType::Bug => ("Bug", "BUG"),
+            RequirementType::Epic => ("Epic", "EPIC"),
+            RequirementType::Story => ("Story", "STORY"),
+            RequirementType::Task => ("Task", "TASK"),
+            RequirementType::Spike => ("Spike", "SPIKE"),
+            RequirementType::Sprint => ("Sprint", "SPRINT"),
+            RequirementType::Folder => ("Folder", "FOLDER"),
         };
+        // Try database first, fall back to built-in prefix
         self.id_config
             .get_type_by_name(type_name)
             .map(|t| t.prefix.clone())
+            .or_else(|| Some(fallback_prefix.to_string()))
     }
 
     /// Generate a new spec_id for a requirement with a new prefix override
