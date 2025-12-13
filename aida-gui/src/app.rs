@@ -21195,10 +21195,12 @@ impl RequirementsApp {
         if let Some(a) = action {
             let mut settings_changed = false;
             let mut notification_msg: Option<String> = None;
+            let mut new_queue_idx: Option<usize> = None;
             match a {
                 't' => {
                     self.user_settings.queue_add_top(req_id);
                     settings_changed = true;
+                    new_queue_idx = Some(0); // Top = position 0
                     let pos_msg = if let Some(pos) = self.user_settings.queue_position(&req_id) {
                         format!(" (position {})", pos + 1)
                     } else {
@@ -21209,7 +21211,9 @@ impl RequirementsApp {
                 'm' => {
                     self.user_settings.queue_add_middle(req_id);
                     settings_changed = true;
-                    let pos_msg = if let Some(pos) = self.user_settings.queue_position(&req_id) {
+                    // Get the new position from the queue
+                    new_queue_idx = self.user_settings.queue_position(&req_id);
+                    let pos_msg = if let Some(pos) = new_queue_idx {
                         format!(" (position {})", pos + 1)
                     } else {
                         String::new()
@@ -21219,7 +21223,9 @@ impl RequirementsApp {
                 'b' => {
                     self.user_settings.queue_add_bottom(req_id);
                     settings_changed = true;
-                    let pos_msg = if let Some(pos) = self.user_settings.queue_position(&req_id) {
+                    // Get the new position from the queue (last position)
+                    new_queue_idx = self.user_settings.queue_position(&req_id);
+                    let pos_msg = if let Some(pos) = new_queue_idx {
                         format!(" (position {})", pos + 1)
                     } else {
                         String::new()
@@ -21231,12 +21237,26 @@ impl RequirementsApp {
                         self.user_settings.queue_remove(&req_id);
                         settings_changed = true;
                         notification_msg = Some("Removed from queue".to_string());
+                        // Adjust selection if in queue view
+                        if self.current_view == View::Queue {
+                            let new_len = self.user_settings.queue.len();
+                            if self.queue_selected_idx >= new_len && new_len > 0 {
+                                new_queue_idx = Some(new_len - 1);
+                            }
+                        }
                     }
                 }
                 'v' => {
                     self.pending_view_change = Some(View::Queue);
                 }
                 _ => {}
+            }
+
+            // Update queue selection to follow the moved item (if in Queue view)
+            if self.current_view == View::Queue {
+                if let Some(idx) = new_queue_idx {
+                    self.queue_selected_idx = idx;
+                }
             }
 
             if settings_changed {
@@ -21296,10 +21316,12 @@ impl RequirementsApp {
                                     // Handle click same as keyboard
                                     let mut settings_changed = false;
                                     let mut notification_msg: Option<String> = None;
+                                    let mut new_queue_idx: Option<usize> = None;
                                     match *key {
                                         't' => {
                                             self.user_settings.queue_add_top(req_id);
                                             settings_changed = true;
+                                            new_queue_idx = Some(0); // Top = position 0
                                             let pos_msg = if let Some(pos) = self.user_settings.queue_position(&req_id) {
                                                 format!(" (position {})", pos + 1)
                                             } else {
@@ -21310,7 +21332,8 @@ impl RequirementsApp {
                                         'm' => {
                                             self.user_settings.queue_add_middle(req_id);
                                             settings_changed = true;
-                                            let pos_msg = if let Some(pos) = self.user_settings.queue_position(&req_id) {
+                                            new_queue_idx = self.user_settings.queue_position(&req_id);
+                                            let pos_msg = if let Some(pos) = new_queue_idx {
                                                 format!(" (position {})", pos + 1)
                                             } else {
                                                 String::new()
@@ -21320,7 +21343,8 @@ impl RequirementsApp {
                                         'b' => {
                                             self.user_settings.queue_add_bottom(req_id);
                                             settings_changed = true;
-                                            let pos_msg = if let Some(pos) = self.user_settings.queue_position(&req_id) {
+                                            new_queue_idx = self.user_settings.queue_position(&req_id);
+                                            let pos_msg = if let Some(pos) = new_queue_idx {
                                                 format!(" (position {})", pos + 1)
                                             } else {
                                                 String::new()
@@ -21332,12 +21356,25 @@ impl RequirementsApp {
                                                 self.user_settings.queue_remove(&req_id);
                                                 settings_changed = true;
                                                 notification_msg = Some("Removed from queue".to_string());
+                                                // Adjust selection if in queue view
+                                                if self.current_view == View::Queue {
+                                                    let new_len = self.user_settings.queue.len();
+                                                    if self.queue_selected_idx >= new_len && new_len > 0 {
+                                                        new_queue_idx = Some(new_len - 1);
+                                                    }
+                                                }
                                             }
                                         }
                                         'v' => {
                                             self.pending_view_change = Some(View::Queue);
                                         }
                                         _ => {}
+                                    }
+                                    // Update queue selection to follow the moved item (if in Queue view)
+                                    if self.current_view == View::Queue {
+                                        if let Some(idx) = new_queue_idx {
+                                            self.queue_selected_idx = idx;
+                                        }
                                     }
                                     if settings_changed {
                                         if let Err(e) = self.user_settings.save() {
