@@ -5,10 +5,12 @@ use chrono::{DateTime, TimeZone, Utc};
 use uuid::Uuid;
 
 use aida_core::{
-    Comment, CommentReaction, FeatureDefinition, FieldChange, HistoryEntry, IdConfiguration,
-    IdFormat, NumberingStrategy, Relationship, RelationshipType as CoreRelType, Requirement,
+    AiActionPromptConfig, AiPromptConfig, AiTypePromptConfig, Comment, CommentReaction,
+    CustomFieldDefinition, CustomTypeDefinition, FeatureDefinition, FieldChange, HistoryEntry,
+    IdConfiguration, IdFormat, NumberingStrategy, ReactionDefinition, Relationship,
+    RelationshipDefinition, RelationshipType as CoreRelType, Requirement,
     RequirementPriority as CorePriority, RequirementStatus as CoreStatus,
-    RequirementType as CoreReqType, RequirementsStore, UrlLink, User,
+    RequirementType as CoreReqType, RequirementsStore, Team, UrlLink, User,
 };
 
 use crate::proto;
@@ -394,6 +396,121 @@ pub fn id_config_to_proto(config: &IdConfiguration) -> proto::IdConfiguration {
 }
 
 // ============================================================================
+// Team conversions
+// ============================================================================
+
+pub fn team_to_proto(team: &Team) -> proto::Team {
+    proto::Team {
+        id: team.id.to_string(),
+        spec_id: team.spec_id.clone().unwrap_or_default(),
+        name: team.name.clone(),
+        description: team.description.clone(),
+        member_ids: team.member_ids.iter().map(|id| id.to_string()).collect(),
+    }
+}
+
+// ============================================================================
+// Reaction definition conversions
+// ============================================================================
+
+pub fn reaction_def_to_proto(def: &ReactionDefinition) -> proto::ReactionDefinition {
+    proto::ReactionDefinition {
+        name: def.name.clone(),
+        emoji: def.emoji.clone(),
+        label: def.label.clone(),
+        description: def.description.clone().unwrap_or_default(),
+        built_in: def.built_in,
+    }
+}
+
+// ============================================================================
+// Custom field definition conversions
+// ============================================================================
+
+pub fn custom_field_to_proto(field: &CustomFieldDefinition) -> proto::CustomFieldDefinition {
+    proto::CustomFieldDefinition {
+        name: field.name.clone(),
+        label: field.label.clone(),
+        field_type: field.field_type.to_string(),
+        required: field.required,
+        options: field.options.clone(),
+        description: field.description.clone().unwrap_or_default(),
+        order: field.order as i32,
+    }
+}
+
+// ============================================================================
+// Custom type definition conversions
+// ============================================================================
+
+pub fn type_def_to_proto(def: &CustomTypeDefinition) -> proto::CustomTypeDefinition {
+    proto::CustomTypeDefinition {
+        name: def.name.clone(),
+        display_name: def.display_name.clone(),
+        description: def.description.clone().unwrap_or_default(),
+        prefix: def.prefix.clone().unwrap_or_default(),
+        statuses: def.statuses.clone(),
+        custom_fields: def.custom_fields.iter().map(custom_field_to_proto).collect(),
+        built_in: def.built_in,
+        color: def.color.clone().unwrap_or_default(),
+        stateless: def.stateless,
+    }
+}
+
+// ============================================================================
+// Relationship definition conversions
+// ============================================================================
+
+pub fn rel_def_to_proto(def: &RelationshipDefinition) -> proto::RelationshipDefinitionProto {
+    proto::RelationshipDefinitionProto {
+        name: def.name.clone(),
+        display_name: def.display_name.clone(),
+        description: def.description.clone(),
+        inverse: def.inverse.clone().unwrap_or_default(),
+        symmetric: def.symmetric,
+        cardinality: format!("{:?}", def.cardinality),
+        source_types: def.source_types.clone(),
+        target_types: def.target_types.clone(),
+        built_in: def.built_in,
+        color: def.color.clone().unwrap_or_default(),
+        icon: def.icon.clone().unwrap_or_default(),
+    }
+}
+
+// ============================================================================
+// AI prompt config conversions
+// ============================================================================
+
+pub fn ai_action_to_proto(action: &AiActionPromptConfig) -> proto::AiActionConfig {
+    proto::AiActionConfig {
+        additional_instructions: action.additional_instructions.clone(),
+    }
+}
+
+pub fn type_prompt_to_proto(tp: &AiTypePromptConfig) -> proto::TypePromptConfig {
+    proto::TypePromptConfig {
+        type_name: tp.type_name.clone(),
+        // The proto uses shorter names than the core type
+        evaluation: tp.evaluation_extra.clone(),
+        improve: tp.improve_extra.clone(),
+        generate_children: String::new(), // Core type doesn't have this field
+        generate_children_extra: tp.generate_children_extra.clone(),
+    }
+}
+
+pub fn ai_prompts_to_proto(config: &AiPromptConfig) -> proto::AiPromptConfig {
+    proto::AiPromptConfig {
+        global_context: config.global_context.clone(),
+        evaluation: Some(ai_action_to_proto(&config.evaluation)),
+        duplicates: Some(ai_action_to_proto(&config.duplicates)),
+        relationships: Some(ai_action_to_proto(&config.relationships)),
+        improve: Some(ai_action_to_proto(&config.improve)),
+        generate_children: Some(ai_action_to_proto(&config.generate_children)),
+        type_prompts: config.type_prompts.iter().map(type_prompt_to_proto).collect(),
+    }
+}
+
+// ============================================================================
 // Store conversions
 // ============================================================================
 
@@ -407,6 +524,30 @@ pub fn store_to_proto(store: &RequirementsStore) -> proto::RequirementsStore {
         features: store.features.iter().map(feature_to_proto).collect(),
         id_config: Some(id_config_to_proto(&store.id_config)),
         next_spec_number: store.next_spec_number as i32,
-        prefix_counters: store.prefix_counters.iter().map(|(k, v)| (k.clone(), *v as i32)).collect(),
+        prefix_counters: store
+            .prefix_counters
+            .iter()
+            .map(|(k, v)| (k.clone(), *v as i32))
+            .collect(),
+        // Extended metadata fields
+        relationship_definitions: store
+            .relationship_definitions
+            .iter()
+            .map(rel_def_to_proto)
+            .collect(),
+        reaction_definitions: store
+            .reaction_definitions
+            .iter()
+            .map(reaction_def_to_proto)
+            .collect(),
+        type_definitions: store
+            .type_definitions
+            .iter()
+            .map(type_def_to_proto)
+            .collect(),
+        allowed_prefixes: store.allowed_prefixes.clone(),
+        restrict_prefixes: store.restrict_prefixes,
+        ai_prompts: Some(ai_prompts_to_proto(&store.ai_prompts)),
+        teams: store.teams.iter().map(team_to_proto).collect(),
     }
 }

@@ -161,6 +161,88 @@ message User {
     string handle = 5;
 }
 
+// Team definition
+message Team {
+    string id = 1;
+    string spec_id = 2;
+    string name = 3;
+    string description = 4;
+    repeated string member_ids = 5;
+}
+
+// Reaction definition for comment reactions
+message ReactionDefinition {
+    string name = 1;
+    string emoji = 2;
+    string label = 3;
+    string description = 4;
+    bool built_in = 5;
+}
+
+// Custom field definition for custom types
+message CustomFieldDefinition {
+    string name = 1;
+    string label = 2;
+    string field_type = 3;        // "text", "textarea", "select", "number", "date", "user"
+    bool required = 4;
+    repeated string options = 5;   // For select fields
+    string description = 6;
+    int32 order = 7;
+}
+
+// Custom type definition
+message CustomTypeDefinition {
+    string name = 1;
+    string display_name = 2;
+    string description = 3;
+    string prefix = 4;
+    repeated string statuses = 5;
+    repeated CustomFieldDefinition custom_fields = 6;
+    bool built_in = 7;
+    string color = 8;
+    bool stateless = 9;
+}
+
+// Relationship definition
+message RelationshipDefinitionProto {
+    string name = 1;
+    string display_name = 2;
+    string description = 3;
+    string inverse = 4;
+    bool symmetric = 5;
+    string cardinality = 6;       // "ManyToMany", "OneToMany", "ManyToOne", "OneToOne"
+    repeated string source_types = 7;
+    repeated string target_types = 8;
+    bool built_in = 9;
+    string color = 10;
+    string icon = 11;
+}
+
+// AI action config for individual AI operations
+message AiActionConfig {
+    string additional_instructions = 1;
+}
+
+// Type-specific AI prompt configuration
+message TypePromptConfig {
+    string type_name = 1;
+    string evaluation = 2;
+    string improve = 3;
+    string generate_children = 4;
+    string generate_children_extra = 5;
+}
+
+// AI prompt configuration
+message AiPromptConfig {
+    string global_context = 1;
+    AiActionConfig evaluation = 2;
+    AiActionConfig duplicates = 3;
+    AiActionConfig relationships = 4;
+    AiActionConfig improve = 5;
+    AiActionConfig generate_children = 6;
+    repeated TypePromptConfig type_prompts = 7;
+}
+
 // The full requirements store
 message RequirementsStore {
     string name = 1;
@@ -172,6 +254,14 @@ message RequirementsStore {
     IdConfiguration id_config = 7;
     int32 next_spec_number = 8;
     map<string, int32> prefix_counters = 9;
+    // Extended metadata fields
+    repeated RelationshipDefinitionProto relationship_definitions = 10;
+    repeated ReactionDefinition reaction_definitions = 11;
+    repeated CustomTypeDefinition type_definitions = 12;
+    repeated string allowed_prefixes = 13;
+    bool restrict_prefixes = 14;
+    AiPromptConfig ai_prompts = 15;
+    repeated Team teams = 16;
 }
 
 // ============================================================================

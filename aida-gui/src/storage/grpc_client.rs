@@ -564,7 +564,12 @@ fn normalize_addr(server_addr: &str) -> String {
 // =============================================================================
 
 pub fn proto_to_store(store: &proto::RequirementsStore) -> Result<RequirementsStore> {
-    use aida_core::{FeatureDefinition, IdConfiguration, IdFormat, NumberingStrategy, User};
+    use aida_core::{
+        AiActionPromptConfig, AiPromptConfig, AiTypePromptConfig, Cardinality,
+        CustomFieldDefinition, CustomFieldType, CustomTypeDefinition, FeatureDefinition,
+        IdConfiguration, IdFormat, NumberingStrategy, ReactionDefinition, RelationshipDefinition,
+        Team, User,
+    };
 
     let requirements: Vec<Requirement> = store.requirements
         .iter()
@@ -618,25 +623,150 @@ pub fn proto_to_store(store: &proto::RequirementsStore) -> Result<RequirementsSt
         .map(|(k, v)| (k.clone(), *v as u32))
         .collect();
 
+    // Parse teams from proto
+    let teams: Vec<Team> = store.teams
+        .iter()
+        .map(|t| Team {
+            id: uuid::Uuid::parse_str(&t.id).unwrap_or_else(|_| uuid::Uuid::new_v4()),
+            spec_id: if t.spec_id.is_empty() { None } else { Some(t.spec_id.clone()) },
+            name: t.name.clone(),
+            description: t.description.clone(),
+            parent_team_id: None,
+            member_ids: t.member_ids.iter()
+                .filter_map(|id| uuid::Uuid::parse_str(id).ok())
+                .collect(),
+            created_at: chrono::Utc::now(),
+            modified_at: None,
+            archived: false,
+        })
+        .collect();
+
+    // Parse reaction definitions from proto
+    let reaction_definitions: Vec<ReactionDefinition> = store.reaction_definitions
+        .iter()
+        .map(|r| ReactionDefinition {
+            name: r.name.clone(),
+            emoji: r.emoji.clone(),
+            label: r.label.clone(),
+            description: if r.description.is_empty() { None } else { Some(r.description.clone()) },
+            built_in: r.built_in,
+        })
+        .collect();
+
+    // Parse type definitions from proto
+    let type_definitions: Vec<CustomTypeDefinition> = store.type_definitions
+        .iter()
+        .map(|t| CustomTypeDefinition {
+            name: t.name.clone(),
+            display_name: t.display_name.clone(),
+            description: if t.description.is_empty() { None } else { Some(t.description.clone()) },
+            prefix: if t.prefix.is_empty() { None } else { Some(t.prefix.clone()) },
+            statuses: t.statuses.clone(),
+            priorities: Vec::new(),
+            custom_fields: t.custom_fields.iter().map(|f| {
+                CustomFieldDefinition {
+                    name: f.name.clone(),
+                    label: f.label.clone(),
+                    field_type: match f.field_type.as_str() {
+                        "textarea" | "TextArea" => CustomFieldType::TextArea,
+                        "select" | "Select" => CustomFieldType::Select,
+                        "number" | "Number" => CustomFieldType::Number,
+                        "date" | "Date" => CustomFieldType::Date,
+                        "user" | "User" => CustomFieldType::User,
+                        _ => CustomFieldType::Text,
+                    },
+                    required: f.required,
+                    options: f.options.clone(),
+                    default_value: None, // Not exposed via proto
+                    description: if f.description.is_empty() { None } else { Some(f.description.clone()) },
+                    order: f.order,
+                }
+            }).collect(),
+            built_in: t.built_in,
+            color: if t.color.is_empty() { None } else { Some(t.color.clone()) },
+            stateless: t.stateless,
+        })
+        .collect();
+
+    // Parse relationship definitions from proto
+    let relationship_definitions: Vec<RelationshipDefinition> = if store.relationship_definitions.is_empty() {
+        RelationshipDefinition::defaults()
+    } else {
+        store.relationship_definitions
+            .iter()
+            .map(|r| RelationshipDefinition {
+                name: r.name.clone(),
+                display_name: r.display_name.clone(),
+                description: r.description.clone(),
+                inverse: if r.inverse.is_empty() { None } else { Some(r.inverse.clone()) },
+                symmetric: r.symmetric,
+                cardinality: match r.cardinality.as_str() {
+                    "OneToOne" => Cardinality::OneToOne,
+                    "OneToMany" => Cardinality::OneToMany,
+                    "ManyToOne" => Cardinality::ManyToOne,
+                    _ => Cardinality::ManyToMany,
+                },
+                source_types: r.source_types.clone(),
+                target_types: r.target_types.clone(),
+                built_in: r.built_in,
+                color: if r.color.is_empty() { None } else { Some(r.color.clone()) },
+                icon: if r.icon.is_empty() { None } else { Some(r.icon.clone()) },
+            })
+            .collect()
+    };
+
+    // Parse AI prompts from proto
+    let ai_prompts = store.ai_prompts.as_ref().map(|p| {
+        AiPromptConfig {
+            global_context: p.global_context.clone(),
+            evaluation: p.evaluation.as_ref().map(|a| AiActionPromptConfig {
+                custom_template: None,
+                additional_instructions: a.additional_instructions.clone(),
+            }).unwrap_or_default(),
+            duplicates: p.duplicates.as_ref().map(|a| AiActionPromptConfig {
+                custom_template: None,
+                additional_instructions: a.additional_instructions.clone(),
+            }).unwrap_or_default(),
+            relationships: p.relationships.as_ref().map(|a| AiActionPromptConfig {
+                custom_template: None,
+                additional_instructions: a.additional_instructions.clone(),
+            }).unwrap_or_default(),
+            improve: p.improve.as_ref().map(|a| AiActionPromptConfig {
+                custom_template: None,
+                additional_instructions: a.additional_instructions.clone(),
+            }).unwrap_or_default(),
+            generate_children: p.generate_children.as_ref().map(|a| AiActionPromptConfig {
+                custom_template: None,
+                additional_instructions: a.additional_instructions.clone(),
+            }).unwrap_or_default(),
+            type_prompts: p.type_prompts.iter().map(|tp| AiTypePromptConfig {
+                type_name: tp.type_name.clone(),
+                evaluation_extra: tp.evaluation.clone(),
+                improve_extra: tp.improve.clone(),
+                generate_children_extra: tp.generate_children_extra.clone(),
+            }).collect(),
+        }
+    }).unwrap_or_default();
+
     Ok(RequirementsStore {
         name: store.name.clone(),
         title: store.title.clone(),
         description: store.description.clone(),
         requirements,
         users,
-        teams: Vec::new(),
+        teams,
         features,
         next_feature_number: 100,
         id_config,
         next_spec_number: store.next_spec_number as u32,
         prefix_counters,
-        relationship_definitions: aida_core::RelationshipDefinition::defaults(),
-        reaction_definitions: Vec::new(),
+        relationship_definitions,
+        reaction_definitions,
         meta_counters: std::collections::HashMap::new(),
-        type_definitions: Vec::new(),
-        allowed_prefixes: Vec::new(),
-        restrict_prefixes: false,
-        ai_prompts: aida_core::AiPromptConfig::default(),
+        type_definitions,
+        allowed_prefixes: store.allowed_prefixes.clone(),
+        restrict_prefixes: store.restrict_prefixes,
+        ai_prompts,
         baselines: Vec::new(),
         store_version: 0,
         migrated_to: None,

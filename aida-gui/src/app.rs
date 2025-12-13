@@ -2836,6 +2836,13 @@ enum QuickChangeField {
     Tags,
 }
 
+/// Goto picker action types
+enum GotoAction {
+    GoToTop,
+    GoToBottom,
+    GoToIndex(usize),
+}
+
 /// AI action types - what kind of AI analysis to perform
 #[derive(Debug, Clone)]
 enum AiAction {
@@ -3542,6 +3549,11 @@ pub struct RequirementsApp {
     show_weight_picker: bool,
     weight_picker_input: String,      // Text input for weight value
 
+    // Goto picker popup (triggered by 'g' - go to requirement by ID)
+    show_goto_picker: bool,
+    goto_picker_input: String,        // Text input for ID search (digits for fuzzy search)
+    goto_picker_matches: Vec<usize>,  // Indices of matching requirements
+
     // Keyboard shortcuts help popup (triggered by '?' key)
     show_keyboard_help: bool,
 
@@ -4246,6 +4258,9 @@ impl RequirementsApp {
             type_picker_selected: 0,
             show_weight_picker: false,
             weight_picker_input: String::new(),
+            show_goto_picker: false,
+            goto_picker_input: String::new(),
+            goto_picker_matches: Vec::new(),
             show_keyboard_help: false,
             last_db_check: Instant::now(),
             known_db_mtime: None,
@@ -4777,6 +4792,9 @@ impl RequirementsApp {
             type_picker_selected: 0,
             show_weight_picker: false,
             weight_picker_input: String::new(),
+            show_goto_picker: false,
+            goto_picker_input: String::new(),
+            goto_picker_matches: Vec::new(),
             show_keyboard_help: false,
             last_db_check: Instant::now(),
             known_db_mtime: None,
@@ -5300,6 +5318,9 @@ impl RequirementsApp {
             type_picker_selected: 0,
             show_weight_picker: false,
             weight_picker_input: String::new(),
+            show_goto_picker: false,
+            goto_picker_input: String::new(),
+            goto_picker_matches: Vec::new(),
             show_keyboard_help: false,
             last_db_check: Instant::now(),
             known_db_mtime: None,
@@ -6391,6 +6412,76 @@ impl RequirementsApp {
     fn start_add_child(&mut self) {
         self.clear_form_for_child();
         self.pending_view_change = Some(View::Add);
+    }
+
+    /// Move a requirement up in the hierarchy to become a sibling of its parent.
+    /// This removes the current Parent relationship and optionally creates a new one
+    /// to the grandparent (if any).
+    /// Returns true if the move was successful, false otherwise.
+    fn move_req_to_sibling_of_parent(&mut self, req_idx: usize) -> bool {
+        // Get the requirement and find its parent
+        let (req_id, parent_id) = {
+            if let Some(req) = self.store.requirements.get(req_idx) {
+                let parent_rel = req.relationships
+                    .iter()
+                    .find(|r| r.rel_type == RelationshipType::Parent);
+                if let Some(rel) = parent_rel {
+                    (req.id, rel.target_id)
+                } else {
+                    // No parent - already at root level
+                    self.message = Some(("Requirement is already at root level".to_string(), false));
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        };
+
+        // Find the grandparent (parent's parent), if any
+        let grandparent_id = self.store.requirements
+            .iter()
+            .find(|r| r.id == parent_id)
+            .and_then(|parent| {
+                parent.relationships
+                    .iter()
+                    .find(|r| r.rel_type == RelationshipType::Parent)
+                    .map(|r| r.target_id)
+            });
+
+        // Get spec_id of parent for display purposes
+        let parent_spec_id = self.store.requirements
+            .iter()
+            .find(|r| r.id == parent_id)
+            .and_then(|r| r.spec_id.clone())
+            .unwrap_or_default();
+
+        // Remove the current parent relationship (bidirectional - also removes Child from parent)
+        let bidirectional = self.store.get_inverse_type(&RelationshipType::Parent).is_some();
+        if let Err(e) = self.store.remove_relationship(&req_id, &RelationshipType::Parent, &parent_id, bidirectional) {
+            self.message = Some((format!("Failed to remove parent relationship: {}", e), true));
+            return false;
+        }
+
+        // If there's a grandparent, create new parent relationship to it
+        if let Some(gp_id) = grandparent_id {
+            if let Err(e) = self.store.add_relationship(
+                &req_id,
+                RelationshipType::Parent,
+                &gp_id,
+                bidirectional,
+            ) {
+                self.message = Some((format!("Failed to create new parent relationship: {}", e), true));
+                // Still partially succeeded (old parent removed), so save anyway
+                self.save();
+                return false;
+            }
+            self.message = Some((format!("Moved to sibling of {}", parent_spec_id), false));
+        } else {
+            self.message = Some((format!("Moved to root level (was child of {})", parent_spec_id), false));
+        }
+
+        self.save();
+        true
     }
 
     /// Get the current file modification time for the database
@@ -21558,6 +21649,193 @@ impl RequirementsApp {
         }
     }
 
+    /// Show goto picker popup (triggered by 'g' key)
+    /// Allows quick navigation by entering digits to fuzzy-match requirement IDs,
+    /// or letters for direct actions (t=top, b=bottom)
+    fn show_goto_picker_popup(&mut self, ctx: &egui::Context) {
+        if !self.show_goto_picker {
+            return;
+        }
+
+        // Get filtered indices for navigation
+        let filtered_indices = self.get_filtered_indices();
+
+        // Handle keyboard input
+        let mut close_popup = false;
+        let mut goto_action: Option<GotoAction> = None;
+
+        ctx.input(|i| {
+            if i.key_pressed(egui::Key::Escape) {
+                close_popup = true;
+            }
+            if i.key_pressed(egui::Key::Enter) {
+                // Navigate to first match if there's exactly one
+                if self.goto_picker_matches.len() == 1 {
+                    goto_action = Some(GotoAction::GoToIndex(self.goto_picker_matches[0]));
+                }
+            }
+            // Direct action keys (only when input is empty or starts with these)
+            if self.goto_picker_input.is_empty() {
+                if i.key_pressed(egui::Key::T) {
+                    // 't' = go to top
+                    goto_action = Some(GotoAction::GoToTop);
+                } else if i.key_pressed(egui::Key::B) {
+                    // 'b' = go to bottom
+                    goto_action = Some(GotoAction::GoToBottom);
+                }
+            }
+        });
+
+        if close_popup {
+            self.show_goto_picker = false;
+            self.goto_picker_input.clear();
+            self.goto_picker_matches.clear();
+            return;
+        }
+
+        // Handle goto actions
+        if let Some(action) = goto_action {
+            match action {
+                GotoAction::GoToTop => {
+                    if !filtered_indices.is_empty() {
+                        let target_idx = filtered_indices[0];
+                        self.selected_idx = Some(target_idx);
+                        self.pending_view_change = Some(View::Detail);
+                        if let Some(req) = self.store.requirements.get(target_idx) {
+                            self.scroll_to_requirement = Some(req.id);
+                        }
+                    }
+                }
+                GotoAction::GoToBottom => {
+                    if !filtered_indices.is_empty() {
+                        let target_idx = filtered_indices[filtered_indices.len() - 1];
+                        self.selected_idx = Some(target_idx);
+                        self.pending_view_change = Some(View::Detail);
+                        if let Some(req) = self.store.requirements.get(target_idx) {
+                            self.scroll_to_requirement = Some(req.id);
+                        }
+                    }
+                }
+                GotoAction::GoToIndex(idx) => {
+                    self.selected_idx = Some(idx);
+                    self.pending_view_change = Some(View::Detail);
+                    if let Some(req) = self.store.requirements.get(idx) {
+                        self.scroll_to_requirement = Some(req.id);
+                    }
+                }
+            }
+            self.show_goto_picker = false;
+            self.goto_picker_input.clear();
+            self.goto_picker_matches.clear();
+            return;
+        }
+
+        // Center the popup on screen
+        let screen_rect = ctx.screen_rect();
+        let popup_size = egui::vec2(300.0, 200.0);
+        let popup_pos = egui::pos2(
+            (screen_rect.width() - popup_size.x) / 2.0,
+            (screen_rect.height() - popup_size.y) / 2.0,
+        );
+
+        egui::Area::new(egui::Id::new("goto_picker_popup"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(popup_pos)
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style())
+                    .inner_margin(8.0)
+                    .show(ui, |ui| {
+                        ui.set_min_width(popup_size.x - 16.0);
+                        ui.label(egui::RichText::new("Go To Requirement").strong());
+                        ui.separator();
+
+                        // ID input
+                        ui.horizontal(|ui| {
+                            ui.label("ID:");
+                            let response = ui.add(
+                                egui::TextEdit::singleline(&mut self.goto_picker_input)
+                                    .hint_text("Enter digits to search...")
+                                    .desired_width(150.0)
+                            );
+                            // Auto-focus the input field
+                            response.request_focus();
+                        });
+
+                        // Update matches when input changes (only accept digits)
+                        let input_digits: String = self.goto_picker_input.chars().filter(|c| c.is_ascii_digit()).collect();
+                        if input_digits != self.goto_picker_input {
+                            self.goto_picker_input = input_digits.clone();
+                        }
+
+                        // Find matching requirements by spec_id
+                        if !self.goto_picker_input.is_empty() {
+                            self.goto_picker_matches = filtered_indices
+                                .iter()
+                                .filter(|&&idx| {
+                                    if let Some(req) = self.store.requirements.get(idx) {
+                                        // Extract digits from spec_id and check if input is a substring
+                                        if let Some(ref spec_id) = req.spec_id {
+                                            let spec_digits: String = spec_id.chars().filter(|c| c.is_ascii_digit()).collect();
+                                            spec_digits.contains(&self.goto_picker_input)
+                                        } else {
+                                            false
+                                        }
+                                    } else {
+                                        false
+                                    }
+                                })
+                                .copied()
+                                .collect();
+
+                            // Show matches (up to 5)
+                            ui.separator();
+                            if self.goto_picker_matches.is_empty() {
+                                ui.colored_label(egui::Color32::GRAY, "No matches");
+                            } else {
+                                ui.label(format!("{} match(es):", self.goto_picker_matches.len()));
+                                for (i, &idx) in self.goto_picker_matches.iter().take(5).enumerate() {
+                                    if let Some(req) = self.store.requirements.get(idx) {
+                                        let spec_id = req.spec_id.as_deref().unwrap_or("???");
+                                        let label = format!("{}: {}", spec_id, truncate_string(&req.title, 30));
+                                        if ui.selectable_label(i == 0, label).clicked() {
+                                            self.selected_idx = Some(idx);
+                                            self.pending_view_change = Some(View::Detail);
+                                            self.scroll_to_requirement = Some(req.id);
+                                            self.show_goto_picker = false;
+                                            self.goto_picker_input.clear();
+                                            self.goto_picker_matches.clear();
+                                            return;
+                                        }
+                                    }
+                                }
+                                if self.goto_picker_matches.len() > 5 {
+                                    ui.small(format!("...and {} more", self.goto_picker_matches.len() - 5));
+                                }
+                            }
+                        } else {
+                            self.goto_picker_matches.clear();
+                        }
+
+                        ui.separator();
+                        ui.horizontal(|ui| {
+                            ui.small("t: top  b: bottom  Enter: go  Esc: cancel");
+                        });
+                    });
+            });
+
+        // Close on click outside
+        if ctx.input(|i| i.pointer.any_click()) {
+            let popup_rect = egui::Rect::from_min_size(popup_pos, popup_size);
+            if let Some(pos) = ctx.input(|i| i.pointer.interact_pos()) {
+                if !popup_rect.contains(pos) {
+                    self.show_goto_picker = false;
+                    self.goto_picker_input.clear();
+                    self.goto_picker_matches.clear();
+                }
+            }
+        }
+    }
+
     /// Show keyboard shortcuts help window (triggered by '?' key)
     fn show_keyboard_help_popup(&mut self, ctx: &egui::Context) {
         if !self.show_keyboard_help {
@@ -21612,6 +21890,7 @@ impl RequirementsApp {
                     ("k / ↑", "Move up in list"),
                     ("Enter / e", "Edit selected"),
                     ("Space", "Toggle expand/collapse"),
+                    ("Ctrl+←", "Move req up in hierarchy (tree views)"),
                 ];
 
                 let views = [
@@ -28724,6 +29003,7 @@ impl eframe::App for RequirementsApp {
             && !self.show_keyboard_help
             && !self.show_delete_menu
             && !self.show_add_menu
+            && !self.show_queue_menu
             && self.quick_change_field.is_none()
             && self.pending_delete_confirm.is_none()
             && v_pressed
@@ -28969,6 +29249,7 @@ impl eframe::App for RequirementsApp {
             let mut nav_delta: i32 = 0;
             let mut jump_to_start = false;
             let mut jump_to_end = false;
+            let mut open_goto_picker = false;
             let page_size: i32 = 10; // Number of items to move for Page Up/Down
 
             // Check if we're in a context where list navigation should work
@@ -28984,7 +29265,8 @@ impl eframe::App for RequirementsApp {
             let in_timeline = self.current_view == View::Timeline;
             let in_planning = self.current_view == View::Planning;
             let in_kanban = self.current_view == View::KanBan;
-            if !in_timeline && !in_planning && !in_kanban && can_navigate
+            let in_queue = self.current_view == View::Queue;
+            if !in_timeline && !in_planning && !in_kanban && !in_queue && can_navigate
                 && (self.user_settings.keybindings.is_pressed(
                     KeyAction::NavigateDown,
                     ctx,
@@ -28996,7 +29278,7 @@ impl eframe::App for RequirementsApp {
                 ))
             {
                 nav_delta = 1;
-            } else if !in_timeline && !in_planning && !in_kanban && can_navigate
+            } else if !in_timeline && !in_planning && !in_kanban && !in_queue && can_navigate
                 && (self.user_settings.keybindings.is_pressed(
                     KeyAction::NavigateUp,
                     ctx,
@@ -29011,8 +29293,8 @@ impl eframe::App for RequirementsApp {
             }
 
             // Page Up/Down, Home/End, and Mouse Wheel (only when not in text input)
-            // Skip for Timeline, Planning, and KanBan views - they have their own handling
-            if nav_context_active && !in_timeline && !in_planning && !in_kanban {
+            // Skip for Timeline, Planning, KanBan, and Queue views - they have their own handling
+            if nav_context_active && !in_timeline && !in_planning && !in_kanban && !in_queue {
                 ctx.input(|i| {
                     // Page Up/Down
                     if i.key_pressed(egui::Key::PageDown) {
@@ -29021,16 +29303,39 @@ impl eframe::App for RequirementsApp {
                         nav_delta = -page_size;
                     }
 
-                    // Home/End
+                    // Home/End and 'G' (vim-style end of list)
                     if i.key_pressed(egui::Key::Home) {
                         jump_to_start = true;
                     } else if i.key_pressed(egui::Key::End) {
                         jump_to_end = true;
                     }
+                    // 'G' (shift+g) for vim-style jump to end of list
+                    // Only when no popups are open
+                    if i.key_pressed(egui::Key::G) && i.modifiers.shift {
+                        jump_to_end = true;
+                    }
+                    // 'g' opens goto picker (without shift)
+                    if i.key_pressed(egui::Key::G) && !i.modifiers.shift && !i.modifiers.ctrl && !i.modifiers.alt {
+                        open_goto_picker = true;
+                    }
 
                     // Mouse wheel scrolls the view without changing selection
                     // (Ctrl+wheel is handled separately for zoom)
                 });
+            }
+
+            // Ctrl+ArrowLeft: Move requirement up in hierarchy (sibling of parent)
+            // Only in list/detail views with a selection, in hierarchical perspectives
+            if nav_context_active && self.perspective != Perspective::Flat {
+                let ctrl_left_pressed = ctx.input(|i| {
+                    let ctrl = i.modifiers.ctrl || i.modifiers.mac_cmd;
+                    ctrl && i.key_pressed(egui::Key::ArrowLeft)
+                });
+                if ctrl_left_pressed {
+                    if let Some(idx) = self.selected_idx {
+                        self.move_req_to_sibling_of_parent(idx);
+                    }
+                }
             }
 
             // Edit keybinding (context-aware)
@@ -29083,8 +29388,10 @@ impl eframe::App for RequirementsApp {
             let no_delete_confirm = self.pending_delete_confirm.is_none();
             let no_view_picker = !self.show_view_picker && !self.show_keyboard_help;
             let no_add_menu = !self.show_add_menu;
+            let no_queue_menu = !self.show_queue_menu;
+            let no_goto_picker = !self.show_goto_picker;
 
-            if nav_context_active && no_popup_open && not_in_form && no_delete_confirm && no_view_picker && no_add_menu {
+            if nav_context_active && no_popup_open && not_in_form && no_delete_confirm && no_view_picker && no_add_menu && no_queue_menu && no_goto_picker {
                 // 's' key to open status popup
                 if self.user_settings.keybindings.is_pressed(
                     KeyAction::OpenStatusPicker,
@@ -29312,6 +29619,13 @@ impl eframe::App for RequirementsApp {
                         }
                     }
                 }
+            }
+
+            // Handle goto picker
+            if open_goto_picker && !self.show_goto_picker {
+                self.show_goto_picker = true;
+                self.goto_picker_input.clear();
+                self.goto_picker_matches.clear();
             }
 
             // Handle keyboard navigation in Timeline view
@@ -30063,6 +30377,9 @@ impl eframe::App for RequirementsApp {
 
         // Show weight picker popup (triggered by 'w' key)
         self.show_weight_picker_popup(ctx);
+
+        // Show goto picker popup (triggered by 'g' key)
+        self.show_goto_picker_popup(ctx);
 
         // Show tag picker popup (triggered by 't' key)
         self.show_tag_picker_popup(ctx);
