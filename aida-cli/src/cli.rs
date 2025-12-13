@@ -827,4 +827,22 @@ pub enum Command {
         #[clap(long, short = 'v')]
         invert_match: bool,
     },
+
+    /// Simple search for requirements (case-insensitive by default)
+    Search {
+        /// Search query (searches title, description, and comments)
+        query: String,
+
+        /// Make search case-sensitive (default is case-insensitive)
+        #[clap(long, short = 's')]
+        case_sensitive: bool,
+
+        /// Filter by status
+        #[clap(long)]
+        status: Option<String>,
+
+        /// Filter by feature
+        #[clap(long)]
+        feature: Option<String>,
+    },
 }

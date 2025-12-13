@@ -22,6 +22,8 @@ To migrate: `aida db migrate --from yaml --to sqlite`
 ```bash
 aida list                              # List all requirements
 aida list --status draft               # Filter by status
+aida search "<query>"                  # Simple case-insensitive search
+aida grep "<pattern>" -i               # Advanced regex search
 aida show <ID>                         # Show requirement details (e.g., FR-0042)
 aida add --title "..." --description "..." --status draft  # Add new requirement
 aida edit <ID> --status completed      # Update status

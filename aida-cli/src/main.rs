@@ -250,6 +250,32 @@ fn main() -> Result<()> {
                 *invert_match,
             )?;
         }
+        Command::Search {
+            query,
+            case_sensitive,
+            status,
+            feature,
+        } => {
+            // Search is a simplified version of grep with sensible defaults:
+            // - Case insensitive by default (unless -s/--case-sensitive)
+            // - Searches all text fields (title, description, comments)
+            grep_requirements(
+                &storage,
+                query,
+                !case_sensitive, // invert: case_sensitive=false means ignore_case=true
+                false,           // no extended regex
+                0,               // no after context
+                0,               // no before context
+                None,            // no context
+                None,            // search all fields
+                status.as_deref(),
+                None, // no type filter
+                feature.as_deref(),
+                false, // show full matches, not just IDs
+                false, // don't show count
+                false, // don't invert match
+            )?;
+        }
     }
 
     Ok(())
