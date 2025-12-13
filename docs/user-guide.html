@@ -1,27 +1,237 @@
 <!DOCTYPE html>
-<html lang="en">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AIDA User Guide</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>AIDA User Guide</title>
+  <style>
+    html {
+      color: #1a1a1a;
+      background-color: #fdfdfd;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 36em;
+      padding-left: 50px;
+      padding-right: 50px;
+      padding-top: 50px;
+      padding-bottom: 50px;
+      hyphens: auto;
+      overflow-wrap: break-word;
+      text-rendering: optimizeLegibility;
+      font-kerning: normal;
+    }
+    @media (max-width: 600px) {
+      body {
+        font-size: 0.9em;
+        padding: 12px;
+      }
+      h1 {
+        font-size: 1.8em;
+      }
+    }
+    @media print {
+      html {
+        background-color: white;
+      }
+      body {
+        background-color: transparent;
+        color: black;
+        font-size: 12pt;
+      }
+      p, h2, h3 {
+        orphans: 3;
+        widows: 3;
+      }
+      h2, h3, h4 {
+        page-break-after: avoid;
+      }
+    }
+    p {
+      margin: 1em 0;
+    }
+    a {
+      color: #1a1a1a;
+    }
+    a:visited {
+      color: #1a1a1a;
+    }
+    img {
+      max-width: 100%;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin-top: 1.4em;
+    }
+    h5, h6 {
+      font-size: 1em;
+      font-style: italic;
+    }
+    h6 {
+      font-weight: normal;
+    }
+    ol, ul {
+      padding-left: 1.7em;
+      margin-top: 1em;
+    }
+    li > ol, li > ul {
+      margin-top: 0;
+    }
+    blockquote {
+      margin: 1em 0 1em 1.7em;
+      padding-left: 1em;
+      border-left: 2px solid #e6e6e6;
+      color: #606060;
+    }
+    code {
+      font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+      font-size: 85%;
+      margin: 0;
+      hyphens: manual;
+    }
+    pre {
+      margin: 1em 0;
+      overflow: auto;
+    }
+    pre code {
+      padding: 0;
+      overflow: visible;
+      overflow-wrap: normal;
+    }
+    .sourceCode {
+     background-color: transparent;
+     overflow: visible;
+    }
+    hr {
+      background-color: #1a1a1a;
+      border: none;
+      height: 1px;
+      margin: 1em 0;
+    }
+    table {
+      margin: 1em 0;
+      border-collapse: collapse;
+      width: 100%;
+      overflow-x: auto;
+      display: block;
+      font-variant-numeric: lining-nums tabular-nums;
+    }
+    table caption {
+      margin-bottom: 0.75em;
+    }
+    tbody {
+      margin-top: 0.5em;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    th {
+      border-top: 1px solid #1a1a1a;
+      padding: 0.25em 0.5em 0.25em 0.5em;
+    }
+    td {
+      padding: 0.125em 0.5em 0.25em 0.5em;
+    }
+    header {
+      margin-bottom: 4em;
+      text-align: center;
+    }
+    #TOC li {
+      list-style: none;
+    }
+    #TOC ul {
+      padding-left: 1.3em;
+    }
+    #TOC > ul {
+      padding-left: 0;
+    }
+    #TOC a:not(:hover) {
+      text-decoration: none;
+    }
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    div.columns{display: flex; gap: min(4vw, 1.5em);}
+    div.column{flex: auto; overflow-x: auto;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    /* The extra [class] is a hack that increases specificity enough to
+       override a similar rule in reveal.js */
+    ul.task-list[class]{list-style: none;}
+    ul.task-list li input[type="checkbox"] {
+      font-size: inherit;
+      width: 0.8em;
+      margin: 0 0.8em 0.2em -1.6em;
+      vertical-align: middle;
+    }
+    .display.math{display: block; text-align: center; margin: 0.5rem auto;}
+    /* CSS for syntax highlighting */
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    .sourceCode { overflow: visible; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { color: #008000; } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { color: #008000; font-weight: bold; } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
 </head>
 <body>
-    <nav class="nav-header">
-        <div class="nav-content">
-            <div class="nav-links">
-                <a href="user-guide.html" class="active">User Guide</a>
-                <a href="DEVELOPER_GUIDE.html">Developer's Guide</a>
-                <a href="admin-guide.html">Admin Guide</a>
-            </div>
-            <button class="theme-toggle" onclick="toggleTheme()">
-                <span id="theme-icon">&#9790;</span>
-                <span id="theme-text">Toggle Theme</span>
-            </button>
-        </div>
-    </nav>
-
-    <div class="container">
+<header id="title-block-header">
+<h1 class="title">AIDA User Guide</h1>
+</header>
 <h1 id="aida-user-guide">AIDA User Guide</h1>
 <p>A professional requirements management system with both CLI and GUI
 interfaces.</p>
@@ -48,18 +258,22 @@ Organization</a></li>
 <h2 id="getting-started">Getting Started</h2>
 <h3 id="installation">Installation</h3>
 <p>Build the project from source:</p>
-<pre class="bash"><code>cargo build --workspace --release</code></pre>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">cargo</span> build <span class="at">--workspace</span> <span class="at">--release</span></span></code></pre></div>
 <p>This creates two binaries in <code>target/release/</code>: -
 <code>aida</code> - Command-line interface - <code>aida-gui</code> -
 Graphical user interface</p>
 <h3 id="quick-start">Quick Start</h3>
 <ol type="1">
 <li><p><strong>Create your first requirement:</strong></p>
-<pre class="bash"><code>aida add --title &quot;User login&quot; --description &quot;Users can log in with email and password&quot;</code></pre></li>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> add <span class="at">--title</span> <span class="st">&quot;User login&quot;</span> <span class="at">--description</span> <span class="st">&quot;Users can log in with email and password&quot;</span></span></code></pre></div></li>
 <li><p><strong>List all requirements:</strong></p>
-<pre class="bash"><code>aida list</code></pre></li>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> list</span></code></pre></div></li>
 <li><p><strong>Or launch the GUI:</strong></p>
-<pre class="bash"><code>aida-gui</code></pre></li>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">aida-gui</span></span></code></pre></div></li>
 </ol>
 <hr />
 <h2 id="cli-usage">CLI Usage</h2>
@@ -89,67 +303,73 @@ Graphical user interface</p>
 <td>Edit a requirement</td>
 </tr>
 <tr class="odd">
-<td><code>aida delete &lt;ID&gt;</code></td>
+<td><code>aida del &lt;ID&gt;</code></td>
 <td>Delete a requirement</td>
 </tr>
 </tbody>
 </table>
 <h3 id="adding-requirements">Adding Requirements</h3>
 <p><strong>Interactive mode:</strong></p>
-<pre class="bash"><code>aida add --interactive</code></pre>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> add <span class="at">--interactive</span></span></code></pre></div>
 <p><strong>Command line mode:</strong></p>
-<pre class="bash"><code>aida add --title &quot;Feature name&quot; \
-        --description &quot;Detailed description&quot; \
-        --priority High \
-        --status Draft \
-        --type Functional \
-        --feature &quot;Authentication&quot;</code></pre>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> add <span class="at">--title</span> <span class="st">&quot;Feature name&quot;</span> <span class="dt">\</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>        <span class="at">--description</span> <span class="st">&quot;Detailed description&quot;</span> <span class="dt">\</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>        <span class="at">--priority</span> High <span class="dt">\</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>        <span class="at">--status</span> Draft <span class="dt">\</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>        <span class="at">--type</span> Functional <span class="dt">\</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>        <span class="at">--feature</span> <span class="st">&quot;Authentication&quot;</span></span></code></pre></div>
 <p><strong>With custom ID prefix:</strong></p>
-<pre class="bash"><code>aida add --title &quot;Security audit&quot; \
-        --prefix SEC \
-        --description &quot;Perform security audit&quot;</code></pre>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> add <span class="at">--title</span> <span class="st">&quot;Security audit&quot;</span> <span class="dt">\</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>        <span class="at">--prefix</span> SEC <span class="dt">\</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>        <span class="at">--description</span> <span class="st">&quot;Perform security audit&quot;</span></span></code></pre></div>
 <h3 id="filtering-and-searching">Filtering and Searching</h3>
-<pre class="bash"><code># Filter by status
-aida list --status Approved
-
-# Filter by priority
-aida list --priority High
-
-# Filter by feature
-aida list --feature &quot;Authentication&quot;
-
-# Search by text
-aida list --search &quot;login&quot;</code></pre>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Filter by status</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> list <span class="at">--status</span> Approved</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Filter by priority</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> list <span class="at">--priority</span> High</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Filter by feature</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> list <span class="at">--feature</span> <span class="st">&quot;Authentication&quot;</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Search by text</span></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> list <span class="at">--search</span> <span class="st">&quot;login&quot;</span></span></code></pre></div>
 <h3 id="working-with-relationships">Working with Relationships</h3>
-<pre class="bash"><code># Add a parent-child relationship
-aida rel add --from SPEC-001 --to SPEC-002 --type parent
-
-# Add bidirectional relationship
-aida rel add --from SPEC-001 --to SPEC-002 --type verifies -b
-
-# List relationships
-aida rel list SPEC-001</code></pre>
+<div class="sourceCode" id="cb9"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Add a parent-child relationship</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> rel add <span class="at">--from</span> SPEC-001 <span class="at">--to</span> SPEC-002 <span class="at">--type</span> parent</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Add bidirectional relationship</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> rel add <span class="at">--from</span> SPEC-001 <span class="at">--to</span> SPEC-002 <span class="at">--type</span> verifies <span class="at">-b</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="co"># List relationships</span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> rel list SPEC-001</span></code></pre></div>
 <h3 id="relationship-definitions">Relationship Definitions</h3>
 <p>Manage custom relationship types with constraints:</p>
-<pre class="bash"><code># List all relationship definitions
-aida rel-def list
-
-# Show details for a relationship definition
-aida rel-def show parent
-
-# Add a custom relationship type
-aida rel-def add --name &quot;blocks&quot; \
-    --display-name &quot;Blocks&quot; \
-    --description &quot;This requirement blocks another&quot; \
-    --inverse &quot;blocked_by&quot; \
-    --cardinality n:n \
-    --color &quot;#ff6b6b&quot;
-
-# Edit a relationship definition
-aida rel-def edit parent --source-types &quot;Functional,System&quot;
-
-# Remove a custom relationship definition
-aida rel-def remove blocks</code></pre>
+<div class="sourceCode" id="cb10"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># List all relationship definitions</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> rel-def list</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Show details for a relationship definition</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> rel-def show parent</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Add a custom relationship type</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> rel-def add <span class="at">--name</span> <span class="st">&quot;blocks&quot;</span> <span class="dt">\</span></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">--display-name</span> <span class="st">&quot;Blocks&quot;</span> <span class="dt">\</span></span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">--description</span> <span class="st">&quot;This requirement blocks another&quot;</span> <span class="dt">\</span></span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">--inverse</span> <span class="st">&quot;blocked_by&quot;</span> <span class="dt">\</span></span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">--cardinality</span> n:n <span class="dt">\</span></span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">--color</span> <span class="st">&quot;#ff6b6b&quot;</span></span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a><span class="co"># Edit a relationship definition</span></span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> rel-def edit parent <span class="at">--source-types</span> <span class="st">&quot;Functional,System&quot;</span></span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a><span class="co"># Remove a custom relationship definition</span></span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> rel-def remove blocks</span></code></pre></div>
 <p><strong>Built-in relationship types:</strong> - <code>parent</code> /
 <code>child</code> - Hierarchical decomposition (N:1 / 1:N) -
 <code>verifies</code> / <code>verified_by</code> - Test relationships
@@ -159,38 +379,43 @@ Dependencies (N:N) - <code>implements</code> /
 <code>references</code> - General reference (N:N, no inverse) -
 <code>duplicate</code> - Marks duplicates (symmetric)</p>
 <h3 id="feature-management">Feature Management</h3>
-<pre class="bash"><code># List features
-aida feature list
-
-# Rename a feature
-aida feature rename &quot;Old Name&quot; &quot;New Name&quot;
-
-# Move requirements between features
-aida feature move SPEC-001 &quot;New Feature&quot;</code></pre>
+<div class="sourceCode" id="cb11"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># List features</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> feature list</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Rename a feature</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> feature rename <span class="st">&quot;Old Name&quot;</span> <span class="st">&quot;New Name&quot;</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Move requirements between features</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> feature move SPEC-001 <span class="st">&quot;New Feature&quot;</span></span></code></pre></div>
 <h3 id="database-management">Database Management</h3>
-<pre class="bash"><code># List registered projects
-aida db list
-
-# Add a new project
-aida db add --name &quot;my-project&quot; --path &quot;/path/to/requirements.yaml&quot;
-
-# Set default project
-aida db default &quot;my-project&quot;
-
-# Remove a project
-aida db remove &quot;my-project&quot;</code></pre>
+<div class="sourceCode" id="cb12"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># List registered projects</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> db list</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Add a new project</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> db add <span class="at">--name</span> <span class="st">&quot;my-project&quot;</span> <span class="at">--path</span> <span class="st">&quot;/path/to/requirements.yaml&quot;</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Set default project</span></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> db default <span class="st">&quot;my-project&quot;</span></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Remove a project</span></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> db remove <span class="st">&quot;my-project&quot;</span></span></code></pre></div>
 <h3 id="opening-the-user-guide">Opening the User Guide</h3>
-<pre class="bash"><code># Open in default browser (light mode)
-aida user-guide
-
-# Open in dark mode
-aida user-guide --dark</code></pre>
+<div class="sourceCode" id="cb13"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Open in default browser (light mode)</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> user-guide</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Open in dark mode</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> user-guide <span class="at">--dark</span></span></code></pre></div>
 <hr />
 <h2 id="gui-usage">GUI Usage</h2>
 <p>Launch the GUI application:</p>
-<pre class="bash"><code>aida-gui</code></pre>
+<div class="sourceCode" id="cb14"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="ex">aida-gui</span></span></code></pre></div>
 <p>Or open a specific requirements file:</p>
-<pre class="bash"><code>aida-gui --file /path/to/requirements.yaml</code></pre>
+<div class="sourceCode" id="cb15"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="ex">aida-gui</span> <span class="at">--file</span> /path/to/requirements.yaml</span></code></pre></div>
 <h3 id="main-interface">Main Interface</h3>
 <p>The GUI consists of three main areas:</p>
 <ol type="1">
@@ -691,8 +916,9 @@ management.</p>
 <p>Requirements without a specified feature go to “Uncategorized”. Set a
 default feature using the <code>AIDA_FEATURE</code> environment
 variable:</p>
-<pre class="bash"><code>export AIDA_FEATURE=&quot;Authentication&quot;
-aida add --title &quot;New auth requirement&quot;  # Automatically uses Authentication</code></pre>
+<div class="sourceCode" id="cb18"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">AIDA_FEATURE</span><span class="op">=</span><span class="st">&quot;Authentication&quot;</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> add <span class="at">--title</span> <span class="st">&quot;New auth requirement&quot;</span>  <span class="co"># Automatically uses Authentication</span></span></code></pre></div>
 <hr />
 <h2 id="multi-project-support">Multi-Project Support</h2>
 <p>Manage multiple requirement sets using the registry system.</p>
@@ -710,15 +936,16 @@ variable</p>
 <li>Interactive prompt</li>
 </ol>
 <h3 id="example-setup">Example Setup</h3>
-<pre class="bash"><code># Register projects
-aida db add --name &quot;frontend&quot; --path ~/projects/frontend/requirements.yaml
-aida db add --name &quot;backend&quot; --path ~/projects/backend/requirements.yaml
-
-# Set default
-aida db default frontend
-
-# Work with specific project
-aida list --project backend</code></pre>
+<div class="sourceCode" id="cb19"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Register projects</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> db add <span class="at">--name</span> <span class="st">&quot;frontend&quot;</span> <span class="at">--path</span> ~/projects/frontend/requirements.yaml</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> db add <span class="at">--name</span> <span class="st">&quot;backend&quot;</span> <span class="at">--path</span> ~/projects/backend/requirements.yaml</span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Set default</span></span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> db default frontend</span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Work with specific project</span></span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> list <span class="at">--project</span> backend</span></code></pre></div>
 <hr />
 <h2 id="storage-backends">Storage Backends</h2>
 <p>The system supports two storage formats for your requirements
@@ -748,11 +975,12 @@ extension: - <code>.yaml</code>, <code>.yml</code> → YAML storage -
 storage</p>
 <p>When registering a project, simply use the appropriate file
 extension:</p>
-<pre class="bash"><code># YAML storage (default)
-aida db add --name &quot;my-project&quot; --path ~/project/requirements.yaml
-
-# SQLite storage
-aida db add --name &quot;my-project&quot; --path ~/project/requirements.db</code></pre>
+<div class="sourceCode" id="cb20"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># YAML storage (default)</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> db add <span class="at">--name</span> <span class="st">&quot;my-project&quot;</span> <span class="at">--path</span> ~/project/requirements.yaml</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a><span class="co"># SQLite storage</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a><span class="ex">aida</span> db add <span class="at">--name</span> <span class="st">&quot;my-project&quot;</span> <span class="at">--path</span> ~/project/requirements.db</span></code></pre></div>
 <h3 id="exporting-and-importing">Exporting and Importing</h3>
 <p>You can export your requirements to JSON format for backup or
 interoperability:</p>
@@ -1266,38 +1494,5 @@ help</li>
 </ul>
 <hr />
 <p><em>Generated for AIDA v0.1.0</em></p>
-    </div>
-
-    <script>
-        function toggleTheme() {
-            const body = document.body;
-            const icon = document.getElementById('theme-icon');
-            
-            if (body.classList.contains('dark-mode')) {
-                body.classList.remove('dark-mode');
-                body.classList.add('light-mode');
-                icon.innerHTML = '&#9790;'; // Moon
-                localStorage.setItem('theme', 'light');
-            } else {
-                body.classList.remove('light-mode');
-                body.classList.add('dark-mode');
-                icon.innerHTML = '&#9788;'; // Sun
-                localStorage.setItem('theme', 'dark');
-            }
-        }
-
-        // Load saved theme preference
-        (function() {
-            const saved = localStorage.getItem('theme');
-            const icon = document.getElementById('theme-icon');
-            if (saved === 'dark') {
-                document.body.classList.add('dark-mode');
-                icon.innerHTML = '&#9788;';
-            } else if (saved === 'light') {
-                document.body.classList.add('light-mode');
-                icon.innerHTML = '&#9790;';
-            }
-        })();
-    </script>
 </body>
 </html>

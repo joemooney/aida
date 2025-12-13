@@ -63,7 +63,7 @@ This creates two binaries in `target/release/`:
 | `aida add` | Add a new requirement |
 | `aida show <ID>` | Show requirement details |
 | `aida edit <ID>` | Edit a requirement |
-| `aida delete <ID>` | Delete a requirement |
+| `aida del <ID>` | Delete a requirement |
 
 ### Adding Requirements
 
