@@ -602,7 +602,7 @@ pub enum Command {
         #[clap(long)]
         priority: Option<String>,
 
-        /// Type of the requirement (functional, non-functional, system, user)
+        /// Type of requirement (functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder)
         #[clap(long)]
         r#type: Option<String>,
 
@@ -681,7 +681,7 @@ pub enum Command {
         #[clap(long)]
         priority: Option<String>,
 
-        /// New type (functional, non-functional, system, user, etc.)
+        /// New type (functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder)
         #[clap(long)]
         r#type: Option<String>,
 

@@ -157,8 +157,29 @@ AIDA has a dual-copy template system to support both development and standalone 
 
 ### CLI Reference (Authoritative)
 Always verify CLI arguments with `aida <command> --help`. Key parameters:
-- `--type`: `functional`, `non-functional`, `system`, `user` (lowercase!)
+- `--type`: `functional`, `non-functional`, `system`, `user`, `bug`, `epic`, `story`, `task`, `spike`, `sprint`, `folder` (lowercase!)
 - `--feature`: Feature category name (NOT a type!)
 - `--status`: `draft`, `approved`, `in-progress`, `completed`, `rejected`
 - `--priority`: `high`, `medium`, `low`
+
+### Requirement Types
+
+**Requirements** (use for features, behaviors, constraints):
+- `functional` - Functional requirements (what the system does)
+- `non-functional` - Performance, security, usability constraints
+- `system` - Technical/infrastructure requirements
+- `user` - User stories
+
+**Agile artifacts** (use for project management):
+- `epic` - Large features spanning multiple stories
+- `story` - User stories for agile development
+- `task` - Individual work items, chores, documentation
+- `bug` - Bug reports and defects
+- `spike` - Research and investigation tasks
+- `sprint` - Sprint planning containers
+
+**Organizational**:
+- `folder` - Organizational folders (stateless)
+
+Use `task` type for chores, documentation, tooling, and other work that doesn't fit traditional requirements.
 
