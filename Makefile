@@ -6,7 +6,8 @@
         test test-unit test-integration clean install \
         db-info db-migrate-sqlite db-migrate-yaml db-export \
         docs proto fmt lint check \
-        web-build web-build-release web-serve web-serve-force web-clean web-deps
+        web-build web-build-release web-serve web-serve-force web-clean web-deps \
+        sync-templates check-templates
 
 # Default database path
 DB ?= requirements.db
@@ -292,3 +293,76 @@ web-build-lite: ## Build lightweight web client (aida-web)
 
 web-serve-lite: ## Serve lightweight web client (aida-web)
 	cd aida-web && trunk serve --port $(WEB_PORT)
+
+#==============================================================================
+# TEMPLATE SYNC TARGETS (AIDA Development Only)
+#==============================================================================
+# These targets manage the dual-copy template system:
+# - Master templates in aida-core/templates/ (embedded in binary)
+# - Project-local templates in .claude/ (used by Claude Code)
+# In the AIDA repo, .claude/ should use symlinks to aida-core/templates/
+
+sync-templates: ## Sync .claude/ templates as symlinks to aida-core/templates/
+	@echo "Syncing .claude/ templates to use symlinks..."
+	@mkdir -p .claude/skills .claude/commands
+	@# Remove existing files and create symlinks for skills
+	@for f in aida-core/templates/skills/*.md; do \
+		name=$$(basename "$$f"); \
+		rm -f ".claude/skills/$$name"; \
+		ln -sf "../../aida-core/templates/skills/$$name" ".claude/skills/$$name"; \
+		echo "  Linked: .claude/skills/$$name -> aida-core/templates/skills/$$name"; \
+	done
+	@# Remove existing files and create symlinks for commands
+	@for f in aida-core/templates/commands/*.md; do \
+		name=$$(basename "$$f"); \
+		rm -f ".claude/commands/$$name"; \
+		ln -sf "../../aida-core/templates/commands/$$name" ".claude/commands/$$name"; \
+		echo "  Linked: .claude/commands/$$name -> aida-core/templates/commands/$$name"; \
+	done
+	@echo "Template sync complete!"
+
+check-templates: ## Check if .claude/ templates are properly linked
+	@echo "Checking template symlinks..."
+	@errors=0; \
+	for f in aida-core/templates/skills/*.md; do \
+		name=$$(basename "$$f"); \
+		target=".claude/skills/$$name"; \
+		if [ -L "$$target" ]; then \
+			echo "  OK: $$target (symlink)"; \
+		elif [ -f "$$target" ]; then \
+			echo "  WARNING: $$target is a regular file, not a symlink!"; \
+			if diff -q "$$f" "$$target" > /dev/null 2>&1; then \
+				echo "    Content matches master (but should be symlink)"; \
+			else \
+				echo "    CONTENT DIFFERS from master!"; \
+				errors=1; \
+			fi; \
+		else \
+			echo "  MISSING: $$target"; \
+			errors=1; \
+		fi; \
+	done; \
+	for f in aida-core/templates/commands/*.md; do \
+		name=$$(basename "$$f"); \
+		target=".claude/commands/$$name"; \
+		if [ -L "$$target" ]; then \
+			echo "  OK: $$target (symlink)"; \
+		elif [ -f "$$target" ]; then \
+			echo "  WARNING: $$target is a regular file, not a symlink!"; \
+			if diff -q "$$f" "$$target" > /dev/null 2>&1; then \
+				echo "    Content matches master (but should be symlink)"; \
+			else \
+				echo "    CONTENT DIFFERS from master!"; \
+				errors=1; \
+			fi; \
+		else \
+			echo "  MISSING: $$target"; \
+			errors=1; \
+		fi; \
+	done; \
+	if [ $$errors -eq 1 ]; then \
+		echo ""; \
+		echo "Run 'make sync-templates' to fix issues"; \
+		exit 1; \
+	fi
+	@echo "All templates OK!"

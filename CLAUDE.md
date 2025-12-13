@@ -80,3 +80,32 @@ Review session and capture missed requirements:
 - Prompt to add missing requirements or update statuses
 - Use at end of conversational sessions as a safety net
 
+## Template Architecture (IMPORTANT for AIDA Development)
+
+**This section is critical for developers working on AIDA itself.**
+
+AIDA has a dual-copy template system to support both development and standalone binary distribution:
+
+### Template Locations
+1. **Master templates**: `aida-core/templates/` - Embedded into binary at compile time
+2. **Project-local templates**: `.claude/skills/` and `.claude/commands/` - Used by Claude Code directly
+
+### Why Two Copies?
+- The master templates (`aida-core/templates/`) get compiled into the binary via `build.rs`, allowing `aida init` to bootstrap new projects without external files
+- The project-local templates (`.claude/`) are what Claude Code actually reads during development
+- In the AIDA repo, we use **symlinks** from `.claude/` to `aida-core/templates/` to keep them in sync
+
+### When Editing Skills/Commands
+**CRITICAL**: When modifying any skill or command template:
+1. Edit ONLY the master copy in `aida-core/templates/`
+2. The symlinks ensure `.claude/` stays in sync automatically
+3. Run `make sync-templates` to verify symlinks are correct
+4. Changes will be embedded in the next binary build
+
+### CLI Reference (Authoritative)
+Always verify CLI arguments with `aida <command> --help`. Key parameters:
+- `--type`: `functional`, `non-functional`, `system`, `user` (lowercase!)
+- `--feature`: Feature category name (NOT a type!)
+- `--status`: `draft`, `approved`, `in-progress`, `completed`, `rejected`
+- `--priority`: `high`, `medium`, `low`
+
