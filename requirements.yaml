@@ -11308,6 +11308,28 @@ requirements:
   created_by: Joe Mooney
   modified_at: 2025-12-13T18:21:49.207935908Z
   req_type: Functional
+- id: e47f0a6f-8445-41a0-863e-22a61ecc4f45
+  spec_id: FR-0296
+  title: Claude Code /aida-evaluate slash command
+  description: 'Add /aida-evaluate <SPEC-ID> slash command that runs AI evaluation on a requirement from Claude Code CLI. Mirrors the GUI''s ''Evaluate Requirement'' feature (A e hotkey). Evaluates clarity, testability, completeness, and consistency. Displays quality score (1-10) with issues and suggestions. Offers follow-up actions: improve description, split into children, find related, accept, or add comment.'
+  status: Completed
+  priority: Medium
+  owner: joe
+  feature: 174-claude-code
+  created_at: 2025-12-13T18:41:21.022379300Z
+  modified_at: 2025-12-13T18:41:21.022379300Z
+  req_type: Functional
+- id: 71b0bc17-2cee-4aba-95e6-a153213bd0b3
+  spec_id: FR-0297
+  title: Proactive requirements workflow with commit-time validation
+  description: 'Improve the scaffolding to automatically capture requirements as changes are implemented. Includes: (1) /aida-commit command for commit-time requirement linking, (2) Updated CLAUDE.md with requirement-first development guidance, (3) Enforcement of trace comments in code, (4) Automatic detection of untraced implementation at commit time.'
+  status: Completed
+  priority: High
+  owner: joe
+  feature: Uncategorized
+  created_at: 2025-12-13T18:45:27.258903826Z
+  modified_at: 2025-12-13T18:45:27.258903826Z
+  req_type: Functional
 users:
 - id: 150164ef-32ed-4d61-8cec-e887ac78cfd7
   spec_id: $USER-001
@@ -11405,8 +11427,8 @@ id_config:
     prefix: SPIKE
     description: Research or investigation task to reduce uncertainty or explore technical approaches
 features: []
-next_feature_number: 174
-next_spec_number: 296
+next_feature_number: 175
+next_spec_number: 298
 prefix_counters: {}
 relationship_definitions:
 - name: parent

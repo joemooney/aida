@@ -34,8 +34,26 @@ aida comment add <ID> "..."            # Add implementation note
 - Create child requirements for sub-tasks discovered during implementation
 - Link related requirements with: `aida rel add --from <FROM> --to <TO> --type <Parent|Verifies|References>`
 
+### Proactive Requirements Workflow (IMPORTANT)
+
+**Requirement-first development**: Before implementing any feature or fix, ensure a requirement exists:
+
+1. **Before coding**: Check if work has a SPEC-ID. If not, create one:
+   ```bash
+   aida add --title "..." --description "..." --status approved
+   ```
+
+2. **During coding**: Add trace comments linking code to requirements:
+   ```rust
+   // trace:FR-0042 | ai:claude:high
+   ```
+
+3. **Before committing**: Use `/aida-commit` to ensure all changes are linked to requirements
+
 ### Session Workflow
-If you work conversationally without explicit /aida-req calls, use `/aida-capture` at session end to review and capture any requirements that were discussed but not yet added to the database.
+- **Proactive capture**: Create requirements BEFORE implementation, not after
+- **Commit-time validation**: Use `/aida-commit` to catch untraced work
+- **Safety net**: If you work conversationally without explicit /aida-req calls, use `/aida-capture` at session end to review and capture any requirements that were discussed but not yet added to the database
 
 ## Code Traceability
 
@@ -79,6 +97,21 @@ Review session and capture missed requirements:
 - Identify implemented work not yet in requirements database
 - Prompt to add missing requirements or update statuses
 - Use at end of conversational sessions as a safety net
+
+### /aida-evaluate
+Evaluate a requirement's quality using AI analysis:
+- Load requirement from database
+- Assess clarity, testability, completeness, and consistency
+- Generate quality score (1-10) with detailed feedback
+- Offer follow-up actions: improve, split, or accept
+
+### /aida-commit
+Commit changes with automatic requirement linking:
+- Analyze staged changes for requirement traces
+- Identify untraced implementation code
+- Prompt to create requirements for untracked work
+- Create commit with requirement references
+- Update linked requirement statuses
 
 ## Template Architecture (IMPORTANT for AIDA Development)
 
