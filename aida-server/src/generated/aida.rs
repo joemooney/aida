@@ -217,6 +217,9 @@ pub struct User {
     pub email: ::prost::alloc::string::String,
     #[prost(string, tag = "5")]
     pub handle: ::prost::alloc::string::String,
+    /// Whether user has a PIN set (hash is never sent to client)
+    #[prost(bool, tag = "6")]
+    pub has_pin: bool,
 }
 /// Team definition
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -849,6 +852,57 @@ pub struct ShutdownRequest {
 pub struct ShutdownResponse {
     #[prost(bool, tag = "1")]
     pub accepted: bool,
+    #[prost(string, tag = "2")]
+    pub message: ::prost::alloc::string::String,
+}
+/// Authentication
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct LoginRequest {
+    /// User handle or name
+    #[prost(string, tag = "1")]
+    pub identifier: ::prost::alloc::string::String,
+    /// PIN (plaintext, server verifies hash)
+    #[prost(string, tag = "2")]
+    pub pin: ::prost::alloc::string::String,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct LoginResponse {
+    #[prost(bool, tag = "1")]
+    pub success: bool,
+    /// Error message on failure
+    #[prost(string, tag = "2")]
+    pub message: ::prost::alloc::string::String,
+    /// User info on success
+    #[prost(message, optional, tag = "3")]
+    pub user: ::core::option::Option<User>,
+    /// Simple token for session (optional, for future use)
+    #[prost(string, tag = "4")]
+    pub session_token: ::prost::alloc::string::String,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SetUserPinRequest {
+    /// UUID or SPEC-ID of user
+    #[prost(string, tag = "1")]
+    pub user_id: ::prost::alloc::string::String,
+    /// Current PIN (if changing)
+    #[prost(string, tag = "2")]
+    pub current_pin: ::prost::alloc::string::String,
+    /// New PIN to set
+    #[prost(string, tag = "3")]
+    pub new_pin: ::prost::alloc::string::String,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SetUserPinResponse {
+    #[prost(bool, tag = "1")]
+    pub success: bool,
     #[prost(string, tag = "2")]
     pub message: ::prost::alloc::string::String,
 }
@@ -1595,6 +1649,52 @@ pub mod requirements_service_client {
                 .insert(GrpcMethod::new("aida.RequirementsService", "Shutdown"));
             self.inner.unary(req, path, codec).await
         }
+        /// Authentication
+        pub async fn login(
+            &mut self,
+            request: impl tonic::IntoRequest<super::LoginRequest>,
+        ) -> std::result::Result<tonic::Response<super::LoginResponse>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/aida.RequirementsService/Login",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("aida.RequirementsService", "Login"));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn set_user_pin(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SetUserPinRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SetUserPinResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/aida.RequirementsService/SetUserPin",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("aida.RequirementsService", "SetUserPin"));
+            self.inner.unary(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -1741,6 +1841,18 @@ pub mod requirements_service_server {
             request: tonic::Request<super::ShutdownRequest>,
         ) -> std::result::Result<
             tonic::Response<super::ShutdownResponse>,
+            tonic::Status,
+        >;
+        /// Authentication
+        async fn login(
+            &self,
+            request: tonic::Request<super::LoginRequest>,
+        ) -> std::result::Result<tonic::Response<super::LoginResponse>, tonic::Status>;
+        async fn set_user_pin(
+            &self,
+            request: tonic::Request<super::SetUserPinRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SetUserPinResponse>,
             tonic::Status,
         >;
     }
@@ -2679,6 +2791,96 @@ pub mod requirements_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = ShutdownSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/aida.RequirementsService/Login" => {
+                    #[allow(non_camel_case_types)]
+                    struct LoginSvc<T: RequirementsService>(pub Arc<T>);
+                    impl<
+                        T: RequirementsService,
+                    > tonic::server::UnaryService<super::LoginRequest> for LoginSvc<T> {
+                        type Response = super::LoginResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::LoginRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as RequirementsService>::login(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = LoginSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/aida.RequirementsService/SetUserPin" => {
+                    #[allow(non_camel_case_types)]
+                    struct SetUserPinSvc<T: RequirementsService>(pub Arc<T>);
+                    impl<
+                        T: RequirementsService,
+                    > tonic::server::UnaryService<super::SetUserPinRequest>
+                    for SetUserPinSvc<T> {
+                        type Response = super::SetUserPinResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SetUserPinRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as RequirementsService>::set_user_pin(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = SetUserPinSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

@@ -159,6 +159,7 @@ message User {
     string name = 3;
     string email = 4;
     string handle = 5;
+    bool has_pin = 6;              // Whether user has a PIN set (hash is never sent to client)
 }
 
 // Team definition
@@ -300,6 +301,10 @@ service RequirementsService {
     // Server status
     rpc GetServerStatus(GetServerStatusRequest) returns (GetServerStatusResponse);
     rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
+
+    // Authentication
+    rpc Login(LoginRequest) returns (LoginResponse);
+    rpc SetUserPin(SetUserPinRequest) returns (SetUserPinResponse);
 }
 
 // ============================================================================
@@ -535,5 +540,29 @@ message ShutdownRequest {
 
 message ShutdownResponse {
     bool accepted = 1;
+    string message = 2;
+}
+
+// Authentication
+message LoginRequest {
+    string identifier = 1;         // User handle or name
+    string pin = 2;                // PIN (plaintext, server verifies hash)
+}
+
+message LoginResponse {
+    bool success = 1;
+    string message = 2;            // Error message on failure
+    User user = 3;                 // User info on success
+    string session_token = 4;      // Simple token for session (optional, for future use)
+}
+
+message SetUserPinRequest {
+    string user_id = 1;            // UUID or SPEC-ID of user
+    string current_pin = 2;        // Current PIN (if changing)
+    string new_pin = 3;            // New PIN to set
+}
+
+message SetUserPinResponse {
+    bool success = 1;
     string message = 2;
 }

@@ -1,4 +1,5 @@
 // trace:FR-0273 | ai:claude:high
+// trace:AUTH-0001 | ai:claude:high
 //! Main AIDA Web application using egui
 
 use std::cell::RefCell;
@@ -7,7 +8,116 @@ use std::rc::Rc;
 use egui::{Color32, RichText, ScrollArea, TextEdit, Ui};
 
 use crate::client::AidaClient;
-use crate::proto::*;
+// Use generated proto types for all gRPC operations
+use crate::generated::aida::*;
+
+// Type conversion for aida_gui UI component compatibility
+// Both proto types are generated from the same .proto file but are distinct Rust types
+mod gui_convert {
+    use super::*;
+
+    /// Convert generated Timestamp to aida_gui Timestamp
+    fn to_gui_timestamp(ts: &Option<Timestamp>) -> Option<aida_gui::storage::proto::Timestamp> {
+        ts.as_ref().map(|t| aida_gui::storage::proto::Timestamp {
+            seconds: t.seconds,
+            nanos: t.nanos,
+        })
+    }
+
+    /// Convert generated Relationship to aida_gui Relationship
+    fn to_gui_relationship(r: &Relationship) -> aida_gui::storage::proto::Relationship {
+        aida_gui::storage::proto::Relationship {
+            target_id: r.target_id.clone(),
+            target_spec_id: r.target_spec_id.clone(),
+            rel_type: r.rel_type,
+            custom_type_name: r.custom_type_name.clone(),
+            created_at: to_gui_timestamp(&r.created_at),
+            created_by: r.created_by.clone(),
+        }
+    }
+
+    /// Convert generated CommentReaction to aida_gui CommentReaction
+    fn to_gui_reaction(r: &CommentReaction) -> aida_gui::storage::proto::CommentReaction {
+        aida_gui::storage::proto::CommentReaction {
+            reaction: r.reaction.clone(),
+            author: r.author.clone(),
+            added_at: to_gui_timestamp(&r.added_at),
+        }
+    }
+
+    /// Convert generated Comment to aida_gui Comment
+    fn to_gui_comment(c: &Comment) -> aida_gui::storage::proto::Comment {
+        aida_gui::storage::proto::Comment {
+            id: c.id.clone(),
+            content: c.content.clone(),
+            author: c.author.clone(),
+            created_at: to_gui_timestamp(&c.created_at),
+            modified_at: to_gui_timestamp(&c.modified_at),
+            parent_id: c.parent_id.clone(),
+            reactions: c.reactions.iter().map(to_gui_reaction).collect(),
+        }
+    }
+
+    /// Convert generated HistoryEntry to aida_gui HistoryEntry
+    fn to_gui_history_entry(h: &HistoryEntry) -> aida_gui::storage::proto::HistoryEntry {
+        aida_gui::storage::proto::HistoryEntry {
+            id: h.id.clone(),
+            author: h.author.clone(),
+            timestamp: to_gui_timestamp(&h.timestamp),
+            changes: h.changes.iter().map(|c| aida_gui::storage::proto::FieldChange {
+                field_name: c.field_name.clone(),
+                old_value: c.old_value.clone(),
+                new_value: c.new_value.clone(),
+            }).collect(),
+        }
+    }
+
+    /// Convert generated UrlLink to aida_gui UrlLink
+    fn to_gui_url_link(u: &UrlLink) -> aida_gui::storage::proto::UrlLink {
+        aida_gui::storage::proto::UrlLink {
+            id: u.id.clone(),
+            url: u.url.clone(),
+            title: u.title.clone(),
+            description: u.description.clone(),
+            added_at: to_gui_timestamp(&u.added_at),
+            added_by: u.added_by.clone(),
+        }
+    }
+
+    /// Convert generated Requirement to aida_gui Requirement for UI components
+    pub fn to_gui_requirement(req: &Requirement) -> aida_gui::storage::proto::Requirement {
+        aida_gui::storage::proto::Requirement {
+            id: req.id.clone(),
+            spec_id: req.spec_id.clone(),
+            prefix_override: req.prefix_override.clone(),
+            title: req.title.clone(),
+            description: req.description.clone(),
+            status: req.status,
+            priority: req.priority,
+            owner: req.owner.clone(),
+            feature: req.feature.clone(),
+            created_at: to_gui_timestamp(&req.created_at),
+            created_by: req.created_by.clone(),
+            modified_at: to_gui_timestamp(&req.modified_at),
+            req_type: req.req_type,
+            dependency_ids: req.dependency_ids.clone(),
+            tags: req.tags.clone(),
+            relationships: req.relationships.iter().map(to_gui_relationship).collect(),
+            comments: req.comments.iter().map(to_gui_comment).collect(),
+            history: req.history.iter().map(to_gui_history_entry).collect(),
+            archived: req.archived,
+            custom_status: req.custom_status.clone(),
+            custom_priority: req.custom_priority.clone(),
+            custom_fields: req.custom_fields.clone(),
+            urls: req.urls.iter().map(to_gui_url_link).collect(),
+        }
+    }
+
+    /// Convert Vec<Comment> to aida_gui Comments for comment_list
+    pub fn to_gui_comments(comments: &[Comment]) -> Vec<aida_gui::storage::proto::Comment> {
+        comments.iter().map(to_gui_comment).collect()
+    }
+}
 
 // Import shared UI components from aida-gui
 // These functions provide consistent rendering between native and web
@@ -34,10 +144,21 @@ pub enum ConnectionState {
     Error(String),
 }
 
+/// Authentication state
+#[derive(Default, Clone)]
+pub enum AuthState {
+    #[default]
+    NotLoggedIn,
+    LoggingIn,
+    LoggedIn(User), // Logged in user (from generated aida proto)
+    Error(String),
+}
+
 /// Current view in the application
 #[derive(Default, Clone, PartialEq)]
 pub enum View {
     #[default]
+    Login, // Show login screen first
     List,
     Detail,
     Create,
@@ -51,6 +172,7 @@ pub enum AsyncResult {
     Search(Result<Vec<Requirement>, String>),
     Created(Result<CreateRequirementResponse, String>),
     Updated(Result<Requirement, String>),
+    Login(Result<LoginResponse, String>),
 }
 
 /// Shared state for async operations
@@ -73,6 +195,12 @@ pub struct AidaWebApp {
 
     // Connection state
     connection_state: ConnectionState,
+
+    // Authentication state
+    auth_state: AuthState,
+    login_identifier: String, // User handle or name for login
+    login_pin: String,        // PIN for login
+    current_user: Option<User>, // Currently logged in user
 
     // Data
     requirements: Vec<Requirement>,
@@ -111,13 +239,26 @@ impl AidaWebApp {
         log::info!("AIDA Web App initialized");
         log::info!("Server URL: {}", server_url);
 
+        // Check for saved session in local storage
+        let saved_user = load_session_from_storage();
+        let (initial_view, auth_state, current_user) = if let Some(user) = saved_user {
+            log::info!("Restored session for user: {}", user.name);
+            (View::List, AuthState::LoggedIn(user.clone()), Some(user))
+        } else {
+            (View::Login, AuthState::NotLoggedIn, None)
+        };
+
         let mut app = Self {
             server_url,
             connection_state: ConnectionState::Disconnected,
+            auth_state,
+            login_identifier: String::new(),
+            login_pin: String::new(),
+            current_user,
             requirements: Vec::new(),
             store_metadata: None,
             selected_idx: None,
-            current_view: View::List,
+            current_view: initial_view,
             search_query: String::new(),
             search_results: None,
             form_title: String::new(),
@@ -132,8 +273,10 @@ impl AidaWebApp {
             notification: None,
         };
 
-        // Start initial connection
-        app.connect_to_server();
+        // If logged in, start connection; otherwise wait for login
+        if app.current_user.is_some() {
+            app.connect_to_server();
+        }
 
         app
     }
@@ -151,6 +294,44 @@ impl AidaWebApp {
             let result = client.get_store().await;
             shared_state.borrow_mut().pending_result = Some(AsyncResult::Store(result));
         });
+    }
+
+    /// Attempt login with identifier and PIN
+    fn do_login(&mut self) {
+        if self.login_identifier.is_empty() {
+            self.show_notification("Please enter a handle or name");
+            return;
+        }
+
+        self.auth_state = AuthState::LoggingIn;
+        self.is_loading = true;
+
+        let server_url = self.server_url.clone();
+        let identifier = self.login_identifier.clone();
+        let pin = self.login_pin.clone();
+        let shared_state = self.shared_state.clone();
+
+        wasm_bindgen_futures::spawn_local(async move {
+            let mut client = AidaClient::new(&server_url);
+            let result = client.login(identifier, pin).await;
+            shared_state.borrow_mut().pending_result = Some(AsyncResult::Login(result));
+        });
+    }
+
+    /// Logout and clear session
+    fn logout(&mut self) {
+        self.auth_state = AuthState::NotLoggedIn;
+        self.current_user = None;
+        self.login_identifier.clear();
+        self.login_pin.clear();
+        self.current_view = View::Login;
+        self.requirements.clear();
+        self.store_metadata = None;
+        self.connection_state = ConnectionState::Disconnected;
+
+        // Clear saved session
+        clear_session_from_storage();
+        self.show_notification("Logged out");
     }
 
     /// Perform search
@@ -286,6 +467,31 @@ impl AidaWebApp {
                     log::error!("Failed to update: {}", e);
                     self.show_notification(&format!("Error: {}", e));
                 }
+                AsyncResult::Login(Ok(response)) => {
+                    if response.success {
+                        if let Some(user) = response.user {
+                            log::info!("Login successful for: {}", user.name);
+                            self.auth_state = AuthState::LoggedIn(user.clone());
+                            self.current_user = Some(user.clone());
+                            self.login_pin.clear(); // Clear PIN from memory
+                            self.current_view = View::List;
+                            // Save session to local storage
+                            save_session_to_storage(&user);
+                            self.show_notification(&format!("Welcome, {}", user.name));
+                            // Connect to server after login
+                            self.connect_to_server();
+                        }
+                    } else {
+                        log::warn!("Login failed: {}", response.message);
+                        self.auth_state = AuthState::Error(response.message.clone());
+                        self.show_notification(&format!("Login failed: {}", response.message));
+                    }
+                }
+                AsyncResult::Login(Err(e)) => {
+                    log::error!("Login error: {}", e);
+                    self.auth_state = AuthState::Error(e.clone());
+                    self.show_notification(&format!("Login error: {}", e));
+                }
             }
         }
     }
@@ -322,6 +528,8 @@ impl AidaWebApp {
 
     /// Draw the top panel with connection status
     fn draw_top_panel(&mut self, ctx: &egui::Context) {
+        let mut should_logout = false;
+
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.heading(RichText::new("AIDA Web").strong());
@@ -353,6 +561,17 @@ impl AidaWebApp {
                 }
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    // User info and logout
+                    if let Some(ref user) = self.current_user {
+                        if ui.button("Logout").clicked() {
+                            should_logout = true;
+                        }
+                        ui.label(RichText::new(&user.name).strong());
+                        ui.label("@");
+                        ui.label(RichText::new(&user.handle).monospace());
+                        ui.separator();
+                    }
+
                     ui.label(format!("{} requirements", self.requirements.len()));
 
                     if self.is_loading {
@@ -368,6 +587,11 @@ impl AidaWebApp {
                 });
             }
         });
+
+        // Handle logout after UI borrowing is done
+        if should_logout {
+            self.logout();
+        }
     }
 
     /// Draw the left panel with requirements list
@@ -433,8 +657,8 @@ impl AidaWebApp {
 
                         let selected = is_selected || is_search_selected;
 
-                        // Use shared list item component
-                        if requirement_list_item(ui, req, selected, &list_config) {
+                        // Use shared list item component (convert to aida_gui proto type)
+                        if requirement_list_item(ui, &gui_convert::to_gui_requirement(req), selected, &list_config) {
                             // Find the actual index in requirements list
                             if let Some(actual_idx) = self.requirements.iter().position(|r| r.id == req.id) {
                                 self.selected_idx = Some(actual_idx);
@@ -450,6 +674,9 @@ impl AidaWebApp {
     fn draw_central_panel(&mut self, ctx: &egui::Context) {
         egui::CentralPanel::default().show(ctx, |ui| {
             match self.current_view {
+                View::Login => {
+                    self.draw_login_view(ui);
+                }
                 View::List => {
                     ui.centered_and_justified(|ui| {
                         ui.label(RichText::new("Select a requirement from the list").weak());
@@ -465,6 +692,85 @@ impl AidaWebApp {
                     self.draw_edit_view(ui);
                 }
             }
+        });
+    }
+
+    /// Draw the login view
+    fn draw_login_view(&mut self, ui: &mut Ui) {
+        ui.vertical_centered(|ui| {
+            ui.add_space(60.0);
+
+            ui.heading(RichText::new("AIDA").size(48.0).strong());
+            ui.label(RichText::new("AI Design Assistant").weak());
+
+            ui.add_space(40.0);
+
+            // Login form
+            ui.group(|ui| {
+                ui.set_max_width(300.0);
+                ui.vertical_centered(|ui| {
+                    ui.heading("Login");
+                    ui.add_space(16.0);
+
+                    // Error message
+                    if let AuthState::Error(ref msg) = self.auth_state {
+                        ui.colored_label(Color32::from_rgb(255, 100, 100), msg);
+                        ui.add_space(8.0);
+                    }
+
+                    // Handle/Name field
+                    ui.horizontal(|ui| {
+                        ui.label("Handle:");
+                        ui.add_space(8.0);
+                    });
+                    let handle_response = ui.add(
+                        TextEdit::singleline(&mut self.login_identifier)
+                            .hint_text("Enter handle or name")
+                            .desired_width(200.0),
+                    );
+
+                    ui.add_space(8.0);
+
+                    // PIN field
+                    ui.horizontal(|ui| {
+                        ui.label("PIN:");
+                        ui.add_space(8.0);
+                    });
+                    let pin_response = ui.add(
+                        TextEdit::singleline(&mut self.login_pin)
+                            .password(true)
+                            .hint_text("Enter PIN (optional)")
+                            .desired_width(200.0),
+                    );
+
+                    ui.add_space(16.0);
+
+                    // Login button
+                    let is_logging_in = matches!(self.auth_state, AuthState::LoggingIn);
+                    ui.add_enabled_ui(!is_logging_in, |ui| {
+                        if is_logging_in {
+                            ui.horizontal(|ui| {
+                                ui.spinner();
+                                ui.label("Logging in...");
+                            });
+                        } else {
+                            let enter_pressed = (handle_response.lost_focus() || pin_response.lost_focus())
+                                && ui.input(|i| i.key_pressed(egui::Key::Enter));
+
+                            if ui.button(RichText::new("Login").size(16.0)).clicked() || enter_pressed {
+                                self.do_login();
+                            }
+                        }
+                    });
+
+                    ui.add_space(8.0);
+                    ui.label(RichText::new("Enter your handle or name to login.").small().weak());
+                    ui.label(RichText::new("PIN is optional for users without one set.").small().weak());
+                });
+            });
+
+            ui.add_space(20.0);
+            ui.label(RichText::new(format!("Server: {}", self.server_url)).small().weak());
         });
     }
 
@@ -547,8 +853,9 @@ impl AidaWebApp {
                     egui::CollapsingHeader::new(format!("Comments ({})", req.comments.len()))
                         .default_open(true)
                         .show(ui, |ui| {
-                            // Use shared comment list component
-                            comment_list(ui, &req.comments);
+                            // Use shared comment list component (convert to aida_gui proto type)
+                            let gui_comments = gui_convert::to_gui_comments(&req.comments);
+                            comment_list(ui, &gui_comments);
                         });
                 });
 
@@ -672,8 +979,11 @@ impl eframe::App for AidaWebApp {
         }
 
         // Draw UI
-        self.draw_top_panel(ctx);
-        self.draw_left_panel(ctx);
+        // Only show top panel and left panel when logged in
+        if self.current_view != View::Login {
+            self.draw_top_panel(ctx);
+            self.draw_left_panel(ctx);
+        }
         self.draw_central_panel(ctx);
     }
 }
@@ -696,3 +1006,75 @@ fn get_server_url() -> Option<String> {
 
 // Local helper functions (format_status, format_priority, etc.) have been moved to
 // the shared aida_gui::ui module for code reuse between native and web builds
+
+// Session storage constants
+const SESSION_STORAGE_KEY: &str = "aida_session";
+
+/// Load user session from browser local storage
+/// trace:AUTH-0001 | ai:claude:high
+fn load_session_from_storage() -> Option<User> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let window = web_sys::window()?;
+        let storage = window.local_storage().ok()??;
+        let json = storage.get_item(SESSION_STORAGE_KEY).ok()??;
+
+        // Parse stored JSON to User (generated proto User with has_pin field)
+        let parsed: serde_json::Value = serde_json::from_str(&json).ok()?;
+        Some(User {
+            id: parsed.get("id")?.as_str()?.to_string(),
+            spec_id: parsed.get("spec_id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            name: parsed.get("name")?.as_str()?.to_string(),
+            email: parsed.get("email").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            handle: parsed.get("handle")?.as_str()?.to_string(),
+            has_pin: parsed.get("has_pin").and_then(|v| v.as_bool()).unwrap_or(false),
+        })
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        None
+    }
+}
+
+/// Save user session to browser local storage
+/// trace:AUTH-0001 | ai:claude:high
+fn save_session_to_storage(user: &User) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        if let Some(window) = web_sys::window() {
+            if let Ok(Some(storage)) = window.local_storage() {
+                // Serialize user to JSON
+                let json = serde_json::json!({
+                    "id": user.id,
+                    "spec_id": user.spec_id,
+                    "name": user.name,
+                    "email": user.email,
+                    "handle": user.handle,
+                    "has_pin": user.has_pin,
+                });
+                if let Ok(json_str) = serde_json::to_string(&json) {
+                    let _ = storage.set_item(SESSION_STORAGE_KEY, &json_str);
+                    log::debug!("Session saved for user: {}", user.name);
+                }
+            }
+        }
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let _ = user;
+    }
+}
+
+/// Clear user session from browser local storage
+/// trace:AUTH-0001 | ai:claude:high
+fn clear_session_from_storage() {
+    #[cfg(target_arch = "wasm32")]
+    {
+        if let Some(window) = web_sys::window() {
+            if let Ok(Some(storage)) = window.local_storage() {
+                let _ = storage.remove_item(SESSION_STORAGE_KEY);
+                log::debug!("Session cleared");
+            }
+        }
+    }
+}

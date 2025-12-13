@@ -2277,6 +2277,12 @@ pub struct User {
     /// User's handle for @mentions (without the @)
     pub handle: String,
 
+    /// Hashed PIN for simple authentication (SHA-256 hash stored as hex string)
+    /// This is a basic authentication mechanism for web clients.
+    /// For production use, consider a proper auth system (OAuth, JWT, etc.)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pin_hash: Option<String>,
+
     /// When the user was created
     pub created_at: DateTime<Utc>,
 
@@ -2298,6 +2304,7 @@ impl User {
             name,
             email,
             handle,
+            pin_hash: None,
             created_at: Utc::now(),
             archived: false,
             version: 1,
@@ -2312,6 +2319,7 @@ impl User {
             name,
             email,
             handle,
+            pin_hash: None,
             created_at: Utc::now(),
             archived: false,
             version: 1,
@@ -2321,6 +2329,41 @@ impl User {
     /// Returns display name: spec_id if available, otherwise name
     pub fn display_id(&self) -> &str {
         self.spec_id.as_deref().unwrap_or(&self.name)
+    }
+
+    /// Set the user's PIN (stores SHA-256 hash)
+    pub fn set_pin(&mut self, pin: &str) {
+        use sha2::{Sha256, Digest};
+        let mut hasher = Sha256::new();
+        hasher.update(pin.as_bytes());
+        let result = hasher.finalize();
+        self.pin_hash = Some(format!("{:x}", result));
+    }
+
+    /// Verify a PIN against the stored hash
+    /// Returns true if the PIN matches, false otherwise
+    /// Returns false if no PIN is set
+    pub fn verify_pin(&self, pin: &str) -> bool {
+        if let Some(ref stored_hash) = self.pin_hash {
+            use sha2::{Sha256, Digest};
+            let mut hasher = Sha256::new();
+            hasher.update(pin.as_bytes());
+            let result = hasher.finalize();
+            let input_hash = format!("{:x}", result);
+            stored_hash == &input_hash
+        } else {
+            false
+        }
+    }
+
+    /// Check if the user has a PIN set
+    pub fn has_pin(&self) -> bool {
+        self.pin_hash.is_some()
+    }
+
+    /// Clear the user's PIN
+    pub fn clear_pin(&mut self) {
+        self.pin_hash = None;
     }
 }
 

@@ -373,6 +373,7 @@ pub fn user_to_proto(user: &User) -> proto::User {
         name: user.name.clone(),
         email: user.email.clone(),
         handle: user.handle.clone(),
+        has_pin: user.has_pin(),
     }
 }
 

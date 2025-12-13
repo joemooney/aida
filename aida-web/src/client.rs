@@ -7,8 +7,9 @@
 
 use tonic_web_wasm_client::Client;
 
-use crate::proto::requirements_service_client::RequirementsServiceClient;
-use crate::proto::*;
+// Use generated proto types which include gRPC-Web client and auth types
+use crate::generated::aida::requirements_service_client::RequirementsServiceClient;
+use crate::generated::aida::*;
 
 // Re-export shared storage types from aida-gui
 pub use aida_gui::storage::{GrpcStorageClient, proto as shared_proto};
@@ -170,5 +171,42 @@ impl AidaClient {
             .await
             .map(|r| r.into_inner().comment.unwrap_or_default())
             .map_err(|e| format!("Failed to add comment: {}", e))
+    }
+
+    /// Login with user identifier (handle or name) and PIN
+    /// trace:AUTH-0001 | ai:claude:high
+    pub async fn login(
+        &mut self,
+        identifier: String,
+        pin: String,
+    ) -> Result<LoginResponse, String> {
+        log::debug!("Logging in as: {}", identifier);
+        let request = LoginRequest { identifier, pin };
+        self.client
+            .login(request)
+            .await
+            .map(|r| r.into_inner())
+            .map_err(|e| format!("Login failed: {}", e))
+    }
+
+    /// Set or update user PIN
+    /// trace:AUTH-0001 | ai:claude:high
+    pub async fn set_user_pin(
+        &mut self,
+        user_id: String,
+        current_pin: String,
+        new_pin: String,
+    ) -> Result<SetUserPinResponse, String> {
+        log::debug!("Setting PIN for user: {}", user_id);
+        let request = SetUserPinRequest {
+            user_id,
+            current_pin,
+            new_pin,
+        };
+        self.client
+            .set_user_pin(request)
+            .await
+            .map(|r| r.into_inner())
+            .map_err(|e| format!("Failed to set PIN: {}", e))
     }
 }

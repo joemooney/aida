@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER NOT NULL
 );
 
-INSERT INTO schema_version (version) VALUES (3);
+INSERT INTO schema_version (version) VALUES (4);
 
 -- Requirements table
 CREATE TABLE IF NOT EXISTS requirements (
@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS users (
     name TEXT NOT NULL,
     email TEXT NOT NULL DEFAULT '',
     handle TEXT NOT NULL,
+    pin_hash TEXT,
     created_at TEXT NOT NULL,
     archived INTEGER NOT NULL DEFAULT 0,
     version INTEGER NOT NULL DEFAULT 1

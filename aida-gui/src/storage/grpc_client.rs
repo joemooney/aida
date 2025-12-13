@@ -584,6 +584,7 @@ pub fn proto_to_store(store: &proto::RequirementsStore) -> Result<RequirementsSt
             name: u.name.clone(),
             email: u.email.clone(),
             handle: u.handle.clone(),
+            pin_hash: None, // PIN hash is never sent from server to client for security
             archived: false,
             created_at: chrono::Utc::now(),
             version: 0,

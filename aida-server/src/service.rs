@@ -744,4 +744,115 @@ impl RequirementsService for AidaService {
             message: format!("Shutdown initiated with {}s timeout", req.timeout_seconds),
         }))
     }
+
+    // ========================================================================
+    // Authentication
+    // ========================================================================
+
+    async fn login(
+        &self,
+        request: Request<proto::LoginRequest>,
+    ) -> Result<Response<proto::LoginResponse>, Status> {
+        let req = request.into_inner();
+        let store = self.state.store.read().await;
+
+        // Find user by handle or name
+        let user = store.users.iter().find(|u| {
+            u.handle.eq_ignore_ascii_case(&req.identifier) ||
+            u.name.eq_ignore_ascii_case(&req.identifier) ||
+            u.spec_id.as_ref().map(|s| s.eq_ignore_ascii_case(&req.identifier)).unwrap_or(false)
+        });
+
+        match user {
+            Some(user) => {
+                // Check if user has a PIN set
+                if !user.has_pin() {
+                    // No PIN set - allow login (first time login)
+                    tracing::info!("User {} logged in (no PIN required)", user.handle);
+                    Ok(Response::new(proto::LoginResponse {
+                        success: true,
+                        message: "Login successful (no PIN set)".to_string(),
+                        user: Some(user_to_proto(user)),
+                        session_token: String::new(), // Future: generate session token
+                    }))
+                } else if user.verify_pin(&req.pin) {
+                    // PIN verified
+                    tracing::info!("User {} logged in with PIN", user.handle);
+                    Ok(Response::new(proto::LoginResponse {
+                        success: true,
+                        message: "Login successful".to_string(),
+                        user: Some(user_to_proto(user)),
+                        session_token: String::new(), // Future: generate session token
+                    }))
+                } else {
+                    // PIN incorrect
+                    tracing::warn!("Failed login attempt for user {}", user.handle);
+                    Ok(Response::new(proto::LoginResponse {
+                        success: false,
+                        message: "Invalid PIN".to_string(),
+                        user: None,
+                        session_token: String::new(),
+                    }))
+                }
+            }
+            None => {
+                tracing::warn!("Login attempt for unknown user: {}", req.identifier);
+                Ok(Response::new(proto::LoginResponse {
+                    success: false,
+                    message: "User not found".to_string(),
+                    user: None,
+                    session_token: String::new(),
+                }))
+            }
+        }
+    }
+
+    async fn set_user_pin(
+        &self,
+        request: Request<proto::SetUserPinRequest>,
+    ) -> Result<Response<proto::SetUserPinResponse>, Status> {
+        let req = request.into_inner();
+        let mut store = self.state.store.write().await;
+
+        // Find user by UUID or SPEC-ID
+        let user_idx = store.users.iter().position(|u| {
+            u.id.to_string() == req.user_id ||
+            u.spec_id.as_ref().map(|s| s == &req.user_id).unwrap_or(false) ||
+            u.handle.eq_ignore_ascii_case(&req.user_id)
+        });
+
+        match user_idx {
+            Some(idx) => {
+                let user = &store.users[idx];
+
+                // If user has an existing PIN, verify current PIN
+                if user.has_pin() {
+                    if !user.verify_pin(&req.current_pin) {
+                        return Ok(Response::new(proto::SetUserPinResponse {
+                            success: false,
+                            message: "Current PIN is incorrect".to_string(),
+                        }));
+                    }
+                }
+
+                // Set new PIN
+                store.users[idx].set_pin(&req.new_pin);
+
+                drop(store);
+                self.state.save().await?;
+
+                tracing::info!("PIN set for user {}", req.user_id);
+                Ok(Response::new(proto::SetUserPinResponse {
+                    success: true,
+                    message: "PIN set successfully".to_string(),
+                }))
+            }
+            None => {
+                Ok(Response::new(proto::SetUserPinResponse {
+                    success: false,
+                    message: "User not found".to_string(),
+                }))
+            }
+        }
+    }
 }

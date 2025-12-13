@@ -5,12 +5,19 @@
 //! to the AIDA server via gRPC-Web protocol.
 //!
 //! ## Architecture
-//! This crate uses shared proto types and UI components from `aida-gui`:
-//! - `proto` - Re-exported from `aida_gui::storage::proto` for type compatibility
-//! - `ui` - Shared UI components for consistent rendering
+//! This crate uses two sets of proto types:
+//! - `proto` - Re-exported from `aida_gui::storage::proto` for UI component compatibility
+//! - `generated` - Web-specific generated proto with gRPC-Web client and auth types
 
 pub mod app;
 pub mod client;
+
+/// Generated proto types with gRPC-Web client support
+pub mod generated {
+    pub mod aida {
+        include!("generated/aida.rs");
+    }
+}
 
 /// Re-export proto types from aida-gui for type compatibility with shared UI components
 pub use aida_gui::storage::proto;

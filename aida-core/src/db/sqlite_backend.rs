@@ -19,8 +19,8 @@ use crate::models::{
 
 use super::traits::{BackendType, DatabaseBackend};
 
-/// Current schema version - updated to 3 for trace_links and implementation_info
-const SCHEMA_VERSION: i32 = 3;
+/// Current schema version - updated to 4 for pin_hash in users
+const SCHEMA_VERSION: i32 = 4;
 
 /// SQLite backend implementation
 pub struct SqliteBackend {
@@ -133,6 +133,26 @@ impl SqliteBackend {
 
             // Ensure schema version is updated even if some ALTERs failed
             let _ = conn.execute("UPDATE schema_version SET version = 3", []);
+        }
+
+        if from_version < 4 {
+            // Migration from v3 to v4: Add pin_hash column to users table
+            // trace:AUTH-0001 | ai:claude:high
+            conn.execute_batch(
+                r#"
+                -- Add pin_hash column for simple user authentication
+                ALTER TABLE users ADD COLUMN pin_hash TEXT;
+
+                -- Update schema version
+                UPDATE schema_version SET version = 4;
+                "#,
+            ).unwrap_or_else(|e| {
+                // Column may already exist, ignore those errors
+                eprintln!("Note: Some v4 migration columns may already exist: {}", e);
+            });
+
+            // Ensure schema version is updated even if ALTER failed
+            let _ = conn.execute("UPDATE schema_version SET version = 4", []);
         }
 
         Ok(())
@@ -368,7 +388,7 @@ impl SqliteBackend {
     /// Load users from database
     fn load_users(&self, conn: &Connection) -> Result<Vec<User>> {
         let mut stmt = conn.prepare(
-            "SELECT id, spec_id, name, email, handle, created_at, archived, version FROM users"
+            "SELECT id, spec_id, name, email, handle, pin_hash, created_at, archived, version FROM users"
         )?;
 
         let rows = stmt.query_map([], |row| {
@@ -377,15 +397,16 @@ impl SqliteBackend {
             let name: String = row.get(2)?;
             let email: String = row.get(3)?;
             let handle: String = row.get(4)?;
-            let created_at_str: String = row.get(5)?;
-            let archived: bool = row.get(6)?;
-            let version: i64 = row.get(7)?;
-            Ok((id_str, spec_id, name, email, handle, created_at_str, archived, version))
+            let pin_hash: Option<String> = row.get(5)?;
+            let created_at_str: String = row.get(6)?;
+            let archived: bool = row.get(7)?;
+            let version: i64 = row.get(8)?;
+            Ok((id_str, spec_id, name, email, handle, pin_hash, created_at_str, archived, version))
         })?;
 
         let mut users = Vec::new();
         for row_result in rows {
-            let (id_str, spec_id, name, email, handle, created_at_str, archived, version) = row_result?;
+            let (id_str, spec_id, name, email, handle, pin_hash, created_at_str, archived, version): (String, Option<String>, String, String, String, Option<String>, String, bool, i64) = row_result?;
             let id = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4());
             let created_at = chrono::DateTime::parse_from_rfc3339(&created_at_str)
                 .map(|dt| dt.with_timezone(&chrono::Utc))
@@ -397,6 +418,7 @@ impl SqliteBackend {
                 name,
                 email,
                 handle,
+                pin_hash,
                 created_at,
                 archived,
                 version,
@@ -604,14 +626,15 @@ impl SqliteBackend {
     /// Save a user to the database
     fn save_user(&self, conn: &Connection, user: &User) -> Result<()> {
         conn.execute(
-            "INSERT OR REPLACE INTO users (id, spec_id, name, email, handle, created_at, archived, version)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT OR REPLACE INTO users (id, spec_id, name, email, handle, pin_hash, created_at, archived, version)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 user.id.to_string(),
                 user.spec_id,
                 user.name,
                 user.email,
                 user.handle,
+                user.pin_hash,
                 user.created_at.to_rfc3339(),
                 user.archived,
                 user.version,
@@ -1004,7 +1027,7 @@ impl DatabaseBackend for SqliteBackend {
         let conn = self.conn.lock().unwrap();
 
         conn.query_row(
-            "SELECT id, spec_id, name, email, handle, created_at, archived, version FROM users WHERE id = ?1",
+            "SELECT id, spec_id, name, email, handle, pin_hash, created_at, archived, version FROM users WHERE id = ?1",
             [id.to_string()],
             |row| {
                 let id_str: String = row.get(0)?;
@@ -1012,9 +1035,10 @@ impl DatabaseBackend for SqliteBackend {
                 let name: String = row.get(2)?;
                 let email: String = row.get(3)?;
                 let handle: String = row.get(4)?;
-                let created_at_str: String = row.get(5)?;
-                let archived: bool = row.get(6)?;
-                let version: i64 = row.get(7)?;
+                let pin_hash: Option<String> = row.get(5)?;
+                let created_at_str: String = row.get(6)?;
+                let archived: bool = row.get(7)?;
+                let version: i64 = row.get(8)?;
 
                 let id = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4());
                 let created_at = chrono::DateTime::parse_from_rfc3339(&created_at_str)
@@ -1027,6 +1051,7 @@ impl DatabaseBackend for SqliteBackend {
                     name,
                     email,
                     handle,
+                    pin_hash,
                     created_at,
                     archived,
                     version,
