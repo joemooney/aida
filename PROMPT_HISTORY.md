@@ -1684,3 +1684,60 @@ A chronological record of development sessions and changes made to the Requireme
   http://localhost:8088
   ```
 - **Status**: Complete - WASM build compiles and serves successfully
+
+### PostgreSQL Database Backend (2025-12-13)
+- **Prompt**: Add PostgreSQL as database backend option alongside SQLite and YAML
+- **Requirement**: FR-0316
+- **Goal**: Enable enterprise-grade PostgreSQL deployments for multi-user scenarios
+- **Implementation**:
+  1. **Dependencies** (Cargo.toml):
+     - Added `postgres` crate with UUID, chrono, serde_json features
+     - Added `r2d2` and `r2d2_postgres` for connection pooling
+     - New feature flag: `postgres` in aida-core
+  2. **BackendType enum** (traits.rs):
+     - Added `BackendType::Postgres` variant
+     - Updated Display implementation
+  3. **Schema** (postgres_schema.sql):
+     - PostgreSQL-native schema with JSONB columns
+     - TIMESTAMPTZ for timestamps, UUID native type
+     - Identical table structure to SQLite
+  4. **PostgresBackend** (postgres_backend.rs):
+     - ~1000 line implementation
+     - r2d2 connection pooling (max 10 connections)
+     - GenericClient trait for transaction support
+     - Full CRUD operations with optimistic locking
+     - All trait methods implemented
+  5. **Factory function** (mod.rs):
+     - Auto-detect `postgres://` connection strings
+     - Feature-gated instantiation
+  6. **Migration functions** (migration.rs):
+     - `migrate_to_postgres()` - any backend to PostgreSQL
+     - `migrate_from_postgres()` - PostgreSQL to any backend
+  7. **CLI support** (main.rs, cli.rs):
+     - `aida db migrate --from <format> --to postgres --output <conn_string>`
+     - `aida db info` shows PostgreSQL-specific info
+     - Direct usage: `aida --file "postgres://..." list`
+- **Key Files Modified**:
+  - `Cargo.toml` - workspace dependencies
+  - `aida-core/Cargo.toml` - postgres feature
+  - `aida-core/src/db/traits.rs` - BackendType::Postgres
+  - `aida-core/src/db/mod.rs` - factory function
+  - `aida-core/src/db/postgres_backend.rs` - NEW (1030 lines)
+  - `aida-core/src/db/postgres_schema.sql` - NEW (92 lines)
+  - `aida-core/src/db/migration.rs` - postgres migrations
+  - `aida-core/src/lib.rs` - re-exports
+  - `aida-cli/Cargo.toml` - enable postgres feature
+  - `aida-cli/src/cli.rs` - migrate command update
+  - `aida-cli/src/main.rs` - handle postgres migrations
+- **Usage**:
+  ```bash
+  # Migrate to PostgreSQL
+  aida db migrate --from sqlite --to postgres --output "postgres://user:pass@localhost:5432/aida"
+
+  # Use PostgreSQL directly
+  aida --file "postgres://user:pass@localhost:5432/aida" list
+
+  # Show database info
+  aida --file "postgres://..." db info
+  ```
+- **Status**: Complete - compiles successfully

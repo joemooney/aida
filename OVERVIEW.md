@@ -145,7 +145,7 @@ Define connections between requirements:
 
 - **Language**: Rust
 - **GUI Framework**: egui (cross-platform, native and WASM)
-- **Storage**: YAML (serde_yaml), SQLite (rusqlite)
+- **Storage**: YAML (serde_yaml), SQLite (rusqlite), PostgreSQL (postgres, r2d2)
 - **CLI Framework**: clap
 - **Interactive Prompts**: inquire
 - **gRPC/RPC**: tonic, prost (Protocol Buffers)
@@ -172,8 +172,15 @@ Requirements are stored using a pluggable backend system:
   - Updates with stale versions are rejected with conflict details
   - Store-level `store_version` for detecting any external modifications
 
+### PostgreSQL Backend (FR-0316)
+- Enterprise-grade database for multi-user/team deployments
+- Connection pooling via r2d2 (max 10 connections)
+- Native JSONB storage for complex fields (relationships, comments, history)
+- Optimistic locking with version columns
+- Connection string format: `postgres://user:password@host:port/database`
+
 ### Migration & Export
-- Migrate between YAML and SQLite formats
+- Migrate between YAML, SQLite, and PostgreSQL formats
 - JSON import/export for interoperability
 
 ## Getting Started
@@ -212,6 +219,10 @@ aida-gui --server localhost:50051          # Connect to remote server
 aida db info                              # Show database info and statistics
 aida db migrate --from yaml --to sqlite   # Migrate YAML to SQLite
 aida db migrate --from sqlite --to yaml   # Export SQLite back to YAML
+aida db migrate --from sqlite --to postgres --output "postgres://user:pass@host:5432/db"
+
+# Use PostgreSQL directly
+aida --file "postgres://user:pass@localhost:5432/aida" list
 
 # Open user guide
 aida user-guide                   # Open in browser (light mode)

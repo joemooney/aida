@@ -9,6 +9,8 @@ description = "Core library for AIDA requirements management - shared between CL
 default = ["native"]
 # Native platform features - file system, SQLite, etc.
 native = ["rusqlite", "fs2", "dirs"]
+# PostgreSQL database backend
+postgres = ["dep:postgres", "dep:r2d2", "dep:r2d2_postgres"]
 
 [dependencies]
 # Core dependencies (all platforms)
@@ -28,6 +30,11 @@ sha2 = "0.10"  # For PIN hashing
 dirs = { workspace = true, optional = true }
 fs2 = { workspace = true, optional = true }
 rusqlite = { workspace = true, optional = true }
+
+# PostgreSQL dependencies (optional)
+postgres = { workspace = true, optional = true }
+r2d2 = { workspace = true, optional = true }
+r2d2_postgres = { workspace = true, optional = true }
 
 # WASM-specific dependencies (uuid needs js feature for randomness)
 [target.'cfg(target_arch = "wasm32")'.dependencies]

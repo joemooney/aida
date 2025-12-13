@@ -98,6 +98,10 @@ pub use db::{
     YamlBackend, SqliteBackend, create_backend, open_or_create,
     migrate_yaml_to_sqlite, migrate_sqlite_to_yaml, export_to_json, import_from_json,
 };
+#[cfg(feature = "postgres")]
+pub use db::PostgresBackend;
+#[cfg(all(feature = "native", feature = "postgres"))]
+pub use db::{migrate_to_postgres, migrate_from_postgres};
 pub use import::{
     ImportConfig, ImportIssue, ImportIssueType, ImportMergeMode, ImportSummary, ImportValidation,
     IssueResolution, RawImportStore, create_backup, execute_import, validate_import_content,

@@ -1566,36 +1566,96 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
             }
         }
         DbCommand::Migrate { from, to, output, force } => {
-            // trace:REQ-0231 | ai:claude:high
-            let source_ext = match from.to_lowercase().as_str() {
+            // trace:REQ-0231,FR-0316 | ai:claude:high
+            use aida_core::create_backend;
+
+            let source_format = match from.to_lowercase().as_str() {
                 "yaml" | "yml" => "yaml",
-                "sqlite" | "db" => "db",
+                "sqlite" | "db" => "sqlite",
+                "postgres" | "postgresql" | "pg" => "postgres",
                 _ => {
-                    println!("{} Invalid source format '{}'. Use 'yaml' or 'sqlite'.", "!".red(), from);
+                    println!("{} Invalid source format '{}'. Use 'yaml', 'sqlite', or 'postgres'.", "!".red(), from);
                     return Ok(());
                 }
             };
 
-            let target_ext = match to.to_lowercase().as_str() {
+            let target_format = match to.to_lowercase().as_str() {
                 "yaml" | "yml" => "yaml",
-                "sqlite" | "db" => "db",
+                "sqlite" | "db" => "sqlite",
+                "postgres" | "postgresql" | "pg" => "postgres",
                 _ => {
-                    println!("{} Invalid target format '{}'. Use 'yaml' or 'sqlite'.", "!".red(), to);
+                    println!("{} Invalid target format '{}'. Use 'yaml', 'sqlite', or 'postgres'.", "!".red(), to);
                     return Ok(());
                 }
             };
 
-            if source_ext == target_ext {
+            if source_format == target_format {
                 println!("{} Source and target formats are the same.", "!".yellow());
                 return Ok(());
             }
 
-            // Determine output path
-            let target_path = output.clone().unwrap_or_else(|| {
-                requirements_path.with_extension(target_ext)
-            });
+            // Handle PostgreSQL migrations
+            if target_format == "postgres" {
+                let conn_string = output.as_deref().ok_or_else(|| {
+                    anyhow::anyhow!("PostgreSQL migration requires --output with a connection string (e.g., postgres://user:pass@host:5432/db)")
+                })?;
 
-            // Check if target exists
+                println!("Migrating from {} to PostgreSQL...", requirements_path.display());
+
+                let source_backend = create_backend(requirements_path, None)?;
+                let count = aida_core::migrate_to_postgres(source_backend.as_ref(), conn_string)?;
+
+                println!(
+                    "{} Successfully migrated {} requirements to PostgreSQL",
+                    "✓".green(),
+                    count
+                );
+                return Ok(());
+            }
+
+            if source_format == "postgres" {
+                let conn_string = requirements_path.to_string_lossy();
+                if !conn_string.starts_with("postgres://") && !conn_string.starts_with("postgresql://") {
+                    println!("{} For PostgreSQL source, use --file with a connection string (e.g., postgres://user:pass@host:5432/db)", "!".red());
+                    return Ok(());
+                }
+
+                let target_ext = if target_format == "yaml" { "yaml" } else { "db" };
+                let target_path = output
+                    .as_ref()
+                    .map(|s| std::path::PathBuf::from(s))
+                    .unwrap_or_else(|| std::path::PathBuf::from(format!("requirements.{}", target_ext)));
+
+                if target_path.exists() && !*force {
+                    println!(
+                        "{} Target file '{}' already exists. Use --force to overwrite.",
+                        "!".yellow(),
+                        target_path.display()
+                    );
+                    return Ok(());
+                }
+
+                println!("Migrating from PostgreSQL to {}...", target_path.display());
+
+                let target_backend = create_backend(&target_path, None)?;
+                let count = aida_core::migrate_from_postgres(&conn_string, target_backend.as_ref())?;
+
+                println!(
+                    "{} Successfully migrated {} requirements to '{}'",
+                    "✓".green(),
+                    count,
+                    target_path.display()
+                );
+                return Ok(());
+            }
+
+            // Standard YAML <-> SQLite migration
+            let target_ext = if target_format == "yaml" { "yaml" } else { "db" };
+            let target_path = output
+                .as_ref()
+                .map(|s| std::path::PathBuf::from(s))
+                .unwrap_or_else(|| requirements_path.with_extension(target_ext));
+
             if target_path.exists() && !*force {
                 println!(
                     "{} Target file '{}' already exists. Use --force to overwrite.",
@@ -1605,10 +1665,9 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
                 return Ok(());
             }
 
-            // Perform migration
             println!("Migrating from {} to {}...", requirements_path.display(), target_path.display());
 
-            let count = if source_ext == "yaml" {
+            let count = if source_format == "yaml" {
                 aida_core::migrate_yaml_to_sqlite(requirements_path, &target_path)?
             } else {
                 aida_core::migrate_sqlite_to_yaml(requirements_path, &target_path)?
@@ -1622,7 +1681,7 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
             );
         }
         DbCommand::Info => {
-            // trace:REQ-0231 | ai:claude:high
+            // trace:REQ-0231,FR-0316 | ai:claude:high
             use aida_core::{BackendType, create_backend};
 
             let backend = create_backend(requirements_path, None)?;
@@ -1643,13 +1702,30 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
             println!("Features:     {}", store.features.len());
             println!("Baselines:    {}", store.baselines.len());
 
-            if backend.backend_type() == BackendType::Sqlite {
-                println!();
-                println!("{}", "Concurrency Support".bold());
-                println!("{}", "─".repeat(40));
-                println!("Store Version:  {}", store.store_version);
-                println!("WAL Mode:       Enabled (recommended for concurrent access)");
-                println!("Optimistic Locking: Supported");
+            match backend.backend_type() {
+                BackendType::Sqlite => {
+                    println!();
+                    println!("{}", "Concurrency Support".bold());
+                    println!("{}", "─".repeat(40));
+                    println!("Store Version:  {}", store.store_version);
+                    println!("WAL Mode:       Enabled (recommended for concurrent access)");
+                    println!("Optimistic Locking: Supported");
+                }
+                BackendType::Postgres => {
+                    println!();
+                    println!("{}", "Concurrency Support".bold());
+                    println!("{}", "─".repeat(40));
+                    println!("Store Version:  {}", store.store_version);
+                    println!("Connection Pool: r2d2 (max 10 connections)");
+                    println!("Optimistic Locking: Supported");
+                    println!("JSONB:          Native PostgreSQL JSON storage");
+                }
+                BackendType::Yaml => {
+                    println!();
+                    println!("{}", "Note".bold());
+                    println!("{}", "─".repeat(40));
+                    println!("Consider migrating to SQLite or PostgreSQL for concurrent access.");
+                }
             }
         }
     }

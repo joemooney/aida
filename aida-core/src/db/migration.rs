@@ -142,6 +142,66 @@ pub fn import_json_to_backend<P: AsRef<Path>>(
     backend.save(&store)
 }
 
+/// Migrates data from any backend to PostgreSQL
+///
+/// # Arguments
+/// * `source` - The source backend (YAML or SQLite)
+/// * `connection_string` - PostgreSQL connection string
+///
+/// # Returns
+/// The number of requirements migrated
+#[cfg(feature = "postgres")]
+pub fn migrate_to_postgres(
+    source: &dyn DatabaseBackend,
+    connection_string: &str,
+) -> Result<usize> {
+    use super::PostgresBackend;
+
+    let postgres_backend = PostgresBackend::new(connection_string)?;
+
+    // Load from source
+    let store = source.load()
+        .context("Failed to load source database")?;
+
+    let req_count = store.requirements.len();
+
+    // Save to PostgreSQL
+    postgres_backend.save(&store)
+        .context("Failed to save to PostgreSQL database")?;
+
+    Ok(req_count)
+}
+
+/// Migrates data from PostgreSQL to another backend
+///
+/// # Arguments
+/// * `connection_string` - PostgreSQL connection string
+/// * `target` - The target backend (YAML or SQLite)
+///
+/// # Returns
+/// The number of requirements migrated
+#[cfg(feature = "postgres")]
+pub fn migrate_from_postgres(
+    connection_string: &str,
+    target: &dyn DatabaseBackend,
+) -> Result<usize> {
+    use super::PostgresBackend;
+
+    let postgres_backend = PostgresBackend::new(connection_string)?;
+
+    // Load from PostgreSQL
+    let store = postgres_backend.load()
+        .context("Failed to load PostgreSQL database")?;
+
+    let req_count = store.requirements.len();
+
+    // Save to target
+    target.save(&store)
+        .context("Failed to save to target database")?;
+
+    Ok(req_count)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

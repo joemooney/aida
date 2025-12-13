@@ -10,7 +10,7 @@ name = "aida"
 path = "src/main.rs"
 
 [dependencies]
-aida-core = { path = "../aida-core" }
+aida-core = { path = "../aida-core", features = ["postgres"] }
 
 # CLI-specific dependencies
 clap = { workspace = true }

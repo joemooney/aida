@@ -1,0 +1,1030 @@
+//! PostgreSQL database storage backend
+//!
+//! This backend stores requirements data in a PostgreSQL database,
+//! providing scalability, concurrent access, and enterprise database features.
+//!
+//! # Connection String Format
+//!
+//! ```text
+//! postgres://user:password@host:port/database
+//! ```
+//!
+//! # Example
+//!
+//! ```ignore
+//! use aida_core::db::PostgresBackend;
+//!
+//! let backend = PostgresBackend::new("postgres://user:pass@localhost:5432/aida")?;
+//! let store = backend.load()?;
+//! ```
+
+use anyhow::{Context, Result};
+use postgres::{GenericClient, Row};
+use r2d2::Pool;
+use r2d2_postgres::PostgresConnectionManager;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
+use uuid::Uuid;
+
+use crate::models::{
+    Comment, CustomTypeDefinition, FeatureDefinition, HistoryEntry, IdConfiguration,
+    ImplementationInfo, ReactionDefinition, RelationshipDefinition, Relationship, Requirement,
+    RequirementPriority, RequirementStatus, RequirementType, RequirementsStore, TraceLink,
+    UrlLink, User,
+};
+
+use super::traits::{BackendType, DatabaseBackend, UpdateResult, VersionConflict};
+
+/// Current schema version
+const SCHEMA_VERSION: i32 = 4;
+
+/// PostgreSQL backend implementation with connection pooling
+pub struct PostgresBackend {
+    /// Connection string stored as path for trait compatibility
+    connection_string: PathBuf,
+    /// Connection pool
+    pool: Pool<PostgresConnectionManager<postgres::NoTls>>,
+}
+
+impl PostgresBackend {
+    /// Creates a new PostgreSQL backend from a connection string
+    ///
+    /// Connection string format: `postgres://user:password@host:port/database`
+    pub fn new<S: AsRef<str>>(connection_string: S) -> Result<Self> {
+        let conn_str = connection_string.as_ref();
+
+        let manager = PostgresConnectionManager::new(conn_str.parse()?, postgres::NoTls);
+
+        let pool = Pool::builder()
+            .max_size(10)
+            .build(manager)
+            .context("Failed to create connection pool")?;
+
+        let backend = Self {
+            connection_string: PathBuf::from(conn_str),
+            pool,
+        };
+
+        backend.init_schema()?;
+        Ok(backend)
+    }
+
+    /// Initialize the database schema
+    fn init_schema(&self) -> Result<()> {
+        let mut client = self.pool.get().context("Failed to get connection from pool")?;
+
+        // Check if schema_version table exists
+        let table_exists: bool = client
+            .query_one(
+                "SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'schema_version'
+                )",
+                &[],
+            )?
+            .get(0);
+
+        let current_version: i32 = if table_exists {
+            client
+                .query_opt("SELECT version FROM schema_version LIMIT 1", &[])?
+                .map(|row| row.get(0))
+                .unwrap_or(0)
+        } else {
+            0
+        };
+
+        if current_version == 0 {
+            // Create initial schema
+            client.batch_execute(include_str!("postgres_schema.sql"))?;
+        } else if current_version < SCHEMA_VERSION {
+            // Handle migrations
+            Self::migrate_schema(&mut *client, current_version)?;
+        }
+
+        Ok(())
+    }
+
+    /// Migrate schema from old version to current
+    fn migrate_schema<C: GenericClient>(client: &mut C, from_version: i32) -> Result<()> {
+        if from_version < 2 {
+            client.batch_execute(
+                r#"
+                ALTER TABLE requirements ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;
+                ALTER TABLE requirements ADD COLUMN IF NOT EXISTS custom_priority TEXT;
+                ALTER TABLE requirements ADD COLUMN IF NOT EXISTS ai_evaluation JSONB;
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;
+                ALTER TABLE metadata ADD COLUMN IF NOT EXISTS ai_prompts JSONB NOT NULL DEFAULT '{}';
+                ALTER TABLE metadata ADD COLUMN IF NOT EXISTS baselines JSONB NOT NULL DEFAULT '[]';
+                ALTER TABLE metadata ADD COLUMN IF NOT EXISTS teams JSONB NOT NULL DEFAULT '[]';
+                ALTER TABLE metadata ADD COLUMN IF NOT EXISTS store_version INTEGER NOT NULL DEFAULT 1;
+                UPDATE schema_version SET version = 2;
+                "#,
+            )?;
+        }
+
+        if from_version < 3 {
+            client.batch_execute(
+                r#"
+                ALTER TABLE requirements ADD COLUMN IF NOT EXISTS trace_links JSONB NOT NULL DEFAULT '[]';
+                ALTER TABLE requirements ADD COLUMN IF NOT EXISTS implementation_info JSONB;
+                UPDATE schema_version SET version = 3;
+                "#,
+            )?;
+        }
+
+        if from_version < 4 {
+            client.batch_execute(
+                r#"
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS pin_hash TEXT;
+                UPDATE schema_version SET version = 4;
+                "#,
+            )?;
+        }
+
+        Ok(())
+    }
+
+    /// Serializes complex types to JSON for storage
+    fn to_json<T: serde::Serialize>(value: &T) -> Result<serde_json::Value> {
+        serde_json::to_value(value).context("Failed to serialize to JSON")
+    }
+
+    /// Deserializes complex types from JSON storage
+    fn from_json<T: serde::de::DeserializeOwned>(value: &serde_json::Value) -> Result<T> {
+        serde_json::from_value(value.clone()).context("Failed to deserialize from JSON")
+    }
+
+    /// Converts a RequirementStatus to a string for storage
+    fn status_to_str(status: &RequirementStatus) -> &'static str {
+        match status {
+            RequirementStatus::Draft => "Draft",
+            RequirementStatus::Approved => "Approved",
+            RequirementStatus::Planned => "Planned",
+            RequirementStatus::InProgress => "In Progress",
+            RequirementStatus::Completed => "Completed",
+            RequirementStatus::Rejected => "Rejected",
+        }
+    }
+
+    /// Parses a RequirementStatus from a string
+    fn str_to_status(s: &str) -> RequirementStatus {
+        match s {
+            "Draft" => RequirementStatus::Draft,
+            "Approved" => RequirementStatus::Approved,
+            "Planned" => RequirementStatus::Planned,
+            "In Progress" => RequirementStatus::InProgress,
+            "Completed" => RequirementStatus::Completed,
+            "Rejected" => RequirementStatus::Rejected,
+            _ => RequirementStatus::Draft,
+        }
+    }
+
+    /// Converts a RequirementPriority to a string for storage
+    fn priority_to_str(priority: &RequirementPriority) -> &'static str {
+        match priority {
+            RequirementPriority::High => "High",
+            RequirementPriority::Medium => "Medium",
+            RequirementPriority::Low => "Low",
+        }
+    }
+
+    /// Parses a RequirementPriority from a string
+    fn str_to_priority(s: &str) -> RequirementPriority {
+        match s {
+            "High" => RequirementPriority::High,
+            "Medium" => RequirementPriority::Medium,
+            "Low" => RequirementPriority::Low,
+            _ => RequirementPriority::Medium,
+        }
+    }
+
+    /// Converts a RequirementType to a string for storage
+    fn type_to_str(req_type: &RequirementType) -> &'static str {
+        match req_type {
+            RequirementType::Functional => "Functional",
+            RequirementType::NonFunctional => "NonFunctional",
+            RequirementType::System => "System",
+            RequirementType::User => "User",
+            RequirementType::ChangeRequest => "ChangeRequest",
+            RequirementType::Bug => "Bug",
+            RequirementType::Epic => "Epic",
+            RequirementType::Story => "Story",
+            RequirementType::Task => "Task",
+            RequirementType::Spike => "Spike",
+            RequirementType::Sprint => "Sprint",
+            RequirementType::Folder => "Folder",
+        }
+    }
+
+    /// Parses a RequirementType from a string
+    fn str_to_type(s: &str) -> RequirementType {
+        match s {
+            "Functional" => RequirementType::Functional,
+            "NonFunctional" => RequirementType::NonFunctional,
+            "System" => RequirementType::System,
+            "User" => RequirementType::User,
+            "ChangeRequest" => RequirementType::ChangeRequest,
+            "Bug" => RequirementType::Bug,
+            "Epic" => RequirementType::Epic,
+            "Story" => RequirementType::Story,
+            "Task" => RequirementType::Task,
+            "Spike" => RequirementType::Spike,
+            "Sprint" => RequirementType::Sprint,
+            "Folder" => RequirementType::Folder,
+            _ => RequirementType::Functional,
+        }
+    }
+
+    /// Parse a requirement from a database row
+    fn row_to_requirement(row: &Row) -> Result<Requirement> {
+        let id: Uuid = row.get("id");
+        let spec_id: Option<String> = row.get("spec_id");
+        let prefix_override: Option<String> = row.get("prefix_override");
+        let title: String = row.get("title");
+        let description: String = row.get("description");
+        let status_str: String = row.get("status");
+        let priority_str: String = row.get("priority");
+        let owner: String = row.get("owner");
+        let feature: String = row.get("feature");
+        let created_at: chrono::DateTime<chrono::Utc> = row.get("created_at");
+        let created_by: Option<String> = row.get("created_by");
+        let modified_at: chrono::DateTime<chrono::Utc> = row.get("modified_at");
+        let req_type_str: String = row.get("req_type");
+        let dependencies_json: serde_json::Value = row.get("dependencies");
+        let tags_json: serde_json::Value = row.get("tags");
+        let relationships_json: serde_json::Value = row.get("relationships");
+        let comments_json: serde_json::Value = row.get("comments");
+        let history_json: serde_json::Value = row.get("history");
+        let archived: bool = row.get("archived");
+        let custom_status: Option<String> = row.get("custom_status");
+        let custom_priority: Option<String> = row.get("custom_priority");
+        let custom_fields_json: serde_json::Value = row.get("custom_fields");
+        let urls_json: serde_json::Value = row.get("urls");
+        let trace_links_json: serde_json::Value = row.get("trace_links");
+        let implementation_info_json: Option<serde_json::Value> = row.get("implementation_info");
+        let ai_evaluation_json: Option<serde_json::Value> = row.get("ai_evaluation");
+        let version: i64 = row.get::<_, i32>("version") as i64;
+
+        let status = Self::str_to_status(&status_str);
+        let priority = Self::str_to_priority(&priority_str);
+        let req_type = Self::str_to_type(&req_type_str);
+        let dependencies: Vec<Uuid> = Self::from_json(&dependencies_json).unwrap_or_default();
+        let tags: HashSet<String> = Self::from_json(&tags_json).unwrap_or_default();
+        let relationships: Vec<Relationship> =
+            Self::from_json(&relationships_json).unwrap_or_default();
+        let comments: Vec<Comment> = Self::from_json(&comments_json).unwrap_or_default();
+        let history: Vec<HistoryEntry> = Self::from_json(&history_json).unwrap_or_default();
+        let custom_fields: HashMap<String, String> =
+            Self::from_json(&custom_fields_json).unwrap_or_default();
+        let urls: Vec<UrlLink> = Self::from_json(&urls_json).unwrap_or_default();
+        let trace_links: Vec<TraceLink> = Self::from_json(&trace_links_json).unwrap_or_default();
+        let implementation_info: Option<ImplementationInfo> =
+            implementation_info_json.and_then(|json| Self::from_json(&json).ok());
+        let ai_evaluation = ai_evaluation_json.and_then(|json| Self::from_json(&json).ok());
+
+        Ok(Requirement {
+            id,
+            spec_id,
+            prefix_override,
+            title,
+            description,
+            status,
+            priority,
+            owner,
+            feature,
+            created_at,
+            created_by,
+            modified_at,
+            req_type,
+            dependencies,
+            tags,
+            weight: None,
+            relationships,
+            comments,
+            history,
+            archived,
+            custom_status,
+            custom_priority,
+            custom_fields,
+            urls,
+            attachments: Vec::new(),
+            trace_links,
+            implementation_info,
+            ai_evaluation,
+            version,
+        })
+    }
+
+    /// Save a requirement to the database
+    fn save_requirement<C: GenericClient>(&self, client: &mut C, req: &Requirement) -> Result<()> {
+        let ai_eval_json = req
+            .ai_evaluation
+            .as_ref()
+            .map(|e| Self::to_json(e))
+            .transpose()?;
+        let impl_info_json = req
+            .implementation_info
+            .as_ref()
+            .map(|i| Self::to_json(i))
+            .transpose()?;
+
+        client.execute(
+            "INSERT INTO requirements
+             (id, spec_id, prefix_override, title, description, status, priority, owner, feature,
+              created_at, created_by, modified_at, req_type, dependencies, tags, relationships,
+              comments, history, archived, custom_status, custom_priority, custom_fields, urls,
+              trace_links, implementation_info, ai_evaluation, version)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
+             ON CONFLICT (id) DO UPDATE SET
+              spec_id = EXCLUDED.spec_id,
+              prefix_override = EXCLUDED.prefix_override,
+              title = EXCLUDED.title,
+              description = EXCLUDED.description,
+              status = EXCLUDED.status,
+              priority = EXCLUDED.priority,
+              owner = EXCLUDED.owner,
+              feature = EXCLUDED.feature,
+              created_at = EXCLUDED.created_at,
+              created_by = EXCLUDED.created_by,
+              modified_at = EXCLUDED.modified_at,
+              req_type = EXCLUDED.req_type,
+              dependencies = EXCLUDED.dependencies,
+              tags = EXCLUDED.tags,
+              relationships = EXCLUDED.relationships,
+              comments = EXCLUDED.comments,
+              history = EXCLUDED.history,
+              archived = EXCLUDED.archived,
+              custom_status = EXCLUDED.custom_status,
+              custom_priority = EXCLUDED.custom_priority,
+              custom_fields = EXCLUDED.custom_fields,
+              urls = EXCLUDED.urls,
+              trace_links = EXCLUDED.trace_links,
+              implementation_info = EXCLUDED.implementation_info,
+              ai_evaluation = EXCLUDED.ai_evaluation,
+              version = EXCLUDED.version",
+            &[
+                &req.id,
+                &req.spec_id,
+                &req.prefix_override,
+                &req.title,
+                &req.description,
+                &Self::status_to_str(&req.status),
+                &Self::priority_to_str(&req.priority),
+                &req.owner,
+                &req.feature,
+                &req.created_at,
+                &req.created_by,
+                &req.modified_at,
+                &Self::type_to_str(&req.req_type),
+                &Self::to_json(&req.dependencies)?,
+                &Self::to_json(&req.tags)?,
+                &Self::to_json(&req.relationships)?,
+                &Self::to_json(&req.comments)?,
+                &Self::to_json(&req.history)?,
+                &req.archived,
+                &req.custom_status,
+                &req.custom_priority,
+                &Self::to_json(&req.custom_fields)?,
+                &Self::to_json(&req.urls)?,
+                &Self::to_json(&req.trace_links)?,
+                &impl_info_json,
+                &ai_eval_json,
+                &(req.version as i32),
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Save a user to the database
+    fn save_user<C: GenericClient>(&self, client: &mut C, user: &User) -> Result<()> {
+        client.execute(
+            "INSERT INTO users (id, spec_id, name, email, handle, pin_hash, created_at, archived, version)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             ON CONFLICT (id) DO UPDATE SET
+              spec_id = EXCLUDED.spec_id,
+              name = EXCLUDED.name,
+              email = EXCLUDED.email,
+              handle = EXCLUDED.handle,
+              pin_hash = EXCLUDED.pin_hash,
+              created_at = EXCLUDED.created_at,
+              archived = EXCLUDED.archived,
+              version = EXCLUDED.version",
+            &[
+                &user.id,
+                &user.spec_id,
+                &user.name,
+                &user.email,
+                &user.handle,
+                &user.pin_hash,
+                &user.created_at,
+                &user.archived,
+                &(user.version as i32),
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Save metadata to the database
+    fn save_metadata<C: GenericClient>(
+        &self,
+        client: &mut C,
+        store: &RequirementsStore,
+    ) -> Result<()> {
+        client.execute(
+            "INSERT INTO metadata
+             (id, name, title, description, id_config, features, next_feature_number, next_spec_number,
+              prefix_counters, relationship_definitions, reaction_definitions, meta_counters,
+              type_definitions, allowed_prefixes, restrict_prefixes, ai_prompts, baselines, teams, store_version)
+             VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+             ON CONFLICT (id) DO UPDATE SET
+              name = EXCLUDED.name,
+              title = EXCLUDED.title,
+              description = EXCLUDED.description,
+              id_config = EXCLUDED.id_config,
+              features = EXCLUDED.features,
+              next_feature_number = EXCLUDED.next_feature_number,
+              next_spec_number = EXCLUDED.next_spec_number,
+              prefix_counters = EXCLUDED.prefix_counters,
+              relationship_definitions = EXCLUDED.relationship_definitions,
+              reaction_definitions = EXCLUDED.reaction_definitions,
+              meta_counters = EXCLUDED.meta_counters,
+              type_definitions = EXCLUDED.type_definitions,
+              allowed_prefixes = EXCLUDED.allowed_prefixes,
+              restrict_prefixes = EXCLUDED.restrict_prefixes,
+              ai_prompts = EXCLUDED.ai_prompts,
+              baselines = EXCLUDED.baselines,
+              teams = EXCLUDED.teams,
+              store_version = EXCLUDED.store_version",
+            &[
+                &store.name,
+                &store.title,
+                &store.description,
+                &Self::to_json(&store.id_config)?,
+                &Self::to_json(&store.features)?,
+                &(store.next_feature_number as i32),
+                &(store.next_spec_number as i32),
+                &Self::to_json(&store.prefix_counters)?,
+                &Self::to_json(&store.relationship_definitions)?,
+                &Self::to_json(&store.reaction_definitions)?,
+                &Self::to_json(&store.meta_counters)?,
+                &Self::to_json(&store.type_definitions)?,
+                &Self::to_json(&store.allowed_prefixes)?,
+                &store.restrict_prefixes,
+                &Self::to_json(&store.ai_prompts)?,
+                &Self::to_json(&store.baselines)?,
+                &Self::to_json(&store.teams)?,
+                &(store.store_version as i32),
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Load requirements from database
+    fn load_requirements<C: GenericClient>(&self, client: &mut C) -> Result<Vec<Requirement>> {
+        let rows = client.query(
+            "SELECT id, spec_id, prefix_override, title, description, status, priority,
+                    owner, feature, created_at, created_by, modified_at, req_type,
+                    dependencies, tags, relationships, comments, history, archived,
+                    custom_status, custom_priority, custom_fields, urls, trace_links,
+                    implementation_info, ai_evaluation, version
+             FROM requirements ORDER BY created_at",
+            &[],
+        )?;
+
+        rows.iter().map(Self::row_to_requirement).collect()
+    }
+
+    /// Load users from database
+    fn load_users<C: GenericClient>(&self, client: &mut C) -> Result<Vec<User>> {
+        let rows = client.query(
+            "SELECT id, spec_id, name, email, handle, pin_hash, created_at, archived, version FROM users",
+            &[],
+        )?;
+
+        let mut users = Vec::new();
+        for row in rows {
+            let id: Uuid = row.get("id");
+            let spec_id: Option<String> = row.get("spec_id");
+            let name: String = row.get("name");
+            let email: String = row.get("email");
+            let handle: String = row.get("handle");
+            let pin_hash: Option<String> = row.get("pin_hash");
+            let created_at: chrono::DateTime<chrono::Utc> = row.get("created_at");
+            let archived: bool = row.get("archived");
+            let version: i64 = row.get::<_, i32>("version") as i64;
+
+            users.push(User {
+                id,
+                spec_id,
+                name,
+                email,
+                handle,
+                pin_hash,
+                created_at,
+                archived,
+                version,
+            });
+        }
+
+        Ok(users)
+    }
+
+    /// Load metadata from database
+    fn load_metadata<C: GenericClient>(
+        &self,
+        client: &mut C,
+    ) -> Result<(
+        String,
+        String,
+        String,
+        IdConfiguration,
+        u32,
+        u32,
+        HashMap<String, u32>,
+        HashMap<String, u32>,
+    )> {
+        let row = client.query_opt(
+            "SELECT name, title, description, id_config, next_feature_number, next_spec_number, prefix_counters, meta_counters
+             FROM metadata WHERE id = 1",
+            &[],
+        )?;
+
+        match row {
+            Some(row) => {
+                let name: String = row.get("name");
+                let title: String = row.get("title");
+                let description: String = row.get("description");
+                let id_config_json: serde_json::Value = row.get("id_config");
+                let next_feature_number: i32 = row.get("next_feature_number");
+                let next_spec_number: i32 = row.get("next_spec_number");
+                let prefix_counters_json: serde_json::Value = row.get("prefix_counters");
+                let meta_counters_json: serde_json::Value = row.get("meta_counters");
+
+                let id_config: IdConfiguration =
+                    Self::from_json(&id_config_json).unwrap_or_default();
+                let prefix_counters: HashMap<String, u32> =
+                    Self::from_json(&prefix_counters_json).unwrap_or_default();
+                let meta_counters: HashMap<String, u32> =
+                    Self::from_json(&meta_counters_json).unwrap_or_default();
+
+                Ok((
+                    name,
+                    title,
+                    description,
+                    id_config,
+                    next_feature_number as u32,
+                    next_spec_number as u32,
+                    prefix_counters,
+                    meta_counters,
+                ))
+            }
+            None => Ok((
+                String::new(),
+                String::new(),
+                String::new(),
+                IdConfiguration::default(),
+                1,
+                1,
+                HashMap::new(),
+                HashMap::new(),
+            )),
+        }
+    }
+
+    /// Load features from database
+    fn load_features<C: GenericClient>(&self, client: &mut C) -> Result<Vec<FeatureDefinition>> {
+        let row = client.query_opt("SELECT features FROM metadata WHERE id = 1", &[])?;
+        match row {
+            Some(row) => {
+                let json: serde_json::Value = row.get("features");
+                Self::from_json(&json)
+            }
+            None => Ok(Vec::new()),
+        }
+    }
+
+    /// Load type definitions from database
+    fn load_type_definitions<C: GenericClient>(
+        &self,
+        client: &mut C,
+    ) -> Result<Vec<CustomTypeDefinition>> {
+        let row = client.query_opt("SELECT type_definitions FROM metadata WHERE id = 1", &[])?;
+        match row {
+            Some(row) => {
+                let json: serde_json::Value = row.get("type_definitions");
+                let defs: Vec<CustomTypeDefinition> = Self::from_json(&json)?;
+                if defs.is_empty() {
+                    Ok(crate::models::default_type_definitions())
+                } else {
+                    Ok(defs)
+                }
+            }
+            None => Ok(crate::models::default_type_definitions()),
+        }
+    }
+
+    /// Load relationship definitions from database
+    fn load_relationship_definitions<C: GenericClient>(
+        &self,
+        client: &mut C,
+    ) -> Result<Vec<RelationshipDefinition>> {
+        let row =
+            client.query_opt("SELECT relationship_definitions FROM metadata WHERE id = 1", &[])?;
+        match row {
+            Some(row) => {
+                let json: serde_json::Value = row.get("relationship_definitions");
+                let defs: Vec<RelationshipDefinition> = Self::from_json(&json)?;
+                if defs.is_empty() {
+                    Ok(RelationshipDefinition::defaults())
+                } else {
+                    Ok(defs)
+                }
+            }
+            None => Ok(RelationshipDefinition::defaults()),
+        }
+    }
+
+    /// Load reaction definitions from database
+    fn load_reaction_definitions<C: GenericClient>(
+        &self,
+        client: &mut C,
+    ) -> Result<Vec<ReactionDefinition>> {
+        let row = client.query_opt("SELECT reaction_definitions FROM metadata WHERE id = 1", &[])?;
+        match row {
+            Some(row) => {
+                let json: serde_json::Value = row.get("reaction_definitions");
+                let defs: Vec<ReactionDefinition> = Self::from_json(&json)?;
+                if defs.is_empty() {
+                    Ok(crate::models::default_reaction_definitions())
+                } else {
+                    Ok(defs)
+                }
+            }
+            None => Ok(crate::models::default_reaction_definitions()),
+        }
+    }
+
+    /// Load allowed prefixes from database
+    fn load_allowed_prefixes<C: GenericClient>(
+        &self,
+        client: &mut C,
+    ) -> Result<(Vec<String>, bool)> {
+        let row = client.query_opt(
+            "SELECT allowed_prefixes, restrict_prefixes FROM metadata WHERE id = 1",
+            &[],
+        )?;
+
+        match row {
+            Some(row) => {
+                let json: serde_json::Value = row.get("allowed_prefixes");
+                let restrict: bool = row.get("restrict_prefixes");
+                let prefixes: Vec<String> = Self::from_json(&json).unwrap_or_default();
+                Ok((prefixes, restrict))
+            }
+            None => Ok((Vec::new(), false)),
+        }
+    }
+
+    /// Load store_version from metadata
+    fn load_store_version<C: GenericClient>(&self, client: &mut C) -> Result<i64> {
+        let row = client.query_opt("SELECT store_version FROM metadata WHERE id = 1", &[])?;
+        Ok(row
+            .map(|r| r.get::<_, i32>("store_version") as i64)
+            .unwrap_or(1))
+    }
+
+    /// Load ai_prompts from metadata
+    fn load_ai_prompts<C: GenericClient>(
+        &self,
+        client: &mut C,
+    ) -> Result<crate::models::AiPromptConfig> {
+        let row = client.query_opt("SELECT ai_prompts FROM metadata WHERE id = 1", &[])?;
+        match row {
+            Some(row) => {
+                let json: serde_json::Value = row.get("ai_prompts");
+                Self::from_json(&json).or_else(|_| Ok(crate::models::AiPromptConfig::default()))
+            }
+            None => Ok(crate::models::AiPromptConfig::default()),
+        }
+    }
+
+    /// Load baselines from metadata
+    fn load_baselines<C: GenericClient>(
+        &self,
+        client: &mut C,
+    ) -> Result<Vec<crate::models::Baseline>> {
+        let row = client.query_opt("SELECT baselines FROM metadata WHERE id = 1", &[])?;
+        match row {
+            Some(row) => {
+                let json: serde_json::Value = row.get("baselines");
+                Self::from_json(&json)
+            }
+            None => Ok(Vec::new()),
+        }
+    }
+
+    /// Load teams from metadata
+    fn load_teams<C: GenericClient>(&self, client: &mut C) -> Result<Vec<crate::models::Team>> {
+        let row = client.query_opt("SELECT teams FROM metadata WHERE id = 1", &[])?;
+        match row {
+            Some(row) => {
+                let json: serde_json::Value = row.get("teams");
+                Self::from_json(&json)
+            }
+            None => Ok(Vec::new()),
+        }
+    }
+}
+
+impl DatabaseBackend for PostgresBackend {
+    fn backend_type(&self) -> BackendType {
+        BackendType::Postgres
+    }
+
+    fn path(&self) -> &Path {
+        &self.connection_string
+    }
+
+    fn load(&self) -> Result<RequirementsStore> {
+        let mut client = self
+            .pool
+            .get()
+            .context("Failed to get connection from pool")?;
+
+        let requirements = self.load_requirements(&mut *client)?;
+        let users = self.load_users(&mut *client)?;
+        let (
+            name,
+            title,
+            description,
+            id_config,
+            next_feature_number,
+            next_spec_number,
+            prefix_counters,
+            meta_counters,
+        ) = self.load_metadata(&mut *client)?;
+        let features = self.load_features(&mut *client)?;
+        let type_definitions = self.load_type_definitions(&mut *client)?;
+        let relationship_definitions = self.load_relationship_definitions(&mut *client)?;
+        let reaction_definitions = self.load_reaction_definitions(&mut *client)?;
+        let (allowed_prefixes, restrict_prefixes) = self.load_allowed_prefixes(&mut *client)?;
+        let ai_prompts = self.load_ai_prompts(&mut *client)?;
+        let baselines = self.load_baselines(&mut *client)?;
+        let teams = self.load_teams(&mut *client)?;
+        let store_version = self.load_store_version(&mut *client)?;
+
+        Ok(RequirementsStore {
+            name,
+            title,
+            description,
+            requirements,
+            users,
+            teams,
+            id_config,
+            features,
+            next_feature_number,
+            next_spec_number,
+            prefix_counters,
+            relationship_definitions,
+            reaction_definitions,
+            meta_counters,
+            type_definitions,
+            allowed_prefixes,
+            restrict_prefixes,
+            ai_prompts,
+            baselines,
+            store_version,
+            migrated_to: None,
+        })
+    }
+
+    fn save(&self, store: &RequirementsStore) -> Result<()> {
+        let mut client = self
+            .pool
+            .get()
+            .context("Failed to get connection from pool")?;
+
+        // Use a transaction for atomicity
+        let mut transaction = client.transaction()?;
+
+        // Clear existing data
+        transaction.execute("DELETE FROM requirements", &[])?;
+        transaction.execute("DELETE FROM users", &[])?;
+
+        // Save all requirements
+        for req in &store.requirements {
+            self.save_requirement(&mut transaction, req)?;
+        }
+
+        // Save all users
+        for user in &store.users {
+            self.save_user(&mut transaction, user)?;
+        }
+
+        // Save metadata
+        self.save_metadata(&mut transaction, store)?;
+
+        transaction.commit()?;
+        Ok(())
+    }
+
+    fn update_atomically<F>(&self, update_fn: F) -> Result<RequirementsStore>
+    where
+        F: FnOnce(&mut RequirementsStore),
+    {
+        let mut client = self
+            .pool
+            .get()
+            .context("Failed to get connection from pool")?;
+
+        let mut transaction = client.transaction()?;
+
+        // Load within transaction
+        let requirements = self.load_requirements(&mut transaction)?;
+        let users = self.load_users(&mut transaction)?;
+        let (
+            name,
+            title,
+            description,
+            id_config,
+            next_feature_number,
+            next_spec_number,
+            prefix_counters,
+            meta_counters,
+        ) = self.load_metadata(&mut transaction)?;
+        let features = self.load_features(&mut transaction)?;
+        let type_definitions = self.load_type_definitions(&mut transaction)?;
+        let relationship_definitions = self.load_relationship_definitions(&mut transaction)?;
+        let reaction_definitions = self.load_reaction_definitions(&mut transaction)?;
+        let (allowed_prefixes, restrict_prefixes) = self.load_allowed_prefixes(&mut transaction)?;
+        let ai_prompts = self.load_ai_prompts(&mut transaction)?;
+        let baselines = self.load_baselines(&mut transaction)?;
+        let teams = self.load_teams(&mut transaction)?;
+        let store_version = self.load_store_version(&mut transaction)?;
+
+        let mut store = RequirementsStore {
+            name,
+            title,
+            description,
+            requirements,
+            users,
+            teams,
+            id_config,
+            features,
+            next_feature_number,
+            next_spec_number,
+            prefix_counters,
+            relationship_definitions,
+            reaction_definitions,
+            meta_counters,
+            type_definitions,
+            allowed_prefixes,
+            restrict_prefixes,
+            ai_prompts,
+            baselines,
+            store_version,
+            migrated_to: None,
+        };
+
+        // Apply changes
+        update_fn(&mut store);
+
+        // Clear and save
+        transaction.execute("DELETE FROM requirements", &[])?;
+        transaction.execute("DELETE FROM users", &[])?;
+
+        for req in &store.requirements {
+            self.save_requirement(&mut transaction, req)?;
+        }
+
+        for user in &store.users {
+            self.save_user(&mut transaction, user)?;
+        }
+
+        self.save_metadata(&mut transaction, &store)?;
+
+        transaction.commit()?;
+        Ok(store)
+    }
+
+    fn get_requirement(&self, id: &Uuid) -> Result<Option<Requirement>> {
+        let mut client = self
+            .pool
+            .get()
+            .context("Failed to get connection from pool")?;
+
+        let row = client.query_opt(
+            "SELECT id, spec_id, prefix_override, title, description, status, priority,
+                    owner, feature, created_at, created_by, modified_at, req_type,
+                    dependencies, tags, relationships, comments, history, archived,
+                    custom_status, custom_priority, custom_fields, urls, trace_links,
+                    implementation_info, ai_evaluation, version
+             FROM requirements WHERE id = $1",
+            &[id],
+        )?;
+
+        match row {
+            Some(row) => Ok(Some(Self::row_to_requirement(&row)?)),
+            None => Ok(None),
+        }
+    }
+
+    fn get_requirement_by_spec_id(&self, spec_id: &str) -> Result<Option<Requirement>> {
+        let mut client = self
+            .pool
+            .get()
+            .context("Failed to get connection from pool")?;
+
+        let row = client.query_opt(
+            "SELECT id, spec_id, prefix_override, title, description, status, priority,
+                    owner, feature, created_at, created_by, modified_at, req_type,
+                    dependencies, tags, relationships, comments, history, archived,
+                    custom_status, custom_priority, custom_fields, urls, trace_links,
+                    implementation_info, ai_evaluation, version
+             FROM requirements WHERE spec_id = $1",
+            &[&spec_id],
+        )?;
+
+        match row {
+            Some(row) => Ok(Some(Self::row_to_requirement(&row)?)),
+            None => Ok(None),
+        }
+    }
+
+    fn update_requirement(&self, requirement: &Requirement) -> Result<()> {
+        let mut client = self
+            .pool
+            .get()
+            .context("Failed to get connection from pool")?;
+        self.save_requirement(&mut *client, requirement)
+    }
+
+    fn update_requirement_versioned(&self, requirement: &Requirement) -> Result<UpdateResult> {
+        let mut client = self
+            .pool
+            .get()
+            .context("Failed to get connection from pool")?;
+
+        // Get current version from database
+        let current_version: Option<i32> = client
+            .query_opt(
+                "SELECT version FROM requirements WHERE id = $1",
+                &[&requirement.id],
+            )?
+            .map(|row| row.get("version"));
+
+        match current_version {
+            Some(db_version) => {
+                // Check for version conflict
+                if db_version as i64 != requirement.version {
+                    return Ok(UpdateResult::Conflict(VersionConflict {
+                        id: requirement.id,
+                        expected_version: requirement.version,
+                        current_version: db_version as i64,
+                        display_id: requirement
+                            .spec_id
+                            .clone()
+                            .unwrap_or_else(|| requirement.id.to_string()),
+                    }));
+                }
+
+                // Version matches - update with incremented version
+                let mut updated_req = requirement.clone();
+                updated_req.version = db_version as i64 + 1;
+                self.save_requirement(&mut *client, &updated_req)?;
+                Ok(UpdateResult::Success)
+            }
+            None => {
+                // Requirement doesn't exist - create it
+                self.save_requirement(&mut *client, requirement)?;
+                Ok(UpdateResult::Success)
+            }
+        }
+    }
+
+    fn exists(&self) -> bool {
+        // For PostgreSQL, we check if we can connect and if the schema exists
+        if let Ok(mut client) = self.pool.get() {
+            client
+                .query_opt(
+                    "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'requirements')",
+                    &[],
+                )
+                .ok()
+                .and_then(|row| row.map(|r| r.get::<_, bool>(0)))
+                .unwrap_or(false)
+        } else {
+            false
+        }
+    }
+
+    fn create_if_not_exists(&self) -> Result<()> {
+        // Schema is created in init_schema during construction
+        // Just verify connection works
+        let _client = self
+            .pool
+            .get()
+            .context("Failed to get connection from pool")?;
+        Ok(())
+    }
+}

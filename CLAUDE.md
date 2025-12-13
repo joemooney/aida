@@ -12,11 +12,22 @@ This project uses AIDA for requirements tracking. **Do NOT maintain a separate R
 Requirements database: `requirements.db`
 
 ### Database Storage
-AIDA supports both YAML and SQLite backends:
+AIDA supports three storage backends:
 - **YAML**: Human-readable, git-friendly, good for single-user scenarios
 - **SQLite**: Better for concurrent access (GUI + CLI), optimistic locking
+- **PostgreSQL**: Enterprise-grade, multi-user, native JSONB support
 
-To migrate: `aida db migrate --from yaml --to sqlite`
+To migrate between backends:
+```bash
+aida db migrate --from yaml --to sqlite
+aida db migrate --from sqlite --to postgres --output "postgres://user:pass@host:5432/db"
+aida db migrate --from postgres --to yaml --output requirements.yaml
+```
+
+To use PostgreSQL directly:
+```bash
+aida --file "postgres://user:pass@localhost:5432/aida" list
+```
 
 ### CLI Commands
 ```bash

@@ -50,6 +50,8 @@ pub enum BackendType {
     Yaml,
     /// SQLite database storage
     Sqlite,
+    /// PostgreSQL database storage
+    Postgres,
 }
 
 impl std::fmt::Display for BackendType {
@@ -57,6 +59,7 @@ impl std::fmt::Display for BackendType {
         match self {
             BackendType::Yaml => write!(f, "YAML"),
             BackendType::Sqlite => write!(f, "SQLite"),
+            BackendType::Postgres => write!(f, "PostgreSQL"),
         }
     }
 }
