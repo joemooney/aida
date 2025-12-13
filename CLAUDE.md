@@ -113,6 +113,14 @@ Commit changes with automatic requirement linking:
 - Create commit with requirement references
 - Update linked requirement statuses
 
+### /aida-sync
+Meta-level skill for AIDA template management:
+- Check if templates have been modified and need rebuilding
+- Verify symlink integrity in AIDA repo
+- Check scaffold status in scaffolded projects
+- Ensure CLAUDE.md documents all skills
+- Use after modifying templates to propagate changes
+
 ## Template Architecture (IMPORTANT for AIDA Development)
 
 **This section is critical for developers working on AIDA itself.**

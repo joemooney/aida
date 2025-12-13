@@ -11326,9 +11326,20 @@ requirements:
   status: Completed
   priority: High
   owner: joe
-  feature: Uncategorized
+  feature: 175-Uncategorized
   created_at: 2025-12-13T18:45:27.258903826Z
   modified_at: 2025-12-13T18:45:27.258903826Z
+  req_type: Functional
+- id: 6b55ed68-0975-4dde-83fd-8bce124b364d
+  spec_id: FR-0298
+  title: Template sync skill for AIDA meta-level management
+  description: 'Add /aida-sync slash command and skill for managing template consistency between AIDA source and scaffolded projects. Includes: (1) Detection of AIDA repo vs scaffolded project mode, (2) Symlink integrity verification for AIDA repo, (3) Template-to-binary rebuild reminders, (4) Scaffold status checking for downstream projects, (5) CLAUDE.md documentation verification.'
+  status: Completed
+  priority: Medium
+  owner: joe
+  feature: Uncategorized
+  created_at: 2025-12-13T18:57:55.388731089Z
+  modified_at: 2025-12-13T18:57:55.388731089Z
   req_type: Functional
 users:
 - id: 150164ef-32ed-4d61-8cec-e887ac78cfd7
@@ -11427,8 +11438,8 @@ id_config:
     prefix: SPIKE
     description: Research or investigation task to reduce uncertainty or explore technical approaches
 features: []
-next_feature_number: 175
-next_spec_number: 298
+next_feature_number: 176
+next_spec_number: 299
 prefix_counters: {}
 relationship_definitions:
 - name: parent
