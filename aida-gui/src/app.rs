@@ -2323,6 +2323,13 @@ pub struct UserSettings {
     /// User's personal work queue - ordered list of requirements to work on
     #[serde(default)]
     pub queue: Vec<QueueEntry>,
+    /// Show toast notifications for queue operations (more visible than status bar)
+    #[serde(default = "default_show_queue_toasts")]
+    pub show_queue_toasts: bool,
+}
+
+fn default_show_queue_toasts() -> bool {
+    true // Show toasts for queue operations by default
 }
 
 fn default_font_size() -> f32 {
@@ -2367,6 +2374,7 @@ impl Default for UserSettings {
             db_poll_interval_secs: default_db_poll_interval(),
             db_auto_reload: default_db_auto_reload(),
             queue: Vec::new(),
+            show_queue_toasts: default_show_queue_toasts(),
         }
     }
 }
@@ -6236,6 +6244,25 @@ impl RequirementsApp {
 
             // Request repaint to keep checking the timer
             ctx.request_repaint();
+        }
+    }
+
+    /// Show a queue operation notification (toast or status bar message based on user preference)
+    ///
+    /// # Arguments
+    /// * `message` - The message to display
+    /// * `is_error` - Whether this is an error message (affects color/style)
+    fn show_queue_notification(&mut self, message: String, is_error: bool) {
+        if self.user_settings.show_queue_toasts {
+            // Show toast notification (more visible, centered at bottom of screen)
+            self.toast_message = Some(ToastNotification {
+                message,
+                is_success: !is_error,
+                show_until: Instant::now() + Duration::from_secs(2),
+            });
+        } else {
+            // Show status bar message (less intrusive, at bottom of window)
+            self.message = Some((message, is_error));
         }
     }
 
@@ -14014,9 +14041,10 @@ impl RequirementsApp {
                 self.queue_selected_idx = new_len - 1;
             }
             if let Err(e) = self.user_settings.save() {
-                self.message = Some((format!("Failed to save queue: {}", e), true));
+                self.show_queue_notification(format!("Failed to save queue: {}", e), true);
+            } else {
+                self.show_queue_notification("Removed from queue".to_string(), false);
             }
-            self.message = Some(("Removed from queue".to_string(), false));
         }
 
         // Clamp selection to valid range
@@ -14106,9 +14134,9 @@ impl RequirementsApp {
         if let Some(req_id) = remove_req_id {
             self.user_settings.queue_remove(&req_id);
             if let Err(e) = self.user_settings.save() {
-                self.message = Some((format!("Failed to save queue: {}", e), true));
+                self.show_queue_notification(format!("Failed to save queue: {}", e), true);
             } else {
-                self.message = Some(("Removed from queue".to_string(), false));
+                self.show_queue_notification("Removed from queue".to_string(), false);
             }
         }
 
@@ -21166,6 +21194,7 @@ impl RequirementsApp {
         // Handle selected action
         if let Some(a) = action {
             let mut settings_changed = false;
+            let mut notification_msg: Option<String> = None;
             match a {
                 't' => {
                     self.user_settings.queue_add_top(req_id);
@@ -21175,7 +21204,7 @@ impl RequirementsApp {
                     } else {
                         String::new()
                     };
-                    self.message = Some((format!("Added to top of queue{}", pos_msg), false));
+                    notification_msg = Some(format!("Added to top of queue{}", pos_msg));
                 }
                 'm' => {
                     self.user_settings.queue_add_middle(req_id);
@@ -21185,7 +21214,7 @@ impl RequirementsApp {
                     } else {
                         String::new()
                     };
-                    self.message = Some((format!("Added to middle of queue{}", pos_msg), false));
+                    notification_msg = Some(format!("Added to middle of queue{}", pos_msg));
                 }
                 'b' => {
                     self.user_settings.queue_add_bottom(req_id);
@@ -21195,13 +21224,13 @@ impl RequirementsApp {
                     } else {
                         String::new()
                     };
-                    self.message = Some((format!("Added to bottom of queue{}", pos_msg), false));
+                    notification_msg = Some(format!("Added to bottom of queue{}", pos_msg));
                 }
                 'd' => {
                     if is_in_queue {
                         self.user_settings.queue_remove(&req_id);
                         settings_changed = true;
-                        self.message = Some(("Removed from queue".to_string(), false));
+                        notification_msg = Some("Removed from queue".to_string());
                     }
                 }
                 'v' => {
@@ -21212,7 +21241,10 @@ impl RequirementsApp {
 
             if settings_changed {
                 if let Err(e) = self.user_settings.save() {
-                    self.message = Some((format!("Failed to save queue: {}", e), true));
+                    self.show_queue_notification(format!("Failed to save queue: {}", e), true);
+                } else if let Some(msg) = notification_msg {
+                    // Show success notification only if save succeeded
+                    self.show_queue_notification(msg, false);
                 }
             }
 
@@ -21263,27 +21295,43 @@ impl RequirementsApp {
                                 if was_clicked {
                                     // Handle click same as keyboard
                                     let mut settings_changed = false;
+                                    let mut notification_msg: Option<String> = None;
                                     match *key {
                                         't' => {
                                             self.user_settings.queue_add_top(req_id);
                                             settings_changed = true;
-                                            self.message = Some(("Added to top of queue".to_string(), false));
+                                            let pos_msg = if let Some(pos) = self.user_settings.queue_position(&req_id) {
+                                                format!(" (position {})", pos + 1)
+                                            } else {
+                                                String::new()
+                                            };
+                                            notification_msg = Some(format!("Added to top of queue{}", pos_msg));
                                         }
                                         'm' => {
                                             self.user_settings.queue_add_middle(req_id);
                                             settings_changed = true;
-                                            self.message = Some(("Added to middle of queue".to_string(), false));
+                                            let pos_msg = if let Some(pos) = self.user_settings.queue_position(&req_id) {
+                                                format!(" (position {})", pos + 1)
+                                            } else {
+                                                String::new()
+                                            };
+                                            notification_msg = Some(format!("Added to middle of queue{}", pos_msg));
                                         }
                                         'b' => {
                                             self.user_settings.queue_add_bottom(req_id);
                                             settings_changed = true;
-                                            self.message = Some(("Added to bottom of queue".to_string(), false));
+                                            let pos_msg = if let Some(pos) = self.user_settings.queue_position(&req_id) {
+                                                format!(" (position {})", pos + 1)
+                                            } else {
+                                                String::new()
+                                            };
+                                            notification_msg = Some(format!("Added to bottom of queue{}", pos_msg));
                                         }
                                         'd' => {
                                             if is_in_queue {
                                                 self.user_settings.queue_remove(&req_id);
                                                 settings_changed = true;
-                                                self.message = Some(("Removed from queue".to_string(), false));
+                                                notification_msg = Some("Removed from queue".to_string());
                                             }
                                         }
                                         'v' => {
@@ -21293,7 +21341,9 @@ impl RequirementsApp {
                                     }
                                     if settings_changed {
                                         if let Err(e) = self.user_settings.save() {
-                                            self.message = Some((format!("Failed to save queue: {}", e), true));
+                                            self.show_queue_notification(format!("Failed to save queue: {}", e), true);
+                                        } else if let Some(msg) = notification_msg {
+                                            self.show_queue_notification(msg, false);
                                         }
                                     }
                                     self.show_queue_menu = false;
