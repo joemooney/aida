@@ -184,6 +184,14 @@ pub enum ScaffoldCommand {
         /// Show detailed file comparisons
         #[clap(long, short = 'v')]
         verbose: bool,
+
+        /// Generate HTML report with diffs
+        #[clap(long)]
+        report: bool,
+
+        /// Output file for report (defaults to stdout)
+        #[clap(long, short = 'o')]
+        output: Option<PathBuf>,
     },
 
     /// Preview scaffolding artifacts without applying

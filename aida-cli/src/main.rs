@@ -3268,6 +3268,8 @@ fn handle_scaffold_command(cmd: &ScaffoldCommand, storage: &Storage, db_path: &s
         ScaffoldCommand::Status {
             project_root,
             verbose,
+            report,
+            output,
         } => {
             let store = storage.load()?;
             let root = project_root
@@ -3283,6 +3285,18 @@ fn handle_scaffold_command(cmd: &ScaffoldCommand, storage: &Storage, db_path: &s
 
             let config = ScaffoldConfig::default();
             let status = check_scaffold_status(&store, &root, &config, db_path);
+
+            // Generate HTML report if requested
+            if *report {
+                let html = generate_scaffold_html_report(&store, &root, &config, db_path, &status)?;
+                if let Some(output_path) = output {
+                    std::fs::write(output_path, &html)?;
+                    println!("{} Scaffold report generated: {}", "✓".green(), output_path.display());
+                } else {
+                    println!("{}", html);
+                }
+                return Ok(());
+            }
 
             if status.is_current {
                 println!("{} Scaffold is up to date", "✓".green());
@@ -3801,4 +3815,365 @@ fn print_grep_match(m: &GrepMatch) {
     for ctx_line in &m.context_after {
         println!("  {} {}", field_display.dimmed(), ctx_line.dimmed());
     }
+}
+
+// trace:FR-0315 | ai:claude:high
+/// Generate HTML report for scaffold status with diffs
+fn generate_scaffold_html_report(
+    store: &RequirementsStore,
+    root: &std::path::Path,
+    config: &ScaffoldConfig,
+    db_path: &std::path::Path,
+    status: &aida_core::ScaffoldStatus,
+) -> Result<String> {
+    use std::fmt::Write;
+
+    let mut scaffolder = Scaffolder::with_database(root.to_path_buf(), config.clone(), db_path.to_path_buf());
+    let preview = scaffolder.preview(store);
+
+    let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
+
+    let mut html = String::new();
+
+    // HTML header with inline styles
+    writeln!(html, r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIDA Scaffold Status Report</title>
+    <style>
+        :root {{
+            --bg-primary: #1a1a2e;
+            --bg-secondary: #16213e;
+            --bg-tertiary: #0f3460;
+            --text-primary: #e4e4e7;
+            --text-secondary: #a1a1aa;
+            --accent-green: #22c55e;
+            --accent-yellow: #eab308;
+            --accent-red: #ef4444;
+            --accent-blue: #3b82f6;
+            --border-color: #27272a;
+        }}
+        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        body {{
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: 2rem;
+        }}
+        .container {{ max-width: 1200px; margin: 0 auto; }}
+        header {{
+            background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            border: 1px solid var(--border-color);
+        }}
+        h1 {{ color: var(--accent-blue); font-size: 1.75rem; margin-bottom: 0.5rem; }}
+        .meta {{ color: var(--text-secondary); font-size: 0.875rem; }}
+        .summary {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }}
+        .summary-card {{
+            background: var(--bg-secondary);
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            text-align: center;
+        }}
+        .summary-card .count {{ font-size: 2.5rem; font-weight: bold; }}
+        .summary-card .label {{ color: var(--text-secondary); font-size: 0.875rem; }}
+        .count.green {{ color: var(--accent-green); }}
+        .count.yellow {{ color: var(--accent-yellow); }}
+        .count.red {{ color: var(--accent-red); }}
+        .count.blue {{ color: var(--accent-blue); }}
+        section {{
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+        }}
+        section h2 {{
+            padding: 1rem 1.5rem;
+            background: var(--bg-tertiary);
+            font-size: 1.1rem;
+            border-bottom: 1px solid var(--border-color);
+        }}
+        .file-list {{ list-style: none; }}
+        .file-list li {{
+            padding: 0.75rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.875rem;
+        }}
+        .file-list li:last-child {{ border-bottom: none; }}
+        .file-list .icon {{ margin-right: 0.5rem; }}
+        details {{
+            border-bottom: 1px solid var(--border-color);
+        }}
+        details:last-child {{ border-bottom: none; }}
+        summary {{
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.875rem;
+            background: var(--bg-secondary);
+            transition: background 0.2s;
+        }}
+        summary:hover {{ background: var(--bg-tertiary); }}
+        summary .icon {{ margin-right: 0.5rem; }}
+        .diff {{
+            padding: 1rem 1.5rem;
+            background: #0d1117;
+            overflow-x: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.8rem;
+            line-height: 1.4;
+        }}
+        .diff-line {{ white-space: pre; }}
+        .diff-line.add {{ color: #3fb950; background: rgba(46, 160, 67, 0.15); }}
+        .diff-line.remove {{ color: #f85149; background: rgba(248, 81, 73, 0.15); }}
+        .diff-line.context {{ color: #8b949e; }}
+        .diff-line.header {{ color: #79c0ff; font-weight: bold; }}
+        .status-ok {{ color: var(--accent-green); }}
+        .status-warn {{ color: var(--accent-yellow); }}
+        .status-error {{ color: var(--accent-red); }}
+        .status-info {{ color: var(--accent-blue); }}
+        .empty {{ padding: 2rem; text-align: center; color: var(--text-secondary); }}
+    </style>
+</head>
+<body>
+<div class="container">"#)?;
+
+    // Header
+    writeln!(html, r#"<header>
+    <h1>📊 AIDA Scaffold Status Report</h1>
+    <p class="meta">Project: {} • Generated: {}</p>
+</header>"#, root.display(), timestamp)?;
+
+    // Summary cards
+    writeln!(html, r#"<div class="summary">
+    <div class="summary-card">
+        <div class="count green">{}</div>
+        <div class="label">Matching</div>
+    </div>
+    <div class="summary-card">
+        <div class="count yellow">{}</div>
+        <div class="label">Modified</div>
+    </div>
+    <div class="summary-card">
+        <div class="count red">{}</div>
+        <div class="label">Missing</div>
+    </div>
+    <div class="summary-card">
+        <div class="count blue">{}</div>
+        <div class="label">Extra</div>
+    </div>
+</div>"#,
+        status.matching.len(),
+        status.modified.len(),
+        status.missing.len(),
+        status.extra.len())?;
+
+    // Overall status
+    let overall_status = if status.is_current {
+        r#"<p class="status-ok">✓ Scaffold is up to date</p>"#
+    } else {
+        r#"<p class="status-warn">⚠ Scaffold drift detected</p>"#
+    };
+    writeln!(html, r#"<section><h2>Status</h2><div style="padding: 1rem 1.5rem;">{}</div></section>"#, overall_status)?;
+
+    // Matching files section
+    if !status.matching.is_empty() {
+        writeln!(html, r#"<section>
+    <h2 class="status-ok">✓ Matching Files ({})</h2>
+    <ul class="file-list">"#, status.matching.len())?;
+        for path in &status.matching {
+            writeln!(html, r#"        <li><span class="icon">✓</span>{}</li>"#, path.display())?;
+        }
+        writeln!(html, "    </ul>\n</section>")?;
+    }
+
+    // Modified files section with diffs
+    if !status.modified.is_empty() {
+        writeln!(html, r#"<section>
+    <h2 class="status-warn">~ Modified Files ({})</h2>"#, status.modified.len())?;
+
+        for (path, file_status) in &status.modified {
+            // Get expected content from scaffold preview
+            let expected_content = preview.artifacts.iter()
+                .find(|a| &a.path == path)
+                .map(|a| a.content.as_str())
+                .unwrap_or("");
+
+            // Get actual content from disk
+            let full_path = root.join(path);
+            let actual_content = std::fs::read_to_string(&full_path).unwrap_or_default();
+
+            // Generate diff
+            let diff = generate_unified_diff(path.to_string_lossy().as_ref(), expected_content, &actual_content);
+
+            let status_info = match file_status {
+                FileStatus::Modified { expected_lines, actual_lines } => {
+                    format!(" (expected {} lines, found {})", expected_lines, actual_lines)
+                }
+                _ => String::new(),
+            };
+
+            writeln!(html, r#"    <details>
+        <summary><span class="icon status-warn">~</span>{}{}</summary>
+        <div class="diff">"#, path.display(), status_info)?;
+
+            for line in diff.lines() {
+                let class = if line.starts_with('+') && !line.starts_with("+++") {
+                    "add"
+                } else if line.starts_with('-') && !line.starts_with("---") {
+                    "remove"
+                } else if line.starts_with("@@") || line.starts_with("---") || line.starts_with("+++") {
+                    "header"
+                } else {
+                    "context"
+                };
+                writeln!(html, r#"<div class="diff-line {}">{}</div>"#, class, html_escape(line))?;
+            }
+
+            writeln!(html, "        </div>\n    </details>")?;
+        }
+        writeln!(html, "</section>")?;
+    }
+
+    // Missing files section
+    if !status.missing.is_empty() {
+        writeln!(html, r#"<section>
+    <h2 class="status-error">✗ Missing Files ({})</h2>
+    <ul class="file-list">"#, status.missing.len())?;
+        for path in &status.missing {
+            writeln!(html, r#"        <li><span class="icon status-error">✗</span>{}</li>"#, path.display())?;
+        }
+        writeln!(html, "    </ul>\n</section>")?;
+    }
+
+    // Extra files section
+    if !status.extra.is_empty() {
+        writeln!(html, r#"<section>
+    <h2 class="status-info">+ Extra Files ({})</h2>
+    <ul class="file-list">"#, status.extra.len())?;
+        for path in &status.extra {
+            writeln!(html, r#"        <li><span class="icon status-info">+</span>{}</li>"#, path.display())?;
+        }
+        writeln!(html, "    </ul>\n</section>")?;
+    }
+
+    // Footer
+    writeln!(html, r#"</div>
+</body>
+</html>"#)?;
+
+    Ok(html)
+}
+
+/// Generate a unified diff between expected and actual content
+fn generate_unified_diff(filename: &str, expected: &str, actual: &str) -> String {
+    use std::fmt::Write;
+
+    let expected_lines: Vec<&str> = expected.lines().collect();
+    let actual_lines: Vec<&str> = actual.lines().collect();
+
+    let mut diff = String::new();
+    writeln!(diff, "--- expected/{}", filename).ok();
+    writeln!(diff, "+++ actual/{}", filename).ok();
+
+    // Simple line-by-line diff with context
+    let max_len = expected_lines.len().max(actual_lines.len());
+    let context_size = 3;
+    let mut in_hunk = false;
+    let mut hunk_start_expected = 0;
+    let mut hunk_start_actual = 0;
+    let mut hunk_lines: Vec<String> = Vec::new();
+    let mut last_change = 0;
+
+    for i in 0..max_len {
+        let exp_line = expected_lines.get(i).copied();
+        let act_line = actual_lines.get(i).copied();
+
+        let is_same = exp_line == act_line;
+
+        if !is_same {
+            // Start a new hunk if needed
+            if !in_hunk {
+                in_hunk = true;
+                hunk_start_expected = i.saturating_sub(context_size);
+                hunk_start_actual = i.saturating_sub(context_size);
+                // Add context before
+                for j in hunk_start_expected..i {
+                    if let Some(line) = expected_lines.get(j) {
+                        hunk_lines.push(format!(" {}", line));
+                    }
+                }
+            }
+            last_change = i;
+
+            // Add the diff lines
+            if let Some(line) = exp_line {
+                hunk_lines.push(format!("-{}", line));
+            }
+            if let Some(line) = act_line {
+                hunk_lines.push(format!("+{}", line));
+            }
+        } else if in_hunk {
+            // We have a matching line in a hunk
+            if i <= last_change + context_size {
+                // Still within context after
+                if let Some(line) = exp_line {
+                    hunk_lines.push(format!(" {}", line));
+                }
+            } else {
+                // End the hunk
+                let exp_count = hunk_lines.iter().filter(|l| !l.starts_with('+')).count();
+                let act_count = hunk_lines.iter().filter(|l| !l.starts_with('-')).count();
+                writeln!(diff, "@@ -{},{} +{},{} @@",
+                    hunk_start_expected + 1, exp_count,
+                    hunk_start_actual + 1, act_count).ok();
+                for line in &hunk_lines {
+                    writeln!(diff, "{}", line).ok();
+                }
+                hunk_lines.clear();
+                in_hunk = false;
+            }
+        }
+    }
+
+    // Flush any remaining hunk
+    if !hunk_lines.is_empty() {
+        let exp_count = hunk_lines.iter().filter(|l| !l.starts_with('+')).count();
+        let act_count = hunk_lines.iter().filter(|l| !l.starts_with('-')).count();
+        writeln!(diff, "@@ -{},{} +{},{} @@",
+            hunk_start_expected + 1, exp_count,
+            hunk_start_actual + 1, act_count).ok();
+        for line in &hunk_lines {
+            writeln!(diff, "{}", line).ok();
+        }
+    }
+
+    if diff.lines().count() <= 2 {
+        // No actual differences found, show a note
+        diff.push_str("@@ -1,1 +1,1 @@\n");
+        diff.push_str(" (Files appear identical or differ only in whitespace)\n");
+    }
+
+    diff
+}
+
+/// Escape HTML special characters
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
 }
