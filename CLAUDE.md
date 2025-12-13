@@ -59,6 +59,7 @@ aida comment add <ID> "..."            # Add implementation note
 
 ## Code Traceability
 
+### Inline Code Traces
 When implementing requirements, add inline trace comments:
 
 ```rust
@@ -70,7 +71,16 @@ fn implement_feature() {
 
 Format: `// trace:<SPEC-ID> | ai:<tool>:<confidence>`
 
-Confidence levels:
+### Commit Message Attribution
+When committing AI-assisted code, prefix the commit message:
+
+```
+[AI:claude:high] feat: add user authentication (FR-0042)
+```
+
+Format: `[AI:<tool>:<confidence>] <conventional commit message>`
+
+### Confidence Levels
 - `high`: >80% AI-generated
 - `med`: 40-80% AI with modifications
 - `low`: <40% AI, mostly human
