@@ -1,16 +1,143 @@
+version: "3.9"
+
 services:
-  db:
-    image: docker.io/library/postgres:15-alpine
-    restart: always
-    environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: mydatabase
+  traefik:
+    image: docker.io/traefik:v3.2
+    container_name: traefik
+    restart: unless-stopped
+
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.endpoint=unix:///var/run/docker.sock
+
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+
+      # Let's Encrypt via Cloudflare DNS-01
+      - --certificatesresolvers.cloudflare.acme.email=you@joemooney.com
+      - --certificatesresolvers.cloudflare.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.cloudflare.acme.dnschallenge=true
+      - --certificatesresolvers.cloudflare.acme.dnschallenge.provider=cloudflare
+
+      # (optional) logs
+      #- --log.level=INFO
+      - --log.level=DEBUG
+
     ports:
-      - "5432:5432"
+      - "80:80"
+      - "443:443"
+
+    environment:
+      # Traefik reads the token from the secret file
+      CF_DNS_API_TOKEN_FILE: /run/secrets/cloudflare_api_token
+
+    secrets:
+      - cloudflare_api_token
+
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      #docker - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_letsencrypt:/letsencrypt
+      #podman
+      - ${XDG_RUNTIME_DIR}/podman/podman.sock:/var/run/docker.sock:ro
+
+    networks:
+      - proxy
+
+
+  gitlab:
+    image: docker.io/gitlab/gitlab-ce:17.8.1-ce.0
+    container_name: gitlab
+    restart: unless-stopped
+    shm_size: "256m"
+
+    hostname: gitlab.joemooney.com
+
+    # Git over SSH (direct)
+    ports:
+      - "2222:22"
+
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'https://gitlab.joemooney.com'
+        gitlab_rails['gitlab_shell_ssh_port'] = 2222
+
+        # GitLab's bundled nginx listens HTTP internally; Traefik terminates TLS
+        nginx['listen_port'] = 80
+        nginx['listen_https'] = false
+
+    volumes:
+      - gitlab_config:/etc/gitlab
+      - gitlab_logs:/var/log/gitlab
+      - gitlab_data:/var/opt/gitlab
+
+    networks:
+      - proxy
+
+    labels:
+      - traefik.enable=true
+
+      # HTTPS router
+      - traefik.http.routers.gitlab.rule=Host(`gitlab.joemooney.com`)
+      - traefik.http.routers.gitlab.entrypoints=websecure
+      - traefik.http.routers.gitlab.tls=true
+      - traefik.http.routers.gitlab.tls.certresolver=cloudflare
+
+      # Service port inside container
+      - traefik.http.services.gitlab.loadbalancer.server.port=80
+
+      # HTTP -> HTTPS redirect
+      - traefik.http.routers.gitlab-http.rule=Host(`gitlab.joemooney.com`)
+      - traefik.http.routers.gitlab-http.entrypoints=web
+      - traefik.http.routers.gitlab-http.middlewares=gitlab-https-redirect
+      - traefik.http.middlewares.gitlab-https-redirect.redirectscheme.scheme=https
+
+
+  postgres:
+    image: docker.io/library/postgres:15-alpine
+    container_name: postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: aida
+      POSTGRES_USER_FILE: /run/secrets/pg_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_password
+
+    secrets:
+      - pg_user
+      - pg_password
+
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+    networks:
+      - internal
+
+    # Intentionally NOT exposed:
+    # no ports: ["5432:5432"]
+
+
+networks:
+  proxy:
+    name: proxy
+  internal:
+    name: internal
+    internal: true
+
 
 volumes:
-  postgres_data:
+  traefik_letsencrypt:
+  gitlab_config:
+  gitlab_logs:
+  gitlab_data:
+  pg_data:
+
+
+secrets:
+  cloudflare_api_token:
+    file: ./secrets/cloudflare_api_token.txt
+  pg_user:
+    file: ./secrets/pg_user.txt
+  pg_password:
+    file: ./secrets/pg_password.txt
 

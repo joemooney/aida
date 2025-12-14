@@ -9126,26 +9126,49 @@ impl RequirementsApp {
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .title_bar(false) // Custom title bar for close button
             .show(ctx, |ui| {
-                // Custom title bar with close button - use allocate_ui_with_layout for proper alignment
+                // Custom title bar with Save/Cancel/Close buttons - use allocate_ui_with_layout for proper alignment
                 let title_bar_height = 30.0;
+                let mut save_clicked = false;
+                let mut cancel_clicked = false;
+                let needs_save = self.settings_tab.needs_save_cancel();
+
                 ui.allocate_ui_with_layout(
                     egui::vec2(settings_width - 16.0, title_bar_height),
                     egui::Layout::left_to_right(egui::Align::Center),
                     |ui| {
                         ui.heading("⚙ Settings");
-                        // Fill remaining space then add close button
+                        // Fill remaining space then add buttons on right
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             if ui.button("✕").on_hover_text("Close (Esc)").clicked() {
                                 close_requested = true;
+                            }
+                            // Show Save/Cancel for tabs that need them
+                            if needs_save {
+                                ui.add_space(8.0);
+                                if ui.button("✕ Cancel").clicked() {
+                                    cancel_clicked = true;
+                                }
+                                if ui.button("💾 Save").clicked() {
+                                    save_clicked = true;
+                                }
                             }
                         });
                     },
                 );
                 ui.separator();
 
-                // Calculate available height for content (minus title bar and save/cancel)
-                let footer_height = if self.settings_tab.needs_save_cancel() { 50.0 } else { 0.0 };
-                let content_height = settings_height - title_bar_height - footer_height - 25.0;
+                // Handle save/cancel clicks
+                if save_clicked {
+                    self.save_settings();
+                    self.show_settings_dialog = false;
+                }
+                if cancel_clicked {
+                    self.revert_settings_changes();
+                    self.show_settings_dialog = false;
+                }
+
+                // Calculate available height for content (minus title bar only - buttons are in title bar now)
+                let content_height = settings_height - title_bar_height - 25.0;
 
                 // Vertical sidebar tabs layout (like Obsidian)
                 ui.horizontal_top(|ui| {
@@ -9188,8 +9211,9 @@ impl RequirementsApp {
                         egui::ScrollArea::vertical()
                             .max_height(content_height)
                             .show(ui, |ui| {
-                                // Also constrain the scroll area content
-                                ui.set_max_width(content_width - 20.0);
+                                // Content fills available width within the constrained container
+                                ui.set_min_width(content_width - 15.0);
+                                ui.set_max_width(content_width - 15.0);
 
                                 // Tab content - aligned to top
                                 match self.settings_tab {
@@ -9230,25 +9254,6 @@ impl RequirementsApp {
                         });
                     });
                 });
-
-                // Only show Save/Cancel for tabs that need them
-                if self.settings_tab.needs_save_cancel() {
-                    ui.add_space(15.0);
-                    ui.separator();
-                    ui.add_space(10.0);
-
-                    ui.horizontal(|ui| {
-                        if ui.button("💾 Save").clicked() {
-                            self.save_settings();
-                            self.show_settings_dialog = false;
-                        }
-
-                        if ui.button("❌ Cancel").clicked() {
-                            self.revert_settings_changes();
-                            self.show_settings_dialog = false;
-                        }
-                    });
-                }
             });
 
         // Handle close request (from 'x' button)
@@ -9465,6 +9470,11 @@ impl RequirementsApp {
                                 &mut self.settings_form_theme,
                                 Theme::DocsDark,
                                 Theme::DocsDark.label(),
+                            );
+                            ui.selectable_value(
+                                &mut self.settings_form_theme,
+                                Theme::PurpleRain,
+                                Theme::PurpleRain.label(),
                             );
 
                             // Show saved custom themes
@@ -15324,7 +15334,7 @@ impl RequirementsApp {
             ui.label("Description:");
             let response = ui.add(
                 egui::TextEdit::multiline(&mut self.store.description)
-                    .desired_width(ui.available_width() - 20.0)
+                    .desired_width(f32::INFINITY)
                     .desired_rows(4)
                     .hint_text("Detailed description of this requirements database..."),
             );
@@ -15468,97 +15478,99 @@ impl RequirementsApp {
 
     /// Show the Skills subtab
     fn show_ai_skills_subtab(&mut self, ui: &mut egui::Ui) {
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            ui.heading("Claude Code Skills");
-            ui.add_space(5.0);
-            ui.label("Skills are prompt templates that extend Claude Code's capabilities.");
-            ui.add_space(10.0);
+        // Constrain max width to prevent dialog expansion
+        let content_width = ui.available_width();
+        ui.set_max_width(content_width);
 
-            // Load skills from .claude/skills/ directory if not already loaded
-            #[cfg(not(target_arch = "wasm32"))]
-            if self.loaded_skills.is_empty() {
-                let project_dir = self.storage.path().parent()
-                    .map(|p| p.to_path_buf())
-                    .unwrap_or_else(|| std::path::PathBuf::from("."));
-                let skills_dir = project_dir.join(".claude").join("skills");
+        ui.heading("Claude Code Skills");
+        ui.add_space(5.0);
+        ui.label("Skills are prompt templates that extend Claude Code's capabilities.");
+        ui.add_space(10.0);
 
-                if skills_dir.exists() {
-                    if let Ok(entries) = std::fs::read_dir(&skills_dir) {
-                        for entry in entries.flatten() {
-                            let path = entry.path();
-                            if path.extension().map_or(false, |ext| ext == "md") {
-                                if let Ok(content) = std::fs::read_to_string(&path) {
-                                    let filename = path.file_name()
-                                        .and_then(|n| n.to_str())
-                                        .unwrap_or("unknown")
-                                        .to_string();
-                                    self.loaded_skills.push((filename, content));
-                                }
+        // Load skills from .claude/skills/ directory if not already loaded
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.loaded_skills.is_empty() {
+            let project_dir = self.storage.path().parent()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| std::path::PathBuf::from("."));
+            let skills_dir = project_dir.join(".claude").join("skills");
+
+            if skills_dir.exists() {
+                if let Ok(entries) = std::fs::read_dir(&skills_dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.extension().map_or(false, |ext| ext == "md") {
+                            if let Ok(content) = std::fs::read_to_string(&path) {
+                                let filename = path.file_name()
+                                    .and_then(|n| n.to_str())
+                                    .unwrap_or("unknown")
+                                    .to_string();
+                                self.loaded_skills.push((filename, content));
                             }
                         }
                     }
                 }
             }
+        }
 
-            // Refresh button
-            ui.horizontal(|ui| {
-                if ui.button("🔄 Refresh Skills").clicked() {
-                    self.loaded_skills.clear();
-                }
-
-                #[cfg(not(target_arch = "wasm32"))]
-                {
-                    let project_dir = self.storage.path().parent()
-                        .map(|p| p.to_path_buf())
-                        .unwrap_or_else(|| std::path::PathBuf::from("."));
-                    let skills_dir = project_dir.join(".claude").join("skills");
-                    ui.label(format!("Path: {}", skills_dir.display()));
-                }
-                #[cfg(target_arch = "wasm32")]
-                ui.label("Skills not available in WASM");
-            });
-            ui.add_space(10.0);
-
-            if self.loaded_skills.is_empty() {
-                ui.label("No skills found in .claude/skills/ directory.");
-                ui.add_space(10.0);
-                ui.label("Use the 'Scaffold Project' button in the Prompts tab to generate skills.");
-            } else {
-                // Display each skill - collect data first to avoid borrow issues
-                let skills_data: Vec<(String, String)> = self.loaded_skills.clone();
-                for (filename, content) in skills_data {
-                    ui.group(|ui| {
-                        ui.horizontal(|ui| {
-                            ui.strong(&filename);
-                            // Extract title from first markdown heading if present
-                            if let Some(title_line) = content.lines().find(|l| l.starts_with("# ")) {
-                                ui.label(format!("- {}", title_line.trim_start_matches("# ")));
-                            }
-
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if ui.button("📝 View/Edit").clicked() {
-                                    self.skill_editor_filename = filename.clone();
-                                    self.skill_editor_content = content.clone();
-                                    self.skill_editor_original_content = content.clone();
-                                    self.skill_editor_edit_mode = false;
-                                    self.show_skill_editor = true;
-                                }
-                            });
-                        });
-                    });
-                    ui.add_space(5.0);
-                }
+        // Refresh button
+        ui.horizontal(|ui| {
+            if ui.button("🔄 Refresh Skills").clicked() {
+                self.loaded_skills.clear();
             }
 
-            ui.add_space(15.0);
-            ui.separator();
-            ui.add_space(10.0);
-
-            // Link to scaffold
-            ui.heading("Create New Skills");
-            ui.add_space(5.0);
-            ui.label("To generate skills for this project, go to the Prompts tab and click 'Scaffold Project'.");
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let project_dir = self.storage.path().parent()
+                    .map(|p| p.to_path_buf())
+                    .unwrap_or_else(|| std::path::PathBuf::from("."));
+                let skills_dir = project_dir.join(".claude").join("skills");
+                ui.label(format!("Path: {}", skills_dir.display()));
+            }
+            #[cfg(target_arch = "wasm32")]
+            ui.label("Skills not available in WASM");
         });
+        ui.add_space(10.0);
+
+        if self.loaded_skills.is_empty() {
+            ui.label("No skills found in .claude/skills/ directory.");
+            ui.add_space(10.0);
+            ui.label("Use the 'Scaffold Project' button in the Prompts tab to generate skills.");
+        } else {
+            // Display each skill - collect data first to avoid borrow issues
+            let skills_data: Vec<(String, String)> = self.loaded_skills.clone();
+            for (filename, content) in skills_data {
+                ui.group(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.strong(&filename);
+                        // Extract title from first markdown heading if present
+                        if let Some(title_line) = content.lines().find(|l| l.starts_with("# ")) {
+                            ui.label(format!("- {}", title_line.trim_start_matches("# ")));
+                        }
+
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.button("📝 View/Edit").clicked() {
+                                self.skill_editor_filename = filename.clone();
+                                self.skill_editor_content = content.clone();
+                                self.skill_editor_original_content = content.clone();
+                                self.skill_editor_edit_mode = false;
+                                self.show_skill_editor = true;
+                            }
+                        });
+                    });
+                });
+                ui.add_space(5.0);
+            }
+        }
+
+        ui.add_space(15.0);
+        ui.separator();
+        ui.add_space(10.0);
+
+        // Link to scaffold
+        ui.heading("Create New Skills");
+        ui.add_space(5.0);
+        ui.label("To generate skills for this project, go to the Prompts tab and click 'Scaffold Project'.");
     }
 
     /// Show the skill editor dialog
@@ -15680,201 +15692,203 @@ impl RequirementsApp {
 
     /// Show the Prompts subtab
     fn show_ai_prompts_subtab(&mut self, ui: &mut egui::Ui) {
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            ui.heading("AI Prompt Configuration");
-            ui.add_space(5.0);
-            ui.label("Customize the prompts used by AI features. Changes are auto-saved.");
-            ui.add_space(10.0);
+        // Constrain max width to prevent dialog expansion
+        let content_width = ui.available_width();
+        ui.set_max_width(content_width);
 
-            // Global Context Section
-            ui.heading("Global Context");
-            ui.add_space(5.0);
-            ui.label("This context is included in ALL AI prompts. Use it to describe your project's domain, terminology, or special requirements.");
-            ui.add_space(5.0);
-            let response = ui.add(
-                egui::TextEdit::multiline(&mut self.store.ai_prompts.global_context)
-                    .desired_width(ui.available_width() - 20.0)
-                    .desired_rows(4)
-                    .hint_text("Example: This is a software-defined radio project. Requirements should reference RF specifications, signal processing constraints, and real-time performance targets..."),
-            );
-            if response.changed() {
-                self.save();
-            }
+        ui.heading("AI Prompt Configuration");
+        ui.add_space(5.0);
+        ui.label("Customize the prompts used by AI features. Changes are auto-saved.");
+        ui.add_space(10.0);
 
-            ui.add_space(15.0);
-            ui.separator();
-            ui.add_space(10.0);
+        // Global Context Section
+        ui.heading("Global Context");
+        ui.add_space(5.0);
+        ui.label("This context is included in ALL AI prompts. Use it to describe your project's domain, terminology, or special requirements.");
+        ui.add_space(5.0);
+        let response = ui.add(
+            egui::TextEdit::multiline(&mut self.store.ai_prompts.global_context)
+                .desired_width(content_width)
+                .desired_rows(8)
+                .hint_text("Example: This is a software-defined radio project..."),
+        );
+        if response.changed() {
+            self.save();
+        }
 
-            // Evaluation Prompt Section
-            ui.heading("Evaluation Prompt");
-            ui.add_space(5.0);
-            ui.label("Customize how AI evaluates requirements for quality and completeness.");
-            ui.add_space(5.0);
+        ui.add_space(15.0);
+        ui.separator();
+        ui.add_space(10.0);
 
-            ui.label("Additional Instructions:");
-            let response = ui.add(
-                egui::TextEdit::multiline(&mut self.store.ai_prompts.evaluation.additional_instructions)
-                    .desired_width(ui.available_width() - 20.0)
-                    .desired_rows(3)
-                    .hint_text("Example: Requirements descriptions may be questions or ideas. Translate these into formal requirements..."),
-            );
-            if response.changed() {
-                self.save();
-            }
+        // Evaluation Prompt Section
+        ui.heading("Evaluation Prompt");
+        ui.add_space(5.0);
+        ui.label("Customize how AI evaluates requirements for quality and completeness.");
+        ui.add_space(5.0);
 
-            ui.add_space(15.0);
-            ui.separator();
-            ui.add_space(10.0);
+        ui.label("Additional Instructions:");
+        let response = ui.add(
+            egui::TextEdit::multiline(&mut self.store.ai_prompts.evaluation.additional_instructions)
+                .desired_width(content_width)
+                .desired_rows(3)
+                .hint_text("Extra instructions for evaluation..."),
+        );
+        if response.changed() {
+            self.save();
+        }
 
-            // Improve Description Prompt Section
-            ui.heading("Improve Description Prompt");
-            ui.add_space(5.0);
-            ui.label("Customize how AI improves requirement descriptions.");
-            ui.add_space(5.0);
+        ui.add_space(15.0);
+        ui.separator();
+        ui.add_space(10.0);
 
-            ui.label("Additional Instructions:");
-            let response = ui.add(
-                egui::TextEdit::multiline(&mut self.store.ai_prompts.improve.additional_instructions)
-                    .desired_width(ui.available_width() - 20.0)
-                    .desired_rows(3)
-                    .hint_text("Example: Preserve technical terminology. Format acceptance criteria as bullet points..."),
-            );
-            if response.changed() {
-                self.save();
-            }
+        // Improve Description Prompt Section
+        ui.heading("Improve Description Prompt");
+        ui.add_space(5.0);
+        ui.label("Customize how AI improves requirement descriptions.");
+        ui.add_space(5.0);
 
-            ui.add_space(15.0);
-            ui.separator();
-            ui.add_space(10.0);
+        ui.label("Additional Instructions:");
+        let response = ui.add(
+            egui::TextEdit::multiline(&mut self.store.ai_prompts.improve.additional_instructions)
+                .desired_width(content_width)
+                .desired_rows(3)
+                .hint_text("Extra instructions for improvement..."),
+        );
+        if response.changed() {
+            self.save();
+        }
 
-            // Generate Children Prompt Section
-            ui.heading("Generate Children Prompt");
-            ui.add_space(5.0);
-            ui.label("Customize how AI breaks down requirements into sub-requirements.");
-            ui.add_space(5.0);
+        ui.add_space(15.0);
+        ui.separator();
+        ui.add_space(10.0);
 
-            ui.label("Additional Instructions:");
-            let response = ui.add(
-                egui::TextEdit::multiline(&mut self.store.ai_prompts.generate_children.additional_instructions)
-                    .desired_width(ui.available_width() - 20.0)
-                    .desired_rows(3)
-                    .hint_text("Example: Consider regulatory compliance requirements. Separate UI, backend, and testing tasks..."),
-            );
-            if response.changed() {
-                self.save();
-            }
+        // Generate Children Prompt Section
+        ui.heading("Generate Children Prompt");
+        ui.add_space(5.0);
+        ui.label("Customize how AI breaks down requirements into sub-requirements.");
+        ui.add_space(5.0);
 
-            ui.add_space(15.0);
-            ui.separator();
-            ui.add_space(10.0);
+        ui.label("Additional Instructions:");
+        let response = ui.add(
+            egui::TextEdit::multiline(&mut self.store.ai_prompts.generate_children.additional_instructions)
+                .desired_width(content_width)
+                .desired_rows(3)
+                .hint_text("Extra instructions for children generation..."),
+        );
+        if response.changed() {
+            self.save();
+        }
 
-            // Per-Type Customization Section
-            ui.heading("Type-Specific Instructions");
-            ui.add_space(5.0);
-            ui.label("Add extra instructions for specific requirement types.");
-            ui.add_space(10.0);
+        ui.add_space(15.0);
+        ui.separator();
+        ui.add_space(10.0);
 
-            // Show existing type prompts
-            let type_names: Vec<String> = self.store.type_definitions.iter().map(|t| t.name.clone()).collect();
-            let existing_types: Vec<String> = self.store.ai_prompts.type_prompts.iter().map(|t| t.type_name.clone()).collect();
+        // Per-Type Customization Section
+        ui.heading("Type-Specific Instructions");
+        ui.add_space(5.0);
+        ui.label("Add extra instructions for specific requirement types.");
+        ui.add_space(10.0);
 
-            // Add button for new type prompt
-            ui.horizontal(|ui| {
-                ui.label("Add type-specific prompt for:");
-                for type_name in &type_names {
-                    if !existing_types.contains(type_name) {
-                        if ui.button(type_name).clicked() {
-                            self.store.ai_prompts.type_prompts.push(aida_core::AiTypePromptConfig {
-                                type_name: type_name.clone(),
-                                evaluation_extra: String::new(),
-                                improve_extra: String::new(),
-                                generate_children_extra: String::new(),
-                            });
-                            self.save();
-                        }
+        // Show existing type prompts
+        let type_names: Vec<String> = self.store.type_definitions.iter().map(|t| t.name.clone()).collect();
+        let existing_types: Vec<String> = self.store.ai_prompts.type_prompts.iter().map(|t| t.type_name.clone()).collect();
+
+        // Add button for new type prompt (use horizontal_wrapped to prevent expansion)
+        ui.horizontal_wrapped(|ui| {
+            ui.label("Add type-specific prompt for:");
+            for type_name in &type_names {
+                if !existing_types.contains(type_name) {
+                    if ui.button(type_name).clicked() {
+                        self.store.ai_prompts.type_prompts.push(aida_core::AiTypePromptConfig {
+                            type_name: type_name.clone(),
+                            evaluation_extra: String::new(),
+                            improve_extra: String::new(),
+                            generate_children_extra: String::new(),
+                        });
+                        self.save();
                     }
                 }
-            });
-
-            ui.add_space(10.0);
-
-            // Show existing type-specific prompts
-            let mut to_remove: Option<usize> = None;
-            for (idx, type_prompt) in self.store.ai_prompts.type_prompts.iter_mut().enumerate() {
-                ui.group(|ui| {
-                    ui.horizontal(|ui| {
-                        ui.strong(&type_prompt.type_name);
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.small_button("🗑 Remove").clicked() {
-                                to_remove = Some(idx);
-                            }
-                        });
-                    });
-
-                    ui.add_space(5.0);
-                    ui.label("Evaluation extra:");
-                    if ui.add(
-                        egui::TextEdit::multiline(&mut type_prompt.evaluation_extra)
-                            .desired_width(ui.available_width() - 20.0)
-                            .desired_rows(2)
-                            .hint_text("Extra instructions for evaluating this type..."),
-                    ).changed() {
-                        // Mark for save - handled below
-                    }
-
-                    ui.add_space(5.0);
-                    ui.label("Improve extra:");
-                    if ui.add(
-                        egui::TextEdit::multiline(&mut type_prompt.improve_extra)
-                            .desired_width(ui.available_width() - 20.0)
-                            .desired_rows(2)
-                            .hint_text("Extra instructions for improving this type..."),
-                    ).changed() {
-                        // Mark for save - handled below
-                    }
-                });
-                ui.add_space(5.0);
             }
-
-            // Handle removal
-            if let Some(idx) = to_remove {
-                self.store.ai_prompts.type_prompts.remove(idx);
-                self.save();
-            }
-
-            ui.add_space(15.0);
-            ui.separator();
-            ui.add_space(10.0);
-
-            // Template placeholders reference
-            ui.heading("Template Placeholders");
-            ui.add_space(5.0);
-            ui.label("If using custom templates, these placeholders are available:");
-            egui::Grid::new("ai_placeholders_grid")
-                .num_columns(2)
-                .spacing([20.0, 5.0])
-                .show(ui, |ui| {
-                    ui.code("{global_context}");
-                    ui.label("Your global context text");
-                    ui.end_row();
-
-                    ui.code("{project_context}");
-                    ui.label("Auto-generated project info");
-                    ui.end_row();
-
-                    ui.code("{req_context}");
-                    ui.label("Current requirement details");
-                    ui.end_row();
-
-                    ui.code("{related_context}");
-                    ui.label("Related requirements info");
-                    ui.end_row();
-
-                    ui.code("{req_type}");
-                    ui.label("Current requirement type");
-                    ui.end_row();
-                });
         });
+
+        ui.add_space(10.0);
+
+        // Show existing type-specific prompts
+        let mut to_remove: Option<usize> = None;
+        for (idx, type_prompt) in self.store.ai_prompts.type_prompts.iter_mut().enumerate() {
+            ui.group(|ui| {
+                ui.horizontal(|ui| {
+                    ui.strong(&type_prompt.type_name);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.small_button("🗑 Remove").clicked() {
+                            to_remove = Some(idx);
+                        }
+                    });
+                });
+
+                ui.add_space(5.0);
+                ui.label("Evaluation extra:");
+                if ui.add(
+                    egui::TextEdit::multiline(&mut type_prompt.evaluation_extra)
+                        .desired_width(content_width)
+                        .desired_rows(2)
+                        .hint_text("Extra evaluation instructions..."),
+                ).changed() {
+                    // Mark for save - handled below
+                }
+
+                ui.add_space(5.0);
+                ui.label("Improve extra:");
+                if ui.add(
+                    egui::TextEdit::multiline(&mut type_prompt.improve_extra)
+                        .desired_width(content_width)
+                        .desired_rows(2)
+                        .hint_text("Extra improvement instructions..."),
+                ).changed() {
+                    // Mark for save - handled below
+                }
+            });
+            ui.add_space(5.0);
+        }
+
+        // Handle removal
+        if let Some(idx) = to_remove {
+            self.store.ai_prompts.type_prompts.remove(idx);
+            self.save();
+        }
+
+        ui.add_space(15.0);
+        ui.separator();
+        ui.add_space(10.0);
+
+        // Template placeholders reference
+        ui.heading("Template Placeholders");
+        ui.add_space(5.0);
+        ui.label("If using custom templates, these placeholders are available:");
+        egui::Grid::new("ai_placeholders_grid")
+            .num_columns(2)
+            .spacing([20.0, 5.0])
+            .show(ui, |ui| {
+                ui.code("{global_context}");
+                ui.label("Your global context text");
+                ui.end_row();
+
+                ui.code("{project_context}");
+                ui.label("Auto-generated project info");
+                ui.end_row();
+
+                ui.code("{req_context}");
+                ui.label("Current requirement details");
+                ui.end_row();
+
+                ui.code("{related_context}");
+                ui.label("Related requirements info");
+                ui.end_row();
+
+                ui.code("{req_type}");
+                ui.label("Current requirement type");
+                ui.end_row();
+            });
     }
 
     /// Show the AI Integration settings tab
