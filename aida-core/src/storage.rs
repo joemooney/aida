@@ -559,7 +559,21 @@ impl Storage {
     where
         F: FnOnce(&mut RequirementsStore),
     {
-        // Acquire exclusive lock
+        // Check if this is a SQLite database by extension
+        let is_sqlite = matches!(
+            self.file_path.extension().and_then(|e| e.to_str()),
+            Some("db") | Some("sqlite") | Some("sqlite3")
+        );
+
+        // For SQLite, use the existing load/save methods which handle SQLite properly
+        if is_sqlite {
+            let mut store = self.load()?;
+            update_fn(&mut store);
+            self.save(&store)?;
+            return Ok(store);
+        }
+
+        // YAML path: Acquire exclusive lock
         let mut lock_file = self.acquire_write_lock()?;
 
         // Write lock holder info
@@ -570,7 +584,7 @@ impl Storage {
             chrono::Utc::now().to_rfc3339()
         );
 
-        // Load latest version from disk
+        // Load latest version from disk (YAML)
         let file = File::open(&self.file_path)
             .with_context(|| format!("Failed to open file: {:?}", self.file_path))?;
         let reader = BufReader::new(file);
@@ -613,6 +627,18 @@ impl Storage {
         original_timestamps: &HashMap<Uuid, DateTime<Utc>>,
         modified_requirement_ids: &[Uuid],
     ) -> Result<SaveResult> {
+        // Check if this is a SQLite database by extension
+        let is_sqlite = matches!(
+            self.file_path.extension().and_then(|e| e.to_str()),
+            Some("db") | Some("sqlite") | Some("sqlite3")
+        );
+
+        // For SQLite, use standard save - SQLite handles concurrency natively
+        if is_sqlite {
+            self.save(local_store)?;
+            return Ok(SaveResult::Success);
+        }
+
         // Acquire exclusive lock
         let mut lock_file = self.acquire_write_lock()?;
 
@@ -624,7 +650,7 @@ impl Storage {
             chrono::Utc::now().to_rfc3339()
         );
 
-        // Load latest version from disk
+        // Load latest version from disk (YAML path)
         let disk_store = if self.file_path.exists() {
             let file = File::open(&self.file_path)
                 .with_context(|| format!("Failed to open file: {:?}", self.file_path))?;
