@@ -9126,29 +9126,33 @@ impl RequirementsApp {
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .title_bar(false) // Custom title bar for close button
             .show(ctx, |ui| {
-                // Custom title bar with close button
-                ui.horizontal(|ui| {
-                    ui.heading("⚙ Settings");
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button("✕").on_hover_text("Close").clicked() {
-                            close_requested = true;
-                        }
-                    });
-                });
+                // Custom title bar with close button - use allocate_ui_with_layout for proper alignment
+                let title_bar_height = 30.0;
+                ui.allocate_ui_with_layout(
+                    egui::vec2(settings_width - 16.0, title_bar_height),
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| {
+                        ui.heading("⚙ Settings");
+                        // Fill remaining space then add close button
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.button("✕").on_hover_text("Close (Esc)").clicked() {
+                                close_requested = true;
+                            }
+                        });
+                    },
+                );
                 ui.separator();
 
                 // Calculate available height for content (minus title bar and save/cancel)
-                let title_height = 35.0;
                 let footer_height = if self.settings_tab.needs_save_cancel() { 50.0 } else { 0.0 };
-                let content_height = settings_height - title_height - footer_height - 20.0;
+                let content_height = settings_height - title_bar_height - footer_height - 25.0;
 
                 // Vertical sidebar tabs layout (like Obsidian)
-                ui.horizontal(|ui| {
-                    // Left sidebar with tab buttons - fixed height
+                ui.horizontal_top(|ui| {
+                    // Left sidebar with tab buttons
                     ui.vertical(|ui| {
                         ui.set_min_width(sidebar_width);
                         ui.set_max_width(sidebar_width);
-                        ui.set_min_height(content_height);
 
                         // Style the sidebar tabs to be full-width buttons
                         let sidebar_tab = |ui: &mut egui::Ui, current: &mut SettingsTab, target: SettingsTab, label: &str| {
@@ -9175,15 +9179,15 @@ impl RequirementsApp {
 
                     ui.separator();
 
-                    // Right content panel with scrolling
-                    egui::ScrollArea::vertical()
+                    // Right content panel with both vertical and horizontal scrolling
+                    egui::ScrollArea::both()
                         .max_height(content_height)
+                        .max_width(content_width)
                         .show(ui, |ui| {
-                            ui.set_min_width(content_width);
-                            ui.set_min_height(content_height - 10.0);
-                            ui.add_space(5.0);
+                            // Constrain content width to prevent excessive expansion
+                            ui.set_max_width(content_width - 20.0);
 
-                            // Tab content
+                            // Tab content - aligned to top (no min_height that would center)
                             match self.settings_tab {
                                 SettingsTab::User => {
                                     self.show_settings_user_tab(ui);
