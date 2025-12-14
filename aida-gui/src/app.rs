@@ -3595,6 +3595,7 @@ pub struct RequirementsApp {
     quick_change_consumed_action: bool,           // True if popup consumed a key this frame (prevents pass-through)
     quick_change_owner_search: String,            // Search text for owner fuzzy finder
     quick_change_feature_search: String,          // Search text for feature fuzzy finder
+    quick_change_last_letter: Option<char>,       // Last letter pressed for first-letter navigation cycling
 
     // Tag picker popup state (triggered by 't' key)
     show_tag_picker: bool,                        // Whether tag picker popup is visible
@@ -4332,6 +4333,7 @@ impl RequirementsApp {
             quick_change_consumed_action: false,
             quick_change_owner_search: String::new(),
             quick_change_feature_search: String::new(),
+            quick_change_last_letter: None,
             show_tag_picker: false,
             tag_picker_search: String::new(),
             tag_picker_selected_tags: HashSet::new(),
@@ -4870,6 +4872,7 @@ impl RequirementsApp {
             quick_change_consumed_action: false,
             quick_change_owner_search: String::new(),
             quick_change_feature_search: String::new(),
+            quick_change_last_letter: None,
             show_tag_picker: false,
             tag_picker_search: String::new(),
             tag_picker_selected_tags: HashSet::new(),
@@ -5400,6 +5403,7 @@ impl RequirementsApp {
             quick_change_consumed_action: false,
             quick_change_owner_search: String::new(),
             quick_change_feature_search: String::new(),
+            quick_change_last_letter: None,
             show_tag_picker: false,
             tag_picker_search: String::new(),
             tag_picker_selected_tags: HashSet::new(),
@@ -20482,6 +20486,7 @@ impl RequirementsApp {
         // Handle keyboard input for the popup
         let mut close_popup = false;
         let mut apply_change = false;
+        let mut letter_pressed: Option<char> = None;
 
         ctx.input(|i| {
             // Escape to close
@@ -20507,11 +20512,73 @@ impl RequirementsApp {
                     self.quick_change_selected = 0; // Wrap to top
                 }
             }
+
+            // First-letter navigation for Status picker (FR-0285)
+            // Detect letter key presses (excluding j/k used for navigation)
+            if field == QuickChangeField::Status {
+                let letter_keys = [
+                    (egui::Key::A, 'a'), (egui::Key::B, 'b'), (egui::Key::C, 'c'),
+                    (egui::Key::D, 'd'), (egui::Key::E, 'e'), (egui::Key::F, 'f'),
+                    (egui::Key::G, 'g'), (egui::Key::H, 'h'), (egui::Key::I, 'i'),
+                    // j/k excluded - used for navigation
+                    (egui::Key::L, 'l'), (egui::Key::M, 'm'), (egui::Key::N, 'n'),
+                    (egui::Key::O, 'o'), (egui::Key::P, 'p'), (egui::Key::Q, 'q'),
+                    (egui::Key::R, 'r'), (egui::Key::S, 's'), (egui::Key::T, 't'),
+                    (egui::Key::U, 'u'), (egui::Key::V, 'v'), (egui::Key::W, 'w'),
+                    (egui::Key::X, 'x'), (egui::Key::Y, 'y'), (egui::Key::Z, 'z'),
+                ];
+                for (key, ch) in letter_keys {
+                    if i.key_pressed(key) {
+                        letter_pressed = Some(ch);
+                        break;
+                    }
+                }
+            }
         });
+
+        // Handle first-letter navigation for Status picker
+        if let Some(letter) = letter_pressed {
+            // Find all options starting with this letter (case-insensitive)
+            let matching_indices: Vec<usize> = options.iter()
+                .enumerate()
+                .filter(|(_, opt)| opt.to_lowercase().starts_with(letter))
+                .map(|(idx, _)| idx)
+                .collect();
+
+            if matching_indices.len() == 1 {
+                // Single match: immediately apply and close
+                self.apply_quick_change(field, matching_indices[0]);
+                self.quick_change_field = None;
+                self.quick_change_target_id = None;
+                self.quick_change_last_letter = None;
+                self.quick_change_consumed_action = true;
+                return;
+            } else if !matching_indices.is_empty() {
+                // Multiple matches: cycle through them
+                let same_letter = self.quick_change_last_letter == Some(letter);
+
+                if same_letter {
+                    // Find the next match after the current selection
+                    let current_pos = matching_indices.iter()
+                        .position(|&idx| idx == self.quick_change_selected);
+                    let next_idx = match current_pos {
+                        Some(pos) => (pos + 1) % matching_indices.len(),
+                        None => 0,
+                    };
+                    self.quick_change_selected = matching_indices[next_idx];
+                } else {
+                    // New letter: jump to first match
+                    self.quick_change_selected = matching_indices[0];
+                }
+                self.quick_change_last_letter = Some(letter);
+            }
+            // No match: ignore the keypress (as per requirement)
+        }
 
         if close_popup {
             self.quick_change_field = None;
             self.quick_change_target_id = None;
+            self.quick_change_last_letter = None;
             self.quick_change_consumed_action = true;
             return;
         }
@@ -20521,6 +20588,7 @@ impl RequirementsApp {
             self.apply_quick_change(field, self.quick_change_selected);
             self.quick_change_field = None;
             self.quick_change_target_id = None;
+            self.quick_change_last_letter = None;
             self.quick_change_consumed_action = true;
             return;
         }
@@ -20563,6 +20631,7 @@ impl RequirementsApp {
                                 self.apply_quick_change(field, idx);
                                 self.quick_change_field = None;
                                 self.quick_change_target_id = None;
+                                self.quick_change_last_letter = None;
                                 self.quick_change_consumed_action = true;
                             }
                         }
@@ -20581,6 +20650,7 @@ impl RequirementsApp {
                 if !popup_rect.contains(pos) {
                     self.quick_change_field = None;
                     self.quick_change_target_id = None;
+                    self.quick_change_last_letter = None;
                     self.quick_change_consumed_action = true;
                 }
             }
