@@ -35,6 +35,7 @@ requirements.db
 # Test files
 test_*.yaml
 .requirements-mapping.yaml
+_ignore
 
 # WASM build artifacts
 **/dist/
