@@ -3904,6 +3904,7 @@ pub struct RequirementsApp {
     timeline_selected_event_idx: Option<usize>,                     // Currently selected event
     timeline_suppress_hover: bool,                                   // Suppress hover highlight after click/keyboard nav
     timeline_suppress_hover_pos: Option<egui::Pos2>,                // Mouse position when hover was suppressed
+    timeline_scroll_to_event: bool,                                  // Auto-scroll to selected event (FR-0319)
 
     // Planning view state
     planning_collapsed_sprints: std::collections::HashSet<Uuid>,     // Collapsed sprint sections
@@ -4536,6 +4537,7 @@ impl RequirementsApp {
             timeline_selected_event_idx: None,
             timeline_suppress_hover: false,
             timeline_suppress_hover_pos: None,
+            timeline_scroll_to_event: false,
             planning_collapsed_sprints: std::collections::HashSet::new(),
             planning_show_completed_sprints: false,
             planning_selected_item: None,
@@ -5127,6 +5129,7 @@ impl RequirementsApp {
             timeline_selected_event_idx: None,
             timeline_suppress_hover: false,
             timeline_suppress_hover_pos: None,
+            timeline_scroll_to_event: false,
 
             // Planning view state
             planning_collapsed_sprints: std::collections::HashSet::new(),
@@ -5582,6 +5585,7 @@ impl RequirementsApp {
             timeline_selected_event_idx: None,
             timeline_suppress_hover: false,
             timeline_suppress_hover_pos: None,
+            timeline_scroll_to_event: false,
             planning_collapsed_sprints: std::collections::HashSet::new(),
             planning_show_completed_sprints: false,
             planning_selected_item: None,
@@ -13840,6 +13844,8 @@ impl RequirementsApp {
         let mut navigate_to_req: Option<(usize, View)> = None;
         let mut suppress_hover_pos: Option<egui::Pos2> = None;
         let suppress_hover = self.timeline_suppress_hover;
+        let scroll_to_event = self.timeline_scroll_to_event;
+        let mut did_scroll = false;
 
         // Timeline display - two columns: list on left, detail on right
         ui.columns(2, |columns| {
@@ -13913,6 +13919,12 @@ impl RequirementsApp {
                         } else {
                             ui.selectable_label(selected, &label_text)
                         };
+
+                        // Auto-scroll to selected event when navigating via keyboard (FR-0319)
+                        if selected && scroll_to_event {
+                            response.scroll_to_me(Some(egui::Align::Center));
+                            did_scroll = true;
+                        }
 
                         if response.clicked() {
                             new_selected_idx = Some(idx);
@@ -14023,6 +14035,10 @@ impl RequirementsApp {
         if let Some(pos) = suppress_hover_pos {
             self.timeline_suppress_hover = true;
             self.timeline_suppress_hover_pos = Some(pos);
+        }
+        // Clear scroll flag after scrolling (FR-0319)
+        if did_scroll {
+            self.timeline_scroll_to_event = false;
         }
         if let Some((req_idx, view)) = navigate_to_req {
             self.selected_idx = Some(req_idx);
@@ -30394,6 +30410,8 @@ impl eframe::App for RequirementsApp {
                         // Suppress hover highlight when using keyboard navigation
                         self.timeline_suppress_hover = true;
                         self.timeline_suppress_hover_pos = ctx.input(|i| i.pointer.hover_pos());
+                        // Auto-scroll to keep selected event visible (FR-0319)
+                        self.timeline_scroll_to_event = true;
                     }
 
                     // Handle Enter key to navigate to requirement
