@@ -3661,6 +3661,9 @@ pub struct RequirementsApp {
     // Keyboard shortcuts help popup (triggered by '?' key)
     show_keyboard_help: bool,
 
+    // Double-ESC navigation (FR-0318)
+    last_esc_press: Option<Instant>,  // Track last ESC press for double-ESC detection
+
     // Database change detection
     last_db_check: Instant,           // When we last checked the file mtime
     known_db_mtime: Option<std::time::SystemTime>, // Last known modification time
@@ -4371,6 +4374,7 @@ impl RequirementsApp {
             goto_picker_input: String::new(),
             goto_picker_matches: Vec::new(),
             show_keyboard_help: false,
+            last_esc_press: None,
             last_db_check: Instant::now(),
             known_db_mtime: None,
             pending_external_reload: false,
@@ -4910,6 +4914,7 @@ impl RequirementsApp {
             goto_picker_input: String::new(),
             goto_picker_matches: Vec::new(),
             show_keyboard_help: false,
+            last_esc_press: None,
             last_db_check: Instant::now(),
             known_db_mtime: None,
             pending_external_reload: false,
@@ -5441,6 +5446,7 @@ impl RequirementsApp {
             goto_picker_input: String::new(),
             goto_picker_matches: Vec::new(),
             show_keyboard_help: false,
+            last_esc_press: None,
             last_db_check: Instant::now(),
             known_db_mtime: None,
             pending_external_reload: false,
@@ -29186,6 +29192,43 @@ impl eframe::App for RequirementsApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Reset per-frame flags at the start of each frame
         self.quick_change_consumed_action = false;
+
+        // Double-ESC navigation to default view (FR-0318)
+        // Check for ESC press when no popup/dialog is consuming it
+        let esc_pressed = ctx.input(|i| i.key_pressed(egui::Key::Escape));
+        let no_popup_open = !self.show_settings_dialog
+            && !self.show_keyboard_help
+            && !self.show_goto_picker
+            && !self.show_theme_editor
+            && !self.show_view_picker
+            && self.quick_change_field.is_none()
+            && !self.show_tag_picker
+            && !self.show_cancel_confirm_dialog
+            && !self.show_conflict_dialog
+            && !self.show_clone_dialog
+            && !self.show_import_dialog
+            && !self.show_create_baseline_dialog
+            && !matches!(self.current_view, View::Add | View::Edit);
+
+        if esc_pressed && no_popup_open {
+            let now = Instant::now();
+            if let Some(last) = self.last_esc_press {
+                // Check if within 500ms for double-ESC
+                if now.duration_since(last) < Duration::from_millis(500) {
+                    // Double-ESC detected - navigate to default view (List)
+                    if self.current_view != View::List {
+                        self.pending_view_change = Some(View::List);
+                        self.last_esc_press = None; // Reset to avoid triple-ESC issues
+                    }
+                } else {
+                    // Too slow - just update timestamp
+                    self.last_esc_press = Some(now);
+                }
+            } else {
+                // First ESC press
+                self.last_esc_press = Some(now);
+            }
+        }
 
         // WASM: Check for pending loaded data from async server fetch (FR-0281)
         #[cfg(target_arch = "wasm32")]
