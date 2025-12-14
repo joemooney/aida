@@ -135,8 +135,25 @@ run-server-bg: server ## Run server in background (use FORCE=1 to kill existing)
 	@sleep 2
 	@echo "Server started on gRPC:$(SERVER_PORT) REST:$(REST_PORT)"
 
-stop-server: ## Stop running server
-	@pkill -f "aida-server" 2>/dev/null || echo "No server running"
+stop-server: ## Stop running AIDA server
+	@pkill -x "aida-server" 2>/dev/null && echo "Stopped aida-server" || echo "No aida-server running"
+
+stop-web: ## Stop running trunk/web server
+	@pkill -f "^trunk serve" 2>/dev/null && echo "Stopped trunk" || echo "No trunk running"
+
+stop-all: ## Stop all running servers (aida-server, trunk, aida-gui)
+	@echo "Stopping all AIDA processes..."
+	@pkill -x "aida-server" 2>/dev/null && echo "  Stopped aida-server" || echo "  No aida-server running"
+	@pkill -f "^trunk serve" 2>/dev/null && echo "  Stopped trunk" || echo "  No trunk running"
+	@pkill -x "aida-gui" 2>/dev/null && echo "  Stopped aida-gui" || echo "  No aida-gui running"
+	@echo "Done."
+
+ps-servers: ## Show running AIDA processes
+	@echo "Running AIDA processes:"
+	@pgrep -x "aida-server" 2>/dev/null | while read pid; do echo "  aida-server (PID $$pid)"; done || true
+	@pgrep -f "^trunk serve" 2>/dev/null | while read pid; do echo "  trunk (PID $$pid)"; done || true
+	@pgrep -x "aida-gui" 2>/dev/null | while read pid; do echo "  aida-gui (PID $$pid)"; done || true
+	@pgrep -x "aida-server" >/dev/null 2>&1 || pgrep -f "^trunk serve" >/dev/null 2>&1 || pgrep -x "aida-gui" >/dev/null 2>&1 || echo "  (none)"
 
 #==============================================================================
 # DATABASE TARGETS
