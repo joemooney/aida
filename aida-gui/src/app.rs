@@ -1219,6 +1219,81 @@ impl CustomTheme {
         }
     }
 
+    fn purple_rain_defaults(name: String) -> Self {
+        // Purple Rain - dark purple theme inspired by Obsidian
+        // Purple accent colors similar to Obsidian's purple theme
+        let bg_main = ThemeColor::new(30, 24, 40);         // Deep purple-black
+        let bg_darker = ThemeColor::new(22, 17, 30);       // Even darker for contrast
+        let bg_faint = ThemeColor::new(38, 30, 50);        // Slightly lighter purple
+        let text_primary = ThemeColor::new(230, 225, 235); // Soft white with purple tint
+        let text_muted = ThemeColor::new(145, 130, 160);   // Muted purple-gray
+        let accent = ThemeColor::new(168, 130, 255);       // Bright purple (Obsidian-like)
+        let accent_hover = ThemeColor::new(190, 160, 255); // Lighter purple on hover
+        let accent_active = ThemeColor::new(130, 90, 200); // Darker purple when active
+        let purple_faint = ThemeColor::new(80, 60, 110);   // Subtle purple for widgets
+
+        Self {
+            name,
+            base: BaseTheme::Dark,
+            // Background - deep purple-black
+            window_fill: bg_main,
+            panel_fill: bg_main,
+            extreme_bg: bg_darker,
+            faint_bg: bg_faint,
+            // Text
+            text_color: text_primary,
+            weak_text_color: text_muted,
+            hyperlink_color: accent,
+            warn_fg: ThemeColor::new(255, 190, 100),       // Warm amber
+            error_fg: ThemeColor::new(255, 120, 140),      // Soft red-pink
+            success_fg: ThemeColor::new(130, 230, 150),    // Soft green
+            // Widgets
+            widget_bg: bg_main,
+            widget_fg: text_muted,
+            widget_inactive_bg: ThemeColor::new(45, 35, 60),
+            widget_hovered_bg: purple_faint,
+            widget_active_bg: ThemeColor::new(70, 50, 100),
+            widget_open_bg: ThemeColor::new(45, 35, 60),
+            // Selection - purple accent
+            selection_bg: ThemeColor::new(100, 70, 150),
+            selection_fg: ThemeColor::new(255, 255, 255),
+            // Strokes
+            widget_stroke_width: 1.0,
+            widget_stroke_color: ThemeColor::new(60, 45, 80),
+            widget_hovered_stroke_color: accent_hover,
+            widget_active_stroke_color: accent_active,
+            // Rounding
+            widget_rounding: 4.0,
+            window_rounding: 8.0,
+            // Shadows
+            window_shadow: true,
+            popup_shadow: true,
+            // Spacing
+            item_spacing: (8.0, 3.0),
+            button_padding: (4.0, 1.0),
+            window_padding: (6.0, 6.0),
+            // Misc
+            dark_mode: true,
+            scroll_bar_width: 8.0,
+            indent: 18.0,
+            title_bar_bg: ThemeColor::new(25, 18, 35),
+            title_bar_text: None,
+            title_bar_font_size: 1.0,
+            // Status colors - purple-themed
+            status_draft: text_muted,
+            status_approved: ThemeColor::new(130, 230, 150),
+            status_in_progress: accent,
+            status_implemented: ThemeColor::new(100, 220, 200),  // Teal-cyan
+            status_completed: ThemeColor::new(130, 230, 150),
+            status_rejected: ThemeColor::new(255, 120, 140),
+            // Priority colors
+            priority_critical: ThemeColor::new(255, 90, 120),
+            priority_high: ThemeColor::new(255, 120, 140),
+            priority_medium: ThemeColor::new(255, 190, 100),
+            priority_low: ThemeColor::new(130, 230, 150),
+        }
+    }
+
     /// Create a CustomTheme from any built-in Theme, capturing its colors
     pub fn from_theme(theme: &Theme, name: String) -> Self {
         match theme {
@@ -1230,6 +1305,7 @@ impl CustomTheme {
             Theme::SolarizedDark => Self::solarized_dark_defaults(name),
             Theme::Nord => Self::nord_dark_defaults(name),
             Theme::DocsDark => Self::docs_dark_defaults(name),
+            Theme::PurpleRain => Self::purple_rain_defaults(name),
             Theme::Custom(custom) => (**custom).clone(),
         }
     }
@@ -1356,6 +1432,8 @@ pub enum Theme {
     NordLight,
     /// Docs Dark - dark blue theme inspired by documentation sites
     DocsDark,
+    /// Purple Rain - dark purple theme inspired by Obsidian
+    PurpleRain,
     /// Custom theme with user-defined colors
     Custom(Box<CustomTheme>),
 }
@@ -1371,6 +1449,7 @@ impl Theme {
             Theme::Nord => "Nord".to_string(),
             Theme::NordLight => "Nord Light".to_string(),
             Theme::DocsDark => "Docs Dark".to_string(),
+            Theme::PurpleRain => "Purple Rain".to_string(),
             Theme::Custom(theme) => format!("Custom: {}", theme.name),
         }
     }
@@ -1384,7 +1463,8 @@ impl Theme {
             Theme::HighContrastDark => Theme::SolarizedDark,
             Theme::SolarizedDark => Theme::Nord,
             Theme::Nord => Theme::DocsDark,
-            Theme::DocsDark => Theme::Dark,
+            Theme::DocsDark => Theme::PurpleRain,
+            Theme::PurpleRain => Theme::Dark,
             Theme::Custom(_) => Theme::Dark, // Cycle back to Dark from Custom
         }
     }
@@ -1439,6 +1519,7 @@ impl Theme {
             Theme::SolarizedDark => egui::Color32::from_rgb(7, 54, 66), // base02
             Theme::Nord => egui::Color32::from_rgb(59, 66, 82), // nord1
             Theme::DocsDark => egui::Color32::from_rgb(20, 20, 40), // Dark blue
+            Theme::PurpleRain => egui::Color32::from_rgb(25, 18, 35), // Deep purple
         }
     }
 
@@ -1469,6 +1550,7 @@ impl Theme {
             Theme::NordLight => egui::Color32::from_rgb(76, 86, 106),
             Theme::VibrantLight => egui::Color32::from_rgb(100, 100, 130),
             Theme::DocsDark => egui::Color32::from_rgb(140, 140, 160),
+            Theme::PurpleRain => egui::Color32::from_rgb(145, 130, 160),  // Muted purple-gray
         }
     }
 }
@@ -9055,76 +9137,81 @@ impl RequirementsApp {
 
                 // Constrain content width to prevent overflow
                 ui.set_max_width(settings_max_width - 30.0);
-                // Tabs
+
+                // Vertical sidebar tabs layout (like Obsidian)
                 ui.horizontal(|ui| {
-                    ui.selectable_value(&mut self.settings_tab, SettingsTab::User, "👤 User");
-                    ui.selectable_value(
-                        &mut self.settings_tab,
-                        SettingsTab::Appearance,
-                        "🎨 Appearance",
-                    );
-                    ui.selectable_value(&mut self.settings_tab, SettingsTab::Keybindings, "⌨ Keys");
-                    ui.selectable_value(&mut self.settings_tab, SettingsTab::IDs, "🔢 IDs");
-                    ui.selectable_value(
-                        &mut self.settings_tab,
-                        SettingsTab::Relationships,
-                        "🔗 Relations",
-                    );
-                    ui.selectable_value(
-                        &mut self.settings_tab,
-                        SettingsTab::Reactions,
-                        "😊 Reactions",
-                    );
-                    ui.selectable_value(
-                        &mut self.settings_tab,
-                        SettingsTab::TypeDefinitions,
-                        "📝 Types",
-                    );
-                    ui.selectable_value(&mut self.settings_tab, SettingsTab::Members, "👥 Members");
-                    ui.selectable_value(&mut self.settings_tab, SettingsTab::AiPrompts, "✦ Prompts");
-                    ui.selectable_value(&mut self.settings_tab, SettingsTab::AiIntegration, "🤖 Agents");
-                    ui.selectable_value(&mut self.settings_tab, SettingsTab::Database, "🗄 Db");
+                    // Left sidebar with tab buttons
+                    ui.vertical(|ui| {
+                        ui.set_min_width(100.0);
+                        ui.set_max_width(100.0);
+
+                        // Style the sidebar tabs to be full-width buttons
+                        let sidebar_tab = |ui: &mut egui::Ui, current: &mut SettingsTab, target: SettingsTab, label: &str| {
+                            let is_selected = *current == target;
+                            let text = egui::RichText::new(label);
+                            let response = ui.selectable_label(is_selected, text);
+                            if response.clicked() {
+                                *current = target;
+                            }
+                        };
+
+                        sidebar_tab(ui, &mut self.settings_tab, SettingsTab::User, "👤 User");
+                        sidebar_tab(ui, &mut self.settings_tab, SettingsTab::Appearance, "🎨 Appearance");
+                        sidebar_tab(ui, &mut self.settings_tab, SettingsTab::Keybindings, "⌨ Keys");
+                        sidebar_tab(ui, &mut self.settings_tab, SettingsTab::IDs, "🔢 IDs");
+                        sidebar_tab(ui, &mut self.settings_tab, SettingsTab::Relationships, "🔗 Relations");
+                        sidebar_tab(ui, &mut self.settings_tab, SettingsTab::Reactions, "😊 Reactions");
+                        sidebar_tab(ui, &mut self.settings_tab, SettingsTab::TypeDefinitions, "📝 Types");
+                        sidebar_tab(ui, &mut self.settings_tab, SettingsTab::Members, "👥 Members");
+                        sidebar_tab(ui, &mut self.settings_tab, SettingsTab::AiPrompts, "✦ Prompts");
+                        sidebar_tab(ui, &mut self.settings_tab, SettingsTab::AiIntegration, "🤖 Agents");
+                        sidebar_tab(ui, &mut self.settings_tab, SettingsTab::Database, "🗄 Database");
+                    });
+
+                    ui.separator();
+
+                    // Right content panel
+                    ui.vertical(|ui| {
+                        ui.add_space(5.0);
+
+                        // Tab content
+                        match self.settings_tab {
+                            SettingsTab::User => {
+                                self.show_settings_user_tab(ui);
+                            }
+                            SettingsTab::Appearance => {
+                                self.show_settings_appearance_tab(ui);
+                            }
+                            SettingsTab::Keybindings => {
+                                self.show_settings_keybindings_tab(ui, ctx);
+                            }
+                            SettingsTab::IDs => {
+                                self.show_settings_ids_tab(ui);
+                            }
+                            SettingsTab::Relationships => {
+                                self.show_settings_relationships_tab(ui);
+                            }
+                            SettingsTab::Reactions => {
+                                self.show_settings_reactions_tab(ui);
+                            }
+                            SettingsTab::TypeDefinitions => {
+                                self.show_settings_type_definitions_tab(ui);
+                            }
+                            SettingsTab::Members => {
+                                self.show_settings_members_tab(ui);
+                            }
+                            SettingsTab::Database => {
+                                self.show_settings_database_tab(ui);
+                            }
+                            SettingsTab::AiPrompts => {
+                                self.show_settings_ai_prompts_tab(ui);
+                            }
+                            SettingsTab::AiIntegration => {
+                                self.show_settings_ai_integration_tab(ui);
+                            }
+                        }
+                    });
                 });
-
-                ui.separator();
-                ui.add_space(10.0);
-
-                // Tab content
-                match self.settings_tab {
-                    SettingsTab::User => {
-                        self.show_settings_user_tab(ui);
-                    }
-                    SettingsTab::Appearance => {
-                        self.show_settings_appearance_tab(ui);
-                    }
-                    SettingsTab::Keybindings => {
-                        self.show_settings_keybindings_tab(ui, ctx);
-                    }
-                    SettingsTab::IDs => {
-                        self.show_settings_ids_tab(ui);
-                    }
-                    SettingsTab::Relationships => {
-                        self.show_settings_relationships_tab(ui);
-                    }
-                    SettingsTab::Reactions => {
-                        self.show_settings_reactions_tab(ui);
-                    }
-                    SettingsTab::TypeDefinitions => {
-                        self.show_settings_type_definitions_tab(ui);
-                    }
-                    SettingsTab::Members => {
-                        self.show_settings_members_tab(ui);
-                    }
-                    SettingsTab::Database => {
-                        self.show_settings_database_tab(ui);
-                    }
-                    SettingsTab::AiPrompts => {
-                        self.show_settings_ai_prompts_tab(ui);
-                    }
-                    SettingsTab::AiIntegration => {
-                        self.show_settings_ai_integration_tab(ui);
-                    }
-                }
 
                 // Only show Save/Cancel for tabs that need them
                 if self.settings_tab.needs_save_cancel() {
