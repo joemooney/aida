@@ -26726,8 +26726,69 @@ fn main() {
 
         ui.separator();
 
-        // === MAIN CONTENT: Left panel (metadata) + Right panel (description) ===
-        let default_left_width = available_width * 0.25;
+        // === TAB BAR (Edit mode only - matching Detail view) ===
+        // Get requirement data for non-Description tabs
+        let req_for_tabs = if is_edit {
+            self.selected_idx.and_then(|idx| self.store.requirements.get(idx).cloned())
+        } else {
+            None
+        };
+
+        // Only show tabs in Edit mode when we have a requirement
+        if is_edit && req_for_tabs.is_some() {
+            let req = req_for_tabs.as_ref().unwrap();
+
+            // Tab bar - horizontal layout matching Detail view
+            ui.horizontal_wrapped(|ui| {
+                // AI tab with evaluation indicator
+                let ai_label = if req.ai_evaluation.is_some() {
+                    if req.needs_ai_evaluation() {
+                        "🤖 AI ⚠️" // Stale evaluation
+                    } else {
+                        "🤖 AI ✓" // Fresh evaluation
+                    }
+                } else {
+                    "🤖 AI" // No evaluation yet
+                };
+                ui.selectable_value(&mut self.active_tab, DetailTab::Ai, ai_label);
+                ui.selectable_value(
+                    &mut self.active_tab,
+                    DetailTab::Description,
+                    "📝 Fields",
+                );
+                ui.selectable_value(
+                    &mut self.active_tab,
+                    DetailTab::Comments,
+                    format!("💬 Comments ({})", req.comments.len()),
+                );
+                ui.selectable_value(
+                    &mut self.active_tab,
+                    DetailTab::Links,
+                    format!("🔗 Links ({})", req.relationships.len() + req.urls.len()),
+                );
+                ui.selectable_value(
+                    &mut self.active_tab,
+                    DetailTab::Attachments,
+                    format!("📎 Attachments ({})", req.attachments.len()),
+                );
+                ui.selectable_value(
+                    &mut self.active_tab,
+                    DetailTab::History,
+                    format!("📜 History ({})", req.history.len()),
+                );
+            });
+
+            ui.separator();
+        }
+
+        // === MAIN CONTENT ===
+        // In Edit mode with tabs: show content based on active tab
+        // In Add mode or when Description tab selected: show editable fields
+        let show_fields = !is_edit || req_for_tabs.is_none() || self.active_tab == DetailTab::Description;
+
+        if show_fields {
+            // === EDITABLE FIELDS: Left panel (metadata) + Right panel (description) ===
+            let default_left_width = available_width * 0.25;
 
         // Track if type changed for status validation
         let old_type = self.form_type.clone();
@@ -27067,16 +27128,44 @@ fn main() {
                     });
             });
 
-        // Auto-sync description's first line to title in Add mode
-        self.sync_title_from_description(is_edit);
+            // Auto-sync description's first line to title in Add mode
+            self.sync_title_from_description(is_edit);
 
-        // Handle type change - validate status
-        if old_type != self.form_type {
-            let statuses = self.store.get_statuses_for_type(&self.form_type);
-            if !statuses.contains(&self.form_status_string) {
-                self.form_status_string = statuses.first().cloned().unwrap_or_else(|| "Draft".to_string());
+            // Handle type change - validate status
+            if old_type != self.form_type {
+                let statuses = self.store.get_statuses_for_type(&self.form_type);
+                if !statuses.contains(&self.form_status_string) {
+                    self.form_status_string = statuses.first().cloned().unwrap_or_else(|| "Draft".to_string());
+                }
+                self.form_custom_fields.clear();
             }
-            self.form_custom_fields.clear();
+        } else if let Some(ref req) = req_for_tabs {
+            // === OTHER TABS: Show read-only content ===
+            let req_id = req.id;
+            let idx = self.selected_idx.unwrap_or(0);
+            egui::ScrollArea::vertical()
+                .id_salt("form_tab_scroll")
+                .auto_shrink([false, false])
+                .show(ui, |ui| match &self.active_tab {
+                    DetailTab::Ai => {
+                        self.show_ai_tab(ui, req, req_id);
+                    }
+                    DetailTab::Comments => {
+                        self.show_comments_tab(ui, req, idx);
+                    }
+                    DetailTab::Links => {
+                        self.show_links_tab(ui, req, req_id);
+                    }
+                    DetailTab::Attachments => {
+                        self.show_attachments_tab(ui, req, req_id);
+                    }
+                    DetailTab::History => {
+                        self.show_history_tab(ui, req);
+                    }
+                    DetailTab::Description => {
+                        // Should not reach here - handled by show_fields branch
+                    }
+                });
         }
 
         // Show cancel confirmation dialog if there are unsaved changes
@@ -30085,6 +30174,29 @@ impl eframe::App for RequirementsApp {
                 self.current_key_context,
             ) {
                 self.pending_save = true;
+            }
+
+            // Ctrl+1-6 for tab switching in Edit mode (FR-0295)
+            // trace:FR-0295 | ai:claude
+            if matches!(self.current_view, View::Edit) {
+                ctx.input(|i| {
+                    let ctrl = i.modifiers.ctrl || i.modifiers.mac_cmd;
+                    if ctrl {
+                        if i.key_pressed(egui::Key::Num1) {
+                            self.active_tab = DetailTab::Ai;
+                        } else if i.key_pressed(egui::Key::Num2) {
+                            self.active_tab = DetailTab::Description;
+                        } else if i.key_pressed(egui::Key::Num3) {
+                            self.active_tab = DetailTab::Comments;
+                        } else if i.key_pressed(egui::Key::Num4) {
+                            self.active_tab = DetailTab::Links;
+                        } else if i.key_pressed(egui::Key::Num5) {
+                            self.active_tab = DetailTab::Attachments;
+                        } else if i.key_pressed(egui::Key::Num6) {
+                            self.active_tab = DetailTab::History;
+                        }
+                    }
+                });
             }
 
             // Quick change popups and other list-context hotkeys
