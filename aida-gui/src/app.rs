@@ -28,7 +28,7 @@ use crate::storage::create_storage_client;
 use eframe::egui;
 use similar::{ChangeTag, TextDiff};
 use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -301,6 +301,12 @@ fn copy_to_primary_selection(text: &str) {
 fn get_clipboard_text() -> Option<String> {
     use crate::platform::PlatformServices;
     crate::platform::platform().get_clipboard()
+}
+
+/// Format a UTC datetime as local time string
+/// This converts UTC timestamps (stored in database) to user's local timezone for display
+fn format_local_datetime(dt: DateTime<Utc>, fmt: &str) -> String {
+    dt.with_timezone(&Local).format(fmt).to_string()
 }
 
 /// Format a requirement as a prompt for Claude Code implementation
@@ -13154,9 +13160,9 @@ impl RequirementsApp {
                         ui.add_space(10.0);
                         ui.separator();
                         ui.horizontal(|ui| {
-                            ui.weak(format!("Created: {}", req.created_at.format("%Y-%m-%d %H:%M")));
+                            ui.weak(format!("Created: {}", format_local_datetime(req.created_at, "%Y-%m-%d %H:%M")));
                             ui.separator();
-                            ui.weak(format!("Modified: {}", req.modified_at.format("%Y-%m-%d %H:%M")));
+                            ui.weak(format!("Modified: {}", format_local_datetime(req.modified_at, "%Y-%m-%d %H:%M")));
                         });
                     });
             });
@@ -13259,7 +13265,7 @@ impl RequirementsApp {
                             }
 
                             // Created date
-                            ui.label(baseline.created_at.format("%Y-%m-%d %H:%M").to_string());
+                            ui.label(format_local_datetime(baseline.created_at, "%Y-%m-%d %H:%M"));
 
                             // Created by
                             ui.label(&baseline.created_by);
@@ -13839,7 +13845,9 @@ impl RequirementsApp {
                     let mut current_date: Option<chrono::NaiveDate> = None;
 
                     for (idx, event) in filtered_events.iter().enumerate() {
-                        let event_date = event.timestamp.date_naive();
+                        // Convert to local time for display
+                        let local_timestamp = event.timestamp.with_timezone(&Local);
+                        let event_date = local_timestamp.date_naive();
 
                         // Show date header when date changes
                         if current_date != Some(event_date) {
@@ -13859,7 +13867,7 @@ impl RequirementsApp {
                         let selected = selected_event_idx == Some(idx);
                         let label_text = format!(
                             "{} {} {} - {} by {}",
-                            event.timestamp.format("%H:%M"),
+                            local_timestamp.format("%H:%M"),
                             event.event_type.icon(),
                             event.event_type.label(),
                             if event.spec_id.is_empty() {
@@ -13932,7 +13940,7 @@ impl RequirementsApp {
                         .spacing([20.0, 8.0])
                         .show(ui, |ui| {
                             ui.label("Time:");
-                            ui.label(event.timestamp.format("%Y-%m-%d %H:%M:%S").to_string());
+                            ui.label(format_local_datetime(event.timestamp, "%Y-%m-%d %H:%M:%S"));
                             ui.end_row();
 
                             ui.label("Author:");
@@ -16952,7 +16960,6 @@ impl RequirementsApp {
 
     #[cfg(not(target_arch = "wasm32"))]
     fn backup_database(&mut self) {
-        use chrono::Local;
 
         let db_path = self.storage.path();
         let timestamp = Local::now().format("%Y%m%d_%H%M%S");
@@ -24140,11 +24147,11 @@ impl RequirementsApp {
                                             }
 
                                             ui.label("Created:");
-                                            ui.label(req.created_at.format("%Y-%m-%d %H:%M").to_string());
+                                            ui.label(format_local_datetime(req.created_at, "%Y-%m-%d %H:%M"));
                                             ui.end_row();
 
                                             ui.label("Modified:");
-                                            ui.label(req.modified_at.format("%Y-%m-%d %H:%M").to_string());
+                                            ui.label(format_local_datetime(req.modified_at, "%Y-%m-%d %H:%M"));
                                             ui.end_row();
                                         });
                                 });
@@ -24281,11 +24288,11 @@ impl RequirementsApp {
                             }
 
                             ui.label("Created:");
-                            ui.label(req.created_at.format("%Y-%m-%d %H:%M").to_string());
+                            ui.label(format_local_datetime(req.created_at, "%Y-%m-%d %H:%M"));
                             ui.end_row();
 
                             ui.label("Modified:");
-                            ui.label(req.modified_at.format("%Y-%m-%d %H:%M").to_string());
+                            ui.label(format_local_datetime(req.modified_at, "%Y-%m-%d %H:%M"));
                             ui.end_row();
                         });
 
@@ -24407,12 +24414,7 @@ impl RequirementsApp {
             // Evaluation timestamp
             ui.horizontal(|ui| {
                 ui.label("Evaluated:");
-                ui.label(
-                    stored_eval
-                        .evaluated_at
-                        .format("%Y-%m-%d %H:%M")
-                        .to_string(),
-                );
+                ui.label(format_local_datetime(stored_eval.evaluated_at, "%Y-%m-%d %H:%M"));
             });
             ui.add_space(10.0);
 
@@ -24664,7 +24666,7 @@ impl RequirementsApp {
                                 "Verified: {}",
                                 url_link
                                     .last_verified
-                                    .map(|d| d.format("%Y-%m-%d %H:%M").to_string())
+                                    .map(|d| format_local_datetime(d, "%Y-%m-%d %H:%M"))
                                     .unwrap_or_default()
                             ));
                         } else {
@@ -24841,7 +24843,7 @@ impl RequirementsApp {
                     tooltip.push_str(&format!("\nCreated by: {}", created_by));
                 }
                 if let Some(created_at) = rel_created_at {
-                    tooltip.push_str(&format!("\nCreated: {}", created_at.format("%Y-%m-%d %H:%M")));
+                    tooltip.push_str(&format!("\nCreated: {}", format_local_datetime(created_at, "%Y-%m-%d %H:%M")));
                 }
 
                 // Show hover cursor and tooltip
@@ -25869,7 +25871,7 @@ fn main() {
                     if let Some(ref by) = attachment.added_by {
                         ui.label(format!("by @{}", by));
                     }
-                    ui.label(attachment.added_at.format("%Y-%m-%d").to_string());
+                    ui.label(format_local_datetime(attachment.added_at, "%Y-%m-%d"));
                 });
             }
 
@@ -25907,7 +25909,7 @@ fn main() {
                     ui.horizontal(|ui| {
                         ui.label(format!(
                             "🕒 {}",
-                            entry.timestamp.format("%Y-%m-%d %H:%M:%S")
+                            format_local_datetime(entry.timestamp, "%Y-%m-%d %H:%M:%S")
                         ));
                         ui.label(format!("👤 {}", entry.author));
                     });
@@ -27804,7 +27806,7 @@ fn main() {
                         ui.label(format!("👤 {}", comment.author));
                         ui.label(format!(
                             "🕒 {}",
-                            comment.created_at.format("%Y-%m-%d %H:%M")
+                            format_local_datetime(comment.created_at, "%Y-%m-%d %H:%M")
                         ));
                     });
 
