@@ -9109,18 +9109,20 @@ impl RequirementsApp {
         }
 
         let max_size = modal_max_size(ctx);
-        // Constrain Settings window width to be reasonable - max 800px or 90% of screen
-        let settings_max_width = 800.0_f32.min(max_size.x * 0.9);
+        // Fixed settings window size like Obsidian - consistent across all tabs
+        // Width: 800px max or 90% of screen, Height: 70% of screen (max 600px)
+        let settings_width = 800.0_f32.min(max_size.x * 0.9);
+        let settings_height = 600.0_f32.min(max_size.y * 0.7);
+        let sidebar_width = 110.0;
+        let content_width = settings_width - sidebar_width - 30.0; // Account for padding/separator
 
         let mut close_requested = false;
 
         egui::Window::new("⚙ Settings")
             .collapsible(false)
-            .resizable(true)
-            .min_width(400.0)
-            .max_width(settings_max_width)
-            .max_height(max_size.y)
-            .scroll([false, true]) // Enable vertical scrolling for the whole window
+            .resizable(false) // Fixed size like Obsidian
+            .fixed_size([settings_width, settings_height])
+            .scroll([false, false]) // No window-level scroll, content scrolls independently
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .title_bar(false) // Custom title bar for close button
             .show(ctx, |ui| {
@@ -9135,15 +9137,18 @@ impl RequirementsApp {
                 });
                 ui.separator();
 
-                // Constrain content width to prevent overflow
-                ui.set_max_width(settings_max_width - 30.0);
+                // Calculate available height for content (minus title bar and save/cancel)
+                let title_height = 35.0;
+                let footer_height = if self.settings_tab.needs_save_cancel() { 50.0 } else { 0.0 };
+                let content_height = settings_height - title_height - footer_height - 20.0;
 
                 // Vertical sidebar tabs layout (like Obsidian)
                 ui.horizontal(|ui| {
-                    // Left sidebar with tab buttons
+                    // Left sidebar with tab buttons - fixed height
                     ui.vertical(|ui| {
-                        ui.set_min_width(100.0);
-                        ui.set_max_width(100.0);
+                        ui.set_min_width(sidebar_width);
+                        ui.set_max_width(sidebar_width);
+                        ui.set_min_height(content_height);
 
                         // Style the sidebar tabs to be full-width buttons
                         let sidebar_tab = |ui: &mut egui::Ui, current: &mut SettingsTab, target: SettingsTab, label: &str| {
@@ -9170,47 +9175,51 @@ impl RequirementsApp {
 
                     ui.separator();
 
-                    // Right content panel
-                    ui.vertical(|ui| {
-                        ui.add_space(5.0);
+                    // Right content panel with scrolling
+                    egui::ScrollArea::vertical()
+                        .max_height(content_height)
+                        .show(ui, |ui| {
+                            ui.set_min_width(content_width);
+                            ui.set_min_height(content_height - 10.0);
+                            ui.add_space(5.0);
 
-                        // Tab content
-                        match self.settings_tab {
-                            SettingsTab::User => {
-                                self.show_settings_user_tab(ui);
+                            // Tab content
+                            match self.settings_tab {
+                                SettingsTab::User => {
+                                    self.show_settings_user_tab(ui);
+                                }
+                                SettingsTab::Appearance => {
+                                    self.show_settings_appearance_tab(ui);
+                                }
+                                SettingsTab::Keybindings => {
+                                    self.show_settings_keybindings_tab(ui, ctx);
+                                }
+                                SettingsTab::IDs => {
+                                    self.show_settings_ids_tab(ui);
+                                }
+                                SettingsTab::Relationships => {
+                                    self.show_settings_relationships_tab(ui);
+                                }
+                                SettingsTab::Reactions => {
+                                    self.show_settings_reactions_tab(ui);
+                                }
+                                SettingsTab::TypeDefinitions => {
+                                    self.show_settings_type_definitions_tab(ui);
+                                }
+                                SettingsTab::Members => {
+                                    self.show_settings_members_tab(ui);
+                                }
+                                SettingsTab::Database => {
+                                    self.show_settings_database_tab(ui);
+                                }
+                                SettingsTab::AiPrompts => {
+                                    self.show_settings_ai_prompts_tab(ui);
+                                }
+                                SettingsTab::AiIntegration => {
+                                    self.show_settings_ai_integration_tab(ui);
+                                }
                             }
-                            SettingsTab::Appearance => {
-                                self.show_settings_appearance_tab(ui);
-                            }
-                            SettingsTab::Keybindings => {
-                                self.show_settings_keybindings_tab(ui, ctx);
-                            }
-                            SettingsTab::IDs => {
-                                self.show_settings_ids_tab(ui);
-                            }
-                            SettingsTab::Relationships => {
-                                self.show_settings_relationships_tab(ui);
-                            }
-                            SettingsTab::Reactions => {
-                                self.show_settings_reactions_tab(ui);
-                            }
-                            SettingsTab::TypeDefinitions => {
-                                self.show_settings_type_definitions_tab(ui);
-                            }
-                            SettingsTab::Members => {
-                                self.show_settings_members_tab(ui);
-                            }
-                            SettingsTab::Database => {
-                                self.show_settings_database_tab(ui);
-                            }
-                            SettingsTab::AiPrompts => {
-                                self.show_settings_ai_prompts_tab(ui);
-                            }
-                            SettingsTab::AiIntegration => {
-                                self.show_settings_ai_integration_tab(ui);
-                            }
-                        }
-                    });
+                        });
                 });
 
                 // Only show Save/Cancel for tabs that need them
