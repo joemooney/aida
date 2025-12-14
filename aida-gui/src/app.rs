@@ -9110,11 +9110,11 @@ impl RequirementsApp {
 
         let max_size = modal_max_size(ctx);
         // Fixed settings window size like Obsidian - consistent across all tabs
-        // Width: 800px max or 90% of screen, Height: 70% of screen (max 600px)
-        let settings_width = 800.0_f32.min(max_size.x * 0.9);
+        // Width: 900px max or 90% of screen (increased for sidebar), Height: 70% of screen (max 600px)
+        let settings_width = 900.0_f32.min(max_size.x * 0.9);
         let settings_height = 600.0_f32.min(max_size.y * 0.7);
-        let sidebar_width = 110.0;
-        let content_width = settings_width - sidebar_width - 30.0; // Account for padding/separator
+        let sidebar_width = 120.0;
+        let content_width = settings_width - sidebar_width - 25.0; // Account for padding/separator
 
         let mut close_requested = false;
 
@@ -9179,16 +9179,20 @@ impl RequirementsApp {
 
                     ui.separator();
 
-                    // Right content panel with both vertical and horizontal scrolling
-                    egui::ScrollArea::both()
-                        .max_height(content_height)
-                        .max_width(content_width)
-                        .show(ui, |ui| {
-                            // Constrain content width to prevent excessive expansion
-                            ui.set_max_width(content_width - 20.0);
+                    // Right content panel - constrained to fixed width
+                    ui.vertical(|ui| {
+                        // Constrain content width to prevent horizontal overflow
+                        ui.set_min_width(content_width);
+                        ui.set_max_width(content_width);
 
-                            // Tab content - aligned to top (no min_height that would center)
-                            match self.settings_tab {
+                        egui::ScrollArea::vertical()
+                            .max_height(content_height)
+                            .show(ui, |ui| {
+                                // Also constrain the scroll area content
+                                ui.set_max_width(content_width - 20.0);
+
+                                // Tab content - aligned to top
+                                match self.settings_tab {
                                 SettingsTab::User => {
                                     self.show_settings_user_tab(ui);
                                 }
@@ -9224,6 +9228,7 @@ impl RequirementsApp {
                                 }
                             }
                         });
+                    });
                 });
 
                 // Only show Save/Cancel for tabs that need them
