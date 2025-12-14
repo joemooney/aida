@@ -6379,6 +6379,7 @@ impl RequirementsApp {
             Theme::SolarizedDark,
             Theme::Nord,
             Theme::DocsDark,
+            Theme::PurpleRain,
         ];
 
         // Find current theme index
