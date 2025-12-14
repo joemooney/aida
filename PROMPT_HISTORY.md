@@ -1769,3 +1769,43 @@ A chronological record of development sessions and changes made to the Requireme
   - Lines 30179-30200: Ctrl+1-6 keyboard shortcut handling
 - **Commit**: a2d7cb1
 - **Status**: Complete - FR-0295 marked as completed
+
+### GitLab Integration Planning (2025-12-14)
+- **Prompt**: Think deeply about GitLab integration - bugs/issues stored in GitLab with CRUD operations, or AIDA as master with periodic sync
+- **Requirement**: EPIC-0320 (GitLab Integration)
+- **Goal**: Design comprehensive GitLab integration with phased implementation
+
+**Phase 1: Read-only Integration**
+- STORY-0321: GitLab Connection Configuration
+- STORY-0322: View GitLab Issues in AIDA
+- STORY-0323: Link AIDA Requirements to GitLab Issues
+
+**Phase 2: One-way Create**
+- STORY-0324: Create GitLab Issue from AIDA Requirement
+- STORY-0325: GitLab Sync State Tracking
+- STORY-0326: GitLab Label Mapping Configuration
+
+**Phase 3: Divergence Detection**
+- STORY-0327: Poll GitLab for Changes
+- STORY-0328: Divergence Detection and Display
+- STORY-0329: GitLab Change Notifications
+
+**Phase 4: Bidirectional Sync**
+- STORY-0330: Push AIDA Changes to GitLab
+- STORY-0331: Pull GitLab Changes to AIDA
+- STORY-0332: Conflict Resolution for GitLab Sync
+- STORY-0333: Automated Sync Rules Configuration
+
+**Technical Spike**
+- SPIKE-0334: GitLab Integration Architecture Design
+
+**Key Design Decisions:**
+1. Hybrid approach - AIDA as requirements master, GitLab for developer work
+2. Phased implementation to deliver value incrementally
+3. Polling-based change detection (webhooks as future enhancement)
+4. Flexible sync rules - per-field direction control
+5. Three-way diff for conflict resolution
+6. Sync state tracked in separate table/collection
+7. Direct reqwest for API calls (vs heavy gitlab crate)
+
+- **Status**: Requirements captured, ready for implementation prioritization
