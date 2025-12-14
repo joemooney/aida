@@ -1741,3 +1741,31 @@ A chronological record of development sessions and changes made to the Requireme
   aida --file "postgres://..." db info
   ```
 - **Status**: Complete - compiles successfully
+
+### Edit View Tabs Matching Detail View (2025-12-14)
+- **Prompt**: Implement FR-0295 - Edit req should show tabs same as Detail view
+- **Requirement**: FR-0295
+- **Goal**: Add tabbed interface to Edit view matching Detail view for consistent navigation
+- **Implementation**:
+  1. **Tab Bar in Edit Mode** (app.rs):
+     - Added tab bar to `show_form_stacked()` after title bar
+     - Tabs: AI, Fields, Comments, Links, Attachments, History
+     - "Fields" tab shows editable form (renamed from "Description" for clarity)
+     - Other tabs show read-only content using existing tab display functions
+  2. **Content Routing**:
+     - `show_fields` conditional routes to appropriate content
+     - Fields tab shows left panel (metadata) + right panel (description editor)
+     - Non-fields tabs call existing `show_ai_tab()`, `show_comments_tab()`, etc.
+  3. **Tab Selection Persistence**:
+     - Reuses existing `active_tab: DetailTab` field
+     - Tab selection persists between Detail and Edit views
+  4. **Keyboard Navigation** (FR-0295):
+     - Added Ctrl+1-6 shortcuts for tab switching in Edit mode
+     - Ctrl+1=AI, Ctrl+2=Fields, Ctrl+3=Comments, Ctrl+4=Links, Ctrl+5=Attachments, Ctrl+6=History
+     - Handles both Ctrl (Linux/Windows) and Cmd (macOS)
+- **Key Code Changes**:
+  - Lines 26729-26785: Tab bar UI in `show_form_stacked()`
+  - Lines 26792-27172: Conditional content based on `show_fields` and `active_tab`
+  - Lines 30179-30200: Ctrl+1-6 keyboard shortcut handling
+- **Commit**: a2d7cb1
+- **Status**: Complete - FR-0295 marked as completed
