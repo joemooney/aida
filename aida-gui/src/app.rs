@@ -66,6 +66,171 @@ enum MigrationWarningKind {
     PossibleStaleYaml,
 }
 
+// trace:STORY-0327 | ai:claude
+/// Result from background GitLab polling
+#[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+#[derive(Clone, Debug)]
+struct GitLabPollResult {
+    /// Number of sync states checked
+    total_checked: usize,
+    /// Number of items in sync
+    in_sync: usize,
+    /// Number of items with AIDA changes
+    aida_modified: usize,
+    /// Number of items with GitLab changes
+    gitlab_modified: usize,
+    /// Number of conflicts
+    conflicts: usize,
+    /// Error message if polling failed
+    error: Option<String>,
+    /// When the poll completed
+    timestamp: std::time::Instant,
+}
+
+// trace:STORY-0327 | ai:claude
+/// Background function to poll GitLab for sync state changes
+#[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+async fn poll_gitlab_for_changes(
+    config: &GitLabConfig,
+    sync_states: Vec<aida_core::GitLabSyncState>,
+    requirements: Vec<Requirement>,
+    storage_path: &std::path::Path,
+) -> GitLabPollResult {
+    use aida_core::{GitLabSyncState, SyncStatus, Storage};
+
+    let client = match GitLabClient::new(config.clone()) {
+        Ok(c) => c,
+        Err(e) => {
+            return GitLabPollResult {
+                total_checked: 0,
+                in_sync: 0,
+                aida_modified: 0,
+                gitlab_modified: 0,
+                conflicts: 0,
+                error: Some(format!("Failed to create GitLab client: {}", e)),
+                timestamp: std::time::Instant::now(),
+            };
+        }
+    };
+
+    // Collect all issue IIDs to fetch
+    let iids: Vec<u64> = sync_states.iter().map(|s| s.gitlab_issue_iid).collect();
+
+    if iids.is_empty() {
+        return GitLabPollResult {
+            total_checked: 0,
+            in_sync: 0,
+            aida_modified: 0,
+            gitlab_modified: 0,
+            conflicts: 0,
+            error: None,
+            timestamp: std::time::Instant::now(),
+        };
+    }
+
+    // Fetch all linked issues in one API call
+    let filter = IssueFilter {
+        iids: Some(iids),
+        ..Default::default()
+    };
+
+    let issues = match client.list_issues(Some(filter)).await {
+        Ok(i) => i,
+        Err(e) => {
+            return GitLabPollResult {
+                total_checked: 0,
+                in_sync: 0,
+                aida_modified: 0,
+                gitlab_modified: 0,
+                conflicts: 0,
+                error: Some(format!("Failed to fetch GitLab issues: {}", e)),
+                timestamp: std::time::Instant::now(),
+            };
+        }
+    };
+
+    // Build lookup maps
+    let issue_map: std::collections::HashMap<u64, &GitLabIssue> =
+        issues.iter().map(|i| (i.iid, i)).collect();
+    let req_map: std::collections::HashMap<uuid::Uuid, &Requirement> =
+        requirements.iter().map(|r| (r.id, r)).collect();
+
+    let mut total_checked = 0;
+    let mut in_sync = 0;
+    let mut aida_modified = 0;
+    let mut gitlab_modified = 0;
+    let mut conflicts = 0;
+    let mut updates: Vec<aida_core::GitLabSyncState> = Vec::new();
+
+    for state in &sync_states {
+        total_checked += 1;
+
+        let Some(issue) = issue_map.get(&state.gitlab_issue_iid) else {
+            // Issue not found - might have been deleted
+            continue;
+        };
+
+        let Some(req) = req_map.get(&state.requirement_id) else {
+            // Requirement not found
+            continue;
+        };
+
+        // Calculate current hashes
+        let current_aida_hash = GitLabSyncState::hash_requirement(req);
+        let current_gitlab_hash = GitLabSyncState::hash_gitlab_issue(issue);
+
+        // Compare with stored hashes
+        let aida_changed = current_aida_hash != state.aida_content_hash;
+        let gitlab_changed = current_gitlab_hash != state.gitlab_content_hash;
+
+        let new_status = match (aida_changed, gitlab_changed) {
+            (false, false) => {
+                in_sync += 1;
+                SyncStatus::InSync
+            }
+            (true, false) => {
+                aida_modified += 1;
+                SyncStatus::AidaModified
+            }
+            (false, true) => {
+                gitlab_modified += 1;
+                SyncStatus::GitLabModified
+            }
+            (true, true) => {
+                conflicts += 1;
+                SyncStatus::Conflict
+            }
+        };
+
+        // Only create an update if status changed
+        if new_status != state.sync_status {
+            let mut updated_state = state.clone();
+            updated_state.sync_status = new_status;
+            updates.push(updated_state);
+        }
+    }
+
+    // Save updated sync states to storage
+    if !updates.is_empty() {
+        let storage = Storage::new(storage_path);
+        for state in updates {
+            if let Err(e) = storage.save_sync_state(&state) {
+                eprintln!("Failed to save updated sync state: {}", e);
+            }
+        }
+    }
+
+    GitLabPollResult {
+        total_checked,
+        in_sync,
+        aida_modified,
+        gitlab_modified,
+        conflicts,
+        error: None,
+        timestamp: std::time::Instant::now(),
+    }
+}
+
 // =============================================================================
 // TEXT EDIT CONTEXT MENU IMPLEMENTATION
 // =============================================================================
@@ -4002,6 +4167,17 @@ pub struct RequirementsApp {
     create_gitlab_issue_labels: String,                              // Comma-separated labels
     #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
     create_gitlab_issue_creating: bool,                              // True while creating issue
+    // GitLab polling state (STORY-0327)
+    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+    gitlab_polling_enabled: bool,                                    // Whether background polling is active
+    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+    gitlab_last_poll: Option<std::time::Instant>,                    // When last poll happened
+    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+    gitlab_poll_receiver: Option<std::sync::mpsc::Receiver<GitLabPollResult>>, // Channel for poll results
+    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+    gitlab_poll_status: Option<String>,                              // Last poll status message
+    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+    gitlab_diverged_count: usize,                                    // Count of diverged sync states
 
     // WASM async loading state (FR-0281) - for gRPC-Web client connection
     #[cfg(target_arch = "wasm32")]
@@ -4668,6 +4844,17 @@ impl RequirementsApp {
             create_gitlab_issue_labels: String::new(),
             #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
             create_gitlab_issue_creating: false,
+            // GitLab polling state (STORY-0327)
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_polling_enabled: true, // Enabled by default if GitLab configured
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_last_poll: None,
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_poll_receiver: None,
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_poll_status: None,
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_diverged_count: 0,
         }
     }
 
@@ -5301,6 +5488,17 @@ impl RequirementsApp {
             create_gitlab_issue_labels: String::new(),
             #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
             create_gitlab_issue_creating: false,
+            // GitLab polling state (STORY-0327)
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_polling_enabled: true, // Enabled by default if GitLab configured
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_last_poll: None,
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_poll_receiver: None,
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_poll_status: None,
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_diverged_count: 0,
         }
     }
 
@@ -7766,6 +7964,49 @@ impl RequirementsApp {
                         } else {
                             self.theme_change_display = None;
                         }
+                    }
+
+                    // GitLab sync status indicator (STORY-0327)
+                    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+                    if self.gitlab_config.is_some() {
+                        ui.separator();
+
+                        // Show sync status with color coding
+                        let (icon, color, tooltip) = if self.gitlab_poll_receiver.is_some() {
+                            // Currently polling
+                            ("🔄", egui::Color32::YELLOW, "Checking GitLab for changes...".to_string())
+                        } else if self.gitlab_diverged_count > 0 {
+                            // Has diverged items
+                            let tooltip = format!(
+                                "{} item(s) have diverged from GitLab\n{}",
+                                self.gitlab_diverged_count,
+                                self.gitlab_poll_status.as_deref().unwrap_or("")
+                            );
+                            ("⚠", egui::Color32::from_rgb(255, 165, 0), tooltip) // Orange warning
+                        } else if let Some(ref status) = self.gitlab_poll_status {
+                            // In sync
+                            ("✓", egui::Color32::from_rgb(100, 200, 100), status.clone())
+                        } else {
+                            // Not yet polled
+                            ("○", egui::Color32::GRAY, "GitLab sync not yet checked".to_string())
+                        };
+
+                        // Add last poll time to tooltip
+                        let tooltip = if let Some(last_poll) = self.gitlab_last_poll {
+                            let elapsed = last_poll.elapsed().as_secs();
+                            if elapsed < 60 {
+                                format!("{}\nLast checked: {}s ago", tooltip, elapsed)
+                            } else if elapsed < 3600 {
+                                format!("{}\nLast checked: {}m ago", tooltip, elapsed / 60)
+                            } else {
+                                format!("{}\nLast checked: {}h ago", tooltip, elapsed / 3600)
+                            }
+                        } else {
+                            tooltip
+                        };
+
+                        let response = ui.label(egui::RichText::new(format!("GL:{}", icon)).color(color));
+                        response.on_hover_text(tooltip);
                     }
 
                     // Show current zoom level
@@ -15868,6 +16109,60 @@ impl RequirementsApp {
                     }
                 });
             });
+    }
+
+    // trace:STORY-0327 | ai:claude
+    /// Start background GitLab polling to check for sync state changes
+    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+    fn start_gitlab_poll(&mut self, ctx: egui::Context) {
+        let Some(config) = self.gitlab_config.clone() else {
+            return;
+        };
+
+        // Load sync states from storage
+        let sync_states = match self.storage.load_all_sync_states() {
+            Ok(states) => states,
+            Err(e) => {
+                eprintln!("Failed to load sync states for polling: {}", e);
+                self.gitlab_poll_status = Some(format!("Failed to load sync states: {}", e));
+                return;
+            }
+        };
+
+        if sync_states.is_empty() {
+            // No linked issues to poll
+            self.gitlab_last_poll = Some(std::time::Instant::now());
+            self.gitlab_poll_status = Some("No linked issues to check".to_string());
+            self.gitlab_diverged_count = 0;
+            return;
+        }
+
+        // Clone requirements for the thread
+        let requirements: Vec<_> = sync_states.iter()
+            .filter_map(|state| {
+                self.store.requirements.iter()
+                    .find(|r| r.id == state.requirement_id)
+                    .cloned()
+            })
+            .collect();
+
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.gitlab_poll_receiver = Some(rx);
+
+        // Clone storage path for the thread
+        let storage_path = self.storage.path().to_path_buf();
+
+        std::thread::spawn(move || {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let result = runtime.block_on(async {
+                poll_gitlab_for_changes(&config, sync_states, requirements, &storage_path).await
+            });
+
+            let _ = tx.send(result);
+
+            // Request repaint
+            ctx.request_repaint();
+        });
     }
 
     /// Show the detail panel for the Planning view (left side)
@@ -30474,6 +30769,70 @@ impl eframe::App for RequirementsApp {
                         self.show_ai_results_panel = true;
                     }
                 }
+            }
+        }
+
+        // Poll for background GitLab polling results (native only with gitlab feature)
+        // trace:STORY-0327 | ai:claude
+        #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+        if let Some(receiver) = &self.gitlab_poll_receiver {
+            if let Ok(result) = receiver.try_recv() {
+                // Process the poll result
+                self.gitlab_poll_receiver = None;
+                self.gitlab_last_poll = Some(result.timestamp);
+
+                if let Some(error) = result.error {
+                    self.gitlab_poll_status = Some(format!("Poll failed: {}", error));
+                    self.gitlab_diverged_count = 0;
+                } else {
+                    let diverged = result.aida_modified + result.gitlab_modified + result.conflicts;
+                    self.gitlab_diverged_count = diverged;
+
+                    if diverged > 0 {
+                        self.gitlab_poll_status = Some(format!(
+                            "Found {} diverged ({} AIDA, {} GitLab, {} conflicts)",
+                            diverged, result.aida_modified, result.gitlab_modified, result.conflicts
+                        ));
+                        // Show toast for changes detected
+                        self.toast_message = Some(ToastNotification {
+                            message: format!("GitLab sync: {} item(s) have diverged", diverged),
+                            is_success: false,
+                            show_until: Instant::now() + Duration::from_secs(5),
+                        });
+                    } else {
+                        self.gitlab_poll_status = Some(format!(
+                            "All {} synced items in sync",
+                            result.in_sync
+                        ));
+                    }
+                }
+
+                // Request repaint to update status bar
+                ctx.request_repaint();
+            }
+        }
+
+        // Trigger GitLab background polling if enabled and enough time has passed
+        // trace:STORY-0327 | ai:claude
+        #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+        if self.gitlab_polling_enabled
+            && self.gitlab_config.is_some()
+            && self.gitlab_poll_receiver.is_none()  // Not already polling
+        {
+            let should_poll = match self.gitlab_last_poll {
+                None => true,  // Never polled before
+                Some(last) => {
+                    // Get interval from config (default 5 minutes)
+                    let interval_secs = self.gitlab_config
+                        .as_ref()
+                        .map(|c| c.polling.interval_seconds)
+                        .unwrap_or(300);
+                    last.elapsed() >= std::time::Duration::from_secs(interval_secs)
+                }
+            };
+
+            if should_poll {
+                self.start_gitlab_poll(ctx.clone());
             }
         }
 
