@@ -3470,7 +3470,6 @@ pub struct RequirementsApp {
     show_settings_dialog: bool,
     show_settings_close_confirm: bool, // Show save/discard/cancel dialog when closing with unsaved changes
     settings_tab: SettingsTab,
-    settings_sidebar_width: f32, // Resizable sidebar width for settings dialog
     ids_subtab: IdsSubTab,
     ai_subtab: AiSubTab,
     // Skills loaded from .claude/skills/ directory
@@ -4283,7 +4282,6 @@ impl RequirementsApp {
             show_settings_dialog: false,
             show_settings_close_confirm: false,
             settings_tab: SettingsTab::default(),
-            settings_sidebar_width: 140.0, // Default sidebar width
             ids_subtab: IdsSubTab::default(),
             ai_subtab: AiSubTab::default(),
             loaded_skills: Vec::new(),
@@ -4862,7 +4860,6 @@ impl RequirementsApp {
             show_settings_dialog: false,
             show_settings_close_confirm: false,
             settings_tab: SettingsTab::default(),
-            settings_sidebar_width: 140.0, // Default sidebar width
             ids_subtab: IdsSubTab::default(),
             ai_subtab: AiSubTab::default(),
             loaded_skills: Vec::new(),
@@ -5433,7 +5430,6 @@ impl RequirementsApp {
             show_settings_dialog: false,
             show_settings_close_confirm: false,
             settings_tab: SettingsTab::default(),
-            settings_sidebar_width: 140.0, // Default sidebar width
             ids_subtab: IdsSubTab::default(),
             ai_subtab: AiSubTab::default(),
             loaded_skills: Vec::new(),
@@ -9252,9 +9248,11 @@ impl RequirementsApp {
 
         let max_size = modal_max_size(ctx);
         // Default settings window size - resizable by user
-        // Width: 900px max or 90% of screen, Height: 70% of screen (max 600px)
+        // Width: 900px max or 90% of screen (increased for sidebar), Height: 70% of screen (max 600px)
         let settings_width = 900.0_f32.min(max_size.x * 0.9);
         let settings_height = 600.0_f32.min(max_size.y * 0.7);
+        let sidebar_width = 120.0;
+        let content_width = settings_width - sidebar_width - 25.0; // Account for padding/separator
 
         let mut close_requested = false;
 
@@ -9311,17 +9309,14 @@ impl RequirementsApp {
                 // Get actual available space for dynamic sizing when window is resized
                 let available_rect = ui.available_rect_before_wrap();
                 let actual_content_height = available_rect.height() - 10.0;
-                let total_width = available_rect.width();
+                let actual_content_width = available_rect.width() - sidebar_width - 25.0;
 
-                // Use stored sidebar width (resizable)
-                let current_sidebar_width = self.settings_sidebar_width;
-
-                // Vertical sidebar tabs layout with resizable splitter
+                // Vertical sidebar tabs layout (like Obsidian)
                 ui.horizontal_top(|ui| {
                     // Left sidebar with tab buttons
                     ui.vertical(|ui| {
-                        ui.set_min_width(current_sidebar_width);
-                        ui.set_max_width(current_sidebar_width);
+                        ui.set_min_width(sidebar_width);
+                        ui.set_max_width(sidebar_width);
 
                         // Style the sidebar tabs to be full-width buttons
                         let sidebar_tab = |ui: &mut egui::Ui, current: &mut SettingsTab, target: SettingsTab, label: &str| {
@@ -9346,39 +9341,9 @@ impl RequirementsApp {
                         sidebar_tab(ui, &mut self.settings_tab, SettingsTab::Database, "🗄 Database");
                     });
 
-                    // Draggable splitter between sidebar and content
-                    let splitter_response = ui.allocate_response(
-                        egui::vec2(8.0, actual_content_height),
-                        egui::Sense::click_and_drag(),
-                    );
-
-                    // Draw the splitter line
-                    let splitter_rect = splitter_response.rect;
-                    let visuals = ui.style().visuals.clone();
-                    let splitter_color = if splitter_response.hovered() || splitter_response.dragged() {
-                        visuals.widgets.active.bg_fill
-                    } else {
-                        visuals.widgets.noninteractive.bg_stroke.color
-                    };
-                    ui.painter().line_segment(
-                        [splitter_rect.center_top(), splitter_rect.center_bottom()],
-                        egui::Stroke::new(2.0, splitter_color),
-                    );
-
-                    // Change cursor when hovering over splitter
-                    if splitter_response.hovered() || splitter_response.dragged() {
-                        ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
-                    }
-
-                    // Handle drag to resize sidebar
-                    if splitter_response.dragged() {
-                        let delta = splitter_response.drag_delta().x;
-                        self.settings_sidebar_width = (self.settings_sidebar_width + delta)
-                            .clamp(100.0, total_width - 300.0); // Min 100px sidebar, min 300px content
-                    }
+                    ui.separator();
 
                     // Right content panel - adapts to actual window size
-                    let actual_content_width = total_width - current_sidebar_width - 20.0;
                     ui.vertical(|ui| {
                         // Use available width for content (adapts to window resize)
                         let panel_width = actual_content_width.max(300.0); // Minimum readable width
