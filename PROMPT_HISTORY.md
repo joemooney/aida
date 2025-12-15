@@ -1937,3 +1937,60 @@ A chronological record of development sessions and changes made to the Requireme
 - STORY-0321: GitLab Connection Configuration ✓
 - STORY-0322: View GitLab Issues in AIDA ✓
 - STORY-0323: Link AIDA Requirements to GitLab Issues ✓
+
+---
+
+### Phase 2: GitLab Write Integration
+
+#### STORY-0324: Create GitLab Issue from AIDA Requirement
+**Goal**: Allow users to create new GitLab issues directly from AIDA requirements
+
+**Implementation:**
+
+1. **App State Fields** (aida-gui/src/app.rs):
+   - `show_create_gitlab_issue_dialog: bool` - Controls dialog visibility
+   - `create_gitlab_issue_req_id: Option<Uuid>` - Source requirement
+   - `create_gitlab_issue_title: String` - Editable issue title
+   - `create_gitlab_issue_description: String` - Editable issue description
+   - `create_gitlab_issue_labels: String` - Comma-separated labels
+   - `create_gitlab_issue_creating: bool` - Loading indicator
+
+2. **Create Issue Button**:
+   - Added "🆕 Create Issue" button next to "Link Issue" in GitLab links section
+   - Pre-populates from requirement:
+     - Title: `[SPEC-ID] Requirement Title`
+     - Description: Markdown with requirement details and trace link
+     - Labels: `aida:<type>` and `priority:<priority>` (if not medium)
+
+3. **Create Issue Dialog Modal** (`show_create_gitlab_issue_modal`):
+   - Centered window with 500px default width
+   - Shows source requirement spec_id
+   - Editable fields:
+     - Title (single line)
+     - Description (multiline, 200px height with scroll)
+     - Labels (comma-separated)
+   - Action buttons:
+     - "✓ Create Issue" (disabled if title empty)
+     - "Cancel"
+   - Loading spinner during creation
+
+4. **Async Issue Creation**:
+   - Uses `tokio::runtime::Runtime::block_on()` for sync GUI context
+   - Calls `GitLabClient::new(config)` and `client.create_issue(request)`
+   - On success:
+     - Adds issue to cached `gitlab_issues` list
+     - Auto-creates `GitLabIssueLink` with type `ImplementedBy`
+     - Saves requirement with new link
+     - Shows success toast: "Created GL-{iid}: {title}"
+   - On error:
+     - Shows error toast with message
+     - Keeps dialog open for retry
+
+5. **Field Mapping (AIDA → GitLab)**:
+   - `req.title` → Issue title (with spec_id prefix)
+   - `req.description` → Issue description (in markdown)
+   - `req.req_type` → Label `aida:<type>`
+   - `req.priority` → Label `priority:<priority>` (if not medium)
+
+- **Commit**: 185c928
+- **Status**: STORY-0324 completed
