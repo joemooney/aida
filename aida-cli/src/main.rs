@@ -4674,6 +4674,154 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
                 }
             }
         }
+
+        // trace:STORY-0327 | ai:claude
+        GitLabCommand::Refresh { id, force } => {
+            use aida_core::{GitLabSyncState, SyncStatus, IssueFilter};
+
+            // Check if storage is SQLite (sync state only works with SQLite)
+            if !storage.is_sqlite() {
+                println!("{}", "GitLab refresh is only available for SQLite databases.".yellow());
+                return Ok(());
+            }
+
+            // Load GitLab config
+            let config = GitLabConfig::load()?
+                .ok_or_else(|| anyhow::anyhow!("GitLab not configured. Run 'aida gitlab config' first."))?;
+
+            let Some(token) = config.effective_token() else {
+                return Err(anyhow::anyhow!("GitLab token required. Set AIDA_GITLAB_TOKEN or run 'aida gitlab config --token <TOKEN>'"));
+            };
+
+            let mut config_with_token = config.clone();
+            config_with_token.token = Some(token);
+            let client = GitLabClient::new(config_with_token)?;
+
+            let store = storage.load()?;
+
+            // Get sync states to refresh
+            let sync_states = if let Some(req_id) = id {
+                // Find the requirement by spec_id or UUID
+                let requirement = store.requirements.iter()
+                    .find(|r| {
+                        r.spec_id.as_deref() == Some(req_id.as_str())
+                            || r.id.to_string() == *req_id
+                    });
+
+                if let Some(req) = requirement {
+                    storage.load_sync_states_for_requirement(req.id)?
+                } else {
+                    println!("{} {}", "Requirement not found:".red(), req_id);
+                    return Ok(());
+                }
+            } else {
+                storage.load_all_sync_states()?
+            };
+
+            if sync_states.is_empty() {
+                println!("{}", "No GitLab sync states found to refresh.".yellow());
+                println!("Link requirements to GitLab issues first.");
+                return Ok(());
+            }
+
+            println!("{}", "Refreshing GitLab sync states...".dimmed());
+            println!("{}", "─".repeat(60));
+
+            // Collect all issue IIDs to fetch
+            let iids: Vec<u64> = sync_states.iter()
+                .map(|s| s.gitlab_issue_iid)
+                .collect();
+
+            // Fetch issues from GitLab
+            let filter = IssueFilter::default().with_iids(iids);
+            let issues = rt.block_on(client.list_issues(Some(filter)))?;
+
+            // Create a map of IID -> Issue for quick lookup
+            let issue_map: std::collections::HashMap<u64, _> = issues
+                .into_iter()
+                .map(|i| (i.iid, i))
+                .collect();
+
+            let mut updated_count = 0;
+            let mut error_count = 0;
+
+            for mut state in sync_states {
+                // Find the requirement
+                let req = store.requirements.iter()
+                    .find(|r| r.id == state.requirement_id);
+
+                let req_display = if let Some(r) = req {
+                    r.spec_id.clone().unwrap_or_else(|| r.id.to_string())
+                } else {
+                    state.spec_id.clone()
+                };
+
+                // Get the GitLab issue
+                if let Some(issue) = issue_map.get(&state.gitlab_issue_iid) {
+                    // Calculate current hashes
+                    let current_gitlab_hash = GitLabSyncState::hash_gitlab_issue(issue);
+                    let current_aida_hash = if let Some(r) = req {
+                        GitLabSyncState::hash_requirement(r)
+                    } else {
+                        state.aida_content_hash.clone()
+                    };
+
+                    // Determine new sync status
+                    let old_status = state.sync_status.clone();
+                    let aida_changed = current_aida_hash != state.aida_content_hash;
+                    let gitlab_changed = current_gitlab_hash != state.gitlab_content_hash;
+
+                    let new_status = match (aida_changed, gitlab_changed) {
+                        (false, false) => SyncStatus::InSync,
+                        (true, false) => SyncStatus::AidaModified,
+                        (false, true) => SyncStatus::GitLabModified,
+                        (true, true) => SyncStatus::Conflict,
+                    };
+
+                    // Update if changed or forced
+                    if *force || new_status != old_status {
+                        state.sync_status = new_status.clone();
+                        state.last_sync = chrono::Utc::now();
+                        state.last_error = None;
+
+                        // Update stored hashes if this is a fresh sync
+                        if state.aida_content_hash.is_empty() {
+                            state.aida_content_hash = current_aida_hash;
+                        }
+                        if state.gitlab_content_hash.is_empty() {
+                            state.gitlab_content_hash = current_gitlab_hash;
+                        }
+
+                        if let Err(e) = storage.save_sync_state(&state) {
+                            println!("  {} {} GL-{}: {}", "✗".red(), req_display, state.gitlab_issue_iid, e);
+                            error_count += 1;
+                        } else {
+                            let status_indicator = match new_status {
+                                SyncStatus::InSync => "✓".green(),
+                                SyncStatus::AidaModified => "△".yellow(),
+                                SyncStatus::GitLabModified => "▽".cyan(),
+                                SyncStatus::Conflict => "⚠".red(),
+                                _ => "?".dimmed(),
+                            };
+                            println!("  {} {} GL-{}: {}", status_indicator, req_display, state.gitlab_issue_iid, new_status);
+                            updated_count += 1;
+                        }
+                    } else {
+                        println!("  {} {} GL-{}: {} (unchanged)", "·".dimmed(), req_display, state.gitlab_issue_iid, old_status);
+                    }
+                } else {
+                    println!("  {} {} GL-{}: {}", "?".yellow(), req_display, state.gitlab_issue_iid, "Issue not found in GitLab");
+                    error_count += 1;
+                }
+            }
+
+            println!("{}", "─".repeat(60));
+            println!(
+                "Refreshed: {} updated, {} errors",
+                updated_count.to_string().green(),
+                if error_count > 0 { error_count.to_string().red() } else { "0".dimmed() }
+            );
+        }
     }
 
     Ok(())

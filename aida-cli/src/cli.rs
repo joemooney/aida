@@ -664,6 +664,16 @@ pub enum GitLabCommand {
         #[clap(long)]
         init: bool,
     },
+
+    /// Refresh sync state by checking GitLab for changes
+    Refresh {
+        /// Specific requirement ID to refresh (optional, refreshes all if not specified)
+        id: Option<String>,
+
+        /// Force refresh even if recently checked
+        #[clap(long)]
+        force: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
