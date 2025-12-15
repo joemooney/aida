@@ -39,7 +39,7 @@ If in the AIDA source repository:
 
 #### 2a. Check Symlink Integrity
 
-Verify `.claude/` symlinks point to `aida-core/templates/`:
+Verify `.claude/` and `.git/hooks/` symlinks point to `aida-core/templates/`:
 
 ```bash
 # List all symlinks in .claude/
@@ -47,6 +47,9 @@ find .claude/commands .claude/skills -type l -exec ls -la {} \;
 
 # Check for broken symlinks
 find .claude/commands .claude/skills -xtype l 2>/dev/null
+
+# Check git hooks symlinks
+ls -la .git/hooks/commit-msg 2>/dev/null
 ```
 
 Report:
@@ -54,7 +57,32 @@ Report:
 - Broken symlinks (symlink target doesn't exist)
 - Non-symlink files (should be symlinks in AIDA repo)
 
-#### 2b. Check Template vs Embedded
+#### 2b. Check Git Hooks
+
+Verify git hooks are symlinked to templates (not copies):
+
+```bash
+# Check if commit-msg hook is a symlink
+if [ -L .git/hooks/commit-msg ]; then
+    echo "✓ commit-msg is symlinked"
+    ls -la .git/hooks/commit-msg
+else
+    echo "✗ commit-msg is NOT a symlink - should be: ../../aida-core/templates/hooks/commit-msg"
+fi
+
+# Compare hook content if not symlinked
+if [ ! -L .git/hooks/commit-msg ] && [ -f .git/hooks/commit-msg ]; then
+    diff .git/hooks/commit-msg aida-core/templates/hooks/commit-msg && echo "Content matches" || echo "Content differs!"
+fi
+```
+
+To fix a non-symlinked hook:
+```bash
+rm .git/hooks/commit-msg
+ln -s ../../aida-core/templates/hooks/commit-msg .git/hooks/commit-msg
+```
+
+#### 2c. Check Template vs Embedded
 
 After modifying templates, the binary needs rebuilding:
 
@@ -70,7 +98,7 @@ Templates have been modified since last build.
 Run `cargo build` to update embedded templates in binary.
 ```
 
-#### 2c. Check CLAUDE.md Consistency
+#### 2d. Check CLAUDE.md Consistency
 
 Verify the CLAUDE.md documents all current skills:
 
@@ -84,7 +112,7 @@ grep -E "^### /aida-" CLAUDE.md
 
 Report any skills not documented in CLAUDE.md.
 
-#### 2d. Version Bump Reminder
+#### 2e. Version Bump Reminder
 
 If templates changed significantly, remind about version:
 
@@ -140,12 +168,14 @@ Present summary:
 ### Actions Needed
 - [ ] Rebuild binary (templates modified)
 - [ ] Create missing symlinks: <list>
+- [ ] Fix git hooks (not symlinked): <list>
 - [ ] Update CLAUDE.md skill documentation
 - [ ] Run `aida scaffold apply` on downstream projects
 
 ### Files Checked
 - Skills: X matching, Y modified, Z missing
 - Commands: X matching, Y modified, Z missing
+- Hooks: X symlinked, Y need fixing
 ```
 
 ## AIDA Development Checklist
@@ -191,11 +221,16 @@ aida-core/templates/
 ├── commands/                       .claude/commands/
 │   ├── aida-req.md        →        ├── aida-req.md (copy)
 │   └── ...                →        └── ...
+├── hooks/                          .git/hooks/
+│   └── commit-msg         →        └── commit-msg (copy)
 └── CLAUDE.md.template     →        CLAUDE.md (generated)
 
 .claude/                   (symlinks in AIDA repo)
 ├── skills/ → aida-core/templates/skills/
 └── commands/ → aida-core/templates/commands/
+
+.git/hooks/                (symlinks in AIDA repo)
+└── commit-msg → ../../aida-core/templates/hooks/commit-msg
 ```
 
 ## Related Skills
