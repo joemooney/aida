@@ -674,6 +674,17 @@ pub enum GitLabCommand {
         #[clap(long)]
         force: bool,
     },
+
+    /// Control background polling for GitLab changes
+    Poll {
+        /// Action: status, start, stop
+        #[clap(default_value = "status")]
+        action: String,
+
+        /// Poll interval in seconds (for start)
+        #[clap(long, default_value = "300")]
+        interval: u64,
+    },
 }
 
 #[derive(Subcommand, Debug)]

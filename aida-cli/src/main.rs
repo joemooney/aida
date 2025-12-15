@@ -4822,6 +4822,50 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
                 if error_count > 0 { error_count.to_string().red() } else { "0".dimmed() }
             );
         }
+
+        // trace:STORY-0327 | ai:claude
+        GitLabCommand::Poll { action, interval } => {
+            match action.to_lowercase().as_str() {
+                "status" => {
+                    let config = GitLabConfig::load()?;
+                    if let Some(config) = config {
+                        println!("{}", "GitLab Polling Configuration".bold());
+                        println!("{}", "─".repeat(40));
+                        println!("Polling enabled: {}", if config.polling.enabled { "yes".green() } else { "no".dimmed() });
+                        println!("Interval: {} seconds ({} minutes)", config.polling.interval_seconds, config.polling.interval_seconds / 60);
+                        println!("Batch size: {}", config.polling.batch_size);
+                        println!("Max concurrent: {}", config.polling.max_concurrent);
+                        println!();
+                        println!("{}", "Note: Background polling runs in the AIDA GUI.".dimmed());
+                        println!("{}", "Use 'aida gitlab refresh' for manual sync.".dimmed());
+                    } else {
+                        println!("{}", "GitLab not configured.".yellow());
+                    }
+                }
+                "start" => {
+                    println!("{}", "Background polling is managed by the AIDA GUI.".yellow());
+                    println!();
+                    println!("To enable polling:");
+                    println!("  1. Open AIDA GUI");
+                    println!("  2. Go to Settings > GitLab");
+                    println!("  3. Enable 'Background Polling'");
+                    println!();
+                    println!("For CLI-based polling, use a cron job or scheduled task:");
+                    println!("  {} aida gitlab refresh", format!("*/{} * * * *", interval / 60).dimmed());
+                }
+                "stop" => {
+                    println!("{}", "Background polling is managed by the AIDA GUI.".yellow());
+                    println!();
+                    println!("To disable polling:");
+                    println!("  1. Open AIDA GUI");
+                    println!("  2. Go to Settings > GitLab");
+                    println!("  3. Disable 'Background Polling'");
+                }
+                _ => {
+                    println!("{}: Unknown action '{}'. Use: status, start, stop", "Error".red(), action);
+                }
+            }
+        }
     }
 
     Ok(())
