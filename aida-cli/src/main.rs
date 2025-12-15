@@ -4562,8 +4562,6 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
 
         // trace:STORY-0326 | ai:claude
         GitLabCommand::Labels { validate, create_missing, init } => {
-            use aida_core::LabelConfig;
-
             // Load or create config
             let mut config = GitLabConfig::load()?.unwrap_or_default();
 
