@@ -9252,10 +9252,10 @@ impl RequirementsApp {
         let settings_width = 900.0_f32.min(max_size.x * 0.9);
         let settings_height = 600.0_f32.min(max_size.y * 0.7);
 
-        // Scale sidebar width with font size (pixels_per_point)
-        // Base width 120px at 1.0 scale, grows proportionally with font size
-        let ppp = ctx.pixels_per_point();
-        let sidebar_width = (120.0 * ppp / 1.0).max(120.0); // Scale with font, min 120px
+        // Scale sidebar width with actual font size setting
+        // Base width 130px at default 14pt, grows proportionally with font size
+        let font_ratio = self.current_font_size / 14.0;
+        let sidebar_width = (130.0 * font_ratio).max(130.0); // Scale with font, min 130px
 
         let content_width = settings_width - sidebar_width - 25.0; // Account for padding/separator
 
