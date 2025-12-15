@@ -9251,7 +9251,12 @@ impl RequirementsApp {
         // Width: 900px max or 90% of screen (increased for sidebar), Height: 70% of screen (max 600px)
         let settings_width = 900.0_f32.min(max_size.x * 0.9);
         let settings_height = 600.0_f32.min(max_size.y * 0.7);
-        let sidebar_width = 120.0;
+
+        // Scale sidebar width with font size (pixels_per_point)
+        // Base width 120px at 1.0 scale, grows proportionally with font size
+        let ppp = ctx.pixels_per_point();
+        let sidebar_width = (120.0 * ppp / 1.0).max(120.0); // Scale with font, min 120px
+
         let content_width = settings_width - sidebar_width - 25.0; // Account for padding/separator
 
         let mut close_requested = false;
@@ -9350,13 +9355,12 @@ impl RequirementsApp {
                         ui.set_min_width(panel_width);
                         ui.set_max_width(panel_width);
 
-                        egui::ScrollArea::vertical()
+                        egui::ScrollArea::both() // Vertical and horizontal scrolling
                             .max_height(actual_content_height)
+                            .auto_shrink([false, false])
                             .show(ui, |ui| {
-                                // Content fills available width within the container
-                                let inner_width = panel_width - 15.0;
-                                ui.set_min_width(inner_width);
-                                ui.set_max_width(inner_width);
+                                // Content has minimum width for readability
+                                ui.set_min_width(400.0);
 
                                 // Tab content - aligned to top
                                 match self.settings_tab {
