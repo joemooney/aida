@@ -1994,3 +1994,83 @@ A chronological record of development sessions and changes made to the Requireme
 
 - **Commit**: 185c928
 - **Status**: STORY-0324 completed
+
+---
+
+## Session 11: GitLab Sync State Tracking (2025-12-14)
+
+### GitLab Sync State Infrastructure (STORY-0325)
+- **Prompt**: Continue STORY-0325 - GitLab sync state tracking
+- **Problem**: No way to track sync state between AIDA requirements and linked GitLab issues to detect changes
+- **Solution**: Add comprehensive sync state tracking with database persistence and CLI visibility
+
+**Implementation:**
+
+1. **Data Model** (aida-core/src/models.rs):
+   - `LinkOrigin` enum - How a link was created:
+     - `CreatedFromAida` - Issue created from AIDA via GUI
+     - `ImportedFromGitLab` - Issue imported from GitLab
+     - `ManualLink` - User manually linked existing issue
+   - `SyncStatus` enum - Current synchronization state:
+     - `InSync` - Content matches between AIDA and GitLab
+     - `AidaModified` - AIDA content changed since last sync
+     - `GitLabModified` - GitLab content changed since last sync
+     - `Conflict` - Both sides modified (needs resolution)
+     - `Error` - Sync check failed
+     - `Untracked` - Not yet tracked (manual links)
+   - `GitLabSyncState` struct - Complete sync tracking record:
+     - requirement_id, spec_id, gitlab_project_id, gitlab_issue_iid, gitlab_issue_id
+     - linked_at, last_sync timestamps
+     - aida_content_hash, gitlab_content_hash (SHA256)
+     - link_origin, sync_status, last_error
+   - Content hash functions:
+     - `GitLabSyncState::hash_requirement()` - Hash req title/description/status/priority/owner/type/tags
+     - `GitLabSyncState::hash_gitlab_issue()` - Hash issue title/description/state/labels/assignees
+
+2. **Database Schema** (schema version 5):
+   - SQLite (aida-core/src/db/schema.sql)
+   - PostgreSQL (aida-core/src/db/postgres_schema.sql)
+   - New `gitlab_sync_state` table:
+     - Primary key: (requirement_id, gitlab_issue_iid)
+     - Indexes for requirement lookup, issue lookup, status filtering
+
+3. **Backend CRUD Operations**:
+   - SQLite (aida-core/src/db/sqlite_backend.rs):
+     - `save_sync_state()` - Upsert sync state record
+     - `load_sync_state()` - Load by requirement_id + issue_iid
+     - `load_sync_states_for_requirement()` - All states for a requirement
+     - `load_all_sync_states()` - All sync states
+     - `load_sync_states_by_status()` - Filter by status
+     - `delete_sync_state()` - Remove sync state
+   - PostgreSQL (aida-core/src/db/postgres_backend.rs):
+     - Same operations with PostgreSQL-specific SQL
+
+4. **Storage Layer** (aida-core/src/storage.rs):
+   - Added sync state methods to `Storage` type
+   - SQLite-only support (validates `is_sqlite()`)
+
+5. **GUI Integration** (aida-gui/src/app.rs):
+   - Manual link creation (`show_gitlab_link_picker_modal`):
+     - Creates sync state with `LinkOrigin::ManualLink`
+     - Status set to `Untracked` (hash unknown for existing issues)
+   - Issue creation (`show_create_gitlab_issue_modal`):
+     - Creates sync state with `LinkOrigin::CreatedFromAida`
+     - Status set to `InSync` (just created, hashes match)
+     - Computes both AIDA and GitLab content hashes
+
+6. **CLI Command** (aida-cli/src/main.rs):
+   - `aida gitlab status` - View sync state for all linked items
+   - `aida gitlab status <SPEC-ID>` - View sync state for specific requirement
+   - `aida gitlab status --diverged` - Show only non-InSync items
+   - Output includes:
+     - Status icon (✓/△/▽/⚠/✗/?)
+     - Requirement spec_id
+     - Link direction (→GL/←GL/↔GL)
+     - Issue IID
+     - Status text (colored)
+     - Last sync timestamp
+     - Error message (if any)
+     - Summary counts
+
+- **Commit**: 6b36f7b
+- **Status**: STORY-0325 completed
