@@ -2895,6 +2895,40 @@ impl SettingsTab {
                 | SettingsTab::Database
         )
     }
+
+    /// Navigate to the next settings tab (wraps around)
+    fn next(&self) -> Self {
+        match self {
+            SettingsTab::User => SettingsTab::Appearance,
+            SettingsTab::Appearance => SettingsTab::Keybindings,
+            SettingsTab::Keybindings => SettingsTab::IDs,
+            SettingsTab::IDs => SettingsTab::Relationships,
+            SettingsTab::Relationships => SettingsTab::Reactions,
+            SettingsTab::Reactions => SettingsTab::TypeDefinitions,
+            SettingsTab::TypeDefinitions => SettingsTab::Members,
+            SettingsTab::Members => SettingsTab::AiPrompts,
+            SettingsTab::AiPrompts => SettingsTab::AiIntegration,
+            SettingsTab::AiIntegration => SettingsTab::Database,
+            SettingsTab::Database => SettingsTab::User, // Wrap to start
+        }
+    }
+
+    /// Navigate to the previous settings tab (wraps around)
+    fn previous(&self) -> Self {
+        match self {
+            SettingsTab::User => SettingsTab::Database, // Wrap to end
+            SettingsTab::Appearance => SettingsTab::User,
+            SettingsTab::Keybindings => SettingsTab::Appearance,
+            SettingsTab::IDs => SettingsTab::Keybindings,
+            SettingsTab::Relationships => SettingsTab::IDs,
+            SettingsTab::Reactions => SettingsTab::Relationships,
+            SettingsTab::TypeDefinitions => SettingsTab::Reactions,
+            SettingsTab::Members => SettingsTab::TypeDefinitions,
+            SettingsTab::AiPrompts => SettingsTab::Members,
+            SettingsTab::AiIntegration => SettingsTab::AiPrompts,
+            SettingsTab::Database => SettingsTab::AiIntegration,
+        }
+    }
 }
 
 #[derive(Default, PartialEq, Clone, Copy)]
@@ -9309,6 +9343,18 @@ impl RequirementsApp {
                 if cancel_clicked {
                     self.revert_settings_changes();
                     self.show_settings_dialog = false;
+                }
+
+                // Handle keyboard navigation for settings tabs (Up/Down arrows)
+                if ui.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
+                    self.settings_tab = self.settings_tab.next();
+                }
+                if ui.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
+                    self.settings_tab = self.settings_tab.previous();
+                }
+                // Handle Escape to close settings
+                if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                    close_requested = true;
                 }
 
                 // Get actual available space for dynamic sizing when window is resized
