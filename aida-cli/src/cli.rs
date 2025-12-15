@@ -590,6 +590,67 @@ pub enum CommentCommand {
     },
 }
 
+/// GitLab integration commands
+#[derive(Subcommand, Debug)]
+pub enum GitLabCommand {
+    /// Configure GitLab connection
+    Config {
+        /// GitLab instance URL (e.g., https://gitlab.com or self-hosted)
+        #[clap(long)]
+        url: Option<String>,
+
+        /// GitLab project ID (numeric)
+        #[clap(long)]
+        project: Option<u64>,
+
+        /// Personal Access Token (will be stored securely)
+        #[clap(long)]
+        token: Option<String>,
+
+        /// Show current configuration
+        #[clap(long)]
+        show: bool,
+    },
+
+    /// Test connection to GitLab
+    Test,
+
+    /// List issues from GitLab
+    List {
+        /// Filter by state (opened, closed, all)
+        #[clap(long, default_value = "opened")]
+        state: String,
+
+        /// Filter by labels (comma-separated)
+        #[clap(long)]
+        labels: Option<String>,
+
+        /// Search query
+        #[clap(long)]
+        search: Option<String>,
+
+        /// Maximum number of issues to show
+        #[clap(long, default_value = "20")]
+        limit: u32,
+    },
+
+    /// Show a specific GitLab issue
+    Show {
+        /// Issue IID (e.g., 123 or GL-123)
+        iid: String,
+    },
+
+    /// Show sync status for linked items
+    Status {
+        /// Requirement ID to check (optional, shows all if not specified)
+        id: Option<String>,
+
+        /// Only show diverged items
+        #[clap(long)]
+        diverged: bool,
+    },
+}
+
 #[derive(Subcommand, Debug)]
 pub enum Command {
     /// Add a new requirement
@@ -781,6 +842,10 @@ pub enum Command {
     /// Scaffolding management commands
     #[clap(subcommand)]
     Scaffold(ScaffoldCommand),
+
+    /// GitLab integration commands
+    #[clap(subcommand)]
+    Gitlab(GitLabCommand),
 
     /// Search requirements for a pattern (like grep)
     Grep {

@@ -10,7 +10,7 @@ name = "aida"
 path = "src/main.rs"
 
 [dependencies]
-aida-core = { path = "../aida-core", features = ["postgres"] }
+aida-core = { path = "../aida-core", features = ["postgres", "gitlab"] }
 
 # CLI-specific dependencies
 clap = { workspace = true }
@@ -21,15 +21,15 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 regex = { workspace = true }
 dirs = { workspace = true }
+tokio = { workspace = true }
 
 # gRPC client dependencies (optional)
 tonic = { workspace = true, optional = true }
 prost = { workspace = true, optional = true }
-tokio = { workspace = true, optional = true }
 
 [features]
 default = []
-remote = ["tonic", "prost", "tokio", "tonic-build"]
+remote = ["tonic", "prost", "tonic-build"]
 
 [build-dependencies]
 tonic-build = { workspace = true, optional = true }

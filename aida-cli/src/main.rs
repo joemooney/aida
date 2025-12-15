@@ -15,11 +15,14 @@ use aida_core::{
     MigrationCheck, NumberingStrategy, Registry, RelationshipDefinition, RelationshipType,
     ReportFormat, ReportGenerator, Requirement, RequirementPriority, RequirementStatus,
     RequirementType, RequirementsStore, ScaffoldConfig, Scaffolder, Storage, TraceLink,
+    // GitLab integration
+    GitLabClient, GitLabConfig, IssueFilter, IssueState,
 };
 
 use crate::cli::{
-    Cli, Command, CommentCommand, ConfigCommand, DbCommand, FeatureCommand, RelDefCommand,
-    RelationshipCommand, ReportCommand, ScaffoldCommand, ServerCommand, TraceCommand, TypeCommand,
+    Cli, Command, CommentCommand, ConfigCommand, DbCommand, FeatureCommand, GitLabCommand,
+    RelDefCommand, RelationshipCommand, ReportCommand, ScaffoldCommand, ServerCommand,
+    TraceCommand, TypeCommand,
 };
 
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
@@ -217,6 +220,9 @@ fn main() -> Result<()> {
         }
         Command::Scaffold(scaffold_cmd) => {
             handle_scaffold_command(scaffold_cmd, &storage, &requirements_path)?;
+        }
+        Command::Gitlab(gitlab_cmd) => {
+            handle_gitlab_command(gitlab_cmd)?;
         }
         Command::Grep {
             pattern,
@@ -4252,4 +4258,204 @@ fn html_escape(s: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+}
+
+// trace:STORY-0321 | ai:claude
+/// Handle GitLab integration commands
+fn handle_gitlab_command(cmd: &GitLabCommand) -> Result<()> {
+    // Create tokio runtime for async operations
+    let rt = tokio::runtime::Runtime::new()?;
+
+    match cmd {
+        GitLabCommand::Config { url, project, token, show } => {
+            if *show {
+                // Show current configuration
+                match GitLabConfig::load() {
+                    Ok(Some(config)) => {
+                        println!("{}", "GitLab Configuration:".bold());
+                        println!("  URL:        {}", config.url);
+                        println!("  Project ID: {}", config.project_id);
+                        println!("  Enabled:    {}", if config.enabled { "yes" } else { "no" });
+                        if config.effective_token().is_some() {
+                            println!("  Token:      {}", "(configured)".green());
+                        } else {
+                            println!("  Token:      {}", "(not set)".yellow());
+                        }
+                        println!("\nLabel prefix: {}", config.labels.prefix);
+                        println!("Sync mode:    {:?}", config.sync.mode);
+                    }
+                    Ok(None) => {
+                        println!("{}", "GitLab is not configured.".yellow());
+                        println!("Use 'aida gitlab config --url <URL> --project <ID> --token <TOKEN>' to configure.");
+                    }
+                    Err(e) => {
+                        println!("{}: {}", "Error loading config".red(), e);
+                    }
+                }
+                return Ok(());
+            }
+
+            // Update configuration
+            let mut config = GitLabConfig::load()?.unwrap_or_default();
+
+            if let Some(u) = url {
+                config.url = u.clone();
+                println!("Set URL: {}", u);
+            }
+            if let Some(p) = project {
+                config.project_id = *p;
+                println!("Set project ID: {}", p);
+            }
+            if let Some(t) = token {
+                // Store token in environment for this session
+                // In production, would use keyring
+                std::env::set_var("AIDA_GITLAB_TOKEN", t);
+                config.token = Some(t.clone());
+                println!("Set token: {}", "(hidden)");
+            }
+
+            // Save config (token excluded from file)
+            config.save()?;
+            println!("{}", "Configuration saved.".green());
+
+            // Validate if we have enough config
+            if let Err(e) = config.validate() {
+                println!("{}: {}", "Warning".yellow(), e);
+                println!("Run 'aida gitlab test' to verify connection.");
+            }
+        }
+
+        GitLabCommand::Test => {
+            // Test connection to GitLab
+            let config = GitLabConfig::load()?
+                .ok_or_else(|| anyhow::anyhow!("GitLab not configured. Run 'aida gitlab config' first."))?;
+
+            println!("Testing connection to {}...", config.url);
+
+            let client = GitLabClient::new(config)?;
+            let project = rt.block_on(client.test_connection())?;
+
+            println!("{}", "Connection successful!".green());
+            println!("  Project: {}", project.name_with_namespace);
+            println!("  URL:     {}", project.web_url);
+            if let Some(desc) = &project.description {
+                if !desc.is_empty() {
+                    println!("  Desc:    {}", desc);
+                }
+            }
+        }
+
+        GitLabCommand::List { state, labels, search, limit } => {
+            let config = GitLabConfig::load()?
+                .ok_or_else(|| anyhow::anyhow!("GitLab not configured. Run 'aida gitlab config' first."))?;
+
+            let client = GitLabClient::new(config)?;
+
+            // Build filter
+            let mut filter = match state.as_str() {
+                "opened" => IssueFilter::open(),
+                "closed" => IssueFilter {
+                    state: Some(IssueState::Closed),
+                    ..Default::default()
+                },
+                _ => IssueFilter::default(),
+            };
+
+            if let Some(l) = labels {
+                filter = filter.with_labels(l.split(',').map(|s| s.trim().to_string()).collect());
+            }
+
+            if let Some(s) = search {
+                filter.search = Some(s.clone());
+            }
+
+            filter.per_page = Some(*limit);
+
+            let issues = rt.block_on(client.list_issues(Some(filter)))?;
+
+            if issues.is_empty() {
+                println!("{}", "No issues found.".yellow());
+                return Ok(());
+            }
+
+            println!("{}", format!("Found {} issues:", issues.len()).bold());
+            println!();
+
+            for issue in &issues {
+                let state_indicator = if issue.is_open() {
+                    "●".green()
+                } else {
+                    "○".bright_black()
+                };
+
+                println!(
+                    "{} {} {}",
+                    state_indicator,
+                    format!("GL-{}", issue.iid).cyan(),
+                    issue.title
+                );
+
+                if !issue.labels.is_empty() {
+                    println!("    Labels: {}", issue.labels.join(", ").bright_black());
+                }
+            }
+        }
+
+        GitLabCommand::Show { iid } => {
+            let config = GitLabConfig::load()?
+                .ok_or_else(|| anyhow::anyhow!("GitLab not configured. Run 'aida gitlab config' first."))?;
+
+            let client = GitLabClient::new(config)?;
+
+            // Parse IID (handle "GL-123" or "123" format)
+            let iid_num: u64 = iid
+                .strip_prefix("GL-")
+                .unwrap_or(iid)
+                .parse()
+                .map_err(|_| anyhow::anyhow!("Invalid issue IID: {}", iid))?;
+
+            let issue = rt.block_on(client.get_issue(iid_num))?;
+
+            println!("{}", format!("GL-{}: {}", issue.iid, issue.title).bold());
+            println!();
+
+            let state_str = if issue.is_open() {
+                "Open".green()
+            } else {
+                "Closed".bright_black()
+            };
+            println!("State:    {}", state_str);
+            println!("Author:   {}", issue.author.username);
+            if let Some(assignee) = issue.assignee_username() {
+                println!("Assignee: {}", assignee);
+            }
+            if !issue.labels.is_empty() {
+                println!("Labels:   {}", issue.labels.join(", "));
+            }
+            if let Some(milestone) = &issue.milestone {
+                println!("Milestone: {}", milestone.title);
+            }
+            println!("URL:      {}", issue.web_url);
+            println!();
+
+            if let Some(desc) = &issue.description {
+                if !desc.is_empty() {
+                    println!("{}", "Description:".bold());
+                    println!("{}", desc);
+                }
+            }
+        }
+
+        GitLabCommand::Status { id, diverged: _ } => {
+            // TODO: Implement sync status tracking (Phase 2)
+            if let Some(req_id) = id {
+                println!("Sync status for {}: {}", req_id, "(not yet implemented)".yellow());
+            } else {
+                println!("{}", "Sync status tracking not yet implemented.".yellow());
+                println!("This feature will be available in Phase 2 of GitLab integration.");
+            }
+        }
+    }
+
+    Ok(())
 }

@@ -2,6 +2,7 @@ pub mod ai;
 pub mod db;
 pub mod export;
 pub mod import;
+pub mod integrations;
 pub mod models;
 #[cfg(feature = "native")]
 pub mod project;
@@ -112,4 +113,12 @@ pub use report::{
     AiIntegrationReport, AiPromptsSection, FileStatus, PromptCustomization, ReportFormat,
     ReportGenerator, ScaffoldStatus, TraceabilityStats, TypePromptCustomization,
     check_scaffold_status,
+};
+#[cfg(feature = "gitlab")]
+pub use integrations::gitlab::{
+    ClientError as GitLabClientError, ConfigError as GitLabConfigError,
+    ConflictStrategy, FieldSyncDirection, FieldSyncRules, GitLabClient, GitLabConfig,
+    GitLabIssue, GitLabLabel, GitLabMilestone, GitLabProject, GitLabUser,
+    IssueFilter, IssueState, LabelConfig, PollingConfig, SyncConfig, SyncMode,
+    CreateIssueRequest, UpdateIssueRequest, CreateNoteRequest,
 };

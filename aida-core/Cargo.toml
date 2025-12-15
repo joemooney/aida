@@ -11,12 +11,15 @@ default = ["native"]
 native = ["rusqlite", "fs2", "dirs"]
 # PostgreSQL database backend
 postgres = ["dep:postgres", "dep:r2d2", "dep:r2d2_postgres"]
+# GitLab integration
+gitlab = ["dep:reqwest", "dep:tokio"]
 
 [dependencies]
 # Core dependencies (all platforms)
 serde = { workspace = true }
 serde_yaml = { workspace = true }
 serde_json = { workspace = true }
+toml = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 anyhow = { workspace = true }
@@ -35,6 +38,10 @@ rusqlite = { workspace = true, optional = true }
 postgres = { workspace = true, optional = true }
 r2d2 = { workspace = true, optional = true }
 r2d2_postgres = { workspace = true, optional = true }
+
+# GitLab integration dependencies (optional)
+reqwest = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
 
 # WASM-specific dependencies (uuid needs js feature for randomness)
 [target.'cfg(target_arch = "wasm32")'.dependencies]
