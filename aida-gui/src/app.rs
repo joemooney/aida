@@ -9247,7 +9247,7 @@ impl RequirementsApp {
         }
 
         let max_size = modal_max_size(ctx);
-        // Fixed settings window size like Obsidian - consistent across all tabs
+        // Default settings window size - resizable by user
         // Width: 900px max or 90% of screen (increased for sidebar), Height: 70% of screen (max 600px)
         let settings_width = 900.0_f32.min(max_size.x * 0.9);
         let settings_height = 600.0_f32.min(max_size.y * 0.7);
@@ -9258,8 +9258,9 @@ impl RequirementsApp {
 
         egui::Window::new("⚙ Settings")
             .collapsible(false)
-            .resizable(false) // Fixed size like Obsidian
-            .fixed_size([settings_width, settings_height])
+            .resizable(true) // Allow user to resize
+            .default_size([settings_width, settings_height])
+            .min_size([600.0, 400.0]) // Minimum usable size
             .scroll([false, false]) // No window-level scroll, content scrolls independently
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .title_bar(false) // Custom title bar for close button
@@ -9305,8 +9306,10 @@ impl RequirementsApp {
                     self.show_settings_dialog = false;
                 }
 
-                // Calculate available height for content (minus title bar only - buttons are in title bar now)
-                let content_height = settings_height - title_bar_height - 25.0;
+                // Get actual available space for dynamic sizing when window is resized
+                let available_rect = ui.available_rect_before_wrap();
+                let actual_content_height = available_rect.height() - 10.0;
+                let actual_content_width = available_rect.width() - sidebar_width - 25.0;
 
                 // Vertical sidebar tabs layout (like Obsidian)
                 ui.horizontal_top(|ui| {
@@ -9340,18 +9343,20 @@ impl RequirementsApp {
 
                     ui.separator();
 
-                    // Right content panel - constrained to fixed width
+                    // Right content panel - adapts to actual window size
                     ui.vertical(|ui| {
-                        // Constrain content width to prevent horizontal overflow
-                        ui.set_min_width(content_width);
-                        ui.set_max_width(content_width);
+                        // Use available width for content (adapts to window resize)
+                        let panel_width = actual_content_width.max(300.0); // Minimum readable width
+                        ui.set_min_width(panel_width);
+                        ui.set_max_width(panel_width);
 
                         egui::ScrollArea::vertical()
-                            .max_height(content_height)
+                            .max_height(actual_content_height)
                             .show(ui, |ui| {
-                                // Content fills available width within the constrained container
-                                ui.set_min_width(content_width - 15.0);
-                                ui.set_max_width(content_width - 15.0);
+                                // Content fills available width within the container
+                                let inner_width = panel_width - 15.0;
+                                ui.set_min_width(inner_width);
+                                ui.set_max_width(inner_width);
 
                                 // Tab content - aligned to top
                                 match self.settings_tab {
