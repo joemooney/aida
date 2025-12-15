@@ -89,6 +89,7 @@ default = ["native"]
 # Native desktop build - full local storage with rusqlite, file system access, etc.
 native = [
     "aida-core/native",
+    "aida-core/gitlab",
     "env_logger",
     "dirs",
     "open",

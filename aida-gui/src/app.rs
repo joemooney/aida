@@ -14,6 +14,10 @@ use aida_core::{
     EditLock, LockFileInfo, MigrationCheck, SaveResult, SessionInfo, Storage,
 };
 
+// GitLab integration imports (native only, requires gitlab feature)
+#[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+use aida_core::{GitLabClient, GitLabConfig, GitLabIssue, IssueFilter, IssueState};
+
 // WASM-only imports for async state management
 #[cfg(target_arch = "wasm32")]
 use std::cell::RefCell;
@@ -3088,6 +3092,7 @@ enum View {
     Planning,  // Sprint planning view for assigning items to Sprints
     Queue,     // Personal work queue view
     UserQueue(String), // View another user's items (by user handle)
+    GitLabIssues, // GitLab issues view (STORY-0322)
 }
 
 /// Layout mode defines the panel arrangement (cycles through 5 predefined layouts)
@@ -3926,6 +3931,24 @@ pub struct RequirementsApp {
     #[cfg(not(target_arch = "wasm32"))]
     migration_dont_show_again: bool,                                 // Checkbox state for "don't show again"
 
+    // GitLab integration state (STORY-0322) - native only
+    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+    gitlab_config: Option<GitLabConfig>,                             // GitLab connection configuration
+    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+    gitlab_issues: Vec<GitLabIssue>,                                 // Cached GitLab issues
+    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+    gitlab_last_fetch: Option<Instant>,                              // When issues were last fetched
+    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+    gitlab_selected_issue: Option<u64>,                              // Selected issue IID for detail view
+    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+    gitlab_loading: bool,                                            // True while fetching issues
+    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+    gitlab_error: Option<String>,                                    // Last error message
+    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+    gitlab_filter_state: Option<IssueState>,                         // Filter by issue state
+    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+    gitlab_filter_search: String,                                    // Search text for issues
+
     // WASM async loading state (FR-0281) - for gRPC-Web client connection
     #[cfg(target_arch = "wasm32")]
     wasm_grpc_client: Option<Rc<GrpcStorageClient>>,                 // gRPC-Web client for server communication
@@ -4554,6 +4577,24 @@ impl RequirementsApp {
             migration_yaml_path: None,
             #[cfg(not(target_arch = "wasm32"))]
             migration_dont_show_again: false,
+
+            // GitLab integration state (STORY-0322)
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_config: GitLabConfig::load().ok().flatten(),
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_issues: Vec::new(),
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_last_fetch: None,
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_selected_issue: None,
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_loading: false,
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_error: None,
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_filter_state: Some(IssueState::Opened),
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_filter_search: String::new(),
         }
     }
 
@@ -5150,6 +5191,24 @@ impl RequirementsApp {
             migration_yaml_path,
             #[cfg(not(target_arch = "wasm32"))]
             migration_dont_show_again: false,
+
+            // GitLab integration state (STORY-0322)
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_config: GitLabConfig::load().ok().flatten(),
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_issues: Vec::new(),
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_last_fetch: None,
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_selected_issue: None,
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_loading: false,
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_error: None,
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_filter_state: Some(IssueState::Opened),
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_filter_search: String::new(),
         }
     }
 
@@ -14982,6 +15041,237 @@ impl RequirementsApp {
         });
     }
 
+    /// Show the GitLab Issues view (STORY-0322)
+    /// trace:STORY-0322 | ai:claude
+    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+    fn show_gitlab_issues_view(&mut self, ui: &mut egui::Ui) {
+        ui.columns(2, |columns| {
+            // Left column - Issues list
+            columns[0].vertical(|ui| {
+                // Header with controls
+                ui.horizontal(|ui| {
+                    ui.heading("🦊 GitLab Issues");
+
+                    ui.separator();
+
+                    // Refresh button
+                    if ui.button("🔄 Refresh").clicked() && !self.gitlab_loading {
+                        self.gitlab_loading = true;
+                        self.gitlab_error = None;
+                        // Fetch issues asynchronously
+                        if let Some(config) = &self.gitlab_config {
+                            let config = config.clone();
+                            let filter_state = self.gitlab_filter_state.clone();
+                            let search = self.gitlab_filter_search.clone();
+
+                            // Build filter
+                            let mut filter = IssueFilter::default();
+                            if let Some(state) = filter_state {
+                                filter.state = Some(state);
+                            }
+                            if !search.is_empty() {
+                                filter.search = Some(search);
+                            }
+                            filter.per_page = Some(100);
+
+                            // Spawn async task to fetch issues
+                            let (tx, rx) = std::sync::mpsc::channel();
+                            std::thread::spawn(move || {
+                                let rt = tokio::runtime::Runtime::new().unwrap();
+                                let result = rt.block_on(async {
+                                    let client = GitLabClient::new(config)?;
+                                    client.list_issues(Some(filter)).await
+                                });
+                                let _ = tx.send(result);
+                            });
+
+                            // Store receiver to poll later (simplified: just block for now)
+                            // In production, this should be non-blocking
+                            match rx.recv_timeout(std::time::Duration::from_secs(10)) {
+                                Ok(Ok(issues)) => {
+                                    self.gitlab_issues = issues;
+                                    self.gitlab_last_fetch = Some(Instant::now());
+                                    self.gitlab_loading = false;
+                                }
+                                Ok(Err(e)) => {
+                                    self.gitlab_error = Some(format!("API error: {}", e));
+                                    self.gitlab_loading = false;
+                                }
+                                Err(_) => {
+                                    self.gitlab_error = Some("Request timed out".to_string());
+                                    self.gitlab_loading = false;
+                                }
+                            }
+                        } else {
+                            self.gitlab_error = Some("GitLab not configured".to_string());
+                            self.gitlab_loading = false;
+                        }
+                    }
+
+                    // Filter by state
+                    ui.separator();
+                    egui::ComboBox::from_id_salt("gitlab_state_filter")
+                        .selected_text(match &self.gitlab_filter_state {
+                            Some(IssueState::Opened) => "Open",
+                            Some(IssueState::Closed) => "Closed",
+                            None => "All",
+                            _ => "All",
+                        })
+                        .show_ui(ui, |ui| {
+                            if ui.selectable_label(matches!(self.gitlab_filter_state, Some(IssueState::Opened)), "Open").clicked() {
+                                self.gitlab_filter_state = Some(IssueState::Opened);
+                            }
+                            if ui.selectable_label(matches!(self.gitlab_filter_state, Some(IssueState::Closed)), "Closed").clicked() {
+                                self.gitlab_filter_state = Some(IssueState::Closed);
+                            }
+                            if ui.selectable_label(self.gitlab_filter_state.is_none(), "All").clicked() {
+                                self.gitlab_filter_state = None;
+                            }
+                        });
+                });
+
+                // Search bar
+                ui.horizontal(|ui| {
+                    ui.label("🔍");
+                    ui.text_edit_singleline(&mut self.gitlab_filter_search);
+                });
+
+                ui.separator();
+
+                // Show loading/error status
+                if self.gitlab_loading {
+                    ui.spinner();
+                    ui.label("Loading issues...");
+                } else if let Some(error) = &self.gitlab_error {
+                    ui.colored_label(egui::Color32::RED, format!("Error: {}", error));
+                } else if self.gitlab_issues.is_empty() {
+                    ui.label("No issues found. Click Refresh to load issues.");
+                } else {
+                    // Last fetch time
+                    if let Some(last_fetch) = self.gitlab_last_fetch {
+                        let elapsed = last_fetch.elapsed();
+                        let elapsed_str = if elapsed.as_secs() < 60 {
+                            format!("{} seconds ago", elapsed.as_secs())
+                        } else if elapsed.as_secs() < 3600 {
+                            format!("{} minutes ago", elapsed.as_secs() / 60)
+                        } else {
+                            format!("{} hours ago", elapsed.as_secs() / 3600)
+                        };
+                        ui.small(format!("Last updated: {}", elapsed_str));
+                    }
+
+                    // Issues list
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            for issue in &self.gitlab_issues {
+                                let is_selected = self.gitlab_selected_issue == Some(issue.iid);
+                                let text = format!("#{} {}", issue.iid, issue.title);
+                                let state_icon = if issue.is_open() { "🟢" } else { "🔴" };
+
+                                ui.horizontal(|ui| {
+                                    ui.label(state_icon);
+                                    let response = ui.selectable_label(is_selected, &text);
+                                    if response.clicked() {
+                                        self.gitlab_selected_issue = Some(issue.iid);
+                                    }
+                                });
+                            }
+                        });
+                }
+            });
+
+            // Right column - Issue details
+            columns[1].vertical(|ui| {
+                self.show_gitlab_issue_detail(ui);
+            });
+        });
+    }
+
+    /// Show GitLab issue detail panel
+    /// trace:STORY-0322 | ai:claude
+    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+    fn show_gitlab_issue_detail(&mut self, ui: &mut egui::Ui) {
+        if let Some(selected_iid) = self.gitlab_selected_issue {
+            if let Some(issue) = self.gitlab_issues.iter().find(|i| i.iid == selected_iid) {
+                // Issue header
+                ui.horizontal(|ui| {
+                    let state_icon = if issue.is_open() { "🟢 Open" } else { "🔴 Closed" };
+                    ui.heading(format!("#{} {}", issue.iid, issue.title));
+                    ui.label(state_icon);
+                });
+
+                ui.separator();
+
+                // Issue metadata
+                ui.horizontal(|ui| {
+                    ui.label("Author:");
+                    ui.label(&issue.author.name);
+                });
+
+                if let Some(assignee) = &issue.assignee {
+                    ui.horizontal(|ui| {
+                        ui.label("Assignee:");
+                        ui.label(&assignee.name);
+                    });
+                }
+
+                if !issue.labels.is_empty() {
+                    ui.horizontal(|ui| {
+                        ui.label("Labels:");
+                        for label in &issue.labels {
+                            ui.label(format!("[{}]", label));
+                        }
+                    });
+                }
+
+                ui.horizontal(|ui| {
+                    ui.label("Created:");
+                    ui.label(issue.created_at.format("%Y-%m-%d %H:%M").to_string());
+                });
+
+                ui.horizontal(|ui| {
+                    ui.label("Updated:");
+                    ui.label(issue.updated_at.format("%Y-%m-%d %H:%M").to_string());
+                });
+
+                ui.separator();
+
+                // Description
+                ui.label(egui::RichText::new("Description").strong());
+                if let Some(desc) = &issue.description {
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            // Render markdown description
+                            CommonMarkViewer::new()
+                                .show(ui, &mut self.markdown_cache, desc);
+                        });
+                } else {
+                    ui.label("No description");
+                }
+
+                ui.separator();
+
+                // Action buttons
+                ui.horizontal(|ui| {
+                    if ui.button("🔗 Open in Browser").clicked() {
+                        #[cfg(feature = "native")]
+                        {
+                            let _ = open::that(&issue.web_url);
+                        }
+                    }
+
+                    // TODO: Add "Link to Requirement" button for STORY-0323
+                });
+            }
+        } else {
+            ui.centered_and_justified(|ui| {
+                ui.label("Select an issue to view details");
+            });
+        }
+    }
+
     /// Show the detail panel for the Planning view (left side)
     fn show_planning_detail_panel(&mut self, ui: &mut egui::Ui) {
         // Check if a sprint is selected (takes precedence for display)
@@ -20696,7 +20986,7 @@ impl RequirementsApp {
 
         // Define view options with their shortcut keys
         // Kanban uses 'K' (Shift+K) to deconflict with 'k' (vim up navigation)
-        let view_options: Vec<(char, &str, View)> = vec![
+        let mut view_options: Vec<(char, &str, View)> = vec![
             ('r', "Requirements", View::List),
             ('q', "Queue", View::Queue),
             ('t', "Timeline", View::Timeline),
@@ -20705,6 +20995,11 @@ impl RequirementsApp {
             ('s', "Sprint Planning", View::Planning),
             ('K', "Kanban", View::KanBan),
         ];
+        // Add GitLab Issues view option on native with gitlab config
+        #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+        if self.gitlab_config.is_some() {
+            view_options.push(('g', "GitLab Issues", View::GitLabIssues));
+        }
         let num_options = view_options.len();
 
         // Handle keyboard input for the popup
@@ -20746,6 +21041,8 @@ impl RequirementsApp {
                 selected_view = Some(View::Planning);
             } else if i.key_pressed(egui::Key::K) && i.modifiers.shift {
                 selected_view = Some(View::KanBan);
+            } else if i.key_pressed(egui::Key::G) && !i.modifiers.shift {
+                selected_view = Some(View::GitLabIssues);
             }
         });
 
@@ -20819,6 +21116,7 @@ impl RequirementsApp {
                                 (View::OrgChart, View::OrgChart) => true,
                                 (View::Planning, View::Planning) => true,
                                 (View::Queue, View::Queue) => true,
+                                (View::GitLabIssues, View::GitLabIssues) => true,
                                 _ => false,
                             };
 
@@ -29656,6 +29954,7 @@ impl eframe::App for RequirementsApp {
                 View::Planning => KeyContext::RequirementsList, // Use same context for planning
                 View::Queue => KeyContext::RequirementsList,    // Use same context for queue
                 View::UserQueue(_) => KeyContext::RequirementsList, // Use same context for user queue view
+                View::GitLabIssues => KeyContext::RequirementsList, // Use same context for GitLab issues view
             }
         };
 
@@ -30992,6 +31291,18 @@ impl eframe::App for RequirementsApp {
                     columns[1].vertical(|ui| {
                         self.show_detail_view_with_close(ui);
                     });
+                });
+            });
+        } else if self.current_view == View::GitLabIssues {
+            // GitLab Issues view (STORY-0322)
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            egui::CentralPanel::default().show(ctx, |ui| {
+                self.show_gitlab_issues_view(ui);
+            });
+            #[cfg(not(all(not(target_arch = "wasm32"), feature = "native")))]
+            egui::CentralPanel::default().show(ctx, |ui| {
+                ui.centered_and_justified(|ui| {
+                    ui.label("GitLab integration not available in this build");
                 });
             });
         } else {
