@@ -1,12 +1,12 @@
 -- PostgreSQL schema for AIDA requirements management
--- Schema version 4
+-- Schema version 5
 
 -- Schema version tracking
 CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER NOT NULL
 );
 
-INSERT INTO schema_version (version) VALUES (4) ON CONFLICT DO NOTHING;
+INSERT INTO schema_version (version) VALUES (5) ON CONFLICT DO NOTHING;
 
 -- Requirements table
 CREATE TABLE IF NOT EXISTS requirements (
@@ -92,3 +92,29 @@ CREATE TABLE IF NOT EXISTS metadata (
 
 -- Insert default metadata row
 INSERT INTO metadata (id) VALUES (1) ON CONFLICT DO NOTHING;
+
+-- GitLab sync state table (STORY-0325)
+CREATE TABLE IF NOT EXISTS gitlab_sync_state (
+    requirement_id UUID NOT NULL,
+    spec_id TEXT NOT NULL,
+    gitlab_project_id BIGINT NOT NULL,
+    gitlab_issue_iid BIGINT NOT NULL,
+    gitlab_issue_id BIGINT NOT NULL,
+    linked_at TIMESTAMPTZ NOT NULL,
+    last_sync TIMESTAMPTZ NOT NULL,
+    aida_content_hash TEXT NOT NULL DEFAULT '',
+    gitlab_content_hash TEXT NOT NULL DEFAULT '',
+    link_origin TEXT NOT NULL DEFAULT 'ManualLink',
+    sync_status TEXT NOT NULL DEFAULT 'Untracked',
+    last_error TEXT,
+    PRIMARY KEY (requirement_id, gitlab_issue_iid)
+);
+
+-- Index for looking up sync state by requirement
+CREATE INDEX IF NOT EXISTS idx_gitlab_sync_requirement ON gitlab_sync_state(requirement_id);
+
+-- Index for looking up sync state by GitLab issue
+CREATE INDEX IF NOT EXISTS idx_gitlab_sync_issue ON gitlab_sync_state(gitlab_project_id, gitlab_issue_iid);
+
+-- Index for filtering by sync status
+CREATE INDEX IF NOT EXISTS idx_gitlab_sync_status ON gitlab_sync_state(sync_status);

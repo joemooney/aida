@@ -222,7 +222,7 @@ fn main() -> Result<()> {
             handle_scaffold_command(scaffold_cmd, &storage, &requirements_path)?;
         }
         Command::Gitlab(gitlab_cmd) => {
-            handle_gitlab_command(gitlab_cmd)?;
+            handle_gitlab_command(gitlab_cmd, &storage)?;
         }
         Command::Grep {
             pattern,
@@ -4262,7 +4262,7 @@ fn html_escape(s: &str) -> String {
 
 // trace:STORY-0321 | ai:claude
 /// Handle GitLab integration commands
-fn handle_gitlab_command(cmd: &GitLabCommand) -> Result<()> {
+fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
     // Create tokio runtime for async operations
     let rt = tokio::runtime::Runtime::new()?;
 
@@ -4446,14 +4446,118 @@ fn handle_gitlab_command(cmd: &GitLabCommand) -> Result<()> {
             }
         }
 
-        GitLabCommand::Status { id, diverged: _ } => {
-            // TODO: Implement sync status tracking (Phase 2)
-            if let Some(req_id) = id {
-                println!("Sync status for {}: {}", req_id, "(not yet implemented)".yellow());
-            } else {
-                println!("{}", "Sync status tracking not yet implemented.".yellow());
-                println!("This feature will be available in Phase 2 of GitLab integration.");
+        // trace:STORY-0325 | ai:claude
+        GitLabCommand::Status { id, diverged } => {
+            use aida_core::{GitLabSyncState, SyncStatus, LinkOrigin};
+
+            // Check if storage is SQLite (sync state only works with SQLite)
+            if !storage.is_sqlite() {
+                println!("{}", "GitLab sync status is only available for SQLite databases.".yellow());
+                return Ok(());
             }
+
+            let store = storage.load()?;
+
+            // Load sync states based on filter
+            let sync_states = if let Some(req_id) = id {
+                // Find the requirement by spec_id or UUID
+                let requirement = store.requirements.iter()
+                    .find(|r| {
+                        r.spec_id.as_deref() == Some(req_id.as_str())
+                            || r.id.to_string() == *req_id
+                    });
+
+                if let Some(req) = requirement {
+                    storage.load_sync_states_for_requirement(req.id)?
+                } else {
+                    println!("{} {}", "Requirement not found:".red(), req_id);
+                    return Ok(());
+                }
+            } else {
+                storage.load_all_sync_states()?
+            };
+
+            // Filter by diverged if requested
+            let sync_states: Vec<_> = if *diverged {
+                sync_states.into_iter()
+                    .filter(|s| !matches!(s.sync_status, SyncStatus::InSync))
+                    .collect()
+            } else {
+                sync_states
+            };
+
+            if sync_states.is_empty() {
+                if *diverged {
+                    println!("{}", "No diverged GitLab links found.".green());
+                } else {
+                    println!("{}", "No GitLab sync states found.".yellow());
+                    println!("Link requirements to GitLab issues using the GUI or create issues from requirements.");
+                }
+                return Ok(());
+            }
+
+            // Display sync states
+            println!("{}", "GitLab Sync Status".bold());
+            println!("{}", "─".repeat(60));
+
+            for state in &sync_states {
+                // Find the requirement for this sync state
+                let req = store.requirements.iter()
+                    .find(|r| r.id == state.requirement_id);
+
+                let req_display = if let Some(r) = req {
+                    r.spec_id.clone().unwrap_or_else(|| r.id.to_string())
+                } else {
+                    state.spec_id.clone()
+                };
+
+                // Status icon and color
+                let (status_icon, status_color) = match state.sync_status {
+                    SyncStatus::InSync => ("✓", "green"),
+                    SyncStatus::AidaModified => ("△", "yellow"),
+                    SyncStatus::GitLabModified => ("▽", "cyan"),
+                    SyncStatus::Conflict => ("⚠", "red"),
+                    SyncStatus::Error => ("✗", "red"),
+                    SyncStatus::Untracked => ("?", "dimmed"),
+                };
+
+                let status_text = match state.sync_status {
+                    SyncStatus::InSync => "In Sync".green(),
+                    SyncStatus::AidaModified => "AIDA Modified".yellow(),
+                    SyncStatus::GitLabModified => "GitLab Modified".cyan(),
+                    SyncStatus::Conflict => "Conflict".red(),
+                    SyncStatus::Error => "Error".red(),
+                    SyncStatus::Untracked => "Untracked".dimmed(),
+                };
+
+                let origin_text = match state.link_origin {
+                    LinkOrigin::CreatedFromAida => "→GL",
+                    LinkOrigin::ImportedFromGitLab => "←GL",
+                    LinkOrigin::ManualLink => "↔GL",
+                };
+
+                println!(
+                    "{} {} {} GL-{} [{}] {}",
+                    status_icon,
+                    req_display.bold(),
+                    origin_text.dimmed(),
+                    state.gitlab_issue_iid,
+                    status_text,
+                    state.last_sync.format("%Y-%m-%d %H:%M").to_string().dimmed()
+                );
+
+                if let Some(error) = &state.last_error {
+                    println!("    {} {}", "Error:".red(), error);
+                }
+            }
+
+            println!("{}", "─".repeat(60));
+            println!(
+                "Total: {} links ({} in sync, {} diverged)",
+                sync_states.len(),
+                sync_states.iter().filter(|s| matches!(s.sync_status, SyncStatus::InSync)).count(),
+                sync_states.iter().filter(|s| !matches!(s.sync_status, SyncStatus::InSync)).count()
+            );
         }
     }
 

@@ -2009,6 +2009,203 @@ impl fmt::Display for GitLabLinkType {
     }
 }
 
+// trace:STORY-0325 | ai:claude
+/// How a GitLab link was originally created
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum LinkOrigin {
+    /// Issue was created from AIDA via "Create GitLab Issue"
+    #[default]
+    CreatedFromAida,
+    /// Issue was imported from GitLab (future feature)
+    ImportedFromGitLab,
+    /// User manually linked an existing issue
+    ManualLink,
+}
+
+impl fmt::Display for LinkOrigin {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LinkOrigin::CreatedFromAida => write!(f, "Created from AIDA"),
+            LinkOrigin::ImportedFromGitLab => write!(f, "Imported from GitLab"),
+            LinkOrigin::ManualLink => write!(f, "Manual link"),
+        }
+    }
+}
+
+// trace:STORY-0325 | ai:claude
+/// Current sync status between AIDA and GitLab
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum SyncStatus {
+    /// Content matches between AIDA and GitLab
+    #[default]
+    InSync,
+    /// AIDA requirement has changed since last sync
+    AidaModified,
+    /// GitLab issue has changed since last sync
+    GitLabModified,
+    /// Both AIDA and GitLab have changed (conflict)
+    Conflict,
+    /// A sync error occurred
+    Error,
+    /// Linked but not actively syncing
+    Untracked,
+}
+
+impl fmt::Display for SyncStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SyncStatus::InSync => write!(f, "In Sync"),
+            SyncStatus::AidaModified => write!(f, "AIDA Modified"),
+            SyncStatus::GitLabModified => write!(f, "GitLab Modified"),
+            SyncStatus::Conflict => write!(f, "Conflict"),
+            SyncStatus::Error => write!(f, "Error"),
+            SyncStatus::Untracked => write!(f, "Untracked"),
+        }
+    }
+}
+
+// trace:STORY-0325 | ai:claude
+/// Tracks sync state between an AIDA requirement and a GitLab issue
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitLabSyncState {
+    /// AIDA requirement UUID
+    pub requirement_id: Uuid,
+
+    /// AIDA spec-id (for display)
+    pub spec_id: String,
+
+    /// GitLab project ID
+    pub gitlab_project_id: u64,
+
+    /// GitLab issue IID (project-scoped issue number)
+    pub gitlab_issue_iid: u64,
+
+    /// GitLab issue global ID (for API operations)
+    pub gitlab_issue_id: u64,
+
+    /// When the link was created
+    pub linked_at: DateTime<Utc>,
+
+    /// Last successful sync timestamp
+    pub last_sync: DateTime<Utc>,
+
+    /// Hash of AIDA content at last sync
+    pub aida_content_hash: String,
+
+    /// Hash of GitLab content at last sync
+    pub gitlab_content_hash: String,
+
+    /// How the link was created
+    pub link_origin: LinkOrigin,
+
+    /// Current sync status
+    pub sync_status: SyncStatus,
+
+    /// Last sync error message (if any)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_error: Option<String>,
+}
+
+impl GitLabSyncState {
+    /// Create a new sync state for a newly created link
+    pub fn new(
+        requirement_id: Uuid,
+        spec_id: impl Into<String>,
+        gitlab_project_id: u64,
+        gitlab_issue_iid: u64,
+        gitlab_issue_id: u64,
+        link_origin: LinkOrigin,
+    ) -> Self {
+        let now = Utc::now();
+        Self {
+            requirement_id,
+            spec_id: spec_id.into(),
+            gitlab_project_id,
+            gitlab_issue_iid,
+            gitlab_issue_id,
+            linked_at: now,
+            last_sync: now,
+            aida_content_hash: String::new(),
+            gitlab_content_hash: String::new(),
+            link_origin,
+            sync_status: SyncStatus::Untracked,
+            last_error: None,
+        }
+    }
+
+    /// Update the sync state after a successful sync
+    pub fn mark_synced(&mut self, aida_hash: String, gitlab_hash: String) {
+        self.last_sync = Utc::now();
+        self.aida_content_hash = aida_hash;
+        self.gitlab_content_hash = gitlab_hash;
+        self.sync_status = SyncStatus::InSync;
+        self.last_error = None;
+    }
+
+    /// Mark the sync state as having an error
+    pub fn mark_error(&mut self, error: impl Into<String>) {
+        self.sync_status = SyncStatus::Error;
+        self.last_error = Some(error.into());
+    }
+
+    /// Calculate content hash for an AIDA requirement
+    /// Includes: title, description, status, priority, owner
+    /// Excludes: timestamps, comments, history (too volatile)
+    pub fn hash_requirement(req: &Requirement) -> String {
+        use sha2::{Sha256, Digest};
+        let mut hasher = Sha256::new();
+
+        // Include stable content fields
+        hasher.update(req.title.as_bytes());
+        hasher.update(req.description.as_bytes());
+        hasher.update(req.status.to_string().as_bytes());
+        hasher.update(req.priority.to_string().as_bytes());
+        hasher.update(req.owner.as_bytes());
+        hasher.update(req.req_type.to_string().as_bytes());
+
+        // Include tags (sorted for consistency)
+        let mut tags: Vec<_> = req.tags.iter().collect();
+        tags.sort();
+        for tag in tags {
+            hasher.update(tag.as_bytes());
+        }
+
+        format!("{:x}", hasher.finalize())
+    }
+
+    /// Calculate content hash for a GitLab issue
+    /// Includes: title, description, state, labels, assignees
+    /// Excludes: timestamps, comment count, vote count (too volatile)
+    #[cfg(feature = "gitlab")]
+    pub fn hash_gitlab_issue(issue: &crate::integrations::gitlab::GitLabIssue) -> String {
+        use sha2::{Sha256, Digest};
+        let mut hasher = Sha256::new();
+
+        // Include stable content fields
+        hasher.update(issue.title.as_bytes());
+        if let Some(desc) = &issue.description {
+            hasher.update(desc.as_bytes());
+        }
+        hasher.update(format!("{:?}", issue.state).as_bytes());
+
+        // Include labels (sorted for consistency)
+        let mut labels = issue.labels.clone();
+        labels.sort();
+        for label in labels {
+            hasher.update(label.as_bytes());
+        }
+
+        // Include assignees (sorted by id for consistency)
+        let mut assignee_ids: Vec<_> = issue.assignees.iter().map(|a| a.id).collect();
+        assignee_ids.sort();
+        for id in assignee_ids {
+            hasher.update(id.to_string().as_bytes());
+        }
+
+        format!("{:x}", hasher.finalize())
+    }
+}
+
 // trace:EPIC-0246 | ai:claude:high
 /// Confidence level for AI-generated implementation
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]

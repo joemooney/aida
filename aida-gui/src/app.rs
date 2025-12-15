@@ -15518,12 +15518,52 @@ impl RequirementsApp {
                             link.issue_state = Some(state);
                             link.last_synced = Some(chrono::Utc::now());
 
-                            // Add to the requirement
-                            if let Some(req) = self.store.requirements.iter_mut().find(|r| r.id == req_id) {
+                            // First, check and add link, collect data for sync state
+                            // trace:STORY-0325 | ai:claude
+                            let sync_state_data = if let Some(req) = self.store.requirements.iter_mut().find(|r| r.id == req_id) {
                                 // Check if already linked
                                 if !req.gitlab_issues.iter().any(|l| l.issue_iid == iid) {
                                     req.gitlab_issues.push(link);
+                                    // Collect data needed for sync state before releasing borrow
+                                    use aida_core::GitLabSyncState;
+                                    let spec_id = req.spec_id.clone().unwrap_or_default();
+                                    let content_hash = GitLabSyncState::hash_requirement(req);
+                                    Some((true, spec_id, content_hash)) // (linked, spec_id, hash)
+                                } else {
+                                    Some((false, String::new(), String::new())) // Already linked
+                                }
+                            } else {
+                                None
+                            };
+
+                            // Now perform operations that need &mut self
+                            if let Some((linked, spec_id, content_hash)) = sync_state_data {
+                                if linked {
                                     self.save();
+
+                                    // Create sync state for manual link
+                                    if let Some(ref config) = self.gitlab_config {
+                                        use aida_core::{GitLabSyncState, LinkOrigin, SyncStatus};
+                                        let now = chrono::Utc::now();
+                                        let sync_state = GitLabSyncState {
+                                            requirement_id: req_id,
+                                            spec_id,
+                                            gitlab_project_id: config.project_id,
+                                            gitlab_issue_iid: iid,
+                                            gitlab_issue_id: 0, // Unknown for manual links
+                                            linked_at: now,
+                                            last_sync: now,
+                                            aida_content_hash: content_hash,
+                                            gitlab_content_hash: String::new(), // Unknown for manual links
+                                            link_origin: LinkOrigin::ManualLink,
+                                            sync_status: SyncStatus::Untracked,
+                                            last_error: None,
+                                        };
+                                        if let Err(e) = self.storage.save_sync_state(&sync_state) {
+                                            eprintln!("Failed to save sync state: {}", e);
+                                        }
+                                    }
+
                                     self.message = Some((format!("Linked GL-{}", iid), false));
                                 } else {
                                     self.message = Some((format!("GL-{} already linked", iid), true));
@@ -15660,8 +15700,10 @@ impl RequirementsApp {
                                         // Add the issue to our cached list
                                         self.gitlab_issues.insert(0, issue.clone());
 
+                                        // trace:STORY-0325 | ai:claude
                                         // Auto-link the issue to the requirement
-                                        if let Some(req) = self.store.requirements.iter_mut().find(|r| r.id == req_id) {
+                                        // Collect data for sync state before releasing borrow
+                                        let sync_data = if let Some(req) = self.store.requirements.iter_mut().find(|r| r.id == req_id) {
                                             let mut link = GitLabIssueLink::new(issue.iid, &issue.title);
                                             // Convert IssueState enum to string
                                             let state_str = match issue.state {
@@ -15673,7 +15715,43 @@ impl RequirementsApp {
                                             link.last_synced = Some(chrono::Utc::now());
                                             link.link_type = GitLabLinkType::ImplementedBy;
                                             req.gitlab_issues.push(link);
+
+                                            // Collect data for sync state
+                                            use aida_core::GitLabSyncState;
+                                            let spec_id = req.spec_id.clone().unwrap_or_default();
+                                            let content_hash = GitLabSyncState::hash_requirement(req);
+                                            Some((spec_id, content_hash))
+                                        } else {
+                                            None
+                                        };
+
+                                        // Now perform save and sync state creation
+                                        if let Some((spec_id, content_hash)) = sync_data {
                                             self.save();
+
+                                            // Create sync state for created issue (in sync at creation)
+                                            if let Some(ref config) = self.gitlab_config {
+                                                use aida_core::{GitLabSyncState, LinkOrigin, SyncStatus};
+                                                let now = chrono::Utc::now();
+                                                let gitlab_hash = GitLabSyncState::hash_gitlab_issue(&issue);
+                                                let sync_state = GitLabSyncState {
+                                                    requirement_id: req_id,
+                                                    spec_id,
+                                                    gitlab_project_id: config.project_id,
+                                                    gitlab_issue_iid: issue.iid,
+                                                    gitlab_issue_id: issue.id as u64,
+                                                    linked_at: now,
+                                                    last_sync: now,
+                                                    aida_content_hash: content_hash,
+                                                    gitlab_content_hash: gitlab_hash,
+                                                    link_origin: LinkOrigin::CreatedFromAida,
+                                                    sync_status: SyncStatus::InSync,
+                                                    last_error: None,
+                                                };
+                                                if let Err(e) = self.storage.save_sync_state(&sync_state) {
+                                                    eprintln!("Failed to save sync state: {}", e);
+                                                }
+                                            }
                                         }
 
                                         self.message = Some((format!("Created GL-{}: {}", issue.iid, issue.title), false));

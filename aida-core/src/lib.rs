@@ -37,6 +37,9 @@ pub use models::{
     // GitLab integration types
     GitLabIssueLink,
     GitLabLinkType,
+    GitLabSyncState,
+    LinkOrigin,
+    SyncStatus,
     // Baseline types
     Baseline,
     BaselineComparison,

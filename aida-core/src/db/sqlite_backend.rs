@@ -20,7 +20,7 @@ use crate::models::{
 use super::traits::{BackendType, DatabaseBackend};
 
 /// Current schema version - updated to 4 for pin_hash in users
-const SCHEMA_VERSION: i32 = 4;
+const SCHEMA_VERSION: i32 = 5;
 
 /// SQLite backend implementation
 pub struct SqliteBackend {
@@ -153,6 +153,48 @@ impl SqliteBackend {
 
             // Ensure schema version is updated even if ALTER failed
             let _ = conn.execute("UPDATE schema_version SET version = 4", []);
+        }
+
+        if from_version < 5 {
+            // Migration from v4 to v5: Add gitlab_sync_state table
+            // trace:STORY-0325 | ai:claude
+            conn.execute_batch(
+                r#"
+                -- GitLab sync state table for tracking sync between AIDA and GitLab
+                CREATE TABLE IF NOT EXISTS gitlab_sync_state (
+                    requirement_id TEXT NOT NULL,
+                    spec_id TEXT NOT NULL,
+                    gitlab_project_id INTEGER NOT NULL,
+                    gitlab_issue_iid INTEGER NOT NULL,
+                    gitlab_issue_id INTEGER NOT NULL,
+                    linked_at TEXT NOT NULL,
+                    last_sync TEXT NOT NULL,
+                    aida_content_hash TEXT NOT NULL DEFAULT '',
+                    gitlab_content_hash TEXT NOT NULL DEFAULT '',
+                    link_origin TEXT NOT NULL DEFAULT 'ManualLink',
+                    sync_status TEXT NOT NULL DEFAULT 'Untracked',
+                    last_error TEXT,
+                    PRIMARY KEY (requirement_id, gitlab_issue_iid)
+                );
+
+                -- Index for looking up sync state by requirement
+                CREATE INDEX IF NOT EXISTS idx_gitlab_sync_requirement ON gitlab_sync_state(requirement_id);
+
+                -- Index for looking up sync state by GitLab issue
+                CREATE INDEX IF NOT EXISTS idx_gitlab_sync_issue ON gitlab_sync_state(gitlab_project_id, gitlab_issue_iid);
+
+                -- Index for filtering by sync status
+                CREATE INDEX IF NOT EXISTS idx_gitlab_sync_status ON gitlab_sync_state(sync_status);
+
+                -- Update schema version
+                UPDATE schema_version SET version = 5;
+                "#,
+            ).unwrap_or_else(|e| {
+                eprintln!("Note: Some v5 migration may already exist: {}", e);
+            });
+
+            // Ensure schema version is updated
+            let _ = conn.execute("UPDATE schema_version SET version = 5", []);
         }
 
         Ok(())
@@ -706,6 +748,165 @@ impl SqliteBackend {
             .query_row("SELECT teams FROM metadata WHERE id = 1", [], |row| row.get(0))
             .unwrap_or_else(|_| "[]".to_string());
         Self::from_json(&json)
+    }
+
+    // ==================== GitLab Sync State Operations (STORY-0325) ====================
+
+    /// Save or update a GitLab sync state
+    /// trace:STORY-0325 | ai:claude
+    pub fn save_sync_state(&self, state: &crate::models::GitLabSyncState) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            r#"INSERT OR REPLACE INTO gitlab_sync_state
+               (requirement_id, spec_id, gitlab_project_id, gitlab_issue_iid, gitlab_issue_id,
+                linked_at, last_sync, aida_content_hash, gitlab_content_hash,
+                link_origin, sync_status, last_error)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)"#,
+            rusqlite::params![
+                state.requirement_id.to_string(),
+                state.spec_id,
+                state.gitlab_project_id as i64,
+                state.gitlab_issue_iid as i64,
+                state.gitlab_issue_id as i64,
+                state.linked_at.to_rfc3339(),
+                state.last_sync.to_rfc3339(),
+                state.aida_content_hash,
+                state.gitlab_content_hash,
+                format!("{:?}", state.link_origin),
+                format!("{:?}", state.sync_status),
+                state.last_error,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Load sync state for a specific requirement and issue
+    /// trace:STORY-0325 | ai:claude
+    pub fn load_sync_state(&self, requirement_id: Uuid, issue_iid: u64) -> Result<Option<crate::models::GitLabSyncState>> {
+        let conn = self.conn.lock().unwrap();
+        let result = conn.query_row(
+            r#"SELECT requirement_id, spec_id, gitlab_project_id, gitlab_issue_iid, gitlab_issue_id,
+                      linked_at, last_sync, aida_content_hash, gitlab_content_hash,
+                      link_origin, sync_status, last_error
+               FROM gitlab_sync_state WHERE requirement_id = ?1 AND gitlab_issue_iid = ?2"#,
+            rusqlite::params![requirement_id.to_string(), issue_iid as i64],
+            |row| Self::row_to_sync_state(row),
+        );
+
+        match result {
+            Ok(state) => Ok(Some(state)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// Load all sync states for a requirement
+    /// trace:STORY-0325 | ai:claude
+    pub fn load_sync_states_for_requirement(&self, requirement_id: Uuid) -> Result<Vec<crate::models::GitLabSyncState>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            r#"SELECT requirement_id, spec_id, gitlab_project_id, gitlab_issue_iid, gitlab_issue_id,
+                      linked_at, last_sync, aida_content_hash, gitlab_content_hash,
+                      link_origin, sync_status, last_error
+               FROM gitlab_sync_state WHERE requirement_id = ?1"#,
+        )?;
+
+        let states = stmt
+            .query_map([requirement_id.to_string()], |row| Self::row_to_sync_state(row))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(states)
+    }
+
+    /// Load all sync states
+    /// trace:STORY-0325 | ai:claude
+    pub fn load_all_sync_states(&self) -> Result<Vec<crate::models::GitLabSyncState>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            r#"SELECT requirement_id, spec_id, gitlab_project_id, gitlab_issue_iid, gitlab_issue_id,
+                      linked_at, last_sync, aida_content_hash, gitlab_content_hash,
+                      link_origin, sync_status, last_error
+               FROM gitlab_sync_state ORDER BY last_sync DESC"#,
+        )?;
+
+        let states = stmt
+            .query_map([], |row| Self::row_to_sync_state(row))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(states)
+    }
+
+    /// Load sync states by status (e.g., all diverged items)
+    /// trace:STORY-0325 | ai:claude
+    pub fn load_sync_states_by_status(&self, status: crate::models::SyncStatus) -> Result<Vec<crate::models::GitLabSyncState>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            r#"SELECT requirement_id, spec_id, gitlab_project_id, gitlab_issue_iid, gitlab_issue_id,
+                      linked_at, last_sync, aida_content_hash, gitlab_content_hash,
+                      link_origin, sync_status, last_error
+               FROM gitlab_sync_state WHERE sync_status = ?1 ORDER BY last_sync DESC"#,
+        )?;
+
+        let states = stmt
+            .query_map([format!("{:?}", status)], |row| Self::row_to_sync_state(row))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(states)
+    }
+
+    /// Delete a sync state
+    /// trace:STORY-0325 | ai:claude
+    pub fn delete_sync_state(&self, requirement_id: Uuid, issue_iid: u64) -> Result<bool> {
+        let conn = self.conn.lock().unwrap();
+        let rows_affected = conn.execute(
+            "DELETE FROM gitlab_sync_state WHERE requirement_id = ?1 AND gitlab_issue_iid = ?2",
+            rusqlite::params![requirement_id.to_string(), issue_iid as i64],
+        )?;
+        Ok(rows_affected > 0)
+    }
+
+    /// Helper to convert a row to GitLabSyncState
+    fn row_to_sync_state(row: &rusqlite::Row) -> rusqlite::Result<crate::models::GitLabSyncState> {
+        use crate::models::{GitLabSyncState, LinkOrigin, SyncStatus};
+
+        let req_id_str: String = row.get(0)?;
+        let linked_at_str: String = row.get(5)?;
+        let last_sync_str: String = row.get(6)?;
+        let link_origin_str: String = row.get(9)?;
+        let sync_status_str: String = row.get(10)?;
+
+        Ok(GitLabSyncState {
+            requirement_id: Uuid::parse_str(&req_id_str).unwrap_or_default(),
+            spec_id: row.get(1)?,
+            gitlab_project_id: row.get::<_, i64>(2)? as u64,
+            gitlab_issue_iid: row.get::<_, i64>(3)? as u64,
+            gitlab_issue_id: row.get::<_, i64>(4)? as u64,
+            linked_at: chrono::DateTime::parse_from_rfc3339(&linked_at_str)
+                .map(|dt| dt.with_timezone(&chrono::Utc))
+                .unwrap_or_else(|_| chrono::Utc::now()),
+            last_sync: chrono::DateTime::parse_from_rfc3339(&last_sync_str)
+                .map(|dt| dt.with_timezone(&chrono::Utc))
+                .unwrap_or_else(|_| chrono::Utc::now()),
+            aida_content_hash: row.get(7)?,
+            gitlab_content_hash: row.get(8)?,
+            link_origin: match link_origin_str.as_str() {
+                "CreatedFromAida" => LinkOrigin::CreatedFromAida,
+                "ImportedFromGitLab" => LinkOrigin::ImportedFromGitLab,
+                _ => LinkOrigin::ManualLink,
+            },
+            sync_status: match sync_status_str.as_str() {
+                "InSync" => SyncStatus::InSync,
+                "AidaModified" => SyncStatus::AidaModified,
+                "GitLabModified" => SyncStatus::GitLabModified,
+                "Conflict" => SyncStatus::Conflict,
+                "Error" => SyncStatus::Error,
+                _ => SyncStatus::Untracked,
+            },
+            last_error: row.get(11)?,
+        })
     }
 }
 

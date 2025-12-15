@@ -36,7 +36,7 @@ use crate::models::{
 use super::traits::{BackendType, DatabaseBackend, UpdateResult, VersionConflict};
 
 /// Current schema version
-const SCHEMA_VERSION: i32 = 4;
+const SCHEMA_VERSION: i32 = 5;
 
 /// PostgreSQL backend implementation with connection pooling
 pub struct PostgresBackend {
@@ -137,6 +137,36 @@ impl PostgresBackend {
                 r#"
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS pin_hash TEXT;
                 UPDATE schema_version SET version = 4;
+                "#,
+            )?;
+        }
+
+        if from_version < 5 {
+            // trace:STORY-0325 | ai:claude
+            client.batch_execute(
+                r#"
+                -- GitLab sync state table for tracking sync between AIDA and GitLab
+                CREATE TABLE IF NOT EXISTS gitlab_sync_state (
+                    requirement_id UUID NOT NULL,
+                    spec_id TEXT NOT NULL,
+                    gitlab_project_id BIGINT NOT NULL,
+                    gitlab_issue_iid BIGINT NOT NULL,
+                    gitlab_issue_id BIGINT NOT NULL,
+                    linked_at TIMESTAMPTZ NOT NULL,
+                    last_sync TIMESTAMPTZ NOT NULL,
+                    aida_content_hash TEXT NOT NULL DEFAULT '',
+                    gitlab_content_hash TEXT NOT NULL DEFAULT '',
+                    link_origin TEXT NOT NULL DEFAULT 'ManualLink',
+                    sync_status TEXT NOT NULL DEFAULT 'Untracked',
+                    last_error TEXT,
+                    PRIMARY KEY (requirement_id, gitlab_issue_iid)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_gitlab_sync_requirement ON gitlab_sync_state(requirement_id);
+                CREATE INDEX IF NOT EXISTS idx_gitlab_sync_issue ON gitlab_sync_state(gitlab_project_id, gitlab_issue_iid);
+                CREATE INDEX IF NOT EXISTS idx_gitlab_sync_status ON gitlab_sync_state(sync_status);
+
+                UPDATE schema_version SET version = 5;
                 "#,
             )?;
         }
@@ -734,6 +764,151 @@ impl PostgresBackend {
             }
             None => Ok(Vec::new()),
         }
+    }
+
+    // ==================== GitLab Sync State Operations (STORY-0325) ====================
+
+    /// Save or update a GitLab sync state
+    /// trace:STORY-0325 | ai:claude
+    pub fn save_sync_state(&self, state: &crate::models::GitLabSyncState) -> Result<()> {
+        let mut client = self.pool.get().context("Failed to get connection from pool")?;
+        client.execute(
+            r#"INSERT INTO gitlab_sync_state
+               (requirement_id, spec_id, gitlab_project_id, gitlab_issue_iid, gitlab_issue_id,
+                linked_at, last_sync, aida_content_hash, gitlab_content_hash,
+                link_origin, sync_status, last_error)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+               ON CONFLICT (requirement_id, gitlab_issue_iid) DO UPDATE SET
+                spec_id = EXCLUDED.spec_id,
+                last_sync = EXCLUDED.last_sync,
+                aida_content_hash = EXCLUDED.aida_content_hash,
+                gitlab_content_hash = EXCLUDED.gitlab_content_hash,
+                sync_status = EXCLUDED.sync_status,
+                last_error = EXCLUDED.last_error"#,
+            &[
+                &state.requirement_id,
+                &state.spec_id,
+                &(state.gitlab_project_id as i64),
+                &(state.gitlab_issue_iid as i64),
+                &(state.gitlab_issue_id as i64),
+                &state.linked_at,
+                &state.last_sync,
+                &state.aida_content_hash,
+                &state.gitlab_content_hash,
+                &format!("{:?}", state.link_origin),
+                &format!("{:?}", state.sync_status),
+                &state.last_error,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Load sync state for a specific requirement and issue
+    /// trace:STORY-0325 | ai:claude
+    pub fn load_sync_state(&self, requirement_id: Uuid, issue_iid: u64) -> Result<Option<crate::models::GitLabSyncState>> {
+        let mut client = self.pool.get().context("Failed to get connection from pool")?;
+        let row = client.query_opt(
+            r#"SELECT requirement_id, spec_id, gitlab_project_id, gitlab_issue_iid, gitlab_issue_id,
+                      linked_at, last_sync, aida_content_hash, gitlab_content_hash,
+                      link_origin, sync_status, last_error
+               FROM gitlab_sync_state WHERE requirement_id = $1 AND gitlab_issue_iid = $2"#,
+            &[&requirement_id, &(issue_iid as i64)],
+        )?;
+
+        match row {
+            Some(row) => Ok(Some(Self::row_to_sync_state(&row)?)),
+            None => Ok(None),
+        }
+    }
+
+    /// Load all sync states for a requirement
+    /// trace:STORY-0325 | ai:claude
+    pub fn load_sync_states_for_requirement(&self, requirement_id: Uuid) -> Result<Vec<crate::models::GitLabSyncState>> {
+        let mut client = self.pool.get().context("Failed to get connection from pool")?;
+        let rows = client.query(
+            r#"SELECT requirement_id, spec_id, gitlab_project_id, gitlab_issue_iid, gitlab_issue_id,
+                      linked_at, last_sync, aida_content_hash, gitlab_content_hash,
+                      link_origin, sync_status, last_error
+               FROM gitlab_sync_state WHERE requirement_id = $1"#,
+            &[&requirement_id],
+        )?;
+
+        rows.iter().map(|row| Self::row_to_sync_state(row)).collect()
+    }
+
+    /// Load all sync states
+    /// trace:STORY-0325 | ai:claude
+    pub fn load_all_sync_states(&self) -> Result<Vec<crate::models::GitLabSyncState>> {
+        let mut client = self.pool.get().context("Failed to get connection from pool")?;
+        let rows = client.query(
+            r#"SELECT requirement_id, spec_id, gitlab_project_id, gitlab_issue_iid, gitlab_issue_id,
+                      linked_at, last_sync, aida_content_hash, gitlab_content_hash,
+                      link_origin, sync_status, last_error
+               FROM gitlab_sync_state ORDER BY last_sync DESC"#,
+            &[],
+        )?;
+
+        rows.iter().map(|row| Self::row_to_sync_state(row)).collect()
+    }
+
+    /// Load sync states by status
+    /// trace:STORY-0325 | ai:claude
+    pub fn load_sync_states_by_status(&self, status: crate::models::SyncStatus) -> Result<Vec<crate::models::GitLabSyncState>> {
+        let mut client = self.pool.get().context("Failed to get connection from pool")?;
+        let rows = client.query(
+            r#"SELECT requirement_id, spec_id, gitlab_project_id, gitlab_issue_iid, gitlab_issue_id,
+                      linked_at, last_sync, aida_content_hash, gitlab_content_hash,
+                      link_origin, sync_status, last_error
+               FROM gitlab_sync_state WHERE sync_status = $1 ORDER BY last_sync DESC"#,
+            &[&format!("{:?}", status)],
+        )?;
+
+        rows.iter().map(|row| Self::row_to_sync_state(row)).collect()
+    }
+
+    /// Delete a sync state
+    /// trace:STORY-0325 | ai:claude
+    pub fn delete_sync_state(&self, requirement_id: Uuid, issue_iid: u64) -> Result<bool> {
+        let mut client = self.pool.get().context("Failed to get connection from pool")?;
+        let rows_affected = client.execute(
+            "DELETE FROM gitlab_sync_state WHERE requirement_id = $1 AND gitlab_issue_iid = $2",
+            &[&requirement_id, &(issue_iid as i64)],
+        )?;
+        Ok(rows_affected > 0)
+    }
+
+    /// Helper to convert a row to GitLabSyncState
+    fn row_to_sync_state(row: &postgres::Row) -> Result<crate::models::GitLabSyncState> {
+        use crate::models::{GitLabSyncState, LinkOrigin, SyncStatus};
+
+        let link_origin_str: String = row.get("link_origin");
+        let sync_status_str: String = row.get("sync_status");
+
+        Ok(GitLabSyncState {
+            requirement_id: row.get("requirement_id"),
+            spec_id: row.get("spec_id"),
+            gitlab_project_id: row.get::<_, i64>("gitlab_project_id") as u64,
+            gitlab_issue_iid: row.get::<_, i64>("gitlab_issue_iid") as u64,
+            gitlab_issue_id: row.get::<_, i64>("gitlab_issue_id") as u64,
+            linked_at: row.get("linked_at"),
+            last_sync: row.get("last_sync"),
+            aida_content_hash: row.get("aida_content_hash"),
+            gitlab_content_hash: row.get("gitlab_content_hash"),
+            link_origin: match link_origin_str.as_str() {
+                "CreatedFromAida" => LinkOrigin::CreatedFromAida,
+                "ImportedFromGitLab" => LinkOrigin::ImportedFromGitLab,
+                _ => LinkOrigin::ManualLink,
+            },
+            sync_status: match sync_status_str.as_str() {
+                "InSync" => SyncStatus::InSync,
+                "AidaModified" => SyncStatus::AidaModified,
+                "GitLabModified" => SyncStatus::GitLabModified,
+                "Conflict" => SyncStatus::Conflict,
+                "Error" => SyncStatus::Error,
+                _ => SyncStatus::Untracked,
+            },
+            last_error: row.get("last_error"),
+        })
     }
 }
 

@@ -1327,6 +1327,90 @@ impl Storage {
     pub fn attachment_exists(&self, stored_path: &str) -> bool {
         self.get_attachment_full_path(stored_path).exists()
     }
+
+    // --- GitLab Sync State Methods (STORY-0325) ---
+
+    /// Save a GitLab sync state record
+    /// trace:STORY-0325 | ai:claude
+    pub fn save_sync_state(&self, state: &crate::models::GitLabSyncState) -> Result<()> {
+        if !self.is_sqlite() {
+            anyhow::bail!("GitLab sync state is only supported for SQLite databases");
+        }
+
+        use crate::db::SqliteBackend;
+        let backend = SqliteBackend::new(&self.file_path)?;
+        backend.save_sync_state(state)
+    }
+
+    /// Load a GitLab sync state by requirement ID and issue IID
+    /// trace:STORY-0325 | ai:claude
+    pub fn load_sync_state(
+        &self,
+        requirement_id: uuid::Uuid,
+        issue_iid: u64,
+    ) -> Result<Option<crate::models::GitLabSyncState>> {
+        if !self.is_sqlite() {
+            anyhow::bail!("GitLab sync state is only supported for SQLite databases");
+        }
+
+        use crate::db::SqliteBackend;
+        let backend = SqliteBackend::new(&self.file_path)?;
+        backend.load_sync_state(requirement_id, issue_iid)
+    }
+
+    /// Load all GitLab sync states for a requirement
+    /// trace:STORY-0325 | ai:claude
+    pub fn load_sync_states_for_requirement(
+        &self,
+        requirement_id: uuid::Uuid,
+    ) -> Result<Vec<crate::models::GitLabSyncState>> {
+        if !self.is_sqlite() {
+            anyhow::bail!("GitLab sync state is only supported for SQLite databases");
+        }
+
+        use crate::db::SqliteBackend;
+        let backend = SqliteBackend::new(&self.file_path)?;
+        backend.load_sync_states_for_requirement(requirement_id)
+    }
+
+    /// Load all GitLab sync states
+    /// trace:STORY-0325 | ai:claude
+    pub fn load_all_sync_states(&self) -> Result<Vec<crate::models::GitLabSyncState>> {
+        if !self.is_sqlite() {
+            anyhow::bail!("GitLab sync state is only supported for SQLite databases");
+        }
+
+        use crate::db::SqliteBackend;
+        let backend = SqliteBackend::new(&self.file_path)?;
+        backend.load_all_sync_states()
+    }
+
+    /// Load GitLab sync states by status
+    /// trace:STORY-0325 | ai:claude
+    pub fn load_sync_states_by_status(
+        &self,
+        status: crate::models::SyncStatus,
+    ) -> Result<Vec<crate::models::GitLabSyncState>> {
+        if !self.is_sqlite() {
+            anyhow::bail!("GitLab sync state is only supported for SQLite databases");
+        }
+
+        use crate::db::SqliteBackend;
+        let backend = SqliteBackend::new(&self.file_path)?;
+        backend.load_sync_states_by_status(status)
+    }
+
+    /// Delete a GitLab sync state
+    /// trace:STORY-0325 | ai:claude
+    pub fn delete_sync_state(&self, requirement_id: uuid::Uuid, issue_iid: u64) -> Result<bool> {
+        if !self.is_sqlite() {
+            anyhow::bail!("GitLab sync state is only supported for SQLite databases");
+        }
+
+        use crate::db::SqliteBackend;
+        let backend = SqliteBackend::new(&self.file_path)?;
+        backend.delete_sync_state(requirement_id, issue_iid)
+    }
 }
 
 #[cfg(test)]
