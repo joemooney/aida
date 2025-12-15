@@ -3955,6 +3955,19 @@ pub struct RequirementsApp {
     gitlab_link_picker_search: String,                               // Search text in link picker
     #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
     gitlab_link_picker_req_id: Option<Uuid>,                         // Requirement to link the issue to
+    // GitLab create issue dialog state (STORY-0324)
+    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+    show_create_gitlab_issue_dialog: bool,                           // Show create issue dialog
+    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+    create_gitlab_issue_req_id: Option<Uuid>,                        // Requirement to create issue from
+    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+    create_gitlab_issue_title: String,                               // Editable title for new issue
+    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+    create_gitlab_issue_description: String,                         // Editable description for new issue
+    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+    create_gitlab_issue_labels: String,                              // Comma-separated labels
+    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+    create_gitlab_issue_creating: bool,                              // True while creating issue
 
     // WASM async loading state (FR-0281) - for gRPC-Web client connection
     #[cfg(target_arch = "wasm32")]
@@ -4608,6 +4621,19 @@ impl RequirementsApp {
             gitlab_link_picker_search: String::new(),
             #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
             gitlab_link_picker_req_id: None,
+            // GitLab create issue dialog state (STORY-0324)
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            show_create_gitlab_issue_dialog: false,
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            create_gitlab_issue_req_id: None,
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            create_gitlab_issue_title: String::new(),
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            create_gitlab_issue_description: String::new(),
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            create_gitlab_issue_labels: String::new(),
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            create_gitlab_issue_creating: false,
         }
     }
 
@@ -5228,6 +5254,19 @@ impl RequirementsApp {
             gitlab_link_picker_search: String::new(),
             #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
             gitlab_link_picker_req_id: None,
+            // GitLab create issue dialog state (STORY-0324)
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            show_create_gitlab_issue_dialog: false,
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            create_gitlab_issue_req_id: None,
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            create_gitlab_issue_title: String::new(),
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            create_gitlab_issue_description: String::new(),
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            create_gitlab_issue_labels: String::new(),
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            create_gitlab_issue_creating: false,
         }
     }
 
@@ -15299,13 +15338,38 @@ impl RequirementsApp {
 
         ui.horizontal(|ui| {
             ui.heading("🦊 GitLab Issues");
-            // Only show Link button if GitLab is configured
+            // Only show buttons if GitLab is configured
             if self.gitlab_config.is_some() {
                 if ui.button("➕ Link Issue").clicked() {
                     // Trigger the GitLab issue picker
                     self.show_gitlab_link_picker = true;
                     self.gitlab_link_picker_search.clear();
                     self.gitlab_link_picker_req_id = Some(req_id);
+                }
+                // trace:STORY-0324 | ai:claude
+                if ui.button("🆕 Create Issue").clicked() {
+                    // Pre-populate from requirement
+                    let spec_id_str = req.spec_id.as_deref().unwrap_or("REQ");
+                    self.create_gitlab_issue_title = format!("[{}] {}", spec_id_str, req.title);
+                    let desc_text = if req.description.is_empty() {
+                        "No description".to_string()
+                    } else {
+                        req.description.clone()
+                    };
+                    self.create_gitlab_issue_description = format!(
+                        "## AIDA Requirement: {}\n\n{}\n\n---\n*Created from AIDA requirement {}*",
+                        req.title,
+                        desc_text,
+                        spec_id_str
+                    );
+                    // Map type and priority to labels
+                    let mut labels = vec![format!("aida:{}", req.req_type.to_string().to_lowercase())];
+                    if req.priority != aida_core::RequirementPriority::Medium {
+                        labels.push(format!("priority:{}", req.priority.to_string().to_lowercase()));
+                    }
+                    self.create_gitlab_issue_labels = labels.join(",");
+                    self.create_gitlab_issue_req_id = Some(req_id);
+                    self.show_create_gitlab_issue_dialog = true;
                 }
             } else {
                 ui.small("(Configure GitLab in Settings)");
@@ -15478,6 +15542,160 @@ impl RequirementsApp {
                     if ui.button("Cancel").clicked() {
                         self.show_gitlab_link_picker = false;
                         self.gitlab_link_picker_req_id = None;
+                    }
+                });
+            });
+    }
+
+    /// Show create GitLab issue dialog modal
+    /// trace:STORY-0324 | ai:claude
+    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+    fn show_create_gitlab_issue_modal(&mut self, ctx: &egui::Context) {
+        use aida_core::{GitLabIssueLink, GitLabLinkType, CreateIssueRequest};
+
+        if !self.show_create_gitlab_issue_dialog {
+            return;
+        }
+
+        let Some(req_id) = self.create_gitlab_issue_req_id else {
+            self.show_create_gitlab_issue_dialog = false;
+            return;
+        };
+
+        // Get requirement spec_id for display
+        let req_spec_id = self.store.requirements.iter()
+            .find(|r| r.id == req_id)
+            .and_then(|r| r.spec_id.clone())
+            .unwrap_or_else(|| "REQ".to_string());
+
+        egui::Window::new("🦊 Create GitLab Issue")
+            .collapsible(false)
+            .resizable(true)
+            .default_width(500.0)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                ui.label(format!("Creating issue from: {}", req_spec_id));
+                ui.add_space(10.0);
+
+                // Title field
+                ui.horizontal(|ui| {
+                    ui.label("Title:");
+                    ui.add_sized(
+                        [ui.available_width(), 24.0],
+                        egui::TextEdit::singleline(&mut self.create_gitlab_issue_title)
+                    );
+                });
+
+                ui.add_space(5.0);
+
+                // Description field (multiline)
+                ui.label("Description:");
+                egui::ScrollArea::vertical()
+                    .max_height(200.0)
+                    .show(ui, |ui| {
+                        ui.add_sized(
+                            [ui.available_width(), 180.0],
+                            egui::TextEdit::multiline(&mut self.create_gitlab_issue_description)
+                        );
+                    });
+
+                ui.add_space(5.0);
+
+                // Labels field
+                ui.horizontal(|ui| {
+                    ui.label("Labels:");
+                    ui.add_sized(
+                        [ui.available_width(), 24.0],
+                        egui::TextEdit::singleline(&mut self.create_gitlab_issue_labels)
+                    );
+                });
+                ui.small("Comma-separated (e.g., aida:story,priority:high)");
+
+                ui.add_space(15.0);
+                ui.separator();
+
+                // Action buttons
+                ui.horizontal(|ui| {
+                    if self.create_gitlab_issue_creating {
+                        ui.spinner();
+                        ui.label("Creating issue...");
+                    } else {
+                        let create_enabled = !self.create_gitlab_issue_title.trim().is_empty();
+                        if ui.add_enabled(create_enabled, egui::Button::new("✓ Create Issue")).clicked() {
+                            // Start async creation
+                            self.create_gitlab_issue_creating = true;
+
+                            // Clone data for async call
+                            let title = self.create_gitlab_issue_title.clone();
+                            let description = if self.create_gitlab_issue_description.trim().is_empty() {
+                                None
+                            } else {
+                                Some(self.create_gitlab_issue_description.clone())
+                            };
+                            let labels = if self.create_gitlab_issue_labels.trim().is_empty() {
+                                None
+                            } else {
+                                Some(self.create_gitlab_issue_labels.clone())
+                            };
+
+                            if let Some(config) = &self.gitlab_config {
+                                let config = config.clone();
+                                let runtime = tokio::runtime::Runtime::new().unwrap();
+
+                                match runtime.block_on(async {
+                                    let client = aida_core::GitLabClient::new(config)?;
+                                    let request = CreateIssueRequest {
+                                        title,
+                                        description,
+                                        labels,
+                                        confidential: None,
+                                        assignee_ids: None,
+                                        milestone_id: None,
+                                        due_date: None,
+                                        weight: None,
+                                    };
+                                    client.create_issue(request).await
+                                }) {
+                                    Ok(issue) => {
+                                        // Add the issue to our cached list
+                                        self.gitlab_issues.insert(0, issue.clone());
+
+                                        // Auto-link the issue to the requirement
+                                        if let Some(req) = self.store.requirements.iter_mut().find(|r| r.id == req_id) {
+                                            let mut link = GitLabIssueLink::new(issue.iid, &issue.title);
+                                            // Convert IssueState enum to string
+                                            let state_str = match issue.state {
+                                                aida_core::IssueState::Opened => "opened",
+                                                aida_core::IssueState::Closed => "closed",
+                                                aida_core::IssueState::Unknown => "unknown",
+                                            };
+                                            link.issue_state = Some(state_str.to_string());
+                                            link.last_synced = Some(chrono::Utc::now());
+                                            link.link_type = GitLabLinkType::ImplementedBy;
+                                            req.gitlab_issues.push(link);
+                                            self.save();
+                                        }
+
+                                        self.message = Some((format!("Created GL-{}: {}", issue.iid, issue.title), false));
+                                        self.show_create_gitlab_issue_dialog = false;
+                                        self.create_gitlab_issue_req_id = None;
+                                        self.create_gitlab_issue_creating = false;
+                                    }
+                                    Err(e) => {
+                                        self.message = Some((format!("Failed to create issue: {}", e), true));
+                                        self.create_gitlab_issue_creating = false;
+                                    }
+                                }
+                            } else {
+                                self.message = Some(("GitLab not configured".to_string(), true));
+                                self.create_gitlab_issue_creating = false;
+                            }
+                        }
+
+                        if ui.button("Cancel").clicked() {
+                            self.show_create_gitlab_issue_dialog = false;
+                            self.create_gitlab_issue_req_id = None;
+                        }
                     }
                 });
             });
@@ -31820,6 +32038,10 @@ impl eframe::App for RequirementsApp {
         // Show GitLab link picker modal (STORY-0323)
         #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
         self.show_gitlab_link_picker_modal(ctx);
+
+        // Show GitLab create issue modal (STORY-0324)
+        #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+        self.show_create_gitlab_issue_modal(ctx);
 
         // Show toast notification overlay (must be last to appear on top)
         self.show_toast_notification(ctx);
