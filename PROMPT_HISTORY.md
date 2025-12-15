@@ -1884,3 +1884,56 @@ A chronological record of development sessions and changes made to the Requireme
 
 - **Commit**: 7c64d0f
 - **Status**: STORY-0321 and STORY-0322 completed
+
+#### STORY-0323: Link AIDA Requirements to GitLab Issues
+**Goal**: Create traceability links between AIDA requirements and GitLab issues
+
+**Implementation:**
+
+1. **Data Model (aida-core/src/models.rs)**:
+   - `GitLabIssueLink` struct with:
+     - `id: Uuid` - Unique link identifier
+     - `issue_iid: u64` - GitLab issue IID (project-scoped)
+     - `project_id: Option<u64>` - Optional project override
+     - `issue_title: String` - Cached title from GitLab
+     - `link_type: GitLabLinkType` - Relationship type
+     - `notes: Option<String>` - Optional notes
+     - `created_at`, `created_by` - Audit fields
+     - `last_synced`, `issue_state` - Sync metadata
+   - `GitLabLinkType` enum: ImplementedBy, TracesTo, RelatedBug, FollowUp
+   - Added `gitlab_issues: Vec<GitLabIssueLink>` to Requirement struct
+
+2. **GUI - Links Tab Section**:
+   - New "🦊 GitLab Issues" section between URLs and Relationships
+   - Shows linked issues with:
+     - State icons (🟢 open, 🔴 closed, ⚪ unknown)
+     - Link type badge ([impl], [trace], [bug], [followup])
+     - Issue ID and title as clickable link
+     - Sync timestamp
+   - Remove button (x) to unlink issues
+   - "➕ Link Issue" button (only shown when GitLab configured)
+
+3. **GUI - Link Picker Modal**:
+   - Search field to filter cached GitLab issues
+   - Lists up to 20 matching issues with state icons
+   - Click to select and create link
+   - Duplicate detection (prevents linking same issue twice)
+   - Cancel button to close without linking
+
+4. **State Management**:
+   - `show_gitlab_link_picker: bool` - Controls modal visibility
+   - `gitlab_link_picker_search: String` - Search text in picker
+   - `gitlab_link_picker_req_id: Option<Uuid>` - Target requirement
+
+5. **Backend Updates**:
+   - SQLite: Added `gitlab_issues: Vec::new()` initialization
+   - PostgreSQL: Added `gitlab_issues: Vec::new()` initialization
+   - gRPC client: Added `gitlab_issues: Vec::new()` initialization
+
+- **Commit**: cac0ee8
+- **Status**: STORY-0323 completed
+
+**Phase 1 Complete!** All three stories in Phase 1 (GitLab Read-only Integration) are now complete:
+- STORY-0321: GitLab Connection Configuration ✓
+- STORY-0322: View GitLab Issues in AIDA ✓
+- STORY-0323: Link AIDA Requirements to GitLab Issues ✓
