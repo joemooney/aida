@@ -7638,6 +7638,17 @@ impl RequirementsApp {
                         self.pending_view_change = Some(View::Planning);
                         ui.close_menu();
                     }
+                    ui.separator();
+                    if ui.button("📥 My Queue").clicked() {
+                        self.pending_view_change = Some(View::Queue);
+                        ui.close_menu();
+                    }
+                    if ui.button("👤 Other User Queue...").clicked() {
+                        self.show_user_queue_picker = true;
+                        self.user_queue_picker_search.clear();
+                        self.user_queue_picker_selected = 0;
+                        ui.close_menu();
+                    }
                 });
 
                 if ui.button("➕ Add").clicked() {
