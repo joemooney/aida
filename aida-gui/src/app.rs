@@ -9251,16 +9251,7 @@ impl RequirementsApp {
         // Width: 900px max or 90% of screen (increased for sidebar), Height: 70% of screen (max 600px)
         let settings_width = 900.0_f32.min(max_size.x * 0.9);
         let settings_height = 600.0_f32.min(max_size.y * 0.7);
-
-        // Calculate sidebar width based on longest label text to ensure single-line display
-        // "🎨 Appearance" is the longest label
-        let longest_label = "🎨 Appearance";
-        let sidebar_width = ctx.fonts(|fonts| {
-            let font_id = egui::TextStyle::Body.resolve(ctx.style().as_ref());
-            fonts.glyph_width(&font_id, ' ') * 2.0 + // padding
-            fonts.layout_no_wrap(longest_label.to_string(), font_id, egui::Color32::WHITE).size().x + 20.0
-        }).max(140.0); // Minimum 140px
-
+        let sidebar_width = 120.0;
         let content_width = settings_width - sidebar_width - 25.0; // Account for padding/separator
 
         let mut close_requested = false;
@@ -9359,12 +9350,13 @@ impl RequirementsApp {
                         ui.set_min_width(panel_width);
                         ui.set_max_width(panel_width);
 
-                        egui::ScrollArea::both() // Allow both vertical and horizontal scrolling
+                        egui::ScrollArea::vertical()
                             .max_height(actual_content_height)
-                            .auto_shrink([false, false])
                             .show(ui, |ui| {
-                                // Content has minimum width but can expand
-                                ui.set_min_width(400.0); // Minimum content width for readability
+                                // Content fills available width within the container
+                                let inner_width = panel_width - 15.0;
+                                ui.set_min_width(inner_width);
+                                ui.set_max_width(inner_width);
 
                                 // Tab content - aligned to top
                                 match self.settings_tab {
