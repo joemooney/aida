@@ -1809,3 +1809,78 @@ A chronological record of development sessions and changes made to the Requireme
 7. Direct reqwest for API calls (vs heavy gitlab crate)
 
 - **Status**: Requirements captured, ready for implementation prioritization
+
+### GitLab Integration Implementation - Phase 1 (2025-12-14)
+- **Prompt**: "1" - Start implementing Phase 1 of GitLab integration
+- **Requirement**: STORY-0321, STORY-0322
+
+#### STORY-0321: GitLab Connection Configuration
+**Goal**: Create GitLab API client and configuration system
+
+**Implementation:**
+1. **aida-core/src/integrations/gitlab/config.rs**:
+   - `GitLabConfig` struct with URL, project_id, token, labels, polling, sync settings
+   - `LabelConfig` for type/status/priority label mapping
+   - `PollingConfig` for refresh interval and batch size
+   - `SyncConfig` with mode (push-only/pull-only/bidirectional/manual)
+   - Config file load/save to `~/.config/aida/gitlab.toml`
+   - Token via `AIDA_GITLAB_TOKEN` environment variable
+
+2. **aida-core/src/integrations/gitlab/client.rs**:
+   - `GitLabClient` struct wrapping reqwest::Client
+   - Async methods: `test_connection`, `list_issues`, `get_issue`, `create_issue`, `update_issue`, `add_comment`
+   - Bearer token authentication
+   - Error handling with `ClientError` enum
+
+3. **aida-core/src/integrations/gitlab/models.rs**:
+   - `GitLabProject`, `GitLabIssue`, `GitLabUser`, `GitLabLabel`, `GitLabMilestone`
+   - `IssueState` (Opened/Closed), `MilestoneState` (Active/Closed)
+   - `CreateIssueRequest`, `UpdateIssueRequest`, `CreateNoteRequest`
+   - `IssueFilter` with state, labels, search, pagination
+
+4. **CLI Commands** (aida-cli):
+   - `aida gitlab config` - Configure GitLab connection
+   - `aida gitlab test` - Test connection
+   - `aida gitlab list` - List issues
+   - `aida gitlab show <IID>` - Show issue details
+   - `aida gitlab status` - Show linked issues with sync status
+
+- **Commit**: 3999d48
+
+#### STORY-0322: View GitLab Issues in AIDA (GUI)
+**Goal**: Display GitLab issues in the GUI with detail panel
+
+**Implementation:**
+1. **New View Type**:
+   - Added `View::GitLabIssues` enum variant
+   - Added to view picker (shortcut: `v g`)
+
+2. **App State Fields** (conditionally compiled for native):
+   - `gitlab_config: Option<GitLabConfig>` - Loaded from config file
+   - `gitlab_issues: Vec<GitLabIssue>` - Cached issues
+   - `gitlab_last_fetch: Option<Instant>` - Cache timestamp
+   - `gitlab_selected_issue: Option<u64>` - Selected IID
+   - `gitlab_loading: bool` - Loading indicator
+   - `gitlab_error: Option<String>` - Error display
+   - `gitlab_filter_state: Option<IssueState>` - State filter
+   - `gitlab_filter_search: String` - Search filter
+
+3. **GitLab Issues View** (`show_gitlab_issues_view`):
+   - Two-column layout (issues list / detail panel)
+   - Header with 🦊 icon and "Refresh" button
+   - State filter combo box (Open/Closed/All)
+   - Search text field
+   - Issues list with state icons (🟢/🔴) and selection
+   - Last updated timestamp display
+   - Loading spinner and error handling
+
+4. **Issue Detail Panel** (`show_gitlab_issue_detail`):
+   - Issue title with state badge
+   - Author and assignee info
+   - Labels display
+   - Created/updated timestamps
+   - Markdown-rendered description
+   - "Open in Browser" button
+
+- **Commit**: 7c64d0f
+- **Status**: STORY-0321 and STORY-0322 completed
