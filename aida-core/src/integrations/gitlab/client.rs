@@ -262,6 +262,48 @@ impl GitLabClient {
             .map_err(|e| ClientError::Parse(e.to_string()))
     }
 
+    // trace:STORY-0326 | ai:claude
+    /// Create a new label in the project
+    pub async fn create_label(&self, name: &str, color: &str, description: Option<&str>) -> Result<GitLabLabel, ClientError> {
+        let url = format!("{}/labels", self.project_url());
+
+        #[derive(serde::Serialize)]
+        struct CreateLabelRequest<'a> {
+            name: &'a str,
+            color: &'a str,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            description: Option<&'a str>,
+        }
+
+        let request = CreateLabelRequest {
+            name,
+            color,
+            description,
+        };
+
+        let response = self
+            .client
+            .post(&url)
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| ClientError::Http(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(ClientError::Api {
+                status: status.as_u16(),
+                message: error_text,
+            });
+        }
+
+        response
+            .json::<GitLabLabel>()
+            .await
+            .map_err(|e| ClientError::Parse(e.to_string()))
+    }
+
     /// List milestones in the project
     pub async fn list_milestones(&self) -> Result<Vec<GitLabMilestone>, ClientError> {
         let url = format!("{}/milestones", self.project_url());

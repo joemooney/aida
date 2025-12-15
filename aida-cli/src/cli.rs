@@ -649,6 +649,21 @@ pub enum GitLabCommand {
         #[clap(long)]
         diverged: bool,
     },
+
+    /// Manage GitLab label mappings
+    Labels {
+        /// Validate that mapped labels exist in GitLab project
+        #[clap(long)]
+        validate: bool,
+
+        /// Create missing labels in GitLab project
+        #[clap(long)]
+        create_missing: bool,
+
+        /// Initialize label mappings with defaults
+        #[clap(long)]
+        init: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]

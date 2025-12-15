@@ -15442,12 +15442,23 @@ impl RequirementsApp {
                         desc_text,
                         spec_id_str
                     );
-                    // Map type and priority to labels
-                    let mut labels = vec![format!("aida:{}", req.req_type.to_string().to_lowercase())];
-                    if req.priority != aida_core::RequirementPriority::Medium {
-                        labels.push(format!("priority:{}", req.priority.to_string().to_lowercase()));
-                    }
-                    self.create_gitlab_issue_labels = labels.join(",");
+                    // trace:STORY-0326 | ai:claude
+                    // Map type and priority to labels using config
+                    let labels = if let Some(config) = &self.gitlab_config {
+                        config.labels.get_labels_for_requirement(
+                            &req.req_type.to_string(),
+                            &req.priority.to_string(),
+                            None, // Don't include status in initial creation
+                        )
+                    } else {
+                        // Fallback to simple labels if no config
+                        let mut labels = vec![format!("aida:{}", req.req_type.to_string().to_lowercase())];
+                        if req.priority != aida_core::RequirementPriority::Medium {
+                            labels.push(format!("priority:{}", req.priority.to_string().to_lowercase()));
+                        }
+                        labels.join(",")
+                    };
+                    self.create_gitlab_issue_labels = labels;
                     self.create_gitlab_issue_req_id = Some(req_id);
                     self.show_create_gitlab_issue_dialog = true;
                 }

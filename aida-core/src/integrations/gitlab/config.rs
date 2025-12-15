@@ -193,6 +193,74 @@ impl LabelConfig {
         map.insert("Rejected".to_string(), "status::rejected".to_string());
         map
     }
+
+    /// Get label for a requirement type
+    pub fn get_type_label(&self, req_type: &str) -> Option<String> {
+        self.types.get(req_type).cloned()
+    }
+
+    /// Get label for a priority
+    pub fn get_priority_label(&self, priority: &str) -> Option<String> {
+        self.priorities.get(priority).cloned()
+    }
+
+    /// Get label for a status
+    pub fn get_status_label(&self, status: &str) -> Option<String> {
+        self.statuses.get(status).cloned()
+    }
+
+    /// Get all labels for a requirement (type + priority + optional status)
+    /// Returns comma-separated string suitable for GitLab API
+    pub fn get_labels_for_requirement(
+        &self,
+        req_type: &str,
+        priority: &str,
+        status: Option<&str>,
+    ) -> String {
+        let mut labels = Vec::new();
+
+        if let Some(type_label) = self.get_type_label(req_type) {
+            labels.push(type_label);
+        }
+
+        if let Some(priority_label) = self.get_priority_label(priority) {
+            labels.push(priority_label);
+        }
+
+        if let Some(status_str) = status {
+            if let Some(status_label) = self.get_status_label(status_str) {
+                labels.push(status_label);
+            }
+        }
+
+        labels.join(",")
+    }
+
+    /// Initialize with default mappings if empty
+    pub fn with_defaults(mut self) -> Self {
+        if self.types.is_empty() {
+            self.types = Self::default_type_mappings();
+        }
+        if self.priorities.is_empty() {
+            self.priorities = Self::default_priority_mappings();
+        }
+        if self.statuses.is_empty() {
+            self.statuses = Self::default_status_mappings();
+        }
+        self
+    }
+
+    /// Get all unique label names from all mappings
+    pub fn all_labels(&self) -> Vec<String> {
+        let mut labels: Vec<String> = self.types.values()
+            .chain(self.priorities.values())
+            .chain(self.statuses.values())
+            .cloned()
+            .collect();
+        labels.sort();
+        labels.dedup();
+        labels
+    }
 }
 
 /// Polling configuration

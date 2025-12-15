@@ -4559,6 +4559,123 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
                 sync_states.iter().filter(|s| !matches!(s.sync_status, SyncStatus::InSync)).count()
             );
         }
+
+        // trace:STORY-0326 | ai:claude
+        GitLabCommand::Labels { validate, create_missing, init } => {
+            use aida_core::LabelConfig;
+
+            // Load or create config
+            let mut config = GitLabConfig::load()?.unwrap_or_default();
+
+            // Initialize with defaults if requested
+            if *init {
+                config.labels = config.labels.with_defaults();
+                config.save()?;
+                println!("{}", "Label mappings initialized with defaults.".green());
+            }
+
+            // Show current label configuration
+            println!("{}", "GitLab Label Mappings".bold());
+            println!("{}", "─".repeat(50));
+
+            if !config.labels.prefix.is_empty() {
+                println!("Prefix: {}", config.labels.prefix.cyan());
+            }
+
+            println!("\n{}", "Type Mappings:".bold());
+            if config.labels.types.is_empty() {
+                println!("  {} (use --init to set defaults)", "(none configured)".dimmed());
+            } else {
+                for (aida_type, gitlab_label) in &config.labels.types {
+                    println!("  {} → {}", aida_type, gitlab_label.cyan());
+                }
+            }
+
+            println!("\n{}", "Priority Mappings:".bold());
+            if config.labels.priorities.is_empty() {
+                println!("  {} (use --init to set defaults)", "(none configured)".dimmed());
+            } else {
+                for (priority, gitlab_label) in &config.labels.priorities {
+                    println!("  {} → {}", priority, gitlab_label.cyan());
+                }
+            }
+
+            println!("\n{}", "Status Mappings:".bold());
+            if config.labels.statuses.is_empty() {
+                println!("  {} (use --init to set defaults)", "(none configured)".dimmed());
+            } else {
+                for (status, gitlab_label) in &config.labels.statuses {
+                    println!("  {} → {}", status, gitlab_label.cyan());
+                }
+            }
+
+            println!("\nAuto-create labels: {}", if config.labels.auto_create_labels { "yes".green() } else { "no".dimmed() });
+
+            // Validate labels if requested
+            if *validate || *create_missing {
+                let Some(token) = config.effective_token() else {
+                    return Err(anyhow::anyhow!("GitLab token required. Set AIDA_GITLAB_TOKEN or run 'aida gitlab config --token <TOKEN>'"));
+                };
+
+                let mut config_with_token = config.clone();
+                config_with_token.token = Some(token);
+                let client = GitLabClient::new(config_with_token)?;
+
+                println!("\n{}", "Validating labels in GitLab...".dimmed());
+
+                // Get all labels from GitLab project
+                let gitlab_labels = rt.block_on(client.list_labels())?;
+                let gitlab_label_names: std::collections::HashSet<_> = gitlab_labels.iter()
+                    .map(|l| l.name.clone())
+                    .collect();
+
+                // Get all mapped labels
+                let mapped_labels = config.labels.all_labels();
+                let mut missing_labels = Vec::new();
+                let mut found_labels = Vec::new();
+
+                for label in &mapped_labels {
+                    if gitlab_label_names.contains(label) {
+                        found_labels.push(label.clone());
+                    } else {
+                        missing_labels.push(label.clone());
+                    }
+                }
+
+                println!("\n{}", "Validation Results:".bold());
+                println!("  {} labels found in GitLab", found_labels.len().to_string().green());
+                if !missing_labels.is_empty() {
+                    println!("  {} labels missing:", missing_labels.len().to_string().yellow());
+                    for label in &missing_labels {
+                        println!("    - {}", label.yellow());
+                    }
+                }
+
+                // Create missing labels if requested
+                if *create_missing && !missing_labels.is_empty() {
+                    println!("\n{}", "Creating missing labels...".dimmed());
+                    for label in &missing_labels {
+                        // Determine label color based on type
+                        let color = if label.starts_with("type::") {
+                            "#428BCA" // Blue for types
+                        } else if label.starts_with("priority::") {
+                            if label.contains("high") { "#DC3545" }
+                            else if label.contains("low") { "#28A745" }
+                            else { "#FFC107" }
+                        } else if label.starts_with("status::") {
+                            "#6C757D" // Gray for status
+                        } else {
+                            "#7950F2" // Purple default
+                        };
+
+                        match rt.block_on(client.create_label(label, color, None)) {
+                            Ok(_) => println!("  {} Created: {}", "✓".green(), label),
+                            Err(e) => println!("  {} Failed to create {}: {}", "✗".red(), label, e),
+                        }
+                    }
+                }
+            }
+        }
     }
 
     Ok(())
