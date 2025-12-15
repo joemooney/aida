@@ -14345,19 +14345,28 @@ impl RequirementsApp {
             return;
         }
 
-        // Handle navigation
+        // Handle navigation and update detail view
+        let mut nav_changed = false;
         if nav_up && !ctrl_up && queue_len > 0 {
             if self.queue_selected_idx > 0 {
                 self.queue_selected_idx -= 1;
             } else {
                 self.queue_selected_idx = queue_len - 1;
             }
+            nav_changed = true;
         }
         if nav_down && !ctrl_down && queue_len > 0 {
             if self.queue_selected_idx < queue_len - 1 {
                 self.queue_selected_idx += 1;
             } else {
                 self.queue_selected_idx = 0;
+            }
+            nav_changed = true;
+        }
+        // Update detail panel when navigating
+        if nav_changed && self.queue_selected_idx < queue_len {
+            if let Some(store_idx) = queue_display_data[self.queue_selected_idx].5 {
+                self.selected_idx = Some(store_idx);
             }
         }
 
@@ -14430,8 +14439,8 @@ impl RequirementsApp {
                             .inner_margin(4.0)
                     };
 
-                    frame.show(ui, |ui| {
-                        let response = ui.horizontal(|ui| {
+                    let frame_response = frame.show(ui, |ui| {
+                        ui.horizontal(|ui| {
                             // Queue position indicator
                             ui.label(egui::RichText::new(format!("#{}", idx + 1)).weak().monospace());
 
@@ -14454,24 +14463,29 @@ impl RequirementsApp {
                             ui.label(title);
 
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                // Status badge
-                                ui.label(egui::RichText::new(status).weak().italics());
-
-                                // Remove button
+                                // Remove button (first in right-to-left = rightmost)
                                 if ui.small_button("✕").on_hover_text("Remove from queue").clicked() {
                                     remove_req_id = Some(*req_id);
                                 }
-                            });
-                        }).response;
 
-                        // Handle click to select
-                        if response.clicked() {
-                            self.queue_selected_idx = idx;
-                            if let Some(sidx) = store_idx {
-                                selected_req_idx = Some(*sidx);
-                            }
-                        }
+                                // Status badge (to the left of remove button)
+                                ui.label(egui::RichText::new(status).weak().italics());
+                            });
+                        });
                     });
+
+                    // Handle click on the row to select (use interact on the frame's rect)
+                    let row_response = ui.interact(
+                        frame_response.response.rect,
+                        ui.id().with(("queue_row", idx)),
+                        egui::Sense::click()
+                    );
+                    if row_response.clicked() {
+                        self.queue_selected_idx = idx;
+                        if let Some(sidx) = store_idx {
+                            selected_req_idx = Some(*sidx);
+                        }
+                    }
                 }
 
                 // Help text at bottom
