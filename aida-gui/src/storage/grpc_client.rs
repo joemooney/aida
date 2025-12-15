@@ -809,6 +809,7 @@ pub fn proto_to_requirement(req: &proto::Requirement) -> Option<Requirement> {
         urls: req.urls.iter().map(proto_to_url_link).collect(),
         attachments: Vec::new(), // Not exposed via proto yet
         trace_links: Vec::new(), // Not exposed via proto yet
+        gitlab_issues: Vec::new(), // Not exposed via proto yet
         implementation_info: None, // Not exposed via proto yet
         ai_evaluation: None,
         version: 0,

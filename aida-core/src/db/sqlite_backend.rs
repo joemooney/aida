@@ -376,6 +376,7 @@ impl SqliteBackend {
                 urls,
                 attachments: Vec::new(),  // TODO: Add attachments column to schema
                 trace_links,
+                gitlab_issues: Vec::new(),  // TODO: Add gitlab_issues column to schema
                 implementation_info,
                 ai_evaluation,
                 version,
@@ -955,6 +956,7 @@ impl DatabaseBackend for SqliteBackend {
                     urls,
                     attachments: Vec::new(),  // TODO: Add attachments column to schema
                     trace_links,
+                    gitlab_issues: Vec::new(),  // TODO: Add gitlab_issues column to schema
                     implementation_info,
                     ai_evaluation,
                     version,

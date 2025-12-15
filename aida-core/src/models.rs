@@ -1887,6 +1887,128 @@ impl TraceLink {
     }
 }
 
+// trace:STORY-0323 | ai:claude
+/// Represents a link between an AIDA requirement and a GitLab issue
+/// Used to track traceability between specs and implementation work
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GitLabIssueLink {
+    /// Unique identifier for the link
+    pub id: Uuid,
+
+    /// GitLab issue IID (project-scoped issue number)
+    pub issue_iid: u64,
+
+    /// GitLab project ID (optional - uses default from config if not set)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_id: Option<u64>,
+
+    /// Display title for the issue (cached from GitLab)
+    pub issue_title: String,
+
+    /// Type of link between requirement and issue
+    #[serde(default)]
+    pub link_type: GitLabLinkType,
+
+    /// Optional notes about this link
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
+
+    /// When this link was created
+    pub created_at: DateTime<Utc>,
+
+    /// Who created this link
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created_by: Option<String>,
+
+    /// Last time the issue data was synced from GitLab
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_synced: Option<DateTime<Utc>>,
+
+    /// GitLab issue state when last synced (open/closed)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub issue_state: Option<String>,
+}
+
+impl GitLabIssueLink {
+    /// Creates a new GitLab issue link
+    pub fn new(issue_iid: u64, issue_title: impl Into<String>) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            issue_iid,
+            project_id: None,
+            issue_title: issue_title.into(),
+            link_type: GitLabLinkType::default(),
+            notes: None,
+            created_at: Utc::now(),
+            created_by: None,
+            last_synced: None,
+            issue_state: None,
+        }
+    }
+
+    /// Sets the project ID
+    pub fn with_project(mut self, project_id: u64) -> Self {
+        self.project_id = Some(project_id);
+        self
+    }
+
+    /// Sets the link type
+    pub fn with_link_type(mut self, link_type: GitLabLinkType) -> Self {
+        self.link_type = link_type;
+        self
+    }
+
+    /// Sets the creator
+    pub fn with_creator(mut self, creator: impl Into<String>) -> Self {
+        self.created_by = Some(creator.into());
+        self
+    }
+
+    /// Sets notes
+    pub fn with_notes(mut self, notes: impl Into<String>) -> Self {
+        self.notes = Some(notes.into());
+        self
+    }
+
+    /// Update sync metadata from GitLab issue
+    pub fn update_from_issue(&mut self, title: &str, state: &str) {
+        self.issue_title = title.to_string();
+        self.issue_state = Some(state.to_string());
+        self.last_synced = Some(Utc::now());
+    }
+
+    /// Returns a display string like "GL-123"
+    pub fn display_id(&self) -> String {
+        format!("GL-{}", self.issue_iid)
+    }
+}
+
+// trace:STORY-0323 | ai:claude
+/// Type of link between AIDA requirement and GitLab issue
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum GitLabLinkType {
+    /// Requirement is implemented by the GitLab issue
+    #[default]
+    ImplementedBy,
+    /// Requirement traces to the GitLab issue (general traceability)
+    TracesTo,
+    /// GitLab issue is a bug related to this requirement
+    RelatedBug,
+    /// GitLab issue is a follow-up task
+    FollowUp,
+}
+
+impl fmt::Display for GitLabLinkType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            GitLabLinkType::ImplementedBy => write!(f, "Implemented by"),
+            GitLabLinkType::TracesTo => write!(f, "Traces to"),
+            GitLabLinkType::RelatedBug => write!(f, "Related bug"),
+            GitLabLinkType::FollowUp => write!(f, "Follow-up"),
+        }
+    }
+}
+
 // trace:EPIC-0246 | ai:claude:high
 /// Confidence level for AI-generated implementation
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -2606,6 +2728,11 @@ pub struct Requirement {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub trace_links: Vec<TraceLink>,
 
+    // trace:STORY-0323 | ai:claude
+    /// Links to GitLab issues related to this requirement
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub gitlab_issues: Vec<GitLabIssueLink>,
+
     // trace:EPIC-0246 | ai:claude:high
     /// Implementation metadata for this requirement
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -2658,6 +2785,7 @@ impl Requirement {
             urls: Vec::new(),
             attachments: Vec::new(),
             trace_links: Vec::new(),
+            gitlab_issues: Vec::new(),
             implementation_info: None,
             version: 1,
             ai_evaluation: None,

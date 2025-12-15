@@ -34,6 +34,9 @@ pub use models::{
     TraceLink,
     ConfidenceLevel,
     ImplementationInfo,
+    // GitLab integration types
+    GitLabIssueLink,
+    GitLabLinkType,
     // Baseline types
     Baseline,
     BaselineComparison,

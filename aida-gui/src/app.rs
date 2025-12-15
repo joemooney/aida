@@ -3948,6 +3948,13 @@ pub struct RequirementsApp {
     gitlab_filter_state: Option<IssueState>,                         // Filter by issue state
     #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
     gitlab_filter_search: String,                                    // Search text for issues
+    // GitLab link picker state (STORY-0323)
+    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+    show_gitlab_link_picker: bool,                                   // Show GitLab issue link picker
+    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+    gitlab_link_picker_search: String,                               // Search text in link picker
+    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+    gitlab_link_picker_req_id: Option<Uuid>,                         // Requirement to link the issue to
 
     // WASM async loading state (FR-0281) - for gRPC-Web client connection
     #[cfg(target_arch = "wasm32")]
@@ -4595,6 +4602,12 @@ impl RequirementsApp {
             gitlab_filter_state: Some(IssueState::Opened),
             #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
             gitlab_filter_search: String::new(),
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            show_gitlab_link_picker: false,
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_link_picker_search: String::new(),
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_link_picker_req_id: None,
         }
     }
 
@@ -5209,6 +5222,12 @@ impl RequirementsApp {
             gitlab_filter_state: Some(IssueState::Opened),
             #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
             gitlab_filter_search: String::new(),
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            show_gitlab_link_picker: false,
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_link_picker_search: String::new(),
+            #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+            gitlab_link_picker_req_id: None,
         }
     }
 
@@ -15272,6 +15291,198 @@ impl RequirementsApp {
         }
     }
 
+    /// Show GitLab issues section in the Links tab
+    /// trace:STORY-0323 | ai:claude
+    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+    fn show_gitlab_links_section(&mut self, ui: &mut egui::Ui, req: &Requirement, req_id: Uuid) {
+        use aida_core::{GitLabIssueLink, GitLabLinkType};
+
+        ui.horizontal(|ui| {
+            ui.heading("🦊 GitLab Issues");
+            // Only show Link button if GitLab is configured
+            if self.gitlab_config.is_some() {
+                if ui.button("➕ Link Issue").clicked() {
+                    // Trigger the GitLab issue picker
+                    self.show_gitlab_link_picker = true;
+                    self.gitlab_link_picker_search.clear();
+                    self.gitlab_link_picker_req_id = Some(req_id);
+                }
+            } else {
+                ui.small("(Configure GitLab in Settings)");
+            }
+        });
+        ui.add_space(5.0);
+
+        if req.gitlab_issues.is_empty() {
+            ui.label("No linked GitLab issues");
+        } else {
+            let mut issue_to_remove: Option<Uuid> = None;
+
+            for link in &req.gitlab_issues {
+                ui.horizontal(|ui| {
+                    // Remove button
+                    if ui.small_button("x").on_hover_text("Remove link").clicked() {
+                        issue_to_remove = Some(link.id);
+                    }
+
+                    // State indicator
+                    let state_icon = match link.issue_state.as_deref() {
+                        Some("opened") => "🟢",
+                        Some("closed") => "🔴",
+                        _ => "⚪",
+                    };
+                    ui.label(state_icon);
+
+                    // Link type badge
+                    let type_label = match link.link_type {
+                        GitLabLinkType::ImplementedBy => "impl",
+                        GitLabLinkType::TracesTo => "trace",
+                        GitLabLinkType::RelatedBug => "bug",
+                        GitLabLinkType::FollowUp => "followup",
+                    };
+                    ui.label(format!("[{}]", type_label));
+
+                    // Issue ID and title
+                    let display_text = format!("{}: {}", link.display_id(), link.issue_title);
+                    if ui.link(&display_text).clicked() {
+                        // Try to open in GitLab browser
+                        if let Some(config) = &self.gitlab_config {
+                            let url = format!(
+                                "{}/-/issues/{}",
+                                config.url.trim_end_matches('/'),
+                                link.issue_iid
+                            );
+                            #[cfg(feature = "native")]
+                            {
+                                let _ = open::that(&url);
+                            }
+                        }
+                    }
+
+                    // Show sync time if available
+                    if let Some(synced) = link.last_synced {
+                        ui.small(format!(
+                            "(synced {})",
+                            synced.format("%Y-%m-%d")
+                        ));
+                    }
+                });
+            }
+
+            // Handle remove
+            if let Some(link_id) = issue_to_remove {
+                if let Some(idx) = self.selected_idx {
+                    if let Some(req) = self.store.requirements.get_mut(idx) {
+                        req.gitlab_issues.retain(|l| l.id != link_id);
+                        self.save();
+                        self.message = Some(("GitLab issue link removed".to_string(), false));
+                    }
+                }
+            }
+        }
+    }
+
+    /// Show GitLab issue link picker modal
+    /// trace:STORY-0323 | ai:claude
+    #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+    fn show_gitlab_link_picker_modal(&mut self, ctx: &egui::Context) {
+        use aida_core::{GitLabIssueLink, GitLabLinkType};
+
+        if !self.show_gitlab_link_picker {
+            return;
+        }
+
+        let Some(req_id) = self.gitlab_link_picker_req_id else {
+            self.show_gitlab_link_picker = false;
+            return;
+        };
+
+        egui::Window::new("Link GitLab Issue")
+            .collapsible(false)
+            .resizable(true)
+            .default_width(400.0)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("🔍");
+                    ui.text_edit_singleline(&mut self.gitlab_link_picker_search);
+                });
+
+                ui.separator();
+
+                // Show cached issues from GitLab Issues view
+                if self.gitlab_issues.is_empty() {
+                    ui.label("No GitLab issues loaded. Please visit GitLab Issues view and click Refresh first.");
+                } else {
+                    // Clone and filter issues to avoid borrow conflict
+                    let search_lower = self.gitlab_link_picker_search.to_lowercase();
+                    let filtered_issues: Vec<(u64, String, bool)> = self.gitlab_issues.iter()
+                        .filter(|issue| {
+                            if search_lower.is_empty() {
+                                true
+                            } else {
+                                issue.title.to_lowercase().contains(&search_lower)
+                                    || issue.iid.to_string().contains(&search_lower)
+                            }
+                        })
+                        .take(20)  // Limit to 20 results
+                        .map(|issue| (issue.iid, issue.title.clone(), issue.is_open()))
+                        .collect();
+
+                    if filtered_issues.is_empty() {
+                        ui.label("No matching issues found");
+                    } else {
+                        let mut selected_issue: Option<(u64, String, String)> = None;
+
+                        egui::ScrollArea::vertical()
+                            .max_height(300.0)
+                            .show(ui, |ui| {
+                                for (iid, title, is_open) in &filtered_issues {
+                                    let state_icon = if *is_open { "🟢" } else { "🔴" };
+                                    let text = format!("{} #{}: {}", state_icon, iid, title);
+
+                                    if ui.selectable_label(false, &text).clicked() {
+                                        let state = if *is_open { "opened" } else { "closed" };
+                                        selected_issue = Some((*iid, title.clone(), state.to_string()));
+                                    }
+                                }
+                            });
+
+                        // Handle selection outside the scroll area closure
+                        if let Some((iid, title, state)) = selected_issue {
+                            // Create the link
+                            let mut link = GitLabIssueLink::new(iid, &title);
+                            link.issue_state = Some(state);
+                            link.last_synced = Some(chrono::Utc::now());
+
+                            // Add to the requirement
+                            if let Some(req) = self.store.requirements.iter_mut().find(|r| r.id == req_id) {
+                                // Check if already linked
+                                if !req.gitlab_issues.iter().any(|l| l.issue_iid == iid) {
+                                    req.gitlab_issues.push(link);
+                                    self.save();
+                                    self.message = Some((format!("Linked GL-{}", iid), false));
+                                } else {
+                                    self.message = Some((format!("GL-{} already linked", iid), true));
+                                }
+                            }
+
+                            self.show_gitlab_link_picker = false;
+                            self.gitlab_link_picker_req_id = None;
+                        }
+                    }
+                }
+
+                ui.separator();
+
+                ui.horizontal(|ui| {
+                    if ui.button("Cancel").clicked() {
+                        self.show_gitlab_link_picker = false;
+                        self.gitlab_link_picker_req_id = None;
+                    }
+                });
+            });
+    }
+
     /// Show the detail panel for the Planning view (left side)
     fn show_planning_detail_panel(&mut self, ui: &mut egui::Ui) {
         // Check if a sprint is selected (takes precedence for display)
@@ -25044,6 +25255,15 @@ impl RequirementsApp {
         ui.separator();
         ui.add_space(10.0);
 
+        // GitLab Issues section (STORY-0323) - only on native with gitlab feature
+        #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+        {
+            self.show_gitlab_links_section(ui, req, req_id);
+            ui.add_space(15.0);
+            ui.separator();
+            ui.add_space(10.0);
+        }
+
         // Relationships section
         ui.horizontal(|ui| {
             ui.heading("Relationships");
@@ -31596,6 +31816,10 @@ impl eframe::App for RequirementsApp {
         if self.show_ai_results_panel {
             self.show_ai_results_modal(ctx);
         }
+
+        // Show GitLab link picker modal (STORY-0323)
+        #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+        self.show_gitlab_link_picker_modal(ctx);
 
         // Show toast notification overlay (must be last to appear on top)
         self.show_toast_notification(ctx);

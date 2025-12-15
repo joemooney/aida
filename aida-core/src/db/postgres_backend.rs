@@ -309,6 +309,7 @@ impl PostgresBackend {
             urls,
             attachments: Vec::new(),
             trace_links,
+            gitlab_issues: Vec::new(),  // TODO: Add gitlab_issues column to PostgreSQL schema
             implementation_info,
             ai_evaluation,
             version,
