@@ -2074,3 +2074,81 @@ A chronological record of development sessions and changes made to the Requireme
 
 - **Commit**: 6b36f7b
 - **Status**: STORY-0325 completed
+
+---
+
+## Session 12: GitLab Label Mapping & Polling (2025-12-14)
+
+### GitLab Label Mapping Configuration (STORY-0326)
+- **Prompt**: Implement STORY-0326 - GitLab Label Mapping Configuration
+- **Problem**: No way to map AIDA requirement types, priorities, and statuses to GitLab labels
+- **Solution**: Add label mapping configuration with CLI commands for validation and creation
+
+**Implementation:**
+
+1. **LabelConfig Helper Methods** (aida-core/src/integrations/gitlab/config.rs):
+   - `get_type_label(req_type)` - Get GitLab label for requirement type
+   - `get_priority_label(priority)` - Get GitLab label for priority
+   - `get_status_label(status)` - Get GitLab label for status
+   - `get_labels_for_requirement(type, priority, status)` - Get comma-separated labels
+   - `with_defaults()` - Initialize with default mappings if empty
+   - `all_labels()` - Get all unique label names from mappings
+
+2. **GitLab Client Extension** (aida-core/src/integrations/gitlab/client.rs):
+   - `create_label(name, color, description)` - Create label in GitLab project
+
+3. **GUI Issue Creation** (aida-gui/src/app.rs):
+   - Updated to use label mappings when creating issues
+   - Auto-applies type, priority, and status labels
+
+4. **CLI Commands** (aida-cli/src/cli.rs, aida-cli/src/main.rs):
+   - `aida gitlab labels` - Show configured label mappings
+   - `aida gitlab labels --validate` - Check which labels exist in GitLab
+   - `aida gitlab labels --create-missing` - Create missing labels in GitLab
+   - `aida gitlab labels --init` - Initialize with default label mappings
+
+- **Commits**: b10c097, ead0cc6
+- **Status**: STORY-0326 completed
+
+### GitLab Polling for Changes (STORY-0327)
+- **Prompt**: Continue with STORY-0327 - Poll GitLab for Changes
+- **Problem**: No automatic detection of changes in linked GitLab issues
+- **Solution**: Add background polling with UI status indicator
+
+**Implementation:**
+
+1. **CLI Commands** (aida-cli/src/main.rs):
+   - `aida gitlab refresh [ID] [--force]` - Manually refresh sync state
+   - `aida gitlab poll status` - Show current polling status
+   - `aida gitlab poll start [--interval <secs>]` - Start background polling daemon
+   - `aida gitlab poll stop` - Stop polling daemon
+
+2. **GUI Background Polling** (aida-gui/src/app.rs):
+   - `GitLabPollResult` struct - Poll result with counts and error
+   - `poll_gitlab_for_changes()` async function:
+     - Loads all sync states from storage
+     - Fetches linked issues in single API call using IID filter
+     - Computes current content hashes
+     - Compares with stored hashes to detect changes
+     - Updates sync status (InSync/AidaModified/GitLabModified/Conflict)
+     - Saves updated sync states to database
+   - Polling state fields in App struct:
+     - `gitlab_polling_enabled` - Whether polling is active
+     - `gitlab_last_poll` - Timestamp of last poll
+     - `gitlab_poll_receiver` - Channel for poll results
+     - `gitlab_poll_status` - Last status message
+     - `gitlab_diverged_count` - Count of diverged items
+   - In `update()`:
+     - Checks for poll results via `try_recv()`
+     - Triggers new poll when interval elapsed
+     - Shows toast notification for diverged items
+
+3. **Status Bar Indicator** (aida-gui/src/app.rs - show_top_panel):
+   - `GL:○` gray - Not yet polled
+   - `GL:🔄` yellow - Currently polling
+   - `GL:✓` green - All items in sync
+   - `GL:⚠` orange - Items have diverged
+   - Tooltip shows detailed status and last poll time
+
+- **Commits**: 3b55d47, 62828f5, 2c46afa
+- **Status**: STORY-0327 completed

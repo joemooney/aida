@@ -141,6 +141,40 @@ Define connections between requirements:
   - Reorder: `Ctrl+Up/Down` or `Ctrl+k/j` in queue view
   - Stored per-user in settings (~/.config/aida/aida_gui_settings.yaml)
 
+### GitLab Integration (STORY-0321 - STORY-0327)
+Bidirectional integration with GitLab for issue tracking:
+
+- **Configuration** (~/.config/aida/gitlab.toml):
+  - GitLab URL (gitlab.com or self-hosted)
+  - Project ID and Personal Access Token
+  - Label mappings for types, priorities, and statuses
+  - Polling interval (default 5 minutes)
+  - Sync mode and conflict resolution settings
+
+- **Issue Linking**:
+  - View existing GitLab issues (`aida gitlab issues`)
+  - Create new GitLab issue from requirement (GUI: "Create Issue" button)
+  - Link to existing issue (GUI: "Link Issue" button)
+  - Automatic bidirectional links (AIDA → GitLab, GitLab → AIDA)
+
+- **Label Mapping**:
+  - Map requirement types to GitLab labels (e.g., Story → type::story)
+  - Map priorities to labels (e.g., High → priority::high)
+  - Map statuses to labels (e.g., InProgress → status::in-progress)
+  - CLI: `aida gitlab labels --validate --create-missing`
+
+- **Sync State Tracking**:
+  - Content hashing (SHA256) for change detection
+  - Sync status: InSync, AidaModified, GitLabModified, Conflict
+  - CLI: `aida gitlab status [--diverged]`
+  - CLI: `aida gitlab refresh [ID]` for manual sync
+
+- **Background Polling** (GUI):
+  - Automatic periodic polling for GitLab changes
+  - Status bar indicator: GL:✓ (in-sync) / GL:⚠ (diverged)
+  - Toast notifications for detected changes
+  - Configurable poll interval
+
 ## Technology Stack
 
 - **Language**: Rust
