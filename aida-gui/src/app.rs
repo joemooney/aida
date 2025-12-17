@@ -4852,7 +4852,7 @@ impl RequirementsApp {
             create_gitlab_issue_creating: false,
             // GitLab polling state (STORY-0327)
             #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
-            gitlab_polling_enabled: true, // Enabled by default if GitLab configured
+            gitlab_polling_enabled: false, // Disabled by default - user can enable in settings
             #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
             gitlab_last_poll: None,
             #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
@@ -5499,7 +5499,7 @@ impl RequirementsApp {
             create_gitlab_issue_creating: false,
             // GitLab polling state (STORY-0327)
             #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
-            gitlab_polling_enabled: true, // Enabled by default if GitLab configured
+            gitlab_polling_enabled: false, // Disabled by default - user can enable in settings
             #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
             gitlab_last_poll: None,
             #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
@@ -16225,12 +16225,23 @@ impl RequirementsApp {
             return;
         };
 
+        // GitLab sync state is only supported for SQLite databases
+        if !self.storage.is_sqlite() {
+            // Silently disable polling for non-SQLite databases
+            self.gitlab_polling_enabled = false;
+            self.gitlab_poll_status = Some("GitLab sync requires SQLite storage".to_string());
+            self.gitlab_last_poll = Some(std::time::Instant::now());
+            return;
+        }
+
         // Load sync states from storage
         let sync_states = match self.storage.load_all_sync_states() {
             Ok(states) => states,
             Err(e) => {
                 eprintln!("Failed to load sync states for polling: {}", e);
                 self.gitlab_poll_status = Some(format!("Failed to load sync states: {}", e));
+                // Set last_poll to prevent immediate retry
+                self.gitlab_last_poll = Some(std::time::Instant::now());
                 return;
             }
         };

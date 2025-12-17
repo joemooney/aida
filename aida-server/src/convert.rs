@@ -347,6 +347,7 @@ pub fn proto_to_requirement(req: &proto::Requirement) -> Option<Requirement> {
         weight: None, // Weight is not exposed via gRPC yet
         version: 1, // New requirements start at version 1
         attachments: Vec::new(), // Attachments are not exposed via gRPC yet
+        gitlab_issues: Vec::new(), // GitLab issues are not exposed via gRPC yet
     })
 }
 
