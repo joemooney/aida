@@ -804,24 +804,49 @@ impl Scaffolder {
 
         let type_section = self.generate_type_specific_section();
 
+        // trace:TASK-0344 | ai:claude
         let traceability_section = r#"
 ## Code Traceability
 
+### Inline Trace Comments
 When implementing requirements, add inline trace comments:
 
 ```rust
-// trace:FR-0042 | ai:claude:high
+// trace:FR-0042 | ai:claude
 fn implement_feature() {
     // Implementation
 }
 ```
 
-Format: `// trace:<SPEC-ID> | ai:<tool>:<confidence>`
+Format: `// trace:<SPEC-ID> | ai:<tool>[:<confidence>]`
 
-Confidence levels:
-- `high`: >80% AI-generated
-- `med`: 40-80% AI with modifications
-- `low`: <40% AI, mostly human
+### Commit Message Format
+**Standard format:**
+```
+[AI:tool] type(scope): description (REQ-ID)
+```
+
+**Examples:**
+```
+[AI:claude] feat(auth): add login validation (FR-0042)
+[AI:claude:med] fix(api): handle null response (BUG-0023)
+chore(deps): update dependencies
+docs: update README
+```
+
+**Rules:**
+- `[AI:tool]` - Required when commit includes AI-assisted code
+- `type` - Required: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
+- `(scope)` - Optional: component or area affected
+- `(REQ-ID)` - Required for feat/fix commits, optional for chore/docs
+
+**Confidence levels:**
+- `[AI:claude]` - High confidence (implied, >80% AI-generated)
+- `[AI:claude:med]` - Medium (40-80% AI with modifications)
+- `[AI:claude:low]` - Low (<40% AI, mostly human)
+
+**Configuration:**
+Set `AIDA_COMMIT_STRICT=true` to reject non-conforming commits, or create `.aida/commit-config`.
 "#;
 
         let db_filename = self.database_filename();

@@ -82,19 +82,34 @@ fn implement_feature() {
 
 Format: `// trace:<SPEC-ID> | ai:<tool>[:<confidence>]`
 
-### Commit Message Attribution
-When committing AI-assisted code, prefix the commit message:
-
+### Commit Message Format
+**Standard format:**
 ```
-[AI:claude] feat: add user authentication (FR-0042)
+[AI:tool] type(scope): description (REQ-ID)
 ```
 
-Format: `[AI:<tool>[:<confidence>]] <conventional commit message>`
+**Examples:**
+```
+[AI:claude] feat(auth): add login validation (FR-0042)
+[AI:claude:med] fix(api): handle null response (BUG-0023)
+chore(deps): update dependencies
+docs: update README
+```
 
-### Confidence Levels
-- (none): high confidence implied (>80% AI-generated)
-- `med`: 40-80% AI with modifications
-- `low`: <40% AI, mostly human
+**Rules:**
+- `[AI:tool]` - Required when commit includes AI-assisted code (files with `trace:` comments)
+- `type` - Required: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
+- `(scope)` - Optional: component or area affected
+- `(REQ-ID)` - Required for feat/fix commits, optional for chore/docs
+
+**Confidence levels:**
+- `[AI:claude]` - High confidence (implied, >80% AI-generated)
+- `[AI:claude:med]` - Medium (40-80% AI with modifications)
+- `[AI:claude:low]` - Low (<40% AI, mostly human)
+
+**Configuration:**
+- Set `AIDA_COMMIT_STRICT=true` to reject non-conforming commits
+- Or create `.aida/commit-config` with settings
 
 ## Claude Code Skills
 

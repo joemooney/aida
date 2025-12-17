@@ -3761,6 +3761,7 @@ pub struct RequirementsApp {
     kanban_detail_modal: Option<usize>,             // Index of requirement to show in detail modal
     kanban_selected_column: usize,                   // Currently selected column index
     kanban_selected_card: usize,                     // Currently selected card index within column
+    kanban_scroll_to_card: bool,                     // Auto-scroll to selected card on keyboard nav
 
     filter_types: HashSet<RequirementType>, // Root filter: Empty = show all
     filter_features: HashSet<String>,       // Root filter: Empty = show all
@@ -4117,6 +4118,7 @@ pub struct RequirementsApp {
     planning_selected_sprint: Option<Uuid>,                          // Currently selected sprint for details/editing
     planning_drag_source: Option<Uuid>,                              // Item being dragged
     planning_drag_target_sprint: Option<Option<Uuid>>,               // Target sprint (None = Backlog)
+    planning_scroll_to_item: bool,                                   // Auto-scroll to selected item on keyboard nav
 
     // Migration warning state (REQ-0231) - native only (local file storage)
     #[cfg(not(target_arch = "wasm32"))]
@@ -4562,6 +4564,7 @@ impl RequirementsApp {
             kanban_detail_modal: None,
             kanban_selected_column: 0,
             kanban_selected_card: 0,
+            kanban_scroll_to_card: false,
             filter_types: HashSet::new(),
             filter_features: HashSet::new(),
             filter_prefixes: HashSet::new(),
@@ -4797,6 +4800,7 @@ impl RequirementsApp {
             planning_selected_sprint: None,
             planning_drag_source: None,
             planning_drag_target_sprint: None,
+            planning_scroll_to_item: false,
             #[cfg(not(target_arch = "wasm32"))]
             show_migration_warning: false,
             #[cfg(not(target_arch = "wasm32"))]
@@ -5151,6 +5155,7 @@ impl RequirementsApp {
             kanban_detail_modal: None,
             kanban_selected_column: 0,
             kanban_selected_card: 0,
+            kanban_scroll_to_card: false,
             filter_types: HashSet::new(),
             filter_features: HashSet::new(),
             filter_prefixes: HashSet::new(),
@@ -5439,6 +5444,7 @@ impl RequirementsApp {
             planning_selected_sprint: None,
             planning_drag_source: None,
             planning_drag_target_sprint: None,
+            planning_scroll_to_item: false,
 
             // Migration warning state (REQ-0231)
             #[cfg(not(target_arch = "wasm32"))]
@@ -5732,6 +5738,7 @@ impl RequirementsApp {
             kanban_detail_modal: None,
             kanban_selected_column: 0,
             kanban_selected_card: 0,
+            kanban_scroll_to_card: false,
             filter_types: HashSet::new(),
             filter_features: HashSet::new(),
             filter_prefixes: HashSet::new(),
@@ -5941,6 +5948,7 @@ impl RequirementsApp {
             planning_selected_sprint: None,
             planning_drag_source: None,
             planning_drag_target_sprint: None,
+            planning_scroll_to_item: false,
             // WASM async loading state (FR-0281)
             wasm_grpc_client: grpc_client,
             wasm_pending_store,
@@ -13204,6 +13212,12 @@ impl RequirementsApp {
         // Handle interactions
         let response = response.interact(egui::Sense::click_and_drag());
 
+        // Auto-scroll to selected card when navigating via keyboard
+        if is_keyboard_selected && self.kanban_scroll_to_card {
+            response.scroll_to_me(Some(egui::Align::Center));
+            self.kanban_scroll_to_card = false;
+        }
+
         // Open detail modal based on configured click action
         let open_modal = match self.user_settings.kanban_click_action {
             KanBanClickAction::RightClick => response.secondary_clicked(),
@@ -13304,7 +13318,11 @@ impl RequirementsApp {
     /// Handle keyboard navigation in Kanban view
     fn handle_kanban_keyboard(&mut self, ctx: &egui::Context) {
         // Don't handle navigation if dragging or if there's a popup open
-        if self.kanban_drag_card.is_some() || self.quick_change_field.is_some() {
+        if self.kanban_drag_card.is_some()
+            || self.quick_change_field.is_some()
+            || self.show_view_picker
+            || self.show_keyboard_help
+        {
             return;
         }
 
@@ -13451,6 +13469,8 @@ impl RequirementsApp {
         if let Some((_, cards)) = columns_data.get(self.kanban_selected_column) {
             if let Some((idx, _)) = cards.get(self.kanban_selected_card) {
                 self.selected_idx = Some(*idx);
+                // Auto-scroll to keep selected card visible
+                self.kanban_scroll_to_card = true;
             }
         }
     }
@@ -15343,6 +15363,12 @@ impl RequirementsApp {
             if let Some(idx) = self.store.requirements.iter().position(|r| r.id == item_id) {
                 self.selected_idx = Some(idx);
             }
+        }
+
+        // Auto-scroll to selected item when navigating via keyboard
+        if is_selected && self.planning_scroll_to_item {
+            response.scroll_to_me(Some(egui::Align::Center));
+            self.planning_scroll_to_item = false;
         }
 
         // Handle drag start
@@ -31332,9 +31358,12 @@ impl eframe::App for RequirementsApp {
             );
 
             // Check navigation keybindings (context-aware)
-            // Block list navigation when status popup is open or delete confirm is pending
+            // Block list navigation when status popup is open, delete confirm is pending, or view picker is open
             // Also skip for Timeline, Planning, and KanBan views - they have their own navigation handling
-            let can_navigate = self.quick_change_field.is_none() && self.pending_delete_confirm.is_none();
+            let can_navigate = self.quick_change_field.is_none()
+                && self.pending_delete_confirm.is_none()
+                && !self.show_view_picker
+                && !self.show_keyboard_help;
             let in_timeline = self.current_view == View::Timeline;
             let in_planning = self.current_view == View::Planning;
             let in_kanban = self.current_view == View::KanBan;
@@ -31903,6 +31932,8 @@ impl eframe::App for RequirementsApp {
                     if let Some(idx) = new_idx {
                         if let Some(&item_id) = planning_items.get(idx) {
                             self.planning_selected_item = Some(item_id);
+                            // Auto-scroll to keep selected item visible
+                            self.planning_scroll_to_item = true;
                             // Also update selected_idx for consistency
                             if let Some(req_idx) = self.store.requirements.iter().position(|r| r.id == item_id) {
                                 self.selected_idx = Some(req_idx);
