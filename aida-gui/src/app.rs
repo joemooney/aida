@@ -3979,6 +3979,7 @@ pub struct RequirementsApp {
     new_project_title: String,
     new_project_description: String,
     new_project_template: String, // "current" or template name
+    new_project_storage_type: String, // "yaml", "sqlite", or "postgres"
     new_project_include_users: bool,
     show_switch_project_dialog: bool,
     available_projects: Vec<(String, String, String)>, // (name, path, description)
@@ -4714,6 +4715,7 @@ impl RequirementsApp {
             new_project_title: String::new(),
             new_project_description: String::new(),
             new_project_template: "current".to_string(),
+            new_project_storage_type: "sqlite".to_string(),
             new_project_include_users: false,
             show_switch_project_dialog: false,
             available_projects: Vec::new(),
@@ -5311,6 +5313,7 @@ impl RequirementsApp {
             new_project_title: String::new(),
             new_project_description: String::new(),
             new_project_template: "current".to_string(),
+            new_project_storage_type: "sqlite".to_string(),
             new_project_include_users: false,
             show_switch_project_dialog: false,
             available_projects: Vec::new(),
@@ -5888,6 +5891,7 @@ impl RequirementsApp {
             new_project_title: String::new(),
             new_project_description: String::new(),
             new_project_template: "current".to_string(),
+            new_project_storage_type: "sqlite".to_string(),
             new_project_include_users: false,
             show_switch_project_dialog: false,
             available_projects: Vec::new(),
@@ -8067,6 +8071,7 @@ impl RequirementsApp {
         self.new_project_title = String::new();
         self.new_project_description = String::new();
         self.new_project_template = "current".to_string();
+        self.new_project_storage_type = "sqlite".to_string();
         self.new_project_include_users = false;
     }
 
@@ -8100,11 +8105,24 @@ impl RequirementsApp {
             return Err(format!("Directory does not exist: {}", dir.display()));
         }
 
-        let project_file = dir.join("requirements.yaml");
+        // Determine file extension based on storage type
+        let extension = match self.new_project_storage_type.as_str() {
+            "yaml" => ".yaml",
+            "sqlite" => ".db",
+            "postgres" => {
+                return Err("PostgreSQL projects require a connection URL. Use 'aida --file postgres://...' from CLI.".to_string());
+            }
+            _ => return Err(format!("Unknown storage type: {}", self.new_project_storage_type)),
+        };
+
+        // Use project name as the filename
+        let filename = format!("{}{}", self.new_project_name, extension);
+        let project_file = dir.join(&filename);
+
         if project_file.exists() {
             return Err(format!(
-                "A requirements.yaml already exists in: {}",
-                dir.display()
+                "File already exists: {}",
+                project_file.display()
             ));
         }
 
@@ -8144,15 +8162,33 @@ impl RequirementsApp {
             }
         };
 
-        // Set project title if provided
+        // Set project name and title
+        new_store.name = self.new_project_name.clone();
         if !self.new_project_title.is_empty() {
             new_store.title = self.new_project_title.clone();
         }
+        if !self.new_project_description.is_empty() {
+            new_store.description = self.new_project_description.clone();
+        }
 
-        // Save the new project file
-        let content =
-            serde_yaml::to_string(&new_store).map_err(|e| format!("Failed to serialize: {}", e))?;
-        fs::write(&project_file, content).map_err(|e| format!("Failed to write file: {}", e))?;
+        // Save based on storage type
+        match self.new_project_storage_type.as_str() {
+            "yaml" => {
+                let content = serde_yaml::to_string(&new_store)
+                    .map_err(|e| format!("Failed to serialize: {}", e))?;
+                fs::write(&project_file, content)
+                    .map_err(|e| format!("Failed to write file: {}", e))?;
+            }
+            "sqlite" => {
+                // Create SQLite database using the storage backend
+                use aida_core::db::{DatabaseBackend, SqliteBackend};
+                let backend = SqliteBackend::new(&project_file)
+                    .map_err(|e| format!("Failed to create SQLite database: {}", e))?;
+                backend.save(&new_store)
+                    .map_err(|e| format!("Failed to save to SQLite: {}", e))?;
+            }
+            _ => unreachable!(),
+        }
 
         // Register in registry
         if let Ok(registry_path) = aida_core::get_registry_path() {
@@ -8326,6 +8362,50 @@ impl RequirementsApp {
                                 );
                                 // TODO: Add templates from ~/.config/aida/templates/
                             });
+                        ui.end_row();
+
+                        ui.label("Storage:");
+                        let storage_label = match self.new_project_storage_type.as_str() {
+                            "yaml" => "YAML (Human-readable)",
+                            "sqlite" => "SQLite (Recommended)",
+                            "postgres" => "PostgreSQL (Enterprise)",
+                            _ => "Unknown",
+                        };
+                        egui::ComboBox::from_id_salt("storage_type_combo")
+                            .selected_text(storage_label)
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(
+                                    &mut self.new_project_storage_type,
+                                    "sqlite".to_string(),
+                                    "SQLite (Recommended)",
+                                );
+                                ui.selectable_value(
+                                    &mut self.new_project_storage_type,
+                                    "yaml".to_string(),
+                                    "YAML (Human-readable)",
+                                );
+                                ui.selectable_value(
+                                    &mut self.new_project_storage_type,
+                                    "postgres".to_string(),
+                                    "PostgreSQL (Enterprise)",
+                                );
+                            });
+                        ui.end_row();
+
+                        // Show the computed filename
+                        ui.label("Database File:");
+                        let filename = if self.new_project_name.is_empty() {
+                            "<project-name>".to_string()
+                        } else {
+                            self.new_project_name.clone()
+                        };
+                        let ext = match self.new_project_storage_type.as_str() {
+                            "yaml" => ".yaml",
+                            "sqlite" => ".db",
+                            "postgres" => " (URL)",
+                            _ => "",
+                        };
+                        ui.label(egui::RichText::new(format!("{}{}", filename, ext)).weak());
                         ui.end_row();
 
                         ui.label("Include Users:");
