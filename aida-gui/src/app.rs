@@ -7090,7 +7090,7 @@ impl RequirementsApp {
                 self.reload_database();
                 // Show brief success toast
                 self.toast_message = Some(ToastNotification {
-                    message: "✓ Database reloaded".to_string(),
+                    message: "Database reloaded".to_string(),
                     is_success: true,
                     show_until: Instant::now() + Duration::from_secs(2),
                 });
@@ -7110,7 +7110,7 @@ impl RequirementsApp {
         if self.pending_external_reload && !self.is_editing() && self.user_settings.db_auto_reload {
             self.reload_database();
             self.toast_message = Some(ToastNotification {
-                message: "✓ Database reloaded after edit".to_string(),
+                message: "Database reloaded after edit".to_string(),
                 is_success: true,
                 show_until: Instant::now() + Duration::from_secs(2),
             });
@@ -23187,8 +23187,20 @@ impl RequirementsApp {
 
     /// Apply type change to a requirement
     fn apply_type_change(&mut self, idx: usize, new_type: RequirementType) {
+        // First, compute the new spec_id if the requirement has one
+        let new_spec_id = if let Some(req) = self.store.requirements.get(idx) {
+            self.store.update_spec_id_for_type_change(req.spec_id.as_deref(), &new_type)
+        } else {
+            None
+        };
+
+        // Now update the requirement
         if let Some(req) = self.store.requirements.get_mut(idx) {
             req.req_type = new_type;
+            // Update spec_id to reflect the new type prefix
+            if let Some(new_id) = new_spec_id {
+                req.spec_id = Some(new_id);
+            }
             self.pending_save = true;
             // Also update modified_at
             req.modified_at = chrono::Utc::now();
@@ -31031,10 +31043,11 @@ impl eframe::App for RequirementsApp {
         }
 
         // '/' to focus search box and clear it (vim-style)
-        // Only block in form views (Add/Edit) or settings dialog where text input is expected
+        // Only block in form views (Add/Edit), settings dialog, or when any text input is focused
         let slash_pressed = ctx.input(|i| i.key_pressed(egui::Key::Slash) && !i.modifiers.shift);
         if !in_form_view
             && !self.show_settings_dialog
+            && !text_input_focused
             && slash_pressed
         {
             // Save current search to history before clearing (if not empty and not duplicate)
