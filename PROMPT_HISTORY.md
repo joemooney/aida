@@ -2152,3 +2152,37 @@ A chronological record of development sessions and changes made to the Requireme
 
 - **Commits**: 3b55d47, 62828f5, 2c46afa
 - **Status**: STORY-0327 completed
+
+---
+
+## Session 13: UI Enhancements (2025-12-19)
+
+### Right-Click Context Menu for Requirements
+- **Prompt**: Add right-click context menu on requirements showing same options as Actions menu
+- **Problem**: Users had to use keyboard shortcut (Shift+A) to access AI actions on requirements
+- **Solution**: Added right-click context menu that displays the same AI Actions popup
+
+**Implementation:**
+
+1. **State Field** (aida-gui/src/app.rs):
+   - Added `context_menu_position: Option<egui::Pos2>` to track right-click location
+   - When `Some(pos)`, menu positions at click location
+   - When `None`, menu is centered (keyboard trigger)
+
+2. **Right-Click Detection** (show_draggable_requirement):
+   - Added `response.secondary_clicked()` handler
+   - Selects the clicked requirement
+   - Stores click position in `context_menu_position`
+   - Opens the existing AI Actions menu
+
+3. **Dynamic Positioning** (show_action_menu_popup):
+   - Uses `context_menu_position` when set, otherwise centers
+   - Clamps position to screen bounds to prevent off-screen menus
+   - Clears position on menu close (click outside, action selected, ESC)
+
+4. **Keyboard Trigger** (global input handling):
+   - Sets `context_menu_position = None` when opening via Shift+A
+   - Ensures centered positioning for keyboard access
+
+- **Commit**: 06e0c64
+- **Features**: Right-click any requirement to access AI actions at cursor position
