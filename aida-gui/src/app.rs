@@ -20690,17 +20690,36 @@ impl RequirementsApp {
                 }
             }
 
-            // Handle right-click context menu
-            if response.secondary_clicked() {
+            // Handle right-click context menu using egui's built-in pattern
+            response.context_menu(|ui| {
+                // Select this requirement when context menu opens
                 self.selected_idx = Some(idx);
                 self.focused_list = FocusedList::List1;
-                // Show action menu at click position
-                if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
-                    self.show_action_menu = true;
-                    self.action_menu_selected = 0;
-                    self.context_menu_position = Some(pos);
+
+                ui.label(egui::RichText::new("AI Actions").strong());
+                ui.separator();
+
+                if ui.button("e  Evaluate").on_hover_text("AI evaluates requirement quality").clicked() {
+                    self.deferred_ai_action = Some(AiAction::Evaluate(req_id));
+                    ui.close_menu();
                 }
-            }
+                if ui.button("d  Find Duplicates").on_hover_text("AI finds potential duplicates").clicked() {
+                    self.deferred_ai_action = Some(AiAction::FindDuplicates(req_id));
+                    ui.close_menu();
+                }
+                if ui.button("r  Suggest Relationships").on_hover_text("AI suggests related requirements").clicked() {
+                    self.deferred_ai_action = Some(AiAction::SuggestRelationships(req_id));
+                    ui.close_menu();
+                }
+                if ui.button("i  Improve Description").on_hover_text("AI improves the description").clicked() {
+                    self.deferred_ai_action = Some(AiAction::ImproveDescription(req_id));
+                    ui.close_menu();
+                }
+                if ui.button("g  Generate Children").on_hover_text("AI generates child requirements").clicked() {
+                    self.deferred_ai_action = Some(AiAction::GenerateChildren(req_id));
+                    ui.close_menu();
+                }
+            });
 
             // Drag handling
             if can_drag {
