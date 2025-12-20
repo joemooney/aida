@@ -3829,9 +3829,10 @@ pub struct RequirementsApp {
     show_add_menu: bool,
     add_menu_selected: usize,  // Currently selected index in add menu (for arrow navigation)
 
-    // Action/AI menu popup (triggered by 'A'/shift+a - shows AI actions)
+    // Action/AI menu popup (triggered by 'A'/shift+a or right-click - shows AI actions)
     show_action_menu: bool,
     action_menu_selected: usize,  // Currently selected index in action menu (for arrow navigation)
+    context_menu_position: Option<egui::Pos2>,  // Position for right-click context menu (None = centered)
 
     // Detail tab menu popup (triggered by 'r' - shows detail tabs: AI, Description, Comments, Links, History)
     show_detail_tab_menu: bool,
@@ -4614,6 +4615,7 @@ impl RequirementsApp {
             add_menu_selected: 0,
             show_action_menu: false,
             action_menu_selected: 0,
+            context_menu_position: None,
             show_detail_tab_menu: false,
             detail_tab_menu_selected: 0,
             show_queue_menu: false,
@@ -5206,6 +5208,7 @@ impl RequirementsApp {
             add_menu_selected: 0,
             show_action_menu: false,
             action_menu_selected: 0,
+            context_menu_position: None,
             show_detail_tab_menu: false,
             detail_tab_menu_selected: 0,
             show_queue_menu: false,
@@ -5790,6 +5793,7 @@ impl RequirementsApp {
             add_menu_selected: 0,
             show_action_menu: false,
             action_menu_selected: 0,
+            context_menu_position: None,
             show_detail_tab_menu: false,
             detail_tab_menu_selected: 0,
             show_queue_menu: false,
@@ -20686,6 +20690,18 @@ impl RequirementsApp {
                 }
             }
 
+            // Handle right-click context menu
+            if response.secondary_clicked() {
+                self.selected_idx = Some(idx);
+                self.focused_list = FocusedList::List1;
+                // Show action menu at click position
+                if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
+                    self.show_action_menu = true;
+                    self.action_menu_selected = 0;
+                    self.context_menu_position = Some(pos);
+                }
+            }
+
             // Drag handling
             if can_drag {
                 if response.drag_started() {
@@ -22545,6 +22561,7 @@ impl RequirementsApp {
         if close_popup {
             self.show_action_menu = false;
             self.action_menu_selected = 0;
+            self.context_menu_position = None;
             return;
         }
 
@@ -22581,16 +22598,25 @@ impl RequirementsApp {
             self.deferred_ai_action = Some(ai_action);
             self.show_action_menu = false;
             self.action_menu_selected = 0;
+            self.context_menu_position = None;
             return;
         }
 
-        // Center the popup on screen
+        // Position popup: use context menu position if set (right-click), otherwise center
         let screen_rect = ctx.screen_rect();
         let popup_size = egui::vec2(280.0, 200.0);
-        let popup_pos = egui::pos2(
-            (screen_rect.width() - popup_size.x) / 2.0,
-            (screen_rect.height() - popup_size.y) / 2.0,
-        );
+        let popup_pos = if let Some(pos) = self.context_menu_position {
+            // Clamp to screen bounds so menu doesn't go off-screen
+            let x = pos.x.min(screen_rect.width() - popup_size.x).max(0.0);
+            let y = pos.y.min(screen_rect.height() - popup_size.y).max(0.0);
+            egui::pos2(x, y)
+        } else {
+            // Center the popup on screen
+            egui::pos2(
+                (screen_rect.width() - popup_size.x) / 2.0,
+                (screen_rect.height() - popup_size.y) / 2.0,
+            )
+        };
 
         egui::Area::new(egui::Id::new("action_menu_popup"))
             .order(egui::Order::Foreground)
@@ -22623,6 +22649,7 @@ impl RequirementsApp {
                                 self.deferred_ai_action = Some(ai_action);
                                 self.show_action_menu = false;
                                 self.action_menu_selected = 0;
+                                self.context_menu_position = None;
                             }
                         }
 
@@ -22640,6 +22667,7 @@ impl RequirementsApp {
                 if !popup_rect.contains(pos) {
                     self.show_action_menu = false;
                     self.action_menu_selected = 0;
+                    self.context_menu_position = None;
                 }
             }
         }
@@ -31296,6 +31324,7 @@ impl eframe::App for RequirementsApp {
             && shift_a_pressed
         {
             self.show_action_menu = true;
+            self.context_menu_position = None;  // Center the popup when opened via keyboard
         }
 
         // 'r' to open detail tab menu (AI, Description, Comments, Links, History)
