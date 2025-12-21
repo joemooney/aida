@@ -3795,6 +3795,7 @@ pub struct RequirementsApp {
     // Layout state
     left_panel_collapsed: bool,  // Whether left panel is manually collapsed (in form view)
     layout_mode: LayoutMode,     // Current layout mode (cycles through 5 layouts)
+    list_panel_width: f32,       // Width of list panel in side-by-side layout (resizable)
     layout_button_press_start: Option<Instant>,  // When layout button was pressed
     show_layout_menu: bool,      // Whether to show the layout selection menu
     layout_button_rect: Option<egui::Rect>,  // Position of layout button for popup menu
@@ -4592,6 +4593,7 @@ impl RequirementsApp {
             show_description_preview: false,
             left_panel_collapsed: false,
             layout_mode: LayoutMode::ListDetailsSide,
+            list_panel_width: 400.0,  // Default width for resizable list panel
             layout_button_press_start: None,
             show_layout_menu: false,
             layout_button_rect: None,
@@ -5185,6 +5187,7 @@ impl RequirementsApp {
             show_description_preview: false,
             left_panel_collapsed: false,
             layout_mode: LayoutMode::ListDetailsSide,
+            list_panel_width: 400.0,  // Default width for resizable list panel
             layout_button_press_start: None,
             show_layout_menu: false,
             layout_button_rect: None,
@@ -5770,6 +5773,7 @@ impl RequirementsApp {
             show_description_preview: false,
             left_panel_collapsed: false,
             layout_mode: LayoutMode::ListDetailsSide,
+            list_panel_width: 400.0,  // Default width for resizable list panel
             layout_button_press_start: None,
             show_layout_menu: false,
             layout_button_rect: None,
@@ -21272,6 +21276,36 @@ impl RequirementsApp {
             }
         }
 
+        // Handle right-click context menu
+        response.context_menu(|ui| {
+            self.selected_idx = Some(idx);
+            self.focused_list = FocusedList::List1;
+
+            ui.label(egui::RichText::new("AI Actions").strong());
+            ui.separator();
+
+            if ui.button("e  Evaluate").on_hover_text("AI evaluates requirement quality").clicked() {
+                self.deferred_ai_action = Some(AiAction::Evaluate(req_id));
+                ui.close_menu();
+            }
+            if ui.button("d  Find Duplicates").on_hover_text("AI finds potential duplicates").clicked() {
+                self.deferred_ai_action = Some(AiAction::FindDuplicates(req_id));
+                ui.close_menu();
+            }
+            if ui.button("r  Suggest Relationships").on_hover_text("AI suggests related requirements").clicked() {
+                self.deferred_ai_action = Some(AiAction::SuggestRelationships(req_id));
+                ui.close_menu();
+            }
+            if ui.button("i  Improve Description").on_hover_text("AI improves the description").clicked() {
+                self.deferred_ai_action = Some(AiAction::ImproveDescription(req_id));
+                ui.close_menu();
+            }
+            if ui.button("g  Generate Children").on_hover_text("AI generates child requirements").clicked() {
+                self.deferred_ai_action = Some(AiAction::GenerateChildren(req_id));
+                ui.close_menu();
+            }
+        });
+
         if response.drag_started() {
             self.drag_source = Some(idx);
         }
@@ -32459,43 +32493,43 @@ impl eframe::App for RequirementsApp {
             match self.layout_mode {
                 LayoutMode::ListDetailsSide => {
                     // List on left, Details on right (side-by-side) - default
-                    // Use columns approach to ensure proper 50/50 split
-                    egui::CentralPanel::default().show(ctx, |ui| {
-                        ui.columns(2, |columns| {
-                            // Left column (List)
-                            let col0_rect = columns[0].available_rect_before_wrap();
-                            columns[0].set_clip_rect(col0_rect);
-                            columns[0].vertical(|ui| {
-                                ui.horizontal(|ui| {
-                                    ui.heading("Requirements");
-                                });
-                                // Search bar
-                                ui.horizontal(|ui| {
-                                    self.show_search_bar(ui, 120.0, true);
-                                    // Filter toggle button
-                                    let filter_active = !self.filter_types.is_empty() || !self.filter_features.is_empty()
-                                        || !self.filter_prefixes.is_empty() || !self.filter_statuses.is_empty()
-                                        || !self.filter_priorities.is_empty();
-                                    let filter_btn_text = if filter_active { "🔽 ●" } else { "🔽" };
-                                    if ui.button(filter_btn_text).on_hover_text("Filters").clicked() {
-                                        self.show_filter_dialog_list1 = !self.show_filter_dialog_list1;
-                                    }
-                                });
-                                ui.separator();
-                                // Scrollable list
-                                egui::ScrollArea::vertical()
-                                    .id_salt("list_side_scroll")
-                                    .auto_shrink([false, false])
-                                    .show(ui, |ui| {
-                                        self.show_tree_list(ui);
-                                    });
+                    // Use resizable SidePanel for the list
+                    let panel_response = egui::SidePanel::left("list_side_panel")
+                        .min_width(200.0)
+                        .default_width(self.list_panel_width)
+                        .max_width(screen_width * 0.7)
+                        .resizable(true)
+                        .show(ctx, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.heading("Requirements");
                             });
-
-                            // Right column (Details)
-                            columns[1].vertical(|ui| {
-                                self.show_detail_view_with_close(ui);
+                            // Search bar
+                            ui.horizontal(|ui| {
+                                self.show_search_bar(ui, 120.0, true);
+                                // Filter toggle button
+                                let filter_active = !self.filter_types.is_empty() || !self.filter_features.is_empty()
+                                    || !self.filter_prefixes.is_empty() || !self.filter_statuses.is_empty()
+                                    || !self.filter_priorities.is_empty();
+                                let filter_btn_text = if filter_active { "🔽 ●" } else { "🔽" };
+                                if ui.button(filter_btn_text).on_hover_text("Filters").clicked() {
+                                    self.show_filter_dialog_list1 = !self.show_filter_dialog_list1;
+                                }
                             });
+                            ui.separator();
+                            // Scrollable list
+                            egui::ScrollArea::vertical()
+                                .id_salt("list_side_scroll")
+                                .auto_shrink([false, false])
+                                .show(ui, |ui| {
+                                    self.show_tree_list(ui);
+                                });
                         });
+                    // Store the panel width for persistence
+                    self.list_panel_width = panel_response.response.rect.width();
+
+                    // Details in CentralPanel (takes remaining space)
+                    egui::CentralPanel::default().show(ctx, |ui| {
+                        self.show_detail_view_with_close(ui);
                     });
                 }
                 LayoutMode::ListDetailsStacked => {
