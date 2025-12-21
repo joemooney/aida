@@ -13580,6 +13580,10 @@ impl RequirementsApp {
                 self.selected_idx = Some(*idx);
                 // Auto-scroll to keep selected card visible
                 self.kanban_scroll_to_card = true;
+                // If detail modal is open, update it to show newly selected card
+                if self.kanban_detail_modal.is_some() {
+                    self.kanban_detail_modal = Some(*idx);
+                }
             }
         }
     }
