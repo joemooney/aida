@@ -13421,7 +13421,8 @@ impl RequirementsApp {
 
         // Check for arrow key presses (or vim keys h/j/k/l)
         // Also check for Ctrl+H/L or Ctrl+Left/Right to move card to adjacent column
-        let (left, right, up, down, space, ctrl_left, ctrl_right) = ctx.input(|i| {
+        // Home/End/G/g for jumping to start/end and goto picker
+        let (left, right, up, down, space, ctrl_left, ctrl_right, home, end, shift_g, g_no_mod) = ctx.input(|i| {
             let ctrl = i.modifiers.ctrl || i.modifiers.mac_cmd;
             (
                 !ctrl && (i.key_pressed(egui::Key::ArrowLeft) || i.key_pressed(egui::Key::H)),
@@ -13431,8 +13432,20 @@ impl RequirementsApp {
                 i.key_pressed(egui::Key::Space),
                 ctrl && (i.key_pressed(egui::Key::H) || i.key_pressed(egui::Key::ArrowLeft)),
                 ctrl && (i.key_pressed(egui::Key::L) || i.key_pressed(egui::Key::ArrowRight)),
+                i.key_pressed(egui::Key::Home),
+                i.key_pressed(egui::Key::End),
+                i.key_pressed(egui::Key::G) && i.modifiers.shift,
+                i.key_pressed(egui::Key::G) && !i.modifiers.shift && !i.modifiers.ctrl && !i.modifiers.alt,
             )
         });
+
+        // 'g' opens goto picker (same as in list view)
+        if g_no_mod {
+            self.show_goto_picker = true;
+            self.goto_picker_input.clear();
+            self.goto_picker_matches.clear();
+            return;
+        }
 
         // Ctrl+H/L moves the selected card to the previous/next column
         if ctrl_left || ctrl_right {
@@ -13528,24 +13541,32 @@ impl RequirementsApp {
             self.update_kanban_selection(&columns_data);
         }
 
-        // Up/Down navigates within current column
+        // Up/Down navigates within current column (no wrapping)
         if let Some((_, cards)) = columns_data.get(self.kanban_selected_column) {
             if !cards.is_empty() {
                 if up {
                     if self.kanban_selected_card > 0 {
                         self.kanban_selected_card -= 1;
-                    } else {
-                        // Wrap to bottom
-                        self.kanban_selected_card = cards.len() - 1;
+                        self.update_kanban_selection(&columns_data);
                     }
-                    self.update_kanban_selection(&columns_data);
+                    // No wrap - stay at top if already at top
                 } else if down {
                     if self.kanban_selected_card < cards.len() - 1 {
                         self.kanban_selected_card += 1;
-                    } else {
-                        // Wrap to top
-                        self.kanban_selected_card = 0;
+                        self.update_kanban_selection(&columns_data);
                     }
+                    // No wrap - stay at bottom if already at bottom
+                }
+
+                // Home or 'gg' (first g opens picker, but we use Home for start)
+                if home {
+                    self.kanban_selected_card = 0;
+                    self.update_kanban_selection(&columns_data);
+                }
+
+                // End or 'G' (shift+g) jumps to last card in column
+                if end || shift_g {
+                    self.kanban_selected_card = cards.len() - 1;
                     self.update_kanban_selection(&columns_data);
                 }
             }
