@@ -2186,3 +2186,31 @@ A chronological record of development sessions and changes made to the Requireme
 
 - **Commit**: 06e0c64
 - **Features**: Right-click any requirement to access AI actions at cursor position
+
+### Resizable List/Detail Panel Divider
+- **Prompt**: Add a slider/divider to resize the requirements list and details view
+- **Problem**: Fixed 50/50 split between list and detail panels couldn't be adjusted
+- **Solution**: Changed to resizable SidePanel layout
+
+**Implementation:**
+
+1. **State Field** (aida-gui/src/app.rs):
+   - Added `list_panel_width: f32` to persist panel width during session
+   - Default width: 400.0 pixels
+
+2. **Layout Change** (ListDetailsSide mode):
+   - Replaced `ui.columns(2, ...)` with `SidePanel::left()` + `CentralPanel`
+   - SidePanel properties:
+     - `min_width(200.0)` - minimum usable width
+     - `default_width(self.list_panel_width)` - uses stored width
+     - `max_width(screen_width * 0.7)` - max 70% of screen
+     - `resizable(true)` - enables drag-to-resize
+   - Panel width stored after each frame for persistence
+
+3. **Right-Click Context Menu Fix**:
+   - Switched to egui's built-in `context_menu()` pattern
+   - Added to both `show_draggable_requirement` (flat view) and
+     `show_draggable_requirement_inline` (tree view)
+
+- **Commit**: 0ecd944
+- **Features**: Drag the divider between list and detail panels to resize
