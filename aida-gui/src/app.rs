@@ -25584,7 +25584,10 @@ impl RequirementsApp {
                     egui::CentralPanel::default()
                         .frame(egui::Frame::none())
                         .show_inside(ui, |ui| {
-                            // Tabs
+                            // Tabs - wrap in horizontal scroll to prevent cutoff
+                            egui::ScrollArea::horizontal()
+                                .id_salt("detail_tabs_scroll")
+                                .show(ui, |ui| {
                             ui.horizontal(|ui| {
                                 // AI tab with indicator showing evaluation status
                                 let ai_label = if req.ai_evaluation.is_some() {
@@ -25627,11 +25630,12 @@ impl RequirementsApp {
                                     format!("📜 History ({})", req.history.len()),
                                 );
                             });
+                            }); // End horizontal scroll for tabs
 
                             ui.separator();
 
-                            // Tab content
-                            egui::ScrollArea::vertical()
+                            // Tab content - both scrollbars for wide content
+                            egui::ScrollArea::both()
                                 .id_salt("detail_tab_content_scroll")
                                 .auto_shrink([false, false])
                                 .show(ui, |ui| match &self.active_tab {
@@ -25721,7 +25725,10 @@ impl RequirementsApp {
 
                     ui.separator();
 
-                    // Tabbed content
+                    // Tabbed content - wrap tabs in horizontal scroll to prevent cutoff
+                    egui::ScrollArea::horizontal()
+                        .id_salt("detail_tabs_scroll_side")
+                        .show(ui, |ui| {
                     ui.horizontal(|ui| {
                         // AI tab with indicator for evaluation status
                         let ai_label = if req.ai_evaluation.is_some() {
@@ -25760,12 +25767,13 @@ impl RequirementsApp {
                             format!("📜 History ({})", req.history.len()),
                         );
                     });
+                    }); // End horizontal scroll for tabs
 
                     ui.separator();
 
-                    // Tab content
+                    // Tab content - both scrollbars for wide content
                     let req_id = req.id;
-                    egui::ScrollArea::vertical().show(ui, |ui| match &self.active_tab {
+                    egui::ScrollArea::both().show(ui, |ui| match &self.active_tab {
                         DetailTab::Ai => {
                             self.show_ai_tab(ui, &req, req_id);
                         }
@@ -32516,16 +32524,20 @@ impl eframe::App for RequirementsApp {
                                 }
                             });
                             ui.separator();
-                            // Scrollable list
-                            egui::ScrollArea::vertical()
+                            // Scrollable list with both vertical and horizontal scrolling
+                            // Horizontal scroll allows panel to shrink even with long titles
+                            egui::ScrollArea::both()
                                 .id_salt("list_side_scroll")
                                 .auto_shrink([false, false])
                                 .show(ui, |ui| {
                                     self.show_tree_list(ui);
                                 });
                         });
-                    // Store the panel width for persistence
-                    self.list_panel_width = panel_response.response.rect.width();
+                    // Note: Don't override list_panel_width from response.rect.width()
+                    // as that includes content-expanded size. egui manages the resizable
+                    // width internally. We only use list_panel_width as the default_width
+                    // on first render.
+                    let _ = panel_response;
 
                     // Details in CentralPanel (takes remaining space)
                     egui::CentralPanel::default().show(ctx, |ui| {
