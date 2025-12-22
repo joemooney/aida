@@ -202,8 +202,15 @@ fn main() -> Result<()> {
         Command::Type(type_cmd) => {
             handle_type_command(type_cmd, &storage)?;
         }
-        Command::Export { format, output } => {
-            handle_export_command(&storage, format, output.as_deref())?;
+        Command::Export { format, output, id } => {
+            handle_export_command(&storage, format, output.as_deref(), id.as_deref())?;
+        }
+        Command::Import {
+            file,
+            parent,
+            on_conflict,
+        } => {
+            handle_import_command(&storage, file, parent.as_deref(), on_conflict)?;
         }
         Command::UserGuide { dark } => {
             open_user_guide(*dark)?;
@@ -1745,6 +1752,7 @@ fn handle_export_command(
     storage: &Storage,
     format: &str,
     output: Option<&std::path::Path>,
+    id: Option<&str>,
 ) -> Result<()> {
     // Load requirements
     let store = storage.load()?;
@@ -1774,11 +1782,84 @@ fn handle_export_command(
                 .unwrap_or_else(|| std::path::PathBuf::from("IMPLEMENTATION.md"));
             export::export_implementation_records(&store, &output_path)?;
         }
+        "tree" => {
+            let root_id = id.ok_or_else(|| {
+                anyhow::anyhow!("Tree export requires --id to specify the root requirement")
+            })?;
+            let output_path = output
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| std::path::PathBuf::from("tree-export.json"));
+            export::export_tree_to_file(&store, root_id, &output_path)?;
+            println!(
+                "{}: Exported requirement tree to {}",
+                "Success".green(),
+                output_path.display()
+            );
+        }
         _ => {
             anyhow::bail!(
-                "Unknown export format: {}. Supported formats: mapping, json, spec, impl",
+                "Unknown export format: {}. Supported formats: mapping, json, spec, impl, tree",
                 format
             );
+        }
+    }
+
+    Ok(())
+}
+
+fn handle_import_command(
+    storage: &Storage,
+    file: &std::path::Path,
+    parent_id: Option<&str>,
+    on_conflict: &str,
+) -> Result<()> {
+    use export::{ConflictStrategy, TreeImportOptions};
+
+    // Parse conflict strategy
+    let conflict_strategy = match on_conflict.to_lowercase().as_str() {
+        "skip" => ConflictStrategy::Skip,
+        "rename" => ConflictStrategy::Rename,
+        "replace" => ConflictStrategy::Replace,
+        _ => {
+            anyhow::bail!(
+                "Unknown conflict strategy: {}. Supported: skip, rename, replace",
+                on_conflict
+            );
+        }
+    };
+
+    // Load current store
+    let mut store = storage.load()?;
+
+    // Setup import options
+    let options = TreeImportOptions {
+        parent_id: parent_id.map(|s| s.to_string()),
+        conflict_strategy,
+        created_by: Some(get_default_author()),
+    };
+
+    // Perform import
+    let result = export::import_tree_from_file(&mut store, file, options)?;
+
+    // Save the updated store
+    storage.save(&store)?;
+
+    // Print results
+    println!("{}: Import completed", "Success".green());
+    println!("  Imported: {} requirements", result.imported_count);
+    println!("  Skipped:  {} requirements", result.skipped_count);
+
+    if !result.unresolved_refs.is_empty() {
+        println!(
+            "  {}",
+            format!("Unresolved external references: {}", result.unresolved_refs.len()).yellow()
+        );
+        for ext_ref in &result.unresolved_refs {
+            if let Some(ref spec_id) = ext_ref.original_target_spec_id {
+                println!("    - {} -> {} ({})", spec_id, ext_ref.original_target_uuid, ext_ref.rel_type);
+            } else {
+                println!("    - {} ({})", ext_ref.original_target_uuid, ext_ref.rel_type);
+            }
         }
     }
 

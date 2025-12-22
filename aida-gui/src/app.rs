@@ -4104,6 +4104,24 @@ pub struct RequirementsApp {
     import_summary: Option<aida_core::ImportSummary>,
     import_dialog_phase: ImportDialogPhase,
 
+    // Tree export/import state (META-EXPORT)
+    show_export_tree_dialog: bool,
+    export_tree_selected_id: Option<Uuid>,
+    export_tree_filter: String,
+    #[cfg(not(target_arch = "wasm32"))]
+    show_import_tree_dialog: bool,
+    #[cfg(not(target_arch = "wasm32"))]
+    import_tree_source_path: Option<std::path::PathBuf>,
+    #[cfg(not(target_arch = "wasm32"))]
+    import_tree_parent_id: Option<Uuid>,
+    #[cfg(not(target_arch = "wasm32"))]
+    import_tree_on_conflict: String,
+    #[cfg(not(target_arch = "wasm32"))]
+    import_tree_result: Option<aida_core::export::TreeImportResult>,
+
+    // Filter: show/hide Meta type requirements
+    filter_show_meta: bool,
+
     // Timeline view state
     timeline_selected_date: Option<chrono::DateTime<chrono::Utc>>,  // Currently selected point in timeline
     timeline_events: Vec<TimelineEvent>,                            // Cached timeline events
@@ -4792,6 +4810,20 @@ impl RequirementsApp {
             import_source_path: None,
             import_summary: None,
             import_dialog_phase: ImportDialogPhase::SelectFile,
+            show_export_tree_dialog: false,
+            export_tree_selected_id: None,
+            export_tree_filter: String::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            show_import_tree_dialog: false,
+            #[cfg(not(target_arch = "wasm32"))]
+            import_tree_source_path: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            import_tree_parent_id: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            import_tree_on_conflict: "skip".to_string(),
+            #[cfg(not(target_arch = "wasm32"))]
+            import_tree_result: None,
+            filter_show_meta: false,
             timeline_selected_date: None,
             timeline_events: Vec::new(),
             timeline_filter_author: String::new(),
@@ -5435,6 +5467,20 @@ impl RequirementsApp {
             import_source_path: None,
             import_summary: None,
             import_dialog_phase: ImportDialogPhase::SelectFile,
+            show_export_tree_dialog: false,
+            export_tree_selected_id: None,
+            export_tree_filter: String::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            show_import_tree_dialog: false,
+            #[cfg(not(target_arch = "wasm32"))]
+            import_tree_source_path: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            import_tree_parent_id: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            import_tree_on_conflict: "skip".to_string(),
+            #[cfg(not(target_arch = "wasm32"))]
+            import_tree_result: None,
+            filter_show_meta: false,
 
             // Timeline view state
             timeline_selected_date: None,
@@ -5946,6 +5992,20 @@ impl RequirementsApp {
             import_source_path: None,
             import_summary: None,
             import_dialog_phase: ImportDialogPhase::default(),
+            show_export_tree_dialog: false,
+            export_tree_selected_id: None,
+            export_tree_filter: String::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            show_import_tree_dialog: false,
+            #[cfg(not(target_arch = "wasm32"))]
+            import_tree_source_path: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            import_tree_parent_id: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            import_tree_on_conflict: "skip".to_string(),
+            #[cfg(not(target_arch = "wasm32"))]
+            import_tree_result: None,
+            filter_show_meta: false,
             timeline_selected_date: None,
             timeline_events: Vec::new(),
             timeline_filter_author: String::new(),
@@ -7814,6 +7874,17 @@ impl RequirementsApp {
                         ui.close_menu();
                     }
                     ui.separator();
+                    // trace:META-EXPORT | ai:claude:high
+                    if ui.button("🌳 Export Tree...").clicked() {
+                        self.show_export_tree_dialog = true;
+                        ui.close_menu();
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if ui.button("🌳 Import Tree...").clicked() {
+                        self.start_import_tree_workflow();
+                        ui.close_menu();
+                    }
+                    ui.separator();
                     if ui.button("🪟 New Window").clicked() {
                         Self::open_new_window();
                         ui.close_menu();
@@ -9079,6 +9150,25 @@ impl RequirementsApp {
         self.import_config = aida_core::ImportConfig::default();
     }
 
+    // trace:META-EXPORT | ai:claude:high
+    /// Start the import tree workflow
+    #[cfg(not(target_arch = "wasm32"))]
+    fn start_import_tree_workflow(&mut self) {
+        // Open a file dialog to select a tree JSON file
+        if let Some(path) = rfd::FileDialog::new()
+            .add_filter("JSON Files", &["json"])
+            .add_filter("All Files", &["*"])
+            .set_title("Import Tree from JSON")
+            .pick_file()
+        {
+            self.import_tree_source_path = Some(path);
+            self.import_tree_parent_id = None;
+            self.import_tree_on_conflict = "skip".to_string();
+            self.import_tree_result = None;
+            self.show_import_tree_dialog = true;
+        }
+    }
+
     // trace:FR-0226 | ai:claude:high
     /// Show the import database dialog
     #[cfg(not(target_arch = "wasm32"))]
@@ -9585,6 +9675,296 @@ impl RequirementsApp {
 
         if ui.button("Done").clicked() {
             *close_dialog = true;
+        }
+    }
+
+    // trace:META-EXPORT | ai:claude:high
+    /// Show the export tree dialog
+    fn show_export_tree_dialog_ui(&mut self, ctx: &egui::Context) {
+        if !self.show_export_tree_dialog {
+            return;
+        }
+
+        let mut close_dialog = false;
+        let max_size = modal_max_size(ctx);
+
+        egui::Window::new("🌳 Export Tree")
+            .collapsible(false)
+            .resizable(true)
+            .min_width(400.0)
+            .max_width(max_size.x)
+            .max_height(max_size.y)
+            .scroll([false, true])
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                ui.label("Select a requirement to export as a tree (includes all descendants):");
+                ui.add_space(10.0);
+
+                // Filter input
+                ui.horizontal(|ui| {
+                    ui.label("Filter:");
+                    ui.text_edit_singleline(&mut self.export_tree_filter);
+                });
+                ui.add_space(10.0);
+
+                // List requirements (folders first, then others)
+                let filter_lower = self.export_tree_filter.to_lowercase();
+                let mut candidates: Vec<_> = self.store.requirements.iter()
+                    .filter(|r| {
+                        if filter_lower.is_empty() {
+                            true
+                        } else {
+                            r.title.to_lowercase().contains(&filter_lower)
+                                || r.spec_id.as_ref().map(|s| s.to_lowercase().contains(&filter_lower)).unwrap_or(false)
+                        }
+                    })
+                    .collect();
+
+                // Sort: folders first, then by spec_id
+                candidates.sort_by(|a, b| {
+                    let a_is_folder = a.req_type == RequirementType::Folder;
+                    let b_is_folder = b.req_type == RequirementType::Folder;
+                    if a_is_folder != b_is_folder {
+                        b_is_folder.cmp(&a_is_folder) // folders first
+                    } else {
+                        a.spec_id.cmp(&b.spec_id)
+                    }
+                });
+
+                // Scrollable list
+                egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
+                    for req in candidates.iter().take(50) {
+                        let spec_id = req.spec_id.as_deref().unwrap_or("N/A");
+                        let is_selected = self.export_tree_selected_id == Some(req.id);
+                        let emoji = match req.req_type {
+                            RequirementType::Functional => "🔧",
+                            RequirementType::NonFunctional => "⚙️",
+                            RequirementType::System => "🖥️",
+                            RequirementType::User => "👤",
+                            RequirementType::ChangeRequest => "🔄",
+                            RequirementType::Bug => "🐛",
+                            RequirementType::Epic => "🎯",
+                            RequirementType::Story => "📖",
+                            RequirementType::Task => "✅",
+                            RequirementType::Spike => "🔬",
+                            RequirementType::Sprint => "🏃",
+                            RequirementType::Folder => "📁",
+                            RequirementType::Meta => "⚡",
+                        };
+                        let label = format!("{} {} - {}", emoji, spec_id, req.title);
+
+                        if ui.selectable_label(is_selected, label).clicked() {
+                            self.export_tree_selected_id = Some(req.id);
+                        }
+                    }
+                });
+
+                ui.add_space(20.0);
+                ui.separator();
+                ui.add_space(10.0);
+
+                ui.horizontal(|ui| {
+                    if ui.button("Cancel").clicked() {
+                        close_dialog = true;
+                    }
+
+                    let can_export = self.export_tree_selected_id.is_some();
+                    if ui.add_enabled(can_export, egui::Button::new("Export...")).clicked() {
+                        if let Some(selected_id) = self.export_tree_selected_id {
+                            self.export_tree_to_file(selected_id);
+                            close_dialog = true;
+                        }
+                    }
+                });
+            });
+
+        if close_dialog {
+            self.show_export_tree_dialog = false;
+            self.export_tree_selected_id = None;
+            self.export_tree_filter.clear();
+        }
+    }
+
+    // trace:META-EXPORT | ai:claude:high
+    /// Actually perform the tree export
+    fn export_tree_to_file(&mut self, root_id: Uuid) {
+        // Find the requirement's spec_id for the filename
+        let spec_id = self.store.get_requirement_by_id(&root_id)
+            .and_then(|r| r.spec_id.clone())
+            .unwrap_or_else(|| root_id.to_string());
+
+        let default_filename = format!("{}-tree.json", spec_id);
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if let Some(path) = rfd::FileDialog::new()
+                .add_filter("JSON Files", &["json"])
+                .set_file_name(&default_filename)
+                .set_title("Save Tree Export")
+                .save_file()
+            {
+                match aida_core::export::export_tree_to_file(&self.store, &spec_id, &path) {
+                    Ok(()) => {
+                        self.message = Some((format!("Exported tree to {}", path.display()), false));
+                    }
+                    Err(e) => {
+                        self.message = Some((format!("Export failed: {}", e), true));
+                    }
+                }
+            }
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            // On WASM, export to JSON string and offer download
+            match aida_core::export::export_tree(&self.store, &spec_id) {
+                Ok(tree) => {
+                    if let Ok(json) = serde_json::to_string_pretty(&tree) {
+                        // For WASM, we'd need to use web APIs to download
+                        self.message = Some(("Tree export ready (WASM download not yet implemented)".to_string(), false));
+                    }
+                }
+                Err(e) => {
+                    self.message = Some((format!("Export failed: {}", e), true));
+                }
+            }
+        }
+    }
+
+    // trace:META-EXPORT | ai:claude:high
+    /// Show the import tree dialog
+    #[cfg(not(target_arch = "wasm32"))]
+    fn show_import_tree_dialog_ui(&mut self, ctx: &egui::Context) {
+        if !self.show_import_tree_dialog {
+            return;
+        }
+
+        let mut close_dialog = false;
+        let max_size = modal_max_size(ctx);
+
+        egui::Window::new("🌳 Import Tree")
+            .collapsible(false)
+            .resizable(true)
+            .min_width(400.0)
+            .max_width(max_size.x)
+            .max_height(max_size.y)
+            .scroll([false, true])
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                if let Some(ref path) = self.import_tree_source_path.clone() {
+                    ui.horizontal(|ui| {
+                        ui.label("File:");
+                        ui.code(path.display().to_string());
+                    });
+                    ui.add_space(10.0);
+
+                    // Parent selection (optional)
+                    ui.label("Parent requirement (optional):");
+                    ui.horizontal(|ui| {
+                        let parent_label = if let Some(parent_id) = self.import_tree_parent_id {
+                            self.store.get_requirement_by_id(&parent_id)
+                                .and_then(|r| r.spec_id.clone())
+                                .unwrap_or_else(|| "Selected".to_string())
+                        } else {
+                            "(None - import at root)".to_string()
+                        };
+                        ui.label(&parent_label);
+                        if ui.button("Choose...").clicked() {
+                            // For now, just clear the parent
+                            // A full implementation would show a picker
+                        }
+                        if self.import_tree_parent_id.is_some() && ui.button("Clear").clicked() {
+                            self.import_tree_parent_id = None;
+                        }
+                    });
+                    ui.add_space(10.0);
+
+                    // Conflict strategy
+                    ui.label("On conflict:");
+                    ui.horizontal(|ui| {
+                        ui.selectable_value(&mut self.import_tree_on_conflict, "skip".to_string(), "Skip");
+                        ui.selectable_value(&mut self.import_tree_on_conflict, "rename".to_string(), "Rename");
+                        ui.selectable_value(&mut self.import_tree_on_conflict, "replace".to_string(), "Replace");
+                    });
+                    ui.add_space(10.0);
+
+                    // Show import result if available
+                    if let Some(ref result) = self.import_tree_result.clone() {
+                        ui.separator();
+                        ui.add_space(10.0);
+                        ui.colored_label(egui::Color32::GREEN, "Import completed!");
+                        ui.label(format!("Imported: {} requirements", result.imported_count));
+                        ui.label(format!("Skipped: {} requirements", result.skipped_count));
+                        if !result.unresolved_refs.is_empty() {
+                            ui.label(format!("Unresolved references: {}", result.unresolved_refs.len()));
+                        }
+                    }
+
+                    ui.add_space(20.0);
+                    ui.separator();
+                    ui.add_space(10.0);
+
+                    ui.horizontal(|ui| {
+                        if ui.button("Cancel").clicked() {
+                            close_dialog = true;
+                        }
+
+                        if self.import_tree_result.is_some() {
+                            if ui.button("Done").clicked() {
+                                close_dialog = true;
+                            }
+                        } else {
+                            if ui.button("Import").clicked() {
+                                self.perform_import_tree();
+                            }
+                        }
+                    });
+                }
+            });
+
+        if close_dialog {
+            self.show_import_tree_dialog = false;
+            self.import_tree_source_path = None;
+            self.import_tree_parent_id = None;
+            self.import_tree_result = None;
+        }
+    }
+
+    // trace:META-EXPORT | ai:claude:high
+    /// Perform the tree import
+    #[cfg(not(target_arch = "wasm32"))]
+    fn perform_import_tree(&mut self) {
+        use aida_core::export::{ConflictStrategy, TreeImportOptions};
+
+        let Some(ref path) = self.import_tree_source_path else {
+            return;
+        };
+
+        let conflict_strategy = match self.import_tree_on_conflict.as_str() {
+            "rename" => ConflictStrategy::Rename,
+            "replace" => ConflictStrategy::Replace,
+            _ => ConflictStrategy::Skip,
+        };
+
+        let options = TreeImportOptions {
+            parent_id: self.import_tree_parent_id.map(|id| id.to_string()),
+            conflict_strategy,
+            created_by: Some(self.user_settings.name.clone()),
+        };
+
+        match aida_core::export::import_tree_from_file(&mut self.store, path, options) {
+            Ok(result) => {
+                self.import_tree_result = Some(result.clone());
+                self.message = Some((
+                    format!("Imported {} requirements", result.imported_count),
+                    false,
+                ));
+                // Save the store
+                self.save();
+            }
+            Err(e) => {
+                self.message = Some((format!("Import failed: {}", e), true));
+            }
         }
     }
 
@@ -32807,6 +33187,11 @@ impl eframe::App for RequirementsApp {
         // Show import database dialog (FR-0226)
         #[cfg(not(target_arch = "wasm32"))]
         self.show_import_database_dialog(ctx);
+
+        // Show export/import tree dialogs (META-EXPORT)
+        self.show_export_tree_dialog_ui(ctx);
+        #[cfg(not(target_arch = "wasm32"))]
+        self.show_import_tree_dialog_ui(ctx);
 
         // Show filter dialogs
         self.show_filter_dialog_list1(ctx);

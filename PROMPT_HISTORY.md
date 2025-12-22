@@ -2214,3 +2214,77 @@ A chronological record of development sessions and changes made to the Requireme
 
 - **Commit**: 0ecd944
 - **Features**: Drag the divider between list and detail panels to resize
+
+---
+
+## Session 14: META Requirements and Tree Export/Import (2025-12-22)
+
+### Meta Requirement Type
+- **Prompt**: Add new Meta requirement type for storing AI prompts, skills, and configuration
+- **Problem**: AI prompts and templates were embedded in binary, not editable or browsable
+- **Solution**: Added Meta type as new requirement category with MetaSubtype for categorization
+
+**Implementation:**
+
+1. **Core Types** (aida-core/src/models.rs):
+   - Added `RequirementType::Meta` variant
+   - Added `MetaSubtype` enum with variants: Prompt, Skill, Command, Template, Config
+   - Added `meta_subtype: Option<MetaSubtype>` field to Requirement struct
+   - Meta is stateless (like Folder) with prefix "META"
+
+2. **Database Schemas**:
+   - SQLite: Added `meta_subtype TEXT` column (schema v5→v6 migration)
+   - PostgreSQL: Added `meta_subtype TEXT` column (schema v5→v6 migration)
+
+3. **Proto/gRPC** (proto/aida.proto):
+   - Added `REQUIREMENT_TYPE_META = 13` to RequirementType enum
+   - Regenerated proto code for all components
+
+4. **CLI/GUI/Server**:
+   - Updated type parsing and display across all components
+   - Added Meta emoji "⚡" for GUI display
+
+### Tree Export/Import Feature
+- **Prompt**: Add ability to export requirement trees to JSON and import into other databases
+- **Problem**: No way to share requirement hierarchies between databases or create reusable templates
+- **Solution**: Implemented recursive tree export/import with UUID/spec_id remapping
+
+**Implementation:**
+
+1. **Export Structures** (aida-core/src/export.rs):
+   - `ExportedTree` - Root container with version, timestamp, source database
+   - `ExportedRequirement` - Recursive structure preserving all fields and children
+   - `ExternalRelRef` - Captures relationships to requirements outside the tree
+
+2. **Import Structures**:
+   - `TreeImportOptions` - Parent ID, conflict strategy, created_by
+   - `ConflictStrategy` - Skip, Rename, or Replace on title collision
+   - `TreeImportResult` - Import counts, UUID/spec_id mappings, unresolved refs
+
+3. **Export Functions**:
+   - `export_tree(store, root_id)` - Recursively exports requirement and descendants
+   - `export_tree_to_file(store, root_id, path)` - Exports to JSON file
+
+4. **Import Functions**:
+   - `import_tree(store, tree, options)` - Recursively imports with new UUIDs
+   - `import_tree_from_file(store, path, options)` - Imports from JSON file
+   - UUID and spec_id remapping for all imported requirements
+   - Parent-child relationships recreated with new IDs
+
+5. **CLI Commands** (aida-cli):
+   - `aida export --format tree --id <SPEC-ID> --output tree.json`
+   - `aida import tree.json [--parent <SPEC-ID>] [--on-conflict skip|rename|replace]`
+
+6. **GUI Dialogs** (aida-gui/src/app.rs):
+   - Menu items: Menu > "🌳 Export Tree..." and "🌳 Import Tree..."
+   - Export dialog: Searchable requirement picker, file save dialog
+   - Import dialog: File picker, parent selection, conflict strategy options
+
+**Use Cases:**
+- Export META folder with all prompts and import into new database
+- Share requirement templates between projects
+- Backup/restore requirement hierarchies
+- Create reusable requirement libraries
+
+- **Commits**: (pending)
+- **Status**: Core implementation complete, meta seeding and prompt fallback pending

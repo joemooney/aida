@@ -847,13 +847,31 @@ pub enum Command {
 
     /// Export requirements to different formats
     Export {
-        /// Output format (mapping, json)
+        /// Output format (mapping, json, tree)
         #[clap(long, short = 'f', default_value = "mapping")]
         format: String,
 
         /// Output file path
         #[clap(long, short = 'o')]
         output: Option<PathBuf>,
+
+        /// Requirement ID (UUID or SPEC-ID) for tree export - exports this requirement and all descendants
+        #[clap(long)]
+        id: Option<String>,
+    },
+
+    /// Import requirements from a tree JSON file
+    Import {
+        /// Path to the tree JSON file to import
+        file: PathBuf,
+
+        /// Parent requirement ID (UUID or SPEC-ID) to attach imported tree under
+        #[clap(long)]
+        parent: Option<String>,
+
+        /// Conflict strategy: skip, rename, replace (default: skip)
+        #[clap(long, default_value = "skip")]
+        on_conflict: String,
     },
 
     /// Open the user guide in the default browser

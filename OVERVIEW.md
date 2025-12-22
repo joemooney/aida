@@ -39,7 +39,10 @@ Human-friendly identifiers (SPEC-001, SPEC-002) alongside internal UUIDs. Config
 - Full CRUD operations (Create, Read, Update, Delete)
 - Type-specific status states (e.g., Draft, Approved, Completed, Rejected for standard types)
 - Priority levels: High, Medium, Low
-- Types: Functional, Non-Functional, System, User, Change Request (with type-specific workflows)
+- Types: Functional, Non-Functional, System, User, Change Request, Bug, Epic, Story, Task, Spike, Sprint, Folder, Meta
+  - Standard requirement types (Functional, Non-Functional, System, User, Change Request) with type-specific workflows
+  - Agile types (Epic, Story, Task, Bug, Spike, Sprint) for project management
+  - Organizational types (Folder for hierarchy, Meta for storing templates/configuration)
 - Feature-based organization with numbered prefixes
 - Tag support for flexible categorization
 - Custom fields support for type-specific data (e.g., Impact, Requested By for Change Requests)
@@ -216,6 +219,19 @@ Requirements are stored using a pluggable backend system:
 ### Migration & Export
 - Migrate between YAML, SQLite, and PostgreSQL formats
 - JSON import/export for interoperability
+- **Tree Export/Import**: Export requirement hierarchies to portable JSON files
+  - Export a requirement and all descendants: `aida export --format tree --id FR-0001 -o tree.json`
+  - Import into another database: `aida import tree.json [--parent FOLDER-001] [--on-conflict skip|rename|replace]`
+  - GUI: Menu > "🌳 Export Tree..." and "🌳 Import Tree..."
+  - Preserves all fields, comments, custom data, and parent-child relationships
+  - UUIDs and spec_ids are regenerated on import to avoid conflicts
+  - Use cases: Share templates, backup hierarchies, create reusable libraries
+
+### Meta Requirements
+- **Meta type**: Store AI prompts, skills, and configuration as browsable requirements
+- **MetaSubtype** categorization: Prompt, Skill, Command, Template, Config
+- Stateless type (no status workflow) with prefix "META"
+- Enables editing and versioning of AI prompts within the requirements database
 
 ## Getting Started
 
