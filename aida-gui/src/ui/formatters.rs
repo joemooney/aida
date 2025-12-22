@@ -43,6 +43,7 @@ pub fn format_type(req_type: i32) -> &'static str {
         Ok(RequirementType::Spike) => "Spike",
         Ok(RequirementType::Sprint) => "Sprint",
         Ok(RequirementType::Folder) => "Folder",
+        Ok(RequirementType::Meta) => "Meta",
         _ => "—",
     }
 }
@@ -180,6 +181,7 @@ pub fn type_abbrev(req_type: i32) -> &'static str {
         Ok(RequirementType::Spike) => "SPK",
         Ok(RequirementType::Sprint) => "SPRT",
         Ok(RequirementType::Folder) => "FLD",
+        Ok(RequirementType::Meta) => "META",
         _ => "?",
     }
 }

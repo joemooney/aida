@@ -171,6 +171,18 @@ impl PostgresBackend {
             )?;
         }
 
+        // Migrate from version 5 to version 6 (add meta_subtype column)
+        if from_version < 6 {
+            client.batch_execute(
+                r#"
+                -- Add meta_subtype column for Meta requirements
+                ALTER TABLE requirements ADD COLUMN IF NOT EXISTS meta_subtype TEXT;
+
+                UPDATE schema_version SET version = 6;
+                "#,
+            )?;
+        }
+
         Ok(())
     }
 
@@ -243,6 +255,7 @@ impl PostgresBackend {
             RequirementType::Spike => "Spike",
             RequirementType::Sprint => "Sprint",
             RequirementType::Folder => "Folder",
+            RequirementType::Meta => "Meta",
         }
     }
 
@@ -261,6 +274,7 @@ impl PostgresBackend {
             "Spike" => RequirementType::Spike,
             "Sprint" => RequirementType::Sprint,
             "Folder" => RequirementType::Folder,
+            "Meta" => RequirementType::Meta,
             _ => RequirementType::Functional,
         }
     }
@@ -326,6 +340,7 @@ impl PostgresBackend {
             created_by,
             modified_at,
             req_type,
+            meta_subtype: None,  // Loaded separately if needed
             dependencies,
             tags,
             weight: None,

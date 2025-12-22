@@ -477,6 +477,7 @@ fn proto_to_requirement(req: &proto::Requirement) -> Option<aida_core::Requireme
         created_by: if req.created_by.is_empty() { None } else { Some(req.created_by.clone()) },
         modified_at: proto_to_datetime(req.modified_at.clone()),
         req_type: proto_to_req_type(type_enum),
+        meta_subtype: None, // Not exposed via proto
         dependencies: req.dependency_ids.iter().filter_map(|id| Uuid::parse_str(id).ok()).collect(),
         tags: req.tags.iter().cloned().collect(),
         weight: None, // Not exposed via proto
@@ -490,6 +491,7 @@ fn proto_to_requirement(req: &proto::Requirement) -> Option<aida_core::Requireme
         urls: req.urls.iter().map(proto_to_url_link).collect(),
         attachments: Vec::new(), // Not exposed via proto
         trace_links: Vec::new(), // Not exposed via proto
+        gitlab_issues: Vec::new(), // Not exposed via proto
         implementation_info: None, // Not exposed via proto
         ai_evaluation: None,
         version: 0, // Remote doesn't track versions locally
@@ -549,6 +551,7 @@ fn proto_to_req_type(req_type: proto::RequirementType) -> aida_core::Requirement
         proto::RequirementType::Spike => Spike,
         proto::RequirementType::Sprint => Sprint,
         proto::RequirementType::Folder => Folder,
+        proto::RequirementType::Meta => Meta,
         proto::RequirementType::Unspecified => Functional,
     }
 }
@@ -705,6 +708,7 @@ fn req_type_to_proto(req_type: &aida_core::RequirementType) -> proto::Requiremen
         Spike => proto::RequirementType::Spike,
         Sprint => proto::RequirementType::Sprint,
         Folder => proto::RequirementType::Folder,
+        Meta => proto::RequirementType::Meta,
     }
 }
 

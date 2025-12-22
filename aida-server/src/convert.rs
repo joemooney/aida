@@ -102,6 +102,7 @@ pub fn req_type_to_proto(req_type: &CoreReqType) -> proto::RequirementType {
         CoreReqType::Spike => proto::RequirementType::Spike,
         CoreReqType::Sprint => proto::RequirementType::Sprint,
         CoreReqType::Folder => proto::RequirementType::Folder,
+        CoreReqType::Meta => proto::RequirementType::Meta,
     }
 }
 
@@ -119,6 +120,7 @@ pub fn proto_to_req_type(req_type: proto::RequirementType) -> CoreReqType {
         proto::RequirementType::Spike => CoreReqType::Spike,
         proto::RequirementType::Sprint => CoreReqType::Sprint,
         proto::RequirementType::Folder => CoreReqType::Folder,
+        proto::RequirementType::Meta => CoreReqType::Meta,
         proto::RequirementType::Unspecified => CoreReqType::Functional,
     }
 }
@@ -331,6 +333,7 @@ pub fn proto_to_requirement(req: &proto::Requirement) -> Option<Requirement> {
         created_by: if req.created_by.is_empty() { None } else { Some(req.created_by.clone()) },
         modified_at: proto_to_datetime(req.modified_at.clone()),
         req_type: proto_to_req_type(type_enum),
+        meta_subtype: None, // Not exposed via gRPC yet
         dependencies: req.dependency_ids.iter().filter_map(|id| Uuid::parse_str(id).ok()).collect(),
         tags: req.tags.iter().cloned().collect(),
         relationships: req.relationships.iter().filter_map(proto_to_relationship).collect(),

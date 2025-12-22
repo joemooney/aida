@@ -15381,6 +15381,7 @@ impl RequirementsApp {
             RequirementType::Spike => "🔬",
             RequirementType::Sprint => "🏃",
             RequirementType::Folder => "📁",
+            RequirementType::Meta => "⚡",
         };
 
         let status_color = match status {
@@ -23268,6 +23269,7 @@ impl RequirementsApp {
             (RequirementType::Spike, "🔬", "Spike"),
             (RequirementType::Sprint, "🏃", "Sprint"),
             (RequirementType::Folder, "📁", "Folder"),
+            (RequirementType::Meta, "⚡", "Meta"),
         ];
 
         // Filter based on search text (fuzzy matching)
@@ -27476,6 +27478,7 @@ fn main() {
                     ui.selectable_value(&mut self.form_type, RequirementType::Sprint, "🏃 Sprint");
                     ui.separator();
                     ui.selectable_value(&mut self.form_type, RequirementType::Folder, "📁 Folder");
+                    ui.selectable_value(&mut self.form_type, RequirementType::Meta, "⚡ Meta");
                 });
             type_changed = old_type != self.form_type;
 
@@ -28312,6 +28315,7 @@ fn main() {
                                         ui.selectable_value(&mut self.form_type, RequirementType::Sprint, "🏃 Sprint");
                                         ui.separator();
                                         ui.selectable_value(&mut self.form_type, RequirementType::Folder, "📁 Folder");
+                                        ui.selectable_value(&mut self.form_type, RequirementType::Meta, "⚡ Meta");
                                     });
                                 ui.end_row();
 
@@ -28778,6 +28782,7 @@ fn main() {
                         ui.selectable_value(&mut self.form_type, RequirementType::Sprint, "🏃 Sprint");
                         ui.separator();
                         ui.selectable_value(&mut self.form_type, RequirementType::Folder, "📁 Folder");
+                        ui.selectable_value(&mut self.form_type, RequirementType::Meta, "⚡ Meta");
                     });
                 ui.end_row();
 

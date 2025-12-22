@@ -878,6 +878,7 @@ pub enum RequirementType {
     Spike = 10,
     Sprint = 11,
     Folder = 12,
+    Meta = 13,
 }
 impl RequirementType {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -899,6 +900,7 @@ impl RequirementType {
             Self::Spike => "REQUIREMENT_TYPE_SPIKE",
             Self::Sprint => "REQUIREMENT_TYPE_SPRINT",
             Self::Folder => "REQUIREMENT_TYPE_FOLDER",
+            Self::Meta => "REQUIREMENT_TYPE_META",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -917,6 +919,7 @@ impl RequirementType {
             "REQUIREMENT_TYPE_SPIKE" => Some(Self::Spike),
             "REQUIREMENT_TYPE_SPRINT" => Some(Self::Sprint),
             "REQUIREMENT_TYPE_FOLDER" => Some(Self::Folder),
+            "REQUIREMENT_TYPE_META" => Some(Self::Meta),
             _ => None,
         }
     }

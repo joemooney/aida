@@ -617,6 +617,7 @@ fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
         RequirementType::Spike => "Spike",
         RequirementType::Sprint => "Sprint",
         RequirementType::Folder => "Folder",
+        RequirementType::Meta => "Meta",
     };
     println!("{}: {}", "Type".blue(), type_str);
 
@@ -796,7 +797,8 @@ fn edit_requirement_cli(
             "spike" => RequirementType::Spike,
             "sprint" => RequirementType::Sprint,
             "folder" => RequirementType::Folder,
-            _ => anyhow::bail!("Invalid type '{}'. Use: functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder", type_str),
+            "meta" => RequirementType::Meta,
+            _ => anyhow::bail!("Invalid type '{}'. Use: functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta", type_str),
         };
         if new_type != req.req_type {
             changes.push(Requirement::field_change("type", format!("{:?}", req.req_type), format!("{:?}", new_type)));

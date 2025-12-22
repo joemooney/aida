@@ -66,6 +66,8 @@ pub enum RequirementType {
     Sprint,  // Time-boxed iteration for work planning
     // Organizational types (stateless)
     Folder,
+    // Meta type for database configuration (prompts, skills, etc.)
+    Meta,
 }
 
 impl fmt::Display for RequirementType {
@@ -83,7 +85,60 @@ impl fmt::Display for RequirementType {
             RequirementType::Spike => write!(f, "Spike"),
             RequirementType::Sprint => write!(f, "Sprint"),
             RequirementType::Folder => write!(f, "Folder"),
+            RequirementType::Meta => write!(f, "Meta"),
         }
+    }
+}
+
+/// Represents the subtype for Meta requirements
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum MetaSubtype {
+    /// AI prompts (evaluate, improve, etc.)
+    Prompt,
+    /// Skill definitions
+    Skill,
+    /// Slash commands
+    Command,
+    /// Other templates
+    Template,
+    /// Database configuration
+    Config,
+}
+
+impl fmt::Display for MetaSubtype {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MetaSubtype::Prompt => write!(f, "Prompt"),
+            MetaSubtype::Skill => write!(f, "Skill"),
+            MetaSubtype::Command => write!(f, "Command"),
+            MetaSubtype::Template => write!(f, "Template"),
+            MetaSubtype::Config => write!(f, "Config"),
+        }
+    }
+}
+
+impl MetaSubtype {
+    /// Parse a meta subtype from a string
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "prompt" => Some(MetaSubtype::Prompt),
+            "skill" => Some(MetaSubtype::Skill),
+            "command" => Some(MetaSubtype::Command),
+            "template" => Some(MetaSubtype::Template),
+            "config" => Some(MetaSubtype::Config),
+            _ => None,
+        }
+    }
+
+    /// Get all meta subtypes
+    pub fn all() -> Vec<MetaSubtype> {
+        vec![
+            MetaSubtype::Prompt,
+            MetaSubtype::Skill,
+            MetaSubtype::Command,
+            MetaSubtype::Template,
+            MetaSubtype::Config,
+        ]
     }
 }
 
@@ -745,6 +800,11 @@ pub fn default_type_definitions() -> Vec<CustomTypeDefinition> {
             .with_prefix("FLD")
             .with_description("Organizational container for grouping related requirements")
             .with_color("#6b7280"),
+        // Meta type for database configuration
+        CustomTypeDefinition::built_in_stateless("Meta", "Meta")
+            .with_prefix("META")
+            .with_description("Database configuration, prompts, skills, and templates")
+            .with_color("#8b5cf6"),
     ]
 }
 
@@ -1152,6 +1212,7 @@ fn default_requirement_types() -> Vec<RequirementTypeDefinition> {
         RequirementTypeDefinition::new("Spike", "SPIKE", "Research and investigation tasks"),
         RequirementTypeDefinition::new("Sprint", "SPRINT", "Sprint planning containers"),
         RequirementTypeDefinition::new("Folder", "FOLDER", "Organizational folders"),
+        RequirementTypeDefinition::new("Meta", "META", "Database configuration and templates"),
     ]
 }
 
@@ -2869,6 +2930,10 @@ pub struct Requirement {
     /// Type of the requirement
     pub req_type: RequirementType,
 
+    /// Subtype for Meta requirements (prompts, skills, commands, etc.)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub meta_subtype: Option<MetaSubtype>,
+
     /// IDs of requirements this requirement depends on
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dependencies: Vec<Uuid>,
@@ -2969,6 +3034,7 @@ impl Requirement {
             created_by: None,
             modified_at: now,
             req_type: RequirementType::Functional,
+            meta_subtype: None,
             dependencies: Vec::new(),
             tags: HashSet::new(),
             weight: None,
@@ -3463,6 +3529,7 @@ impl RequirementsStore {
             RequirementType::Spike => "Spike",
             RequirementType::Sprint => "Sprint",
             RequirementType::Folder => "Folder",
+            RequirementType::Meta => "Meta",
         };
         self.type_definitions.iter().find(|td| td.name == type_name)
     }
@@ -3572,9 +3639,10 @@ impl RequirementsStore {
         self.requirements
             .iter()
             .filter(|r| {
-                // Exclude Sprint and Folder types
+                // Exclude Sprint, Folder, and Meta types
                 r.req_type != RequirementType::Sprint
                     && r.req_type != RequirementType::Folder
+                    && r.req_type != RequirementType::Meta
                     // Has no sprint_assignment relationship
                     && !r.relationships.iter().any(|rel| {
                         rel.rel_type == RelationshipType::Custom("sprint_assignment".to_string())
@@ -4392,6 +4460,7 @@ impl RequirementsStore {
             RequirementType::Spike => ("Spike", "SPIKE"),
             RequirementType::Sprint => ("Sprint", "SPRINT"),
             RequirementType::Folder => ("Folder", "FOLDER"),
+            RequirementType::Meta => ("Meta", "META"),
         };
         // Try database first, fall back to built-in prefix
         self.id_config
@@ -4516,6 +4585,7 @@ impl RequirementsStore {
                     RequirementType::Spike => Some("SPIKE".to_string()),
                     RequirementType::Sprint => Some("SPRINT".to_string()),
                     RequirementType::Folder => Some("FLD".to_string()),
+                    RequirementType::Meta => Some("META".to_string()),
                 };
                 (i, prefix_override, feature_prefix, type_prefix)
             })
@@ -4690,6 +4760,7 @@ impl RequirementsStore {
                     RequirementType::Spike => Some("SPIKE".to_string()),
                     RequirementType::Sprint => Some("SPRINT".to_string()),
                     RequirementType::Folder => Some("FLD".to_string()),
+                    RequirementType::Meta => Some("META".to_string()),
                 };
                 (i, prefix_override, feature_prefix, type_prefix)
             })

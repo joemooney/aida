@@ -72,6 +72,7 @@ pub use models::{
     RequirementStatus,
     RequirementType,
     RequirementTypeDefinition,
+    MetaSubtype,
     RequirementsStore,
     // URL link type
     UrlLink,

@@ -44,6 +44,7 @@ enum RequirementType {
     REQUIREMENT_TYPE_SPIKE = 10;
     REQUIREMENT_TYPE_SPRINT = 11;
     REQUIREMENT_TYPE_FOLDER = 12;
+    REQUIREMENT_TYPE_META = 13;
 }
 
 // Relationship type enum

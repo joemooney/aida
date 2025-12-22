@@ -641,6 +641,7 @@ fn parse_req_type(s: &str) -> aida_core::RequirementType {
         "spike" => aida_core::RequirementType::Spike,
         "sprint" => aida_core::RequirementType::Sprint,
         "folder" => aida_core::RequirementType::Folder,
+        "meta" => aida_core::RequirementType::Meta,
         _ => aida_core::RequirementType::Functional,
     }
 }

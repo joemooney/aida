@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER NOT NULL
 );
 
-INSERT INTO schema_version (version) VALUES (5);
+INSERT INTO schema_version (version) VALUES (6);
 
 -- Requirements table
 CREATE TABLE IF NOT EXISTS requirements (
@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS requirements (
     created_by TEXT,
     modified_at TEXT NOT NULL,
     req_type TEXT NOT NULL DEFAULT 'Functional',
+    meta_subtype TEXT,
     dependencies TEXT NOT NULL DEFAULT '[]',
     tags TEXT NOT NULL DEFAULT '[]',
     relationships TEXT NOT NULL DEFAULT '[]',

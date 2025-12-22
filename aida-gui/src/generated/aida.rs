@@ -195,6 +195,9 @@ pub struct User {
     pub email: ::prost::alloc::string::String,
     #[prost(string, tag = "5")]
     pub handle: ::prost::alloc::string::String,
+    /// Whether user has a PIN set (hash is never sent to client)
+    #[prost(bool, tag = "6")]
+    pub has_pin: bool,
 }
 /// Team definition
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -740,6 +743,49 @@ pub struct ShutdownResponse {
     #[prost(string, tag = "2")]
     pub message: ::prost::alloc::string::String,
 }
+/// Authentication
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct LoginRequest {
+    /// User handle or name
+    #[prost(string, tag = "1")]
+    pub identifier: ::prost::alloc::string::String,
+    /// PIN (plaintext, server verifies hash)
+    #[prost(string, tag = "2")]
+    pub pin: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct LoginResponse {
+    #[prost(bool, tag = "1")]
+    pub success: bool,
+    /// Error message on failure
+    #[prost(string, tag = "2")]
+    pub message: ::prost::alloc::string::String,
+    /// User info on success
+    #[prost(message, optional, tag = "3")]
+    pub user: ::core::option::Option<User>,
+    /// Simple token for session (optional, for future use)
+    #[prost(string, tag = "4")]
+    pub session_token: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SetUserPinRequest {
+    /// UUID or SPEC-ID of user
+    #[prost(string, tag = "1")]
+    pub user_id: ::prost::alloc::string::String,
+    /// Current PIN (if changing)
+    #[prost(string, tag = "2")]
+    pub current_pin: ::prost::alloc::string::String,
+    /// New PIN to set
+    #[prost(string, tag = "3")]
+    pub new_pin: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SetUserPinResponse {
+    #[prost(bool, tag = "1")]
+    pub success: bool,
+    #[prost(string, tag = "2")]
+    pub message: ::prost::alloc::string::String,
+}
 /// Requirement status enum
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
@@ -832,6 +878,7 @@ pub enum RequirementType {
     Spike = 10,
     Sprint = 11,
     Folder = 12,
+    Meta = 13,
 }
 impl RequirementType {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -853,6 +900,7 @@ impl RequirementType {
             Self::Spike => "REQUIREMENT_TYPE_SPIKE",
             Self::Sprint => "REQUIREMENT_TYPE_SPRINT",
             Self::Folder => "REQUIREMENT_TYPE_FOLDER",
+            Self::Meta => "REQUIREMENT_TYPE_META",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -871,6 +919,7 @@ impl RequirementType {
             "REQUIREMENT_TYPE_SPIKE" => Some(Self::Spike),
             "REQUIREMENT_TYPE_SPRINT" => Some(Self::Sprint),
             "REQUIREMENT_TYPE_FOLDER" => Some(Self::Folder),
+            "REQUIREMENT_TYPE_META" => Some(Self::Meta),
             _ => None,
         }
     }
@@ -1462,6 +1511,52 @@ pub mod requirements_service_client {
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(GrpcMethod::new("aida.RequirementsService", "Shutdown"));
+            self.inner.unary(req, path, codec).await
+        }
+        /// Authentication
+        pub async fn login(
+            &mut self,
+            request: impl tonic::IntoRequest<super::LoginRequest>,
+        ) -> std::result::Result<tonic::Response<super::LoginResponse>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/aida.RequirementsService/Login",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("aida.RequirementsService", "Login"));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn set_user_pin(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SetUserPinRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SetUserPinResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/aida.RequirementsService/SetUserPin",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("aida.RequirementsService", "SetUserPin"));
             self.inner.unary(req, path, codec).await
         }
     }
