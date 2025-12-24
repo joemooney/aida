@@ -3,6 +3,7 @@ pub mod db;
 pub mod export;
 pub mod import;
 pub mod integrations;
+pub mod meta;
 pub mod models;
 #[cfg(feature = "native")]
 pub mod project;
@@ -114,6 +115,11 @@ pub use import::{
     ImportConfig, ImportIssue, ImportIssueType, ImportMergeMode, ImportSummary, ImportValidation,
     IssueResolution, RawImportStore, create_backup, execute_import, validate_import_content,
     validate_import_file,
+};
+pub use meta::{
+    get_prompt_template, needs_meta_seeding, seed_meta_requirements,
+    DEFAULT_EVALUATION_PROMPT, DEFAULT_DUPLICATES_PROMPT, DEFAULT_RELATIONSHIPS_PROMPT,
+    DEFAULT_IMPROVE_PROMPT, DEFAULT_GENERATE_CHILDREN_PROMPT,
 };
 #[cfg(feature = "native")]
 pub use report::{

@@ -2,7 +2,13 @@
 //!
 //! This module builds structured prompts for various AI operations,
 //! providing rich context from the requirements database.
+//!
+//! Prompts can be customized in three ways (checked in order):
+//! 1. META requirements in database (MetaSubtype::Prompt with matching title)
+//! 2. Custom templates in store.ai_prompts configuration
+//! 3. Embedded default templates
 
+use crate::meta::get_prompt_template;
 use crate::models::{Requirement, RequirementsStore};
 
 /// Build context about the project
@@ -193,17 +199,7 @@ pub fn build_evaluation_prompt(req: &Requirement, store: &RequirementsStore) -> 
     let config = &store.ai_prompts;
     let req_type = req.req_type.to_string();
 
-    // Check for custom template
-    if let Some(custom_template) = &config.evaluation.custom_template {
-        return custom_template
-            .replace("{project_context}", &project_context)
-            .replace("{req_context}", &req_context)
-            .replace("{related_context}", &related_context)
-            .replace("{global_context}", &config.global_context)
-            .replace("{req_type}", &req_type);
-    }
-
-    // Build with default template + customizations
+    // Build substitution values
     let global_context_section = if !config.global_context.is_empty() {
         format!("\n## Project-Specific Context\n{}\n", config.global_context)
     } else {
@@ -224,46 +220,30 @@ pub fn build_evaluation_prompt(req: &Requirement, store: &RequirementsStore) -> 
         .map(|s| format!("\n## Type-Specific Instructions ({})\n{}\n", req_type, s))
         .unwrap_or_default();
 
-    format!(
-        r#"You are an expert requirements analyst evaluating a software requirement for quality and completeness.
-{global_context_section}
-{project_context}
+    // Check for custom template in store.ai_prompts config first
+    if let Some(custom_template) = &config.evaluation.custom_template {
+        return custom_template
+            .replace("{project_context}", &project_context)
+            .replace("{req_context}", &req_context)
+            .replace("{related_context}", &related_context)
+            .replace("{global_context}", &global_context_section)
+            .replace("{additional_instructions}", &additional_instructions)
+            .replace("{type_extra}", &type_extra)
+            .replace("{req_type}", &req_type);
+    }
 
-{req_context}
+    // Check for META prompt in database, fall back to embedded default
+    let template = get_prompt_template(store, "Evaluate Requirement");
 
-{related_context}
-{additional_instructions}{type_extra}
-## Task
-Evaluate this requirement and provide a structured assessment. Consider:
-1. Clarity: Is the requirement clearly stated and unambiguous?
-2. Completeness: Does it have sufficient detail for implementation?
-3. Testability: Can this requirement be verified/tested?
-4. Consistency: Does it align with related requirements?
-5. Feasibility: Is it realistic and achievable?
-
-## Response Format
-Respond ONLY with valid JSON in this exact format:
-```json
-{{
-  "quality_score": <1-10>,
-  "issues": [
-    {{
-      "type": "<vague_language|missing_criteria|ambiguous|incomplete|inconsistent|untestable>",
-      "severity": "<low|medium|high>",
-      "text": "<description of the issue>",
-      "suggestion": "<how to fix it>"
-    }}
-  ],
-  "strengths": ["<strength1>", "<strength2>"],
-  "suggested_improvements": {{
-    "description": "<improved description text if needed, or null>",
-    "rationale": "<why this improvement helps>"
-  }}
-}}
-```
-
-Provide your evaluation now:"#
-    )
+    // Apply substitutions to the template
+    template
+        .replace("{project_context}", &project_context)
+        .replace("{req_context}", &req_context)
+        .replace("{related_context}", &related_context)
+        .replace("{global_context}", &global_context_section)
+        .replace("{additional_instructions}", &additional_instructions)
+        .replace("{type_extra}", &type_extra)
+        .replace("{req_type}", &req_type)
 }
 
 /// Build prompt for finding duplicates
@@ -274,17 +254,7 @@ pub fn build_duplicates_prompt(req: &Requirement, store: &RequirementsStore) -> 
     let config = &store.ai_prompts;
     let req_type = req.req_type.to_string();
 
-    // Check for custom template
-    if let Some(custom_template) = &config.duplicates.custom_template {
-        return custom_template
-            .replace("{project_context}", &project_context)
-            .replace("{req_context}", &req_context)
-            .replace("{all_reqs}", &all_reqs)
-            .replace("{global_context}", &config.global_context)
-            .replace("{req_type}", &req_type);
-    }
-
-    // Build with default template + customizations
+    // Build substitution values
     let global_context_section = if !config.global_context.is_empty() {
         format!("\n## Project-Specific Context\n{}\n", config.global_context)
     } else {
@@ -300,42 +270,28 @@ pub fn build_duplicates_prompt(req: &Requirement, store: &RequirementsStore) -> 
         String::new()
     };
 
-    format!(
-        r#"You are an expert requirements analyst identifying potential duplicate or overlapping requirements.
-{global_context_section}
-{project_context}
+    // Check for custom template in store.ai_prompts config first
+    if let Some(custom_template) = &config.duplicates.custom_template {
+        return custom_template
+            .replace("{project_context}", &project_context)
+            .replace("{req_context}", &req_context)
+            .replace("{all_reqs}", &all_reqs)
+            .replace("{global_context}", &global_context_section)
+            .replace("{additional_instructions}", &additional_instructions)
+            .replace("{req_type}", &req_type);
+    }
 
-{req_context}
+    // Check for META prompt in database, fall back to embedded default
+    let template = get_prompt_template(store, "Find Duplicates");
 
-{all_reqs}
-{additional_instructions}
-## Task
-Analyze the current requirement and compare it against all other requirements to find:
-1. Exact duplicates (same functionality described differently)
-2. Partial overlaps (requirements that cover similar ground)
-3. Potential conflicts (requirements that contradict each other)
-
-Only report requirements with similarity > 0.5 (50%).
-
-## Response Format
-Respond ONLY with valid JSON in this exact format:
-```json
-{{
-  "potential_duplicates": [
-    {{
-      "spec_id": "<SPEC-ID of similar requirement>",
-      "similarity": <0.0-1.0>,
-      "reason": "<why these are similar>",
-      "recommendation": "<merge|link|keep_separate|review>"
-    }}
-  ]
-}}
-```
-
-If no duplicates found, return: {{"potential_duplicates": []}}
-
-Provide your analysis now:"#
-    )
+    // Apply substitutions to the template
+    template
+        .replace("{project_context}", &project_context)
+        .replace("{req_context}", &req_context)
+        .replace("{all_reqs}", &all_reqs)
+        .replace("{global_context}", &global_context_section)
+        .replace("{additional_instructions}", &additional_instructions)
+        .replace("{req_type}", &req_type)
 }
 
 /// Build prompt for suggesting relationships
@@ -359,18 +315,7 @@ pub fn build_relationships_prompt(req: &Requirement, store: &RequirementsStore) 
         rel_types.join("\n- ")
     };
 
-    // Check for custom template
-    if let Some(custom_template) = &config.relationships.custom_template {
-        return custom_template
-            .replace("{project_context}", &project_context)
-            .replace("{req_context}", &req_context)
-            .replace("{all_reqs}", &all_reqs)
-            .replace("{rel_types}", &rel_types_str)
-            .replace("{global_context}", &config.global_context)
-            .replace("{req_type}", &req_type);
-    }
-
-    // Build with default template + customizations
+    // Build substitution values
     let global_context_section = if !config.global_context.is_empty() {
         format!("\n## Project-Specific Context\n{}\n", config.global_context)
     } else {
@@ -386,46 +331,30 @@ pub fn build_relationships_prompt(req: &Requirement, store: &RequirementsStore) 
         String::new()
     };
 
-    format!(
-        r#"You are an expert requirements analyst identifying missing relationships between requirements.
-{global_context_section}
-{project_context}
+    // Check for custom template in store.ai_prompts config first
+    if let Some(custom_template) = &config.relationships.custom_template {
+        return custom_template
+            .replace("{project_context}", &project_context)
+            .replace("{req_context}", &req_context)
+            .replace("{all_reqs}", &all_reqs)
+            .replace("{rel_types}", &rel_types_str)
+            .replace("{global_context}", &global_context_section)
+            .replace("{additional_instructions}", &additional_instructions)
+            .replace("{req_type}", &req_type);
+    }
 
-{req_context}
+    // Check for META prompt in database, fall back to embedded default
+    let template = get_prompt_template(store, "Suggest Relationships");
 
-{all_reqs}
-
-## Available Relationship Types
-- {rel_types_str}
-{additional_instructions}
-## Task
-Analyze the current requirement and suggest relationships that should exist but don't:
-1. Dependencies (what must be done first)
-2. Parent/child relationships (decomposition)
-3. Verification relationships (what tests/validates this)
-4. References (related but not dependent)
-
-Only suggest relationships with confidence > 0.7 (70%).
-
-## Response Format
-Respond ONLY with valid JSON in this exact format:
-```json
-{{
-  "suggested_relationships": [
-    {{
-      "rel_type": "<relationship type>",
-      "target_spec_id": "<SPEC-ID of target requirement>",
-      "confidence": <0.0-1.0>,
-      "rationale": "<why this relationship should exist>"
-    }}
-  ]
-}}
-```
-
-If no relationships to suggest, return: {{"suggested_relationships": []}}
-
-Provide your analysis now:"#
-    )
+    // Apply substitutions to the template
+    template
+        .replace("{project_context}", &project_context)
+        .replace("{req_context}", &req_context)
+        .replace("{all_reqs}", &all_reqs)
+        .replace("{rel_types}", &rel_types_str)
+        .replace("{global_context}", &global_context_section)
+        .replace("{additional_instructions}", &additional_instructions)
+        .replace("{req_type}", &req_type)
 }
 
 /// Build prompt for improving description
@@ -466,18 +395,7 @@ pub fn build_improve_prompt(req: &Requirement, store: &RequirementsStore) -> Str
         )
     };
 
-    // Check for custom template
-    if let Some(custom_template) = &config.improve.custom_template {
-        return custom_template
-            .replace("{project_context}", &project_context)
-            .replace("{req_context}", &req_context)
-            .replace("{related_context}", &related_context)
-            .replace("{examples}", &examples_str)
-            .replace("{global_context}", &config.global_context)
-            .replace("{req_type}", &req_type);
-    }
-
-    // Build with default template + customizations
+    // Build substitution values
     let global_context_section = if !config.global_context.is_empty() {
         format!("\n## Project-Specific Context\n{}\n", config.global_context)
     } else {
@@ -498,40 +416,32 @@ pub fn build_improve_prompt(req: &Requirement, store: &RequirementsStore) -> Str
         .map(|s| format!("\n## Type-Specific Instructions ({})\n{}\n", req_type, s))
         .unwrap_or_default();
 
-    format!(
-        r#"You are an expert requirements analyst improving a requirement's description for clarity and completeness.
-{global_context_section}
-{project_context}
+    // Check for custom template in store.ai_prompts config first
+    if let Some(custom_template) = &config.improve.custom_template {
+        return custom_template
+            .replace("{project_context}", &project_context)
+            .replace("{req_context}", &req_context)
+            .replace("{related_context}", &related_context)
+            .replace("{examples}", &examples_str)
+            .replace("{global_context}", &global_context_section)
+            .replace("{additional_instructions}", &additional_instructions)
+            .replace("{type_extra}", &type_extra)
+            .replace("{req_type}", &req_type);
+    }
 
-{req_context}
+    // Check for META prompt in database, fall back to embedded default
+    let template = get_prompt_template(store, "Improve Description");
 
-{related_context}
-
-{examples_str}
-{additional_instructions}{type_extra}
-## Task
-Improve the requirement's description to be:
-1. Clear and unambiguous
-2. Complete with acceptance criteria where appropriate
-3. Testable/verifiable
-4. Consistent with the requirement type ({})
-5. Professional and well-structured
-
-Do NOT change the meaning or scope of the requirement.
-
-## Response Format
-Respond ONLY with valid JSON in this exact format:
-```json
-{{
-  "improved_description": "<the improved description text>",
-  "changes_made": ["<change1>", "<change2>"],
-  "rationale": "<why these improvements help>"
-}}
-```
-
-Provide your improved version now:"#,
-        req_type
-    )
+    // Apply substitutions to the template
+    template
+        .replace("{project_context}", &project_context)
+        .replace("{req_context}", &req_context)
+        .replace("{related_context}", &related_context)
+        .replace("{examples}", &examples_str)
+        .replace("{global_context}", &global_context_section)
+        .replace("{additional_instructions}", &additional_instructions)
+        .replace("{type_extra}", &type_extra)
+        .replace("{req_type}", &req_type)
 }
 
 /// Build prompt for generating child requirements
@@ -569,18 +479,7 @@ pub fn build_generate_children_prompt(req: &Requirement, store: &RequirementsSto
         types.join(", ")
     };
 
-    // Check for custom template
-    if let Some(custom_template) = &config.generate_children.custom_template {
-        return custom_template
-            .replace("{project_context}", &project_context)
-            .replace("{req_context}", &req_context)
-            .replace("{existing_children}", &existing_str)
-            .replace("{available_types}", &types_str)
-            .replace("{global_context}", &config.global_context)
-            .replace("{req_type}", &req_type);
-    }
-
-    // Build with default template + customizations
+    // Build substitution values
     let global_context_section = if !config.global_context.is_empty() {
         format!("\n## Project-Specific Context\n{}\n", config.global_context)
     } else {
@@ -601,45 +500,32 @@ pub fn build_generate_children_prompt(req: &Requirement, store: &RequirementsSto
         .map(|s| format!("\n## Type-Specific Instructions ({})\n{}\n", req_type, s))
         .unwrap_or_default();
 
-    format!(
-        r#"You are an expert requirements analyst breaking down a high-level requirement into implementable sub-requirements.
-{global_context_section}
-{project_context}
+    // Check for custom template in store.ai_prompts config first
+    if let Some(custom_template) = &config.generate_children.custom_template {
+        return custom_template
+            .replace("{project_context}", &project_context)
+            .replace("{req_context}", &req_context)
+            .replace("{existing_children}", &existing_str)
+            .replace("{available_types}", &types_str)
+            .replace("{global_context}", &global_context_section)
+            .replace("{additional_instructions}", &additional_instructions)
+            .replace("{type_extra}", &type_extra)
+            .replace("{req_type}", &req_type);
+    }
 
-{req_context}
+    // Check for META prompt in database, fall back to embedded default
+    let template = get_prompt_template(store, "Generate Children");
 
-## Existing Children
-{existing_str}
-
-## Available Requirement Types
-{types_str}
-{additional_instructions}{type_extra}
-## Task
-Break down this requirement into smaller, implementable sub-requirements. Consider:
-1. Logical decomposition of functionality
-2. Separation of concerns (UI, backend, data, etc.)
-3. Testability of each sub-requirement
-4. Appropriate granularity for implementation
-
-Generate 3-7 sub-requirements that together fully cover the parent requirement.
-
-## Response Format
-Respond ONLY with valid JSON in this exact format:
-```json
-{{
-  "suggested_children": [
-    {{
-      "title": "<concise title>",
-      "description": "<clear description with acceptance criteria>",
-      "type": "<requirement type>",
-      "rationale": "<why this is a distinct sub-requirement>"
-    }}
-  ]
-}}
-```
-
-Provide your breakdown now:"#
-    )
+    // Apply substitutions to the template
+    template
+        .replace("{project_context}", &project_context)
+        .replace("{req_context}", &req_context)
+        .replace("{existing_children}", &existing_str)
+        .replace("{available_types}", &types_str)
+        .replace("{global_context}", &global_context_section)
+        .replace("{additional_instructions}", &additional_instructions)
+        .replace("{type_extra}", &type_extra)
+        .replace("{req_type}", &req_type)
 }
 
 #[cfg(test)]

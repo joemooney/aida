@@ -2288,3 +2288,42 @@ A chronological record of development sessions and changes made to the Requireme
 
 - **Commits**: (pending)
 - **Status**: Core implementation complete, meta seeding and prompt fallback pending
+
+### Meta Seeding and Prompt Fallback
+- **Prompt**: Implement meta seeding for new databases and prompt fallback to check database first
+- **Problem**: AI prompts were embedded and not editable; needed to store them as browsable requirements
+- **Solution**: Created `aida-core/src/meta.rs` module with seeding and fallback functions
+
+**Implementation:**
+
+1. **Meta Module** (aida-core/src/meta.rs):
+   - Default prompt templates as const strings:
+     - `DEFAULT_EVALUATION_PROMPT`
+     - `DEFAULT_DUPLICATES_PROMPT`
+     - `DEFAULT_RELATIONSHIPS_PROMPT`
+     - `DEFAULT_IMPROVE_PROMPT`
+     - `DEFAULT_GENERATE_CHILDREN_PROMPT`
+   - `get_prompt_template(store, name)` - checks database for META prompt, falls back to embedded
+   - `seed_meta_requirements(store)` - creates META-PROMPTS folder with default templates
+   - `needs_meta_seeding(store)` - checks if seeding is needed
+
+2. **Prompt Fallback** (aida-core/src/ai/prompts.rs):
+   - Modified all prompt building functions to use `get_prompt_template()`
+   - Priority order:
+     1. Custom template in `store.ai_prompts` configuration
+     2. META requirement in database matching prompt name
+     3. Embedded default template
+   - Prompt names matched: "Evaluate Requirement", "Find Duplicates", "Suggest Relationships", "Improve Description", "Generate Children"
+
+3. **Exports** (aida-core/src/lib.rs):
+   - Added `meta` module
+   - Exported: `get_prompt_template`, `needs_meta_seeding`, `seed_meta_requirements`
+   - Exported default prompt constants
+
+**Usage:**
+- Call `seed_meta_requirements(&mut store)` after creating a new database
+- Edit META requirements in GUI/CLI to customize prompts
+- Changes take effect immediately without code changes
+
+- **Commit**: (pending)
+- **Features**: Database-stored customizable AI prompts, seeding for new databases

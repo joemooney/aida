@@ -232,6 +232,10 @@ Requirements are stored using a pluggable backend system:
 - **MetaSubtype** categorization: Prompt, Skill, Command, Template, Config
 - Stateless type (no status workflow) with prefix "META"
 - Enables editing and versioning of AI prompts within the requirements database
+- **Meta Seeding**: `seed_meta_requirements()` creates default AI prompt templates in new databases
+- **Prompt Fallback**: AI prompts check database for META requirements first, then fall back to embedded defaults
+  - Customize prompts by editing META requirements in GUI/CLI
+  - Prompt names: "Evaluate Requirement", "Find Duplicates", "Suggest Relationships", "Improve Description", "Generate Children"
 
 ## Getting Started
 
