@@ -283,6 +283,314 @@ aida user-guide                   # Open in browser (light mode)
 aida user-guide --dark            # Open in browser (dark mode)
 ```
 
+## Use Cases & Tutorials
+
+### Use Case 1: Sharing Requirement Templates Between Projects
+
+**Scenario**: You have a well-structured set of security requirements in Project A that you want to reuse in Project B.
+
+**Step-by-step**:
+
+1. **Create a template folder in Project A**:
+   ```bash
+   aida add --title "Security Requirements Template" --type folder --prefix SEC
+   # Creates SEC-001
+   ```
+
+2. **Add template requirements as children**:
+   ```bash
+   aida add --title "Authentication Required" --type functional --description "All API endpoints must require authentication"
+   aida rel add --from FR-001 --to SEC-001 --type parent
+
+   aida add --title "Input Validation" --type functional --description "All user inputs must be validated and sanitized"
+   aida rel add --from FR-002 --to SEC-001 --type parent
+   ```
+
+3. **Export the template tree**:
+   ```bash
+   aida export --format tree --id SEC-001 -o security-template.json
+   ```
+
+4. **Import into Project B**:
+   ```bash
+   cd /path/to/project-b
+   aida import security-template.json --on-conflict rename
+   ```
+
+5. **Verify the import**:
+   ```bash
+   aida list --type folder
+   # Shows the imported SEC folder with new SPEC-IDs
+   ```
+
+**GUI Alternative**:
+- Select the folder in Project A → Menu → "🌳 Export Tree..." → Save file
+- Open Project B → Menu → "🌳 Import Tree..." → Select file → Choose conflict strategy → Import
+
+---
+
+### Use Case 2: Customizing AI Prompts for Domain-Specific Evaluation
+
+**Scenario**: You're working on a medical device project and need the AI to evaluate requirements against FDA regulations.
+
+**Step-by-step**:
+
+1. **Locate the META prompts folder**:
+   ```bash
+   aida list --type meta
+   # Shows META-001 "AI Prompts" folder
+   ```
+
+2. **Find the evaluation prompt**:
+   ```bash
+   aida show META-002
+   # Shows "Evaluate Requirement" prompt with default template
+   ```
+
+3. **Edit the prompt to add domain-specific criteria**:
+   ```bash
+   aida edit META-002 --description "$(cat <<'EOF'
+   Template for evaluating requirement quality.
+   Placeholders: {global_context}, {project_context}, {req_context}, {related_context}, {additional_instructions}, {type_extra}
+
+   ---
+
+   You are an expert requirements analyst evaluating a software requirement for a medical device.
+
+   {global_context}
+   {project_context}
+   {req_context}
+   {related_context}
+   {additional_instructions}{type_extra}
+
+   ## Task
+   Evaluate this requirement considering:
+   1. Clarity: Is the requirement unambiguous?
+   2. Completeness: Does it have sufficient detail?
+   3. Testability: Can this requirement be verified?
+   4. Consistency: Does it align with related requirements?
+   5. Feasibility: Is it realistic?
+   6. **FDA Compliance**: Does it support 21 CFR Part 820 requirements?
+   7. **Risk Assessment**: Are safety implications addressed?
+
+   ## Response Format
+   Respond ONLY with valid JSON in this exact format:
+   {
+     "quality_score": <1-10>,
+     "issues": [...],
+     "strengths": [...],
+     "suggested_improvements": {...},
+     "fda_compliance_notes": "<any FDA-related observations>"
+   }
+   EOF
+   )"
+   ```
+
+4. **Test the custom prompt**:
+   - Open GUI → Select a requirement → Click "🤖 AI" → "Evaluate"
+   - The AI will now use your FDA-specific evaluation criteria
+
+**GUI Alternative**:
+- Settings → Show Meta requirements (check the filter)
+- Navigate to META-002 "Evaluate Requirement"
+- Edit the description with your custom prompt template
+- Save changes
+
+---
+
+### Use Case 3: Setting Up a New Project with Meta Seeding
+
+**Scenario**: You're starting a new project and want the default AI prompts automatically created.
+
+**Step-by-step**:
+
+1. **Initialize a new AIDA database**:
+   ```bash
+   mkdir my-new-project && cd my-new-project
+   aida init
+   # Creates requirements.yaml with default configuration
+   ```
+
+2. **Verify META requirements were seeded**:
+   ```bash
+   aida list --type meta
+   # Shows:
+   # META-001  AI Prompts (folder)
+   # META-002  Evaluate Requirement
+   # META-003  Find Duplicates
+   # META-004  Suggest Relationships
+   # META-005  Improve Description
+   # META-006  Generate Children
+   ```
+
+3. **View a prompt template**:
+   ```bash
+   aida show META-002
+   # Displays the full evaluation prompt with all placeholders
+   ```
+
+4. **The AI system automatically uses these**:
+   - When you run AI evaluation, it checks META requirements first
+   - If not found, falls back to embedded defaults
+   - Edit any META prompt to customize behavior project-wide
+
+---
+
+### Use Case 4: Migrating Requirements Between Storage Backends
+
+**Scenario**: Your project has grown and you need better performance than YAML provides.
+
+**Step-by-step**:
+
+1. **Check current database info**:
+   ```bash
+   aida db info
+   # Shows: Backend: YAML, Path: requirements.yaml, Requirements: 500
+   ```
+
+2. **Migrate to SQLite**:
+   ```bash
+   aida db migrate --from yaml --to sqlite
+   # Creates requirements.db
+   ```
+
+3. **Update your project configuration**:
+   ```bash
+   aida db add --name "my-project" --path ./requirements.db
+   aida db default my-project
+   ```
+
+4. **For team environments, migrate to PostgreSQL**:
+   ```bash
+   aida db migrate --from sqlite --to postgres \
+     --output "postgres://user:pass@localhost:5432/aida_prod"
+   ```
+
+5. **Use PostgreSQL directly**:
+   ```bash
+   aida --file "postgres://user:pass@localhost:5432/aida_prod" list
+   ```
+
+---
+
+### Use Case 5: GitLab Integration Workflow
+
+**Scenario**: Your team uses GitLab for issue tracking and you want bidirectional sync.
+
+**Step-by-step**:
+
+1. **Create GitLab configuration**:
+   ```bash
+   mkdir -p ~/.config/aida
+   cat > ~/.config/aida/gitlab.toml << 'EOF'
+   [gitlab]
+   url = "https://gitlab.com"
+   project_id = 12345678
+   token = "glpat-xxxxxxxxxxxxx"
+
+   [labels]
+   type_mapping = { Story = "type::story", Bug = "type::bug", Task = "type::task" }
+   priority_mapping = { High = "priority::high", Medium = "priority::medium", Low = "priority::low" }
+   status_mapping = { InProgress = "status::in-progress", Completed = "status::done" }
+
+   [polling]
+   enabled = true
+   interval_seconds = 300
+   EOF
+   ```
+
+2. **Validate and create missing labels**:
+   ```bash
+   aida gitlab labels --validate --create-missing
+   ```
+
+3. **Link a requirement to an existing GitLab issue**:
+   - Open GUI → Select requirement → Links tab → "Link Issue" button
+   - Enter GitLab issue number → Link
+
+4. **Create a new GitLab issue from a requirement**:
+   - Open GUI → Select requirement → "Create Issue" button
+   - Labels are automatically applied based on type/priority/status
+
+5. **Monitor sync status**:
+   ```bash
+   aida gitlab status --diverged
+   # Shows requirements that have changed on either side
+   ```
+
+6. **Manual refresh**:
+   ```bash
+   aida gitlab refresh STORY-042
+   # Re-syncs the requirement with GitLab
+   ```
+
+**In GUI**:
+- Status bar shows `GL:✓` (in-sync) or `GL:⚠` (diverged)
+- Toast notifications appear when changes are detected
+- Background polling runs automatically
+
+---
+
+### Use Case 6: Building a Reusable Requirements Library
+
+**Scenario**: Your organization wants to maintain a library of reusable requirement templates.
+
+**Step-by-step**:
+
+1. **Create a dedicated library database**:
+   ```bash
+   mkdir -p ~/aida-library && cd ~/aida-library
+   aida init
+   ```
+
+2. **Organize by domain**:
+   ```bash
+   # Create category folders
+   aida add --title "Authentication Templates" --type folder --prefix AUTH
+   aida add --title "Security Templates" --type folder --prefix SEC
+   aida add --title "Accessibility Templates" --type folder --prefix A11Y
+   ```
+
+3. **Add template requirements with detailed descriptions**:
+   ```bash
+   aida add --title "OAuth 2.0 Integration" --type functional \
+     --description "## Overview
+   The system shall support OAuth 2.0 authentication.
+
+   ## Acceptance Criteria
+   - Support Authorization Code flow
+   - Support refresh tokens
+   - Token expiration handling
+   - Secure token storage
+
+   ## Notes
+   Customize the provider list for your project."
+
+   aida rel add --from FR-001 --to AUTH-001 --type parent
+   ```
+
+4. **Export individual templates or entire categories**:
+   ```bash
+   # Export entire category
+   aida export --format tree --id AUTH-001 -o auth-templates.json
+
+   # Export single template
+   aida export --format tree --id FR-001 -o oauth-template.json
+   ```
+
+5. **Import into project with conflict handling**:
+   ```bash
+   cd /path/to/project
+   aida import ~/aida-library/auth-templates.json --on-conflict skip
+   ```
+
+**Best Practices**:
+- Use `--on-conflict skip` to avoid duplicating existing templates
+- Use `--on-conflict rename` when you want to keep both versions
+- Use `--parent FOLDER-001` to organize imported templates
+
+---
+
 ## Documentation
 
 - **README.md**: Quick start and project structure

@@ -12,9 +12,11 @@ A professional requirements management system with both CLI and GUI interfaces.
 - [CLI Usage](#cli-usage)
 - [GUI Usage](#gui-usage)
 - [Working with Requirements](#working-with-requirements)
+  - [Meta Requirements](#meta-requirements)
 - [Features and Organization](#features-and-organization)
 - [Multi-Project Support](#multi-project-support)
 - [Storage Backends](#storage-backends)
+  - [Tree Export/Import](#tree-exportimport)
 - [Keyboard Shortcuts](#keyboard-shortcuts)
 - [Settings](#settings)
 
@@ -508,6 +510,72 @@ In the GUI, go to **Settings** > **Types** tab to manage type definitions:
 - Custom types (not built-in) can be deleted using the 🗑 button
 - Types in use by existing requirements cannot be deleted
 
+### Meta Requirements
+
+Meta requirements are a special type used to store AI prompts, configuration, and templates as browsable requirements within your database. This allows you to customize AI behavior on a per-project basis.
+
+**Meta Subtypes:**
+
+| Subtype | Description |
+|---------|-------------|
+| **Prompt** | AI prompt templates for evaluation, improvement, etc. |
+| **Skill** | AI skill definitions |
+| **Command** | Slash command definitions |
+| **Template** | Reusable templates |
+| **Config** | Project configuration |
+
+**Default AI Prompts:**
+
+When you create a new database, AIDA automatically seeds it with default META requirements:
+
+| SPEC-ID | Title | Purpose |
+|---------|-------|---------|
+| META-001 | AI Prompts | Folder containing all prompt templates |
+| META-002 | Evaluate Requirement | Template for quality evaluation |
+| META-003 | Find Duplicates | Template for duplicate detection |
+| META-004 | Suggest Relationships | Template for relationship suggestions |
+| META-005 | Improve Description | Template for description improvement |
+| META-006 | Generate Children | Template for child requirement generation |
+
+**Customizing AI Prompts:**
+
+1. Enable Meta visibility: In the filter panel, check "Show Meta"
+2. Navigate to the prompt you want to customize (e.g., META-002 "Evaluate Requirement")
+3. Edit the description to modify the prompt template
+4. Save changes
+
+The AI system will automatically use your customized prompts. If a META prompt is not found or is empty, the system falls back to embedded defaults.
+
+**Prompt Placeholders:**
+
+When editing prompts, you can use these placeholders:
+
+| Placeholder | Description |
+|-------------|-------------|
+| `{global_context}` | Global AI context from settings |
+| `{project_context}` | Project-specific context |
+| `{req_context}` | Current requirement details |
+| `{related_context}` | Related requirements |
+| `{additional_instructions}` | Extra instructions from type config |
+| `{type_extra}` | Type-specific instructions |
+| `{all_reqs}` | All requirements (for duplicate detection) |
+| `{rel_types}` | Available relationship types |
+| `{examples}` | Example requirements |
+| `{existing_children}` | Current child requirements |
+| `{req_type}` | Current requirement type |
+
+**CLI Commands:**
+```bash
+# List all META requirements
+aida list --type meta
+
+# View a specific prompt
+aida show META-002
+
+# Edit a prompt
+aida edit META-002 --description "Your custom prompt template here"
+```
+
 ### Relationship Types
 
 The system includes built-in relationship types with configurable constraints:
@@ -651,7 +719,55 @@ You can export your requirements to JSON format for backup or interoperability:
 - **JSON export** - Portable format for sharing between systems
 - **Migration** - Convert between YAML and SQLite formats
 
-For detailed information on migration procedures and storage administration, see the [Administrator's Guide](admin-guide.md).
+#### Tree Export/Import
+
+Export requirement hierarchies (a requirement and all its descendants) to portable JSON files for sharing between projects:
+
+**CLI Export**:
+```bash
+# Export a requirement tree to JSON
+aida export --format tree --id FOLDER-001 -o templates.json
+
+# The exported file includes:
+# - All descendant requirements (children, grandchildren, etc.)
+# - Comments and custom fields
+# - Internal parent-child relationships
+# - Notes about external relationships for manual resolution
+```
+
+**CLI Import**:
+```bash
+# Import into current database
+aida import templates.json
+
+# Import under a specific parent
+aida import templates.json --parent FOLDER-002
+
+# Handle conflicts with existing requirements
+aida import templates.json --on-conflict skip     # Skip if title exists
+aida import templates.json --on-conflict rename   # Add "(imported)" suffix
+aida import templates.json --on-conflict replace  # Replace existing
+```
+
+**GUI Export**:
+1. Select the requirement you want to export (typically a Folder)
+2. Go to Menu → "🌳 Export Tree..."
+3. Choose save location and filename
+4. Click Export
+
+**GUI Import**:
+1. Go to Menu → "🌳 Import Tree..."
+2. Select the JSON file to import
+3. Optionally select a parent requirement
+4. Choose conflict strategy (Skip, Rename, or Replace)
+5. Click Import
+
+**Important Notes**:
+- UUIDs and SPEC-IDs are regenerated on import to avoid conflicts
+- External relationships (to requirements outside the tree) are noted but not created
+- Use this feature to create reusable template libraries
+
+For detailed migration procedures and storage administration, see the [Administrator's Guide](admin-guide.md).
 
 ---
 

@@ -206,6 +206,48 @@ Always verify CLI arguments with `aida <command> --help`. Key parameters:
 
 **Organizational**:
 - `folder` - Organizational folders (stateless)
+- `meta` - AI prompts, templates, and configuration (stateless)
 
 Use `task` type for chores, documentation, tooling, and other work that doesn't fit traditional requirements.
+
+### Meta Requirements and AI Prompt Customization
+
+Meta requirements store AI prompts as editable requirements in the database:
+
+```bash
+# List META requirements (AI prompts)
+aida list --type meta
+
+# View a prompt template
+aida show META-002  # "Evaluate Requirement"
+
+# Edit a prompt to customize AI behavior
+aida edit META-002 --description "Your custom prompt template..."
+```
+
+**Default META prompts** (created automatically on `aida init`):
+- META-002: Evaluate Requirement
+- META-003: Find Duplicates
+- META-004: Suggest Relationships
+- META-005: Improve Description
+- META-006: Generate Children
+
+The AI system checks database prompts first, then falls back to embedded defaults.
+
+### Tree Export/Import
+
+Export requirement hierarchies for sharing between projects:
+
+```bash
+# Export a requirement tree (includes all descendants)
+aida export --format tree --id FOLDER-001 -o templates.json
+
+# Import into current database
+aida import templates.json
+
+# Import under a parent with conflict handling
+aida import templates.json --parent FOLDER-002 --on-conflict skip
+```
+
+Conflict strategies: `skip` (skip existing), `rename` (add suffix), `replace` (overwrite)
 

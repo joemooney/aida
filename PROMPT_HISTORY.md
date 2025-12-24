@@ -2327,3 +2327,32 @@ A chronological record of development sessions and changes made to the Requireme
 
 - **Commit**: (pending)
 - **Features**: Database-stored customizable AI prompts, seeding for new databases
+
+
+### Documentation Update - Use Cases and Tutorials
+- **Prompt**: Make sure all documentation is up-to-date with step-by-step use cases explained in detail
+- **Problem**: Documentation lacked detailed use case examples for new features (Meta requirements, Tree export/import, GitLab integration)
+- **Solution**: Added comprehensive use case section to OVERVIEW.md and updated user guide
+
+**Changes:**
+
+1. **OVERVIEW.md** - Added "Use Cases & Tutorials" section with 6 detailed scenarios:
+   - Use Case 1: Sharing Requirement Templates Between Projects (tree export/import)
+   - Use Case 2: Customizing AI Prompts for Domain-Specific Evaluation (meta requirements)
+   - Use Case 3: Setting Up a New Project with Meta Seeding
+   - Use Case 4: Migrating Requirements Between Storage Backends
+   - Use Case 5: GitLab Integration Workflow
+   - Use Case 6: Building a Reusable Requirements Library
+
+2. **docs/user-guide.md** - Added new sections:
+   - Meta Requirements section with subtypes, default prompts, customization guide, placeholders
+   - Tree Export/Import section with CLI and GUI instructions
+   - Updated Table of Contents with new sections
+
+3. **CLAUDE.md** - Added new features:
+   - Added `meta` type to Organizational types
+   - Added "Meta Requirements and AI Prompt Customization" section
+   - Added "Tree Export/Import" section with CLI commands
+
+- **Commit**: (pending)
+- **Status**: Documentation complete
