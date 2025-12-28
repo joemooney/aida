@@ -43,10 +43,12 @@ for file in $STAGED_FILES; do
     # Skip excluded files
     skip=false
     for pattern in $EXCLUDE_PATTERNS; do
-        if [[ "$file" == *"$pattern"* ]]; then
-            skip=true
-            break
-        fi
+        case "$file" in
+            *"$pattern"*)
+                skip=true
+                break
+                ;;
+        esac
     done
     [ "$skip" = true ] && continue
 
@@ -99,10 +101,12 @@ if [ "$HAS_TRACE_FILES" = true ]; then
     for file in $STAGED_FILES; do
         skip=false
         for pattern in $EXCLUDE_PATTERNS; do
-            if [[ "$file" == *"$pattern"* ]]; then
-                skip=true
-                break
-            fi
+            case "$file" in
+                *"$pattern"*)
+                    skip=true
+                    break
+                    ;;
+            esac
         done
         [ "$skip" = true ] && continue
 
