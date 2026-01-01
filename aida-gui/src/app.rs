@@ -33101,18 +33101,9 @@ impl eframe::App for RequirementsApp {
             // Create baseline dialog
             self.show_create_baseline_dialog(ctx);
         } else if self.current_view == View::Timeline {
-            // Timeline view with resizable panel - timeline on left, details on right
-            egui::SidePanel::left("timeline_side_panel")
-                .min_width(300.0)
-                .default_width(self.timeline_panel_width)
-                .max_width(screen_width * 0.7)
-                .resizable(true)
-                .show(ctx, |ui| {
-                    self.show_timeline_view(ui);
-                });
-            // Details panel on the right
+            // Timeline view has its own internal two-column layout (event list + event detail)
             egui::CentralPanel::default().show(ctx, |ui| {
-                self.show_detail_view_with_close(ui);
+                self.show_timeline_view(ui);
             });
         } else if self.current_view == View::Planning {
             // Sprint planning view with planning on left, detail panel on right (consistent with List view)
