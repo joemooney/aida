@@ -32165,7 +32165,11 @@ impl eframe::App for RequirementsApp {
             let in_planning = self.current_view == View::Planning;
             let in_kanban = self.current_view == View::KanBan;
             let in_queue = self.current_view == View::Queue;
-            if !in_timeline && !in_planning && !in_kanban && !in_queue && can_navigate
+            #[cfg(not(target_arch = "wasm32"))]
+            let in_templates = self.current_view == View::Templates;
+            #[cfg(target_arch = "wasm32")]
+            let in_templates = false;
+            if !in_timeline && !in_planning && !in_kanban && !in_queue && !in_templates && can_navigate
                 && (self.user_settings.keybindings.is_pressed(
                     KeyAction::NavigateDown,
                     ctx,
@@ -32177,7 +32181,7 @@ impl eframe::App for RequirementsApp {
                 ))
             {
                 nav_delta = 1;
-            } else if !in_timeline && !in_planning && !in_kanban && !in_queue && can_navigate
+            } else if !in_timeline && !in_planning && !in_kanban && !in_queue && !in_templates && can_navigate
                 && (self.user_settings.keybindings.is_pressed(
                     KeyAction::NavigateUp,
                     ctx,
@@ -32192,8 +32196,8 @@ impl eframe::App for RequirementsApp {
             }
 
             // Page Up/Down, Home/End, and Mouse Wheel (only when not in text input)
-            // Skip for Timeline, Planning, KanBan, and Queue views - they have their own handling
-            if nav_context_active && !in_timeline && !in_planning && !in_kanban && !in_queue {
+            // Skip for Timeline, Planning, KanBan, Queue, and Templates views - they have their own handling
+            if nav_context_active && !in_timeline && !in_planning && !in_kanban && !in_queue && !in_templates {
                 ctx.input(|i| {
                     // Page Up/Down
                     if i.key_pressed(egui::Key::PageDown) {
