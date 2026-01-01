@@ -2356,3 +2356,45 @@ A chronological record of development sessions and changes made to the Requireme
 
 - **Commit**: (pending)
 - **Status**: Documentation complete
+
+
+### Templates View Implementation (FR-0357)
+- **Prompt**: "I want a view in aida what will show all the meta data, hooks, skills, prompts etc. I think we should store this information encoded in aida via build.rs so that we can bootstrap new projects from just the binary."
+- **Problem**: No way to browse embedded templates from the GUI; users couldn't see what skills/commands/hooks were available
+- **Solution**: Created Templates view in GUI with category navigation and content preview
+
+**Implementation:**
+
+1. **build.rs Enhancements**:
+   - Added `embed_file()` function for single files (e.g., settings.json)
+   - Added `TEMPLATE_CATEGORIES` static for introspection
+   - Embedded settings.json for Claude Code configuration
+
+2. **templates.rs New Functions**:
+   - `TemplateInfo` struct with key, category, name, content, source
+   - `TemplateSource` enum: ProjectLocal, UserConfig, Embedded, NotFound
+   - `get_embedded_templates()` - returns all templates with metadata
+   - `get_templates_by_category()` - filter by category
+   - `get_template_categories()` - list categories with descriptions
+
+3. **lib.rs Exports**:
+   - Exported TemplateInfo, TemplateLoader, TemplateSource
+   - Exported helper functions for templates
+
+4. **GUI Templates View** (aida-gui/src/app.rs):
+   - Added `View::Templates` to View enum
+   - Added menu item "📄 Templates" in View menu
+   - Added 'm' keyboard shortcut for Templates view
+   - Two-column layout: categories/list on left, preview on right
+   - Category tabs: skills, commands, hooks, settings.json
+   - Template list with source icons (📦 Embedded, 📁 Project, 👤 User)
+   - Content preview in scrollable monospace area
+
+5. **Keyboard Navigation**:
+   - j/k and arrow keys for template list navigation
+   - Home/End to jump to first/last template
+   - Navigation hint in header
+
+- **Commits**: c076e0c, 340dc25
+- **Status**: Complete
+- **Requirement**: FR-0357 (Templates View - Browse embedded skills, commands, hooks)
