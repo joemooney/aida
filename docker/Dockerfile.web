@@ -46,6 +46,15 @@ server {
     gzip on;
     gzip_types text/plain text/css application/javascript application/wasm;
 
+    # Redirect root to include default server URL
+    location = / {
+        # If no query params, redirect to include server URL
+        if ($args = "") {
+            return 302 /?server=https://api.aida.joemooney.com;
+        }
+        try_files $uri $uri/ /index.html;
+    }
+
     # SPA fallback
     location / {
         try_files $uri $uri/ /index.html;
