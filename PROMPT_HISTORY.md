@@ -2398,3 +2398,69 @@ A chronological record of development sessions and changes made to the Requireme
 - **Commits**: c076e0c, 340dc25
 - **Status**: Complete
 - **Requirement**: FR-0357 (Templates View - Browse embedded skills, commands, hooks)
+
+
+### Resizable Panels and Template Naming Fixes (2025-12-31)
+- **Prompt**: "In the requirements view, we have a slider between the list and the details view. We should have the same slider in the Timeline, My Queue, Other Queue, Templates views"
+- **Problem**: Queue and Templates views lacked the resizable divider between list and detail panels
+- **Solution**: Added resizable SidePanels to Queue, UserQueue, and Templates views
+
+**Changes:**
+
+1. **State Variables** (aida-gui/src/app.rs):
+   - Added `queue_panel_width: f32` for Queue/UserQueue views
+   - Added `templates_panel_width: f32` for Templates view
+
+2. **Queue Views**:
+   - Refactored Queue and UserQueue to use `egui::SidePanel` with `.resizable(true)`
+   - List panel shows on left, details on right with draggable divider
+
+3. **Templates View Refactoring**:
+   - Split rendering into `show_templates_list_panel()` and `show_templates_preview_panel()`
+   - Added resizable SidePanel pattern matching other views
+
+4. **Timeline View** (reverted):
+   - Initially tried adding SidePanel but broke internal columns layout
+   - Timeline already has `ui.columns(2, ...)` for event list + detail
+   - Reverted to CentralPanel to preserve existing behavior
+
+- **Commit**: 679bf06
+- **Status**: Complete
+
+
+### Template File Renaming
+- **Prompt**: "In Templates, I see review.md and status.md. Should these be prefixed like aida-review.md so that they conform to our naming convention?"
+- **Problem**: Template files didn't follow aida-* naming convention
+- **Solution**: Renamed template files and updated symlinks
+
+**Files Renamed:**
+- `templates/commands/review.md` → `aida-review.md`
+- `templates/commands/status.md` → `aida-status.md`
+- `templates/hooks/commit-msg` → `aida-commit-msg`
+
+**Symlinks Updated:**
+- `.claude/commands/aida-review.md`
+- `.claude/commands/aida-status.md`
+- `.git/hooks/commit-msg` → `aida-commit-msg`
+
+- **Commit**: (included in 679bf06)
+- **Status**: Complete
+
+
+### Templates View Keyboard Navigation Fix
+- **Prompt**: "In Templates view the navigation keys automatically switch us back to requirements view"
+- **Problem**: j/k and arrow keys in Templates view were intercepted by general list navigation code, causing requirements list navigation instead of template list navigation
+- **Root Cause**: General navigation code at line ~32172 excluded Timeline, Planning, KanBan, Queue but not Templates
+- **Solution**: Added `in_templates` check to keyboard navigation exclusion conditions
+
+**Changes** (aida-gui/src/app.rs):
+```rust
+#[cfg(not(target_arch = "wasm32"))]
+let in_templates = self.current_view == View::Templates;
+#[cfg(target_arch = "wasm32")]
+let in_templates = false;
+if !in_timeline && !in_planning && !in_kanban && !in_queue && !in_templates && can_navigate
+```
+
+- **Commit**: a5c1431
+- **Status**: Complete
