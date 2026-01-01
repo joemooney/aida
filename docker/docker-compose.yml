@@ -165,6 +165,25 @@ services:
 
 
   # ═══════════════════════════════════════════════════════════════════════════
+  # Cloudflare Tunnel - Secure public access without opening ports
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    networks:
+      - proxy
+    depends_on:
+      - gitlab
+      - aida-server
+      - aida-web
+
+
+  # ═══════════════════════════════════════════════════════════════════════════
   # AIDA - AI Design Assistant
   # ═══════════════════════════════════════════════════════════════════════════
 
