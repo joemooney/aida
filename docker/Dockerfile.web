@@ -1,7 +1,7 @@
 # Multi-stage build for aida-web (WASM client)
 # Build stage uses x86_64, runtime is multi-arch nginx
 
-FROM rust:1.83-bookworm AS builder
+FROM docker.io/library/rust:1.83-bookworm AS builder
 
 WORKDIR /app
 
@@ -25,7 +25,7 @@ WORKDIR /app/aida-gui
 RUN trunk build --release
 
 # Runtime: lightweight nginx to serve static files
-FROM nginx:alpine
+FROM docker.io/library/nginx:alpine
 
 # Copy built WASM files
 COPY --from=builder /app/aida-gui/dist /usr/share/nginx/html
