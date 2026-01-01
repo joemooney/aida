@@ -4230,7 +4230,15 @@ pub struct RequirementsApp {
     #[cfg(not(target_arch = "wasm32"))]
     templates_selected_category: String,                             // Currently selected template category
     #[cfg(not(target_arch = "wasm32"))]
-    templates_selected_key: Option<String>,                          // Currently selected template key for preview
+    templates_selected_idx: Option<usize>,                           // Currently selected template index for preview
+}
+
+impl RequirementsApp {
+    /// Get templates for the currently selected category (helper for keyboard nav)
+    #[cfg(not(target_arch = "wasm32"))]
+    fn get_current_category_templates(&self) -> Vec<aida_core::TemplateInfo> {
+        aida_core::get_templates_by_category(&self.templates_selected_category)
+    }
 }
 
 /// A timeline event representing a change to a requirement
@@ -4907,7 +4915,7 @@ impl RequirementsApp {
 
             // Templates view state
             templates_selected_category: String::from("skills"),
-            templates_selected_key: None,
+            templates_selected_idx: None,
         }
     }
 
@@ -5574,7 +5582,7 @@ impl RequirementsApp {
 
             // Templates view state
             templates_selected_category: String::from("skills"),
-            templates_selected_key: None,
+            templates_selected_idx: None,
         }
     }
 
@@ -14681,7 +14689,7 @@ impl RequirementsApp {
     /// Show the Templates view for browsing embedded skills, commands, hooks, and settings
     #[cfg(not(target_arch = "wasm32"))]
     fn show_templates_view(&mut self, ui: &mut egui::Ui) {
-        use aida_core::{get_embedded_templates, get_template_categories, get_templates_by_category};
+        use aida_core::{get_template_categories, get_templates_by_category};
 
         // Header with controls
         ui.horizontal(|ui| {
@@ -14693,6 +14701,7 @@ impl RequirementsApp {
                 if ui.button("📋 Back to List").clicked() {
                     self.pending_view_change = Some(View::List);
                 }
+                ui.label(egui::RichText::new("↑↓/jk nav").small().color(egui::Color32::GRAY));
             });
         });
 
@@ -14700,6 +14709,10 @@ impl RequirementsApp {
 
         // Get all categories
         let categories = get_template_categories();
+
+        // Get templates for selected category
+        let templates = get_templates_by_category(&self.templates_selected_category);
+        let template_count = templates.len();
 
         // Two-column layout: categories/templates on left, preview on right
         ui.columns(2, |columns| {
@@ -14722,7 +14735,7 @@ impl RequirementsApp {
                             .clicked()
                         {
                             self.templates_selected_category = name.to_string();
-                            self.templates_selected_key = None; // Clear selection when changing category
+                            self.templates_selected_idx = None; // Clear selection when changing category
                         }
                     }
                 });
@@ -14730,9 +14743,6 @@ impl RequirementsApp {
                 ui.separator();
                 ui.label(egui::RichText::new("Templates").strong());
                 ui.add_space(4.0);
-
-                // Get templates for selected category
-                let templates = get_templates_by_category(&self.templates_selected_category);
 
                 // Template list
                 egui::ScrollArea::vertical()
@@ -14742,8 +14752,8 @@ impl RequirementsApp {
                         if templates.is_empty() {
                             ui.label(egui::RichText::new("No templates in this category").italics().color(egui::Color32::GRAY));
                         } else {
-                            for template in &templates {
-                                let is_selected = self.templates_selected_key.as_ref() == Some(&template.key);
+                            for (idx, template) in templates.iter().enumerate() {
+                                let is_selected = self.templates_selected_idx == Some(idx);
 
                                 // Template entry with icon based on source
                                 let source_icon = match template.source {
@@ -14755,7 +14765,7 @@ impl RequirementsApp {
 
                                 let display_name = format!("{} {}", source_icon, template.name);
                                 if ui.selectable_label(is_selected, &display_name).clicked() {
-                                    self.templates_selected_key = Some(template.key.clone());
+                                    self.templates_selected_idx = Some(idx);
                                 }
                             }
                         }
@@ -14773,10 +14783,9 @@ impl RequirementsApp {
 
             // Right column: Template preview
             columns[1].vertical(|ui| {
-                if let Some(ref selected_key) = self.templates_selected_key.clone() {
-                    // Find the selected template
-                    let templates = get_embedded_templates();
-                    if let Some(template) = templates.iter().find(|t| t.key == *selected_key) {
+                if let Some(selected_idx) = self.templates_selected_idx {
+                    // Get selected template
+                    if let Some(template) = templates.get(selected_idx) {
                         // Header
                         ui.horizontal(|ui| {
                             ui.heading(&template.name);
@@ -14822,6 +14831,8 @@ impl RequirementsApp {
                             ui.add_space(50.0);
                             ui.label(egui::RichText::new("Select a template to preview").size(16.0).color(egui::Color32::GRAY));
                             ui.add_space(10.0);
+                            ui.label("Use ↑↓ or j/k to navigate, Enter to select.");
+                            ui.add_space(10.0);
                             ui.label("Templates are embedded in the binary and used by `aida init` to scaffold new projects.");
                             ui.add_space(10.0);
                             ui.label("Categories:");
@@ -14834,6 +14845,9 @@ impl RequirementsApp {
                 }
             });
         });
+
+        // Store template count for keyboard navigation
+        let _ = template_count; // Used by keyboard handler
     }
 
     /// Show the Timeline view
@@ -32723,6 +32737,57 @@ impl eframe::App for RequirementsApp {
                                 self.pending_view_change = Some(View::Detail);
                             }
                         }
+                    }
+                }
+            }
+
+            // Handle keyboard navigation in Templates view
+            #[cfg(not(target_arch = "wasm32"))]
+            if self.current_view == View::Templates && nav_context_active {
+                let templates = self.get_current_category_templates();
+                let template_count = templates.len();
+
+                if template_count > 0 {
+                    let mut templates_nav_delta: i32 = 0;
+                    let mut templates_jump_start = false;
+                    let mut templates_jump_end = false;
+
+                    ctx.input(|i| {
+                        // j/Down = next template, k/Up = previous template
+                        if i.key_pressed(egui::Key::J) || i.key_pressed(egui::Key::ArrowDown) {
+                            templates_nav_delta = 1;
+                        } else if i.key_pressed(egui::Key::K) || i.key_pressed(egui::Key::ArrowUp) {
+                            templates_nav_delta = -1;
+                        }
+                        // Home/End for jump to first/last
+                        if i.key_pressed(egui::Key::Home) {
+                            templates_jump_start = true;
+                        } else if i.key_pressed(egui::Key::End) {
+                            templates_jump_end = true;
+                        }
+                        // Enter to select first template if none selected
+                        if i.key_pressed(egui::Key::Enter) && self.templates_selected_idx.is_none() {
+                            self.templates_selected_idx = Some(0);
+                        }
+                    });
+
+                    // Apply navigation
+                    let new_idx = if templates_jump_start {
+                        Some(0)
+                    } else if templates_jump_end {
+                        Some(template_count - 1)
+                    } else if templates_nav_delta != 0 {
+                        let current = self.templates_selected_idx.unwrap_or(0) as i32;
+                        let new_pos = (current + templates_nav_delta)
+                            .max(0)
+                            .min(template_count as i32 - 1) as usize;
+                        Some(new_pos)
+                    } else {
+                        None
+                    };
+
+                    if let Some(idx) = new_idx {
+                        self.templates_selected_idx = Some(idx);
                     }
                 }
             }
