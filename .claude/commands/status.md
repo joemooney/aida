@@ -1,1 +1,0 @@
-../../aida-core/templates/commands/status.md
