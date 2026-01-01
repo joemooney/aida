@@ -17,7 +17,7 @@ use tower_http::cors::{Any, CorsLayer};
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
-use aida_core::Storage;
+use aida_core::db::create_backend;
 
 mod convert;
 mod rest;
@@ -187,19 +187,26 @@ async fn main() -> Result<()> {
         .finish();
     tracing::subscriber::set_global_default(subscriber)?;
 
-    // Determine database path
+    // Determine database path/URL
+    // Priority: --database arg > AIDA_DATABASE_URL env var > default file path
     let db_path = if let Some(path) = args.database {
-        std::path::PathBuf::from(path)
+        path
+    } else if let Ok(url) = std::env::var("AIDA_DATABASE_URL") {
+        url
     } else {
         // Use default path from aida-core
         aida_core::determine_requirements_path(None)?
+            .to_string_lossy()
+            .to_string()
     };
 
-    info!("Using database: {}", db_path.display());
+    info!("Using database: {}", db_path);
 
-    // Initialize storage and load data
-    let storage = Storage::new(&db_path);
-    let state = Arc::new(ServerState::new(storage)?);
+    // Initialize backend (auto-detects postgres:// URLs vs file paths)
+    let backend = create_backend(std::path::Path::new(&db_path), None)?;
+    info!("Backend type: {}", backend.backend_type());
+
+    let state = Arc::new(ServerState::new(backend)?);
 
     // Build CORS layer - allows gRPC-Web requests from browser clients
     let cors = CorsLayer::new()

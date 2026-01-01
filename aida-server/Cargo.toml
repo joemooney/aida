@@ -9,6 +9,10 @@ description = "gRPC server for AIDA requirements management"
 name = "aida-server"
 path = "src/main.rs"
 
+[features]
+default = []
+postgres = ["aida-core/postgres"]
+
 [dependencies]
 aida-core = { path = "../aida-core" }
 

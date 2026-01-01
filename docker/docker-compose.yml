@@ -164,6 +164,93 @@ services:
       - traefik.http.services.pgadmin.loadbalancer.server.port=80
 
 
+  # ═══════════════════════════════════════════════════════════════════════════
+  # AIDA - AI Design Assistant
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  aida-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.server
+    image: aida-server:latest
+    container_name: aida-server
+    restart: unless-stopped
+
+    environment:
+      RUST_LOG: info
+
+    secrets:
+      - pg_user
+      - pg_password
+      - aida_database_url
+
+    volumes:
+      - aida_data:/data
+
+    networks:
+      - proxy
+      - internal
+
+    depends_on:
+      - postgres
+
+    labels:
+      - traefik.enable=true
+
+      # gRPC-Web API endpoint (for WASM client)
+      - traefik.http.routers.aida-api.rule=Host(`api.aida.joemooney.com`)
+      - traefik.http.routers.aida-api.entrypoints=websecure
+      - traefik.http.routers.aida-api.tls=true
+      - traefik.http.routers.aida-api.tls.certresolver=cloudflare
+      - traefik.http.services.aida-api.loadbalancer.server.port=8080
+
+      # CORS headers for gRPC-Web
+      - traefik.http.middlewares.aida-cors.headers.accesscontrolallowmethods=GET,POST,OPTIONS
+      - traefik.http.middlewares.aida-cors.headers.accesscontrolallowheaders=Content-Type,x-grpc-web,x-user-agent
+      - traefik.http.middlewares.aida-cors.headers.accesscontrolalloworiginlist=https://aida.joemooney.com
+      - traefik.http.middlewares.aida-cors.headers.accesscontrolmaxage=86400
+      - traefik.http.routers.aida-api.middlewares=aida-cors
+
+      # 🔒 IP allowlist (same as pgadmin for now)
+      #- traefik.http.middlewares.aida-ip.ipallowlist.sourcerange=144.208.111.126/32,192.168.0.0/16
+      #- traefik.http.routers.aida-api.middlewares=aida-ip,aida-cors
+
+
+  aida-web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web
+    image: aida-web:latest
+    container_name: aida-web
+    restart: unless-stopped
+
+    networks:
+      - proxy
+
+    depends_on:
+      - aida-server
+
+    labels:
+      - traefik.enable=true
+
+      # WASM client
+      - traefik.http.routers.aida-web.rule=Host(`aida.joemooney.com`)
+      - traefik.http.routers.aida-web.entrypoints=websecure
+      - traefik.http.routers.aida-web.tls=true
+      - traefik.http.routers.aida-web.tls.certresolver=cloudflare
+      - traefik.http.services.aida-web.loadbalancer.server.port=80
+
+      # HTTP -> HTTPS redirect
+      - traefik.http.routers.aida-web-http.rule=Host(`aida.joemooney.com`)
+      - traefik.http.routers.aida-web-http.entrypoints=web
+      - traefik.http.routers.aida-web-http.middlewares=aida-https-redirect
+      - traefik.http.middlewares.aida-https-redirect.redirectscheme.scheme=https
+
+      # 🔒 IP allowlist (same as pgadmin for now)
+      #- traefik.http.middlewares.aida-web-ip.ipallowlist.sourcerange=144.208.111.126/32,192.168.0.0/16
+      #- traefik.http.routers.aida-web.middlewares=aida-web-ip
+
+
 networks:
   proxy:
     name: proxy
@@ -179,6 +266,7 @@ volumes:
   gitlab_data:
   pg_data:
   pgadmin_data:
+  aida_data:
 
 
 secrets:
@@ -190,4 +278,6 @@ secrets:
     file: ./secrets/pg_password.txt
   pgadmin_password:
     file: ./secrets/pgadmin_password.txt
+  aida_database_url:
+    file: ./secrets/aida_database_url.txt
 

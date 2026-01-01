@@ -1,0 +1,54 @@
+# Multi-stage build for aida-server
+# Supports both x86_64 and ARM64 (Raspberry Pi 5)
+
+FROM rust:1.83-bookworm AS builder
+
+WORKDIR /app
+
+# Install protobuf compiler
+RUN apt-get update && apt-get install -y protobuf-compiler && rm -rf /var/lib/apt/lists/*
+
+# Copy workspace files
+COPY Cargo.toml Cargo.lock ./
+COPY aida-core ./aida-core
+COPY aida-cli ./aida-cli
+COPY aida-server ./aida-server
+COPY aida-gui ./aida-gui
+COPY proto ./proto
+
+# Build release binary with postgres feature
+RUN cargo build --release --package aida-server --features "postgres"
+
+# Runtime image
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy binary from builder
+COPY --from=builder /app/target/release/aida-server /app/aida-server
+
+# Create data directory
+RUN mkdir -p /data
+
+# Entrypoint script to read secrets
+RUN cat > /app/entrypoint.sh << 'EOF'
+#!/bin/sh
+# Read database URL from Docker secret if available
+if [ -f /run/secrets/aida_database_url ]; then
+    export AIDA_DATABASE_URL=$(cat /run/secrets/aida_database_url)
+fi
+exec /app/aida-server "$@"
+EOF
+RUN chmod +x /app/entrypoint.sh
+
+ENV RUST_LOG=info
+
+EXPOSE 50051 8080
+
+ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["--host", "0.0.0.0", "--port", "50051", "--rest-port", "8080"]

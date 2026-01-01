@@ -7,7 +7,8 @@ use tokio::sync::RwLock;
 use tonic::{Request, Response, Status};
 use uuid::Uuid;
 
-use aida_core::{Requirement, RequirementsStore, Storage};
+use aida_core::db::DatabaseBackend;
+use aida_core::{Requirement, RequirementsStore};
 
 use crate::convert::*;
 use crate::proto;
@@ -15,7 +16,7 @@ use crate::proto::requirements_service_server::RequirementsService;
 
 /// Server state shared across all connections
 pub struct ServerState {
-    pub storage: Storage,
+    pub backend: Box<dyn DatabaseBackend>,
     pub store: RwLock<RequirementsStore>,
     pub start_time: Instant,
     pub version: String,
@@ -23,10 +24,10 @@ pub struct ServerState {
 }
 
 impl ServerState {
-    pub fn new(storage: Storage) -> anyhow::Result<Self> {
-        let store = storage.load()?;
+    pub fn new(backend: Box<dyn DatabaseBackend>) -> anyhow::Result<Self> {
+        let store = backend.load()?;
         Ok(Self {
-            storage,
+            backend,
             store: RwLock::new(store),
             start_time: Instant::now(),
             version: env!("CARGO_PKG_VERSION").to_string(),
@@ -37,7 +38,7 @@ impl ServerState {
     /// Save the current store to disk
     async fn save(&self) -> Result<(), Status> {
         let store = self.store.read().await;
-        self.storage
+        self.backend
             .save(&store)
             .map_err(|e| Status::internal(format!("Failed to save: {}", e)))
     }
@@ -717,13 +718,14 @@ impl RequirementsService for AidaService {
         let shutdown_requested = *self.state.shutdown_requested.read().await;
         let status = if shutdown_requested { "shutting_down" } else { "running" };
 
+        let backend_type = self.state.backend.backend_type();
         Ok(Response::new(proto::GetServerStatusResponse {
             version: self.state.version.clone(),
             status: status.to_string(),
             uptime_seconds: self.state.start_time.elapsed().as_secs() as i64,
             active_connections: 0, // TODO: Track this
-            storage_backend: "yaml".to_string(),
-            storage_path: self.state.storage.path().to_string_lossy().to_string(),
+            storage_backend: backend_type.to_string().to_lowercase(),
+            storage_path: format!("{}", backend_type),
         }))
     }
 

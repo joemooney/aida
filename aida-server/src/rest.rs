@@ -167,20 +167,16 @@ async fn ping(State(state): State<Arc<ServerState>>) -> impl IntoResponse {
 async fn get_status(
     State(state): State<Arc<ServerState>>,
 ) -> Result<Json<proto::GetServerStatusResponse>, (StatusCode, Json<ApiError>)> {
-    let store = state.store.read().await;
-    let backend = if state.storage.path().extension().map(|e| e == "db").unwrap_or(false) {
-        "sqlite"
-    } else {
-        "yaml"
-    };
+    let _store = state.store.read().await;
+    let backend_type = state.backend.backend_type();
 
     Ok(Json(proto::GetServerStatusResponse {
         version: state.version.clone(),
         status: "running".to_string(),
         uptime_seconds: state.start_time.elapsed().as_secs() as i64,
         active_connections: 0, // Not tracked in REST
-        storage_backend: backend.to_string(),
-        storage_path: state.storage.path().display().to_string(),
+        storage_backend: backend_type.to_string().to_lowercase(),
+        storage_path: format!("{}", backend_type),
     }))
 }
 
@@ -333,7 +329,7 @@ async fn create_requirement(
 
     // Save
     drop(store);
-    if let Err(e) = state.storage.save(&*state.store.read().await) {
+    if let Err(e) = state.backend.save(&*state.store.read().await) {
         return Err(ApiError::new(
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to save: {}", e),
@@ -413,7 +409,7 @@ async fn update_requirement(
 
     // Save
     drop(store);
-    if let Err(e) = state.storage.save(&*state.store.read().await) {
+    if let Err(e) = state.backend.save(&*state.store.read().await) {
         return Err(ApiError::new(
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to save: {}", e),
@@ -438,7 +434,7 @@ async fn delete_requirement(
 
     // Save
     drop(store);
-    if let Err(e) = state.storage.save(&*state.store.read().await) {
+    if let Err(e) = state.backend.save(&*state.store.read().await) {
         return Err(ApiError::new(
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to save: {}", e),
@@ -471,7 +467,7 @@ async fn add_comment(
 
     // Save
     drop(store);
-    if let Err(e) = state.storage.save(&*state.store.read().await) {
+    if let Err(e) = state.backend.save(&*state.store.read().await) {
         return Err(ApiError::new(
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to save: {}", e),
