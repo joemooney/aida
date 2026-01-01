@@ -172,6 +172,12 @@ pub struct ScaffoldConfig {
     pub include_commit_msg_hook: bool,
     /// Include pre-commit hook for trace comment validation
     pub include_pre_commit_hook: bool,
+    /// Generate Claude Code hooks for AIDA integration
+    pub generate_claude_code_hooks: bool,
+    /// Include commit validation hook (PreToolUse)
+    pub include_validate_commit_hook: bool,
+    /// Include commit tracking hook (PostToolUse)
+    pub include_track_commits_hook: bool,
     /// Custom project type for specialized scaffolding
     pub project_type: ProjectType,
     /// Tech stack hints for context generation
@@ -196,6 +202,9 @@ impl Default for ScaffoldConfig {
             generate_git_hooks: true,
             include_commit_msg_hook: true,
             include_pre_commit_hook: false, // Optional, disabled by default
+            generate_claude_code_hooks: true,
+            include_validate_commit_hook: true,
+            include_track_commits_hook: true,
             project_type: ProjectType::Generic,
             tech_stack: Vec::new(),
         }
@@ -655,6 +664,69 @@ impl Scaffolder {
             }
         }
 
+        // Claude Code hooks (in .claude/hooks/)
+        if self.config.generate_claude_code_hooks {
+            new_dirs.insert(PathBuf::from(".claude/hooks"));
+
+            // Validate commit hook (PreToolUse)
+            if self.config.include_validate_commit_hook {
+                let path = PathBuf::from(".claude/hooks/aida-validate-commit.sh");
+                let artifact = self.create_artifact(
+                    path.clone(),
+                    self.generate_validate_commit_hook(),
+                    "Claude Code hook for validating commit messages reference requirements".to_string(),
+                    true, // shell script
+                );
+
+                match &artifact.file_status {
+                    FileStatus::New => new_files.push(path),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
+                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+                }
+
+                artifacts.push(artifact);
+            }
+
+            // Track commits hook (PostToolUse)
+            if self.config.include_track_commits_hook {
+                let path = PathBuf::from(".claude/hooks/aida-track-commits.sh");
+                let artifact = self.create_artifact(
+                    path.clone(),
+                    self.generate_track_commits_hook(),
+                    "Claude Code hook for updating requirement status after commits".to_string(),
+                    true, // shell script
+                );
+
+                match &artifact.file_status {
+                    FileStatus::New => new_files.push(path),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
+                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+                }
+
+                artifacts.push(artifact);
+            }
+
+            // Generate settings.json with hook configuration
+            let path = PathBuf::from(".claude/settings.json");
+            let artifact = self.create_artifact(
+                path.clone(),
+                self.generate_claude_settings_json(),
+                "Claude Code settings with AIDA hook configuration".to_string(),
+                false, // JSON file
+            );
+
+            match &artifact.file_status {
+                FileStatus::New => new_files.push(path),
+                FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
+                FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+            }
+
+            artifacts.push(artifact);
+        }
+
         // Filter new_dirs to only include those that don't exist
         let new_dirs: Vec<PathBuf> = new_dirs
             .into_iter()
@@ -735,9 +807,9 @@ impl Scaffolder {
                 message: e.to_string(),
             })?;
 
-            // Make git hooks executable on Unix
+            // Make git hooks and Claude Code hooks executable on Unix
             #[cfg(unix)]
-            if artifact.path.starts_with(".git/hooks/") {
+            if artifact.path.starts_with(".git/hooks/") || artifact.path.starts_with(".claude/hooks/") {
                 use std::os::unix::fs::PermissionsExt;
                 let mut perms = fs::metadata(&full_path)
                     .map_err(|e| ScaffoldError::IoError {
@@ -2641,6 +2713,221 @@ fi
 exit 0
 "#
         .to_string()
+    }
+
+    /// Generate Claude Code validate-commit hook content
+    fn generate_validate_commit_hook(&self) -> String {
+        r#"#!/bin/bash
+# AIDA Claude Code Hook: Validate commits reference requirements
+# PreToolUse hook for Bash commands
+#
+# This hook intercepts git commit commands and validates that:
+# 1. Commit message includes a requirement ID (REQ-ID) for feat/fix commits
+# 2. The referenced requirement exists in the database
+#
+# Exit codes:
+#   0 - Allow the command
+#   2 - Block the command (show stderr to Claude)
+
+set -euo pipefail
+
+# Read JSON input from stdin
+input=$(cat)
+
+# Extract the command being executed
+command=$(echo "$input" | jq -r '.tool_input.command // ""')
+
+# Only validate git commit commands
+if ! echo "$command" | grep -qE '^git commit'; then
+    exit 0  # Not a commit, allow
+fi
+
+# Skip if it's an amend or merge commit
+if echo "$command" | grep -qE '(--amend|--no-edit|Merge)'; then
+    exit 0
+fi
+
+# Extract commit message from -m flag
+# Handle both single and double quotes
+if echo "$command" | grep -qE '\-m "'; then
+    msg=$(echo "$command" | sed -n 's/.*-m "\([^"]*\)".*/\1/p')
+elif echo "$command" | grep -qE "\-m '"; then
+    msg=$(echo "$command" | sed -n "s/.*-m '\\([^']*\\)'.*/\\1/p")
+else
+    # No inline message, might be using editor - allow
+    exit 0
+fi
+
+# Check commit type - only require REQ-ID for feat/fix
+commit_type=$(echo "$msg" | grep -oE '^(\[AI:[^\]]+\] )?(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)' | tail -1 || true)
+
+case "$commit_type" in
+    *feat*|*fix*)
+        # Require requirement ID for features and fixes
+        if ! echo "$msg" | grep -qE '\([A-Z]+-[0-9]+\)'; then
+            cat >&2 <<EOF
+Commit blocked: Missing requirement ID
+
+Your feat/fix commit must reference a requirement:
+  Format: type(scope): description (REQ-ID)
+  Example: feat(auth): add login validation (FR-0042)
+
+Run 'aida list --status approved' to find requirement IDs.
+To skip validation, use 'chore' or 'docs' type instead.
+EOF
+            exit 2  # Block the commit
+        fi
+        ;;
+    *)
+        # Other types (docs, chore, etc.) don't require REQ-ID
+        exit 0
+        ;;
+esac
+
+# Validate that the requirement exists
+req_id=$(echo "$msg" | grep -oE '\([A-Z]+-[0-9]+\)' | head -1 | tr -d '()')
+
+if [ -n "$req_id" ]; then
+    if command -v aida &> /dev/null; then
+        if ! aida show "$req_id" &> /dev/null 2>&1; then
+            echo "Warning: Requirement $req_id not found in database" >&2
+            # Non-blocking warning - exit 0 to allow, exit 2 to block
+            exit 0
+        fi
+    fi
+fi
+
+exit 0  # Allow commit
+"#
+        .to_string()
+    }
+
+    /// Generate Claude Code track-commits hook content
+    fn generate_track_commits_hook(&self) -> String {
+        r#"#!/bin/bash
+# AIDA Claude Code Hook: Track commits and update requirement status
+# PostToolUse hook for Bash commands
+#
+# This hook runs after successful git commit commands and:
+# 1. Extracts requirement IDs from the commit message
+# 2. Updates those requirements to "in-progress" status
+# 3. Adds a comment noting the commit
+#
+# Exit codes:
+#   0 - Success (always, this is informational only)
+
+set -euo pipefail
+
+# Read JSON input from stdin
+input=$(cat)
+
+# Extract command and response
+command=$(echo "$input" | jq -r '.tool_input.command // ""')
+tool_response=$(echo "$input" | jq -r '.tool_response // ""')
+
+# Only process git commit commands
+if ! echo "$command" | grep -qE '^git commit'; then
+    exit 0
+fi
+
+# Check if commit was successful (look for success indicators in response)
+if echo "$tool_response" | grep -qiE '(error|failed|abort)'; then
+    exit 0  # Commit failed, don't update
+fi
+
+# Extract requirement IDs from commit message
+req_ids=$(echo "$command" | grep -oE '\([A-Z]+-[0-9]+\)' | tr -d '()' | sort -u || true)
+
+if [ -z "$req_ids" ]; then
+    exit 0  # No requirements referenced
+fi
+
+# Check if aida CLI is available
+if ! command -v aida &> /dev/null; then
+    exit 0
+fi
+
+# Get the commit hash (if available)
+commit_hash=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+
+# Update each requirement
+for req_id in $req_ids; do
+    # Check current status
+    current_status=$(aida show "$req_id" 2>/dev/null | grep -oE 'Status:\s*\w+' | awk '{print $2}' || true)
+
+    case "$current_status" in
+        Draft|Approved|Planned)
+            # Transition to InProgress
+            aida edit "$req_id" --status in-progress 2>/dev/null || true
+            echo "Updated $req_id status to in-progress"
+            ;;
+        InProgress)
+            # Already in progress, just add comment
+            ;;
+        Completed)
+            # Already completed, skip
+            continue
+            ;;
+    esac
+
+    # Add commit reference as comment
+    aida comment add "$req_id" "Commit $commit_hash references this requirement" 2>/dev/null || true
+done
+
+exit 0
+"#
+        .to_string()
+    }
+
+    /// Generate Claude Code settings.json content
+    fn generate_claude_settings_json(&self) -> String {
+        let mut hooks = Vec::new();
+
+        if self.config.include_validate_commit_hook {
+            hooks.push(r#"    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/aida-validate-commit.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]"#);
+        }
+
+        if self.config.include_track_commits_hook {
+            hooks.push(r#"    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/aida-track-commits.sh",
+            "timeout": 15
+          }
+        ]
+      }
+    ]"#);
+        }
+
+        if hooks.is_empty() {
+            return r#"{
+  "hooks": {}
+}"#
+            .to_string();
+        }
+
+        format!(
+            r#"{{
+  "hooks": {{
+{}
+  }}
+}}"#,
+            hooks.join(",\n")
+        )
     }
 }
 

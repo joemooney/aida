@@ -366,7 +366,8 @@ impl Storage {
         let timeout = Duration::from_secs(5);
 
         loop {
-            match lock_file.try_lock_shared() {
+            // Use fs2's try_lock_shared explicitly to avoid conflict with std::fs::File method
+            match fs2::FileExt::try_lock_shared(&lock_file) {
                 Ok(()) => return Ok(Some(lock_file)),
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                     if start.elapsed() > timeout {
