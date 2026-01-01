@@ -32,10 +32,33 @@ fn main() {
     // Hooks
     embed_directory(&mut code, "templates/hooks", "hooks");
 
+    // Settings (Claude Code configuration)
+    embed_file(&mut code, "templates/settings.json", "settings.json");
+
     code.push_str("    m\n");
     code.push_str("});\n");
 
+    // Generate a list of template categories for introspection
+    code.push_str("\n/// Categories of embedded templates\n");
+    code.push_str("pub static TEMPLATE_CATEGORIES: &[(&str, &str)] = &[\n");
+    code.push_str("    (\"skills\", \"Claude Code Skills - Requirements-driven development workflows\"),\n");
+    code.push_str("    (\"commands\", \"Slash Commands - Quick actions for common tasks\"),\n");
+    code.push_str("    (\"hooks\", \"Hooks - Git and Claude Code integration hooks\"),\n");
+    code.push_str("    (\"settings.json\", \"Settings - Claude Code configuration\"),\n");
+    code.push_str("];\n");
+
     fs::write(&dest_path, code).unwrap();
+}
+
+fn embed_file(code: &mut String, file_path: &str, key: &str) {
+    let path = Path::new(file_path);
+    if path.exists() {
+        let rel_path = file_path.replace("\\", "/");
+        code.push_str(&format!(
+            "    m.insert(\"{}\", include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/{}\")).trim_end());\n",
+            key, rel_path
+        ));
+    }
 }
 
 fn embed_directory(code: &mut String, dir: &str, prefix: &str) {

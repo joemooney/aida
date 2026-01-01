@@ -18,6 +18,52 @@ use once_cell::sync::Lazy;
 // Include the auto-generated embedded templates
 include!(concat!(env!("OUT_DIR"), "/embedded_templates.rs"));
 
+/// Information about an embedded template
+#[derive(Debug, Clone)]
+pub struct TemplateInfo {
+    /// Key/path of the template (e.g., "skills/aida-req.md")
+    pub key: String,
+    /// Category (skills, commands, hooks, settings.json)
+    pub category: String,
+    /// Display name (derived from filename)
+    pub name: String,
+    /// Content of the template
+    pub content: String,
+    /// Source of the template
+    pub source: TemplateSource,
+}
+
+/// Get all embedded templates with their info
+pub fn get_embedded_templates() -> Vec<TemplateInfo> {
+    EMBEDDED_TEMPLATES
+        .iter()
+        .map(|(key, content)| {
+            let category = key.split('/').next().unwrap_or("other").to_string();
+            let name = key.split('/').last().unwrap_or(key).to_string();
+            TemplateInfo {
+                key: key.to_string(),
+                category,
+                name,
+                content: content.to_string(),
+                source: TemplateSource::Embedded,
+            }
+        })
+        .collect()
+}
+
+/// Get templates by category
+pub fn get_templates_by_category(category: &str) -> Vec<TemplateInfo> {
+    get_embedded_templates()
+        .into_iter()
+        .filter(|t| t.category == category || t.key == category)
+        .collect()
+}
+
+/// Get template categories with descriptions
+pub fn get_template_categories() -> &'static [(&'static str, &'static str)] {
+    TEMPLATE_CATEGORIES
+}
+
 /// Template loader that checks external files first, then falls back to embedded
 pub struct TemplateLoader {
     /// Project-local template directory (highest priority)

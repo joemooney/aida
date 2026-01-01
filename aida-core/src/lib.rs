@@ -127,6 +127,11 @@ pub use report::{
     ReportGenerator, ScaffoldStatus, TraceabilityStats, TypePromptCustomization,
     check_scaffold_status,
 };
+#[cfg(feature = "native")]
+pub use templates::{
+    TemplateInfo, TemplateLoader, TemplateSource,
+    get_embedded_templates, get_templates_by_category, get_template_categories,
+};
 #[cfg(feature = "gitlab")]
 pub use integrations::gitlab::{
     ClientError as GitLabClientError, ConfigError as GitLabConfigError,

@@ -3292,6 +3292,7 @@ enum View {
     Queue,     // Personal work queue view
     UserQueue(String), // View another user's items (by user handle)
     GitLabIssues, // GitLab issues view (STORY-0322)
+    Templates, // Templates/Meta view for skills, commands, hooks, prompts
 }
 
 /// Layout mode defines the panel arrangement (cycles through 5 predefined layouts)
@@ -4224,6 +4225,12 @@ pub struct RequirementsApp {
     wasm_saving: bool,                                               // True while saving to server
     #[cfg(target_arch = "wasm32")]
     wasm_egui_ctx: egui::Context,                                    // egui context for async repaint requests
+
+    // Templates view state
+    #[cfg(not(target_arch = "wasm32"))]
+    templates_selected_category: String,                             // Currently selected template category
+    #[cfg(not(target_arch = "wasm32"))]
+    templates_selected_key: Option<String>,                          // Currently selected template key for preview
 }
 
 /// A timeline event representing a change to a requirement
@@ -4897,6 +4904,10 @@ impl RequirementsApp {
             gitlab_poll_status: None,
             #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
             gitlab_diverged_count: 0,
+
+            // Templates view state
+            templates_selected_category: String::from("skills"),
+            templates_selected_key: None,
         }
     }
 
@@ -5560,6 +5571,10 @@ impl RequirementsApp {
             gitlab_poll_status: None,
             #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
             gitlab_diverged_count: 0,
+
+            // Templates view state
+            templates_selected_category: String::from("skills"),
+            templates_selected_key: None,
         }
     }
 
@@ -7936,6 +7951,11 @@ impl RequirementsApp {
                         self.show_user_queue_picker = true;
                         self.user_queue_picker_search.clear();
                         self.user_queue_picker_selected = 0;
+                        ui.close_menu();
+                    }
+                    ui.separator();
+                    if ui.button("📄 Templates").clicked() {
+                        self.pending_view_change = Some(View::Templates);
                         ui.close_menu();
                     }
                 });
@@ -14656,6 +14676,164 @@ impl RequirementsApp {
                 true
             })
             .collect()
+    }
+
+    /// Show the Templates view for browsing embedded skills, commands, hooks, and settings
+    #[cfg(not(target_arch = "wasm32"))]
+    fn show_templates_view(&mut self, ui: &mut egui::Ui) {
+        use aida_core::{get_embedded_templates, get_template_categories, get_templates_by_category};
+
+        // Header with controls
+        ui.horizontal(|ui| {
+            ui.heading("📄 Templates");
+            ui.separator();
+            ui.label("Embedded skills, commands, hooks, and settings");
+
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button("📋 Back to List").clicked() {
+                    self.pending_view_change = Some(View::List);
+                }
+            });
+        });
+
+        ui.separator();
+
+        // Get all categories
+        let categories = get_template_categories();
+
+        // Two-column layout: categories/templates on left, preview on right
+        ui.columns(2, |columns| {
+            // Left column: Category and template list
+            columns[0].vertical(|ui| {
+                ui.label(egui::RichText::new("Categories").strong());
+                ui.add_space(4.0);
+
+                // Category buttons
+                ui.horizontal_wrapped(|ui| {
+                    for (name, description) in categories.iter() {
+                        let is_selected = self.templates_selected_category == *name;
+                        let text = if is_selected {
+                            egui::RichText::new(*name).strong()
+                        } else {
+                            egui::RichText::new(*name)
+                        };
+                        if ui.selectable_label(is_selected, text)
+                            .on_hover_text(*description)
+                            .clicked()
+                        {
+                            self.templates_selected_category = name.to_string();
+                            self.templates_selected_key = None; // Clear selection when changing category
+                        }
+                    }
+                });
+
+                ui.separator();
+                ui.label(egui::RichText::new("Templates").strong());
+                ui.add_space(4.0);
+
+                // Get templates for selected category
+                let templates = get_templates_by_category(&self.templates_selected_category);
+
+                // Template list
+                egui::ScrollArea::vertical()
+                    .id_salt("templates_list_scroll")
+                    .max_height(ui.available_height() - 50.0)
+                    .show(ui, |ui| {
+                        if templates.is_empty() {
+                            ui.label(egui::RichText::new("No templates in this category").italics().color(egui::Color32::GRAY));
+                        } else {
+                            for template in &templates {
+                                let is_selected = self.templates_selected_key.as_ref() == Some(&template.key);
+
+                                // Template entry with icon based on source
+                                let source_icon = match template.source {
+                                    aida_core::TemplateSource::ProjectLocal(_) => "📁",
+                                    aida_core::TemplateSource::UserConfig(_) => "👤",
+                                    aida_core::TemplateSource::Embedded => "📦",
+                                    aida_core::TemplateSource::NotFound => "❓",
+                                };
+
+                                let display_name = format!("{} {}", source_icon, template.name);
+                                if ui.selectable_label(is_selected, &display_name).clicked() {
+                                    self.templates_selected_key = Some(template.key.clone());
+                                }
+                            }
+                        }
+                    });
+
+                // Legend
+                ui.separator();
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("Legend:").small());
+                    ui.label(egui::RichText::new("📦 Embedded").small().color(egui::Color32::GRAY));
+                    ui.label(egui::RichText::new("📁 Project").small().color(egui::Color32::GRAY));
+                    ui.label(egui::RichText::new("👤 User").small().color(egui::Color32::GRAY));
+                });
+            });
+
+            // Right column: Template preview
+            columns[1].vertical(|ui| {
+                if let Some(ref selected_key) = self.templates_selected_key.clone() {
+                    // Find the selected template
+                    let templates = get_embedded_templates();
+                    if let Some(template) = templates.iter().find(|t| t.key == *selected_key) {
+                        // Header
+                        ui.horizontal(|ui| {
+                            ui.heading(&template.name);
+                            ui.separator();
+                            ui.label(egui::RichText::new(&template.key).monospace().color(egui::Color32::GRAY));
+                        });
+
+                        // Source info
+                        let source_text = match &template.source {
+                            aida_core::TemplateSource::ProjectLocal(path) => format!("📁 Project: {}", path.display()),
+                            aida_core::TemplateSource::UserConfig(path) => format!("👤 User: {}", path.display()),
+                            aida_core::TemplateSource::Embedded => "📦 Embedded in binary".to_string(),
+                            aida_core::TemplateSource::NotFound => "❓ Not found".to_string(),
+                        };
+                        ui.label(egui::RichText::new(&source_text).small().color(egui::Color32::GRAY));
+
+                        ui.separator();
+
+                        // Content preview in a scrollable monospace area
+                        ui.label(egui::RichText::new("Content:").strong());
+                        egui::ScrollArea::both()
+                            .id_salt("template_content_scroll")
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| {
+                                // Use a TextEdit in read-only mode for selection support
+                                let mut content = template.content.clone();
+                                ui.add(
+                                    egui::TextEdit::multiline(&mut content)
+                                        .font(egui::TextStyle::Monospace)
+                                        .desired_width(f32::INFINITY)
+                                        .interactive(false)
+                                );
+                            });
+                    } else {
+                        ui.centered_and_justified(|ui| {
+                            ui.label(egui::RichText::new("Template not found").color(egui::Color32::RED));
+                        });
+                    }
+                } else {
+                    // No template selected
+                    ui.centered_and_justified(|ui| {
+                        ui.vertical_centered(|ui| {
+                            ui.add_space(50.0);
+                            ui.label(egui::RichText::new("Select a template to preview").size(16.0).color(egui::Color32::GRAY));
+                            ui.add_space(10.0);
+                            ui.label("Templates are embedded in the binary and used by `aida init` to scaffold new projects.");
+                            ui.add_space(10.0);
+                            ui.label("Categories:");
+                            ui.add_space(5.0);
+                            for (name, desc) in categories.iter() {
+                                ui.label(format!("• {} - {}", name, desc));
+                            }
+                        });
+                    });
+                }
+            });
+        });
     }
 
     /// Show the Timeline view
@@ -22479,6 +22657,7 @@ impl RequirementsApp {
             ('o', "Org Chart", View::OrgChart),
             ('s', "Sprint Planning", View::Planning),
             ('K', "Kanban", View::KanBan),
+            ('m', "Templates", View::Templates),
         ];
         // Add GitLab Issues view option on native with gitlab config
         #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
@@ -22528,6 +22707,8 @@ impl RequirementsApp {
                 selected_view = Some(View::KanBan);
             } else if i.key_pressed(egui::Key::G) && !i.modifiers.shift {
                 selected_view = Some(View::GitLabIssues);
+            } else if i.key_pressed(egui::Key::M) && !i.modifiers.shift {
+                selected_view = Some(View::Templates);
             }
         });
 
@@ -22602,6 +22783,7 @@ impl RequirementsApp {
                                 (View::Planning, View::Planning) => true,
                                 (View::Queue, View::Queue) => true,
                                 (View::GitLabIssues, View::GitLabIssues) => true,
+                                (View::Templates, View::Templates) => true,
                                 _ => false,
                             };
 
@@ -31549,6 +31731,7 @@ impl eframe::App for RequirementsApp {
                 View::Queue => KeyContext::RequirementsList,    // Use same context for queue
                 View::UserQueue(_) => KeyContext::RequirementsList, // Use same context for user queue view
                 View::GitLabIssues => KeyContext::RequirementsList, // Use same context for GitLab issues view
+                View::Templates => KeyContext::RequirementsList, // Use same context for templates view
             }
         };
 
@@ -32905,6 +33088,11 @@ impl eframe::App for RequirementsApp {
                 ui.centered_and_justified(|ui| {
                     ui.label("GitLab integration not available in this build");
                 });
+            });
+        } else if self.current_view == View::Templates {
+            // Templates view showing embedded skills, commands, hooks, settings
+            egui::CentralPanel::default().show(ctx, |ui| {
+                self.show_templates_view(ui);
             });
         } else {
             // In List/Detail view, use layout mode
