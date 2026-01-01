@@ -3797,6 +3797,9 @@ pub struct RequirementsApp {
     left_panel_collapsed: bool,  // Whether left panel is manually collapsed (in form view)
     layout_mode: LayoutMode,     // Current layout mode (cycles through 5 layouts)
     list_panel_width: f32,       // Width of list panel in side-by-side layout (resizable)
+    timeline_panel_width: f32,   // Width of timeline panel (resizable)
+    queue_panel_width: f32,      // Width of queue panel (resizable)
+    templates_panel_width: f32,  // Width of templates panel (resizable)
     layout_button_press_start: Option<Instant>,  // When layout button was pressed
     show_layout_menu: bool,      // Whether to show the layout selection menu
     layout_button_rect: Option<egui::Rect>,  // Position of layout button for popup menu
@@ -4627,6 +4630,9 @@ impl RequirementsApp {
             left_panel_collapsed: false,
             layout_mode: LayoutMode::ListDetailsSide,
             list_panel_width: 400.0,  // Default width for resizable list panel
+            timeline_panel_width: 500.0,  // Default width for timeline panel
+            queue_panel_width: 400.0,  // Default width for queue panel
+            templates_panel_width: 350.0,  // Default width for templates panel
             layout_button_press_start: None,
             show_layout_menu: false,
             layout_button_rect: None,
@@ -5239,6 +5245,9 @@ impl RequirementsApp {
             left_panel_collapsed: false,
             layout_mode: LayoutMode::ListDetailsSide,
             list_panel_width: 400.0,  // Default width for resizable list panel
+            timeline_panel_width: 500.0,  // Default width for timeline panel
+            queue_panel_width: 400.0,  // Default width for queue panel
+            templates_panel_width: 350.0,  // Default width for templates panel
             layout_button_press_start: None,
             show_layout_menu: false,
             layout_button_rect: None,
@@ -5843,6 +5852,9 @@ impl RequirementsApp {
             left_panel_collapsed: false,
             layout_mode: LayoutMode::ListDetailsSide,
             list_panel_width: 400.0,  // Default width for resizable list panel
+            timeline_panel_width: 500.0,  // Default width for timeline panel
+            queue_panel_width: 400.0,  // Default width for queue panel
+            templates_panel_width: 350.0,  // Default width for templates panel
             layout_button_press_start: None,
             show_layout_menu: false,
             layout_button_rect: None,
@@ -14686,22 +14698,18 @@ impl RequirementsApp {
             .collect()
     }
 
-    /// Show the Templates view for browsing embedded skills, commands, hooks, and settings
+    /// Show the Templates list panel (left side) - categories and template list
     #[cfg(not(target_arch = "wasm32"))]
-    fn show_templates_view(&mut self, ui: &mut egui::Ui) {
+    fn show_templates_list_panel(&mut self, ui: &mut egui::Ui) {
         use aida_core::{get_template_categories, get_templates_by_category};
 
         // Header with controls
         ui.horizontal(|ui| {
             ui.heading("📄 Templates");
-            ui.separator();
-            ui.label("Embedded skills, commands, hooks, and settings");
-
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.button("📋 Back to List").clicked() {
+                if ui.button("📋").on_hover_text("Back to List").clicked() {
                     self.pending_view_change = Some(View::List);
                 }
-                ui.label(egui::RichText::new("↑↓/jk nav").small().color(egui::Color32::GRAY));
             });
         });
 
@@ -14710,144 +14718,145 @@ impl RequirementsApp {
         // Get all categories
         let categories = get_template_categories();
 
-        // Get templates for selected category
-        let templates = get_templates_by_category(&self.templates_selected_category);
-        let template_count = templates.len();
+        ui.label(egui::RichText::new("Categories").strong());
+        ui.add_space(4.0);
 
-        // Two-column layout: categories/templates on left, preview on right
-        ui.columns(2, |columns| {
-            // Left column: Category and template list
-            columns[0].vertical(|ui| {
-                ui.label(egui::RichText::new("Categories").strong());
-                ui.add_space(4.0);
-
-                // Category buttons
-                ui.horizontal_wrapped(|ui| {
-                    for (name, description) in categories.iter() {
-                        let is_selected = self.templates_selected_category == *name;
-                        let text = if is_selected {
-                            egui::RichText::new(*name).strong()
-                        } else {
-                            egui::RichText::new(*name)
-                        };
-                        if ui.selectable_label(is_selected, text)
-                            .on_hover_text(*description)
-                            .clicked()
-                        {
-                            self.templates_selected_category = name.to_string();
-                            self.templates_selected_idx = None; // Clear selection when changing category
-                        }
-                    }
-                });
-
-                ui.separator();
-                ui.label(egui::RichText::new("Templates").strong());
-                ui.add_space(4.0);
-
-                // Template list
-                egui::ScrollArea::vertical()
-                    .id_salt("templates_list_scroll")
-                    .max_height(ui.available_height() - 50.0)
-                    .show(ui, |ui| {
-                        if templates.is_empty() {
-                            ui.label(egui::RichText::new("No templates in this category").italics().color(egui::Color32::GRAY));
-                        } else {
-                            for (idx, template) in templates.iter().enumerate() {
-                                let is_selected = self.templates_selected_idx == Some(idx);
-
-                                // Template entry with icon based on source
-                                let source_icon = match template.source {
-                                    aida_core::TemplateSource::ProjectLocal(_) => "📁",
-                                    aida_core::TemplateSource::UserConfig(_) => "👤",
-                                    aida_core::TemplateSource::Embedded => "📦",
-                                    aida_core::TemplateSource::NotFound => "❓",
-                                };
-
-                                let display_name = format!("{} {}", source_icon, template.name);
-                                if ui.selectable_label(is_selected, &display_name).clicked() {
-                                    self.templates_selected_idx = Some(idx);
-                                }
-                            }
-                        }
-                    });
-
-                // Legend
-                ui.separator();
-                ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("Legend:").small());
-                    ui.label(egui::RichText::new("📦 Embedded").small().color(egui::Color32::GRAY));
-                    ui.label(egui::RichText::new("📁 Project").small().color(egui::Color32::GRAY));
-                    ui.label(egui::RichText::new("👤 User").small().color(egui::Color32::GRAY));
-                });
-            });
-
-            // Right column: Template preview
-            columns[1].vertical(|ui| {
-                if let Some(selected_idx) = self.templates_selected_idx {
-                    // Get selected template
-                    if let Some(template) = templates.get(selected_idx) {
-                        // Header
-                        ui.horizontal(|ui| {
-                            ui.heading(&template.name);
-                            ui.separator();
-                            ui.label(egui::RichText::new(&template.key).monospace().color(egui::Color32::GRAY));
-                        });
-
-                        // Source info
-                        let source_text = match &template.source {
-                            aida_core::TemplateSource::ProjectLocal(path) => format!("📁 Project: {}", path.display()),
-                            aida_core::TemplateSource::UserConfig(path) => format!("👤 User: {}", path.display()),
-                            aida_core::TemplateSource::Embedded => "📦 Embedded in binary".to_string(),
-                            aida_core::TemplateSource::NotFound => "❓ Not found".to_string(),
-                        };
-                        ui.label(egui::RichText::new(&source_text).small().color(egui::Color32::GRAY));
-
-                        ui.separator();
-
-                        // Content preview in a scrollable monospace area
-                        ui.label(egui::RichText::new("Content:").strong());
-                        egui::ScrollArea::both()
-                            .id_salt("template_content_scroll")
-                            .auto_shrink([false, false])
-                            .show(ui, |ui| {
-                                // Use a TextEdit in read-only mode for selection support
-                                let mut content = template.content.clone();
-                                ui.add(
-                                    egui::TextEdit::multiline(&mut content)
-                                        .font(egui::TextStyle::Monospace)
-                                        .desired_width(f32::INFINITY)
-                                        .interactive(false)
-                                );
-                            });
-                    } else {
-                        ui.centered_and_justified(|ui| {
-                            ui.label(egui::RichText::new("Template not found").color(egui::Color32::RED));
-                        });
-                    }
+        // Category buttons
+        ui.horizontal_wrapped(|ui| {
+            for (name, description) in categories.iter() {
+                let is_selected = self.templates_selected_category == *name;
+                let text = if is_selected {
+                    egui::RichText::new(*name).strong()
                 } else {
-                    // No template selected
-                    ui.centered_and_justified(|ui| {
-                        ui.vertical_centered(|ui| {
-                            ui.add_space(50.0);
-                            ui.label(egui::RichText::new("Select a template to preview").size(16.0).color(egui::Color32::GRAY));
-                            ui.add_space(10.0);
-                            ui.label("Use ↑↓ or j/k to navigate, Enter to select.");
-                            ui.add_space(10.0);
-                            ui.label("Templates are embedded in the binary and used by `aida init` to scaffold new projects.");
-                            ui.add_space(10.0);
-                            ui.label("Categories:");
-                            ui.add_space(5.0);
-                            for (name, desc) in categories.iter() {
-                                ui.label(format!("• {} - {}", name, desc));
-                            }
-                        });
-                    });
+                    egui::RichText::new(*name)
+                };
+                if ui.selectable_label(is_selected, text)
+                    .on_hover_text(*description)
+                    .clicked()
+                {
+                    self.templates_selected_category = name.to_string();
+                    self.templates_selected_idx = None; // Clear selection when changing category
                 }
-            });
+            }
         });
 
-        // Store template count for keyboard navigation
-        let _ = template_count; // Used by keyboard handler
+        ui.separator();
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new("Templates").strong());
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.label(egui::RichText::new("↑↓/jk").small().color(egui::Color32::GRAY));
+            });
+        });
+        ui.add_space(4.0);
+
+        // Get templates for selected category
+        let templates = get_templates_by_category(&self.templates_selected_category);
+
+        // Template list
+        egui::ScrollArea::vertical()
+            .id_salt("templates_list_scroll")
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                if templates.is_empty() {
+                    ui.label(egui::RichText::new("No templates in this category").italics().color(egui::Color32::GRAY));
+                } else {
+                    for (idx, template) in templates.iter().enumerate() {
+                        let is_selected = self.templates_selected_idx == Some(idx);
+
+                        // Template entry with icon based on source
+                        let source_icon = match template.source {
+                            aida_core::TemplateSource::ProjectLocal(_) => "📁",
+                            aida_core::TemplateSource::UserConfig(_) => "👤",
+                            aida_core::TemplateSource::Embedded => "📦",
+                            aida_core::TemplateSource::NotFound => "❓",
+                        };
+
+                        let display_name = format!("{} {}", source_icon, template.name);
+                        if ui.selectable_label(is_selected, &display_name).clicked() {
+                            self.templates_selected_idx = Some(idx);
+                        }
+                    }
+                }
+            });
+
+        // Legend at bottom
+        ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("📦 Embedded").small().color(egui::Color32::GRAY));
+                ui.label(egui::RichText::new("📁 Project").small().color(egui::Color32::GRAY));
+                ui.label(egui::RichText::new("👤 User").small().color(egui::Color32::GRAY));
+            });
+        });
+    }
+
+    /// Show the Templates preview panel (right side) - template content preview
+    #[cfg(not(target_arch = "wasm32"))]
+    fn show_templates_preview_panel(&mut self, ui: &mut egui::Ui) {
+        use aida_core::{get_template_categories, get_templates_by_category};
+
+        let templates = get_templates_by_category(&self.templates_selected_category);
+
+        if let Some(selected_idx) = self.templates_selected_idx {
+            // Get selected template
+            if let Some(template) = templates.get(selected_idx) {
+                // Header
+                ui.horizontal(|ui| {
+                    ui.heading(&template.name);
+                    ui.separator();
+                    ui.label(egui::RichText::new(&template.key).monospace().color(egui::Color32::GRAY));
+                });
+
+                // Source info
+                let source_text = match &template.source {
+                    aida_core::TemplateSource::ProjectLocal(path) => format!("📁 Project: {}", path.display()),
+                    aida_core::TemplateSource::UserConfig(path) => format!("👤 User: {}", path.display()),
+                    aida_core::TemplateSource::Embedded => "📦 Embedded in binary".to_string(),
+                    aida_core::TemplateSource::NotFound => "❓ Not found".to_string(),
+                };
+                ui.label(egui::RichText::new(&source_text).small().color(egui::Color32::GRAY));
+
+                ui.separator();
+
+                // Content preview in a scrollable monospace area
+                ui.label(egui::RichText::new("Content:").strong());
+                egui::ScrollArea::both()
+                    .id_salt("template_content_scroll")
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        // Use a TextEdit in read-only mode for selection support
+                        let mut content = template.content.clone();
+                        ui.add(
+                            egui::TextEdit::multiline(&mut content)
+                                .font(egui::TextStyle::Monospace)
+                                .desired_width(f32::INFINITY)
+                                .interactive(false)
+                        );
+                    });
+            } else {
+                ui.centered_and_justified(|ui| {
+                    ui.label(egui::RichText::new("Template not found").color(egui::Color32::RED));
+                });
+            }
+        } else {
+            // No template selected
+            let categories = get_template_categories();
+            ui.centered_and_justified(|ui| {
+                ui.vertical_centered(|ui| {
+                    ui.add_space(50.0);
+                    ui.label(egui::RichText::new("Select a template to preview").size(16.0).color(egui::Color32::GRAY));
+                    ui.add_space(10.0);
+                    ui.label("Use ↑↓ or j/k to navigate.");
+                    ui.add_space(10.0);
+                    ui.label("Templates are embedded in the binary and used by `aida init` to scaffold new projects.");
+                    ui.add_space(10.0);
+                    ui.label("Categories:");
+                    ui.add_space(5.0);
+                    for (name, desc) in categories.iter() {
+                        ui.label(format!("• {} - {}", name, desc));
+                    }
+                });
+            });
+        }
     }
 
     /// Show the Timeline view
@@ -33092,9 +33101,18 @@ impl eframe::App for RequirementsApp {
             // Create baseline dialog
             self.show_create_baseline_dialog(ctx);
         } else if self.current_view == View::Timeline {
-            // Timeline view showing requirement changes over time
+            // Timeline view with resizable panel - timeline on left, details on right
+            egui::SidePanel::left("timeline_side_panel")
+                .min_width(300.0)
+                .default_width(self.timeline_panel_width)
+                .max_width(screen_width * 0.7)
+                .resizable(true)
+                .show(ctx, |ui| {
+                    self.show_timeline_view(ui);
+                });
+            // Details panel on the right
             egui::CentralPanel::default().show(ctx, |ui| {
-                self.show_timeline_view(ui);
+                self.show_detail_view_with_close(ui);
             });
         } else if self.current_view == View::Planning {
             // Sprint planning view with planning on left, detail panel on right (consistent with List view)
@@ -33112,35 +33130,33 @@ impl eframe::App for RequirementsApp {
                 });
             });
         } else if self.current_view == View::Queue {
-            // Queue view with queue on left, detail panel on right (consistent with List view)
-            egui::CentralPanel::default().show(ctx, |ui| {
-                ui.columns(2, |columns| {
-                    // Left column - Queue view
-                    columns[0].vertical(|ui| {
-                        self.show_queue_view(ui);
-                    });
-
-                    // Right column - Detail panel (for selected item)
-                    columns[1].vertical(|ui| {
-                        self.show_detail_view_with_close(ui);
-                    });
+            // Queue view with resizable panel - queue on left, detail panel on right
+            egui::SidePanel::left("queue_side_panel")
+                .min_width(200.0)
+                .default_width(self.queue_panel_width)
+                .max_width(screen_width * 0.7)
+                .resizable(true)
+                .show(ctx, |ui| {
+                    self.show_queue_view(ui);
                 });
+            // Details panel on the right
+            egui::CentralPanel::default().show(ctx, |ui| {
+                self.show_detail_view_with_close(ui);
             });
         } else if let View::UserQueue(ref handle) = self.current_view {
-            // User queue view - show items owned by a specific user
+            // User queue view with resizable panel - user queue on left, detail panel on right
             let handle_clone = handle.clone();
-            egui::CentralPanel::default().show(ctx, |ui| {
-                ui.columns(2, |columns| {
-                    // Left column - User queue view
-                    columns[0].vertical(|ui| {
-                        self.show_user_queue_view(ui, &handle_clone);
-                    });
-
-                    // Right column - Detail panel (for selected item)
-                    columns[1].vertical(|ui| {
-                        self.show_detail_view_with_close(ui);
-                    });
+            egui::SidePanel::left("user_queue_side_panel")
+                .min_width(200.0)
+                .default_width(self.queue_panel_width)
+                .max_width(screen_width * 0.7)
+                .resizable(true)
+                .show(ctx, |ui| {
+                    self.show_user_queue_view(ui, &handle_clone);
                 });
+            // Details panel on the right
+            egui::CentralPanel::default().show(ctx, |ui| {
+                self.show_detail_view_with_close(ui);
             });
         } else if self.current_view == View::GitLabIssues {
             // GitLab Issues view (STORY-0322)
@@ -33155,9 +33171,18 @@ impl eframe::App for RequirementsApp {
                 });
             });
         } else if self.current_view == View::Templates {
-            // Templates view showing embedded skills, commands, hooks, settings
+            // Templates view with resizable panel - templates list on left, preview on right
+            egui::SidePanel::left("templates_side_panel")
+                .min_width(200.0)
+                .default_width(self.templates_panel_width)
+                .max_width(screen_width * 0.5)
+                .resizable(true)
+                .show(ctx, |ui| {
+                    self.show_templates_list_panel(ui);
+                });
+            // Preview panel on the right
             egui::CentralPanel::default().show(ctx, |ui| {
-                self.show_templates_view(ui);
+                self.show_templates_preview_panel(ui);
             });
         } else {
             // In List/Detail view, use layout mode
