@@ -203,7 +203,12 @@ async fn main() -> Result<()> {
     info!("Using database: {}", db_path);
 
     // Initialize backend (auto-detects postgres:// URLs vs file paths)
-    let backend = create_backend(std::path::Path::new(&db_path), None)?;
+    // Run on blocking thread to avoid runtime conflict with synchronous postgres crate
+    let db_path_clone = db_path.clone();
+    let backend = tokio::task::spawn_blocking(move || {
+        create_backend(std::path::Path::new(&db_path_clone), None)
+    })
+    .await??;
     info!("Backend type: {}", backend.backend_type());
 
     let state = Arc::new(ServerState::new(backend)?);

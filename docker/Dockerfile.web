@@ -26,6 +26,9 @@ COPY proto ./proto
 WORKDIR /app/aida-gui
 RUN trunk build --release
 
+# Remove SRI integrity attributes - CDNs like Cloudflare may modify JS/CSS, breaking hashes
+RUN sed -i 's/ integrity="[^"]*"//g' dist/index.html
+
 # Runtime: lightweight nginx to serve static files
 FROM docker.io/library/nginx:alpine
 

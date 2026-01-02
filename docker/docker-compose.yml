@@ -218,7 +218,7 @@ services:
       - traefik.enable=true
 
       # gRPC-Web API endpoint (for WASM client)
-      - traefik.http.routers.aida-api.rule=Host(`api.aida.joemooney.com`)
+      - traefik.http.routers.aida-api.rule=Host(`aida-api.joemooney.com`)
       - traefik.http.routers.aida-api.entrypoints=websecure
       - traefik.http.routers.aida-api.tls=true
       - traefik.http.routers.aida-api.tls.certresolver=cloudflare
@@ -227,7 +227,7 @@ services:
       # CORS headers for gRPC-Web
       - traefik.http.middlewares.aida-cors.headers.accesscontrolallowmethods=GET,POST,OPTIONS
       - traefik.http.middlewares.aida-cors.headers.accesscontrolallowheaders=Content-Type,x-grpc-web,x-user-agent
-      - traefik.http.middlewares.aida-cors.headers.accesscontrolalloworiginlist=https://aida.joemooney.com
+      - traefik.http.middlewares.aida-cors.headers.accesscontrolalloworiginlist=https://aida.joemooney.com,http://localhost:8080
       - traefik.http.middlewares.aida-cors.headers.accesscontrolmaxage=86400
       - traefik.http.routers.aida-api.middlewares=aida-cors
 
