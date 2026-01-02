@@ -222,7 +222,7 @@ services:
       - traefik.http.routers.aida-api.entrypoints=websecure
       - traefik.http.routers.aida-api.tls=true
       - traefik.http.routers.aida-api.tls.certresolver=cloudflare
-      - traefik.http.services.aida-api.loadbalancer.server.port=8080
+      - traefik.http.services.aida-api.loadbalancer.server.port=50051
 
       # CORS headers for gRPC-Web
       - traefik.http.middlewares.aida-cors.headers.accesscontrolallowmethods=GET,POST,OPTIONS
