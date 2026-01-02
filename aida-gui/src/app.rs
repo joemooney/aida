@@ -31342,7 +31342,12 @@ impl eframe::App for RequirementsApp {
             && self.quick_change_field.is_none()
             && !self.show_tag_picker
             && !self.show_cancel_confirm_dialog
-            && !self.show_conflict_dialog
+            && {
+                #[cfg(not(target_arch = "wasm32"))]
+                { !self.show_conflict_dialog }
+                #[cfg(target_arch = "wasm32")]
+                { true }
+            }
             && !self.show_clone_dialog
             && !self.show_import_dialog
             && !self.show_create_baseline_dialog
@@ -33166,18 +33171,28 @@ impl eframe::App for RequirementsApp {
                 });
             });
         } else if self.current_view == View::Templates {
-            // Templates view with resizable panel - templates list on left, preview on right
-            egui::SidePanel::left("templates_side_panel")
-                .min_width(200.0)
-                .default_width(self.templates_panel_width)
-                .max_width(screen_width * 0.5)
-                .resizable(true)
-                .show(ctx, |ui| {
-                    self.show_templates_list_panel(ui);
+            // Templates view - native only (requires local template loading)
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                // Templates view with resizable panel - templates list on left, preview on right
+                egui::SidePanel::left("templates_side_panel")
+                    .min_width(200.0)
+                    .default_width(self.templates_panel_width)
+                    .max_width(screen_width * 0.5)
+                    .resizable(true)
+                    .show(ctx, |ui| {
+                        self.show_templates_list_panel(ui);
+                    });
+                // Preview panel on the right
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    self.show_templates_preview_panel(ui);
                 });
-            // Preview panel on the right
+            }
+            #[cfg(target_arch = "wasm32")]
             egui::CentralPanel::default().show(ctx, |ui| {
-                self.show_templates_preview_panel(ui);
+                ui.centered_and_justified(|ui| {
+                    ui.label("Templates view not available in web version");
+                });
             });
         } else {
             // In List/Detail view, use layout mode

@@ -179,8 +179,9 @@ services:
       - proxy
     depends_on:
       - gitlab
-      - aida-server
-      - aida-web
+      # aida-server and aida-web are optional - cloudflared will route to them when available
+      # - aida-server
+      # - aida-web
 
 
   # ═══════════════════════════════════════════════════════════════════════════
