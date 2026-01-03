@@ -224,6 +224,7 @@ services:
       - traefik.http.routers.aida-rest.entrypoints=websecure
       - traefik.http.routers.aida-rest.tls=true
       - traefik.http.routers.aida-rest.tls.certresolver=cloudflare
+      - traefik.http.routers.aida-rest.service=aida-rest
       - traefik.http.services.aida-rest.loadbalancer.server.port=8080
       - traefik.http.routers.aida-rest.middlewares=aida-cors
 
@@ -234,6 +235,7 @@ services:
       - traefik.http.routers.aida-grpc.entrypoints=websecure
       - traefik.http.routers.aida-grpc.tls=true
       - traefik.http.routers.aida-grpc.tls.certresolver=cloudflare
+      - traefik.http.routers.aida-grpc.service=aida-grpc
       - traefik.http.services.aida-grpc.loadbalancer.server.port=50051
       - traefik.http.routers.aida-grpc.middlewares=aida-cors
 
