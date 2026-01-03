@@ -2464,3 +2464,67 @@ if !in_timeline && !in_planning && !in_kanban && !in_queue && !in_templates && c
 
 - **Commit**: a5c1431
 - **Status**: Complete
+
+
+### Multi-Project Support (2025-01-02)
+- **Prompt**: "I would like to be able to support multiple projects on aida.joemooney.com, how could we go about doing that?"
+- **Problem**: AIDA only supported a single project/database, limiting multi-tenant use
+- **Solution**: Implemented multi-project support with per-project SQLite databases
+
+**Architecture:**
+- Each project gets its own isolated SQLite database file
+- Server uses `x-project` header to route requests to correct database
+- Client passes `?project=name` URL parameter
+- Project selector UI shown when no project is selected (WASM only)
+
+**Server Changes (aida-server):**
+
+1. **ProjectManager** (src/projects.rs - NEW):
+   - Manages multiple isolated SQLite databases
+   - Lazy loading of database backends
+   - Project registry stored in `projects.json`
+   - Methods: `list_projects()`, `create_project()`, `delete_project()`, `get_backend()`
+   - Automatic migration of legacy requirements.db to "default" project
+
+2. **REST Endpoints** (src/rest.rs):
+   - `GET /api/projects` - List all projects
+   - `POST /api/projects` - Create new project
+   - `GET /api/projects/:name` - Get project info
+   - `DELETE /api/projects/:name` - Delete project
+   - All requirement endpoints require `X-Project` header
+
+3. **gRPC Multi-Project Service** (src/service.rs):
+   - Added `AidaServiceMultiProject` struct
+   - Extracts `x-project` from gRPC metadata for every request
+   - Routes to correct backend via ProjectManager
+
+4. **Main Entry Point** (src/main.rs):
+   - Added `--data-dir` argument for multi-project mode
+   - Detects mode: multi-project (default) or single-project (--database)
+   - Default data_dir: `/data` (Docker) or `~/.aida` (local)
+
+**Client Changes (aida-gui):**
+
+1. **URL Parameter Parsing** (src/lib.rs):
+   - Parse `?project=name` from URL query parameters
+
+2. **gRPC Header Support** (src/storage/grpc_client.rs):
+   - Added `project` field to GrpcStorageClient
+   - `connect_with_project()` method for project-aware connections
+   - `make_request()` helper adds `x-project` metadata to all requests
+
+3. **Project Selector UI** (src/app.rs):
+   - `ProjectInfo` struct for parsed server responses
+   - State fields: `wasm_projects`, `wasm_projects_error`, `wasm_projects_loading`
+   - `show_project_selector()` - Full-screen project selector UI
+   - `fetch_projects()` - REST API call to list projects
+   - `create_project()` - REST API call to create new project
+   - `navigate_to_project()` - Updates URL with `?project=name`
+
+**Dependencies Added:**
+- `aida-gui/Cargo.toml`: serde-wasm-bindgen, web-sys features (Headers, Request, etc.)
+- `aida-server/Cargo.toml`: dirs crate for home directory resolution
+
+- **Commit**: 605967f
+- **Status**: Complete
+- **Requirements**: FR-0227 (Multi-Project Support)

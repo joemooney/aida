@@ -67,10 +67,28 @@ Define connections between requirements:
 - Built-in type definitions for Functional, NonFunctional, System, User, and ChangeRequest types
 - Settings UI for viewing type definitions
 
-### Multi-Project Support
-- Central registry (~/.requirements.config) for managing multiple projects
-- Environment variable support (REQ_DB_NAME, REQ_FEATURE, REQ_REGISTRY_PATH)
-- Project resolution with priority ordering
+### Multi-Project Support (FR-0227)
+- **Server-Side Multi-Project Mode** (`aida-server --data-dir <path>`):
+  - Each project gets its own isolated SQLite database file
+  - ProjectManager manages multiple databases with lazy loading
+  - Project registry stored in `projects.json`
+  - Automatic migration of legacy `requirements.db` to "default" project
+  - Default data directory: `/data` (Docker) or `~/.aida` (local)
+- **REST API for Project Management** (port 8080):
+  - `GET /api/projects` - List all projects
+  - `POST /api/projects` - Create new project (name, description)
+  - `GET /api/projects/:name` - Get project info
+  - `DELETE /api/projects/:name` - Delete project and its database
+- **Request Routing via Headers**:
+  - `X-Project` header routes REST requests to correct backend
+  - `x-project` gRPC metadata routes gRPC requests
+- **Web Client Project Selection**:
+  - URL parameter: `?project=name&server=https://api.example.com`
+  - Project selector UI when no project specified
+  - GrpcStorageClient adds x-project header to all requests
+- **Legacy Compatibility**:
+  - Single-project mode: `aida-server --database <path>` (no project header required)
+  - Environment variable: `AIDA_DATABASE_URL` for single database
 
 ### Headless Server Mode (FR-0227)
 - **gRPC Server (`aida-server`)**: Headless server exposing full API via gRPC
