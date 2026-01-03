@@ -3605,6 +3605,7 @@ impl ViewPreset {
 /// Project information for multi-project support (WASM only)
 #[cfg(target_arch = "wasm32")]
 #[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProjectInfo {
     pub name: String,
     pub description: String,
