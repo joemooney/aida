@@ -217,23 +217,32 @@ services:
     labels:
       - traefik.enable=true
 
-      # gRPC-Web API endpoint (for WASM client)
-      - traefik.http.routers.aida-api.rule=Host(`aida-api.joemooney.com`)
-      - traefik.http.routers.aida-api.entrypoints=websecure
-      - traefik.http.routers.aida-api.tls=true
-      - traefik.http.routers.aida-api.tls.certresolver=cloudflare
-      - traefik.http.services.aida-api.loadbalancer.server.port=50051
+      # gRPC-Web API endpoint (for WASM client) - port 50051
+      - traefik.http.routers.aida-grpc.rule=Host(`aida-api.joemooney.com`) && !PathPrefix(`/api`)
+      - traefik.http.routers.aida-grpc.entrypoints=websecure
+      - traefik.http.routers.aida-grpc.tls=true
+      - traefik.http.routers.aida-grpc.tls.certresolver=cloudflare
+      - traefik.http.services.aida-grpc.loadbalancer.server.port=50051
+      - traefik.http.routers.aida-grpc.middlewares=aida-cors
 
-      # CORS headers for gRPC-Web
-      - traefik.http.middlewares.aida-cors.headers.accesscontrolallowmethods=GET,POST,OPTIONS
-      - traefik.http.middlewares.aida-cors.headers.accesscontrolallowheaders=Content-Type,x-grpc-web,x-user-agent
-      - traefik.http.middlewares.aida-cors.headers.accesscontrolalloworiginlist=https://aida.joemooney.com,http://localhost:8080
+      # REST API endpoint (for project management) - port 8080
+      - traefik.http.routers.aida-rest.rule=Host(`aida-api.joemooney.com`) && PathPrefix(`/api`)
+      - traefik.http.routers.aida-rest.entrypoints=websecure
+      - traefik.http.routers.aida-rest.tls=true
+      - traefik.http.routers.aida-rest.tls.certresolver=cloudflare
+      - traefik.http.services.aida-rest.loadbalancer.server.port=8080
+      - traefik.http.routers.aida-rest.middlewares=aida-cors
+
+      # CORS headers for gRPC-Web and REST API
+      - traefik.http.middlewares.aida-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS
+      - traefik.http.middlewares.aida-cors.headers.accesscontrolallowheaders=Content-Type,x-grpc-web,x-user-agent,x-project,Accept
+      - traefik.http.middlewares.aida-cors.headers.accesscontrolalloworiginlist=https://aida.joemooney.com,http://localhost:8080,http://localhost:8088
       - traefik.http.middlewares.aida-cors.headers.accesscontrolmaxage=86400
-      - traefik.http.routers.aida-api.middlewares=aida-cors
 
       # 🔒 IP allowlist (same as pgadmin for now)
       #- traefik.http.middlewares.aida-ip.ipallowlist.sourcerange=144.208.111.126/32,192.168.0.0/16
-      #- traefik.http.routers.aida-api.middlewares=aida-ip,aida-cors
+      #- traefik.http.routers.aida-grpc.middlewares=aida-ip,aida-cors
+      #- traefik.http.routers.aida-rest.middlewares=aida-ip,aida-cors
 
 
   aida-web:

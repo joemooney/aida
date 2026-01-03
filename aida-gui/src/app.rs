@@ -31490,8 +31490,16 @@ fn main() {
         self.wasm_projects_loading = true;
 
         // Build API URL from server address
+        // In production, REST API is at same domain as gRPC (Traefik routes /api/* to port 8080)
+        // Locally, replace :50051 with :8080
         let server_addr = self.server_addr.as_ref()
-            .map(|s| s.replace(":50051", ":8080")) // Use REST port
+            .map(|s| {
+                if s.contains("localhost") || s.contains("127.0.0.1") {
+                    s.replace(":50051", ":8080")
+                } else {
+                    s.clone()
+                }
+            })
             .unwrap_or_else(|| "http://localhost:8080".to_string());
         let url = format!("{}/api/projects", server_addr);
 
@@ -31557,8 +31565,15 @@ fn main() {
 
         self.wasm_creating_project = true;
 
+        // Build API URL - same logic as fetch_projects
         let server_addr = self.server_addr.as_ref()
-            .map(|s| s.replace(":50051", ":8080"))
+            .map(|s| {
+                if s.contains("localhost") || s.contains("127.0.0.1") {
+                    s.replace(":50051", ":8080")
+                } else {
+                    s.clone()
+                }
+            })
             .unwrap_or_else(|| "http://localhost:8080".to_string());
         let url = format!("{}/api/projects", server_addr);
 

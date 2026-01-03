@@ -36,11 +36,16 @@ COPY --from=builder /app/target/release/aida-server /app/aida-server
 # Create data directory
 RUN mkdir -p /data
 
-# Entrypoint script to read secrets
+# Entrypoint script to read secrets and configure mode
+# - If AIDA_DATABASE_URL secret exists: single-project mode (legacy)
+# - Otherwise: multi-project mode with /data directory
 RUN printf '#!/bin/sh\n\
-# Read database URL from Docker secret if available\n\
+# Read database URL from Docker secret if available (single-project mode)\n\
 if [ -f /run/secrets/aida_database_url ]; then\n\
     export AIDA_DATABASE_URL=$(cat /run/secrets/aida_database_url)\n\
+    echo "Single-project mode: using AIDA_DATABASE_URL"\n\
+else\n\
+    echo "Multi-project mode: using /data directory"\n\
 fi\n\
 exec /app/aida-server "$@"\n' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
@@ -49,4 +54,6 @@ ENV RUST_LOG=info
 EXPOSE 50051 8080
 
 ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["--host", "0.0.0.0", "--port", "50051", "--rest-port", "8080"]
+# Default to multi-project mode with /data directory
+# Override with --database <path> for single-project mode
+CMD ["--host", "0.0.0.0", "--port", "50051", "--rest-port", "8080", "--data-dir", "/data"]
