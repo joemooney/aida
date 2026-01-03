@@ -217,27 +217,43 @@ services:
     labels:
       - traefik.enable=true
 
+      # Services (shared between HTTP and HTTPS routers)
+      - traefik.http.services.aida-rest.loadbalancer.server.port=8080
+      - traefik.http.services.aida-grpc.loadbalancer.server.port=50051
+
       # REST API endpoint (for project management) - port 8080
       # Higher priority (100) to match /api paths first
+      # HTTPS router
       - traefik.http.routers.aida-rest.rule=Host(`aida-api.joemooney.com`) && PathPrefix(`/api`)
       - traefik.http.routers.aida-rest.priority=100
       - traefik.http.routers.aida-rest.entrypoints=websecure
       - traefik.http.routers.aida-rest.tls=true
       - traefik.http.routers.aida-rest.tls.certresolver=cloudflare
       - traefik.http.routers.aida-rest.service=aida-rest
-      - traefik.http.services.aida-rest.loadbalancer.server.port=8080
       - traefik.http.routers.aida-rest.middlewares=aida-cors
+      # HTTP router (for Cloudflare tunnel)
+      - traefik.http.routers.aida-rest-http.rule=Host(`aida-api.joemooney.com`) && PathPrefix(`/api`)
+      - traefik.http.routers.aida-rest-http.priority=100
+      - traefik.http.routers.aida-rest-http.entrypoints=web
+      - traefik.http.routers.aida-rest-http.service=aida-rest
+      - traefik.http.routers.aida-rest-http.middlewares=aida-cors
 
       # gRPC-Web API endpoint (for WASM client) - port 50051
       # Lower priority (1) as catch-all for non-/api paths
+      # HTTPS router
       - traefik.http.routers.aida-grpc.rule=Host(`aida-api.joemooney.com`)
       - traefik.http.routers.aida-grpc.priority=1
       - traefik.http.routers.aida-grpc.entrypoints=websecure
       - traefik.http.routers.aida-grpc.tls=true
       - traefik.http.routers.aida-grpc.tls.certresolver=cloudflare
       - traefik.http.routers.aida-grpc.service=aida-grpc
-      - traefik.http.services.aida-grpc.loadbalancer.server.port=50051
       - traefik.http.routers.aida-grpc.middlewares=aida-cors
+      # HTTP router (for Cloudflare tunnel)
+      - traefik.http.routers.aida-grpc-http.rule=Host(`aida-api.joemooney.com`)
+      - traefik.http.routers.aida-grpc-http.priority=1
+      - traefik.http.routers.aida-grpc-http.entrypoints=web
+      - traefik.http.routers.aida-grpc-http.service=aida-grpc
+      - traefik.http.routers.aida-grpc-http.middlewares=aida-cors
 
       # CORS headers for gRPC-Web and REST API
       - traefik.http.middlewares.aida-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS
