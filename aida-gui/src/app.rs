@@ -3031,6 +3031,7 @@ enum DetailTab {
     Links,
     Attachments,
     History,
+    WebPreview,
 }
 
 #[derive(Default, PartialEq, Clone)]
@@ -3912,6 +3913,13 @@ pub struct RequirementsApp {
     #[cfg(target_arch = "wasm32")]
     project_picker_selected: usize,      // Currently selected index in project list
 
+    // Web Preview tab state
+    web_preview_selected_url_idx: usize, // Selected URL index when multiple URLs exist
+    #[cfg(target_arch = "wasm32")]
+    web_preview_iframe_loaded: bool,     // Whether the iframe has been created
+    #[cfg(target_arch = "wasm32")]
+    web_preview_current_url: Option<String>, // Currently loaded URL in iframe
+
     // Double-ESC navigation (FR-0318)
     last_esc_press: Option<Instant>,  // Track last ESC press for double-ESC detection
 
@@ -4735,6 +4743,11 @@ impl RequirementsApp {
             show_project_picker: false,
             #[cfg(target_arch = "wasm32")]
             project_picker_selected: 0,
+            web_preview_selected_url_idx: 0,
+            #[cfg(target_arch = "wasm32")]
+            web_preview_iframe_loaded: false,
+            #[cfg(target_arch = "wasm32")]
+            web_preview_current_url: None,
             last_esc_press: None,
             last_db_check: Instant::now(),
             known_db_mtime: None,
@@ -5357,6 +5370,11 @@ impl RequirementsApp {
             show_project_picker: false,
             #[cfg(target_arch = "wasm32")]
             project_picker_selected: 0,
+            web_preview_selected_url_idx: 0,
+            #[cfg(target_arch = "wasm32")]
+            web_preview_iframe_loaded: false,
+            #[cfg(target_arch = "wasm32")]
+            web_preview_current_url: None,
             last_esc_press: None,
             last_db_check: Instant::now(),
             known_db_mtime: None,
@@ -5985,6 +6003,11 @@ impl RequirementsApp {
             show_project_picker: false,
             #[cfg(target_arch = "wasm32")]
             project_picker_selected: 0,
+            web_preview_selected_url_idx: 0,
+            #[cfg(target_arch = "wasm32")]
+            web_preview_iframe_loaded: false,
+            #[cfg(target_arch = "wasm32")]
+            web_preview_current_url: None,
             last_esc_press: None,
             last_db_check: Instant::now(),
             known_db_mtime: None,
@@ -23588,6 +23611,7 @@ impl RequirementsApp {
             ('l', "Links", "View relationships and URL links", DetailTab::Links),
             ('t', "Attachments", "View file attachments", DetailTab::Attachments),
             ('h', "History", "View change history", DetailTab::History),
+            ('w', "Web Preview", "Preview URL in embedded frame", DetailTab::WebPreview),
         ];
         let num_options = tab_options.len();
 
@@ -23627,6 +23651,8 @@ impl RequirementsApp {
                 selected_tab = Some(DetailTab::Attachments);
             } else if i.key_pressed(egui::Key::H) {
                 selected_tab = Some(DetailTab::History);
+            } else if i.key_pressed(egui::Key::W) {
+                selected_tab = Some(DetailTab::WebPreview);
             }
         });
 
@@ -23659,7 +23685,9 @@ impl RequirementsApp {
                 1 => DetailTab::Description,
                 2 => DetailTab::Comments,
                 3 => DetailTab::Links,
-                4 => DetailTab::History,
+                4 => DetailTab::Attachments,
+                5 => DetailTab::History,
+                6 => DetailTab::WebPreview,
                 _ => DetailTab::Description,
             });
         }
@@ -26477,6 +26505,14 @@ impl RequirementsApp {
                                     DetailTab::History,
                                     format!("📜 History ({})", req.history.len()),
                                 );
+                                // Only show Web Preview tab if there are URLs
+                                if !req.urls.is_empty() {
+                                    ui.selectable_value(
+                                        &mut self.active_tab,
+                                        DetailTab::WebPreview,
+                                        "🌐 Web Preview",
+                                    );
+                                }
                             });
                             }); // End horizontal scroll for tabs
 
@@ -26504,6 +26540,9 @@ impl RequirementsApp {
                                     }
                                     DetailTab::History => {
                                         self.show_history_tab(ui, &req);
+                                    }
+                                    DetailTab::WebPreview => {
+                                        self.show_web_preview_tab(ui, &req);
                                     }
                                 });
                         });
@@ -26614,6 +26653,14 @@ impl RequirementsApp {
                             DetailTab::History,
                             format!("📜 History ({})", req.history.len()),
                         );
+                        // Only show Web Preview tab if there are URLs
+                        if !req.urls.is_empty() {
+                            ui.selectable_value(
+                                &mut self.active_tab,
+                                DetailTab::WebPreview,
+                                "🌐 Web Preview",
+                            );
+                        }
                     });
                     }); // End horizontal scroll for tabs
 
@@ -26639,6 +26686,9 @@ impl RequirementsApp {
                         }
                         DetailTab::History => {
                             self.show_history_tab(ui, &req);
+                        }
+                        DetailTab::WebPreview => {
+                            self.show_web_preview_tab(ui, &req);
                         }
                     });
                 }
@@ -28229,6 +28279,207 @@ fn main() {
         }
     }
 
+    /// Show the Web Preview tab - displays URLs with iframe preview (WASM) or links (native)
+    fn show_web_preview_tab(&mut self, ui: &mut egui::Ui, req: &Requirement) {
+        ui.heading("Web Preview");
+        ui.add_space(10.0);
+
+        if req.urls.is_empty() {
+            ui.label("No URLs attached to this requirement.");
+            ui.label("Add URLs in the Links tab to enable web preview.");
+            return;
+        }
+
+        // URL selector if multiple URLs
+        let selected_url = if req.urls.len() == 1 {
+            Some(&req.urls[0])
+        } else {
+            // Show URL picker
+            ui.horizontal(|ui| {
+                ui.label("Select URL:");
+            });
+
+            let mut selected_idx = self.web_preview_selected_url_idx;
+            for (idx, url_link) in req.urls.iter().enumerate() {
+                let label = if url_link.title.is_empty() {
+                    url_link.url.clone()
+                } else {
+                    format!("{} - {}", url_link.title, url_link.url)
+                };
+                if ui.selectable_label(selected_idx == idx, &label).clicked() {
+                    self.web_preview_selected_url_idx = idx;
+                    selected_idx = idx;
+                }
+            }
+
+            ui.add_space(10.0);
+            req.urls.get(selected_idx)
+        };
+
+        if let Some(url_link) = selected_url {
+            let url = &url_link.url;
+
+            // Show URL info
+            ui.horizontal(|ui| {
+                ui.label("URL:");
+                ui.hyperlink(url);
+            });
+
+            if !url_link.title.is_empty() {
+                ui.horizontal(|ui| {
+                    ui.label("Title:");
+                    ui.label(&url_link.title);
+                });
+            }
+
+            if let Some(ref desc) = url_link.description {
+                if !desc.is_empty() {
+                    ui.horizontal(|ui| {
+                        ui.label("Description:");
+                        ui.label(desc);
+                    });
+                }
+            }
+
+            ui.add_space(10.0);
+            ui.separator();
+
+            // Action buttons
+            ui.horizontal(|ui| {
+                #[cfg(target_arch = "wasm32")]
+                {
+                    if ui.button("🔄 Refresh Preview").clicked() {
+                        // Force iframe refresh by toggling state
+                        self.web_preview_iframe_loaded = false;
+                    }
+                }
+
+                if ui.button("🔗 Open in New Tab").clicked() {
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        if let Some(window) = web_sys::window() {
+                            let _ = window.open_with_url_and_target(url, "_blank");
+                        }
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        let _ = open::that(url);
+                    }
+                }
+
+                if ui.button("📋 Copy URL").clicked() {
+                    ui.output_mut(|o| o.copied_text = url.clone());
+                }
+            });
+
+            ui.add_space(10.0);
+
+            // Iframe preview (WASM only)
+            #[cfg(target_arch = "wasm32")]
+            {
+                ui.separator();
+                ui.label("Preview:");
+                ui.add_space(5.0);
+
+                // Show iframe using a custom widget area
+                let available_size = ui.available_size();
+                let iframe_height = (available_size.y - 20.0).max(300.0);
+
+                // Create a placeholder for the iframe
+                let (rect, _response) = ui.allocate_exact_size(
+                    egui::vec2(available_size.x, iframe_height),
+                    egui::Sense::hover(),
+                );
+
+                // Draw a border for the iframe area
+                ui.painter().rect_stroke(
+                    rect,
+                    0.0,
+                    egui::Stroke::new(1.0, ui.style().visuals.widgets.noninteractive.bg_stroke.color),
+                );
+
+                // Use JavaScript to create/update the iframe
+                if !self.web_preview_iframe_loaded || self.web_preview_current_url.as_ref() != Some(url) {
+                    self.create_web_preview_iframe(url, rect);
+                    self.web_preview_iframe_loaded = true;
+                    self.web_preview_current_url = Some(url.clone());
+                }
+
+                // Show loading message
+                if !self.web_preview_iframe_loaded {
+                    ui.painter().text(
+                        rect.center(),
+                        egui::Align2::CENTER_CENTER,
+                        "Loading...",
+                        egui::FontId::default(),
+                        ui.style().visuals.text_color(),
+                    );
+                }
+
+                // Note about iframe limitations
+                ui.add_space(5.0);
+                ui.small("Note: Some websites block iframe embedding for security reasons.");
+            }
+
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                ui.separator();
+                ui.add_space(10.0);
+                ui.label("Web preview is only available in the browser version.");
+                ui.label("Use 'Open in New Tab' to view the URL in your default browser.");
+            }
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn create_web_preview_iframe(&self, url: &str, rect: egui::Rect) {
+        if let Some(window) = web_sys::window() {
+            if let Some(document) = window.document() {
+                // Remove existing iframe if any
+                if let Some(existing) = document.get_element_by_id("aida-web-preview-iframe") {
+                    existing.remove();
+                }
+
+                // Create new iframe
+                if let Ok(iframe) = document.create_element("iframe") {
+                    let _ = iframe.set_attribute("id", "aida-web-preview-iframe");
+                    let _ = iframe.set_attribute("src", url);
+                    let _ = iframe.set_attribute("frameborder", "0");
+                    let _ = iframe.set_attribute("sandbox", "allow-scripts allow-same-origin allow-forms");
+
+                    // Position the iframe over the egui rect
+                    // Note: This is approximate - egui uses logical pixels
+                    let style = format!(
+                        "position: fixed; left: {}px; top: {}px; width: {}px; height: {}px; border: none; z-index: 1000;",
+                        rect.left() as i32,
+                        rect.top() as i32,
+                        rect.width() as i32,
+                        rect.height() as i32,
+                    );
+                    let _ = iframe.set_attribute("style", &style);
+
+                    // Append to body
+                    if let Some(body) = document.body() {
+                        let _ = body.append_child(&iframe);
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn remove_web_preview_iframe(&mut self) {
+        if let Some(window) = web_sys::window() {
+            if let Some(document) = window.document() {
+                if let Some(existing) = document.get_element_by_id("aida-web-preview-iframe") {
+                    existing.remove();
+                }
+            }
+        }
+        self.web_preview_iframe_loaded = false;
+        self.web_preview_current_url = None;
+    }
+
     fn show_form(&mut self, ui: &mut egui::Ui, is_edit: bool) {
         let title = if is_edit {
             "Edit Requirement"
@@ -29043,6 +29294,14 @@ fn main() {
                     DetailTab::History,
                     format!("📜 History ({})", req.history.len()),
                 );
+                // Only show Web Preview tab if there are URLs
+                if !req.urls.is_empty() {
+                    ui.selectable_value(
+                        &mut self.active_tab,
+                        DetailTab::WebPreview,
+                        "🌐 Web Preview",
+                    );
+                }
             });
 
             ui.separator();
@@ -29432,6 +29691,9 @@ fn main() {
                     }
                     DetailTab::Description => {
                         // Should not reach here - handled by show_fields branch
+                    }
+                    DetailTab::WebPreview => {
+                        self.show_web_preview_tab(ui, req);
                     }
                 });
         }
@@ -31876,6 +32138,14 @@ impl eframe::App for RequirementsApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Reset per-frame flags at the start of each frame
         self.quick_change_consumed_action = false;
+
+        // Clean up web preview iframe when not on WebPreview tab (WASM only)
+        #[cfg(target_arch = "wasm32")]
+        {
+            if self.active_tab != DetailTab::WebPreview && self.web_preview_iframe_loaded {
+                self.remove_web_preview_iframe();
+            }
+        }
 
         // Double-ESC navigation to default view (FR-0318)
         // Check for ESC press when no popup/dialog is consuming it
