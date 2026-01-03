@@ -31515,6 +31515,7 @@ fn main() {
             })
             .unwrap_or_else(|| "http://localhost:8080".to_string());
         let url = format!("{}/api/projects", server_addr);
+        log::info!("WASM: fetch_projects called, URL: {}", url);
 
         let projects = Rc::clone(&self.wasm_projects);
         let error = Rc::clone(&self.wasm_projects_error);
@@ -31522,6 +31523,7 @@ fn main() {
         let ctx = self.wasm_egui_ctx.clone();
 
         wasm_bindgen_futures::spawn_local(async move {
+            log::info!("WASM: fetch_projects async task started");
             let result = async {
                 let window = web_sys::window().ok_or("No window")?;
 
@@ -31556,13 +31558,16 @@ fn main() {
 
             match result {
                 Ok(list) => {
+                    log::info!("WASM: fetch_projects success, got {} projects", list.len());
                     *projects.borrow_mut() = Some(list);
                 }
                 Err(e) => {
+                    log::error!("WASM: fetch_projects error: {}", e);
                     *error.borrow_mut() = Some(format!("Failed to load projects: {}", e));
                 }
             }
             *loading.borrow_mut() = false;
+            log::info!("WASM: fetch_projects completed, loading set to false");
             ctx.request_repaint();
         });
     }

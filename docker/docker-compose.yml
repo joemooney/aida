@@ -216,6 +216,8 @@ services:
 
     labels:
       - traefik.enable=true
+      # Use proxy network for load balancing (not internal)
+      - traefik.docker.network=proxy
 
       # Services (shared between HTTP and HTTPS routers)
       - traefik.http.services.aida-rest.loadbalancer.server.port=8080
