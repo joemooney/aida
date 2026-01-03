@@ -2,12 +2,13 @@
 //! REST API implementation for AIDA requirements management
 //!
 //! Provides JSON-based REST endpoints that mirror the gRPC service.
+//! Supports multi-project via X-Project header.
 
 use std::sync::Arc;
 
 use axum::{
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
     routing::{delete, get, post, put},
     Json, Router,
@@ -15,19 +16,32 @@ use axum::{
 use serde::{Deserialize, Serialize};
 
 use crate::convert::*;
+use crate::projects::ProjectManager;
 use crate::proto;
 use crate::service::ServerState;
 
+/// Application state containing the ProjectManager
+pub struct AppState {
+    pub project_manager: Arc<ProjectManager>,
+}
+
 /// Create the REST API router
-pub fn create_rest_router(state: Arc<ServerState>) -> Router {
+pub fn create_rest_router(project_manager: Arc<ProjectManager>) -> Router {
+    let state = Arc::new(AppState { project_manager });
+
     Router::new()
+        // Project management (no X-Project header required)
+        .route("/api/projects", get(list_projects))
+        .route("/api/projects", post(create_project))
+        .route("/api/projects/:name", get(get_project))
+        .route("/api/projects/:name", delete(delete_project))
         // Server status
         .route("/api/status", get(get_status))
         .route("/api/ping", get(ping))
-        // Store operations
+        // Store operations (require X-Project header)
         .route("/api/store", get(get_store))
         .route("/api/store/metadata", get(get_store_metadata))
-        // Requirements CRUD
+        // Requirements CRUD (require X-Project header)
         .route("/api/requirements", get(list_requirements))
         .route("/api/requirements", post(create_requirement))
         .route("/api/requirements/:id", get(get_requirement))
@@ -37,6 +51,23 @@ pub fn create_rest_router(state: Arc<ServerState>) -> Router {
         .route("/api/requirements/:id/comments", post(add_comment))
         // Search
         .route("/api/search", get(search_requirements))
+        .with_state(state)
+}
+
+/// Legacy router for backwards compatibility (single project mode)
+pub fn create_rest_router_legacy(state: Arc<ServerState>) -> Router {
+    Router::new()
+        .route("/api/status", get(get_status_legacy))
+        .route("/api/ping", get(ping_legacy))
+        .route("/api/store", get(get_store_legacy))
+        .route("/api/store/metadata", get(get_store_metadata_legacy))
+        .route("/api/requirements", get(list_requirements_legacy))
+        .route("/api/requirements", post(create_requirement_legacy))
+        .route("/api/requirements/:id", get(get_requirement_legacy))
+        .route("/api/requirements/:id", put(update_requirement_legacy))
+        .route("/api/requirements/:id", delete(delete_requirement_legacy))
+        .route("/api/requirements/:id/comments", post(add_comment_legacy))
+        .route("/api/search", get(search_requirements_legacy))
         .with_state(state)
 }
 
@@ -67,6 +98,20 @@ struct PingResponse {
     status: String,
     version: String,
     uptime_seconds: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectResponse {
+    name: String,
+    description: String,
+    created_at: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectListResponse {
+    projects: Vec<ProjectResponse>,
 }
 
 // ============================================================================
@@ -106,6 +151,13 @@ struct SearchQuery {
 // ============================================================================
 // Request types
 // ============================================================================
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CreateProjectRequest {
+    name: String,
+    description: Option<String>,
+}
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -153,46 +205,168 @@ struct AddCommentRequest {
 }
 
 // ============================================================================
-// Handlers
+// Helper: Extract project from headers and get backend
 // ============================================================================
 
-async fn ping(State(state): State<Arc<ServerState>>) -> impl IntoResponse {
+async fn get_project_backend(
+    app_state: &AppState,
+    headers: &HeaderMap,
+) -> Result<Arc<ServerState>, (StatusCode, Json<ApiError>)> {
+    let project = headers
+        .get("x-project")
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "Missing X-Project header. Specify which project to access.",
+            )
+        })?;
+
+    app_state
+        .project_manager
+        .get_backend(project)
+        .await
+        .map_err(|e| ApiError::new(StatusCode::NOT_FOUND, format!("Project error: {}", e)))
+}
+
+// ============================================================================
+// Project management handlers
+// ============================================================================
+
+async fn list_projects(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<ProjectListResponse>, (StatusCode, Json<ApiError>)> {
+    let projects = state.project_manager.list_projects().await;
+    Ok(Json(ProjectListResponse {
+        projects: projects
+            .into_iter()
+            .map(|p| ProjectResponse {
+                name: p.name,
+                description: p.description,
+                created_at: p.created_at.to_rfc3339(),
+            })
+            .collect(),
+    }))
+}
+
+async fn create_project(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<CreateProjectRequest>,
+) -> Result<(StatusCode, Json<ProjectResponse>), (StatusCode, Json<ApiError>)> {
+    let project = state
+        .project_manager
+        .create_project(&body.name, &body.description.unwrap_or_default())
+        .await
+        .map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, e.to_string()))?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(ProjectResponse {
+            name: project.name,
+            description: project.description,
+            created_at: project.created_at.to_rfc3339(),
+        }),
+    ))
+}
+
+async fn get_project(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+) -> Result<Json<ProjectResponse>, (StatusCode, Json<ApiError>)> {
+    let project = state
+        .project_manager
+        .get_project(&name)
+        .await
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Project not found: {}", name)))?;
+
+    Ok(Json(ProjectResponse {
+        name: project.name,
+        description: project.description,
+        created_at: project.created_at.to_rfc3339(),
+    }))
+}
+
+async fn delete_project(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
+    state
+        .project_manager
+        .delete_project(&name)
+        .await
+        .map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, e.to_string()))?;
+
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "message": format!("Project '{}' deleted", name)
+    })))
+}
+
+// ============================================================================
+// Server status handlers
+// ============================================================================
+
+async fn ping(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     Json(PingResponse {
         status: "ok".to_string(),
-        version: state.version.clone(),
-        uptime_seconds: state.start_time.elapsed().as_secs(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        uptime_seconds: 0, // TODO: Track server start time
     })
 }
 
 async fn get_status(
-    State(state): State<Arc<ServerState>>,
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
 ) -> Result<Json<proto::GetServerStatusResponse>, (StatusCode, Json<ApiError>)> {
-    let _store = state.store.read().await;
-    let backend_type = state.backend.backend_type();
+    // If X-Project header is provided, get status for that project
+    if let Some(project_header) = headers.get("x-project") {
+        if let Ok(project) = project_header.to_str() {
+            if let Ok(backend) = state.project_manager.get_backend(project).await {
+                let backend_type = backend.backend.backend_type();
+                return Ok(Json(proto::GetServerStatusResponse {
+                    version: env!("CARGO_PKG_VERSION").to_string(),
+                    status: "running".to_string(),
+                    uptime_seconds: backend.start_time.elapsed().as_secs() as i64,
+                    active_connections: 0,
+                    storage_backend: backend_type.to_string().to_lowercase(),
+                    storage_path: project.to_string(),
+                }));
+            }
+        }
+    }
 
+    // Generic status without project context
     Ok(Json(proto::GetServerStatusResponse {
-        version: state.version.clone(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
         status: "running".to_string(),
-        uptime_seconds: state.start_time.elapsed().as_secs() as i64,
-        active_connections: 0, // Not tracked in REST
-        storage_backend: backend_type.to_string().to_lowercase(),
-        storage_path: format!("{}", backend_type),
+        uptime_seconds: 0,
+        active_connections: 0,
+        storage_backend: "multi-project".to_string(),
+        storage_path: state.project_manager.data_dir().to_string_lossy().to_string(),
     }))
 }
 
+// ============================================================================
+// Store handlers (require X-Project header)
+// ============================================================================
+
 async fn get_store(
-    State(state): State<Arc<ServerState>>,
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
 ) -> Result<Json<proto::GetStoreResponse>, (StatusCode, Json<ApiError>)> {
-    let store = state.store.read().await;
+    let backend = get_project_backend(&state, &headers).await?;
+    let store = backend.store.read().await;
     Ok(Json(proto::GetStoreResponse {
         store: Some(store_to_proto(&store)),
     }))
 }
 
 async fn get_store_metadata(
-    State(state): State<Arc<ServerState>>,
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
 ) -> Result<Json<proto::GetStoreMetadataResponse>, (StatusCode, Json<ApiError>)> {
-    let store = state.store.read().await;
+    let backend = get_project_backend(&state, &headers).await?;
+    let store = backend.store.read().await;
     Ok(Json(proto::GetStoreMetadataResponse {
         name: store.name.clone(),
         title: store.title.clone(),
@@ -203,45 +377,45 @@ async fn get_store_metadata(
     }))
 }
 
+// ============================================================================
+// Requirements handlers (require X-Project header)
+// ============================================================================
+
 async fn list_requirements(
-    State(state): State<Arc<ServerState>>,
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Query(query): Query<ListQuery>,
 ) -> Result<Json<proto::ListRequirementsResponse>, (StatusCode, Json<ApiError>)> {
-    let store = state.store.read().await;
+    let backend = get_project_backend(&state, &headers).await?;
+    let store = backend.store.read().await;
 
     let mut requirements: Vec<_> = store
         .requirements
         .iter()
         .filter(|req| {
-            // Filter by archived status
             if !query.include_archived.unwrap_or(false) && req.archived {
                 return false;
             }
-            // Filter by status
             if let Some(ref status) = query.status {
                 if format!("{:?}", req.status).to_lowercase() != status.to_lowercase() {
                     return false;
                 }
             }
-            // Filter by priority
             if let Some(ref priority) = query.priority {
                 if format!("{:?}", req.priority).to_lowercase() != priority.to_lowercase() {
                     return false;
                 }
             }
-            // Filter by type
             if let Some(ref req_type) = query.req_type {
                 if format!("{:?}", req.req_type).to_lowercase() != req_type.to_lowercase() {
                     return false;
                 }
             }
-            // Filter by feature
             if let Some(ref feature) = query.feature {
                 if req.feature.to_lowercase() != feature.to_lowercase() {
                     return false;
                 }
             }
-            // Filter by owner
             if let Some(ref owner) = query.owner {
                 if req.owner.to_lowercase() != owner.to_lowercase() {
                     return false;
@@ -254,7 +428,6 @@ async fn list_requirements(
 
     let total_count = requirements.len() as i32;
 
-    // Apply pagination
     let offset = query.offset.unwrap_or(0) as usize;
     let limit = query.limit.unwrap_or(0) as usize;
 
@@ -272,10 +445,12 @@ async fn list_requirements(
 }
 
 async fn get_requirement(
-    State(state): State<Arc<ServerState>>,
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Json<proto::GetRequirementResponse>, (StatusCode, Json<ApiError>)> {
-    let store = state.store.read().await;
+    let backend = get_project_backend(&state, &headers).await?;
+    let store = backend.store.read().await;
 
     let req = find_requirement(&store, &id)
         .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {}", id)))?;
@@ -286,12 +461,13 @@ async fn get_requirement(
 }
 
 async fn create_requirement(
-    State(state): State<Arc<ServerState>>,
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Json(body): Json<CreateRequirementRequest>,
 ) -> Result<(StatusCode, Json<proto::CreateRequirementResponse>), (StatusCode, Json<ApiError>)> {
-    let mut store = state.store.write().await;
+    let backend = get_project_backend(&state, &headers).await?;
+    let mut store = backend.store.write().await;
 
-    // Build the new requirement
     let mut new_req = aida_core::Requirement::new(
         body.title,
         body.description.unwrap_or_default(),
@@ -307,7 +483,6 @@ async fn create_requirement(
         new_req.tags = tags.into_iter().collect();
     }
 
-    // Add to store with SPEC-ID assignment
     let feature_prefix = store.features.iter()
         .find(|f| f.name == new_req.feature)
         .map(|f| f.prefix.clone());
@@ -321,15 +496,13 @@ async fn create_requirement(
         type_prefix.as_deref(),
     );
 
-    // Get the added requirement with its SPEC-ID
     let added_req = store.requirements.last()
         .ok_or_else(|| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Failed to add requirement"))?;
     let spec_id = added_req.spec_id.clone().unwrap_or_default();
     let proto_req = requirement_to_proto(added_req);
 
-    // Save
     drop(store);
-    if let Err(e) = state.backend.save(&*state.store.read().await) {
+    if let Err(e) = backend.backend.save(&*backend.store.read().await) {
         return Err(ApiError::new(
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to save: {}", e),
@@ -346,18 +519,19 @@ async fn create_requirement(
 }
 
 async fn update_requirement(
-    State(state): State<Arc<ServerState>>,
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Path(id): Path<String>,
     Json(body): Json<UpdateRequirementRequest>,
 ) -> Result<Json<proto::UpdateRequirementResponse>, (StatusCode, Json<ApiError>)> {
-    let mut store = state.store.write().await;
+    let backend = get_project_backend(&state, &headers).await?;
+    let mut store = backend.store.write().await;
 
     let idx = find_requirement_index(&store, &id)
         .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {}", id)))?;
 
     let req = &mut store.requirements[idx];
 
-    // Apply updates
     if let Some(title) = body.title {
         req.title = title;
     }
@@ -407,9 +581,8 @@ async fn update_requirement(
 
     let proto_req = requirement_to_proto(req);
 
-    // Save
     drop(store);
-    if let Err(e) = state.backend.save(&*state.store.read().await) {
+    if let Err(e) = backend.backend.save(&*backend.store.read().await) {
         return Err(ApiError::new(
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to save: {}", e),
@@ -422,19 +595,20 @@ async fn update_requirement(
 }
 
 async fn delete_requirement(
-    State(state): State<Arc<ServerState>>,
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Json<proto::DeleteRequirementResponse>, (StatusCode, Json<ApiError>)> {
-    let mut store = state.store.write().await;
+    let backend = get_project_backend(&state, &headers).await?;
+    let mut store = backend.store.write().await;
 
     let idx = find_requirement_index(&store, &id)
         .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {}", id)))?;
 
     store.requirements.remove(idx);
 
-    // Save
     drop(store);
-    if let Err(e) = state.backend.save(&*state.store.read().await) {
+    if let Err(e) = backend.backend.save(&*backend.store.read().await) {
         return Err(ApiError::new(
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to save: {}", e),
@@ -448,11 +622,13 @@ async fn delete_requirement(
 }
 
 async fn add_comment(
-    State(state): State<Arc<ServerState>>,
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Path(id): Path<String>,
     Json(body): Json<AddCommentRequest>,
 ) -> Result<(StatusCode, Json<proto::AddCommentResponse>), (StatusCode, Json<ApiError>)> {
-    let mut store = state.store.write().await;
+    let backend = get_project_backend(&state, &headers).await?;
+    let mut store = backend.store.write().await;
 
     let idx = find_requirement_index(&store, &id)
         .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {}", id)))?;
@@ -465,9 +641,8 @@ async fn add_comment(
     let proto_comment = comment_to_proto(&comment);
     store.requirements[idx].comments.push(comment);
 
-    // Save
     drop(store);
-    if let Err(e) = state.backend.save(&*state.store.read().await) {
+    if let Err(e) = backend.backend.save(&*backend.store.read().await) {
         return Err(ApiError::new(
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to save: {}", e),
@@ -483,10 +658,12 @@ async fn add_comment(
 }
 
 async fn search_requirements(
-    State(state): State<Arc<ServerState>>,
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Query(query): Query<SearchQuery>,
 ) -> Result<Json<proto::SearchRequirementsResponse>, (StatusCode, Json<ApiError>)> {
-    let store = state.store.read().await;
+    let backend = get_project_backend(&state, &headers).await?;
+    let store = backend.store.read().await;
     let search_text = query.q.unwrap_or_default().to_lowercase();
 
     let search_title = query.search_title.unwrap_or(true);
@@ -498,30 +675,25 @@ async fn search_requirements(
         .requirements
         .iter()
         .filter(|req| {
-            // Filter by archived
             if !query.include_archived.unwrap_or(false) && req.archived {
                 return false;
             }
-            // Filter by status
             if let Some(ref status) = query.status {
                 if format!("{:?}", req.status).to_lowercase() != status.to_lowercase() {
                     return false;
                 }
             }
-            // Filter by type
             if let Some(ref req_type) = query.req_type {
                 if format!("{:?}", req.req_type).to_lowercase() != req_type.to_lowercase() {
                     return false;
                 }
             }
-            // Filter by feature
             if let Some(ref feature) = query.feature {
                 if req.feature.to_lowercase() != feature.to_lowercase() {
                     return false;
                 }
             }
 
-            // Text search
             if search_text.is_empty() {
                 return true;
             }
@@ -554,7 +726,400 @@ async fn search_requirements(
 
     let total_matches = results.len() as i32;
 
-    // Apply limit
+    if let Some(limit) = query.limit {
+        if limit > 0 {
+            results = results.into_iter().take(limit as usize).collect();
+        }
+    }
+
+    Ok(Json(proto::SearchRequirementsResponse {
+        requirements: results,
+        total_matches,
+    }))
+}
+
+// ============================================================================
+// Legacy handlers (for backwards compatibility with single-project mode)
+// ============================================================================
+
+async fn ping_legacy(State(state): State<Arc<ServerState>>) -> impl IntoResponse {
+    Json(PingResponse {
+        status: "ok".to_string(),
+        version: state.version.clone(),
+        uptime_seconds: state.start_time.elapsed().as_secs(),
+    })
+}
+
+async fn get_status_legacy(
+    State(state): State<Arc<ServerState>>,
+) -> Result<Json<proto::GetServerStatusResponse>, (StatusCode, Json<ApiError>)> {
+    let _store = state.store.read().await;
+    let backend_type = state.backend.backend_type();
+
+    Ok(Json(proto::GetServerStatusResponse {
+        version: state.version.clone(),
+        status: "running".to_string(),
+        uptime_seconds: state.start_time.elapsed().as_secs() as i64,
+        active_connections: 0,
+        storage_backend: backend_type.to_string().to_lowercase(),
+        storage_path: format!("{}", backend_type),
+    }))
+}
+
+async fn get_store_legacy(
+    State(state): State<Arc<ServerState>>,
+) -> Result<Json<proto::GetStoreResponse>, (StatusCode, Json<ApiError>)> {
+    let store = state.store.read().await;
+    Ok(Json(proto::GetStoreResponse {
+        store: Some(store_to_proto(&store)),
+    }))
+}
+
+async fn get_store_metadata_legacy(
+    State(state): State<Arc<ServerState>>,
+) -> Result<Json<proto::GetStoreMetadataResponse>, (StatusCode, Json<ApiError>)> {
+    let store = state.store.read().await;
+    Ok(Json(proto::GetStoreMetadataResponse {
+        name: store.name.clone(),
+        title: store.title.clone(),
+        description: store.description.clone(),
+        requirement_count: store.requirements.len() as i32,
+        user_count: store.users.len() as i32,
+        feature_count: store.features.len() as i32,
+    }))
+}
+
+async fn list_requirements_legacy(
+    State(state): State<Arc<ServerState>>,
+    Query(query): Query<ListQuery>,
+) -> Result<Json<proto::ListRequirementsResponse>, (StatusCode, Json<ApiError>)> {
+    let store = state.store.read().await;
+
+    let mut requirements: Vec<_> = store
+        .requirements
+        .iter()
+        .filter(|req| {
+            if !query.include_archived.unwrap_or(false) && req.archived {
+                return false;
+            }
+            if let Some(ref status) = query.status {
+                if format!("{:?}", req.status).to_lowercase() != status.to_lowercase() {
+                    return false;
+                }
+            }
+            if let Some(ref priority) = query.priority {
+                if format!("{:?}", req.priority).to_lowercase() != priority.to_lowercase() {
+                    return false;
+                }
+            }
+            if let Some(ref req_type) = query.req_type {
+                if format!("{:?}", req.req_type).to_lowercase() != req_type.to_lowercase() {
+                    return false;
+                }
+            }
+            if let Some(ref feature) = query.feature {
+                if req.feature.to_lowercase() != feature.to_lowercase() {
+                    return false;
+                }
+            }
+            if let Some(ref owner) = query.owner {
+                if req.owner.to_lowercase() != owner.to_lowercase() {
+                    return false;
+                }
+            }
+            true
+        })
+        .map(requirement_to_proto)
+        .collect();
+
+    let total_count = requirements.len() as i32;
+
+    let offset = query.offset.unwrap_or(0) as usize;
+    let limit = query.limit.unwrap_or(0) as usize;
+
+    if offset > 0 {
+        requirements = requirements.into_iter().skip(offset).collect();
+    }
+    if limit > 0 {
+        requirements = requirements.into_iter().take(limit).collect();
+    }
+
+    Ok(Json(proto::ListRequirementsResponse {
+        requirements,
+        total_count,
+    }))
+}
+
+async fn get_requirement_legacy(
+    State(state): State<Arc<ServerState>>,
+    Path(id): Path<String>,
+) -> Result<Json<proto::GetRequirementResponse>, (StatusCode, Json<ApiError>)> {
+    let store = state.store.read().await;
+
+    let req = find_requirement(&store, &id)
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {}", id)))?;
+
+    Ok(Json(proto::GetRequirementResponse {
+        requirement: Some(requirement_to_proto(req)),
+    }))
+}
+
+async fn create_requirement_legacy(
+    State(state): State<Arc<ServerState>>,
+    Json(body): Json<CreateRequirementRequest>,
+) -> Result<(StatusCode, Json<proto::CreateRequirementResponse>), (StatusCode, Json<ApiError>)> {
+    let mut store = state.store.write().await;
+
+    let mut new_req = aida_core::Requirement::new(
+        body.title,
+        body.description.unwrap_or_default(),
+    );
+    new_req.status = parse_status(&body.status.unwrap_or_else(|| "Draft".to_string()));
+    new_req.priority = parse_priority(&body.priority.unwrap_or_else(|| "Medium".to_string()));
+    new_req.req_type = parse_req_type(&body.req_type.unwrap_or_else(|| "Functional".to_string()));
+    new_req.owner = body.owner.unwrap_or_default();
+    new_req.feature = body.feature.unwrap_or_else(|| "Uncategorized".to_string());
+    new_req.prefix_override = body.prefix_override;
+    new_req.created_by = body.created_by;
+    if let Some(tags) = body.tags {
+        new_req.tags = tags.into_iter().collect();
+    }
+
+    let feature_prefix = store.features.iter()
+        .find(|f| f.name == new_req.feature)
+        .map(|f| f.prefix.clone());
+    let type_prefix = store.type_definitions.iter()
+        .find(|td| td.name == new_req.req_type.to_string().replace(" ", "").replace("-", ""))
+        .and_then(|td| td.prefix.clone());
+
+    store.add_requirement_with_id(
+        new_req.clone(),
+        feature_prefix.as_deref(),
+        type_prefix.as_deref(),
+    );
+
+    let added_req = store.requirements.last()
+        .ok_or_else(|| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Failed to add requirement"))?;
+    let spec_id = added_req.spec_id.clone().unwrap_or_default();
+    let proto_req = requirement_to_proto(added_req);
+
+    drop(store);
+    if let Err(e) = state.backend.save(&*state.store.read().await) {
+        return Err(ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to save: {}", e),
+        ));
+    }
+
+    Ok((
+        StatusCode::CREATED,
+        Json(proto::CreateRequirementResponse {
+            requirement: Some(proto_req),
+            spec_id,
+        }),
+    ))
+}
+
+async fn update_requirement_legacy(
+    State(state): State<Arc<ServerState>>,
+    Path(id): Path<String>,
+    Json(body): Json<UpdateRequirementRequest>,
+) -> Result<Json<proto::UpdateRequirementResponse>, (StatusCode, Json<ApiError>)> {
+    let mut store = state.store.write().await;
+
+    let idx = find_requirement_index(&store, &id)
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {}", id)))?;
+
+    let req = &mut store.requirements[idx];
+
+    if let Some(title) = body.title {
+        req.title = title;
+    }
+    if let Some(description) = body.description {
+        req.description = description;
+    }
+    if let Some(status) = body.status {
+        req.status = parse_status(&status);
+    }
+    if let Some(priority) = body.priority {
+        req.priority = parse_priority(&priority);
+    }
+    if let Some(owner) = body.owner {
+        req.owner = owner;
+    }
+    if let Some(feature) = body.feature {
+        req.feature = feature;
+    }
+    if let Some(req_type) = body.req_type {
+        req.req_type = parse_req_type(&req_type);
+    }
+    if let Some(archived) = body.archived {
+        req.archived = archived;
+    }
+    if let Some(custom_status) = body.custom_status {
+        req.custom_status = Some(custom_status);
+    }
+    if let Some(custom_priority) = body.custom_priority {
+        req.custom_priority = Some(custom_priority);
+    }
+    if let Some(tags) = body.tags {
+        if body.replace_tags.unwrap_or(false) {
+            req.tags = tags.into_iter().collect();
+        } else {
+            req.tags.extend(tags);
+        }
+    }
+    if let Some(custom_fields) = body.custom_fields {
+        if body.replace_custom_fields.unwrap_or(false) {
+            req.custom_fields = custom_fields;
+        } else {
+            req.custom_fields.extend(custom_fields);
+        }
+    }
+
+    req.modified_at = chrono::Utc::now();
+
+    let proto_req = requirement_to_proto(req);
+
+    drop(store);
+    if let Err(e) = state.backend.save(&*state.store.read().await) {
+        return Err(ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to save: {}", e),
+        ));
+    }
+
+    Ok(Json(proto::UpdateRequirementResponse {
+        requirement: Some(proto_req),
+    }))
+}
+
+async fn delete_requirement_legacy(
+    State(state): State<Arc<ServerState>>,
+    Path(id): Path<String>,
+) -> Result<Json<proto::DeleteRequirementResponse>, (StatusCode, Json<ApiError>)> {
+    let mut store = state.store.write().await;
+
+    let idx = find_requirement_index(&store, &id)
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {}", id)))?;
+
+    store.requirements.remove(idx);
+
+    drop(store);
+    if let Err(e) = state.backend.save(&*state.store.read().await) {
+        return Err(ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to save: {}", e),
+        ));
+    }
+
+    Ok(Json(proto::DeleteRequirementResponse {
+        success: true,
+        message: format!("Deleted requirement: {}", id),
+    }))
+}
+
+async fn add_comment_legacy(
+    State(state): State<Arc<ServerState>>,
+    Path(id): Path<String>,
+    Json(body): Json<AddCommentRequest>,
+) -> Result<(StatusCode, Json<proto::AddCommentResponse>), (StatusCode, Json<ApiError>)> {
+    let mut store = state.store.write().await;
+
+    let idx = find_requirement_index(&store, &id)
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {}", id)))?;
+
+    let comment = aida_core::Comment::new(
+        body.content,
+        body.author.unwrap_or_else(|| "anonymous".to_string()),
+    );
+
+    let proto_comment = comment_to_proto(&comment);
+    store.requirements[idx].comments.push(comment);
+
+    drop(store);
+    if let Err(e) = state.backend.save(&*state.store.read().await) {
+        return Err(ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to save: {}", e),
+        ));
+    }
+
+    Ok((
+        StatusCode::CREATED,
+        Json(proto::AddCommentResponse {
+            comment: Some(proto_comment),
+        }),
+    ))
+}
+
+async fn search_requirements_legacy(
+    State(state): State<Arc<ServerState>>,
+    Query(query): Query<SearchQuery>,
+) -> Result<Json<proto::SearchRequirementsResponse>, (StatusCode, Json<ApiError>)> {
+    let store = state.store.read().await;
+    let search_text = query.q.unwrap_or_default().to_lowercase();
+
+    let search_title = query.search_title.unwrap_or(true);
+    let search_description = query.search_description.unwrap_or(true);
+    let search_comments = query.search_comments.unwrap_or(false);
+    let search_spec_id = query.search_spec_id.unwrap_or(true);
+
+    let mut results: Vec<_> = store
+        .requirements
+        .iter()
+        .filter(|req| {
+            if !query.include_archived.unwrap_or(false) && req.archived {
+                return false;
+            }
+            if let Some(ref status) = query.status {
+                if format!("{:?}", req.status).to_lowercase() != status.to_lowercase() {
+                    return false;
+                }
+            }
+            if let Some(ref req_type) = query.req_type {
+                if format!("{:?}", req.req_type).to_lowercase() != req_type.to_lowercase() {
+                    return false;
+                }
+            }
+            if let Some(ref feature) = query.feature {
+                if req.feature.to_lowercase() != feature.to_lowercase() {
+                    return false;
+                }
+            }
+
+            if search_text.is_empty() {
+                return true;
+            }
+            let mut matched = false;
+            if search_title && req.title.to_lowercase().contains(&search_text) {
+                matched = true;
+            }
+            if search_description && req.description.to_lowercase().contains(&search_text) {
+                matched = true;
+            }
+            if search_spec_id {
+                if let Some(ref spec_id) = req.spec_id {
+                    if spec_id.to_lowercase().contains(&search_text) {
+                        matched = true;
+                    }
+                }
+            }
+            if search_comments {
+                for comment in &req.comments {
+                    if comment.content.to_lowercase().contains(&search_text) {
+                        matched = true;
+                        break;
+                    }
+                }
+            }
+            matched
+        })
+        .map(requirement_to_proto)
+        .collect();
+
+    let total_matches = results.len() as i32;
+
     if let Some(limit) = query.limit {
         if limit > 0 {
             results = results.into_iter().take(limit as usize).collect();
@@ -575,11 +1140,9 @@ fn find_requirement<'a>(
     store: &'a aida_core::RequirementsStore,
     id: &str,
 ) -> Option<&'a aida_core::Requirement> {
-    // Try UUID first
     if let Ok(uuid) = uuid::Uuid::parse_str(id) {
         return store.requirements.iter().find(|r| r.id == uuid);
     }
-    // Try SPEC-ID
     store
         .requirements
         .iter()
@@ -587,11 +1150,9 @@ fn find_requirement<'a>(
 }
 
 fn find_requirement_index(store: &aida_core::RequirementsStore, id: &str) -> Option<usize> {
-    // Try UUID first
     if let Ok(uuid) = uuid::Uuid::parse_str(id) {
         return store.requirements.iter().position(|r| r.id == uuid);
     }
-    // Try SPEC-ID
     store
         .requirements
         .iter()

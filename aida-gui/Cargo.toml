@@ -72,7 +72,14 @@ web-sys = { version = "0.3", optional = true, features = [
     "Url",
     "UrlSearchParams",
     "Storage",
+    # For REST API calls (project selector)
+    "Headers",
+    "Request",
+    "RequestInit",
+    "RequestMode",
+    "Response",
 ] }
+serde-wasm-bindgen = { version = "0.6", optional = true }
 console_log = { version = "1", optional = true }
 console_error_panic_hook = { version = "0.1", optional = true }
 log = { version = "0.4", optional = true }
@@ -112,6 +119,7 @@ web = [
     "console_error_panic_hook",
     "log",
     "serde_json",
+    "serde-wasm-bindgen",
     # WASM gRPC-Web client
     "tonic-web-wasm-client",
 ]

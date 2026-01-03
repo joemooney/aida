@@ -71,9 +71,10 @@ mod web_entry {
         init_web();
         log::info!("AIDA WASM: init_web() completed");
 
-        // Get server address from URL query params
+        // Get server address and project from URL query params
         let server_address = platform::web::get_query_param("server");
-        log::info!("AIDA WASM: server_address = {:?}", server_address);
+        let project = platform::web::get_query_param("project");
+        log::info!("AIDA WASM: server_address = {:?}, project = {:?}", server_address, project);
 
         // Start the eframe web runner
         let web_options = eframe::WebOptions::default();

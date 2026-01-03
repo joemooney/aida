@@ -3602,6 +3602,15 @@ impl ViewPreset {
     }
 }
 
+/// Project information for multi-project support (WASM only)
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone, Debug, Deserialize)]
+pub struct ProjectInfo {
+    pub name: String,
+    pub description: String,
+    pub created_at: String,
+}
+
 pub struct RequirementsApp {
     #[cfg(not(target_arch = "wasm32"))]
     storage: Storage,
@@ -3613,6 +3622,8 @@ pub struct RequirementsApp {
     remote_client: Option<crate::remote::StorageBackend>,
     /// Server address string for display
     server_addr: Option<String>,
+    /// Current project name (for multi-project support)
+    current_project: Option<String>,
     current_view: View,
     selected_idx: Option<usize>,
     filter_text: String,
@@ -4228,6 +4239,19 @@ pub struct RequirementsApp {
     wasm_saving: bool,                                               // True while saving to server
     #[cfg(target_arch = "wasm32")]
     wasm_egui_ctx: egui::Context,                                    // egui context for async repaint requests
+    // Project selector state (WASM multi-project support)
+    #[cfg(target_arch = "wasm32")]
+    wasm_projects: Rc<RefCell<Option<Vec<ProjectInfo>>>>,            // Available projects from server
+    #[cfg(target_arch = "wasm32")]
+    wasm_projects_error: Rc<RefCell<Option<String>>>,                // Error loading projects
+    #[cfg(target_arch = "wasm32")]
+    wasm_projects_loading: bool,                                     // True while loading projects
+    #[cfg(target_arch = "wasm32")]
+    wasm_new_project_name: String,                                   // New project name input
+    #[cfg(target_arch = "wasm32")]
+    wasm_new_project_description: String,                            // New project description input
+    #[cfg(target_arch = "wasm32")]
+    wasm_creating_project: bool,                                     // True while creating a project
 
     // Templates view state
     #[cfg(not(target_arch = "wasm32"))]
@@ -4486,6 +4510,7 @@ impl RequirementsApp {
             #[cfg(feature = "remote")]
             remote_client: Some(remote_backend),
             server_addr: Some(server_addr.to_string()),
+            current_project: None, // Server mode doesn't use project header
             current_view: View::List,
             selected_idx: None,
             filter_text: String::new(),
@@ -5101,6 +5126,7 @@ impl RequirementsApp {
             #[cfg(feature = "remote")]
             remote_client: None,
             server_addr: None,
+            current_project: None,
             current_view: View::List,
             selected_idx: None,
             filter_text: String::new(),
@@ -5638,14 +5664,15 @@ impl RequirementsApp {
             cc.egui_ctx.set_style(style);
         }
 
-        // Get server address from URL query param (?server=...) or use default
+        // Get server address and project from URL query params
         let server_addr = crate::platform::web::get_query_param("server")
             .unwrap_or_else(|| "http://localhost:50051".to_string());
-        log::info!("WASM: Connecting to server at {}", server_addr);
+        let current_project = crate::platform::web::get_query_param("project");
+        log::info!("WASM: Connecting to server at {}, project: {:?}", server_addr, current_project);
 
         // Create gRPC-Web client and shared state for async loading
         let (grpc_client, wasm_pending_store, wasm_load_error, wasm_loading) =
-            match GrpcStorageClient::connect(&server_addr) {
+            match GrpcStorageClient::connect_with_project(&server_addr, current_project.clone()) {
                 Ok(client) => {
                     let client = Rc::new(client);
                     let pending_store = Rc::new(RefCell::new(None));
@@ -5708,6 +5735,7 @@ impl RequirementsApp {
             #[cfg(feature = "remote")]
             remote_client: None,
             server_addr: Some(server_addr),
+            current_project,
             current_view: View::List,
             selected_idx: None,
             filter_text: String::new(),
@@ -6068,6 +6096,13 @@ impl RequirementsApp {
             wasm_update_error: Rc::new(RefCell::new(None)),
             wasm_saving: false,
             wasm_egui_ctx: cc.egui_ctx.clone(),
+            // Project selector state
+            wasm_projects: Rc::new(RefCell::new(None)),
+            wasm_projects_error: Rc::new(RefCell::new(None)),
+            wasm_projects_loading: false,
+            wasm_new_project_name: String::new(),
+            wasm_new_project_description: String::new(),
+            wasm_creating_project: false,
         }
     }
 
@@ -31324,6 +31359,293 @@ fn main() {
             self.show_filter_dialog_list2 = false;
         }
     }
+
+    /// Show project selector for WASM multi-project support
+    #[cfg(target_arch = "wasm32")]
+    fn show_project_selector(&mut self, ctx: &egui::Context) {
+        // Fetch projects if not yet loaded and not currently loading
+        if self.wasm_projects.borrow().is_none() && !self.wasm_projects_loading {
+            self.fetch_projects();
+        }
+
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.vertical_centered(|ui| {
+                ui.add_space(40.0);
+                ui.heading("AIDA - Select Project");
+                ui.add_space(20.0);
+
+                // Show error if any
+                let error_text = self.wasm_projects_error.borrow().clone();
+                if let Some(ref error) = error_text {
+                    ui.colored_label(egui::Color32::RED, error);
+                    ui.add_space(10.0);
+                    if ui.button("Retry").clicked() {
+                        *self.wasm_projects_error.borrow_mut() = None;
+                        self.fetch_projects();
+                    }
+                    ui.add_space(20.0);
+                }
+
+                // Loading indicator
+                if self.wasm_projects_loading {
+                    ui.spinner();
+                    ui.label("Loading projects...");
+                    return;
+                }
+
+                // Project list
+                if let Some(ref projects) = *self.wasm_projects.borrow() {
+                    ui.group(|ui| {
+                        ui.set_min_width(400.0);
+                        ui.heading("Existing Projects");
+                        ui.add_space(10.0);
+
+                        if projects.is_empty() {
+                            ui.label("No projects yet. Create one below!");
+                        } else {
+                            egui::ScrollArea::vertical()
+                                .max_height(300.0)
+                                .show(ui, |ui| {
+                                    for project in projects.iter() {
+                                        ui.horizontal(|ui| {
+                                            ui.group(|ui| {
+                                                ui.set_min_width(350.0);
+                                                ui.vertical(|ui| {
+                                                    if ui.button(&project.name).clicked() {
+                                                        self.navigate_to_project(&project.name);
+                                                    }
+                                                    if !project.description.is_empty() {
+                                                        ui.label(
+                                                            egui::RichText::new(&project.description)
+                                                                .small()
+                                                                .color(egui::Color32::GRAY),
+                                                        );
+                                                    }
+                                                });
+                                            });
+                                        });
+                                        ui.add_space(5.0);
+                                    }
+                                });
+                        }
+                    });
+                    ui.add_space(20.0);
+                }
+
+                // Create new project section
+                ui.group(|ui| {
+                    ui.set_min_width(400.0);
+                    ui.heading("Create New Project");
+                    ui.add_space(10.0);
+
+                    ui.horizontal(|ui| {
+                        ui.label("Name:");
+                        ui.text_edit_singleline(&mut self.wasm_new_project_name);
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Description:");
+                        ui.text_edit_singleline(&mut self.wasm_new_project_description);
+                    });
+                    ui.add_space(10.0);
+
+                    let name_valid = !self.wasm_new_project_name.is_empty()
+                        && self.wasm_new_project_name.chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false)
+                        && self.wasm_new_project_name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+
+                    ui.add_enabled_ui(name_valid && !self.wasm_creating_project, |ui| {
+                        if ui.button("Create Project").clicked() {
+                            self.create_project();
+                        }
+                    });
+
+                    if self.wasm_creating_project {
+                        ui.spinner();
+                    }
+
+                    if !name_valid && !self.wasm_new_project_name.is_empty() {
+                        ui.colored_label(
+                            egui::Color32::YELLOW,
+                            "Name must start with a letter and contain only letters, numbers, hyphens, or underscores",
+                        );
+                    }
+                });
+
+                ui.add_space(20.0);
+                ui.label(
+                    egui::RichText::new("Or add ?project=name to the URL to access a project directly")
+                        .small()
+                        .color(egui::Color32::GRAY),
+                );
+            });
+        });
+    }
+
+    /// Fetch projects from REST API (WASM only)
+    #[cfg(target_arch = "wasm32")]
+    fn fetch_projects(&mut self) {
+        use wasm_bindgen::prelude::*;
+        use wasm_bindgen_futures::JsFuture;
+        use web_sys::{Request, RequestInit, RequestMode, Response};
+
+        self.wasm_projects_loading = true;
+
+        // Build API URL from server address
+        let server_addr = self.server_addr.as_ref()
+            .map(|s| s.replace(":50051", ":8080")) // Use REST port
+            .unwrap_or_else(|| "http://localhost:8080".to_string());
+        let url = format!("{}/api/projects", server_addr);
+
+        let projects = Rc::clone(&self.wasm_projects);
+        let error = Rc::clone(&self.wasm_projects_error);
+        let ctx = self.wasm_egui_ctx.clone();
+
+        wasm_bindgen_futures::spawn_local(async move {
+            let result = async {
+                let window = web_sys::window().ok_or("No window")?;
+
+                let mut opts = RequestInit::new();
+                opts.method("GET");
+                opts.mode(RequestMode::Cors);
+
+                let request = Request::new_with_str_and_init(&url, &opts)
+                    .map_err(|_| "Failed to create request")?;
+                request.headers().set("Accept", "application/json")
+                    .map_err(|_| "Failed to set header")?;
+
+                let resp_value = JsFuture::from(window.fetch_with_request(&request))
+                    .await
+                    .map_err(|_| "Fetch failed")?;
+                let resp: Response = resp_value.dyn_into()
+                    .map_err(|_| "Response cast failed")?;
+
+                if !resp.ok() {
+                    return Err(format!("HTTP {}", resp.status()).into());
+                }
+
+                let json = JsFuture::from(resp.json().map_err(|_| "JSON parse failed")?)
+                    .await
+                    .map_err(|_| "JSON parse failed")?;
+
+                let project_list: Vec<ProjectInfo> = serde_wasm_bindgen::from_value(json)
+                    .map_err(|e| format!("Deserialize failed: {:?}", e))?;
+
+                Ok::<_, Box<dyn std::error::Error>>(project_list)
+            }.await;
+
+            match result {
+                Ok(list) => {
+                    *projects.borrow_mut() = Some(list);
+                }
+                Err(e) => {
+                    *error.borrow_mut() = Some(format!("Failed to load projects: {}", e));
+                }
+            }
+            ctx.request_repaint();
+        });
+    }
+
+    /// Create a new project via REST API (WASM only)
+    #[cfg(target_arch = "wasm32")]
+    fn create_project(&mut self) {
+        use wasm_bindgen::prelude::*;
+        use wasm_bindgen_futures::JsFuture;
+        use web_sys::{Request, RequestInit, RequestMode, Response};
+
+        if self.wasm_new_project_name.is_empty() {
+            return;
+        }
+
+        self.wasm_creating_project = true;
+
+        let server_addr = self.server_addr.as_ref()
+            .map(|s| s.replace(":50051", ":8080"))
+            .unwrap_or_else(|| "http://localhost:8080".to_string());
+        let url = format!("{}/api/projects", server_addr);
+
+        let name = self.wasm_new_project_name.clone();
+        let description = self.wasm_new_project_description.clone();
+        let projects = Rc::clone(&self.wasm_projects);
+        let error = Rc::clone(&self.wasm_projects_error);
+        let ctx = self.wasm_egui_ctx.clone();
+
+        wasm_bindgen_futures::spawn_local(async move {
+            let result = async {
+                let window = web_sys::window().ok_or("No window")?;
+
+                let body = serde_json::json!({
+                    "name": name,
+                    "description": description
+                });
+
+                let mut opts = RequestInit::new();
+                opts.method("POST");
+                opts.mode(RequestMode::Cors);
+                opts.body(Some(&JsValue::from_str(&body.to_string())));
+
+                let request = Request::new_with_str_and_init(&url, &opts)
+                    .map_err(|_| "Failed to create request")?;
+                request.headers().set("Content-Type", "application/json")
+                    .map_err(|_| "Failed to set header")?;
+
+                let resp_value = JsFuture::from(window.fetch_with_request(&request))
+                    .await
+                    .map_err(|_| "Fetch failed")?;
+                let resp: Response = resp_value.dyn_into()
+                    .map_err(|_| "Response cast failed")?;
+
+                if !resp.ok() {
+                    let status = resp.status();
+                    let text = JsFuture::from(resp.text().map_err(|_| "Text parse failed")?)
+                        .await
+                        .map_err(|_| "Text parse failed")?
+                        .as_string()
+                        .unwrap_or_default();
+                    return Err(format!("HTTP {}: {}", status, text).into());
+                }
+
+                let json = JsFuture::from(resp.json().map_err(|_| "JSON parse failed")?)
+                    .await
+                    .map_err(|_| "JSON parse failed")?;
+
+                let created: ProjectInfo = serde_wasm_bindgen::from_value(json)
+                    .map_err(|e| format!("Deserialize failed: {:?}", e))?;
+
+                Ok::<_, Box<dyn std::error::Error>>(created)
+            }.await;
+
+            match result {
+                Ok(created) => {
+                    // Add to local list
+                    if let Some(ref mut list) = *projects.borrow_mut() {
+                        list.push(created);
+                    }
+                }
+                Err(e) => {
+                    *error.borrow_mut() = Some(format!("Failed to create project: {}", e));
+                }
+            }
+            ctx.request_repaint();
+        });
+
+        // Clear form
+        self.wasm_new_project_name.clear();
+        self.wasm_new_project_description.clear();
+        self.wasm_creating_project = false;
+    }
+
+    /// Navigate to a project by updating the URL (WASM only)
+    #[cfg(target_arch = "wasm32")]
+    fn navigate_to_project(&self, project: &str) {
+        if let Some(window) = web_sys::window() {
+            let server = self.server_addr.as_deref().unwrap_or("http://localhost:50051");
+            let new_url = format!("{}?project={}&server={}",
+                window.location().origin().unwrap_or_default(),
+                project,
+                server
+            );
+            let _ = window.location().set_href(&new_url);
+        }
+    }
 }
 
 impl eframe::App for RequirementsApp {
@@ -32939,6 +33261,15 @@ impl eframe::App for RequirementsApp {
                 // Mouse released but we didn't catch it - clear state
             }
         });
+
+        // WASM: Show project selector if no project is selected (multi-project support)
+        #[cfg(target_arch = "wasm32")]
+        {
+            if self.current_project.is_none() {
+                self.show_project_selector(ctx);
+                return;
+            }
+        }
 
         self.show_top_panel(ctx);
 

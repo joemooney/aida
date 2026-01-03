@@ -320,6 +320,7 @@ use tonic_web_wasm_client::Client as WasmClient;
 #[cfg(target_arch = "wasm32")]
 pub struct GrpcStorageClient {
     server_addr: String,
+    project: Option<String>,
     client: Arc<Mutex<RequirementsServiceClient<WasmClient>>>,
 }
 
@@ -330,14 +331,45 @@ impl GrpcStorageClient {
     /// # Arguments
     /// * `server_addr` - Server URL (e.g., "http://localhost:50051")
     pub fn connect(server_addr: &str) -> Result<Self> {
+        Self::connect_with_project(server_addr, None)
+    }
+
+    /// Connect to a gRPC-Web server with a specific project
+    ///
+    /// # Arguments
+    /// * `server_addr` - Server URL (e.g., "http://localhost:50051")
+    /// * `project` - Optional project name for multi-project support
+    pub fn connect_with_project(server_addr: &str, project: Option<String>) -> Result<Self> {
         let addr = normalize_addr(server_addr);
         let wasm_client = WasmClient::new(addr.clone());
         let client = RequirementsServiceClient::new(wasm_client);
 
         Ok(GrpcStorageClient {
             server_addr: server_addr.to_string(),
+            project,
             client: Arc::new(Mutex::new(client)),
         })
+    }
+
+    /// Get the current project name
+    pub fn project(&self) -> Option<&str> {
+        self.project.as_deref()
+    }
+
+    /// Set the project for this client
+    pub fn set_project(&mut self, project: Option<String>) {
+        self.project = project;
+    }
+
+    /// Create a tonic request with project metadata
+    fn make_request<T>(&self, message: T) -> tonic::Request<T> {
+        let mut request = tonic::Request::new(message);
+        if let Some(ref project) = self.project {
+            if let Ok(value) = project.parse() {
+                request.metadata_mut().insert("x-project", value);
+            }
+        }
+        request
     }
 
     /// Get a mutable reference to the inner client for async operations
@@ -431,7 +463,7 @@ impl GrpcStorageClient {
     /// Async version of load() for WASM
     pub async fn load_async(&self) -> Result<RequirementsStore> {
         let mut client = self.client.lock().unwrap();
-        let request = proto::GetStoreRequest {};
+        let request = self.make_request(proto::GetStoreRequest {});
         let response = client.get_store(request).await
             .map_err(|e| anyhow::anyhow!("Failed to get store: {}", e))?;
         let proto_store = response.into_inner().store
@@ -442,7 +474,7 @@ impl GrpcStorageClient {
     /// Async version of get_server_status() for WASM
     pub async fn get_server_status_async(&self) -> Result<ServerStatus> {
         let mut client = self.client.lock().unwrap();
-        let request = proto::GetServerStatusRequest {};
+        let request = self.make_request(proto::GetServerStatusRequest {});
         let response = client.get_server_status(request).await
             .map_err(|e| anyhow::anyhow!("Failed to get server status: {}", e))?;
         let status = response.into_inner();
@@ -459,7 +491,7 @@ impl GrpcStorageClient {
     /// Async version of create_requirement() for WASM
     pub async fn create_requirement_async(&self, req: &Requirement) -> Result<Requirement> {
         let mut client = self.client.lock().unwrap();
-        let request = requirement_to_create_request(req);
+        let request = self.make_request(requirement_to_create_request(req));
         let response = client.create_requirement(request).await
             .map_err(|e| anyhow::anyhow!("Failed to create requirement: {}", e))?;
         let created = response.into_inner().requirement
@@ -471,7 +503,7 @@ impl GrpcStorageClient {
     /// Async version of update_requirement() for WASM
     pub async fn update_requirement_async(&self, req: &Requirement) -> Result<Requirement> {
         let mut client = self.client.lock().unwrap();
-        let request = requirement_to_update_request(req);
+        let request = self.make_request(requirement_to_update_request(req));
         let response = client.update_requirement(request).await
             .map_err(|e| anyhow::anyhow!("Failed to update requirement: {}", e))?;
         let updated = response.into_inner().requirement
@@ -483,9 +515,9 @@ impl GrpcStorageClient {
     /// Async version of delete_requirement() for WASM
     pub async fn delete_requirement_async(&self, id: &str) -> Result<()> {
         let mut client = self.client.lock().unwrap();
-        let request = proto::DeleteRequirementRequest {
+        let request = self.make_request(proto::DeleteRequirementRequest {
             id: id.to_string(),
-        };
+        });
         let response = client.delete_requirement(request).await
             .map_err(|e| anyhow::anyhow!("Failed to delete requirement: {}", e))?;
         if response.into_inner().success {
@@ -504,12 +536,12 @@ impl GrpcStorageClient {
         parent_id: Option<&str>,
     ) -> Result<Comment> {
         let mut client = self.client.lock().unwrap();
-        let request = proto::AddCommentRequest {
+        let request = self.make_request(proto::AddCommentRequest {
             requirement_id: req_id.to_string(),
             content: content.to_string(),
             author: author.to_string(),
             parent_comment_id: parent_id.unwrap_or("").to_string(),
-        };
+        });
         let response = client.add_comment(request).await
             .map_err(|e| anyhow::anyhow!("Failed to add comment: {}", e))?;
         let comment = response.into_inner().comment
@@ -528,13 +560,13 @@ impl GrpcStorageClient {
     ) -> Result<()> {
         let mut client = self.client.lock().unwrap();
         let (proto_rel_type, custom_name) = rel_type_to_proto(rel_type);
-        let request = proto::AddRelationshipRequest {
+        let request = self.make_request(proto::AddRelationshipRequest {
             source_id: source_id.to_string(),
             target_id: target_id.to_string(),
             rel_type: proto_rel_type as i32,
             custom_type_name: custom_name,
             created_by: created_by.to_string(),
-        };
+        });
         let response = client.add_relationship(request).await
             .map_err(|e| anyhow::anyhow!("Failed to add relationship: {}", e))?;
         if response.into_inner().success {

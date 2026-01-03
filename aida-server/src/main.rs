@@ -20,6 +20,7 @@ use tracing_subscriber::FmtSubscriber;
 use aida_core::db::create_backend;
 
 mod convert;
+mod projects;
 mod rest;
 mod service;
 
@@ -137,7 +138,11 @@ struct Args {
     #[arg(short = 'H', long, default_value = "127.0.0.1")]
     host: String,
 
-    /// Path to the requirements database file
+    /// Data directory for project databases (multi-project mode)
+    #[arg(long)]
+    data_dir: Option<String>,
+
+    /// Path to a single database file (single-project/legacy mode)
     #[arg(short, long)]
     database: Option<String>,
 
@@ -187,32 +192,6 @@ async fn main() -> Result<()> {
         .finish();
     tracing::subscriber::set_global_default(subscriber)?;
 
-    // Determine database path/URL
-    // Priority: --database arg > AIDA_DATABASE_URL env var > default file path
-    let db_path = if let Some(path) = args.database {
-        path
-    } else if let Ok(url) = std::env::var("AIDA_DATABASE_URL") {
-        url
-    } else {
-        // Use default path from aida-core
-        aida_core::determine_requirements_path(None)?
-            .to_string_lossy()
-            .to_string()
-    };
-
-    info!("Using database: {}", db_path);
-
-    // Initialize backend (auto-detects postgres:// URLs vs file paths)
-    // Run on blocking thread to avoid runtime conflict with synchronous postgres crate
-    let db_path_clone = db_path.clone();
-    let backend = tokio::task::spawn_blocking(move || {
-        create_backend(std::path::Path::new(&db_path_clone), None)
-    })
-    .await??;
-    info!("Backend type: {}", backend.backend_type());
-
-    let state = Arc::new(ServerState::new(backend)?);
-
     // Build CORS layer - allows gRPC-Web requests from browser clients
     let cors = CorsLayer::new()
         .allow_methods([
@@ -228,6 +207,7 @@ async fn main() -> Result<()> {
             header::ACCEPT,
             header::HeaderName::from_static("x-grpc-web"),
             header::HeaderName::from_static("x-user-agent"),
+            header::HeaderName::from_static("x-project"),
             header::HeaderName::from_static("grpc-timeout"),
             header::HeaderName::from_static("grpc-accept-encoding"),
             header::HeaderName::from_static("grpc-encoding"),
@@ -246,60 +226,150 @@ async fn main() -> Result<()> {
     info!("Starting AIDA server v{}", env!("CARGO_PKG_VERSION"));
     info!("gRPC/gRPC-Web: http://{}", grpc_addr);
 
-    // Create the gRPC service with gRPC-Web support
-    let grpc_service = AidaService::new(state.clone());
-    let grpc_service = RequirementsServiceServer::new(grpc_service);
-    let grpc_web_service = tonic_web::enable(grpc_service);
-
     // Create a shutdown signal that can be shared between gRPC and REST servers
-    // Note: _shutdown_rx is unused when REST is disabled (rest_port=0)
     #[allow(unused_variables)]
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(());
 
-    // Start REST server if enabled
-    let rest_handle = if args.rest_port > 0 {
-        let rest_addr: SocketAddr = format!("{}:{}", args.host, args.rest_port).parse()?;
-        info!("REST API: http://{}/api", rest_addr);
+    // Determine mode: multi-project (--data-dir) or single-project (--database)
+    let use_multi_project = args.data_dir.is_some() ||
+        (args.database.is_none() && std::env::var("AIDA_DATABASE_URL").is_err());
 
-        let rest_router = rest::create_rest_router(state.clone()).layer(cors.clone());
+    if use_multi_project {
+        // Multi-project mode
+        let data_dir = args.data_dir
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| {
+                // Default: /data in Docker, ~/.aida locally
+                if std::path::Path::new("/data").exists() {
+                    std::path::PathBuf::from("/data")
+                } else {
+                    dirs::home_dir()
+                        .unwrap_or_else(|| std::path::PathBuf::from("."))
+                        .join(".aida")
+                }
+            });
 
-        let rest_listener = tokio::net::TcpListener::bind(rest_addr).await?;
-        let mut rest_shutdown_rx = shutdown_rx.clone();
-        Some(tokio::spawn(async move {
-            axum::serve(rest_listener, rest_router)
-                .with_graceful_shutdown(async move {
-                    // Wait for the shutdown signal
-                    let _ = rest_shutdown_rx.changed().await;
-                })
-                .await
-        }))
+        info!("Multi-project mode: data_dir={:?}", data_dir);
+
+        let project_manager = Arc::new(projects::ProjectManager::new(data_dir)?);
+
+        // Migrate legacy database if exists
+        if project_manager.migrate_legacy_database().await? {
+            info!("Migrated legacy database to 'default' project");
+        }
+
+        // Start REST server if enabled
+        let rest_handle = if args.rest_port > 0 {
+            let rest_addr: SocketAddr = format!("{}:{}", args.host, args.rest_port).parse()?;
+            info!("REST API: http://{}/api", rest_addr);
+            info!("Projects API: http://{}/api/projects", rest_addr);
+
+            let rest_router = rest::create_rest_router(project_manager.clone()).layer(cors.clone());
+
+            let rest_listener = tokio::net::TcpListener::bind(rest_addr).await?;
+            let mut rest_shutdown_rx = shutdown_rx.clone();
+            Some(tokio::spawn(async move {
+                axum::serve(rest_listener, rest_router)
+                    .with_graceful_shutdown(async move {
+                        let _ = rest_shutdown_rx.changed().await;
+                    })
+                    .await
+            }))
+        } else {
+            info!("REST API: disabled");
+            None
+        };
+
+        // Create the gRPC service with multi-project support
+        let grpc_service = service::AidaServiceMultiProject::new(project_manager);
+        let grpc_service = RequirementsServiceServer::new(grpc_service);
+        let grpc_web_service = tonic_web::enable(grpc_service);
+
+        // Run gRPC server
+        Server::builder()
+            .accept_http1(true)
+            .layer(cors)
+            .concurrency_limit_per_connection(args.max_connections)
+            .add_service(grpc_web_service)
+            .serve_with_shutdown(grpc_addr, async move {
+                tokio::signal::ctrl_c()
+                    .await
+                    .expect("Failed to install CTRL+C signal handler");
+                info!("Received shutdown signal, stopping server...");
+                let _ = shutdown_tx.send(());
+            })
+            .await?;
+
+        if let Some(handle) = rest_handle {
+            let _ = handle.await;
+        }
     } else {
-        info!("REST API: disabled");
-        None
-    };
+        // Single-project/legacy mode
+        let db_path = if let Some(path) = args.database {
+            path
+        } else if let Ok(url) = std::env::var("AIDA_DATABASE_URL") {
+            url
+        } else {
+            aida_core::determine_requirements_path(None)?
+                .to_string_lossy()
+                .to_string()
+        };
 
-    // Create and run the gRPC server with gRPC-Web support
-    // Using tonic_web::enable() on the service wraps it with gRPC-Web support
-    // CORS layer handles browser cross-origin requests
-    Server::builder()
-        .accept_http1(true) // Required for gRPC-Web
-        .layer(cors)
-        .concurrency_limit_per_connection(args.max_connections)
-        .add_service(grpc_web_service)
-        .serve_with_shutdown(grpc_addr, async move {
-            // Wait for shutdown signal
-            tokio::signal::ctrl_c()
-                .await
-                .expect("Failed to install CTRL+C signal handler");
-            info!("Received shutdown signal, stopping server...");
-            // Signal the REST server to shutdown too
-            let _ = shutdown_tx.send(());
+        info!("Single-project mode: database={}", db_path);
+
+        let db_path_clone = db_path.clone();
+        let backend = tokio::task::spawn_blocking(move || {
+            create_backend(std::path::Path::new(&db_path_clone), None)
         })
-        .await?;
+        .await??;
+        info!("Backend type: {}", backend.backend_type());
 
-    // Wait for REST server to finish if running
-    if let Some(handle) = rest_handle {
-        let _ = handle.await;
+        let state = Arc::new(ServerState::new(backend)?);
+
+        // Start REST server if enabled (legacy mode)
+        let rest_handle = if args.rest_port > 0 {
+            let rest_addr: SocketAddr = format!("{}:{}", args.host, args.rest_port).parse()?;
+            info!("REST API: http://{}/api", rest_addr);
+
+            let rest_router = rest::create_rest_router_legacy(state.clone()).layer(cors.clone());
+
+            let rest_listener = tokio::net::TcpListener::bind(rest_addr).await?;
+            let mut rest_shutdown_rx = shutdown_rx.clone();
+            Some(tokio::spawn(async move {
+                axum::serve(rest_listener, rest_router)
+                    .with_graceful_shutdown(async move {
+                        let _ = rest_shutdown_rx.changed().await;
+                    })
+                    .await
+            }))
+        } else {
+            info!("REST API: disabled");
+            None
+        };
+
+        // Create the gRPC service (legacy single-project)
+        let grpc_service = AidaService::new(state.clone());
+        let grpc_service = RequirementsServiceServer::new(grpc_service);
+        let grpc_web_service = tonic_web::enable(grpc_service);
+
+        // Run gRPC server
+        Server::builder()
+            .accept_http1(true)
+            .layer(cors)
+            .concurrency_limit_per_connection(args.max_connections)
+            .add_service(grpc_web_service)
+            .serve_with_shutdown(grpc_addr, async move {
+                tokio::signal::ctrl_c()
+                    .await
+                    .expect("Failed to install CTRL+C signal handler");
+                info!("Received shutdown signal, stopping server...");
+                let _ = shutdown_tx.send(());
+            })
+            .await?;
+
+        if let Some(handle) = rest_handle {
+            let _ = handle.await;
+        }
     }
 
     info!("Server stopped");
