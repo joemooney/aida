@@ -2528,3 +2528,44 @@ if !in_timeline && !in_planning && !in_kanban && !in_queue && !in_templates && c
 - **Commit**: 605967f
 - **Status**: Complete
 - **Requirements**: FR-0227 (Multi-Project Support)
+
+
+### Multi-Project Deployment Fixes (2026-01-03)
+- **Prompt**: Fix deployment issues for multi-project support on aida.joemooney.com
+- **Problems**: Multiple issues discovered during production deployment
+
+**Issue 1: Traefik Network Routing (504 Gateway Timeout)**
+- **Root Cause**: aida-server is on two networks (proxy + internal). Traefik was picking the `internal` network IP (alphabetically first) which it couldn't reach
+- **Solution**: Added `traefik.docker.network=proxy` label to aida-server in docker-compose.yml
+- **Commit**: 6b68874
+
+**Issue 2: JSON Deserialization (expected a sequence)**
+- **Root Cause**: REST API returns `{"projects": [...]}` wrapper, but WASM was deserializing as `Vec<ProjectInfo>` directly
+- **Solution**: Added `ProjectsResponse` wrapper struct to handle the response format
+- **Commit**: 66fcc91
+
+**Issue 3: Field Name Mismatch (missing field 'created_at')**
+- **Root Cause**: API returns camelCase (`createdAt`) but struct used snake_case (`created_at`)
+- **Solution**: Added `#[serde(rename_all = "camelCase")]` to ProjectInfo struct
+- **Commit**: 0b1982c
+
+**Docker Compose Changes:**
+```yaml
+aida-server:
+  labels:
+    - traefik.docker.network=proxy  # NEW - ensures correct network routing
+```
+
+**Client Changes (aida-gui/src/app.rs):**
+```rust
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]  // Handle API camelCase
+pub struct ProjectInfo { ... }
+
+#[derive(Debug, Deserialize)]
+struct ProjectsResponse {  // Wrapper for API response
+    projects: Vec<ProjectInfo>,
+}
+```
+
+- **Status**: Complete - Multi-project UI working at aida.joemooney.com
