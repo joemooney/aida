@@ -3611,6 +3611,13 @@ pub struct ProjectInfo {
     pub created_at: String,
 }
 
+/// REST API response wrapper for project list
+#[cfg(target_arch = "wasm32")]
+#[derive(Debug, Deserialize)]
+struct ProjectsResponse {
+    projects: Vec<ProjectInfo>,
+}
+
 pub struct RequirementsApp {
     #[cfg(not(target_arch = "wasm32"))]
     storage: Storage,
@@ -31550,10 +31557,10 @@ fn main() {
                     .await
                     .map_err(|_| "JSON parse failed")?;
 
-                let project_list: Vec<ProjectInfo> = serde_wasm_bindgen::from_value(json)
+                let response: ProjectsResponse = serde_wasm_bindgen::from_value(json)
                     .map_err(|e| format!("Deserialize failed: {:?}", e))?;
 
-                Ok::<_, Box<dyn std::error::Error>>(project_list)
+                Ok::<_, Box<dyn std::error::Error>>(response.projects)
             }.await;
 
             match result {
