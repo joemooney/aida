@@ -56,6 +56,15 @@
             serverUrl: "http://localhost:50051",
         };
 
+        // Intercept Ctrl+S to prevent browser "Save Page" dialog
+        // The WASM app handles Ctrl+S for saving requirements
+        document.addEventListener("keydown", function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+                e.preventDefault();
+                // The keypress will still be passed to the canvas/WASM app
+            }
+        });
+
         // Hide loading indicator once WASM loads
         document.addEventListener("DOMContentLoaded", function() {
             // The eframe app will hide the loading div

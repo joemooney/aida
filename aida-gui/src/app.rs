@@ -1858,7 +1858,7 @@ impl KeyAction {
             KeyAction::NavigateDownVim => "Navigate Down (j)",
             KeyAction::Edit => "Edit Requirement",
             KeyAction::ToggleExpand => "Toggle Expand/Collapse",
-            KeyAction::Save => "Save",
+            KeyAction::Save => "Save (Ctrl+Enter also works)",
             KeyAction::ZoomIn => "Zoom In",
             KeyAction::ZoomOut => "Zoom Out",
             KeyAction::ZoomReset => "Reset Zoom",
@@ -28681,7 +28681,7 @@ fn main() {
         ui.add_space(8.0);
         ui.separator();
 
-        // Check for pending save (triggered by Ctrl+S keybinding)
+        // Check for pending save (triggered by Ctrl+S or Ctrl+Enter keybinding)
         let should_save = self.pending_save;
         if should_save {
             self.pending_save = false;
@@ -28747,7 +28747,7 @@ fn main() {
         let title_bar_bg = self.user_settings.theme.title_bar_bg();
         let title_bar_font_size = self.user_settings.theme.title_bar_font_size();
 
-        // Check for pending save (triggered by Ctrl+S keybinding)
+        // Check for pending save (triggered by Ctrl+S or Ctrl+Enter keybinding)
         let should_save = self.pending_save;
         if should_save {
             self.pending_save = false;
@@ -28797,7 +28797,7 @@ fn main() {
                             self.request_form_cancel(is_edit);
                         }
 
-                        // Save button (trigger on click, Ctrl+S, or ESC in Edit mode)
+                        // Save button (trigger on click, Ctrl+S, Ctrl+Enter, or ESC in Edit mode)
                         if ui.button("💾 Save").clicked() || should_save || esc_save {
                             if is_edit {
                                 if let Some(idx) = self.selected_idx {
@@ -29288,7 +29288,7 @@ fn main() {
         let title_bar_bg = self.user_settings.theme.title_bar_bg();
         let title_bar_font_size = self.user_settings.theme.title_bar_font_size();
 
-        // Check for pending save (triggered by Ctrl+S keybinding)
+        // Check for pending save (triggered by Ctrl+S or Ctrl+Enter keybinding)
         let should_save = self.pending_save;
         if should_save {
             self.pending_save = false;
@@ -29338,7 +29338,7 @@ fn main() {
                             self.request_form_cancel(is_edit);
                         }
 
-                        // Save button (trigger on click, Ctrl+S, or ESC in Edit mode)
+                        // Save button (trigger on click, Ctrl+S, Ctrl+Enter, or ESC in Edit mode)
                         if ui.button("💾 Save").clicked() || should_save || esc_save {
                             if is_edit {
                                 if let Some(idx) = self.selected_idx {
@@ -32647,11 +32647,18 @@ impl eframe::App for RequirementsApp {
             }
 
             // Save keybinding (context-aware - works in Form context)
-            if self.user_settings.keybindings.is_pressed(
-                KeyAction::Save,
-                ctx,
-                self.current_key_context,
-            ) {
+            // Ctrl+S (desktop) or Ctrl+Enter (works in browser too)
+            let ctrl_enter_pressed = ctx.input(|i| {
+                let ctrl = i.modifiers.ctrl || i.modifiers.mac_cmd;
+                ctrl && i.key_pressed(egui::Key::Enter)
+            });
+            if ctrl_enter_pressed
+                || self.user_settings.keybindings.is_pressed(
+                    KeyAction::Save,
+                    ctx,
+                    self.current_key_context,
+                )
+            {
                 self.pending_save = true;
             }
 
