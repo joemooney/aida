@@ -49,15 +49,9 @@ impl ProjectManager {
         // Ensure data directory exists
         std::fs::create_dir_all(&data_dir)?;
 
-        let manager = Self {
-            data_dir: data_dir.clone(),
-            projects: RwLock::new(HashMap::new()),
-            backends: RwLock::new(HashMap::new()),
-        };
-
         // Load existing registry synchronously during construction
         let registry_path = data_dir.join("projects.json");
-        if registry_path.exists() {
+        let projects = if registry_path.exists() {
             let content = std::fs::read_to_string(&registry_path)?;
             let registry: ProjectRegistry = serde_json::from_str(&content)?;
 
@@ -66,11 +60,16 @@ impl ProjectManager {
                 project.db_path = data_dir.join(format!("{}.db", project.name));
                 projects.insert(project.name.clone(), project);
             }
+            projects
+        } else {
+            HashMap::new()
+        };
 
-            // We need to set the projects synchronously
-            // Since we're in the constructor, we can use blocking
-            *manager.projects.blocking_write() = projects;
-        }
+        let manager = Self {
+            data_dir: data_dir.clone(),
+            projects: RwLock::new(projects),
+            backends: RwLock::new(HashMap::new()),
+        };
 
         info!("ProjectManager initialized with data_dir: {:?}", data_dir);
         Ok(manager)
