@@ -5668,52 +5668,65 @@ impl RequirementsApp {
         let server_addr = crate::platform::web::get_query_param("server")
             .unwrap_or_else(|| "http://localhost:50051".to_string());
         let current_project = crate::platform::web::get_query_param("project");
-        log::info!("WASM: Connecting to server at {}, project: {:?}", server_addr, current_project);
+        log::info!("WASM: server_address = {:?}, project = {:?}", Some(&server_addr), current_project);
 
         // Create gRPC-Web client and shared state for async loading
+        // Only connect and load if a project is selected
         let (grpc_client, wasm_pending_store, wasm_load_error, wasm_loading) =
-            match GrpcStorageClient::connect_with_project(&server_addr, current_project.clone()) {
-                Ok(client) => {
-                    let client = Rc::new(client);
-                    let pending_store = Rc::new(RefCell::new(None));
-                    let load_error = Rc::new(RefCell::new(None));
+            if current_project.is_some() {
+                // Project selected - connect to gRPC and load store
+                match GrpcStorageClient::connect_with_project(&server_addr, current_project.clone()) {
+                    Ok(client) => {
+                        let client = Rc::new(client);
+                        let pending_store = Rc::new(RefCell::new(None));
+                        let load_error = Rc::new(RefCell::new(None));
 
-                    // Spawn async task to load requirements from server
-                    {
-                        let client_clone = Rc::clone(&client);
-                        let pending_store_clone = Rc::clone(&pending_store);
-                        let load_error_clone = Rc::clone(&load_error);
-                        let ctx = cc.egui_ctx.clone();
+                        // Spawn async task to load requirements from server
+                        {
+                            let client_clone = Rc::clone(&client);
+                            let pending_store_clone = Rc::clone(&pending_store);
+                            let load_error_clone = Rc::clone(&load_error);
+                            let ctx = cc.egui_ctx.clone();
 
-                        wasm_bindgen_futures::spawn_local(async move {
-                            log::info!("WASM: Starting async load from server");
-                            match client_clone.load_async().await {
-                                Ok(store) => {
-                                    log::info!("WASM: Successfully loaded {} requirements from server",
-                                              store.requirements.len());
-                                    *pending_store_clone.borrow_mut() = Some(store);
+                            wasm_bindgen_futures::spawn_local(async move {
+                                log::info!("WASM: Starting async load from server");
+                                match client_clone.load_async().await {
+                                    Ok(store) => {
+                                        log::info!("WASM: Successfully loaded {} requirements from server",
+                                                  store.requirements.len());
+                                        *pending_store_clone.borrow_mut() = Some(store);
+                                    }
+                                    Err(e) => {
+                                        log::error!("WASM: Failed to load from server: {}", e);
+                                        *load_error_clone.borrow_mut() = Some(format!("Failed to load: {}", e));
+                                    }
                                 }
-                                Err(e) => {
-                                    log::error!("WASM: Failed to load from server: {}", e);
-                                    *load_error_clone.borrow_mut() = Some(format!("Failed to load: {}", e));
-                                }
-                            }
-                            // Request repaint to update UI with loaded data
-                            ctx.request_repaint();
-                        });
+                                // Request repaint to update UI with loaded data
+                                ctx.request_repaint();
+                            });
+                        }
+
+                        (Some(client), pending_store, load_error, true)
                     }
-
-                    (Some(client), pending_store, load_error, true)
+                    Err(e) => {
+                        log::error!("WASM: Failed to connect to server: {}", e);
+                        (
+                            None,
+                            Rc::new(RefCell::new(None)),
+                            Rc::new(RefCell::new(Some(format!("Connection failed: {}", e)))),
+                            false
+                        )
+                    }
                 }
-                Err(e) => {
-                    log::error!("WASM: Failed to connect to server: {}", e);
-                    (
-                        None,
-                        Rc::new(RefCell::new(None)),
-                        Rc::new(RefCell::new(Some(format!("Connection failed: {}", e)))),
-                        false
-                    )
-                }
+            } else {
+                // No project selected - skip gRPC connection, show project selector
+                log::info!("WASM: No project selected, will show project selector");
+                (
+                    None,
+                    Rc::new(RefCell::new(None)),
+                    Rc::new(RefCell::new(None)),
+                    false
+                )
             };
 
         // Create empty store (will be replaced when async load completes)
