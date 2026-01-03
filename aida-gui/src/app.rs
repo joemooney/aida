@@ -1845,6 +1845,8 @@ pub enum KeyAction {
     SwitchToFilterMode, // '/' - switch search to filter mode
     // View navigation
     OpenViewPicker,     // 'v' - open view picker (two-key sequence: v + k/t/b/o/r/s)
+    // Project navigation (WASM only)
+    OpenProjectPicker,  // 'P' (shift+p) - open project picker to switch databases
     // Help
     ShowKeyboardHelp,   // '?' - show keyboard shortcuts help
 }
@@ -1884,6 +1886,7 @@ impl KeyAction {
             KeyAction::ClearSearch => "Clear Search",
             KeyAction::SwitchToFilterMode => "Switch to Filter Mode",
             KeyAction::OpenViewPicker => "Open View Picker",
+            KeyAction::OpenProjectPicker => "Open Project Picker",
             KeyAction::ShowKeyboardHelp => "Show Keyboard Help",
         }
     }
@@ -1923,6 +1926,7 @@ impl KeyAction {
             KeyAction::ClearSearch => KeyContext::RequirementsList,
             KeyAction::SwitchToFilterMode => KeyContext::Global,
             KeyAction::OpenViewPicker => KeyContext::Global,
+            KeyAction::OpenProjectPicker => KeyContext::Global,
             KeyAction::ShowKeyboardHelp => KeyContext::Global,
         }
     }
@@ -1961,6 +1965,7 @@ impl KeyAction {
             KeyAction::ClearSearch,
             KeyAction::SwitchToFilterMode,
             KeyAction::OpenViewPicker,
+            KeyAction::OpenProjectPicker,
             KeyAction::ShowKeyboardHelp,
         ]
     }
@@ -2345,6 +2350,12 @@ impl Default for KeyBindings {
         bindings.insert(
             KeyAction::OpenViewPicker,
             KeyBinding::new(egui::Key::V, KeyAction::OpenViewPicker.default_context()),
+        );
+        // 'P' (Shift+P) to open project picker (switch databases - WASM only)
+        bindings.insert(
+            KeyAction::OpenProjectPicker,
+            KeyBinding::new(egui::Key::P, KeyAction::OpenProjectPicker.default_context())
+                .with_shift(),
         );
         // '?' (Shift+/) to show keyboard help
         bindings.insert(
@@ -3891,6 +3902,16 @@ pub struct RequirementsApp {
     // Keyboard shortcuts help popup (triggered by '?' key)
     show_keyboard_help: bool,
 
+    // Leader key state (for '=' prefix combos like '= t' for theme)
+    leader_key_pending: Option<char>,    // The leader key that was pressed (e.g., '=')
+    leader_key_time: Option<Instant>,    // When leader key was pressed (for timeout)
+
+    // Project picker popup (triggered by 'P' / Shift+P - switch between projects)
+    #[cfg(target_arch = "wasm32")]
+    show_project_picker: bool,
+    #[cfg(target_arch = "wasm32")]
+    project_picker_selected: usize,      // Currently selected index in project list
+
     // Double-ESC navigation (FR-0318)
     last_esc_press: Option<Instant>,  // Track last ESC press for double-ESC detection
 
@@ -4708,6 +4729,12 @@ impl RequirementsApp {
             goto_picker_input: String::new(),
             goto_picker_matches: Vec::new(),
             show_keyboard_help: false,
+            leader_key_pending: None,
+            leader_key_time: None,
+            #[cfg(target_arch = "wasm32")]
+            show_project_picker: false,
+            #[cfg(target_arch = "wasm32")]
+            project_picker_selected: 0,
             last_esc_press: None,
             last_db_check: Instant::now(),
             known_db_mtime: None,
@@ -5324,6 +5351,12 @@ impl RequirementsApp {
             goto_picker_input: String::new(),
             goto_picker_matches: Vec::new(),
             show_keyboard_help: false,
+            leader_key_pending: None,
+            leader_key_time: None,
+            #[cfg(target_arch = "wasm32")]
+            show_project_picker: false,
+            #[cfg(target_arch = "wasm32")]
+            project_picker_selected: 0,
             last_esc_press: None,
             last_db_check: Instant::now(),
             known_db_mtime: None,
@@ -5946,6 +5979,12 @@ impl RequirementsApp {
             goto_picker_input: String::new(),
             goto_picker_matches: Vec::new(),
             show_keyboard_help: false,
+            leader_key_pending: None,
+            leader_key_time: None,
+            #[cfg(target_arch = "wasm32")]
+            show_project_picker: false,
+            #[cfg(target_arch = "wasm32")]
+            project_picker_selected: 0,
             last_esc_press: None,
             last_db_check: Instant::now(),
             known_db_mtime: None,
@@ -22900,6 +22939,140 @@ impl RequirementsApp {
         }
     }
 
+    /// Show project picker popup (triggered by 'P' key - WASM only)
+    /// Allows switching between project databases
+    #[cfg(target_arch = "wasm32")]
+    fn show_project_picker_popup(&mut self, ctx: &egui::Context) {
+        if !self.show_project_picker {
+            return;
+        }
+
+        // Get the projects list
+        let projects: Vec<ProjectInfo> = self.wasm_projects.borrow().clone().unwrap_or_default();
+        let num_projects = projects.len();
+
+        // Handle keyboard input for the popup
+        let mut close_popup = false;
+        let mut selected_project: Option<String> = None;
+        let mut nav_up = false;
+        let mut nav_down = false;
+        let mut confirm = false;
+
+        ctx.input(|i| {
+            if i.key_pressed(egui::Key::Escape) {
+                close_popup = true;
+            }
+            if i.key_pressed(egui::Key::ArrowUp) || i.key_pressed(egui::Key::K) {
+                nav_up = true;
+            }
+            if i.key_pressed(egui::Key::ArrowDown) || i.key_pressed(egui::Key::J) {
+                nav_down = true;
+            }
+            if i.key_pressed(egui::Key::Enter) {
+                confirm = true;
+            }
+        });
+
+        if close_popup {
+            self.show_project_picker = false;
+            self.project_picker_selected = 0;
+            return;
+        }
+
+        // Handle arrow navigation
+        if nav_up && num_projects > 0 {
+            if self.project_picker_selected > 0 {
+                self.project_picker_selected -= 1;
+            } else {
+                self.project_picker_selected = num_projects - 1;
+            }
+        }
+        if nav_down && num_projects > 0 {
+            if self.project_picker_selected < num_projects - 1 {
+                self.project_picker_selected += 1;
+            } else {
+                self.project_picker_selected = 0;
+            }
+        }
+
+        // Enter confirms the currently selected option
+        if confirm && num_projects > 0 {
+            if let Some(project) = projects.get(self.project_picker_selected) {
+                selected_project = Some(project.name.clone());
+            }
+        }
+
+        if let Some(project_name) = selected_project {
+            self.show_project_picker = false;
+            self.project_picker_selected = 0;
+            self.navigate_to_project(&project_name);
+            return;
+        }
+
+        // Center the popup on screen
+        let screen_rect = ctx.screen_rect();
+        let popup_size = egui::vec2(300.0, 250.0);
+        let popup_pos = egui::pos2(
+            (screen_rect.width() - popup_size.x) / 2.0,
+            (screen_rect.height() - popup_size.y) / 2.0,
+        );
+
+        egui::Area::new(egui::Id::new("project_picker_popup"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(popup_pos)
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style())
+                    .inner_margin(8.0)
+                    .show(ui, |ui| {
+                        ui.set_min_width(popup_size.x - 16.0);
+                        ui.label(egui::RichText::new("🗄️ Switch Project").strong());
+                        ui.separator();
+
+                        if *self.wasm_projects_loading.borrow() {
+                            ui.spinner();
+                            ui.label("Loading projects...");
+                        } else if projects.is_empty() {
+                            ui.label("No projects found");
+                        } else {
+                            for (idx, project) in projects.iter().enumerate() {
+                                let is_selected = idx == self.project_picker_selected;
+                                let is_current = self.current_project.as_ref() == Some(&project.name);
+
+                                let marker = if is_current { "●" } else { " " };
+                                let text = format!("{} {}", marker, project.name);
+                                let response = ui.selectable_label(is_selected, &text);
+                                if response.clicked() {
+                                    self.show_project_picker = false;
+                                    self.project_picker_selected = 0;
+                                    self.navigate_to_project(&project.name);
+                                    return;
+                                }
+                                // Show description as tooltip
+                                if !project.description.is_empty() {
+                                    response.on_hover_text(&project.description);
+                                }
+                            }
+                        }
+
+                        ui.separator();
+                        ui.horizontal(|ui| {
+                            ui.small("↑↓/jk nav • Enter select • Esc close");
+                        });
+                    });
+            });
+
+        // Close on click outside
+        if ctx.input(|i| i.pointer.any_click()) {
+            let popup_rect = egui::Rect::from_min_size(popup_pos, popup_size);
+            if let Some(pos) = ctx.input(|i| i.pointer.interact_pos()) {
+                if !popup_rect.contains(pos) {
+                    self.show_project_picker = false;
+                    self.project_picker_selected = 0;
+                }
+            }
+        }
+    }
+
     /// Show delete/archive menu popup (triggered by 'd' key)
     fn show_delete_menu_popup(&mut self, ctx: &egui::Context) {
         if !self.show_delete_menu {
@@ -24661,6 +24834,7 @@ impl RequirementsApp {
                     ("f", "Assign to feature"),
                     ("S", "Assign to sprint"),
                     ("T", "Change type"),
+                    ("t", "Assign tags"),
                     ("w", "Set weight/effort"),
                     ("r", "Jump to detail tab"),
                 ];
@@ -24687,13 +24861,19 @@ impl RequirementsApp {
                 ];
 
                 let zoom = [
-                    ("Ctrl++", "Zoom in"),
-                    ("Ctrl+-", "Zoom out"),
-                    ("Ctrl+0", "Reset zoom"),
+                    ("= = / Ctrl++", "Zoom in"),
+                    ("= - / Ctrl+-", "Zoom out"),
+                    ("= 0 / Ctrl+0", "Reset zoom"),
+                    ("= t", "Cycle theme"),
                     ("Ctrl+wheel", "Zoom with mouse"),
-                    ("t", "Cycle theme"),
                 ];
 
+                #[cfg(target_arch = "wasm32")]
+                let help = [
+                    ("?", "Show this help"),
+                    ("P", "Switch project"),
+                ];
+                #[cfg(not(target_arch = "wasm32"))]
                 let help = [
                     ("?", "Show this help"),
                 ];
@@ -32132,8 +32312,72 @@ impl eframe::App for RequirementsApp {
         // Handle keyboard shortcuts for zoom (global context)
         let mut zoom_delta: f32 = 0.0;
         let mut zoom_reset = false;
+        let mut theme_cycle = false;
 
-        // Check for zoom keybindings
+        // Leader key handling for '=' prefix combos (= =, = -, = t, = 0)
+        // Check for leader key timeout (1 second)
+        if let Some(leader_time) = self.leader_key_time {
+            if leader_time.elapsed().as_millis() > 1000 {
+                self.leader_key_pending = None;
+                self.leader_key_time = None;
+            }
+        }
+
+        // Check if we have a pending leader key
+        if self.leader_key_pending == Some('=') {
+            ctx.input(|i| {
+                // = = or = + for zoom in
+                if i.key_pressed(egui::Key::Equals) || i.key_pressed(egui::Key::Plus) {
+                    zoom_delta = 1.0;
+                    self.leader_key_pending = None;
+                    self.leader_key_time = None;
+                }
+                // = - for zoom out
+                else if i.key_pressed(egui::Key::Minus) {
+                    zoom_delta = -1.0;
+                    self.leader_key_pending = None;
+                    self.leader_key_time = None;
+                }
+                // = 0 for zoom reset
+                else if i.key_pressed(egui::Key::Num0) {
+                    zoom_reset = true;
+                    self.leader_key_pending = None;
+                    self.leader_key_time = None;
+                }
+                // = t for theme cycle
+                else if i.key_pressed(egui::Key::T) {
+                    theme_cycle = true;
+                    self.leader_key_pending = None;
+                    self.leader_key_time = None;
+                }
+                // ESC to cancel leader
+                else if i.key_pressed(egui::Key::Escape) {
+                    self.leader_key_pending = None;
+                    self.leader_key_time = None;
+                }
+                // Any other key cancels leader mode
+                else if i.keys_down.iter().any(|k| *k != egui::Key::Equals) {
+                    // Only cancel if a non-modifier key is pressed
+                    let any_key_pressed = i.events.iter().any(|e| {
+                        matches!(e, egui::Event::Key { pressed: true, .. })
+                    });
+                    if any_key_pressed {
+                        self.leader_key_pending = None;
+                        self.leader_key_time = None;
+                    }
+                }
+            });
+        } else {
+            // Check for '=' key to start leader sequence
+            ctx.input(|i| {
+                if i.key_pressed(egui::Key::Equals) && !i.modifiers.ctrl && !i.modifiers.shift {
+                    self.leader_key_pending = Some('=');
+                    self.leader_key_time = Some(Instant::now());
+                }
+            });
+        }
+
+        // Also support legacy Ctrl+ keybindings for desktop
         if self.user_settings.keybindings.is_pressed(
             KeyAction::ZoomIn,
             ctx,
@@ -32156,8 +32400,8 @@ impl eframe::App for RequirementsApp {
             zoom_reset = true;
         }
 
-        // Check for theme cycling keybinding (global context)
-        if self.user_settings.keybindings.is_pressed(
+        // Check for theme cycling keybinding (global context) or leader key combo
+        if theme_cycle || self.user_settings.keybindings.is_pressed(
             KeyAction::CycleTheme,
             ctx,
             self.current_key_context,
@@ -32275,6 +32519,25 @@ impl eframe::App for RequirementsApp {
             && v_pressed
         {
             self.show_view_picker = true;
+        }
+
+        // 'P' (Shift+P) to open project picker (WASM only - switch databases)
+        #[cfg(target_arch = "wasm32")]
+        {
+            let p_shift_pressed = ctx.input(|i| i.key_pressed(egui::Key::P) && i.modifiers.shift && !i.modifiers.ctrl);
+            if !in_form_view
+                && !in_settings
+                && !text_input_focused
+                && !self.show_view_picker
+                && !self.show_keyboard_help
+                && !self.show_project_picker
+                && p_shift_pressed
+            {
+                self.show_project_picker = true;
+                self.project_picker_selected = 0;
+                // Refresh projects list
+                self.fetch_projects();
+            }
         }
 
         // '?' to show keyboard shortcuts help
@@ -33778,6 +34041,10 @@ impl eframe::App for RequirementsApp {
 
         // Show view picker popup (triggered by 'v' key)
         self.show_view_picker_popup(ctx);
+
+        // Show project picker popup (triggered by 'P'/Shift+p key) - WASM only
+        #[cfg(target_arch = "wasm32")]
+        self.show_project_picker_popup(ctx);
 
         // Show delete/archive menu popup (triggered by 'd' key)
         self.show_delete_menu_popup(ctx);
