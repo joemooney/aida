@@ -4245,13 +4245,13 @@ pub struct RequirementsApp {
     #[cfg(target_arch = "wasm32")]
     wasm_projects_error: Rc<RefCell<Option<String>>>,                // Error loading projects
     #[cfg(target_arch = "wasm32")]
-    wasm_projects_loading: bool,                                     // True while loading projects
+    wasm_projects_loading: Rc<RefCell<bool>>,                        // True while loading projects
     #[cfg(target_arch = "wasm32")]
     wasm_new_project_name: String,                                   // New project name input
     #[cfg(target_arch = "wasm32")]
     wasm_new_project_description: String,                            // New project description input
     #[cfg(target_arch = "wasm32")]
-    wasm_creating_project: bool,                                     // True while creating a project
+    wasm_creating_project: Rc<RefCell<bool>>,                        // True while creating a project
 
     // Templates view state
     #[cfg(not(target_arch = "wasm32"))]
@@ -6112,10 +6112,10 @@ impl RequirementsApp {
             // Project selector state
             wasm_projects: Rc::new(RefCell::new(None)),
             wasm_projects_error: Rc::new(RefCell::new(None)),
-            wasm_projects_loading: false,
+            wasm_projects_loading: Rc::new(RefCell::new(false)),
             wasm_new_project_name: String::new(),
             wasm_new_project_description: String::new(),
-            wasm_creating_project: false,
+            wasm_creating_project: Rc::new(RefCell::new(false)),
         }
     }
 
@@ -31377,7 +31377,7 @@ fn main() {
     #[cfg(target_arch = "wasm32")]
     fn show_project_selector(&mut self, ctx: &egui::Context) {
         // Fetch projects if not yet loaded and not currently loading
-        if self.wasm_projects.borrow().is_none() && !self.wasm_projects_loading {
+        if self.wasm_projects.borrow().is_none() && !*self.wasm_projects_loading.borrow() {
             self.fetch_projects();
         }
 
@@ -31400,7 +31400,7 @@ fn main() {
                 }
 
                 // Loading indicator
-                if self.wasm_projects_loading {
+                if *self.wasm_projects_loading.borrow() {
                     ui.spinner();
                     ui.label("Loading projects...");
                     return;
@@ -31465,13 +31465,13 @@ fn main() {
                         && self.wasm_new_project_name.chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false)
                         && self.wasm_new_project_name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
 
-                    ui.add_enabled_ui(name_valid && !self.wasm_creating_project, |ui| {
+                    ui.add_enabled_ui(name_valid && !*self.wasm_creating_project.borrow(), |ui| {
                         if ui.button("Create Project").clicked() {
                             self.create_project();
                         }
                     });
 
-                    if self.wasm_creating_project {
+                    if *self.wasm_creating_project.borrow() {
                         ui.spinner();
                     }
 
@@ -31500,7 +31500,7 @@ fn main() {
         use wasm_bindgen_futures::JsFuture;
         use web_sys::{Request, RequestInit, RequestMode, Response};
 
-        self.wasm_projects_loading = true;
+        *self.wasm_projects_loading.borrow_mut() = true;
 
         // Build API URL from server address
         // In production, REST API is at same domain as gRPC (Traefik routes /api/* to port 8080)
@@ -31518,6 +31518,7 @@ fn main() {
 
         let projects = Rc::clone(&self.wasm_projects);
         let error = Rc::clone(&self.wasm_projects_error);
+        let loading = Rc::clone(&self.wasm_projects_loading);
         let ctx = self.wasm_egui_ctx.clone();
 
         wasm_bindgen_futures::spawn_local(async move {
@@ -31561,6 +31562,7 @@ fn main() {
                     *error.borrow_mut() = Some(format!("Failed to load projects: {}", e));
                 }
             }
+            *loading.borrow_mut() = false;
             ctx.request_repaint();
         });
     }
@@ -31576,7 +31578,7 @@ fn main() {
             return;
         }
 
-        self.wasm_creating_project = true;
+        *self.wasm_creating_project.borrow_mut() = true;
 
         // Build API URL - same logic as fetch_projects
         let server_addr = self.server_addr.as_ref()
@@ -31594,7 +31596,12 @@ fn main() {
         let description = self.wasm_new_project_description.clone();
         let projects = Rc::clone(&self.wasm_projects);
         let error = Rc::clone(&self.wasm_projects_error);
+        let creating = Rc::clone(&self.wasm_creating_project);
         let ctx = self.wasm_egui_ctx.clone();
+
+        // Clear form immediately
+        self.wasm_new_project_name.clear();
+        self.wasm_new_project_description.clear();
 
         wasm_bindgen_futures::spawn_local(async move {
             let result = async {
@@ -31652,13 +31659,9 @@ fn main() {
                     *error.borrow_mut() = Some(format!("Failed to create project: {}", e));
                 }
             }
+            *creating.borrow_mut() = false;
             ctx.request_repaint();
         });
-
-        // Clear form
-        self.wasm_new_project_name.clear();
-        self.wasm_new_project_description.clear();
-        self.wasm_creating_project = false;
     }
 
     /// Navigate to a project by updating the URL (WASM only)
