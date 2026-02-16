@@ -24,35 +24,17 @@ Use this skill when:
 
 ## Core Principles
 
-### Think Before Code
-Planning separates design decisions from implementation. This allows for:
-- Reviewing approach before committing effort
-- Identifying risks and unknowns early
-- Creating a clear implementation roadmap
-- Breaking down complex work into manageable pieces
-
-### Documented Plans
-All planning decisions should be captured in the requirements database as:
-- Child requirements for sub-tasks
-- Comments for design decisions and trade-offs
-- Status transition to `Planned` when complete
+Planning separates design decisions from implementation, allowing you to review the approach before committing effort, identify risks early, and create a clear implementation roadmap. All planning decisions should be captured in the requirements database as child requirements, comments for design decisions, and a status transition to `Planned` when complete.
 
 ## Workflow
 
 ### Step 1: Load Requirement Context
 
-Fetch the requirement details:
-
 ```bash
 aida show <SPEC-ID>
 ```
 
-Display to user:
-- SPEC-ID and title
-- Current description
-- Status, priority, type
-- Related requirements (parent/child, links)
-- Any existing comments
+Display to user: SPEC-ID, title, description, status, priority, type, related requirements, and existing comments.
 
 Verify the requirement is in `Approved` status. If not, inform the user:
 - `Draft`: Needs approval first
@@ -75,14 +57,8 @@ For each significant unknown, note it as a question to resolve during planning.
 If the requirement is complex, break it into child requirements:
 
 ```bash
-# Create child requirement for each logical unit of work
-aida add \
-  --title "Component: User input validation" \
-  --description "Validate user input for..." \
-  --type task \
-  --status draft
-
-# Link as child
+aida add --title "Component: User input validation" \
+  --description "Validate user input for..." --type task --status draft
 aida rel add --from <PARENT-ID> --to <CHILD-ID> --type Parent
 ```
 
@@ -94,26 +70,18 @@ Guidelines for decomposition:
 
 ### Step 4: Document Design Decisions
 
-Record any significant design decisions:
+Record significant design decisions and identify affected files:
 
 ```bash
 aida comment add <SPEC-ID> "Design: Using async/await pattern because..."
-aida comment add <SPEC-ID> "Decision: Chose HashMap over BTreeMap for O(1) lookup"
 aida comment add <SPEC-ID> "Risk: External API rate limiting may need handling"
-```
-
-### Step 5: Identify File Changes
-
-List the files that will be modified or created:
-
-```bash
 aida comment add <SPEC-ID> "Files to modify:
 - src/models.rs: Add new struct
 - src/handlers.rs: Add endpoint
 - src/tests/mod.rs: Add unit tests"
 ```
 
-### Step 6: Mark as Planned
+### Step 5: Mark as Planned
 
 When planning is complete:
 
@@ -128,7 +96,7 @@ If child requirements were created, approve them:
 aida edit <CHILD-ID> --status approved
 ```
 
-### Step 7: Present Plan to User
+### Step 6: Present Plan to User
 
 Summarize for the user:
 1. Overview of implementation approach
@@ -142,8 +110,7 @@ Ask if they want to proceed to implementation with `/aida-implement`.
 ## Status Transitions
 
 During planning, requirements transition:
-
-1. **Approved** -> **Planned** (when planning is complete)
+- **Approved** -> **Planned** (when planning is complete)
 
 Child requirements created during planning start as:
 - **Draft** -> **Approved** (when ready for implementation)
@@ -158,63 +125,14 @@ When `/aida-implement` is invoked on a requirement:
 ## CLI Reference
 
 ```bash
-# Show requirement
-aida show <SPEC-ID>
-
-# Search for related requirements
-aida grep "keyword" -f description         # Search descriptions
-aida grep -i "auth" --status approved      # Case insensitive, filter by status
-aida grep -E "TODO|FIXME" -f comments      # Regex search in comments
-aida grep -l "database"                    # List matching SPEC-IDs only
-
-# Check status
-aida show <SPEC-ID> | grep Status
-
-# Create child requirement
+aida show <SPEC-ID>                              # Show requirement details
+aida grep "keyword" -f description               # Search descriptions
+aida grep -i "auth" --status approved            # Case insensitive, filter by status
+aida grep -E "TODO|FIXME" -f comments            # Regex in comments
+aida grep -l "database"                          # List matching SPEC-IDs only
 aida add --title "..." --description "..." --type task --status draft
-
-# Link child to parent
 aida rel add --from <PARENT-ID> --to <CHILD-ID> --type Parent
-
-# Add design comment
-aida comment add <SPEC-ID> "Design: ..."
-
-# Mark as planned
-aida edit <SPEC-ID> --status planned
-
-# Approve child requirements
-aida edit <CHILD-ID> --status approved
-
-# List children of a requirement
-aida show <SPEC-ID>  # Shows relationships section
+aida comment add <SPEC-ID> "Design: ..."         # Add design comment
+aida edit <SPEC-ID> --status planned             # Mark as planned
+aida edit <CHILD-ID> --status approved           # Approve child requirements
 ```
-
-## Example Planning Session
-
-User invokes: `/aida-plan FR-0100`
-
-1. Fetch requirement:
-   ```
-   FR-0100: Add user authentication
-   Status: Approved
-   Description: The system shall support user authentication with username/password
-   ```
-
-2. Decompose:
-   - FR-0100-A: Database schema for users (task)
-   - FR-0100-B: Password hashing module (task)
-   - FR-0100-C: Login endpoint (task)
-   - FR-0100-D: Session management (task)
-
-3. Document decisions:
-   - "Using argon2 for password hashing"
-   - "JWT tokens for session management"
-   - "30-minute token expiry"
-
-4. Identify files:
-   - src/models/user.rs (new)
-   - src/auth/mod.rs (new)
-   - src/routes/auth.rs (new)
-   - migrations/001_users.sql (new)
-
-5. Mark as planned and present summary

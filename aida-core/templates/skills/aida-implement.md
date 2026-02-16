@@ -47,6 +47,10 @@ export AIDA_AUTHOR="ai:claude:$USER"
 This ensures all `aida add` and `aida comment add` commands automatically use the AI author format.
 Format: `ai:<tool>:<username>` (e.g., `ai:claude:joe`)
 
+## Approved Requirements
+
+!`aida list --status approved --format brief 2>/dev/null | head -15 || echo "none"`
+
 ## Workflow
 
 ### Step 1: Load Requirement Context

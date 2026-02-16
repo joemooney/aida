@@ -2,6 +2,10 @@
 
 Show current project status and requirements summary.
 
+## Current Status
+
+!`aida list --format summary 2>/dev/null || echo "No database found"`
+
 ## Instructions
 
 1. Run `aida list --status approved` to show approved requirements
@@ -11,7 +15,7 @@ Show current project status and requirements summary.
 ## Output Format
 
 ```
-## Aida Status
+## Project Status
 
 ### Approved Requirements (Ready for Implementation)
 - [SPEC-ID] Title

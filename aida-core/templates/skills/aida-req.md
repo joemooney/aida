@@ -20,6 +20,11 @@ Use this skill when:
 - User has an idea that should be captured as a requirement
 - User asks to "add a requirement" or "create a spec"
 
+## Current Project Context
+
+- Features: !`aida feature list 2>/dev/null | head -20 || echo "none"`
+- Recent requirements: !`aida list --format brief 2>/dev/null | tail -10 || echo "none"`
+
 ## Workflow
 
 ### Step 1: Gather Requirement Information

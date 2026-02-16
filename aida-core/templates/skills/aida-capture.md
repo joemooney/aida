@@ -21,6 +21,10 @@ Use this skill when:
 - User asks to update requirements based on what was discussed
 - After implementing features without explicitly creating requirements
 
+## In-Progress Work
+
+!`aida list --status in-progress --format brief 2>/dev/null | head -10 || echo "none"`
+
 ## Workflow
 
 ### Step 1: Scan Conversation
