@@ -68,7 +68,11 @@ fn embed_directory(code: &mut String, dir: &str, prefix: &str) {
     }
 
     if let Ok(entries) = fs::read_dir(dir_path) {
-        for entry in entries.flatten() {
+        // Sort entries by filename for deterministic build output
+        let mut sorted_entries: Vec<_> = entries.flatten().collect();
+        sorted_entries.sort_by_key(|e| e.file_name());
+
+        for entry in sorted_entries {
             let path = entry.path();
             if path.is_file() {
                 let file_name = path.file_name().unwrap().to_str().unwrap();

@@ -1,3 +1,13 @@
+---
+name: aida-commit
+description: Commit changes with automatic requirement linking. Analyzes staged changes for requirement traces and creates properly formatted commits.
+disable-model-invocation: true
+allowed-tools:
+  - Bash
+  - Read
+  - Grep
+---
+
 # AIDA Commit Skill
 
 ## Purpose

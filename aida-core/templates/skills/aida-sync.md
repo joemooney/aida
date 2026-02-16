@@ -1,3 +1,12 @@
+---
+name: aida-sync
+description: Sync AIDA templates and scaffolding. Use after modifying templates to verify integrity and propagate changes.
+disable-model-invocation: true
+allowed-tools:
+  - Bash
+  - Glob
+---
+
 # AIDA Sync Skill
 
 ## Purpose

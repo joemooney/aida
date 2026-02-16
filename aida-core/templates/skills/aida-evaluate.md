@@ -1,3 +1,11 @@
+---
+name: aida-evaluate
+description: Evaluate a requirement's quality using AI analysis. Use when user wants to assess clarity, testability, completeness, or consistency of a requirement.
+allowed-tools:
+  - Bash
+  - Read
+---
+
 # AIDA Requirement Evaluation Skill
 
 ## Purpose

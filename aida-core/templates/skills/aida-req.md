@@ -1,3 +1,11 @@
+---
+name: aida-req
+description: Add a new requirement to the AIDA database with AI evaluation. Use when user wants to create a spec, add a feature request, or capture an idea.
+allowed-tools:
+  - Bash
+  - Read
+---
+
 # AIDA Requirement Creation Skill
 
 ## Purpose

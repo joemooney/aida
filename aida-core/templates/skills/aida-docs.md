@@ -1,3 +1,15 @@
+---
+name: aida-docs
+description: Manage project documentation including guides, reports, and keeping docs in sync with the codebase and requirements.
+allowed-tools:
+  - Bash
+  - Read
+  - Edit
+  - Write
+  - Glob
+  - Grep
+---
+
 # AIDA Documentation Skill
 
 ## Purpose

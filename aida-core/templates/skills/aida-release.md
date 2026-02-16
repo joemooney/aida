@@ -1,3 +1,14 @@
+---
+name: aida-release
+description: Manage software releases with version bumping, changelog, and git tagging integrated with AIDA requirements.
+disable-model-invocation: true
+allowed-tools:
+  - Bash
+  - Read
+  - Edit
+  - Write
+---
+
 # AIDA Release Management Skill
 
 ## Purpose
