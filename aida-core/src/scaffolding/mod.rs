@@ -189,6 +189,18 @@ pub struct ScaffoldConfig {
     pub include_aida_commit_skill: bool,
     /// Include aida-sync skill for template synchronization
     pub include_aida_sync_skill: bool,
+    /// Include aida-test skill for test generation linked to requirements
+    pub include_aida_test_skill: bool,
+    /// Include aida-review skill for code review against specs
+    pub include_aida_review_skill: bool,
+    /// Include aida-onboard skill for project onboarding
+    pub include_aida_onboard_skill: bool,
+    /// Include aida-sprint skill for sprint planning
+    pub include_aida_sprint_skill: bool,
+    /// Include aida-search skill for unified search
+    pub include_aida_search_skill: bool,
+    /// Include aida-standup skill for daily standup generation
+    pub include_aida_standup_skill: bool,
     /// Generate git hooks for traceability validation
     pub generate_git_hooks: bool,
     /// Include commit-msg hook for AI attribution validation
@@ -222,6 +234,12 @@ impl Default for ScaffoldConfig {
             include_aida_evaluate_skill: true,
             include_aida_commit_skill: true,
             include_aida_sync_skill: true,
+            include_aida_test_skill: true,
+            include_aida_review_skill: true,
+            include_aida_onboard_skill: true,
+            include_aida_sprint_skill: true,
+            include_aida_search_skill: true,
+            include_aida_standup_skill: true,
             generate_git_hooks: true,
             include_commit_msg_hook: true,
             include_pre_commit_hook: false, // Optional, disabled by default
@@ -653,6 +671,126 @@ impl Scaffolder {
 
                 artifacts.push(artifact);
             }
+
+            // Add aida-test skill
+            if self.config.include_aida_test_skill {
+                let path = PathBuf::from(".claude/skills/aida-test.md");
+                let artifact = self.create_artifact(
+                    path.clone(),
+                    self.generate_aida_test_skill(),
+                    "Skill for generating tests linked to requirements".to_string(),
+                    false,
+                );
+
+                match &artifact.file_status {
+                    FileStatus::New => new_files.push(path),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
+                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+                }
+
+                artifacts.push(artifact);
+            }
+
+            // Add aida-review skill
+            if self.config.include_aida_review_skill {
+                let path = PathBuf::from(".claude/skills/aida-review.md");
+                let artifact = self.create_artifact(
+                    path.clone(),
+                    self.generate_aida_review_skill(),
+                    "Skill for reviewing code changes against specs".to_string(),
+                    false,
+                );
+
+                match &artifact.file_status {
+                    FileStatus::New => new_files.push(path),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
+                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+                }
+
+                artifacts.push(artifact);
+            }
+
+            // Add aida-onboard skill
+            if self.config.include_aida_onboard_skill {
+                let path = PathBuf::from(".claude/skills/aida-onboard.md");
+                let artifact = self.create_artifact(
+                    path.clone(),
+                    self.generate_aida_onboard_skill(),
+                    "Skill for project onboarding".to_string(),
+                    false,
+                );
+
+                match &artifact.file_status {
+                    FileStatus::New => new_files.push(path),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
+                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+                }
+
+                artifacts.push(artifact);
+            }
+
+            // Add aida-sprint skill
+            if self.config.include_aida_sprint_skill {
+                let path = PathBuf::from(".claude/skills/aida-sprint.md");
+                let artifact = self.create_artifact(
+                    path.clone(),
+                    self.generate_aida_sprint_skill(),
+                    "Skill for sprint planning".to_string(),
+                    false,
+                );
+
+                match &artifact.file_status {
+                    FileStatus::New => new_files.push(path),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
+                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+                }
+
+                artifacts.push(artifact);
+            }
+
+            // Add aida-search skill
+            if self.config.include_aida_search_skill {
+                let path = PathBuf::from(".claude/skills/aida-search.md");
+                let artifact = self.create_artifact(
+                    path.clone(),
+                    self.generate_aida_search_skill(),
+                    "Skill for unified search across requirements and code".to_string(),
+                    false,
+                );
+
+                match &artifact.file_status {
+                    FileStatus::New => new_files.push(path),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
+                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+                }
+
+                artifacts.push(artifact);
+            }
+
+            // Add aida-standup skill
+            if self.config.include_aida_standup_skill {
+                let path = PathBuf::from(".claude/skills/aida-standup.md");
+                let artifact = self.create_artifact(
+                    path.clone(),
+                    self.generate_aida_standup_skill(),
+                    "Skill for daily standup generation".to_string(),
+                    false,
+                );
+
+                match &artifact.file_status {
+                    FileStatus::New => new_files.push(path),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
+                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+                }
+
+                artifacts.push(artifact);
+            }
         }
 
         // .git/hooks/ directory (only if .git exists)
@@ -880,6 +1018,11 @@ impl Scaffolder {
             ("commands/aida-evaluate.md", "aida-evaluate", "Evaluate requirement quality with AI"),
             ("commands/aida-commit.md", "aida-commit", "Commit with requirement linking"),
             ("commands/aida-sync.md", "aida-sync", "Sync templates and scaffolding"),
+            ("commands/aida-test.md", "aida-test", "Generate tests linked to requirements"),
+            ("commands/aida-onboard.md", "aida-onboard", "Project onboarding for new team members"),
+            ("commands/aida-sprint.md", "aida-sprint", "Sprint planning from approved requirements"),
+            ("commands/aida-search.md", "aida-search", "Unified search across requirements and code"),
+            ("commands/aida-standup.md", "aida-standup", "Daily standup summary from recent activity"),
         ];
 
         command_defs
@@ -1027,6 +1170,54 @@ Use this skill when:
 4. Ensure templates and skills are consistent
 "#.to_string()
             })
+    }
+
+    /// Generate aida-test skill content (loads from embedded template)
+    fn generate_aida_test_skill(&self) -> String {
+        use crate::templates::EMBEDDED_TEMPLATES;
+        EMBEDDED_TEMPLATES.get("skills/aida-test.md")
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "# AIDA Test Generation Skill\n\n(template not found)".to_string())
+    }
+
+    /// Generate aida-review skill content (loads from embedded template)
+    fn generate_aida_review_skill(&self) -> String {
+        use crate::templates::EMBEDDED_TEMPLATES;
+        EMBEDDED_TEMPLATES.get("skills/aida-review.md")
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "# AIDA Code Review Skill\n\n(template not found)".to_string())
+    }
+
+    /// Generate aida-onboard skill content (loads from embedded template)
+    fn generate_aida_onboard_skill(&self) -> String {
+        use crate::templates::EMBEDDED_TEMPLATES;
+        EMBEDDED_TEMPLATES.get("skills/aida-onboard.md")
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "# AIDA Project Onboarding Skill\n\n(template not found)".to_string())
+    }
+
+    /// Generate aida-sprint skill content (loads from embedded template)
+    fn generate_aida_sprint_skill(&self) -> String {
+        use crate::templates::EMBEDDED_TEMPLATES;
+        EMBEDDED_TEMPLATES.get("skills/aida-sprint.md")
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "# AIDA Sprint Planning Skill\n\n(template not found)".to_string())
+    }
+
+    /// Generate aida-search skill content (loads from embedded template)
+    fn generate_aida_search_skill(&self) -> String {
+        use crate::templates::EMBEDDED_TEMPLATES;
+        EMBEDDED_TEMPLATES.get("skills/aida-search.md")
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "# AIDA Unified Search Skill\n\n(template not found)".to_string())
+    }
+
+    /// Generate aida-standup skill content (loads from embedded template)
+    fn generate_aida_standup_skill(&self) -> String {
+        use crate::templates::EMBEDDED_TEMPLATES;
+        EMBEDDED_TEMPLATES.get("skills/aida-standup.md")
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "# AIDA Standup Skill\n\n(template not found)".to_string())
     }
 }
 
