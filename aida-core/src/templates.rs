@@ -295,8 +295,8 @@ mod tests {
         // Should have at least the core templates
         assert!(EMBEDDED_TEMPLATES.contains_key("skills/aida-req.md"));
         assert!(EMBEDDED_TEMPLATES.contains_key("skills/aida-implement.md"));
-        assert!(EMBEDDED_TEMPLATES.contains_key("commands/status.md"));
-        assert!(EMBEDDED_TEMPLATES.contains_key("hooks/commit-msg"));
+        assert!(EMBEDDED_TEMPLATES.contains_key("commands/aida-status.md"));
+        assert!(EMBEDDED_TEMPLATES.contains_key("hooks/aida-commit-msg"));
     }
 
     #[test]
