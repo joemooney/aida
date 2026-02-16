@@ -2569,3 +2569,79 @@ struct ProjectsResponse {  // Wrapper for API response
 ```
 
 - **Status**: Complete - Multi-project UI working at aida.joemooney.com
+
+---
+
+## Session: Scaffolding Modernization (5-Phase Plan)
+
+**Date**: 2026-02-15
+**Branch**: `feature/modernize-web-frontend`
+
+### Overview
+Complete modernization of the AIDA scaffolding system across 5 phases, transforming skill templates from plain markdown to Claude Code-compatible skills with frontmatter, dynamic context, and MCP integration.
+
+### Phase 1: Foundation — Consolidate Templates + Add Frontmatter
+- **Prompt**: Review scaffolding system and create improvement plan
+- **Actions**:
+  - Migrated 6 inline skill string literals from `scaffolding.rs` to load from `EMBEDDED_TEMPLATES`
+  - Added YAML frontmatter to all 9 skills (`name`, `description`, `allowed-tools`, `disable-model-invocation`)
+  - Split `scaffolding.rs` (~3,000 lines) into modules: `mod.rs`, `claude_md.rs`, `hooks.rs`, `settings.rs`
+  - Sorted `build.rs` template embedding for deterministic builds
+  - Bumped SCAFFOLD_VERSION to 1.1.0
+- **Commit**: 761d716
+
+### Phase 2: Skill Quality + Dynamic Context Injection
+- **Actions**:
+  - Added `!`command`` dynamic context injection to key skills (aida-req, aida-implement, aida-capture, aida-commit, aida-status)
+  - Trimmed verbose skills: aida-release (329→165 lines), aida-plan (210→138 lines), aida-sync (239→155 lines)
+  - All commands use `2>/dev/null || echo "fallback"` for graceful degradation
+- **Commit**: c382f26, 9b52475
+
+### Phase 3: New Skills + Enhanced Hooks
+- **Actions**:
+  - Created 6 new skill templates with frontmatter:
+    - `aida-test.md` — Generate tests linked to requirements
+    - `aida-review.md` — Review code changes against specs
+    - `aida-onboard.md` — Project onboarding for new team members
+    - `aida-sprint.md` — Sprint planning from approved requirements
+    - `aida-search.md` — Unified search across requirements and code
+    - `aida-standup.md` — Generate daily standup reports
+  - Created 5 matching command wrappers in `templates/commands/`
+  - Created 2 new hooks: `aida-stop-check.sh` (untraced edit warnings), `aida-session-context.sh` (session context injection)
+  - Registered all new skills in `scaffolding/mod.rs` with `ScaffoldConfig` boolean fields
+  - Expanded CLAUDE.md generation to document all 15 skills by category
+  - Added `.mcp.json` generation to scaffolding
+  - Bumped SCAFFOLD_VERSION to 1.2.0
+- **Commits**: 2c20052, 3d332a6
+
+### Phase 4: MCP Server (`aida mcp-serve`)
+- **Actions**:
+  - Created `aida-cli/src/mcp.rs` (~500 lines) — full MCP server over stdio
+  - JSON-RPC 2.0 protocol: initialize, tools/list, tools/call, resources/list, resources/read
+  - 7 tools: list_requirements, show_requirement, add_requirement, update_requirement, search_requirements, add_comment, list_features
+  - 2 resources: aida://project/summary, aida://requirements/tree
+  - Added `McpServe` CLI subcommand
+  - Added serde/serde_json dependencies to aida-cli
+  - Tested: MCP handshake, tool listing, search tool (returned 16 results from live DB)
+- **Commit**: eb533a1
+
+### Phase 5: Organization Template Layer + Advanced Features
+- **Actions**:
+  - Extended `TemplateLoader` with 4-tier priority: project → organization → user → embedded
+  - Added `Organization(PathBuf)` variant to `TemplateSource` enum
+  - Updated all template lookup methods for org tier (`~/.config/aida/org-templates/`)
+  - Added organization source icon in GUI
+  - Fixed aida-web `UrlLink` missing `open_mode` field
+  - Bumped SCAFFOLD_VERSION to 2.0.0
+- **Commit**: b49b5c8
+
+### Ancillary Changes
+- Added `ts-rs` derive macros to ~40 structs/enums for TypeScript type generation
+- Committed all new `.claude/` symlinks for Phase 3 skills/commands
+- **Commits**: d6f4ff7, 0761e29
+
+### Key Technical Details
+- **Template architecture**: `aida-core/templates/` → embedded via `build.rs` → loaded by `EMBEDDED_TEMPLATES` HashMap → scaffolded to `.claude/` as symlinks
+- **MCP protocol**: Minimal implementation using only serde_json (no heavy framework), reads JSON lines from stdin, writes to stdout
+- **Frontmatter format**: `---` delimited YAML with `name`, `description`, `allowed-tools[]`, optional `disable-model-invocation: true`
+- **Dynamic context**: Executed by Claude Code at skill load time, provides live project data without bloating templates

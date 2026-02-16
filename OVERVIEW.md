@@ -196,6 +196,23 @@ Bidirectional integration with GitLab for issue tracking:
   - Toast notifications for detected changes
   - Configurable poll interval
 
+### AI Integration — Claude Code Scaffolding
+AIDA scaffolds Claude Code configuration into projects via `aida init`:
+- **15 Skills**: `/aida-req`, `/aida-implement`, `/aida-capture`, `/aida-evaluate`, `/aida-commit`, `/aida-plan`, `/aida-sync`, `/aida-docs`, `/aida-release`, `/aida-test`, `/aida-review`, `/aida-onboard`, `/aida-sprint`, `/aida-search`, `/aida-standup`
+- **YAML Frontmatter**: All skills have Claude Code frontmatter (`name`, `description`, `allowed-tools`, `disable-model-invocation`)
+- **Dynamic Context Injection**: Skills use `!`command`` to inject live project data at load time
+- **Template System**: 4-tier priority (project `.aida/templates/` → org `~/.config/aida/org-templates/` → user `~/.config/aida/templates/` → embedded)
+- **MCP Server**: `aida mcp-serve` exposes requirements as native Claude Code tools over JSON-RPC 2.0 stdio
+- **Hooks**: `aida-stop-check.sh` (warn about untraced edits), `aida-session-context.sh` (inject project context)
+- **Generated artifacts**: `CLAUDE.md`, `.claude/skills/`, `.claude/commands/`, `settings.json`, `.mcp.json`
+- **Scaffold version**: 2.0.0
+
+### MCP Server (`aida mcp-serve`)
+Model Context Protocol server for Claude Code integration:
+- **Tools**: `list_requirements`, `show_requirement`, `add_requirement`, `update_requirement`, `search_requirements`, `add_comment`, `list_features`
+- **Resources**: `aida://project/summary`, `aida://requirements/tree`
+- JSON-RPC 2.0 over stdio, configured via `.mcp.json`
+
 ## Technology Stack
 
 - **Language**: Rust

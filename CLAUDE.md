@@ -113,51 +113,35 @@ docs: update README
 
 ## Claude Code Skills
 
-This project uses AIDA requirements-driven development:
+This project uses AIDA requirements-driven development with 15 skills:
 
-### /aida-req
-Add new requirements with AI evaluation:
-- Interactive requirement gathering
-- Immediate database storage with draft status
-- Background AI evaluation for quality feedback
-- Follow-up actions: improve, split, link, accept
+### Core Skills
+- `/aida-req` — Add new requirements with AI evaluation, quality feedback, and follow-up actions
+- `/aida-implement` — Implement requirements with traceability, child breakdown, and inline trace comments
+- `/aida-capture` — Review session and capture missed requirements as a safety net
+- `/aida-evaluate` — Evaluate requirement quality (clarity, testability, completeness) with scoring
 
-### /aida-implement
-Implement requirements with traceability:
-- Load and display requirement context
-- Break down into child requirements as needed
-- Update requirements during implementation
-- Add inline traceability comments to code
+### Development Workflow
+- `/aida-commit` — Commit with automatic requirement linking and untraced code detection
+- `/aida-review` — Review code changes against requirement specs, identify coverage gaps
+- `/aida-test` — Generate and run tests linked to requirements with verification relationships
+- `/aida-plan` — Create implementation plans from requirements with architecture considerations
 
-### /aida-capture
-Review session and capture missed requirements:
-- Scan conversation for discussed features/bugs/ideas
-- Identify implemented work not yet in requirements database
-- Prompt to add missing requirements or update statuses
-- Use at end of conversational sessions as a safety net
+### Project Management
+- `/aida-sprint` — Sprint planning: select approved requirements, group by feature, create sprint container
+- `/aida-standup` — Generate daily standup from recent commits and requirement progress
+- `/aida-onboard` — Interactive project onboarding: architecture summary, requirement stats, first task suggestions
+- `/aida-search` — Unified search across requirements database and codebase
 
-### /aida-evaluate
-Evaluate a requirement's quality using AI analysis:
-- Load requirement from database
-- Assess clarity, testability, completeness, and consistency
-- Generate quality score (1-10) with detailed feedback
-- Offer follow-up actions: improve, split, or accept
+### Maintenance
+- `/aida-release` — Release management: version bump, changelog generation, requirement status updates
+- `/aida-docs` — Generate and update project documentation from requirements
+- `/aida-sync` — AIDA template management: check templates, verify symlinks, ensure CLAUDE.md is current
 
-### /aida-commit
-Commit changes with automatic requirement linking:
-- Analyze staged changes for requirement traces
-- Identify untraced implementation code
-- Prompt to create requirements for untracked work
-- Create commit with requirement references
-- Update linked requirement statuses
-
-### /aida-sync
-Meta-level skill for AIDA template management:
-- Check if templates have been modified and need rebuilding
-- Verify symlink integrity in AIDA repo
-- Check scaffold status in scaffolded projects
-- Ensure CLAUDE.md documents all skills
-- Use after modifying templates to propagate changes
+### MCP Server
+Run `aida mcp-serve` for native Claude Code tool integration via `.mcp.json`:
+- Tools: `list_requirements`, `show_requirement`, `add_requirement`, `update_requirement`, `search_requirements`, `add_comment`, `list_features`
+- Resources: `aida://project/summary`, `aida://requirements/tree`
 
 ## Template Architecture (IMPORTANT for AIDA Development)
 
