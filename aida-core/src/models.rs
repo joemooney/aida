@@ -5,9 +5,10 @@ use std::collections::HashSet;
 use std::env;
 use std::fmt;
 use uuid::Uuid;
+use ts_rs::TS;
 
 /// Represents the status of a requirement
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
 pub enum RequirementStatus {
     Draft,
     Approved,
@@ -31,7 +32,7 @@ impl fmt::Display for RequirementStatus {
 }
 
 /// Represents the priority of a requirement
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
 pub enum RequirementPriority {
     High,
     Medium,
@@ -49,7 +50,7 @@ impl fmt::Display for RequirementPriority {
 }
 
 /// Represents the type of a requirement
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
 pub enum RequirementType {
     // Traditional requirements types
     Functional,
@@ -91,7 +92,7 @@ impl fmt::Display for RequirementType {
 }
 
 /// Represents the subtype for Meta requirements
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
 pub enum MetaSubtype {
     /// AI prompts (evaluate, improve, etc.)
     Prompt,
@@ -143,7 +144,7 @@ impl MetaSubtype {
 }
 
 /// Represents a relationship type between requirements
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
 pub enum RelationshipType {
     /// Parent-child relationship (this is parent of target)
     Parent,
@@ -221,7 +222,7 @@ impl RelationshipType {
 // ============================================================================
 
 /// Field type for custom fields
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum CustomFieldType {
     /// Single-line text input
@@ -264,7 +265,7 @@ impl fmt::Display for CustomFieldType {
 }
 
 /// Definition of a custom field for a requirement type
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 pub struct CustomFieldDefinition {
     /// Field name (used as key in custom_fields map)
     pub name: String,
@@ -394,7 +395,7 @@ impl CustomFieldDefinition {
 }
 
 /// Definition of a custom requirement type with its specific statuses and fields
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 pub struct CustomTypeDefinition {
     /// Internal name/key for the type (e.g., "ChangeRequest")
     pub name: String,
@@ -813,7 +814,7 @@ pub fn default_type_definitions() -> Vec<CustomTypeDefinition> {
 // ============================================================================
 
 /// Cardinality constraints for relationships
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, TS)]
 pub enum Cardinality {
     /// One source to one target (1:1)
     OneToOne,
@@ -850,7 +851,7 @@ impl Cardinality {
 }
 
 /// Defines a relationship type and its constraints
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 pub struct RelationshipDefinition {
     /// Unique identifier for this relationship type (lowercase, no spaces)
     pub name: String,
@@ -1094,7 +1095,7 @@ impl RelationshipDefinition {
 }
 
 /// Result of validating a relationship
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, TS)]
 pub struct RelationshipValidation {
     /// Whether the relationship is valid
     pub valid: bool,
@@ -1141,7 +1142,7 @@ impl RelationshipValidation {
 // ============================================================================
 
 /// ID format style for requirement identifiers
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, TS)]
 pub enum IdFormat {
     /// Single-level format: PREFIX-NNN (e.g., AUTH-001, FR-002)
     /// Features and types share the same namespace
@@ -1153,7 +1154,7 @@ pub enum IdFormat {
 }
 
 /// Numbering strategy for requirement IDs
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, TS)]
 pub enum NumberingStrategy {
     /// Global sequential numbering across all prefixes
     /// e.g., AUTH-001, FR-002, PAY-003
@@ -1168,7 +1169,7 @@ pub enum NumberingStrategy {
 }
 
 /// Configuration for a requirement type with its prefix
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 pub struct RequirementTypeDefinition {
     /// Display name for the type (e.g., "Functional")
     pub name: String,
@@ -1217,7 +1218,7 @@ fn default_requirement_types() -> Vec<RequirementTypeDefinition> {
 }
 
 /// Configuration for a feature with its prefix
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 pub struct FeatureDefinition {
     /// Sequential number for ordering
     pub number: u32,
@@ -1247,7 +1248,7 @@ impl FeatureDefinition {
 }
 
 /// ID system configuration
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 pub struct IdConfiguration {
     /// Format style for IDs
     #[serde(default)]
@@ -1333,7 +1334,7 @@ pub struct IdConfigValidation {
 }
 
 /// Represents a relationship between two requirements
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 pub struct Relationship {
     /// The type of relationship
     pub rel_type: RelationshipType,
@@ -1348,7 +1349,7 @@ pub struct Relationship {
 }
 
 /// Represents a field change in a requirement's history
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 pub struct FieldChange {
     /// Name of the field that changed
     pub field_name: String,
@@ -1361,7 +1362,7 @@ pub struct FieldChange {
 }
 
 /// Represents a history entry for a requirement update
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 pub struct HistoryEntry {
     /// Unique identifier for this history entry
     pub id: Uuid,
@@ -1390,7 +1391,7 @@ impl HistoryEntry {
 
 /// A snapshot of a requirement at a specific point in time (for baselines)
 /// This is a full copy of the requirement state, not a reference
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 pub struct RequirementSnapshot {
     /// The original requirement's UUID (for linking back)
     pub original_id: Uuid,
@@ -1461,7 +1462,7 @@ impl RequirementSnapshot {
 }
 
 /// Represents a baseline - a named snapshot of requirements at a point in time
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 pub struct Baseline {
     /// Unique identifier for this baseline
     pub id: Uuid,
@@ -1541,7 +1542,7 @@ impl Baseline {
 }
 
 /// Summary of changes between two baselines or baseline and current state
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 pub struct BaselineComparison {
     /// Requirements added (in target but not in source)
     pub added: Vec<Uuid>,
@@ -1557,7 +1558,7 @@ pub struct BaselineComparison {
 }
 
 /// Represents changes to a single requirement between baselines
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct BaselineRequirementDiff {
     /// The requirement's UUID
     pub id: Uuid,
@@ -1570,7 +1571,7 @@ pub struct BaselineRequirementDiff {
 }
 
 /// Represents a reaction emoji definition
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 pub struct ReactionDefinition {
     /// Unique identifier/key for the reaction (e.g., "resolved", "rejected")
     pub name: String,
@@ -1651,7 +1652,7 @@ pub fn default_reaction_definitions() -> Vec<ReactionDefinition> {
 }
 
 /// Represents a reaction on a comment
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 pub struct CommentReaction {
     /// The reaction type (references ReactionDefinition.name)
     pub reaction: String,
@@ -1675,7 +1676,7 @@ impl CommentReaction {
 }
 
 /// How a URL should be opened when clicked
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum UrlOpenMode {
     /// Open in embedded iframe preview (default)
@@ -1686,7 +1687,7 @@ pub enum UrlOpenMode {
 }
 
 /// Represents an external URL link attached to a requirement
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 pub struct UrlLink {
     /// Unique identifier for the link
     pub id: Uuid,
@@ -1754,7 +1755,7 @@ impl UrlLink {
 }
 
 /// Represents a file attachment on a requirement
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 pub struct Attachment {
     /// Unique identifier for the attachment
     pub id: Uuid,
@@ -1833,7 +1834,7 @@ impl Attachment {
 
 // trace:REQ-0243 | ai:claude:high
 /// Represents the type of artifact being traced
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
 pub enum ArtifactType {
     /// Source code file
     SourceCode,
@@ -1872,7 +1873,7 @@ impl ArtifactType {
 // trace:REQ-0243 | ai:claude:high
 /// Represents a trace link between a requirement and a code artifact
 /// This enables bidirectional traceability: requirement -> code and code -> requirement
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 pub struct TraceLink {
     /// Unique identifier for the trace link
     pub id: Uuid,
@@ -1973,7 +1974,7 @@ impl TraceLink {
 // trace:STORY-0323 | ai:claude
 /// Represents a link between an AIDA requirement and a GitLab issue
 /// Used to track traceability between specs and implementation work
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 pub struct GitLabIssueLink {
     /// Unique identifier for the link
     pub id: Uuid,
@@ -2068,7 +2069,7 @@ impl GitLabIssueLink {
 
 // trace:STORY-0323 | ai:claude
 /// Type of link between AIDA requirement and GitLab issue
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, TS)]
 pub enum GitLabLinkType {
     /// Requirement is implemented by the GitLab issue
     #[default]
@@ -2094,7 +2095,7 @@ impl fmt::Display for GitLabLinkType {
 
 // trace:STORY-0325 | ai:claude
 /// How a GitLab link was originally created
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, TS)]
 pub enum LinkOrigin {
     /// Issue was created from AIDA via "Create GitLab Issue"
     #[default]
@@ -2117,7 +2118,7 @@ impl fmt::Display for LinkOrigin {
 
 // trace:STORY-0325 | ai:claude
 /// Current sync status between AIDA and GitLab
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, TS)]
 pub enum SyncStatus {
     /// Content matches between AIDA and GitLab
     #[default]
@@ -2149,7 +2150,7 @@ impl fmt::Display for SyncStatus {
 
 // trace:STORY-0325 | ai:claude
 /// Tracks sync state between an AIDA requirement and a GitLab issue
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct GitLabSyncState {
     /// AIDA requirement UUID
     pub requirement_id: Uuid,
@@ -2291,7 +2292,7 @@ impl GitLabSyncState {
 
 // trace:EPIC-0246 | ai:claude:high
 /// Confidence level for AI-generated implementation
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
 pub enum ConfidenceLevel {
     /// >80% AI-generated
     High,
@@ -2326,7 +2327,7 @@ impl ConfidenceLevel {
 // trace:EPIC-0246 | ai:claude:high
 /// Tracks implementation metadata for a requirement
 /// Stores information about how and when a requirement was implemented
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, TS)]
 pub struct ImplementationInfo {
     /// Whether the requirement has been implemented
     pub implemented: bool,
@@ -2427,7 +2428,7 @@ impl ImplementationInfo {
 
 /// Parsed trace comment from source code
 /// Format: `// trace:<SPEC-ID> - <title> | ai:<tool>:<confidence> | impl:<date> | by:<user>`
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, TS)]
 pub struct TraceComment {
     /// The requirement ID (e.g., FR-0042)
     pub spec_id: String,
@@ -2537,7 +2538,7 @@ impl TraceComment {
 }
 
 /// Represents a comment on a requirement with threading support
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, TS)]
 pub struct Comment {
     /// Unique identifier for the comment
     pub id: Uuid,
@@ -2688,7 +2689,7 @@ impl Comment {
 }
 
 /// Represents a user in the system
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct User {
     /// Unique identifier for the user
     pub id: Uuid,
@@ -2798,7 +2799,7 @@ impl User {
 
 /// Represents a team in the system
 /// Teams can contain users (members) and can be nested (parent/child teams)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct Team {
     /// Unique identifier for the team
     pub id: Uuid,
@@ -2906,7 +2907,7 @@ impl Team {
 }
 
 /// Represents a single requirement in the system
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct Requirement {
     /// Unique identifier for the requirement (UUID)
     pub id: Uuid,
@@ -3288,7 +3289,7 @@ impl Requirement {
 // ============================================================================
 
 /// Configuration for a single AI prompt action (evaluation, duplicates, etc.)
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 pub struct AiActionPromptConfig {
     /// Custom template to replace the default prompt entirely.
     /// Use placeholders: {project_context}, {req_context}, {related_context}, {all_reqs}
@@ -3302,7 +3303,7 @@ pub struct AiActionPromptConfig {
 }
 
 /// Per-type AI prompt customization
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 pub struct AiTypePromptConfig {
     /// The requirement type this config applies to (e.g., "Functional", "Epic", "Story")
     pub type_name: String,
@@ -3321,7 +3322,7 @@ pub struct AiTypePromptConfig {
 }
 
 /// Complete AI prompt configuration for a project
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
 pub struct AiPromptConfig {
     /// Global context prepended to ALL AI prompts.
     /// Use this to describe your project's methodology, terminology, or special rules.
@@ -3388,7 +3389,7 @@ impl AiPromptConfig {
 }
 
 /// Collection of all requirements
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct RequirementsStore {
     /// Database name (displayed in window title prefix)
     #[serde(default)]

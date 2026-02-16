@@ -5,9 +5,10 @@
 use crate::ai::client::AiError;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 /// Issue found in a requirement
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct IssueReport {
     #[serde(rename = "type")]
     pub issue_type: String,
@@ -17,14 +18,14 @@ pub struct IssueReport {
 }
 
 /// Suggested improvement to a requirement
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct SuggestedImprovement {
     pub description: Option<String>,
     pub rationale: String,
 }
 
 /// Response from evaluation action
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct EvaluationResponse {
     pub quality_score: u8,
     pub issues: Vec<IssueReport>,
@@ -35,7 +36,7 @@ pub struct EvaluationResponse {
 /// Stored AI evaluation with metadata
 /// This struct wraps evaluation results with timestamps to track when
 /// evaluations need to be refreshed (when requirement changes).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct StoredAiEvaluation {
     /// The evaluation results from AI
     pub evaluation: EvaluationResponse,
@@ -63,7 +64,7 @@ impl StoredAiEvaluation {
 }
 
 /// A potential duplicate requirement
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct DuplicateResult {
     pub spec_id: String,
     pub similarity: f64,
@@ -72,13 +73,13 @@ pub struct DuplicateResult {
 }
 
 /// Response from find duplicates action
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct DuplicatesResponse {
     pub potential_duplicates: Vec<DuplicateResult>,
 }
 
 /// A suggested relationship
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct RelationshipSuggestion {
     pub rel_type: String,
     pub target_spec_id: String,
@@ -87,13 +88,13 @@ pub struct RelationshipSuggestion {
 }
 
 /// Response from suggest relationships action
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct SuggestRelationshipsResponse {
     pub suggested_relationships: Vec<RelationshipSuggestion>,
 }
 
 /// Response from improve description action
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct ImproveDescriptionResponse {
     pub improved_description: String,
     pub changes_made: Vec<String>,
@@ -101,7 +102,7 @@ pub struct ImproveDescriptionResponse {
 }
 
 /// A generated child requirement
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct GeneratedChild {
     pub title: String,
     pub description: String,
@@ -111,7 +112,7 @@ pub struct GeneratedChild {
 }
 
 /// Response from generate children action
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct GenerateChildrenResponse {
     pub suggested_children: Vec<GeneratedChild>,
 }
