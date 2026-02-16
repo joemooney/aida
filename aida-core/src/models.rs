@@ -1674,6 +1674,17 @@ impl CommentReaction {
     }
 }
 
+/// How a URL should be opened when clicked
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UrlOpenMode {
+    /// Open in embedded iframe preview (default)
+    #[default]
+    Preview,
+    /// Open in a new browser tab/window
+    NewTab,
+}
+
 /// Represents an external URL link attached to a requirement
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct UrlLink {
@@ -1689,6 +1700,10 @@ pub struct UrlLink {
     /// Optional description
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+
+    /// How the URL should be opened (preview iframe or new tab)
+    #[serde(default)]
+    pub open_mode: UrlOpenMode,
 
     /// When the link was added
     pub added_at: DateTime<Utc>,
@@ -1717,6 +1732,7 @@ impl UrlLink {
             url: url.into(),
             title: title.into(),
             description: None,
+            open_mode: UrlOpenMode::default(),
             added_at: Utc::now(),
             added_by: added_by.into(),
             last_verified: None,
@@ -1727,6 +1743,12 @@ impl UrlLink {
     /// Creates a new URL link with description
     pub fn with_description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
+        self
+    }
+
+    /// Sets the open mode for the URL link
+    pub fn with_open_mode(mut self, mode: UrlOpenMode) -> Self {
+        self.open_mode = mode;
         self
     }
 }

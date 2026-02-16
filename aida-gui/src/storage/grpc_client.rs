@@ -961,10 +961,18 @@ fn proto_to_url_link(link: &proto::UrlLink) -> aida_core::UrlLink {
         url: link.url.clone(),
         title: link.title.clone(),
         description: if link.description.is_empty() { None } else { Some(link.description.clone()) },
+        open_mode: proto_to_url_open_mode(link.open_mode),
         added_at: proto_to_datetime(link.added_at.clone()),
         added_by: link.added_by.clone(),
         last_verified: None,
         last_verified_ok: None,
+    }
+}
+
+fn proto_to_url_open_mode(mode: i32) -> aida_core::UrlOpenMode {
+    match mode {
+        1 => aida_core::UrlOpenMode::NewTab,
+        _ => aida_core::UrlOpenMode::Preview, // Default to Preview (0)
     }
 }
 

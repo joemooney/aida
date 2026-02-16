@@ -110,6 +110,7 @@ message UrlLink {
     string description = 4;        // Optional description
     Timestamp added_at = 5;        // When the link was added
     string added_by = 6;           // Who added the link
+    int32 open_mode = 7;           // 0=Preview (iframe), 1=NewTab (external)
 }
 
 // The main Requirement message

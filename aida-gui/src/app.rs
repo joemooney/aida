@@ -3,7 +3,7 @@ use aida_core::{
     Cardinality, Comment, CustomFieldDefinition, CustomFieldType, DatabaseBackend,
     EvaluationResponse, FieldChange, IdFormat, NumberingStrategy, RelationshipDefinition,
     RelationshipType, Requirement, RequirementPriority, RequirementStatus, RequirementType,
-    RequirementsStore, StoredAiEvaluation, UrlLink,
+    RequirementsStore, StoredAiEvaluation, UrlLink, UrlOpenMode,
 };
 
 // Native-only imports (require filesystem access)
@@ -4012,6 +4012,7 @@ pub struct RequirementsApp {
     url_form_url: String,
     url_form_title: String,
     url_form_description: String,
+    url_form_open_mode: UrlOpenMode, // How the URL should open (Preview vs NewTab)
     url_verification_status: Option<(bool, String)>, // (success, message)
     url_verification_in_progress: bool,
 
@@ -4818,6 +4819,7 @@ impl RequirementsApp {
             url_form_url: String::new(),
             url_form_title: String::new(),
             url_form_description: String::new(),
+            url_form_open_mode: UrlOpenMode::default(),
             url_verification_status: None,
             url_verification_in_progress: false,
             show_markdown_help: false,
@@ -5447,6 +5449,7 @@ impl RequirementsApp {
             url_form_url: String::new(),
             url_form_title: String::new(),
             url_form_description: String::new(),
+            url_form_open_mode: UrlOpenMode::default(),
             url_verification_status: None,
             url_verification_in_progress: false,
             // Markdown help
@@ -6078,6 +6081,7 @@ impl RequirementsApp {
             url_form_url: String::new(),
             url_form_title: String::new(),
             url_form_description: String::new(),
+            url_form_open_mode: UrlOpenMode::default(),
             url_verification_status: None,
             url_verification_in_progress: false,
             show_markdown_help: false,
@@ -26962,6 +26966,7 @@ impl RequirementsApp {
                 self.url_form_url.clear();
                 self.url_form_title.clear();
                 self.url_form_description.clear();
+                self.url_form_open_mode = UrlOpenMode::default();
                 self.url_verification_status = None;
                 self.url_verification_in_progress = false;
                 self.show_url_form = true;
@@ -27031,6 +27036,7 @@ impl RequirementsApp {
                     self.url_form_url = url_link.url.clone();
                     self.url_form_title = url_link.title.clone();
                     self.url_form_description = url_link.description.clone().unwrap_or_default();
+                    self.url_form_open_mode = url_link.open_mode;
                     self.url_verification_status = None;
                     self.url_verification_in_progress = false;
                     self.show_url_form = true;
@@ -27549,6 +27555,21 @@ impl RequirementsApp {
                         .desired_width(350.0),
                 );
                 ui.end_row();
+
+                ui.label("Open in:");
+                ui.horizontal(|ui| {
+                    ui.selectable_value(
+                        &mut self.url_form_open_mode,
+                        UrlOpenMode::Preview,
+                        "🌐 Web Preview",
+                    ).on_hover_text("Show URL in embedded iframe (may be blocked by some sites)");
+                    ui.selectable_value(
+                        &mut self.url_form_open_mode,
+                        UrlOpenMode::NewTab,
+                        "🔗 New Tab",
+                    ).on_hover_text("Always open in a new browser tab");
+                });
+                ui.end_row();
             });
 
         ui.add_space(15.0);
@@ -27812,6 +27833,7 @@ impl RequirementsApp {
                             } else {
                                 Some(self.url_form_description.clone())
                             };
+                            url_link.open_mode = self.url_form_open_mode;
                             // Update verification status if we just verified
                             if let Some((success, _)) = &self.url_verification_status {
                                 url_link.last_verified = Some(chrono::Utc::now());
@@ -27828,6 +27850,7 @@ impl RequirementsApp {
                         if !self.url_form_description.is_empty() {
                             url_link.description = Some(self.url_form_description.clone());
                         }
+                        url_link.open_mode = self.url_form_open_mode;
                         // Set verification status if we just verified
                         if let Some((success, _)) = &self.url_verification_status {
                             url_link.last_verified = Some(chrono::Utc::now());

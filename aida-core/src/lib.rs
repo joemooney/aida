@@ -75,8 +75,9 @@ pub use models::{
     RequirementTypeDefinition,
     MetaSubtype,
     RequirementsStore,
-    // URL link type
+    // URL link types
     UrlLink,
+    UrlOpenMode,
     User,
     // Team type
     Team,

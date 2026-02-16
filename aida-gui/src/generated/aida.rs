@@ -102,6 +102,9 @@ pub struct UrlLink {
     /// Who added the link
     #[prost(string, tag = "6")]
     pub added_by: ::prost::alloc::string::String,
+    /// 0=Preview (iframe), 1=NewTab (external)
+    #[prost(int32, tag = "7")]
+    pub open_mode: i32,
 }
 /// The main Requirement message
 #[derive(Clone, PartialEq, ::prost::Message)]

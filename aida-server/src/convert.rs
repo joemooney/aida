@@ -265,6 +265,21 @@ pub fn url_link_to_proto(link: &UrlLink) -> proto::UrlLink {
         description: link.description.clone().unwrap_or_default(),
         added_at: Some(datetime_to_proto(link.added_at)),
         added_by: link.added_by.clone(),
+        open_mode: url_open_mode_to_proto(&link.open_mode),
+    }
+}
+
+pub fn url_open_mode_to_proto(mode: &aida_core::UrlOpenMode) -> i32 {
+    match mode {
+        aida_core::UrlOpenMode::Preview => 0,
+        aida_core::UrlOpenMode::NewTab => 1,
+    }
+}
+
+pub fn proto_to_url_open_mode(mode: i32) -> aida_core::UrlOpenMode {
+    match mode {
+        1 => aida_core::UrlOpenMode::NewTab,
+        _ => aida_core::UrlOpenMode::Preview,
     }
 }
 
@@ -274,6 +289,7 @@ pub fn proto_to_url_link(link: &proto::UrlLink) -> UrlLink {
         url: link.url.clone(),
         title: link.title.clone(),
         description: if link.description.is_empty() { None } else { Some(link.description.clone()) },
+        open_mode: proto_to_url_open_mode(link.open_mode),
         added_at: proto_to_datetime(link.added_at.clone()),
         added_by: link.added_by.clone(),
         last_verified: None,
