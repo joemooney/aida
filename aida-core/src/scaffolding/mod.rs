@@ -793,6 +793,35 @@ impl Scaffolder {
             }
         }
 
+        // .mcp.json — MCP server configuration for Claude Code
+        {
+            let mcp_content = r#"{
+  "mcpServers": {
+    "aida": {
+      "type": "stdio",
+      "command": "aida",
+      "args": ["mcp-serve"]
+    }
+  }
+}"#.to_string();
+            let path = PathBuf::from(".mcp.json");
+            let artifact = self.create_artifact(
+                path.clone(),
+                mcp_content,
+                "MCP server configuration for Claude Code".to_string(),
+                false,
+            );
+
+            match &artifact.file_status {
+                FileStatus::New => new_files.push(path),
+                FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
+                FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+            }
+
+            artifacts.push(artifact);
+        }
+
         // .git/hooks/ directory (only if .git exists)
         if self.config.generate_git_hooks && self.project_root.join(".git").exists() {
             new_dirs.insert(PathBuf::from(".git/hooks"));

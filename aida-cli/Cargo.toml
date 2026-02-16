@@ -13,6 +13,8 @@ path = "src/main.rs"
 aida-core = { path = "../aida-core", features = ["postgres", "gitlab"] }
 
 # CLI-specific dependencies
+serde = { workspace = true }
+serde_json = { workspace = true }
 clap = { workspace = true }
 inquire = { workspace = true }
 colored = { workspace = true }

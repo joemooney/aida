@@ -1,6 +1,7 @@
 mod cli;
 #[cfg(feature = "remote")]
 mod client;
+mod mcp;
 mod prompts;
 
 use anyhow::{Context, Result};
@@ -230,6 +231,9 @@ fn main() -> Result<()> {
         }
         Command::Gitlab(gitlab_cmd) => {
             handle_gitlab_command(gitlab_cmd, &storage)?;
+        }
+        Command::McpServe => {
+            mcp::run_mcp_server(&storage)?;
         }
         Command::Grep {
             pattern,

@@ -901,6 +901,12 @@ pub enum Command {
     #[clap(subcommand)]
     Gitlab(GitLabCommand),
 
+    /// Start MCP (Model Context Protocol) server over stdio
+    ///
+    /// Exposes AIDA requirements as MCP tools for Claude Code integration.
+    /// Reads JSON-RPC 2.0 requests from stdin, writes responses to stdout.
+    McpServe,
+
     /// Search requirements for a pattern (like grep)
     Grep {
         /// Pattern to search for (regex supported with -E)
