@@ -22,7 +22,7 @@ use crate::models::RequirementsStore;
 use crate::templates::TemplateLoader;
 
 /// Current scaffolding version - increment when templates change significantly
-pub const SCAFFOLD_VERSION: &str = "1.1.0";
+pub const SCAFFOLD_VERSION: &str = "1.2.0";
 
 /// Compute a simple checksum for content (first 8 chars of hex-encoded hash)
 fn compute_checksum(content: &str) -> String {

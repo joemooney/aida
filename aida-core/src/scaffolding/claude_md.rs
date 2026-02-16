@@ -138,26 +138,28 @@ If you work conversationally without explicit /aida-req calls, use `/aida-captur
 
 This project uses AIDA requirements-driven development:
 
-### /aida-req
-Add new requirements with AI evaluation:
-- Interactive requirement gathering
-- Immediate database storage with draft status
-- Background AI evaluation for quality feedback
-- Follow-up actions: improve, split, link, accept
+### Core Skills
+- `/aida-req` — Add new requirements with AI evaluation and quality feedback
+- `/aida-implement` — Implement requirements with code traceability and status tracking
+- `/aida-plan` — Plan requirement implementation: decompose, document decisions, identify files
+- `/aida-evaluate` — Evaluate requirement quality (clarity, testability, completeness)
+- `/aida-capture` — Review session and capture missed requirements (use at end of sessions)
 
-### /aida-implement
-Implement requirements with traceability:
-- Load and display requirement context
-- Break down into child requirements as needed
-- Update requirements during implementation
-- Add inline traceability comments to code
+### Development Workflow
+- `/aida-commit` — Commit with automatic requirement linking and status updates
+- `/aida-review` — Review code changes against requirement specs, identify gaps
+- `/aida-test` — Generate tests linked to requirements with `Verifies` relationships
+- `/aida-search` — Unified search across requirements database and code
 
-### /aida-capture
-Review session and capture missed requirements:
-- Scan conversation for discussed features/bugs/ideas
-- Identify implemented work not yet in requirements database
-- Prompt to add missing requirements or update statuses
-- Use at end of conversational sessions as a safety net
+### Project Management
+- `/aida-sprint` — Sprint planning: select approved requirements, group by feature
+- `/aida-standup` — Daily standup summary from recent commits and requirement changes
+- `/aida-onboard` — Project onboarding: architecture overview, requirements status, first tasks
+
+### Maintenance
+- `/aida-release` — Release management: version bump, changelog, requirement export
+- `/aida-docs` — Documentation generation and management
+- `/aida-sync` — Template synchronization and scaffold status checking
 "#;
 
         format!(
