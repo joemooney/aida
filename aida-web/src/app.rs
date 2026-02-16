@@ -81,6 +81,7 @@ mod gui_convert {
             description: u.description.clone(),
             added_at: to_gui_timestamp(&u.added_at),
             added_by: u.added_by.clone(),
+            open_mode: u.open_mode,
         }
     }
 

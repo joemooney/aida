@@ -14888,6 +14888,7 @@ impl RequirementsApp {
                         // Template entry with icon based on source
                         let source_icon = match template.source {
                             aida_core::TemplateSource::ProjectLocal(_) => "📁",
+                            aida_core::TemplateSource::Organization(_) => "🏢",
                             aida_core::TemplateSource::UserConfig(_) => "👤",
                             aida_core::TemplateSource::Embedded => "📦",
                             aida_core::TemplateSource::NotFound => "❓",
@@ -14931,6 +14932,7 @@ impl RequirementsApp {
                 // Source info
                 let source_text = match &template.source {
                     aida_core::TemplateSource::ProjectLocal(path) => format!("📁 Project: {}", path.display()),
+                    aida_core::TemplateSource::Organization(path) => format!("🏢 Organization: {}", path.display()),
                     aida_core::TemplateSource::UserConfig(path) => format!("👤 User: {}", path.display()),
                     aida_core::TemplateSource::Embedded => "📦 Embedded in binary".to_string(),
                     aida_core::TemplateSource::NotFound => "❓ Not found".to_string(),

@@ -64,10 +64,18 @@ pub fn get_template_categories() -> &'static [(&'static str, &'static str)] {
     TEMPLATE_CATEGORIES
 }
 
-/// Template loader that checks external files first, then falls back to embedded
+/// Template loader that checks external files first, then falls back to embedded.
+///
+/// Load order (highest priority first):
+/// 1. Project-local `.aida/templates/`
+/// 2. Organization `~/.config/aida/org-templates/`
+/// 3. User config `~/.config/aida/templates/`
+/// 4. Embedded templates (compiled into binary)
 pub struct TemplateLoader {
     /// Project-local template directory (highest priority)
     project_templates: Option<PathBuf>,
+    /// Organization template directory (shared org-wide policies)
+    org_templates: Option<PathBuf>,
     /// User config template directory
     user_templates: Option<PathBuf>,
     /// Cache of loaded templates
@@ -77,10 +85,13 @@ pub struct TemplateLoader {
 impl TemplateLoader {
     /// Create a new template loader
     pub fn new() -> Self {
-        let user_templates = dirs::config_dir().map(|p| p.join("aida/templates"));
+        let config_dir = dirs::config_dir();
+        let user_templates = config_dir.as_ref().map(|p| p.join("aida/templates"));
+        let org_templates = config_dir.as_ref().map(|p| p.join("aida/org-templates"));
 
         Self {
             project_templates: None,
+            org_templates,
             user_templates,
             cache: HashMap::new(),
         }
@@ -89,10 +100,13 @@ impl TemplateLoader {
     /// Create a template loader with a project root for local templates
     pub fn with_project_root(project_root: &Path) -> Self {
         let project_templates = Some(project_root.join(".aida/templates"));
-        let user_templates = dirs::config_dir().map(|p| p.join("aida/templates"));
+        let config_dir = dirs::config_dir();
+        let user_templates = config_dir.as_ref().map(|p| p.join("aida/templates"));
+        let org_templates = config_dir.as_ref().map(|p| p.join("aida/org-templates"));
 
         Self {
             project_templates,
+            org_templates,
             user_templates,
             cache: HashMap::new(),
         }
@@ -121,11 +135,21 @@ impl TemplateLoader {
         None
     }
 
-    /// Load from external file locations
+    /// Load from external file locations (project → org → user)
     fn load_external(&self, key: &str) -> Option<String> {
         // Try project-local first
         if let Some(ref project_dir) = self.project_templates {
             let path = project_dir.join(key);
+            if path.exists() {
+                if let Ok(content) = fs::read_to_string(&path) {
+                    return Some(content);
+                }
+            }
+        }
+
+        // Try organization templates
+        if let Some(ref org_dir) = self.org_templates {
+            let path = org_dir.join(key);
             if path.exists() {
                 if let Ok(content) = fs::read_to_string(&path) {
                     return Some(content);
@@ -149,13 +173,8 @@ impl TemplateLoader {
     /// Check if a template is available (either external or embedded)
     pub fn has_template(&self, key: &str) -> bool {
         // Check external locations
-        if let Some(ref project_dir) = self.project_templates {
-            if project_dir.join(key).exists() {
-                return true;
-            }
-        }
-        if let Some(ref user_dir) = self.user_templates {
-            if user_dir.join(key).exists() {
+        for dir in [self.project_templates.as_ref(), self.org_templates.as_ref(), self.user_templates.as_ref()].into_iter().flatten() {
+            if dir.join(key).exists() {
                 return true;
             }
         }
@@ -169,7 +188,7 @@ impl TemplateLoader {
         let mut keys: Vec<String> = EMBEDDED_TEMPLATES.keys().map(|k| k.to_string()).collect();
 
         // Add any external templates not in embedded
-        for dir in [self.project_templates.as_ref(), self.user_templates.as_ref()].into_iter().flatten() {
+        for dir in [self.project_templates.as_ref(), self.org_templates.as_ref(), self.user_templates.as_ref()].into_iter().flatten() {
             if let Ok(entries) = fs::read_dir(dir) {
                 for entry in entries.flatten() {
                     if entry.path().is_dir() {
@@ -221,6 +240,14 @@ impl TemplateLoader {
             }
         }
 
+        // Check organization templates
+        if let Some(ref org_dir) = self.org_templates {
+            let path = org_dir.join(key);
+            if path.exists() {
+                return TemplateSource::Organization(path);
+            }
+        }
+
         // Check user config
         if let Some(ref user_dir) = self.user_templates {
             let path = user_dir.join(key);
@@ -249,6 +276,8 @@ impl Default for TemplateLoader {
 pub enum TemplateSource {
     /// Template from project-local .aida/templates/
     ProjectLocal(PathBuf),
+    /// Template from organization-wide ~/.config/aida/org-templates/
+    Organization(PathBuf),
     /// Template from user config ~/.config/aida/templates/
     UserConfig(PathBuf),
     /// Template embedded in binary
