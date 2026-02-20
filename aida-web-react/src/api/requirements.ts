@@ -6,14 +6,14 @@ export function fetchRequirements(): Promise<Requirement[]> {
 }
 
 export function fetchRequirement(id: string): Promise<Requirement> {
-  return apiFetch<Requirement>(`/requirements/${id}`);
+  return apiFetch<Requirement>(`/v2/requirements/${id}`);
 }
 
 export function updateRequirement(
   id: string,
   data: Partial<Requirement>,
 ): Promise<Requirement> {
-  return apiFetch<Requirement>(`/requirements/${id}`, {
+  return apiFetch<Requirement>(`/v2/requirements/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data),
   });
@@ -29,7 +29,7 @@ export function createRequirement(
 }
 
 export function searchRequirements(query: string): Promise<Requirement[]> {
-  return apiFetch<Requirement[]>(`/search?q=${encodeURIComponent(query)}`);
+  return apiFetch<Requirement[]>(`/v2/search?q=${encodeURIComponent(query)}`);
 }
 
 export function addComment(

@@ -19,6 +19,7 @@ use crate::convert::*;
 use crate::projects::ProjectManager;
 use crate::proto;
 use crate::service::ServerState;
+use aida_core::models;
 
 /// Application state containing the ProjectManager
 pub struct AppState {
@@ -51,6 +52,9 @@ pub fn create_rest_router(project_manager: Arc<ProjectManager>) -> Router {
         .route("/api/requirements/:id/comments", post(add_comment))
         // Search
         .route("/api/search", get(search_requirements))
+        // New V2 API routes
+        .route("/api/v2/users", get(list_users))
+        .route("/api/v2/requirements", get(list_requirements_v2))
         .with_state(state)
 }
 
@@ -68,6 +72,11 @@ pub fn create_rest_router_legacy(state: Arc<ServerState>) -> Router {
         .route("/api/requirements/:id", delete(delete_requirement_legacy))
         .route("/api/requirements/:id/comments", post(add_comment_legacy))
         .route("/api/search", get(search_requirements_legacy))
+        // V2 API routes (native JSON matching TypeScript types)
+        .route("/api/v2/requirements", get(list_requirements_v2_legacy))
+        .route("/api/v2/requirements/:id", get(get_requirement_v2_legacy))
+        .route("/api/v2/requirements/:id", put(update_requirement_v2_legacy))
+        .route("/api/v2/search", get(search_requirements_v2_legacy))
         .with_state(state)
 }
 
@@ -228,6 +237,31 @@ async fn get_project_backend(
         .await
         .map_err(|e| ApiError::new(StatusCode::NOT_FOUND, format!("Project error: {}", e)))
 }
+
+// ============================================================================
+// V2 API Handlers (direct aida_core models)
+// ============================================================================
+
+async fn list_users(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<models::User>>, (StatusCode, Json<ApiError>)> {
+    let backend = get_project_backend(&state, &headers).await?;
+    let store = backend.store.read().await;
+
+    Ok(Json(store.users.clone()))
+}
+
+async fn list_requirements_v2(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<models::Requirement>>, (StatusCode, Json<ApiError>)> {
+    let backend = get_project_backend(&state, &headers).await?;
+    let store = backend.store.read().await;
+
+    Ok(Json(store.requirements.clone()))
+}
+
 
 // ============================================================================
 // Project management handlers
@@ -1201,4 +1235,152 @@ fn parse_req_type(s: &str) -> aida_core::RequirementType {
         "meta" => aida_core::RequirementType::Meta,
         _ => aida_core::RequirementType::Functional,
     }
+}
+
+// ============================================================================
+// V2 legacy handlers (native JSON matching TypeScript types)
+// ============================================================================
+
+// trace:FR-0227 | ai:claude
+async fn list_requirements_v2_legacy(
+    State(state): State<Arc<ServerState>>,
+) -> Result<Json<Vec<models::Requirement>>, (StatusCode, Json<ApiError>)> {
+    let store = state.store.read().await;
+    Ok(Json(store.requirements.clone()))
+}
+
+async fn get_requirement_v2_legacy(
+    State(state): State<Arc<ServerState>>,
+    Path(id): Path<String>,
+) -> Result<Json<models::Requirement>, (StatusCode, Json<ApiError>)> {
+    let store = state.store.read().await;
+    let req = find_requirement(&store, &id)
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {id}")))?;
+    Ok(Json(req.clone()))
+}
+
+#[derive(Deserialize)]
+struct UpdateRequirementV2Request {
+    status: Option<String>,
+    priority: Option<String>,
+    title: Option<String>,
+    description: Option<String>,
+    owner: Option<String>,
+    feature: Option<String>,
+    tags: Option<Vec<String>>,
+}
+
+async fn update_requirement_v2_legacy(
+    State(state): State<Arc<ServerState>>,
+    Path(id): Path<String>,
+    Json(body): Json<UpdateRequirementV2Request>,
+) -> Result<Json<models::Requirement>, (StatusCode, Json<ApiError>)> {
+    let mut store = state.store.write().await;
+    let idx = find_requirement_index(&store, &id)
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {id}")))?;
+
+    if let Some(status) = &body.status {
+        store.requirements[idx].status = parse_status(status);
+    }
+    if let Some(priority) = &body.priority {
+        store.requirements[idx].priority = parse_priority(priority);
+    }
+    if let Some(title) = &body.title {
+        store.requirements[idx].title = title.clone();
+    }
+    if let Some(description) = &body.description {
+        store.requirements[idx].description = description.clone();
+    }
+    if let Some(owner) = &body.owner {
+        store.requirements[idx].owner = owner.clone();
+    }
+    if let Some(feature) = &body.feature {
+        store.requirements[idx].feature = feature.clone();
+    }
+    if let Some(tags) = &body.tags {
+        store.requirements[idx].tags = tags.iter().cloned().collect();
+    }
+    store.requirements[idx].modified_at = chrono::Utc::now();
+
+    let updated = store.requirements[idx].clone();
+
+    // Persist changes
+    if let Err(e) = state.backend.save(&store) {
+        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+    }
+
+    Ok(Json(updated))
+}
+
+async fn search_requirements_v2_legacy(
+    State(state): State<Arc<ServerState>>,
+    Query(query): Query<SearchQuery>,
+) -> Result<Json<Vec<models::Requirement>>, (StatusCode, Json<ApiError>)> {
+    let store = state.store.read().await;
+    let search_text = query.q.unwrap_or_default().to_lowercase();
+
+    let search_title = query.search_title.unwrap_or(true);
+    let search_description = query.search_description.unwrap_or(true);
+    let search_comments = query.search_comments.unwrap_or(false);
+    let search_spec_id = query.search_spec_id.unwrap_or(true);
+
+    let mut results: Vec<_> = store
+        .requirements
+        .iter()
+        .filter(|req| {
+            if !query.include_archived.unwrap_or(false) && req.archived {
+                return false;
+            }
+            if let Some(ref status) = query.status {
+                if format!("{:?}", req.status).to_lowercase() != status.to_lowercase() {
+                    return false;
+                }
+            }
+            if let Some(ref req_type) = query.req_type {
+                if format!("{:?}", req.req_type).to_lowercase() != req_type.to_lowercase() {
+                    return false;
+                }
+            }
+            if let Some(ref feature) = query.feature {
+                if req.feature.to_lowercase() != feature.to_lowercase() {
+                    return false;
+                }
+            }
+            if search_text.is_empty() {
+                return true;
+            }
+            let mut matched = false;
+            if search_title && req.title.to_lowercase().contains(&search_text) {
+                matched = true;
+            }
+            if search_description && req.description.to_lowercase().contains(&search_text) {
+                matched = true;
+            }
+            if search_spec_id {
+                if let Some(ref spec_id) = req.spec_id {
+                    if spec_id.to_lowercase().contains(&search_text) {
+                        matched = true;
+                    }
+                }
+            }
+            if search_comments {
+                for comment in &req.comments {
+                    if comment.content.to_lowercase().contains(&search_text) {
+                        matched = true;
+                        break;
+                    }
+                }
+            }
+            matched
+        })
+        .cloned()
+        .collect();
+
+    if let Some(limit) = query.limit {
+        if limit > 0 {
+            results = results.into_iter().take(limit as usize).collect();
+        }
+    }
+
+    Ok(Json(results))
 }
