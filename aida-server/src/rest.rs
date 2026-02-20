@@ -77,6 +77,9 @@ pub fn create_rest_router_legacy(state: Arc<ServerState>) -> Router {
         .route("/api/v2/requirements/:id", get(get_requirement_v2_legacy))
         .route("/api/v2/requirements/:id", put(update_requirement_v2_legacy))
         .route("/api/v2/search", get(search_requirements_v2_legacy))
+        // Sprint assignment endpoints
+        .route("/api/v2/requirements/:id/sprint", put(assign_sprint_legacy))
+        .route("/api/v2/requirements/:id/sprint", delete(remove_sprint_legacy))
         .with_state(state)
 }
 
@@ -1387,4 +1390,77 @@ async fn search_requirements_v2_legacy(
     }
 
     Ok(Json(results))
+}
+
+// ============================================================================
+// Sprint assignment handlers (legacy)
+// ============================================================================
+
+#[derive(Deserialize)]
+struct SprintAssignRequest {
+    sprint_id: String,
+    username: Option<String>,
+}
+
+async fn assign_sprint_legacy(
+    State(state): State<Arc<ServerState>>,
+    Path(id): Path<String>,
+    Json(body): Json<SprintAssignRequest>,
+) -> Result<Json<models::Requirement>, (StatusCode, Json<ApiError>)> {
+    let mut store = state.store.write().await;
+
+    // Look up the requirement to assign
+    let req_id = {
+        let req = find_requirement(&store, &id)
+            .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {id}")))?;
+        req.id
+    };
+
+    // Look up the sprint
+    let sprint_id = {
+        let sprint = find_requirement(&store, &body.sprint_id)
+            .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Sprint not found: {}", body.sprint_id)))?;
+        if sprint.req_type != aida_core::RequirementType::Sprint {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, format!("Target {} is not a Sprint", body.sprint_id)));
+        }
+        sprint.id
+    };
+
+    let username = body.username.unwrap_or_else(|| "web-user".to_string());
+    store.assign_to_sprint(req_id, sprint_id, &username);
+
+    let updated = find_requirement(&store, &id)
+        .ok_or_else(|| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Requirement disappeared after assignment"))?
+        .clone();
+
+    if let Err(e) = state.backend.save(&store) {
+        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+    }
+
+    Ok(Json(updated))
+}
+
+async fn remove_sprint_legacy(
+    State(state): State<Arc<ServerState>>,
+    Path(id): Path<String>,
+) -> Result<Json<models::Requirement>, (StatusCode, Json<ApiError>)> {
+    let mut store = state.store.write().await;
+
+    let req_id = {
+        let req = find_requirement(&store, &id)
+            .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {id}")))?;
+        req.id
+    };
+
+    store.remove_from_sprint(req_id, "web-user");
+
+    let updated = find_requirement(&store, &id)
+        .ok_or_else(|| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Requirement disappeared after removal"))?
+        .clone();
+
+    if let Err(e) = state.backend.save(&store) {
+        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+    }
+
+    Ok(Json(updated))
 }

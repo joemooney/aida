@@ -3,6 +3,7 @@ import { AppLayout } from './components/layout/AppLayout';
 import { DashboardPage } from './components/dashboard/DashboardPage';
 import { KanbanBoard } from './components/kanban/KanbanBoard';
 import { RequirementsList } from './components/list/RequirementsList';
+import { SprintView } from './components/sprint/SprintView';
 
 export default function App() {
   return (
@@ -12,6 +13,7 @@ export default function App() {
           <Route index element={<DashboardPage />} />
           <Route path="board" element={<KanbanBoard />} />
           <Route path="list" element={<RequirementsList />} />
+          <Route path="sprints" element={<SprintView />} />
         </Route>
       </Routes>
     </BrowserRouter>

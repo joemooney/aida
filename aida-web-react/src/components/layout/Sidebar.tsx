@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Columns3, List, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Columns3, List, Zap, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/board', icon: Columns3, label: 'Kanban Board' },
   { to: '/list', icon: List, label: 'List View' },
+  { to: '/sprints', icon: Zap, label: 'Sprints' },
 ];
 
 interface SidebarProps {
