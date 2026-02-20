@@ -1,12 +1,13 @@
 import { X } from 'lucide-react';
-import type { Requirement, RequirementPriority } from '@shared/types';
+import type { Requirement, RequirementPriority, RequirementType } from '@shared/types';
 import { StatusBadge, PriorityBadge, TypeBadge } from '../ui/Badge';
 import { EditableText, EditableSelect } from '../ui/EditableField';
-import { STATUS_ORDER, STATUS_CONFIG, PRIORITY_CONFIG } from '../../lib/constants';
+import { STATUS_ORDER, STATUS_CONFIG, PRIORITY_CONFIG, TYPE_CONFIG } from '../../lib/constants';
 import { useUpdateRequirement } from '../../hooks/useRequirements';
 import { cn } from '../../lib/utils';
 
 const PRIORITIES: RequirementPriority[] = ['High', 'Medium', 'Low'];
+const TYPES = Object.keys(TYPE_CONFIG) as RequirementType[];
 
 interface DetailHeaderProps {
   requirement: Requirement;
@@ -70,7 +71,17 @@ export function DetailHeader({ requirement, onClose }: DetailHeaderProps) {
             </span>
           )}
         />
-        <TypeBadge type={requirement.req_type} />
+        <EditableSelect
+          value={requirement.req_type}
+          options={TYPES}
+          onSave={(req_type) => save({ req_type })}
+          renderValue={(t) => <TypeBadge type={t} />}
+          renderOption={(t) => (
+            <span className={cn('flex items-center gap-2', TYPE_CONFIG[t].color)}>
+              {TYPE_CONFIG[t].label}
+            </span>
+          )}
+        />
       </div>
     </div>
   );

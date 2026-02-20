@@ -1268,6 +1268,7 @@ struct UpdateRequirementV2Request {
     owner: Option<String>,
     feature: Option<String>,
     tags: Option<Vec<String>>,
+    req_type: Option<String>,
 }
 
 async fn update_requirement_v2_legacy(
@@ -1299,6 +1300,9 @@ async fn update_requirement_v2_legacy(
     }
     if let Some(tags) = &body.tags {
         store.requirements[idx].tags = tags.iter().cloned().collect();
+    }
+    if let Some(req_type) = &body.req_type {
+        store.requirements[idx].req_type = parse_req_type(req_type);
     }
     store.requirements[idx].modified_at = chrono::Utc::now();
 
