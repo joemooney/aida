@@ -1,5 +1,4 @@
 import { useDroppable } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import type { RequirementStatus, Requirement } from '@shared/types';
 import { cn } from '../../lib/utils';
 import { STATUS_CONFIG } from '../../lib/constants';
@@ -18,7 +17,7 @@ export function KanbanColumn({ status, requirements }: KanbanColumnProps) {
     <div
       ref={setNodeRef}
       className={cn(
-        'flex flex-col rounded-xl bg-surface-alt border border-edge min-w-[280px] w-[280px]',
+        'flex flex-col rounded-xl bg-surface-alt border border-edge min-w-[280px] w-[280px] transition-colors',
         isOver && 'border-accent/50 bg-accent/5',
       )}
     >
@@ -33,11 +32,9 @@ export function KanbanColumn({ status, requirements }: KanbanColumnProps) {
 
       {/* Cards */}
       <div className="flex-1 overflow-y-auto p-2 space-y-2 min-h-[200px]">
-        <SortableContext items={requirements.map((r) => r.id)} strategy={verticalListSortingStrategy}>
-          {requirements.map((req) => (
-            <KanbanCard key={req.id} requirement={req} />
-          ))}
-        </SortableContext>
+        {requirements.map((req) => (
+          <KanbanCard key={req.id} requirement={req} />
+        ))}
       </div>
     </div>
   );

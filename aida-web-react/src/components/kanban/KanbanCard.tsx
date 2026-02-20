@@ -1,5 +1,4 @@
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { useDraggable } from '@dnd-kit/core';
 import { ArrowUp, Minus, ArrowDown } from 'lucide-react';
 import type { Requirement } from '@shared/types';
 import { cn } from '../../lib/utils';
@@ -31,14 +30,12 @@ export function KanbanCard({ requirement, isDragOverlay = false }: KanbanCardPro
     listeners,
     setNodeRef,
     transform,
-    transition,
     isDragging,
-  } = useSortable({ id: requirement.id });
+  } = useDraggable({ id: requirement.id });
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
+  const style = transform
+    ? { transform: `translate(${transform.x}px, ${transform.y}px)` }
+    : undefined;
 
   const PriorityIcon = priorityIcons[requirement.priority];
 
@@ -51,7 +48,7 @@ export function KanbanCard({ requirement, isDragOverlay = false }: KanbanCardPro
       onClick={() => !isDragging && open(requirement.spec_id ?? requirement.id)}
       className={cn(
         'rounded-lg border border-edge bg-surface-raised p-3 cursor-grab active:cursor-grabbing',
-        'transition-all hover:border-edge-hover hover:shadow-md hover:shadow-black/10',
+        'transition-shadow hover:border-edge-hover hover:shadow-md hover:shadow-black/10',
         isDragging && 'opacity-40',
         isDragOverlay && 'shadow-xl shadow-black/30 rotate-2 border-accent/50',
       )}
