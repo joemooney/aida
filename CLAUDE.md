@@ -72,6 +72,24 @@ aida comment add <ID> "..."            # Add implementation note
 - **Commit-time validation**: Use `/aida-commit` to catch untraced work
 - **Safety net**: If you work conversationally without explicit /aida-req calls, use `/aida-capture` at session end to review and capture any requirements that were discussed but not yet added to the database
 
+### Plan Archival (IMPORTANT)
+
+**Every implementation plan must be saved to `docs/plans/`.**
+
+When you create or receive an implementation plan (via plan mode or user-provided), save it before implementing:
+
+1. **Create** `docs/plans/` directory if it doesn't exist
+2. **Save** the plan as `docs/plans/YYYY-MM-DD-<slug>.md` where `<slug>` is a short kebab-case description (e.g., `2026-02-20-sprint-charts.md`)
+3. **Include** in the plan file:
+   - The full plan content (phases, files, approach)
+   - A `## Related Requirements` section listing any AIDA requirement IDs this plan addresses
+   - A `## Status` section (initially "In Progress", updated to "Completed" when done)
+4. **Update** the status to "Completed" after successful implementation
+
+This ensures all architectural decisions and implementation approaches are preserved for future reference, even across chat sessions.
+
+**Scaffolding**: When initializing new projects with `aida init`, the `docs/plans/` directory should be part of the standard project structure.
+
 ## Code Traceability
 
 ### Inline Code Traces

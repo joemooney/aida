@@ -130,6 +130,8 @@ Define connections between requirements:
   - Full-text search
   - Dark/light theme toggle using CSS custom properties
   - Sprint planning with drag-and-drop between backlog and sprints (via @dnd-kit)
+  - Sprint creation modal, archive/unarchive toggle
+  - Sprint charts: burndown, burn-up, velocity (pure SVG, no charting library)
 - **Source organization**: 45+ files across `api/`, `lib/`, `hooks/`, `components/` (ui, layout, kanban, list, detail, dashboard, sprint)
 - **Shared types**: TypeScript types in `shared/types.ts` generated from Rust structs via ts-rs
 - **Design choices**: URL-based filter and detail state, optimistic updates for drag-and-drop status changes

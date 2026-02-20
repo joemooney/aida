@@ -2746,3 +2746,60 @@ Implement Sprint Planning view with drag-and-drop between backlog and sprints.
 
 ### Commit
 - **b0e5025** — [AI:claude] feat(web): add sprint view with planning and backlog management
+
+---
+
+## Sprint Enhancements: Create, Archive, and Charts (2026-02-20)
+
+### Prompt
+Implement sprint create modal, archive sprint toggle, and burndown/burn-up/velocity charts using pure SVG.
+
+### Plan
+Saved to `docs/plans/2026-02-20-sprint-enhancements.md`
+
+### Phase 1: Extend V2 API (Rust)
+- Added `custom_fields` and `archived` to `UpdateRequirementV2Request` in `rest.rs`
+- Added `CreateRequirementV2Request` struct and `create_requirement_v2_legacy` handler
+- Registered `POST /api/v2/requirements` route in legacy router
+
+### Phase 2: Sprint API & Hooks (TypeScript)
+- Added `createSprint()` API function and `CreateSprintData` interface
+- Added `useCreateSprint()` mutation hook
+
+### Phase 3: Create Sprint Modal
+- Created `CreateSprintModal.tsx` — modal with sprint number, title, start/end dates, goal, planned velocity
+- Auto-suggests next sprint number, auto-generates "Sprint N" title
+
+### Phase 4: Archive Sprint
+- Added archive button (hover-visible `Archive` icon) to `SprintCard.tsx`
+- Passed `onArchive` through `SprintSelector.tsx`
+- Added "Show archived" toggle button in `SprintView.tsx` header
+
+### Phase 5: Sprint Charts (Pure SVG)
+- `BurndownChart.tsx` — ideal vs actual remaining items line chart
+- `BurnupChart.tsx` — scope vs cumulative completed with area fill
+- `VelocityChart.tsx` — bar chart of completed points per sprint with average line
+- `SprintCharts.tsx` — container rendering all three in responsive 3-column grid
+- Added `computeBurndownData`, `computeBurnupData`, `computeVelocityData` utilities to `sprint-utils.ts`
+
+### Phase 6: Integration
+- Updated `SprintView.tsx` with "New Sprint" button, archive toggle, charts below board
+- Both `cargo build -p aida-server` and `npm run build` pass
+
+### Files Changed
+- 7 modified, 5 created (12 files total, 836 insertions)
+
+### Commit
+- **8f28d2a** — [AI:claude] feat(web): add sprint create, archive, and charts
+
+---
+
+## Plan Archival Feature (2026-02-20)
+
+### Prompt
+Add instruction to CLAUDE.md for storing implementation plans in `docs/plans/` with related requirement IDs.
+
+### Actions
+- Added "Plan Archival" section to CLAUDE.md under Session Workflow
+- Created `docs/plans/` directory
+- Saved the sprint enhancements plan as `docs/plans/2026-02-20-sprint-enhancements.md`
