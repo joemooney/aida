@@ -2645,3 +2645,48 @@ Complete modernization of the AIDA scaffolding system across 5 phases, transform
 - **MCP protocol**: Minimal implementation using only serde_json (no heavy framework), reads JSON lines from stdin, writes to stdout
 - **Frontmatter format**: `---` delimited YAML with `name`, `description`, `allowed-tools[]`, optional `disable-model-invocation: true`
 - **Dynamic context**: Executed by Claude Code at skill load time, provides live project data without bloating templates
+
+---
+
+## Session 22: AIDA React Dashboard (2026-02-20)
+
+### Prompt
+User requested implementation of a full React dashboard for AIDA, replacing/complementing the egui-based WASM browser client with a modern React SPA.
+
+### Implementation Plan
+9-phase implementation:
+1. **Foundation** — Vite + React 19 + Tailwind CSS 4 project setup, Vite dev proxy to REST API
+2. **UI Primitives** — Reusable component library (Badge, Button, Card, Input, Select, StatusBadge)
+3. **Layout** — App shell with sidebar navigation, header, dark/light theme toggle
+4. **Data Layer** — @tanstack/react-query hooks for requirements CRUD, API client module
+5. **Kanban Board** — Drag-and-drop board with @dnd-kit, columns per status, optimistic updates
+6. **Dashboard** — Metrics cards, charts by status/priority/type, recent activity
+7. **List View** — Sortable/filterable table with inline status badges
+8. **Detail Panel** — Requirement detail view with editing, comments, relationships
+9. **Polish** — URL-based state management, search, responsive layout, production build verification
+
+### Actions Taken
+- Created `aida-web-react/` with React 19, Vite 8, Tailwind CSS 4, @tanstack/react-query, react-router-dom, @dnd-kit, lucide-react, clsx
+- Created `shared/types.ts` with TypeScript types generated from Rust structs via ts-rs
+- Built 35 source files organized into:
+  - `api/` — REST API client with fetch wrapper
+  - `lib/` — Utility functions, cn() helper
+  - `hooks/` — React Query hooks for requirements data
+  - `components/ui/` — Badge, Button, Card, Input, Select, StatusBadge primitives
+  - `components/layout/` — AppLayout, Sidebar, Header, ThemeProvider
+  - `components/kanban/` — KanbanBoard, KanbanColumn, KanbanCard
+  - `components/list/` — RequirementList, RequirementRow
+  - `components/detail/` — RequirementDetail panel
+  - `components/dashboard/` — MetricsCards, StatusChart, PriorityChart
+- 52 files committed total (7,240 lines of code)
+- TypeScript passes clean, production build succeeds
+- Port registry updated: 5173 (React dev server), 8080 (REST API)
+
+### Key Design Choices
+- **Theming**: CSS custom properties for dark/light mode, toggled via ThemeProvider context
+- **State management**: URL-based filter and detail state (query params and route params) for shareability
+- **Drag-and-drop**: Optimistic updates on Kanban card moves, with rollback on API failure
+- **Type safety**: Shared TypeScript types generated from Rust structs ensure API contract consistency
+
+### Commit
+- **8f3be09** — feat(web-react): implement AIDA React Dashboard

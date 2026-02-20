@@ -119,6 +119,20 @@ Define connections between requirements:
   - Reduced conditional compilation in business logic
   - Server handles all database operations (YAML/SQLite)
 
+### React Dashboard (`aida-web-react/`)
+- **Stack**: React 19 + Vite 8 + Tailwind CSS 4 + @tanstack/react-query
+- **Dev server**: Port 5173, with Vite dev proxy forwarding `/api` to REST API on port 8080
+- **Features**:
+  - Dashboard metrics (requirement counts by status, priority, type)
+  - Kanban board with drag-and-drop (via @dnd-kit)
+  - List view with filtering and sorting
+  - Detail panel for viewing/editing requirements
+  - Full-text search
+  - Dark/light theme toggle using CSS custom properties
+- **Source organization**: 35 files across `api/`, `lib/`, `hooks/`, `components/` (ui, layout, kanban, list, detail, dashboard)
+- **Shared types**: TypeScript types in `shared/types.ts` generated from Rust structs via ts-rs
+- **Design choices**: URL-based filter and detail state, optimistic updates for drag-and-drop status changes
+
 ### WASM Browser Client (FR-0273)
 - **Dual-Target GUI (`aida-gui`)**: Same codebase for native desktop and WASM browser
   - Full-featured web client with nearly identical UI to desktop
