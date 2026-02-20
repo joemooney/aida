@@ -129,7 +129,8 @@ Define connections between requirements:
   - Detail panel for viewing/editing requirements
   - Full-text search
   - Dark/light theme toggle using CSS custom properties
-- **Source organization**: 35 files across `api/`, `lib/`, `hooks/`, `components/` (ui, layout, kanban, list, detail, dashboard)
+  - Sprint planning with drag-and-drop between backlog and sprints (via @dnd-kit)
+- **Source organization**: 45+ files across `api/`, `lib/`, `hooks/`, `components/` (ui, layout, kanban, list, detail, dashboard, sprint)
 - **Shared types**: TypeScript types in `shared/types.ts` generated from Rust structs via ts-rs
 - **Design choices**: URL-based filter and detail state, optimistic updates for drag-and-drop status changes
 

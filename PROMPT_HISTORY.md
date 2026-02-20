@@ -2690,3 +2690,59 @@ User requested implementation of a full React dashboard for AIDA, replacing/comp
 
 ### Commit
 - **8f3be09** — feat(web-react): implement AIDA React Dashboard
+
+---
+
+## Session: Sprint View with Planning & Backlog
+
+### Prompt
+Implement Sprint Planning view with drag-and-drop between backlog and sprints.
+
+### Actions Taken
+
+**Phase 1: REST API Endpoints (Rust)**
+- Added `PUT /api/v2/requirements/:id/sprint` — assign requirement to a sprint
+- Added `DELETE /api/v2/requirements/:id/sprint` — remove from sprint (back to backlog)
+- Created `SprintAssignRequest` struct with `sprint_id` and optional `username`
+- Handlers validate target is a Sprint type, call `store.assign_to_sprint()` / `store.remove_from_sprint()`
+- File modified: `aida-server/src/rest.rs`
+
+**Phase 2: TypeScript API, Hooks, and Utils**
+- Created `src/api/sprints.ts` — `assignToSprint()` and `removeFromSprint()` API functions
+- Created `src/hooks/useSprints.ts` — `useAssignToSprint()` and `useRemoveFromSprint()` mutation hooks
+- Created `src/lib/sprint-utils.ts` — Sprint utility functions:
+  - `isSprintAssignment()` — type-checks `{ Custom: "sprint_assignment" }` relationship
+  - `getSprintNumber()`, `getSprintGoal()`, `getSprintDates()` — custom field accessors
+  - `getSprintState()` — returns `'active' | 'past' | 'future' | 'unknown'` based on dates
+  - `computeSprintProgress()` — calculates completion percentage and story points
+  - `getSprintAssignmentTarget()` — extracts sprint UUID from requirement relationships
+
+**Phase 3: Sprint UI Components (7 files)**
+- `SprintView.tsx` — Main page component at `/sprints` route, derives sprints/backlog from `useRequirements()`, DnD context
+- `SprintSelector.tsx` — Horizontal scrollable strip of sprint cards at top
+- `SprintCard.tsx` — Sprint card showing title, dates, state badge, progress bar
+- `SprintBoard.tsx` — Two-column layout (backlog + sprint items)
+- `SprintColumn.tsx` — Droppable column with header showing item count and story points
+- `SprintItemCard.tsx` — Draggable requirement card with spec_id, priority, type badge, story points
+- `SprintProgressBar.tsx` — Reusable progress bar with color-coded fill
+
+**Phase 4: Integration**
+- Modified `App.tsx` — added `/sprints` route
+- Modified `Sidebar.tsx` — added Sprints nav item with Zap icon
+
+**DnD Logic**
+- Drag from backlog → sprint column: calls `assignToSprint(reqId, sprintId)`
+- Drag from sprint → backlog: calls `removeFromSprint(reqId)`
+- Same column drop: no-op
+- Both mutations invalidate `['requirements']` query key
+
+### Build Verification
+- `cargo build -p aida-server` — compiled successfully (no new warnings)
+- `npm run build` — production build succeeded (357KB JS, 31KB CSS)
+
+### Files Changed
+- 3 modified: `rest.rs`, `App.tsx`, `Sidebar.tsx`
+- 10 created: `sprints.ts`, `useSprints.ts`, `sprint-utils.ts`, 7 sprint components
+
+### Commit
+- **b0e5025** — [AI:claude] feat(web): add sprint view with planning and backlog management
