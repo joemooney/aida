@@ -9,15 +9,17 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import { Zap } from 'lucide-react';
+import { Zap, Plus, Eye, EyeOff } from 'lucide-react';
 import type { Requirement } from '@shared/types';
-import { useRequirements } from '../../hooks/useRequirements';
+import { useRequirements, useUpdateRequirement } from '../../hooks/useRequirements';
 import { useAssignToSprint, useRemoveFromSprint } from '../../hooks/useSprints';
 import { Spinner } from '../ui/Spinner';
 import { EmptyState } from '../ui/EmptyState';
 import { SprintSelector } from './SprintSelector';
 import { SprintBoard } from './SprintBoard';
 import { SprintItemCard } from './SprintItemCard';
+import { CreateSprintModal } from './CreateSprintModal';
+import { SprintCharts } from './charts/SprintCharts';
 import {
   isSprintAssignment,
   getSprintAssignmentTarget,
@@ -29,18 +31,21 @@ export function SprintView() {
   const { data: requirements, isLoading, error } = useRequirements();
   const assignMutation = useAssignToSprint();
   const removeMutation = useRemoveFromSprint();
+  const updateMutation = useUpdateRequirement();
   const [selectedSprintId, setSelectedSprintId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
 
-  // Derive sprints sorted by sprint_number
-  const sprints = useMemo(() => {
+  // All sprints (including archived) for charts
+  const allSprints = useMemo(() => {
     if (!requirements) return [];
     return requirements
-      .filter((r) => r.req_type === 'Sprint' && !r.archived)
+      .filter((r) => r.req_type === 'Sprint')
       .sort((a, b) => {
         const aNum = getSprintNumber(a) ?? Infinity;
         const bNum = getSprintNumber(b) ?? Infinity;
@@ -48,11 +53,23 @@ export function SprintView() {
       });
   }, [requirements]);
 
-  // Map: sprint UUID -> items assigned to it
-  const sprintItemsMap = useMemo(() => {
+  // Visible sprints (respecting archive toggle)
+  const sprints = useMemo(() => {
+    if (showArchived) return allSprints;
+    return allSprints.filter((r) => !r.archived);
+  }, [allSprints, showArchived]);
+
+  // Next sprint number for create modal
+  const nextSprintNumber = useMemo(() => {
+    const nums = allSprints.map(getSprintNumber).filter((n): n is number => n != null);
+    return nums.length > 0 ? Math.max(...nums) + 1 : 1;
+  }, [allSprints]);
+
+  // Map: sprint UUID -> items assigned to it (includes all sprints for velocity chart)
+  const allSprintItemsMap = useMemo(() => {
     if (!requirements) return {} as Record<string, Requirement[]>;
     const map: Record<string, Requirement[]> = {};
-    for (const sprint of sprints) {
+    for (const sprint of allSprints) {
       map[sprint.id] = [];
     }
     for (const req of requirements) {
@@ -63,7 +80,7 @@ export function SprintView() {
       }
     }
     return map;
-  }, [requirements, sprints]);
+  }, [requirements, allSprints]);
 
   // Backlog: requirements not assigned to any sprint, excluding Sprint/Folder/Meta
   const backlog = useMemo(() => {
@@ -93,8 +110,8 @@ export function SprintView() {
 
   const allItems = useMemo(() => {
     if (!requirements) return [];
-    return [...backlog, ...(selectedSprintId ? sprintItemsMap[selectedSprintId] ?? [] : [])];
-  }, [requirements, backlog, sprintItemsMap, selectedSprintId]);
+    return [...backlog, ...(selectedSprintId ? allSprintItemsMap[selectedSprintId] ?? [] : [])];
+  }, [requirements, backlog, allSprintItemsMap, selectedSprintId]);
 
   const activeReq = useMemo(
     () => allItems.find((r) => r.id === activeId) ?? null,
@@ -134,6 +151,13 @@ export function SprintView() {
     [allItems, selectedSprintId, assignMutation, removeMutation],
   );
 
+  const handleArchive = useCallback(
+    (sprintId: string) => {
+      updateMutation.mutate({ id: sprintId, data: { archived: true } });
+    },
+    [updateMutation],
+  );
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -157,48 +181,86 @@ export function SprintView() {
         : selectedSprint.title)
     : 'Sprint';
 
+  const archivedCount = allSprints.filter((s) => s.archived).length;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <Zap className="h-5 w-5 text-accent" />
         <h1 className="text-xl font-semibold text-content">Sprint Planning</h1>
+        <div className="flex-1" />
+        {archivedCount > 0 && (
+          <button
+            onClick={() => setShowArchived(!showArchived)}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-content-secondary hover:bg-surface-hover transition-colors"
+          >
+            {showArchived ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            {showArchived ? 'Hide archived' : `Show archived (${archivedCount})`}
+          </button>
+        )}
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90 transition-colors"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          New Sprint
+        </button>
       </div>
 
-      {sprints.length === 0 ? (
+      {sprints.length === 0 && !showCreateModal ? (
         <EmptyState
           icon={<Zap className="h-10 w-10" />}
           title="No sprints found"
-          description="Create a Sprint requirement to start planning."
+          description="Create a Sprint to start planning."
         />
       ) : (
         <>
           <SprintSelector
             sprints={sprints}
-            sprintItemsMap={sprintItemsMap}
+            sprintItemsMap={allSprintItemsMap}
             selectedId={selectedSprintId}
             onSelect={setSelectedSprintId}
+            onArchive={handleArchive}
           />
 
           {selectedSprintId && (
-            <DndContext
-              sensors={sensors}
-              collisionDetection={pointerWithin}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-            >
-              <SprintBoard
-                backlog={backlog}
-                sprintItems={sprintItemsMap[selectedSprintId] ?? []}
-                sprintId={selectedSprintId}
-                sprintTitle={sprintTitle}
-              />
+            <>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={pointerWithin}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+              >
+                <SprintBoard
+                  backlog={backlog}
+                  sprintItems={allSprintItemsMap[selectedSprintId] ?? []}
+                  sprintId={selectedSprintId}
+                  sprintTitle={sprintTitle}
+                />
 
-              <DragOverlay>
-                {activeReq ? <SprintItemCard requirement={activeReq} isDragOverlay /> : null}
-              </DragOverlay>
-            </DndContext>
+                <DragOverlay>
+                  {activeReq ? <SprintItemCard requirement={activeReq} isDragOverlay /> : null}
+                </DragOverlay>
+              </DndContext>
+
+              {selectedSprint && (
+                <SprintCharts
+                  selectedSprint={selectedSprint}
+                  sprintItems={allSprintItemsMap[selectedSprintId] ?? []}
+                  allSprints={allSprints}
+                  sprintItemsMap={allSprintItemsMap}
+                />
+              )}
+            </>
           )}
         </>
+      )}
+
+      {showCreateModal && (
+        <CreateSprintModal
+          nextSprintNumber={nextSprintNumber}
+          onClose={() => setShowCreateModal(false)}
+        />
       )}
     </div>
   );

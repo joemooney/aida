@@ -6,9 +6,10 @@ interface SprintSelectorProps {
   sprintItemsMap: Record<string, Requirement[]>;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  onArchive?: (sprintId: string) => void;
 }
 
-export function SprintSelector({ sprints, sprintItemsMap, selectedId, onSelect }: SprintSelectorProps) {
+export function SprintSelector({ sprints, sprintItemsMap, selectedId, onSelect, onArchive }: SprintSelectorProps) {
   if (sprints.length === 0) return null;
 
   return (
@@ -20,6 +21,7 @@ export function SprintSelector({ sprints, sprintItemsMap, selectedId, onSelect }
           items={sprintItemsMap[sprint.id] ?? []}
           selected={sprint.id === selectedId}
           onClick={() => onSelect(sprint.id)}
+          onArchive={onArchive}
         />
       ))}
     </div>

@@ -74,6 +74,7 @@ pub fn create_rest_router_legacy(state: Arc<ServerState>) -> Router {
         .route("/api/search", get(search_requirements_legacy))
         // V2 API routes (native JSON matching TypeScript types)
         .route("/api/v2/requirements", get(list_requirements_v2_legacy))
+        .route("/api/v2/requirements", post(create_requirement_v2_legacy))
         .route("/api/v2/requirements/:id", get(get_requirement_v2_legacy))
         .route("/api/v2/requirements/:id", put(update_requirement_v2_legacy))
         .route("/api/v2/search", get(search_requirements_v2_legacy))
@@ -1272,6 +1273,8 @@ struct UpdateRequirementV2Request {
     feature: Option<String>,
     tags: Option<Vec<String>>,
     req_type: Option<String>,
+    custom_fields: Option<std::collections::HashMap<String, String>>,
+    archived: Option<bool>,
 }
 
 async fn update_requirement_v2_legacy(
@@ -1307,6 +1310,12 @@ async fn update_requirement_v2_legacy(
     if let Some(req_type) = &body.req_type {
         store.requirements[idx].req_type = parse_req_type(req_type);
     }
+    if let Some(custom_fields) = body.custom_fields {
+        store.requirements[idx].custom_fields.extend(custom_fields);
+    }
+    if let Some(archived) = body.archived {
+        store.requirements[idx].archived = archived;
+    }
     store.requirements[idx].modified_at = chrono::Utc::now();
 
     let updated = store.requirements[idx].clone();
@@ -1317,6 +1326,66 @@ async fn update_requirement_v2_legacy(
     }
 
     Ok(Json(updated))
+}
+
+#[derive(Deserialize)]
+struct CreateRequirementV2Request {
+    title: String,
+    description: Option<String>,
+    status: Option<String>,
+    priority: Option<String>,
+    owner: Option<String>,
+    feature: Option<String>,
+    req_type: Option<String>,
+    tags: Option<Vec<String>>,
+    custom_fields: Option<std::collections::HashMap<String, String>>,
+}
+
+async fn create_requirement_v2_legacy(
+    State(state): State<Arc<ServerState>>,
+    Json(body): Json<CreateRequirementV2Request>,
+) -> Result<(StatusCode, Json<models::Requirement>), (StatusCode, Json<ApiError>)> {
+    let mut store = state.store.write().await;
+
+    let mut new_req = aida_core::Requirement::new(
+        body.title,
+        body.description.unwrap_or_default(),
+    );
+    new_req.status = parse_status(&body.status.unwrap_or_else(|| "Draft".to_string()));
+    new_req.priority = parse_priority(&body.priority.unwrap_or_else(|| "Medium".to_string()));
+    new_req.req_type = parse_req_type(&body.req_type.unwrap_or_else(|| "Functional".to_string()));
+    new_req.owner = body.owner.unwrap_or_default();
+    new_req.feature = body.feature.unwrap_or_else(|| "Uncategorized".to_string());
+    if let Some(tags) = body.tags {
+        new_req.tags = tags.into_iter().collect();
+    }
+    if let Some(custom_fields) = body.custom_fields {
+        new_req.custom_fields = custom_fields;
+    }
+
+    let feature_prefix = store.features.iter()
+        .find(|f| f.name == new_req.feature)
+        .map(|f| f.prefix.clone());
+    let type_prefix = store.type_definitions.iter()
+        .find(|td| td.name == new_req.req_type.to_string().replace(" ", "").replace("-", ""))
+        .and_then(|td| td.prefix.clone());
+
+    store.add_requirement_with_id(
+        new_req,
+        feature_prefix.as_deref(),
+        type_prefix.as_deref(),
+    );
+
+    let added = store.requirements.last()
+        .ok_or_else(|| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Failed to add requirement"))?
+        .clone();
+
+    drop(store);
+    if let Err(e) = state.backend.save(&*state.store.read().await) {
+        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to save: {}", e)));
+    }
+
+    Ok((StatusCode::CREATED, Json(added)))
 }
 
 async fn search_requirements_v2_legacy(
