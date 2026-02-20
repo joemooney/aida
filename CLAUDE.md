@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 AI Design Assistant
 
 ### React Dashboard
-The React dashboard is located at `aida-web-react/` and runs on port 5173 (dev) via Vite, connecting to the REST API on port 8080. Stack: React 19, Vite 8, Tailwind CSS 4, @tanstack/react-query. Shared TypeScript types are generated from Rust structs in `shared/types.ts`. Views: Dashboard, Kanban Board, List View, Sprint Planning (with drag-and-drop backlog/sprint assignment).
+The React dashboard is located at `aida-web-react/` and runs on port 5173 (dev) via Vite, connecting to the REST API on port 8080. Stack: React 19, Vite 8, Tailwind CSS 4, @tanstack/react-query. Shared TypeScript types are generated from Rust structs in `shared/types.ts`. Views: Dashboard, Kanban Board, List View, Sprint Planning (with drag-and-drop backlog/sprint assignment), Skills Browser (view/edit skills and commands).
 
 ## Requirements Management
 

@@ -132,7 +132,8 @@ Define connections between requirements:
   - Sprint planning with drag-and-drop between backlog and sprints (via @dnd-kit)
   - Sprint creation modal, archive/unarchive toggle
   - Sprint charts: burndown, burn-up, velocity (pure SVG, no charting library)
-- **Source organization**: 45+ files across `api/`, `lib/`, `hooks/`, `components/` (ui, layout, kanban, list, detail, dashboard, sprint)
+  - Skills browser: view, search, and edit skills/commands with card grid and detail panel
+- **Source organization**: 45+ files across `api/`, `lib/`, `hooks/`, `components/` (ui, layout, kanban, list, detail, dashboard, sprint, skills)
 - **Shared types**: TypeScript types in `shared/types.ts` generated from Rust structs via ts-rs
 - **Design choices**: URL-based filter and detail state, optimistic updates for drag-and-drop status changes
 

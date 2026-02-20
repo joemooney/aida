@@ -2803,3 +2803,37 @@ Add instruction to CLAUDE.md for storing implementation plans in `docs/plans/` w
 - Added "Plan Archival" section to CLAUDE.md under Session Workflow
 - Created `docs/plans/` directory
 - Saved the sprint enhancements plan as `docs/plans/2026-02-20-sprint-enhancements.md`
+
+---
+
+## Skills Browser View (2026-02-20)
+
+### Prompt
+Implement a Skills browser view in the web dashboard: REST API endpoints to list/view/edit skills and commands, plus a React UI with card grid, detail panel, and edit mode.
+
+### Actions
+
+#### Phase 1: Backend — Skills API endpoints
+- Added 3 new endpoints to `aida-server/src/rest.rs`:
+  - `GET /api/v2/skills` — lists all skills + commands with name, description, kind
+  - `GET /api/v2/skills/:name` — returns full content, allowed_tools, frontmatter
+  - `PUT /api/v2/skills/:name` — updates content (writes to symlink target via canonicalize)
+- Implemented YAML frontmatter parser for skill files (name, description, allowed-tools)
+- Scans `.claude/skills/*.md` and `.claude/commands/*.md` relative to CWD
+
+#### Phase 2: Frontend API + Hooks
+- Created `aida-web-react/src/api/skills.ts` with `fetchSkills`, `fetchSkill`, `updateSkill`
+- Created `aida-web-react/src/hooks/useSkills.ts` with `useSkills`, `useSkill`, `useUpdateSkill`
+
+#### Phase 3: Skills View Components
+- `SkillsView.tsx` — top-level view with header, filter toggle (All/Skills/Commands), responsive grid
+- `SkillCard.tsx` — card with name, description, kind badge; click opens detail panel
+- `SkillDetailPanel.tsx` — slide-in panel with view/edit modes, tool badges, save button
+
+#### Phase 4: Routing + Sidebar
+- Added Sparkles icon + "Skills" nav item to `Sidebar.tsx`
+- Added `/skills` route to `App.tsx`
+
+### Files Changed
+- 3 modified (`rest.rs`, `Sidebar.tsx`, `App.tsx`)
+- 5 created (`api/skills.ts`, `hooks/useSkills.ts`, `SkillsView.tsx`, `SkillCard.tsx`, `SkillDetailPanel.tsx`)

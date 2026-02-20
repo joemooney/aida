@@ -4,6 +4,7 @@
 //! Provides JSON-based REST endpoints that mirror the gRPC service.
 //! Supports multi-project via X-Project header.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::{
@@ -81,6 +82,10 @@ pub fn create_rest_router_legacy(state: Arc<ServerState>) -> Router {
         // Sprint assignment endpoints
         .route("/api/v2/requirements/:id/sprint", put(assign_sprint_legacy))
         .route("/api/v2/requirements/:id/sprint", delete(remove_sprint_legacy))
+        // Skills browser endpoints
+        .route("/api/v2/skills", get(list_skills))
+        .route("/api/v2/skills/:name", get(get_skill))
+        .route("/api/v2/skills/:name", put(update_skill))
         .with_state(state)
 }
 
@@ -1532,4 +1537,226 @@ async fn remove_sprint_legacy(
     }
 
     Ok(Json(updated))
+}
+
+// ============================================================================
+// Skills browser handlers
+// ============================================================================
+
+#[derive(Serialize)]
+struct SkillInfo {
+    name: String,
+    description: String,
+    kind: String,
+}
+
+#[derive(Serialize)]
+struct SkillDetail {
+    name: String,
+    description: String,
+    kind: String,
+    content: String,
+    allowed_tools: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct UpdateSkillRequest {
+    content: String,
+}
+
+/// Parse YAML frontmatter from a markdown file.
+/// Returns (name, description, allowed_tools, full_content).
+fn parse_skill_frontmatter(content: &str) -> (String, String, Vec<String>) {
+    if !content.starts_with("---") {
+        return (String::new(), String::new(), Vec::new());
+    }
+    // Find closing ---
+    if let Some(end) = content[3..].find("\n---") {
+        let yaml_block = &content[3..3 + end].trim();
+        let mut name = String::new();
+        let mut description = String::new();
+        let mut allowed_tools = Vec::new();
+        let mut in_tools = false;
+
+        for line in yaml_block.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("name:") {
+                name = trimmed.strip_prefix("name:").unwrap_or("").trim().to_string();
+                in_tools = false;
+            } else if trimmed.starts_with("description:") {
+                description = trimmed.strip_prefix("description:").unwrap_or("").trim().to_string();
+                in_tools = false;
+            } else if trimmed.starts_with("allowed-tools:") {
+                in_tools = true;
+            } else if in_tools && trimmed.starts_with("- ") {
+                allowed_tools.push(trimmed.strip_prefix("- ").unwrap_or("").trim().to_string());
+            } else if !trimmed.starts_with('-') {
+                in_tools = false;
+            }
+        }
+
+        (name, description, allowed_tools)
+    } else {
+        (String::new(), String::new(), Vec::new())
+    }
+}
+
+/// Get the .claude directory relative to cwd
+fn claude_dir() -> PathBuf {
+    std::env::current_dir().unwrap_or_default().join(".claude")
+}
+
+/// Scan a directory for .md files and return skill info entries
+fn scan_skill_dir(dir: &std::path::Path, kind: &str) -> Vec<(SkillInfo, PathBuf)> {
+    let mut results = Vec::new();
+    let entries = match std::fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return results,
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("md") {
+            continue;
+        }
+        let file_name = path.file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
+        let content = match std::fs::read_to_string(&path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        let (fm_name, description, _) = parse_skill_frontmatter(&content);
+        let name = if fm_name.is_empty() { file_name } else { fm_name };
+        // For commands without frontmatter, extract description from first non-empty, non-heading line
+        let desc = if description.is_empty() {
+            content.lines()
+                .skip_while(|l| l.starts_with("---"))
+                .skip_while(|l| l.trim().is_empty() || l.starts_with('#'))
+                .find(|l| !l.trim().is_empty())
+                .unwrap_or("")
+                .trim()
+                .to_string()
+        } else {
+            description
+        };
+        results.push((
+            SkillInfo {
+                name,
+                description: desc,
+                kind: kind.to_string(),
+            },
+            path,
+        ));
+    }
+    results.sort_by(|a, b| a.0.name.cmp(&b.0.name));
+    results
+}
+
+async fn list_skills(
+    State(_state): State<Arc<ServerState>>,
+) -> Result<Json<Vec<SkillInfo>>, (StatusCode, Json<ApiError>)> {
+    let base = claude_dir();
+    let mut all: Vec<SkillInfo> = Vec::new();
+
+    for (info, _) in scan_skill_dir(&base.join("skills"), "skill") {
+        all.push(info);
+    }
+    for (info, _) in scan_skill_dir(&base.join("commands"), "command") {
+        all.push(info);
+    }
+
+    Ok(Json(all))
+}
+
+async fn get_skill(
+    State(_state): State<Arc<ServerState>>,
+    Path(name): Path<String>,
+) -> Result<Json<SkillDetail>, (StatusCode, Json<ApiError>)> {
+    let base = claude_dir();
+
+    // Search skills then commands
+    let dirs = [
+        (base.join("skills"), "skill"),
+        (base.join("commands"), "command"),
+    ];
+
+    for (dir, kind) in &dirs {
+        let path = dir.join(format!("{}.md", name));
+        if path.exists() {
+            let content = std::fs::read_to_string(&path)
+                .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            let (fm_name, description, allowed_tools) = parse_skill_frontmatter(&content);
+            let skill_name = if fm_name.is_empty() { name.clone() } else { fm_name };
+            let desc = if description.is_empty() {
+                content.lines()
+                    .skip_while(|l| l.starts_with("---"))
+                    .skip_while(|l| l.trim().is_empty() || l.starts_with('#'))
+                    .find(|l| !l.trim().is_empty())
+                    .unwrap_or("")
+                    .trim()
+                    .to_string()
+            } else {
+                description
+            };
+            return Ok(Json(SkillDetail {
+                name: skill_name,
+                description: desc,
+                kind: kind.to_string(),
+                content,
+                allowed_tools,
+            }));
+        }
+    }
+
+    Err(ApiError::new(StatusCode::NOT_FOUND, format!("Skill not found: {name}")))
+}
+
+async fn update_skill(
+    State(_state): State<Arc<ServerState>>,
+    Path(name): Path<String>,
+    Json(body): Json<UpdateSkillRequest>,
+) -> Result<Json<SkillDetail>, (StatusCode, Json<ApiError>)> {
+    let base = claude_dir();
+
+    let dirs = [
+        (base.join("skills"), "skill"),
+        (base.join("commands"), "command"),
+    ];
+
+    for (dir, kind) in &dirs {
+        let path = dir.join(format!("{}.md", name));
+        if path.exists() {
+            // Resolve symlinks so we write to the master template
+            let real_path = std::fs::canonicalize(&path)
+                .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+            std::fs::write(&real_path, &body.content)
+                .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+            let (fm_name, description, allowed_tools) = parse_skill_frontmatter(&body.content);
+            let skill_name = if fm_name.is_empty() { name.clone() } else { fm_name };
+            let desc = if description.is_empty() {
+                body.content.lines()
+                    .skip_while(|l| l.starts_with("---"))
+                    .skip_while(|l| l.trim().is_empty() || l.starts_with('#'))
+                    .find(|l| !l.trim().is_empty())
+                    .unwrap_or("")
+                    .trim()
+                    .to_string()
+            } else {
+                description
+            };
+
+            return Ok(Json(SkillDetail {
+                name: skill_name,
+                description: desc,
+                kind: kind.to_string(),
+                content: body.content,
+                allowed_tools,
+            }));
+        }
+    }
+
+    Err(ApiError::new(StatusCode::NOT_FOUND, format!("Skill not found: {name}")))
 }
