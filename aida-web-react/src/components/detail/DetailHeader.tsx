@@ -1,8 +1,12 @@
 import { X } from 'lucide-react';
-import type { Requirement, RequirementStatus } from '@shared/types';
+import type { Requirement, RequirementPriority } from '@shared/types';
 import { StatusBadge, PriorityBadge, TypeBadge } from '../ui/Badge';
-import { STATUS_ORDER } from '../../lib/constants';
+import { EditableText, EditableSelect } from '../ui/EditableField';
+import { STATUS_ORDER, STATUS_CONFIG, PRIORITY_CONFIG } from '../../lib/constants';
 import { useUpdateRequirement } from '../../hooks/useRequirements';
+import { cn } from '../../lib/utils';
+
+const PRIORITIES: RequirementPriority[] = ['High', 'Medium', 'Low'];
 
 interface DetailHeaderProps {
   requirement: Requirement;
@@ -11,12 +15,10 @@ interface DetailHeaderProps {
 
 export function DetailHeader({ requirement, onClose }: DetailHeaderProps) {
   const updateReq = useUpdateRequirement();
+  const reqId = requirement.spec_id ?? requirement.id;
 
-  function handleStatusChange(newStatus: RequirementStatus) {
-    updateReq.mutate({
-      id: requirement.spec_id ?? requirement.id,
-      data: { status: newStatus },
-    });
+  function save(data: Partial<Requirement>) {
+    updateReq.mutate({ id: reqId, data });
   }
 
   return (
@@ -32,31 +34,42 @@ export function DetailHeader({ requirement, onClose }: DetailHeaderProps) {
         </button>
       </div>
 
-      {/* Title */}
-      <h2 className="text-lg font-semibold text-content mb-3 leading-snug">
-        {requirement.title}
-      </h2>
+      {/* Editable title */}
+      <div className="mb-3">
+        <EditableText
+          value={requirement.title}
+          onSave={(title) => save({ title })}
+          className="text-lg font-semibold text-content leading-snug"
+          inputClassName="text-lg font-semibold"
+          placeholder="Untitled requirement"
+        />
+      </div>
 
-      {/* Badges row */}
+      {/* Badges row — clickable to change */}
       <div className="flex items-center gap-3 flex-wrap">
-        {/* Status dropdown */}
-        <div className="relative group">
-          <StatusBadge status={requirement.status} />
-          <div className="absolute top-full left-0 mt-1 hidden group-hover:block z-10">
-            <div className="rounded-lg border border-edge bg-surface-alt shadow-xl shadow-black/20 py-1 min-w-[140px]">
-              {STATUS_ORDER.map((status) => (
-                <button
-                  key={status}
-                  onClick={() => handleStatusChange(status)}
-                  className="w-full px-3 py-1.5 text-left text-xs text-content-secondary hover:text-content hover:bg-surface-hover transition-colors cursor-pointer"
-                >
-                  {status}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-        <PriorityBadge priority={requirement.priority} />
+        <EditableSelect
+          value={requirement.status}
+          options={STATUS_ORDER}
+          onSave={(status) => save({ status })}
+          renderValue={(s) => <StatusBadge status={s} />}
+          renderOption={(s) => (
+            <span className="flex items-center gap-2">
+              <span className={cn('h-1.5 w-1.5 rounded-full', STATUS_CONFIG[s].dot)} />
+              {STATUS_CONFIG[s].label}
+            </span>
+          )}
+        />
+        <EditableSelect
+          value={requirement.priority}
+          options={PRIORITIES}
+          onSave={(priority) => save({ priority })}
+          renderValue={(p) => <PriorityBadge priority={p} />}
+          renderOption={(p) => (
+            <span className={cn('flex items-center gap-2', PRIORITY_CONFIG[p].color)}>
+              {PRIORITY_CONFIG[p].label}
+            </span>
+          )}
+        />
         <TypeBadge type={requirement.req_type} />
       </div>
     </div>
