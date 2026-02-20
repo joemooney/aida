@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Search, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useSkills } from '../../hooks/useSkills';
 import { Spinner } from '../ui/Spinner';
@@ -19,14 +19,26 @@ const filters: { value: FilterKind; label: string }[] = [
 export function SkillsView() {
   const { data: skills, isLoading, error } = useSkills();
   const [filter, setFilter] = useState<FilterKind>('all');
+  const [search, setSearch] = useState('');
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedSkill = searchParams.get('skill');
 
   const filtered = useMemo(() => {
     if (!skills) return [];
-    if (filter === 'all') return skills;
-    return skills.filter((s) => s.kind === filter);
-  }, [skills, filter]);
+    let result = skills;
+    if (filter !== 'all') {
+      result = result.filter((s) => s.kind === filter);
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter(
+        (s) =>
+          s.name.toLowerCase().includes(q) ||
+          s.description.toLowerCase().includes(q),
+      );
+    }
+    return result;
+  }, [skills, filter, search]);
 
   function openSkill(name: string) {
     setSearchParams({ skill: name });
@@ -64,22 +76,42 @@ export function SkillsView() {
         </div>
       </div>
 
-      {/* Filter toggles */}
-      <div className="flex gap-1 rounded-lg bg-surface-alt border border-edge p-1 w-fit">
-        {filters.map((f) => (
-          <button
-            key={f.value}
-            onClick={() => setFilter(f.value)}
-            className={cn(
-              'rounded-md px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer',
-              filter === f.value
-                ? 'bg-accent text-white'
-                : 'text-content-secondary hover:text-content hover:bg-surface-hover',
-            )}
-          >
-            {f.label}
-          </button>
-        ))}
+      {/* Filter toggles + search */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex gap-1 rounded-lg bg-surface-alt border border-edge p-1 w-fit">
+          {filters.map((f) => (
+            <button
+              key={f.value}
+              onClick={() => setFilter(f.value)}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer',
+                filter === f.value
+                  ? 'bg-accent text-white'
+                  : 'text-content-secondary hover:text-content hover:bg-surface-hover',
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-content-muted" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search skills..."
+            className="h-8 rounded-lg border border-edge bg-surface-alt pl-8 pr-8 text-xs text-content placeholder:text-content-muted focus:outline-none focus:border-accent/50 w-56"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-content-muted hover:text-content cursor-pointer"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Grid */}
