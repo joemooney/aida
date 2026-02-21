@@ -1,6 +1,15 @@
+import { useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, Columns3, List, Zap, Sparkles, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { useRequirements } from '../../hooks/useRequirements';
+import {
+  getSprintNumber,
+  getSprintState,
+  getSprintDates,
+  computeSprintProgress,
+  getSprintAssignmentTarget,
+} from '../../lib/sprint-utils';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -17,6 +26,36 @@ interface SidebarProps {
 }
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
+  const { data: requirements } = useRequirements();
+
+  const activeSprint = useMemo(() => {
+    if (!requirements) return null;
+    const sprints = requirements.filter((r) => r.req_type === 'Sprint' && !r.archived);
+    const active = sprints.find((s) => getSprintState(s) === 'active');
+    if (!active) return null;
+
+    const items = requirements.filter((r) => {
+      if (r.req_type === 'Sprint' || r.req_type === 'Folder' || r.req_type === 'Meta') return false;
+      return getSprintAssignmentTarget(r) === active.id;
+    });
+    const progress = computeSprintProgress(items);
+    const num = getSprintNumber(active);
+    const { end } = getSprintDates(active);
+
+    let daysLeft: number | null = null;
+    if (end) {
+      const diff = Math.ceil((new Date(end).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+      daysLeft = Math.max(0, diff);
+    }
+
+    return {
+      id: active.spec_id ?? active.id,
+      label: num != null ? `Sprint ${num}` : active.title,
+      progress,
+      daysLeft,
+    };
+  }, [requirements]);
+
   return (
     <aside
       className={cn(
@@ -35,23 +74,53 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       {/* Navigation */}
       <nav className="flex-1 space-y-1 p-2 mt-2">
         {navItems.map(({ to, icon: Icon, label }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={to === '/'}
-            className={({ isActive }) =>
-              cn(
-                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                collapsed && 'justify-center px-2',
-                isActive
-                  ? 'bg-accent/10 text-accent'
-                  : 'text-content-secondary hover:text-content hover:bg-surface-hover',
-              )
-            }
-          >
-            <Icon className="h-5 w-5 shrink-0" />
-            {!collapsed && label}
-          </NavLink>
+          <div key={to}>
+            <NavLink
+              to={to}
+              end={to === '/'}
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                  collapsed && 'justify-center px-2',
+                  isActive
+                    ? 'bg-accent/10 text-accent'
+                    : 'text-content-secondary hover:text-content hover:bg-surface-hover',
+                )
+              }
+            >
+              <Icon className="h-5 w-5 shrink-0" />
+              {!collapsed && label}
+            </NavLink>
+
+            {/* Active sprint sub-item under Sprints */}
+            {to === '/sprints' && activeSprint && !collapsed && (
+              <NavLink
+                to="/sprints"
+                className="flex items-center gap-2 rounded-lg ml-5 pl-4 pr-3 py-1.5 mt-0.5 text-xs text-content-muted hover:text-content hover:bg-surface-hover transition-colors border-l border-edge"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-content-secondary truncate">{activeSprint.label}</div>
+                  <div className="flex items-center gap-2 mt-1">
+                    {/* Progress bar */}
+                    <div className="flex-1 h-1 rounded-full bg-surface-hover overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-accent transition-all"
+                        style={{ width: `${activeSprint.progress.percentage}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] tabular-nums shrink-0">
+                      {activeSprint.progress.completed}/{activeSprint.progress.total}
+                    </span>
+                  </div>
+                  {activeSprint.daysLeft != null && (
+                    <div className="text-[10px] mt-0.5">
+                      {activeSprint.daysLeft === 0 ? 'Ends today' : `${activeSprint.daysLeft}d left`}
+                    </div>
+                  )}
+                </div>
+              </NavLink>
+            )}
+          </div>
         ))}
       </nav>
 
