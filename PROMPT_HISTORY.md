@@ -3275,3 +3275,36 @@ Implement requirements-aware AI chat for PMs/stakeholders — web-based chat UI 
 #### Verification
 - `cargo build -p aida-server` — compiles with no new warnings
 - `npx tsc --noEmit` — no TypeScript errors
+
+---
+
+### Session — 2026-02-21: Runtime API Key Management (TASK-0374)
+
+#### Prompt
+Implement API key management in Settings Admin tab so PMs/stakeholders can set ANTHROPIC_API_KEY without env vars.
+
+#### Actions Taken
+- Added `RwLock<HashMap>` API key store to AdminState with env var pre-population
+- Added GET/PUT/DELETE `/api/v2/admin/api-keys` REST endpoints with masked key display
+- Created `ChatState` wrapper combining `ServerState` + `AdminState`, updated chat module to read API key from runtime store
+- Added frontend API functions (`fetchApiKeys`, `setApiKey`, `deleteApiKey`) and React Query hooks
+- Built `ApiKeysCard` component in AdminTab with set/update/clear UX
+- Cargo build and TypeScript check pass clean
+
+#### Files Changed
+- `aida-server/src/admin.rs` — Added API key store and REST endpoints
+- `aida-server/src/chat.rs` — Created ChatState wrapper, read from runtime store
+- `aida-server/src/main.rs` — Passed admin_state to chat router
+- `aida-web-react/src/api/admin.ts` — API key fetch/set/delete functions
+- `aida-web-react/src/hooks/useAdmin.ts` — useApiKeys, useSetApiKey, useDeleteApiKey hooks
+- `aida-web-react/src/components/settings/AdminTab.tsx` — ApiKeysCard component
+
+#### Design Decisions
+- Keys stored in-memory only (not persisted to disk) for security
+- Env var fallback: if runtime key is cleared, falls back to env var
+- Masked display: first 7 + last 4 chars shown (e.g., "sk-ant-...xYz9")
+- Auto-invalidates chat-status query on key changes
+
+#### Git
+- Commit: feat(admin): add runtime API key management via Settings UI
+- Requirement: TASK-0374

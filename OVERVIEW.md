@@ -137,8 +137,8 @@ Define connections between requirements:
   - Sprint charts: burndown, burn-up, velocity (pure SVG, no charting library)
   - Skills browser: view, search, and edit skills/commands with card grid and detail panel
   - Docs browser: browse and read markdown documentation from `docs/` and `docs/plans/` with rendered markdown
-  - Chat: AI-powered Q&A for PMs/stakeholders — streams Claude API responses with full requirements context, spec IDs auto-linked via `LinkedMarkdown` (requires `ANTHROPIC_API_KEY` env var, model configurable via `AIDA_CHAT_MODEL`)
-  - Settings view: manage store metadata, relationship/type/reaction definitions, ID configuration, and prefix management via tab-based UI
+  - Chat: AI-powered Q&A for PMs/stakeholders — streams Claude API responses with full requirements context, spec IDs auto-linked via `LinkedMarkdown` (requires `ANTHROPIC_API_KEY` env var or runtime key via Admin settings, model configurable via `AIDA_CHAT_MODEL`)
+  - Settings view: manage store metadata, relationship/type/reaction definitions, ID configuration, prefix management, and Admin tab (dev-mode server rebuild & restart, runtime API key management) via tab-based UI
 - **Source organization**: 45+ files across `api/`, `lib/`, `hooks/`, `components/` (ui, layout, kanban, list, detail, dashboard, sprint, skills, settings)
 - **Shared types**: TypeScript types in `shared/types.ts` generated from Rust structs via ts-rs
 - **Design choices**: URL-based filter and detail state, optimistic updates for drag-and-drop status changes
