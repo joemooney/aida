@@ -12,7 +12,7 @@ use crate::meta::get_prompt_template;
 use crate::models::{Requirement, RequirementsStore};
 
 /// Build context about the project
-fn build_project_context(store: &RequirementsStore) -> String {
+pub fn build_project_context(store: &RequirementsStore) -> String {
     let total_reqs = store.requirements.len();
     let active_reqs = store
         .requirements
@@ -163,7 +163,7 @@ fn requirement_to_context(req: &Requirement) -> String {
 }
 
 /// Build all requirements summary for duplicate detection
-fn build_requirements_summary(store: &RequirementsStore, exclude_id: uuid::Uuid) -> String {
+pub fn build_requirements_summary(store: &RequirementsStore, exclude_id: uuid::Uuid) -> String {
     let summaries: Vec<String> = store
         .requirements
         .iter()
@@ -187,6 +187,38 @@ fn build_requirements_summary(store: &RequirementsStore, exclude_id: uuid::Uuid)
 
     format!(
         "## All Requirements (for comparison)\n{}",
+        summaries.join("\n")
+    )
+}
+
+/// Build a full requirements summary for chat context (no exclusions, includes status/priority)
+pub fn build_all_requirements_summary(store: &RequirementsStore) -> String {
+    let summaries: Vec<String> = store
+        .requirements
+        .iter()
+        .filter(|r| !r.archived)
+        .map(|r| {
+            format!(
+                "- {} [{}|{}|{}]: {} — {}",
+                r.spec_id.as_deref().unwrap_or("?"),
+                r.req_type,
+                r.status,
+                r.priority,
+                r.title,
+                if r.description.len() > 120 {
+                    format!("{}...", &r.description[..120])
+                } else if r.description.is_empty() {
+                    "(no description)".to_string()
+                } else {
+                    r.description.clone()
+                }
+            )
+        })
+        .collect();
+
+    format!(
+        "## All Requirements ({} active)\n{}",
+        summaries.len(),
         summaries.join("\n")
     )
 }

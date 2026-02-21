@@ -11,6 +11,7 @@ import { DocFullPage } from './components/docs/DocFullPage';
 import { RequirementFullPage } from './components/detail/RequirementFullPage';
 import { SettingsView } from './components/settings/SettingsView';
 import { QueuePage } from './components/queue/QueuePage';
+import { ChatPage } from './components/chat/ChatPage';
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
           <Route path="docs" element={<DocsView />} />
           <Route path="docs/view/*" element={<DocFullPage />} />
           <Route path="req/:id" element={<RequirementFullPage />} />
+          <Route path="chat" element={<ChatPage />} />
           <Route path="settings" element={<SettingsView />} />
         </Route>
       </Routes>

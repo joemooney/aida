@@ -32,6 +32,10 @@ http = { workspace = true }
 hyper = { workspace = true }
 hyper-util = { workspace = true }
 
+# HTTP client for AI chat
+reqwest = { workspace = true, features = ["stream"] }
+futures-util = "0.3"
+
 # Other dependencies
 anyhow = { workspace = true }
 serde = { workspace = true }

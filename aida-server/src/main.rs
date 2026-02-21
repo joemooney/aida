@@ -20,6 +20,7 @@ use tracing_subscriber::FmtSubscriber;
 use aida_core::db::create_backend;
 
 mod admin;
+mod chat;
 mod convert;
 mod projects;
 mod rest;
@@ -276,6 +277,7 @@ async fn main() -> Result<()> {
 
             let rest_router = rest::create_rest_router(project_manager.clone())
                 .merge(admin::create_admin_router(admin_state.clone()))
+                .merge(chat::create_chat_router_stub())
                 .layer(cors.clone());
 
             let rest_listener = tokio::net::TcpListener::bind(rest_addr).await?;
@@ -345,6 +347,7 @@ async fn main() -> Result<()> {
 
             let rest_router = rest::create_rest_router_legacy(state.clone())
                 .merge(admin::create_admin_router(admin_state.clone()))
+                .merge(chat::create_chat_router(state.clone()))
                 .layer(cors.clone());
 
             let rest_listener = tokio::net::TcpListener::bind(rest_addr).await?;

@@ -3219,3 +3219,59 @@ Implement the full My Queue feature across all 6 phases.
 #### Verification
 - `cargo build -p aida-server` — compiles with no new warnings
 - `npx tsc --noEmit` — no TypeScript errors
+
+---
+
+### Session — 2026-02-21: AIDA Chat (STORY-0374)
+
+#### Prompt
+Implement requirements-aware AI chat for PMs/stakeholders — web-based chat UI that streams AI responses from the Claude API with full requirements database as context. Spec IDs auto-linked via existing LinkedMarkdown component.
+
+#### Actions Taken
+
+**Phase 1: Make aida-core prompt helpers public**
+- Made `build_project_context` and `build_requirements_summary` `pub` in `aida-core/src/ai/prompts.rs`
+- Added new `pub fn build_all_requirements_summary(store)` — full requirements summary with status/priority for chat context
+
+**Phase 2: Backend chat.rs module**
+- Added `reqwest` (with stream feature) and `futures-util` dependencies to `aida-server/Cargo.toml`
+- Created `aida-server/src/chat.rs` with:
+  - `GET /api/v2/chat/status` — returns availability (checks ANTHROPIC_API_KEY)
+  - `POST /api/v2/chat` — SSE streaming endpoint: validates key, builds system prompt with project context + all requirements, POSTs to Claude API with streaming, parses `content_block_delta` events, forwards as `event: delta` SSE events
+  - Model defaults to `claude-sonnet-4-20250514`, overridable via `AIDA_CHAT_MODEL`
+  - Stub router for multi-project mode (returns `available: false`)
+- Wired `chat::create_chat_router(state)` into legacy REST router and stub into multi-project router
+
+**Phase 3: Frontend API + hooks**
+- Created `aida-web-react/src/api/chat.ts` — types + `fetchChatStatus()` + `sendChatMessage()` (raw fetch for streaming)
+- Created `aida-web-react/src/hooks/useChat.ts`:
+  - `useChatStatus()` — React Query hook for status endpoint
+  - `useChat()` — full conversation state: messages, isStreaming, send(), clear(); SSE parsing via ReadableStream reader
+
+**Phase 4: ChatPage component**
+- Created `aida-web-react/src/components/chat/ChatPage.tsx`:
+  - Header with clear button
+  - Empty state with 5 starter question chips
+  - Message bubbles: user (right, accent bg), assistant (left, LinkedMarkdown rendering with auto-linked spec IDs)
+  - Blinking cursor during streaming
+  - Fixed input bar with textarea (Enter to send, Shift+Enter for newline)
+  - Loading/unavailable states
+
+**Phase 5: Route + navigation**
+- Added `/chat` route in `App.tsx`
+- Added Chat nav item with `MessageCircle` icon in `Sidebar.tsx` (before Settings)
+
+#### Files Changed
+- `aida-core/src/ai/prompts.rs` — Made helpers pub, added `build_all_requirements_summary`
+- `aida-server/Cargo.toml` — Added reqwest + futures-util deps
+- `aida-server/src/chat.rs` (new) — Chat SSE streaming endpoints
+- `aida-server/src/main.rs` — Added mod chat, merged routers
+- `aida-web-react/src/api/chat.ts` (new) — API types and fetch functions
+- `aida-web-react/src/hooks/useChat.ts` (new) — Chat hooks
+- `aida-web-react/src/components/chat/ChatPage.tsx` (new) — Chat UI page
+- `aida-web-react/src/App.tsx` — Added /chat route
+- `aida-web-react/src/components/layout/Sidebar.tsx` — Added Chat nav item
+
+#### Verification
+- `cargo build -p aida-server` — compiles with no new warnings
+- `npx tsc --noEmit` — no TypeScript errors
