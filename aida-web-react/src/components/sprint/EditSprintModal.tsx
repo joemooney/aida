@@ -63,7 +63,7 @@ export function EditSprintModal({ sprint, onClose }: EditSprintModalProps) {
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <form
           onSubmit={handleSubmit}
-          className="bg-surface-alt border border-edge rounded-2xl shadow-2xl shadow-black/40 w-full max-w-md flex flex-col gap-5 p-6 animate-fade-in"
+          className="bg-surface-alt border border-edge rounded-2xl shadow-2xl shadow-black/40 w-full max-w-lg flex flex-col gap-5 p-6 animate-fade-in"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
@@ -80,8 +80,19 @@ export function EditSprintModal({ sprint, onClose }: EditSprintModalProps) {
 
           {/* Fields */}
           <div className="flex flex-col gap-4">
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-content-secondary">Title</span>
+              <input
+                type="text"
+                required
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="rounded-lg border border-edge bg-surface px-3 py-2 text-sm text-content placeholder-content-muted focus:border-accent focus:outline-none"
+              />
+            </label>
+
             <div className="flex gap-3">
-              <label className="flex flex-col gap-1 flex-1">
+              <label className="flex flex-col gap-1 max-w-[140px]">
                 <span className="text-xs font-medium text-content-secondary">Sprint Number</span>
                 <input
                   type="number"
@@ -89,17 +100,6 @@ export function EditSprintModal({ sprint, onClose }: EditSprintModalProps) {
                   required
                   value={sprintNumber}
                   onChange={(e) => setSprintNumber(e.target.value)}
-                  className="rounded-lg border border-edge bg-surface px-3 py-2 text-sm text-content placeholder-content-muted focus:border-accent focus:outline-none"
-                />
-              </label>
-
-              <label className="flex flex-col gap-1 flex-[2]">
-                <span className="text-xs font-medium text-content-secondary">Title</span>
-                <input
-                  type="text"
-                  required
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
                   className="rounded-lg border border-edge bg-surface px-3 py-2 text-sm text-content placeholder-content-muted focus:border-accent focus:outline-none"
                 />
               </label>
