@@ -105,4 +105,4 @@ prose prose-sm prose-invert max-w-none text-content prose-headings:text-content 
 
 ## Status
 
-In Progress
+Completed
