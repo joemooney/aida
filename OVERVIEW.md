@@ -127,7 +127,10 @@ Define connections between requirements:
   - Kanban board with drag-and-drop (via @dnd-kit)
   - List view with filtering, sorting, and parent/child tree toggle (flat/tree modes with collapsible hierarchy)
   - Detail panel for viewing/editing requirements
-  - Full-text search
+  - Full-text search with structured query parsing (`owner:joe`, `tag:frontend`, `status:approved` syntax)
+  - Tag-based filtering across views (kanban, list, timeline) with active filter chips
+  - Inline tag pills in list rows (up to 3 visible + overflow indicator)
+  - Markdown description rendering in detail panel (react-markdown + remark-gfm)
   - Dark/light theme toggle using CSS custom properties
   - Sprint planning with drag-and-drop between backlog and sprints (via @dnd-kit)
   - Sprint creation modal, archive/unarchive toggle

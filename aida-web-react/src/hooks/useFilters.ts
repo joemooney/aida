@@ -8,6 +8,7 @@ export interface Filters {
   type: RequirementType | '';
   feature: string;
   owner: string;
+  tag: string;
 }
 
 export function useFilters() {
@@ -19,6 +20,7 @@ export function useFilters() {
     type: (searchParams.get('type') ?? '') as Filters['type'],
     feature: searchParams.get('feature') ?? '',
     owner: searchParams.get('owner') ?? '',
+    tag: searchParams.get('tag') ?? '',
   }), [searchParams]);
 
   const setFilter = useCallback(
@@ -35,6 +37,16 @@ export function useFilters() {
     [setSearchParams],
   );
 
+  const removeFilter = useCallback(
+    (key: keyof Filters) => {
+      setSearchParams((prev) => {
+        prev.delete(key);
+        return prev;
+      });
+    },
+    [setSearchParams],
+  );
+
   const clearFilters = useCallback(() => {
     setSearchParams((prev) => {
       prev.delete('status');
@@ -42,6 +54,7 @@ export function useFilters() {
       prev.delete('type');
       prev.delete('feature');
       prev.delete('owner');
+      prev.delete('tag');
       return prev;
     });
   }, [setSearchParams]);
@@ -54,6 +67,7 @@ export function useFilters() {
         if (filters.type && req.req_type !== filters.type) return false;
         if (filters.feature && req.feature !== filters.feature) return false;
         if (filters.owner && req.owner !== filters.owner) return false;
+        if (filters.tag && !(req.tags ?? []).includes(filters.tag)) return false;
         return true;
       });
     },
@@ -65,5 +79,5 @@ export function useFilters() {
     [filters],
   );
 
-  return { filters, setFilter, clearFilters, applyFilters, activeFilterCount };
+  return { filters, setFilter, removeFilter, clearFilters, applyFilters, activeFilterCount };
 }

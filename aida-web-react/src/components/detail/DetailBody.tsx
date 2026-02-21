@@ -1,5 +1,7 @@
-import { useState } from 'react';
-import { Plus, X } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Plus, X, Pencil, Check } from 'lucide-react';
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { Requirement } from '@shared/types';
 import { Avatar } from '../ui/Avatar';
 import { EditableText } from '../ui/EditableField';
@@ -14,6 +16,37 @@ export function DetailBody({ requirement }: DetailBodyProps) {
   const updateReq = useUpdateRequirement();
   const reqId = requirement.spec_id ?? requirement.id;
   const [newTag, setNewTag] = useState('');
+  const [editingDesc, setEditingDesc] = useState(false);
+  const [descDraft, setDescDraft] = useState(requirement.description);
+  const descRef = useRef<HTMLTextAreaElement>(null);
+
+  // Sync draft when requirement changes externally
+  useEffect(() => {
+    if (!editingDesc) setDescDraft(requirement.description);
+  }, [requirement.description, editingDesc]);
+
+  useEffect(() => {
+    if (editingDesc && descRef.current) {
+      descRef.current.focus();
+      const len = descRef.current.value.length;
+      descRef.current.setSelectionRange(len, len);
+    }
+  }, [editingDesc]);
+
+  function saveDesc() {
+    const trimmed = descDraft.trim();
+    if (trimmed && trimmed !== requirement.description) {
+      save({ description: trimmed });
+    } else {
+      setDescDraft(requirement.description);
+    }
+    setEditingDesc(false);
+  }
+
+  function cancelDesc() {
+    setDescDraft(requirement.description);
+    setEditingDesc(false);
+  }
 
   function save(data: Partial<Requirement>) {
     updateReq.mutate({ id: reqId, data });
@@ -39,13 +72,52 @@ export function DetailBody({ requirement }: DetailBodyProps) {
       {/* Description */}
       <div>
         <h3 className="text-xs font-medium uppercase tracking-wider text-content-muted mb-2">Description</h3>
-        <EditableText
-          value={requirement.description}
-          onSave={(description) => save({ description })}
-          className="text-sm text-content-secondary leading-relaxed whitespace-pre-wrap"
-          placeholder="Add a description..."
-          multiline
-        />
+        {editingDesc ? (
+          <div className="space-y-2">
+            <textarea
+              ref={descRef}
+              value={descDraft}
+              onChange={(e) => setDescDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveDesc(); }
+                if (e.key === 'Escape') { e.preventDefault(); cancelDesc(); }
+              }}
+              rows={8}
+              className="w-full rounded-lg border border-accent bg-surface px-3 py-1.5 text-sm text-content focus:outline-none focus:ring-1 focus:ring-accent resize-y min-h-[80px]"
+              placeholder="Add a description (markdown supported)..."
+            />
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={saveDesc}
+                className="flex items-center gap-1 rounded-md bg-accent px-2 py-1 text-[11px] font-medium text-white hover:bg-accent-hover transition-colors cursor-pointer"
+              >
+                <Check className="h-3 w-3" /> Save
+              </button>
+              <button
+                onClick={cancelDesc}
+                className="flex items-center gap-1 rounded-md bg-surface-hover px-2 py-1 text-[11px] font-medium text-content-secondary hover:text-content transition-colors cursor-pointer"
+              >
+                <X className="h-3 w-3" /> Cancel
+              </button>
+              <span className="text-[10px] text-content-muted ml-auto">Ctrl+Enter to save</span>
+            </div>
+          </div>
+        ) : (
+          <div
+            onClick={() => setEditingDesc(true)}
+            className="group/desc relative cursor-pointer rounded-lg hover:bg-surface-hover/50 -mx-2 px-2 py-1 transition-colors"
+            title="Click to edit"
+          >
+            {requirement.description ? (
+              <div className="prose prose-sm prose-invert max-w-none text-content prose-headings:text-content prose-strong:text-content prose-code:text-accent prose-code:bg-surface-hover prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:before:content-none prose-code:after:content-none prose-pre:bg-surface-hover prose-pre:border prose-pre:border-edge prose-a:text-accent">
+                <Markdown remarkPlugins={[remarkGfm]}>{requirement.description}</Markdown>
+              </div>
+            ) : (
+              <span className="text-sm text-content-muted italic">Add a description...</span>
+            )}
+            <Pencil className="absolute right-1.5 top-2 h-3 w-3 text-content-muted opacity-0 group-hover/desc:opacity-100 transition-opacity" />
+          </div>
+        )}
       </div>
 
       {/* Metadata */}

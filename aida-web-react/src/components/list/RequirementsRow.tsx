@@ -20,9 +20,23 @@ export function RequirementsRow({ requirement }: RequirementsRowProps) {
         <span className="text-[11px] font-mono text-content-muted">{requirement.spec_id}</span>
       </td>
       <td className="py-3 px-4">
-        <span className="text-sm font-medium text-content group-hover:text-accent transition-colors">
-          {requirement.title}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-content group-hover:text-accent transition-colors">
+            {requirement.title}
+          </span>
+          {requirement.tags && requirement.tags.length > 0 && (
+            <div className="flex items-center gap-1 shrink-0">
+              {requirement.tags.slice(0, 3).map((tag) => (
+                <span key={tag} className="rounded bg-surface-hover px-1.5 py-0.5 text-[10px] text-content-muted">
+                  {tag}
+                </span>
+              ))}
+              {requirement.tags.length > 3 && (
+                <span className="text-[10px] text-content-muted">+{requirement.tags.length - 3}</span>
+              )}
+            </div>
+          )}
+        </div>
       </td>
       <td className="py-3 px-4">
         <StatusBadge status={requirement.status} />

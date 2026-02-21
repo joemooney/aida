@@ -4,7 +4,41 @@ import { Search, Sun, Moon, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useTheme } from '../../hooks/useTheme';
 import { useSearch } from '../../hooks/useSearch';
+import { useFilters, type Filters } from '../../hooks/useFilters';
 import type { Requirement } from '@shared/types';
+
+const FILTER_FIELDS = new Set<keyof Filters>(['status', 'priority', 'type', 'feature', 'owner', 'tag']);
+
+function normalizeFilterValue(key: keyof Filters, value: string): string {
+  if (key === 'status' || key === 'priority') {
+    // Title-case: "approved" -> "Approved", "in-progress" -> "In-Progress"
+    return value.replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+  if (key === 'type') {
+    // Title-case type names: "bug" -> "Bug", "functional" -> "Functional"
+    return value.replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+  return value;
+}
+
+function parseStructuredQuery(input: string): { filters: Partial<Filters>; remainder: string } {
+  const filters: Partial<Filters> = {};
+  // Match field:value or field:"quoted value"
+  const pattern = /\b(status|priority|type|feature|owner|tag):(?:"([^"]+)"|(\S+))/gi;
+  let remainder = input;
+
+  let match;
+  while ((match = pattern.exec(input)) !== null) {
+    const key = match[1].toLowerCase() as keyof Filters;
+    const value = match[2] ?? match[3]; // quoted or unquoted
+    if (FILTER_FIELDS.has(key)) {
+      filters[key] = normalizeFilterValue(key, value) as never;
+      remainder = remainder.replace(match[0], '');
+    }
+  }
+
+  return { filters, remainder: remainder.trim() };
+}
 
 export function Header() {
   const { theme, toggle } = useTheme();
@@ -13,6 +47,7 @@ export function Header() {
   const [query, setQuery] = useState(searchParams.get('q') ?? '');
   const [showResults, setShowResults] = useState(false);
   const { data: results, isLoading } = useSearch(query);
+  const { setFilter } = useFilters();
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -34,6 +69,20 @@ export function Header() {
     navigate(`?detail=${req.spec_id ?? req.id}`);
   }
 
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter' && query.trim()) {
+      const { filters, remainder } = parseStructuredQuery(query);
+      const filterKeys = Object.keys(filters) as (keyof Filters)[];
+      if (filterKeys.length > 0) {
+        for (const key of filterKeys) {
+          setFilter(key, filters[key]!);
+        }
+        setQuery(remainder);
+        if (!remainder) setShowResults(false);
+      }
+    }
+  }
+
   return (
     <header className="flex items-center gap-4 border-b border-edge bg-surface-alt px-6 h-14">
       {/* Search */}
@@ -49,7 +98,8 @@ export function Header() {
           }}
           onFocus={() => query.length > 0 && setShowResults(true)}
           onBlur={() => setTimeout(() => setShowResults(false), 200)}
-          placeholder="Search requirements... ( / )"
+          onKeyDown={handleKeyDown}
+          placeholder="Search... (try owner:joe, tag:frontend)"
           className="w-full rounded-lg border border-edge bg-surface py-1.5 pl-9 pr-8 text-sm text-content placeholder:text-content-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
         />
         {query && (

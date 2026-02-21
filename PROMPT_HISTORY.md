@@ -2992,3 +2992,56 @@ Add a List/Tree toggle to the web List View so requirements can be viewed as a f
 ### Files Changed
 - 3 modified (`aida-server/src/rest.rs`, `App.tsx`, `Sidebar.tsx`)
 - 11 created (`api/settings.ts`, `hooks/useSettings.ts`, `SettingsView.tsx`, `GeneralTab.tsx`, `RelationshipsTab.tsx`, `RelationshipForm.tsx`, `TypesTab.tsx`, `TypeForm.tsx`, `ReactionsTab.tsx`, `ReactionForm.tsx`, `IdsTab.tsx`)
+
+---
+
+## Tag Filtering, Structured Search, and Markdown Descriptions (2026-02-20)
+
+### Prompt
+Add tag filtering to list/kanban/timeline views, structured search parsing (field:value syntax) in the search bar, and markdown rendering for requirement descriptions.
+
+### Plan
+Saved to `docs/plans/2026-02-20-tag-filtering-structured-search-markdown.md`
+
+### Actions
+
+#### Phase 1: Tag Filter in useFilters Hook
+- Added `tag: string` to `Filters` interface
+- Read `tag` from URL search params
+- Added tag matching in `applyFilters`: checks `req.tags` array includes filter value
+- Added `tag` to `clearFilters` deletions
+- Added `removeFilter(key)` function to delete a single filter from URL params
+- File modified: `aida-web-react/src/hooks/useFilters.ts`
+
+#### Phase 2: Filter Bar UI Enhancements
+- Extracted unique tags from requirements: `flatMap(r => r.tags ?? [])` with dedup and sort
+- Added tag `<select>` dropdown after owner dropdown (same styling)
+- Created `FilterChip` component — accent-colored pill with `label:value` and X button
+- Replaced "Clear (N)" button with active filter chip row
+- "Clear all" text button appears when 2+ filters active
+- File modified: `aida-web-react/src/components/kanban/KanbanFilterBar.tsx`
+
+#### Phase 3: Structured Search in Header
+- Added `parseStructuredQuery(input)` — regex parses `field:value` and `field:"quoted value"` patterns
+- Supported fields: status, priority, type, feature, owner, tag
+- Added `normalizeFilterValue(key, value)` — title-cases status/priority/type values
+- On Enter keydown: parse query, apply detected filters via `setFilter()`, keep remainder as search text
+- Updated placeholder: `'Search... (try owner:joe, tag:frontend)'`
+- File modified: `aida-web-react/src/components/layout/Header.tsx`
+
+#### Phase 4: Tag Pills in List Rows
+- Wrapped title cell content in flex div
+- Added up to 3 small tag badges after title span
+- Shows `+N` overflow indicator if more than 3 tags
+- File modified: `aida-web-react/src/components/list/RequirementsRow.tsx`
+
+#### Phase 5: Markdown Description Rendering
+- Replaced `EditableText` for description with inline view/edit toggle
+- View mode: renders through `<Markdown remarkPlugins={[remarkGfm]}>` with prose styling from DocFullPage
+- Edit mode: textarea with Ctrl+Enter to save, Escape to cancel
+- Click-to-edit pencil icon on hover in view mode
+- File modified: `aida-web-react/src/components/detail/DetailBody.tsx`
+
+### Files Changed
+- 5 modified (`useFilters.ts`, `KanbanFilterBar.tsx`, `Header.tsx`, `RequirementsRow.tsx`, `DetailBody.tsx`)
+- 1 plan saved (`docs/plans/2026-02-20-tag-filtering-structured-search-markdown.md`)
