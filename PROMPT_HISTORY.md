@@ -3196,3 +3196,26 @@ Implement the full My Queue feature across all 6 phases.
   - Applied `LinkedMarkdown` to all 4 markdown rendering locations: DetailBody, DocFullPage, DocDetailPanel, SkillDetailPanel
   - Spec ID patterns supported: 1-8 uppercase letters followed by hyphen and 1-6 digits (e.g., FR-0042, EPIC-0365, STORY-0372)
 - **Commit**: 7386495
+
+### Admin Rebuild & Restart (2026-02-21)
+- **Prompt**: Implement dev-mode Admin tab in Settings for triggering cargo build from browser with real-time SSE output streaming and auto-restart
+- **Requirement**: TASK-0373
+- **Actions**:
+  - Created `aida-server/src/admin.rs` — AdminState, status endpoint (`GET /api/v2/admin/status`), SSE rebuild endpoint (`GET /api/v2/admin/rebuild?restart=true`) with concurrent build protection via AtomicBool, workspace root auto-detection, stdout/stderr streaming, and process replacement restart
+  - Created `aida-web-react/src/api/admin.ts` — AdminStatus type, fetchAdminStatus, SSE event types
+  - Created `aida-web-react/src/hooks/useAdmin.ts` — useAdminStatus (React Query), useRebuild (EventSource SSE with reconnect polling)
+  - Created `aida-web-react/src/components/settings/AdminTab.tsx` — Server status card, build action buttons, dev-mode hint, error banner, terminal log with auto-scroll
+  - Modified `aida-server/src/main.rs` — Added `mod admin`, AdminState creation gated on AIDA_DEV_MODE env var, merged admin router into both multi-project and legacy REST routers
+  - Modified `aida-web-react/src/components/settings/SettingsView.tsx` — Added Admin tab to settings tab bar
+
+#### Files Changed
+- `aida-server/src/admin.rs` (new) — Backend admin module
+- `aida-server/src/main.rs` — Wire admin routes
+- `aida-web-react/src/api/admin.ts` (new) — API types
+- `aida-web-react/src/hooks/useAdmin.ts` (new) — React hooks
+- `aida-web-react/src/components/settings/AdminTab.tsx` (new) — UI component
+- `aida-web-react/src/components/settings/SettingsView.tsx` — Add admin tab
+
+#### Verification
+- `cargo build -p aida-server` — compiles with no new warnings
+- `npx tsc --noEmit` — no TypeScript errors

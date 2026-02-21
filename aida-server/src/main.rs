@@ -19,6 +19,7 @@ use tracing_subscriber::FmtSubscriber;
 
 use aida_core::db::create_backend;
 
+mod admin;
 mod convert;
 mod projects;
 mod rest;
@@ -192,6 +193,15 @@ async fn main() -> Result<()> {
         .finish();
     tracing::subscriber::set_global_default(subscriber)?;
 
+    // Create admin state (dev-mode gated)
+    let dev_mode = std::env::var("AIDA_DEV_MODE")
+        .map(|v| v == "1" || v == "true")
+        .unwrap_or(false);
+    let admin_state = Arc::new(admin::AdminState::new(dev_mode));
+    if dev_mode {
+        info!("Dev mode enabled (AIDA_DEV_MODE)");
+    }
+
     // Build CORS layer - allows gRPC-Web requests from browser clients
     let cors = CorsLayer::new()
         .allow_methods([
@@ -264,7 +274,9 @@ async fn main() -> Result<()> {
             info!("REST API: http://{}/api", rest_addr);
             info!("Projects API: http://{}/api/projects", rest_addr);
 
-            let rest_router = rest::create_rest_router(project_manager.clone()).layer(cors.clone());
+            let rest_router = rest::create_rest_router(project_manager.clone())
+                .merge(admin::create_admin_router(admin_state.clone()))
+                .layer(cors.clone());
 
             let rest_listener = tokio::net::TcpListener::bind(rest_addr).await?;
             let mut rest_shutdown_rx = shutdown_rx.clone();
@@ -331,7 +343,9 @@ async fn main() -> Result<()> {
             let rest_addr: SocketAddr = format!("{}:{}", args.host, args.rest_port).parse()?;
             info!("REST API: http://{}/api", rest_addr);
 
-            let rest_router = rest::create_rest_router_legacy(state.clone()).layer(cors.clone());
+            let rest_router = rest::create_rest_router_legacy(state.clone())
+                .merge(admin::create_admin_router(admin_state.clone()))
+                .layer(cors.clone());
 
             let rest_listener = tokio::net::TcpListener::bind(rest_addr).await?;
             let mut rest_shutdown_rx = shutdown_rx.clone();

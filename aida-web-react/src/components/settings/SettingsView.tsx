@@ -5,8 +5,9 @@ import { RelationshipsTab } from './RelationshipsTab';
 import { TypesTab } from './TypesTab';
 import { ReactionsTab } from './ReactionsTab';
 import { IdsTab } from './IdsTab';
+import { AdminTab } from './AdminTab';
 
-type SettingsTab = 'general' | 'relationships' | 'types' | 'reactions' | 'ids';
+type SettingsTab = 'general' | 'relationships' | 'types' | 'reactions' | 'ids' | 'admin';
 
 const tabs: { key: SettingsTab; label: string }[] = [
   { key: 'general', label: 'General' },
@@ -14,6 +15,7 @@ const tabs: { key: SettingsTab; label: string }[] = [
   { key: 'types', label: 'Types' },
   { key: 'reactions', label: 'Reactions' },
   { key: 'ids', label: 'IDs & Prefixes' },
+  { key: 'admin', label: 'Admin' },
 ];
 
 export function SettingsView() {
@@ -48,6 +50,7 @@ export function SettingsView() {
         {activeTab === 'types' && <TypesTab />}
         {activeTab === 'reactions' && <ReactionsTab />}
         {activeTab === 'ids' && <IdsTab />}
+        {activeTab === 'admin' && <AdminTab />}
       </div>
     </div>
   );
