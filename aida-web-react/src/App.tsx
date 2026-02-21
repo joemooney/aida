@@ -5,6 +5,7 @@ import { KanbanBoard } from './components/kanban/KanbanBoard';
 import { RequirementsList } from './components/list/RequirementsList';
 import { SprintView } from './components/sprint/SprintView';
 import { SkillsView } from './components/skills/SkillsView';
+import { DocsView } from './components/docs/DocsView';
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
           <Route path="list" element={<RequirementsList />} />
           <Route path="sprints" element={<SprintView />} />
           <Route path="skills" element={<SkillsView />} />
+          <Route path="docs" element={<DocsView />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -2837,3 +2837,38 @@ Implement a Skills browser view in the web dashboard: REST API endpoints to list
 ### Files Changed
 - 3 modified (`rest.rs`, `Sidebar.tsx`, `App.tsx`)
 - 5 created (`api/skills.ts`, `hooks/useSkills.ts`, `SkillsView.tsx`, `SkillCard.tsx`, `SkillDetailPanel.tsx`)
+
+---
+
+## Docs Browser View (2026-02-20)
+
+### Prompt
+Add a "Docs" page to the React dashboard to browse and read markdown files from the `docs/` directory (including `docs/plans/`), with read-only markdown rendering via react-markdown.
+
+### Actions
+
+#### Phase 1: Backend — Docs API endpoints
+- Added 2 new endpoints to `aida-server/src/rest.rs`:
+  - `GET /api/v2/docs` — recursively lists all `.md` files from `docs/` with title, section, path
+  - `GET /api/v2/docs/*path` — returns full markdown content by relative path (supports nested paths)
+- Title extraction from first `# heading` line
+- Section classification: files in `docs/plans/` → "plans", others → "docs"
+- Path traversal protection via canonicalization
+
+#### Phase 2: Frontend API + Hooks
+- Created `aida-web-react/src/api/docs.ts` with `fetchDocs()` and `fetchDoc(path)`
+- Created `aida-web-react/src/hooks/useDocs.ts` with `useDocs()` and `useDoc(path)`
+
+#### Phase 3: Docs View Components
+- `DocsView.tsx` — top-level view with header, filter toggle (All/Docs/Plans), search, grouped sections
+- `DocCard.tsx` — card with title, section badge, file path; click opens detail panel
+- `DocDetailPanel.tsx` — slide-in panel (max-w-3xl) with read-only rendered markdown
+
+#### Phase 4: Routing + Sidebar
+- Added FileText icon + "Docs" nav item to `Sidebar.tsx`
+- Added `/docs` route to `App.tsx`
+
+### Files Changed
+- 3 modified (`rest.rs`, `Sidebar.tsx`, `App.tsx`)
+- 5 created (`api/docs.ts`, `hooks/useDocs.ts`, `DocsView.tsx`, `DocCard.tsx`, `DocDetailPanel.tsx`)
+- 1 created (`docs/plans/2026-02-20-docs-browser.md`)

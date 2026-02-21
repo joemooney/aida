@@ -86,6 +86,9 @@ pub fn create_rest_router_legacy(state: Arc<ServerState>) -> Router {
         .route("/api/v2/skills", get(list_skills))
         .route("/api/v2/skills/:name", get(get_skill))
         .route("/api/v2/skills/:name", put(update_skill))
+        // Docs browser endpoints
+        .route("/api/v2/docs", get(list_docs))
+        .route("/api/v2/docs/*path", get(get_doc))
         .with_state(state)
 }
 
@@ -1761,4 +1764,136 @@ async fn update_skill(
     }
 
     Err(ApiError::new(StatusCode::NOT_FOUND, format!("Skill not found: {name}")))
+}
+
+// ============================================================================
+// Docs browser handlers
+// ============================================================================
+
+#[derive(Serialize)]
+struct DocInfo {
+    name: String,
+    title: String,
+    path: String,
+    section: String,
+}
+
+#[derive(Serialize)]
+struct DocDetail {
+    name: String,
+    title: String,
+    path: String,
+    section: String,
+    content: String,
+}
+
+/// Extract the first `# heading` from markdown content
+fn extract_md_title(content: &str) -> String {
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if let Some(heading) = trimmed.strip_prefix("# ") {
+            return heading.trim().to_string();
+        }
+    }
+    String::new()
+}
+
+/// Get the docs/ directory relative to cwd
+fn docs_dir() -> PathBuf {
+    std::env::current_dir().unwrap_or_default().join("docs")
+}
+
+/// Recursively scan for .md files under a directory
+fn scan_docs_recursive(dir: &std::path::Path, base: &std::path::Path) -> Vec<DocInfo> {
+    let mut results = Vec::new();
+    let entries = match std::fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return results,
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            results.extend(scan_docs_recursive(&path, base));
+            continue;
+        }
+        if path.extension().and_then(|e| e.to_str()) != Some("md") {
+            continue;
+        }
+        let rel_path = path.strip_prefix(base).unwrap_or(&path);
+        let rel_str = rel_path.to_string_lossy().to_string();
+        let name = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
+        let content = std::fs::read_to_string(&path).unwrap_or_default();
+        let title = extract_md_title(&content);
+        let title = if title.is_empty() { name.clone() } else { title };
+        let section = if rel_str.starts_with("plans/") || rel_str.starts_with("plans\\") {
+            "plans".to_string()
+        } else {
+            "docs".to_string()
+        };
+        results.push(DocInfo {
+            name,
+            title,
+            path: rel_str,
+            section,
+        });
+    }
+    results.sort_by(|a, b| a.path.cmp(&b.path));
+    results
+}
+
+async fn list_docs(
+    State(_state): State<Arc<ServerState>>,
+) -> Result<Json<Vec<DocInfo>>, (StatusCode, Json<ApiError>)> {
+    let base = docs_dir();
+    if !base.exists() {
+        return Ok(Json(Vec::new()));
+    }
+    Ok(Json(scan_docs_recursive(&base, &base)))
+}
+
+async fn get_doc(
+    State(_state): State<Arc<ServerState>>,
+    Path(rel_path): Path<String>,
+) -> Result<Json<DocDetail>, (StatusCode, Json<ApiError>)> {
+    let base = docs_dir();
+    let file_path = base.join(&rel_path);
+
+    // Prevent path traversal
+    let canonical = file_path
+        .canonicalize()
+        .map_err(|_| ApiError::new(StatusCode::NOT_FOUND, format!("Doc not found: {rel_path}")))?;
+    let canonical_base = base
+        .canonicalize()
+        .map_err(|_| ApiError::new(StatusCode::NOT_FOUND, "Docs directory not found"))?;
+    if !canonical.starts_with(&canonical_base) {
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, "Invalid path"));
+    }
+
+    let content = std::fs::read_to_string(&canonical)
+        .map_err(|_| ApiError::new(StatusCode::NOT_FOUND, format!("Doc not found: {rel_path}")))?;
+
+    let name = file_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
+    let title = extract_md_title(&content);
+    let title = if title.is_empty() { name.clone() } else { title };
+    let section = if rel_path.starts_with("plans/") || rel_path.starts_with("plans\\") {
+        "plans".to_string()
+    } else {
+        "docs".to_string()
+    };
+
+    Ok(Json(DocDetail {
+        name,
+        title,
+        path: rel_path,
+        section,
+        content,
+    }))
 }

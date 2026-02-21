@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Columns3, List, Zap, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Columns3, List, Zap, Sparkles, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 const navItems = [
@@ -8,6 +8,7 @@ const navItems = [
   { to: '/list', icon: List, label: 'List View' },
   { to: '/sprints', icon: Zap, label: 'Sprints' },
   { to: '/skills', icon: Sparkles, label: 'Skills' },
+  { to: '/docs', icon: FileText, label: 'Docs' },
 ];
 
 interface SidebarProps {
