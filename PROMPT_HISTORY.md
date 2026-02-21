@@ -2943,3 +2943,21 @@ Add a List/Tree toggle to the web List View so requirements can be viewed as a f
 - 1 modified (`RequirementsList.tsx`)
 - 2 created (`tree-utils.ts`, `TreeRow.tsx`)
 - 1 plan saved (`docs/plans/2026-02-20-list-tree-toggle.md`)
+
+### Timeline View for Web Dashboard
+- **Prompt**: Add a Timeline view showing chronological event feed from requirement history, comments, and creation events
+- **Actions**:
+  - Created `aida-web-react/src/lib/timeline-utils.ts` — utility functions to build, filter, and group timeline events from requirements data
+  - Created `aida-web-react/src/components/timeline/TimelineEventCard.tsx` — single event row with icon, time, spec ID, title, and author avatar
+  - Created `aida-web-react/src/components/timeline/TimelineDateGroup.tsx` — sticky date header with grouped event cards
+  - Created `aida-web-react/src/components/timeline/TimelineDetailPanel.tsx` — right-column detail showing event info, field change diffs, and comment content
+  - Created `aida-web-react/src/components/timeline/TimelineFilterBar.tsx` — author and field text filters with event count and clear button
+  - Created `aida-web-react/src/components/timeline/TimelineView.tsx` — top-level two-column layout with scrollable event list and detail panel
+  - Modified `App.tsx` to add `/timeline` route
+  - Modified `Sidebar.tsx` to add Timeline nav item with Clock icon between Sprints and Skills
+  - All data built client-side from existing `useRequirements()` hook — no backend changes
+- **Git**: `a33cac0` — `[AI:claude] feat(web): add Timeline view with chronological event feed`
+
+### Files Changed
+- 2 modified (`App.tsx`, `Sidebar.tsx`)
+- 6 created (`timeline-utils.ts`, `TimelineEventCard.tsx`, `TimelineDateGroup.tsx`, `TimelineDetailPanel.tsx`, `TimelineFilterBar.tsx`, `TimelineView.tsx`)
