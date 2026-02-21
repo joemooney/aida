@@ -1,8 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { X, Pencil, Eye, Save } from 'lucide-react';
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { cn } from '../../lib/utils';
+import { LinkedMarkdown } from '../ui/LinkedMarkdown';
 import { useSkill, useUpdateSkill } from '../../hooks/useSkills';
 import { Spinner } from '../ui/Spinner';
 
@@ -160,9 +159,9 @@ export function SkillDetailPanel({ name, onClose }: SkillDetailPanelProps) {
                   spellCheck={false}
                 />
               ) : (
-                <div className="p-5 prose prose-sm prose-invert max-w-none text-content prose-headings:text-content prose-strong:text-content prose-code:text-accent prose-code:bg-surface-hover prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:before:content-none prose-code:after:content-none prose-pre:bg-surface-hover prose-pre:border prose-pre:border-edge prose-a:text-accent">
-                  <Markdown remarkPlugins={[remarkGfm]}>{markdownBody}</Markdown>
-                </div>
+                <LinkedMarkdown className="p-5 prose prose-sm prose-invert max-w-none text-content prose-headings:text-content prose-strong:text-content prose-code:text-accent prose-code:bg-surface-hover prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:before:content-none prose-code:after:content-none prose-pre:bg-surface-hover prose-pre:border prose-pre:border-edge prose-a:text-accent">
+                  {markdownBody}
+                </LinkedMarkdown>
               )}
             </div>
           </>

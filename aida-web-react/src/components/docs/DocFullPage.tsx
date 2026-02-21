@@ -1,8 +1,7 @@
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { cn } from '../../lib/utils';
+import { LinkedMarkdown } from '../ui/LinkedMarkdown';
 import { useDoc } from '../../hooks/useDocs';
 import { Spinner } from '../ui/Spinner';
 import { EmptyState } from '../ui/EmptyState';
@@ -53,9 +52,9 @@ export function DocFullPage() {
       </div>
 
       {/* Rendered markdown */}
-      <div className="prose prose-sm prose-invert max-w-none text-content prose-headings:text-content prose-strong:text-content prose-code:text-accent prose-code:bg-surface-hover prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:before:content-none prose-code:after:content-none prose-pre:bg-surface-hover prose-pre:border prose-pre:border-edge prose-a:text-accent">
-        <Markdown remarkPlugins={[remarkGfm]}>{doc.content}</Markdown>
-      </div>
+      <LinkedMarkdown className="prose prose-sm prose-invert max-w-none text-content prose-headings:text-content prose-strong:text-content prose-code:text-accent prose-code:bg-surface-hover prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:before:content-none prose-code:after:content-none prose-pre:bg-surface-hover prose-pre:border prose-pre:border-edge prose-a:text-accent">
+        {doc.content}
+      </LinkedMarkdown>
     </div>
   );
 }

@@ -1,8 +1,7 @@
 import { useEffect } from 'react';
 import { X, ExternalLink } from 'lucide-react';
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { cn } from '../../lib/utils';
+import { LinkedMarkdown } from '../ui/LinkedMarkdown';
 import { useDoc } from '../../hooks/useDocs';
 import { Spinner } from '../ui/Spinner';
 
@@ -93,9 +92,9 @@ export function DocDetailPanel({ path, onClose }: DocDetailPanelProps) {
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto">
-              <div className="p-5 prose prose-sm prose-invert max-w-none text-content prose-headings:text-content prose-strong:text-content prose-code:text-accent prose-code:bg-surface-hover prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:before:content-none prose-code:after:content-none prose-pre:bg-surface-hover prose-pre:border prose-pre:border-edge prose-a:text-accent">
-                <Markdown remarkPlugins={[remarkGfm]}>{doc.content}</Markdown>
-              </div>
+              <LinkedMarkdown className="p-5 prose prose-sm prose-invert max-w-none text-content prose-headings:text-content prose-strong:text-content prose-code:text-accent prose-code:bg-surface-hover prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:before:content-none prose-code:after:content-none prose-pre:bg-surface-hover prose-pre:border prose-pre:border-edge prose-a:text-accent">
+                {doc.content}
+              </LinkedMarkdown>
             </div>
           </>
         )}

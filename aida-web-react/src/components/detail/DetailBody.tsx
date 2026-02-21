@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Plus, X, Pencil, Check } from 'lucide-react';
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import type { Requirement } from '@shared/types';
+import { LinkedMarkdown } from '../ui/LinkedMarkdown';
 import { Avatar } from '../ui/Avatar';
 import { EditableText } from '../ui/EditableField';
 import { formatDate } from '../../lib/utils';
@@ -109,9 +108,9 @@ export function DetailBody({ requirement }: DetailBodyProps) {
             title="Click to edit"
           >
             {requirement.description ? (
-              <div className="prose prose-sm prose-invert max-w-none text-content prose-headings:text-content prose-strong:text-content prose-code:text-accent prose-code:bg-surface-hover prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:before:content-none prose-code:after:content-none prose-pre:bg-surface-hover prose-pre:border prose-pre:border-edge prose-a:text-accent">
-                <Markdown remarkPlugins={[remarkGfm]}>{requirement.description}</Markdown>
-              </div>
+              <LinkedMarkdown className="prose prose-sm prose-invert max-w-none text-content prose-headings:text-content prose-strong:text-content prose-code:text-accent prose-code:bg-surface-hover prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:before:content-none prose-code:after:content-none prose-pre:bg-surface-hover prose-pre:border prose-pre:border-edge prose-a:text-accent">
+                {requirement.description}
+              </LinkedMarkdown>
             ) : (
               <span className="text-sm text-content-muted italic">Add a description...</span>
             )}
