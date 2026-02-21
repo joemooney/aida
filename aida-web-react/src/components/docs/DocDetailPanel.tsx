@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, ExternalLink } from 'lucide-react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { cn } from '../../lib/utils';
@@ -22,6 +22,10 @@ export function DocDetailPanel({ path, onClose }: DocDetailPanelProps) {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
+
+  function openInNewTab() {
+    window.open(`/docs/view/${path}`, '_blank');
+  }
 
   return (
     <>
@@ -64,12 +68,21 @@ export function DocDetailPanel({ path, onClose }: DocDetailPanelProps) {
                   {doc.section === 'plans' ? 'plan' : 'doc'}
                 </span>
               </div>
-              <button
-                onClick={onClose}
-                className="rounded-lg p-1.5 text-content-muted hover:text-content hover:bg-surface-hover transition-colors cursor-pointer"
-              >
-                <X className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={openInNewTab}
+                  title="Open in new tab"
+                  className="rounded-lg p-1.5 text-content-muted hover:text-content hover:bg-surface-hover transition-colors cursor-pointer"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={onClose}
+                  className="rounded-lg p-1.5 text-content-muted hover:text-content hover:bg-surface-hover transition-colors cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
 
             {/* Path info */}

@@ -6,6 +6,7 @@ import { RequirementsList } from './components/list/RequirementsList';
 import { SprintView } from './components/sprint/SprintView';
 import { SkillsView } from './components/skills/SkillsView';
 import { DocsView } from './components/docs/DocsView';
+import { DocFullPage } from './components/docs/DocFullPage';
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
           <Route path="sprints" element={<SprintView />} />
           <Route path="skills" element={<SkillsView />} />
           <Route path="docs" element={<DocsView />} />
+          <Route path="docs/view/*" element={<DocFullPage />} />
         </Route>
       </Routes>
     </BrowserRouter>
