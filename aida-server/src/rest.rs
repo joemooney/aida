@@ -2400,17 +2400,17 @@ async fn queue_add(
         .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {}", body.requirement_id)))?;
     let requirement_id = req.id;
 
-    // Compute position
+    // Compute position (i64::MAX = sentinel for "auto-append to bottom")
     let position = match body.position.as_deref() {
         Some("top") => {
             let existing = state.backend.queue_list(&user_id, true)
                 .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-            existing.first().map(|e| e.position - 1000).unwrap_or(0)
+            existing.first().map(|e| e.position - 1000).unwrap_or(1000)
         }
         Some(n) if n != "bottom" => {
-            n.parse::<i64>().unwrap_or(0)
+            n.parse::<i64>().unwrap_or(i64::MAX)
         }
-        _ => 0, // bottom or unspecified: queue_add auto-assigns max+1000
+        _ => i64::MAX, // bottom or unspecified: queue_add auto-assigns max+1000
     };
 
     let added_by = body.added_by.unwrap_or_else(|| user_id.clone());
@@ -2424,10 +2424,16 @@ async fn queue_add(
         added_at: chrono::Utc::now(),
     };
 
-    state.backend.queue_add(entry.clone())
+    state.backend.queue_add(entry)
         .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let response = enrich_queue_entry(&entry, &store);
+    // Read back the actual stored entry (position may have been auto-assigned)
+    let entries = state.backend.queue_list(&user_id, true)
+        .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let saved = entries.iter().find(|e| e.requirement_id == requirement_id)
+        .ok_or_else(|| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Entry not found after save"))?;
+
+    let response = enrich_queue_entry(saved, &store);
     Ok((StatusCode::CREATED, Json(response)))
 }
 

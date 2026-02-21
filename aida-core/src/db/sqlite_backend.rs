@@ -1383,8 +1383,8 @@ impl DatabaseBackend for SqliteBackend {
     fn queue_add(&self, entry: QueueEntry) -> Result<()> {
         let conn = self.conn.lock().unwrap();
 
-        // Auto-assign position if 0: max + 1000
-        let position = if entry.position == 0 {
+        // Auto-assign position if i64::MAX (sentinel for "append to bottom")
+        let position = if entry.position == i64::MAX {
             let max_pos: i64 = conn
                 .query_row(
                     "SELECT COALESCE(MAX(position), 0) FROM queue_entries WHERE user_id = ?1",

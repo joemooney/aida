@@ -4422,9 +4422,9 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
 
             let position = if *top {
                 let entries = storage.queue_list(&user_id, true)?;
-                entries.first().map(|e| e.position - 1000).unwrap_or(0)
+                entries.first().map(|e| e.position - 1000).unwrap_or(1000)
             } else {
-                0 // queue_add auto-assigns max+1000
+                i64::MAX // sentinel: queue_add auto-assigns max+1000
             };
 
             let entry = aida_core::QueueEntry {

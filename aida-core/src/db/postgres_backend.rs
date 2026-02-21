@@ -1288,7 +1288,7 @@ impl DatabaseBackend for PostgresBackend {
     fn queue_add(&self, entry: QueueEntry) -> Result<()> {
         let mut client = self.pool.get().context("Failed to get connection")?;
 
-        let position = if entry.position == 0 {
+        let position = if entry.position == i64::MAX {
             let row = client.query_one(
                 "SELECT COALESCE(MAX(position), 0) FROM queue_entries WHERE user_id = $1",
                 &[&entry.user_id],
