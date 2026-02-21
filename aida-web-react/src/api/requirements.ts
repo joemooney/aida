@@ -32,6 +32,10 @@ export function searchRequirements(query: string): Promise<Requirement[]> {
   return apiFetch<Requirement[]>(`/v2/search?q=${encodeURIComponent(query)}`);
 }
 
+export function reloadServer(): Promise<{ reloaded: boolean; requirements: number }> {
+  return apiFetch('/v2/reload', { method: 'POST' });
+}
+
 export function addComment(
   id: string,
   content: string,

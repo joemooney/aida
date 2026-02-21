@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Search, Sun, Moon, X } from 'lucide-react';
+import { Search, Sun, Moon, X, RefreshCw } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '../../lib/utils';
 import { useTheme } from '../../hooks/useTheme';
 import { useSearch } from '../../hooks/useSearch';
 import { useFilters, type Filters } from '../../hooks/useFilters';
+import { reloadServer } from '../../api/requirements';
 import type { Requirement } from '@shared/types';
 
 const FILTER_FIELDS = new Set<keyof Filters>(['status', 'priority', 'type', 'feature', 'owner', 'tag']);
@@ -43,12 +45,27 @@ function parseStructuredQuery(input: string): { filters: Partial<Filters>; remai
 export function Header() {
   const { theme, toggle } = useTheme();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const [query, setQuery] = useState(searchParams.get('q') ?? '');
   const [showResults, setShowResults] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const { data: results, isLoading } = useSearch(query);
   const { setFilter } = useFilters();
   const inputRef = useRef<HTMLInputElement>(null);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      await reloadServer();
+      await queryClient.invalidateQueries();
+    } catch {
+      // Still invalidate local cache even if server reload fails
+      await queryClient.invalidateQueries();
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -138,6 +155,20 @@ export function Header() {
 
       {/* Spacer */}
       <div className="flex-1" />
+
+      {/* Refresh data */}
+      <button
+        onClick={handleRefresh}
+        disabled={refreshing}
+        className={cn(
+          'flex h-8 w-8 items-center justify-center rounded-lg transition-colors cursor-pointer',
+          'text-content-muted hover:text-content hover:bg-surface-hover',
+          refreshing && 'animate-spin',
+        )}
+        title="Refresh data from server"
+      >
+        <RefreshCw className="h-4 w-4" />
+      </button>
 
       {/* Theme toggle */}
       <button
