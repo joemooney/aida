@@ -4,6 +4,7 @@ export interface SkillInfo {
   name: string;
   description: string;
   kind: 'skill' | 'command';
+  content: string;
 }
 
 export interface SkillDetail {

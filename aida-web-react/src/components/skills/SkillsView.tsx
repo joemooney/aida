@@ -34,7 +34,8 @@ export function SkillsView() {
       result = result.filter(
         (s) =>
           s.name.toLowerCase().includes(q) ||
-          s.description.toLowerCase().includes(q),
+          s.description.toLowerCase().includes(q) ||
+          s.content.toLowerCase().includes(q),
       );
     }
     return result;

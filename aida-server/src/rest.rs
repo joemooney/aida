@@ -1548,6 +1548,7 @@ struct SkillInfo {
     name: String,
     description: String,
     kind: String,
+    content: String,
 }
 
 #[derive(Serialize)]
@@ -1645,6 +1646,7 @@ fn scan_skill_dir(dir: &std::path::Path, kind: &str) -> Vec<(SkillInfo, PathBuf)
                 name,
                 description: desc,
                 kind: kind.to_string(),
+                content,
             },
             path,
         ));
