@@ -3045,3 +3045,33 @@ Saved to `docs/plans/2026-02-20-tag-filtering-structured-search-markdown.md`
 ### Files Changed
 - 5 modified (`useFilters.ts`, `KanbanFilterBar.tsx`, `Header.tsx`, `RequirementsRow.tsx`, `DetailBody.tsx`)
 - 1 plan saved (`docs/plans/2026-02-20-tag-filtering-structured-search-markdown.md`)
+
+---
+
+### Dashboard: Sprint Summary + Clickable Status Navigation
+- **Prompt**: Add active sprint summary section to Dashboard and make status count cards clickable to navigate to filtered List View
+- **Actions**:
+
+#### Phase 1: Clickable MetricsCards
+- Added `useNavigate` from react-router-dom
+- Changed card `<div>` to `<button>` elements
+- Each card navigates to `/list?status=X` on click; "Total" navigates to `/list` (no filter)
+- Added `cursor-pointer` and `hover:border-accent/50 hover:bg-surface-hover` styling
+- File modified: `aida-web-react/src/components/dashboard/MetricsCards.tsx`
+
+#### Phase 2: SprintSummary Component
+- Created new component with sprint header (name, date range, days-left badge)
+- Sprint-scoped status count cards (same clickable style as project-wide cards)
+- Progress bar with percentage and story points display
+- Uses existing sprint-utils: `getSprintNumber`, `getSprintDates`, `computeSprintProgress`
+- File created: `aida-web-react/src/components/dashboard/SprintSummary.tsx`
+
+#### Phase 3: DashboardPage Integration
+- Computed active sprint + items using same pattern as Sidebar (filter Sprint type, find active, match assignments)
+- Rendered `<SprintSummary>` between project-wide `<MetricsCards>` and charts grid
+- Only shown when an active sprint exists
+- File modified: `aida-web-react/src/components/dashboard/DashboardPage.tsx`
+
+### Files Changed
+- 2 modified (`DashboardPage.tsx`, `MetricsCards.tsx`)
+- 1 created (`SprintSummary.tsx`)
