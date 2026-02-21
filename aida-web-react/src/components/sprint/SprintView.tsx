@@ -9,10 +9,11 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import { Zap, Plus, Eye, EyeOff } from 'lucide-react';
+import { Zap, Plus, Eye, EyeOff, LayoutGrid, BarChart3 } from 'lucide-react';
 import type { Requirement } from '@shared/types';
 import { useRequirements, useUpdateRequirement } from '../../hooks/useRequirements';
 import { useAssignToSprint, useRemoveFromSprint } from '../../hooks/useSprints';
+import { cn } from '../../lib/utils';
 import { Spinner } from '../ui/Spinner';
 import { EmptyState } from '../ui/EmptyState';
 import { SprintSelector } from './SprintSelector';
@@ -38,6 +39,8 @@ export function SprintView() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [activeTab, setActiveTab] = useState<'board' | 'metrics'>('board');
+  const [metricsSprintId, setMetricsSprintId] = useState<string | null>(null);
   const [editingSprint, setEditingSprint] = useState<Requirement | null>(null);
   const [closingSprint, setClosingSprint] = useState<Requirement | null>(null);
 
@@ -245,35 +248,64 @@ export function SprintView() {
             onClose={handleCloseSprint}
           />
 
-          {selectedSprintId && (
-            <>
-              <DndContext
-                sensors={sensors}
-                collisionDetection={pointerWithin}
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
-              >
-                <SprintBoard
-                  backlog={backlog}
-                  sprintItems={allSprintItemsMap[selectedSprintId] ?? []}
-                  sprintId={selectedSprintId}
-                  sprintTitle={sprintTitle}
-                />
-
-                <DragOverlay>
-                  {activeReq ? <SprintItemCard requirement={activeReq} isDragOverlay /> : null}
-                </DragOverlay>
-              </DndContext>
-
-              {selectedSprint && (
-                <SprintCharts
-                  selectedSprint={selectedSprint}
-                  sprintItems={allSprintItemsMap[selectedSprintId] ?? []}
-                  allSprints={allSprints}
-                  sprintItemsMap={allSprintItemsMap}
-                />
+          {/* Tab toggle */}
+          <div className="flex items-center gap-1 border-b border-edge">
+            <button
+              onClick={() => setActiveTab('board')}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-px',
+                activeTab === 'board'
+                  ? 'border-accent text-accent'
+                  : 'border-transparent text-content-muted hover:text-content',
               )}
-            </>
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+              Board
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab('metrics');
+                if (!metricsSprintId && selectedSprintId) setMetricsSprintId(selectedSprintId);
+              }}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-px',
+                activeTab === 'metrics'
+                  ? 'border-accent text-accent'
+                  : 'border-transparent text-content-muted hover:text-content',
+              )}
+            >
+              <BarChart3 className="h-3.5 w-3.5" />
+              Metrics
+            </button>
+          </div>
+
+          {activeTab === 'board' && selectedSprintId && (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={pointerWithin}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+            >
+              <SprintBoard
+                backlog={backlog}
+                sprintItems={allSprintItemsMap[selectedSprintId] ?? []}
+                sprintId={selectedSprintId}
+                sprintTitle={sprintTitle}
+              />
+
+              <DragOverlay>
+                {activeReq ? <SprintItemCard requirement={activeReq} isDragOverlay /> : null}
+              </DragOverlay>
+            </DndContext>
+          )}
+
+          {activeTab === 'metrics' && (
+            <MetricsTab
+              allSprints={allSprints}
+              sprintItemsMap={allSprintItemsMap}
+              metricsSprintId={metricsSprintId ?? selectedSprintId}
+              onSelectSprint={setMetricsSprintId}
+            />
           )}
         </>
       )}
@@ -300,6 +332,72 @@ export function SprintView() {
           onClose={() => setClosingSprint(null)}
         />
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Metrics tab — sprint picker + charts
+// ---------------------------------------------------------------------------
+
+interface MetricsTabProps {
+  allSprints: Requirement[];
+  sprintItemsMap: Record<string, Requirement[]>;
+  metricsSprintId: string | null;
+  onSelectSprint: (id: string) => void;
+}
+
+function MetricsTab({ allSprints, sprintItemsMap, metricsSprintId, onSelectSprint }: MetricsTabProps) {
+  const metricsSprint = useMemo(
+    () => allSprints.find((s) => s.id === metricsSprintId) ?? allSprints[0] ?? null,
+    [allSprints, metricsSprintId],
+  );
+
+  if (!metricsSprint) {
+    return (
+      <EmptyState
+        icon={<BarChart3 className="h-10 w-10" />}
+        title="No sprint data"
+        description="Create a sprint with items to see metrics."
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Sprint picker */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs font-medium text-content-secondary">Sprint:</span>
+        {allSprints.map((s) => {
+          const num = getSprintNumber(s);
+          const label = num != null ? `Sprint ${num}` : s.title;
+          const isSelected = s.id === metricsSprint.id;
+          return (
+            <button
+              key={s.id}
+              onClick={() => onSelectSprint(s.id)}
+              className={cn(
+                'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                isSelected
+                  ? 'bg-accent text-white'
+                  : 'bg-surface-alt border border-edge text-content-muted hover:text-content hover:border-edge-hover',
+                s.archived && !isSelected && 'opacity-50',
+              )}
+            >
+              {label}
+              {s.archived ? ' (archived)' : ''}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Charts */}
+      <SprintCharts
+        selectedSprint={metricsSprint}
+        sprintItems={sprintItemsMap[metricsSprint.id] ?? []}
+        allSprints={allSprints}
+        sprintItemsMap={sprintItemsMap}
+      />
     </div>
   );
 }
