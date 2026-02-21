@@ -299,23 +299,28 @@ async fn run_build(
                 args.join(" ")
             );
 
-            // Spawn replacement process after a brief delay
-            let mut cmd = std::process::Command::new(&binary_path);
-            cmd.args(&args);
-            // Inherit environment including AIDA_DEV_MODE
-            cmd.stdin(std::process::Stdio::null());
-
-            // Use a shell wrapper to delay the start so the SSE response can flush
+            // Build the replacement command with --force to reclaim ports
             let binary_str = binary_path.to_string_lossy().to_string();
-            let args_str = args
+            let mut all_args = args.clone();
+            if !all_args.iter().any(|a| a == "--force" || a == "-f") {
+                all_args.push("--force".to_string());
+            }
+            let args_str = all_args
                 .iter()
                 .map(|a| shell_escape(a))
                 .collect::<Vec<_>>()
                 .join(" ");
 
-            std::process::Command::new("sh")
-                .arg("-c")
-                .arg(format!("sleep 1 && {} {}", binary_str, args_str))
+            // Use setsid to start a new session so the child survives parent exit.
+            // sleep gives time for the current process to exit and release ports.
+            let shell_cmd = format!(
+                "sleep 2 && exec {} {}",
+                shell_escape(&binary_str),
+                args_str
+            );
+
+            std::process::Command::new("setsid")
+                .args(["sh", "-c", &shell_cmd])
                 .stdin(std::process::Stdio::null())
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null())
