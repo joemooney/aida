@@ -27,10 +27,8 @@ pub struct ServerState {
 
 impl ServerState {
     pub fn new(backend: Box<dyn DatabaseBackend>) -> anyhow::Result<Self> {
-        let mtime = std::fs::metadata(backend.path())
-            .and_then(|m| m.modified())
-            .unwrap_or(SystemTime::UNIX_EPOCH);
         let store = backend.load()?;
+        let mtime = Self::compute_db_mtime(backend.path());
         Ok(Self {
             backend,
             store: RwLock::new(store),
@@ -49,13 +47,24 @@ impl ServerState {
             .map_err(|e| Status::internal(format!("Failed to save: {}", e)))
     }
 
+    /// Get the latest mtime across the DB file and its WAL file (for SQLite WAL mode)
+    fn compute_db_mtime(path: &std::path::Path) -> SystemTime {
+        let main_mtime = std::fs::metadata(path)
+            .and_then(|m| m.modified())
+            .unwrap_or(SystemTime::UNIX_EPOCH);
+        // SQLite WAL mode writes to a separate -wal file
+        let wal_path = path.with_extension("db-wal");
+        let wal_mtime = std::fs::metadata(&wal_path)
+            .and_then(|m| m.modified())
+            .unwrap_or(SystemTime::UNIX_EPOCH);
+        main_mtime.max(wal_mtime)
+    }
+
     /// Reload the store from the database backend
     pub async fn reload(&self) -> anyhow::Result<usize> {
         let new_store = self.backend.load()?;
         let count = new_store.requirements.len();
-        let mtime = std::fs::metadata(self.backend.path())
-            .and_then(|m| m.modified())
-            .unwrap_or(SystemTime::UNIX_EPOCH);
+        let mtime = Self::compute_db_mtime(self.backend.path());
         *self.store.write().await = new_store;
         *self.last_loaded_mtime.write().await = mtime;
         tracing::info!("Reloaded store from disk ({} requirements)", count);
@@ -64,10 +73,10 @@ impl ServerState {
 
     /// Check if the DB file has been modified since last load and reload if so
     pub async fn check_reload(&self) {
-        let current_mtime = match std::fs::metadata(self.backend.path()).and_then(|m| m.modified()) {
-            Ok(t) => t,
-            Err(_) => return,
-        };
+        let current_mtime = Self::compute_db_mtime(self.backend.path());
+        if current_mtime == SystemTime::UNIX_EPOCH {
+            return;
+        }
         let last = *self.last_loaded_mtime.read().await;
         if current_mtime > last {
             if let Err(e) = self.reload().await {
