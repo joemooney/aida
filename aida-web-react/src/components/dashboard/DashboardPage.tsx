@@ -1,13 +1,30 @@
+import { useMemo } from 'react';
 import { useRequirements } from '../../hooks/useRequirements';
 import { Spinner } from '../ui/Spinner';
 import { EmptyState } from '../ui/EmptyState';
 import { MetricsCards } from './MetricsCards';
+import { SprintSummary } from './SprintSummary';
 import { StatusChart } from './StatusChart';
 import { FeatureProgress } from './FeatureProgress';
 import { LayoutDashboard } from 'lucide-react';
+import { getSprintState, getSprintAssignmentTarget } from '../../lib/sprint-utils';
 
 export function DashboardPage() {
   const { data: requirements, isLoading, error } = useRequirements();
+
+  const activeSprint = useMemo(() => {
+    if (!requirements) return null;
+    const sprints = requirements.filter((r) => r.req_type === 'Sprint' && !r.archived);
+    const active = sprints.find((s) => getSprintState(s) === 'active');
+    if (!active) return null;
+
+    const items = requirements.filter((r) => {
+      if (r.req_type === 'Sprint' || r.req_type === 'Folder' || r.req_type === 'Meta') return false;
+      return getSprintAssignmentTarget(r) === active.id;
+    });
+
+    return { sprint: active, items };
+  }, [requirements]);
 
   if (isLoading) {
     return (
@@ -48,6 +65,9 @@ export function DashboardPage() {
       ) : (
         <>
           <MetricsCards requirements={stateful} />
+          {activeSprint && (
+            <SprintSummary sprint={activeSprint.sprint} items={activeSprint.items} />
+          )}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <StatusChart requirements={stateful} />
             <FeatureProgress requirements={stateful} />
