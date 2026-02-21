@@ -2904,3 +2904,42 @@ Add a "Docs" page to the React dashboard to browse and read markdown files from 
 ### Files Changed
 - 3 modified (`SprintCard.tsx`, `SprintSelector.tsx`, `SprintView.tsx`)
 - 2 created (`EditSprintModal.tsx`, `CloseSprintModal.tsx`)
+
+---
+
+## Parent/Child Tree Toggle on List View (2026-02-20)
+
+### Prompt
+Add a List/Tree toggle to the web List View so requirements can be viewed as a flat table (default) or as an indented, collapsible parent/child tree based on Parent relationships.
+
+### Actions
+- **Date**: 2026-02-20
+
+#### Phase 1: Tree Utility Functions
+- Created `aida-web-react/src/lib/tree-utils.ts`
+- `TreeNode` type with requirement, children array, and depth
+- `buildTree()` — scans relationships for `rel_type === "Parent"` to find each item's parent `target_id`, builds parent→children map, returns sorted root nodes
+- `flattenTree()` — returns flat list of visible rows, respects collapsed set, computes ancestor-only dimming when filters active
+- `collectParentIds()` — helper for expand/collapse all buttons
+
+#### Phase 2: TreeRow Component
+- Created `aida-web-react/src/components/list/TreeRow.tsx`
+- Mirrors `RequirementsRow` cell layout (ID, title, status, priority, type, owner, modified)
+- Title cell indented by `depth * 20px`
+- ChevronRight/ChevronDown toggle for nodes with children
+- `opacity-50` for dimmed ancestor-only context nodes
+- Click opens detail panel via `useDetailPanel().open()`
+
+#### Phase 3: RequirementsList Modifications
+- Modified `aida-web-react/src/components/list/RequirementsList.tsx`
+- Added `viewMode: 'flat' | 'tree'` state (default flat)
+- Added `collapsed: Set<string>` state for tree collapse tracking
+- Toggle button group (List icon / GitBranch icon) in header
+- Expand all / Collapse all buttons (ChevronsUpDown / ChevronsDownUp) in tree mode
+- Column sorting disabled in tree mode (headers not clickable)
+- Filters work in both modes; tree mode shows ancestor nodes dimmed for context
+
+### Files Changed
+- 1 modified (`RequirementsList.tsx`)
+- 2 created (`tree-utils.ts`, `TreeRow.tsx`)
+- 1 plan saved (`docs/plans/2026-02-20-list-tree-toggle.md`)

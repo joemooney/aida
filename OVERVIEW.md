@@ -125,7 +125,7 @@ Define connections between requirements:
 - **Features**:
   - Dashboard metrics (requirement counts by status, priority, type)
   - Kanban board with drag-and-drop (via @dnd-kit)
-  - List view with filtering and sorting
+  - List view with filtering, sorting, and parent/child tree toggle (flat/tree modes with collapsible hierarchy)
   - Detail panel for viewing/editing requirements
   - Full-text search
   - Dark/light theme toggle using CSS custom properties
