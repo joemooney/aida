@@ -2872,3 +2872,35 @@ Add a "Docs" page to the React dashboard to browse and read markdown files from 
 - 3 modified (`rest.rs`, `Sidebar.tsx`, `App.tsx`)
 - 5 created (`api/docs.ts`, `hooks/useDocs.ts`, `DocsView.tsx`, `DocCard.tsx`, `DocDetailPanel.tsx`)
 - 1 created (`docs/plans/2026-02-20-docs-browser.md`)
+
+---
+
+### Sprint Edit, Close, and Carry-Over
+- **Prompt**: Implement sprint edit, close, and carry-over functionality
+- **Date**: 2026-02-20
+
+#### Phase 1: EditSprintModal
+- Created `aida-web-react/src/components/sprint/EditSprintModal.tsx`
+- Cloned CreateSprintModal pattern, pre-populates fields from `sprint.custom_fields`
+- Uses `useUpdateRequirement()` to save changes (title + custom_fields)
+
+#### Phase 2: CloseSprintModal
+- Created `aida-web-react/src/components/sprint/CloseSprintModal.tsx`
+- Summary section with sprint name, dates, progress bar
+- Checkbox list of incomplete items (all checked by default)
+- "Close Sprint" — sets sprint status to Completed
+- "Close & Create Next" — closes sprint, creates next sprint (number+1, dates = day after end + 2 weeks), moves checked items via `assignToSprint`
+- Sequential `mutateAsync` calls with error handling at each step
+
+#### Phase 3: SprintCard Action Buttons
+- Modified `SprintCard.tsx` — added pencil (edit) and check-circle (close) icons alongside archive
+- All three buttons appear on hover in a row, hidden for archived sprints
+- Close button hidden for past sprints
+
+#### Phase 4: Wiring in SprintSelector + SprintView
+- `SprintSelector.tsx` — passes `onEdit` and `onClose` through to SprintCard
+- `SprintView.tsx` — added `editingSprint` and `closingSprint` state, handlers to find sprint by id, renders modals conditionally
+
+### Files Changed
+- 3 modified (`SprintCard.tsx`, `SprintSelector.tsx`, `SprintView.tsx`)
+- 2 created (`EditSprintModal.tsx`, `CloseSprintModal.tsx`)
