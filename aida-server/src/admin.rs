@@ -4,22 +4,24 @@
 //! Provides server status and a rebuild+restart SSE endpoint,
 //! gated behind the AIDA_DEV_MODE=1 environment variable.
 
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{
         sse::{Event, Sse},
         IntoResponse, Json,
     },
-    routing::get,
+    routing::{get, put},
     Router,
 };
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncBufReadExt;
+use tokio::sync::RwLock;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{info, warn};
 
@@ -32,15 +34,29 @@ pub struct AdminState {
     pub version: String,
     pub start_time: Instant,
     pub building: AtomicBool,
+    /// Runtime API key store: name → value (e.g., "ANTHROPIC_API_KEY" → "sk-...")
+    pub api_keys: RwLock<HashMap<String, String>>,
+    /// Tracks which keys came from env vars vs runtime
+    pub api_key_sources: RwLock<HashMap<String, String>>,
 }
 
 impl AdminState {
     pub fn new(dev_mode: bool) -> Self {
+        let mut keys = HashMap::new();
+        let mut sources = HashMap::new();
+        if let Ok(key) = std::env::var("ANTHROPIC_API_KEY") {
+            if !key.is_empty() {
+                keys.insert("ANTHROPIC_API_KEY".to_string(), key);
+                sources.insert("ANTHROPIC_API_KEY".to_string(), "env".to_string());
+            }
+        }
         Self {
             dev_mode,
             version: env!("CARGO_PKG_VERSION").to_string(),
             start_time: Instant::now(),
             building: AtomicBool::new(false),
+            api_keys: RwLock::new(keys),
+            api_key_sources: RwLock::new(sources),
         }
     }
 }
@@ -76,6 +92,20 @@ struct RebuildQuery {
     restart: Option<bool>,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ApiKeyInfo {
+    name: String,
+    is_set: bool,
+    source: String,
+    masked_value: String,
+}
+
+#[derive(Deserialize)]
+struct SetApiKeyRequest {
+    value: String,
+}
+
 // ============================================================================
 // Router
 // ============================================================================
@@ -84,6 +114,8 @@ pub fn create_admin_router(admin_state: Arc<AdminState>) -> Router {
     Router::new()
         .route("/api/v2/admin/status", get(admin_status))
         .route("/api/v2/admin/rebuild", get(admin_rebuild_sse))
+        .route("/api/v2/admin/api-keys", get(list_api_keys))
+        .route("/api/v2/admin/api-keys/{name}", put(set_api_key).delete(delete_api_key))
         .with_state(admin_state)
 }
 
@@ -141,6 +173,111 @@ async fn admin_rebuild_sse(
     });
 
     Ok(Sse::new(ReceiverStream::new(rx)))
+}
+
+// ============================================================================
+// API key handlers
+// ============================================================================
+
+/// Mask an API key: show first 7 + last 4 chars (e.g., "sk-ant-...xYz9")
+fn mask_api_key(key: &str) -> String {
+    if key.len() <= 11 {
+        return "*".repeat(key.len());
+    }
+    format!("{}...{}", &key[..7], &key[key.len() - 4..])
+}
+
+/// Known API keys we track — currently just Anthropic, extensible later
+const KNOWN_API_KEYS: &[&str] = &["ANTHROPIC_API_KEY"];
+
+async fn list_api_keys(
+    State(state): State<Arc<AdminState>>,
+) -> Json<Vec<ApiKeyInfo>> {
+    let keys = state.api_keys.read().await;
+    let sources = state.api_key_sources.read().await;
+
+    let infos: Vec<ApiKeyInfo> = KNOWN_API_KEYS
+        .iter()
+        .map(|&name| {
+            let value = keys.get(name);
+            let source = sources.get(name).map(|s| s.as_str()).unwrap_or("none");
+            ApiKeyInfo {
+                name: name.to_string(),
+                is_set: value.is_some(),
+                source: source.to_string(),
+                masked_value: value.map(|v| mask_api_key(v)).unwrap_or_default(),
+            }
+        })
+        .collect();
+
+    Json(infos)
+}
+
+async fn set_api_key(
+    State(state): State<Arc<AdminState>>,
+    Path(name): Path<String>,
+    Json(req): Json<SetApiKeyRequest>,
+) -> Result<Json<ApiKeyInfo>, (StatusCode, Json<serde_json::Value>)> {
+    if req.value.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": "API key value must not be empty" })),
+        ));
+    }
+
+    let masked = mask_api_key(&req.value);
+
+    {
+        let mut keys = state.api_keys.write().await;
+        keys.insert(name.clone(), req.value);
+    }
+    {
+        let mut sources = state.api_key_sources.write().await;
+        sources.insert(name.clone(), "runtime".to_string());
+    }
+
+    info!("API key '{}' set via runtime ({})", name, masked);
+
+    Ok(Json(ApiKeyInfo {
+        name,
+        is_set: true,
+        source: "runtime".to_string(),
+        masked_value: masked,
+    }))
+}
+
+async fn delete_api_key(
+    State(state): State<Arc<AdminState>>,
+    Path(name): Path<String>,
+) -> Json<ApiKeyInfo> {
+    // Remove runtime override
+    {
+        let mut keys = state.api_keys.write().await;
+        keys.remove(&name);
+    }
+    {
+        let mut sources = state.api_key_sources.write().await;
+        sources.remove(&name);
+    }
+
+    // Check if env var fallback exists
+    let env_value = std::env::var(&name).ok().filter(|v| !v.is_empty());
+    if let Some(ref val) = env_value {
+        // Re-populate from env
+        let mut keys = state.api_keys.write().await;
+        keys.insert(name.clone(), val.clone());
+        let mut sources = state.api_key_sources.write().await;
+        sources.insert(name.clone(), "env".to_string());
+    }
+
+    info!("API key '{}' runtime override removed", name);
+
+    Json(ApiKeyInfo {
+        name,
+        is_set: env_value.is_some(),
+        source: if env_value.is_some() { "env".to_string() } else { "none".to_string() },
+        masked_value: env_value.map(|v| mask_api_key(&v)).unwrap_or_default(),
+    })
 }
 
 // ============================================================================

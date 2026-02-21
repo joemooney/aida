@@ -1,8 +1,8 @@
 // trace:TASK-0373 | ai:claude
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useRef, useState } from 'react';
-import { fetchAdminStatus } from '../api/admin';
-import type { AdminStatus, SseStatusEvent, SseLogEvent } from '../api/admin';
+import { fetchAdminStatus, fetchApiKeys, setApiKey, deleteApiKey } from '../api/admin';
+import type { AdminStatus, ApiKeyInfo, SseStatusEvent, SseLogEvent } from '../api/admin';
 
 export function useAdminStatus() {
   return useQuery<AdminStatus>({
@@ -115,4 +115,39 @@ export function useRebuild() {
     startBuild,
     isBuilding: phase === 'building' || phase === 'restarting' || phase === 'reconnecting',
   };
+}
+
+// ============================================================================
+// API Keys hooks
+// ============================================================================
+
+export function useApiKeys() {
+  return useQuery<ApiKeyInfo[]>({
+    queryKey: ['admin', 'api-keys'],
+    queryFn: fetchApiKeys,
+    staleTime: 30_000,
+  });
+}
+
+export function useSetApiKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, value }: { name: string; value: string }) =>
+      setApiKey(name, value),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'api-keys'] });
+      queryClient.invalidateQueries({ queryKey: ['chat-status'] });
+    },
+  });
+}
+
+export function useDeleteApiKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => deleteApiKey(name),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'api-keys'] });
+      queryClient.invalidateQueries({ queryKey: ['chat-status'] });
+    },
+  });
 }

@@ -22,3 +22,32 @@ export interface SseLogEvent {
 export function fetchAdminStatus(): Promise<AdminStatus> {
   return apiFetch<AdminStatus>('/v2/admin/status');
 }
+
+// ============================================================================
+// API Keys
+// ============================================================================
+
+export interface ApiKeyInfo {
+  name: string;
+  isSet: boolean;
+  source: string;
+  maskedValue: string;
+}
+
+export function fetchApiKeys(): Promise<ApiKeyInfo[]> {
+  return apiFetch<ApiKeyInfo[]>('/v2/admin/api-keys');
+}
+
+export function setApiKey(name: string, value: string): Promise<ApiKeyInfo> {
+  return apiFetch<ApiKeyInfo>(`/v2/admin/api-keys/${encodeURIComponent(name)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ value }),
+  });
+}
+
+export function deleteApiKey(name: string): Promise<ApiKeyInfo> {
+  return apiFetch<ApiKeyInfo>(`/v2/admin/api-keys/${encodeURIComponent(name)}`, {
+    method: 'DELETE',
+  });
+}

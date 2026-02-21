@@ -20,7 +20,17 @@ use tokio_stream::wrappers::ReceiverStream;
 use tracing::{error, warn};
 
 use aida_core::ai::prompts;
+use crate::admin::AdminState;
 use crate::service::ServerState;
+
+// ============================================================================
+// Combined state for chat handlers
+// ============================================================================
+
+pub struct ChatState {
+    pub server: Arc<ServerState>,
+    pub admin: Arc<AdminState>,
+}
 
 // ============================================================================
 // Types
@@ -58,7 +68,8 @@ struct ClaudeRequest {
 // Router
 // ============================================================================
 
-pub fn create_chat_router(state: Arc<ServerState>) -> Router {
+pub fn create_chat_router(server: Arc<ServerState>, admin: Arc<AdminState>) -> Router {
+    let state = Arc::new(ChatState { server, admin });
     Router::new()
         .route("/api/v2/chat", post(chat_stream))
         .route("/api/v2/chat/status", get(chat_status))
@@ -75,12 +86,13 @@ pub fn create_chat_router_stub() -> Router {
 // Handlers
 // ============================================================================
 
-async fn chat_status(State(state): State<Arc<ServerState>>) -> Json<ChatStatusResponse> {
-    let api_key = std::env::var("ANTHROPIC_API_KEY").ok();
-    let has_key = api_key.map(|k| !k.is_empty()).unwrap_or(false);
+async fn chat_status(State(state): State<Arc<ChatState>>) -> Json<ChatStatusResponse> {
+    let keys = state.admin.api_keys.read().await;
+    let has_key = keys.get("ANTHROPIC_API_KEY").map(|k| !k.is_empty()).unwrap_or(false);
+    drop(keys);
 
     // Also verify the store is accessible
-    let store_ok = state.store.read().await;
+    let store_ok = state.server.store.read().await;
     let req_count = store_ok.requirements.iter().filter(|r| !r.archived).count();
     drop(store_ok);
 
@@ -92,7 +104,7 @@ async fn chat_status(State(state): State<Arc<ServerState>>) -> Json<ChatStatusRe
     } else {
         Json(ChatStatusResponse {
             available: false,
-            reason: Some("ANTHROPIC_API_KEY not set".to_string()),
+            reason: Some("ANTHROPIC_API_KEY not set — configure it in Settings → Admin → API Keys".to_string()),
         })
     }
 }
@@ -105,16 +117,20 @@ async fn chat_status_unavailable() -> Json<ChatStatusResponse> {
 }
 
 async fn chat_stream(
-    State(state): State<Arc<ServerState>>,
+    State(state): State<Arc<ChatState>>,
     Json(req): Json<ChatRequest>,
 ) -> Result<Sse<ReceiverStream<Result<Event, axum::Error>>>, impl IntoResponse> {
-    // 1. Validate API key
-    let api_key = match std::env::var("ANTHROPIC_API_KEY") {
-        Ok(key) if !key.is_empty() => key,
+    // 1. Validate API key from runtime store
+    let keys = state.admin.api_keys.read().await;
+    let api_key = keys.get("ANTHROPIC_API_KEY").cloned();
+    drop(keys);
+
+    let api_key = match api_key {
+        Some(key) if !key.is_empty() => key,
         _ => {
             return Err((
                 StatusCode::SERVICE_UNAVAILABLE,
-                Json(serde_json::json!({ "error": "ANTHROPIC_API_KEY not configured" })),
+                Json(serde_json::json!({ "error": "ANTHROPIC_API_KEY not configured — set it in Settings → Admin → API Keys" })),
             ));
         }
     };
@@ -128,7 +144,7 @@ async fn chat_stream(
     }
 
     // 3. Build system prompt with requirements context
-    let store = state.store.read().await;
+    let store = state.server.store.read().await;
     let project_context = prompts::build_project_context(&store);
     let requirements_summary = prompts::build_all_requirements_summary(&store);
     drop(store);
