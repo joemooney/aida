@@ -1,4 +1,4 @@
-import { Calendar, Archive } from 'lucide-react';
+import { Calendar, Archive, Pencil, CheckCircle2 } from 'lucide-react';
 import type { Requirement } from '@shared/types';
 import { cn, formatDate } from '../../lib/utils';
 import {
@@ -24,9 +24,11 @@ interface SprintCardProps {
   selected: boolean;
   onClick: () => void;
   onArchive?: (sprintId: string) => void;
+  onEdit?: (sprintId: string) => void;
+  onClose?: (sprintId: string) => void;
 }
 
-export function SprintCard({ sprint, items, selected, onClick, onArchive }: SprintCardProps) {
+export function SprintCard({ sprint, items, selected, onClick, onArchive, onEdit, onClose }: SprintCardProps) {
   const num = getSprintNumber(sprint);
   const goal = getSprintGoal(sprint);
   const { start, end } = getSprintDates(sprint);
@@ -45,19 +47,49 @@ export function SprintCard({ sprint, items, selected, onClick, onArchive }: Spri
         sprint.archived && 'opacity-60',
       )}
     >
-      {/* Archive button */}
-      {onArchive && !sprint.archived && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onArchive(sprint.spec_id ?? sprint.id);
-          }}
-          title="Archive sprint"
-          className="absolute top-2 right-2 p-1 rounded-md text-content-muted opacity-0 group-hover:opacity-100 hover:text-content hover:bg-surface-hover transition-all"
-        >
-          <Archive className="h-3.5 w-3.5" />
-        </button>
+      {/* Action buttons */}
+      {!sprint.archived && (
+        <div className="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
+          {onEdit && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(sprint.id);
+              }}
+              title="Edit sprint"
+              className="p-1 rounded-md text-content-muted hover:text-content hover:bg-surface-hover transition-colors"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {onClose && state !== 'past' && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose(sprint.id);
+              }}
+              title="Close sprint"
+              className="p-1 rounded-md text-content-muted hover:text-content hover:bg-surface-hover transition-colors"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {onArchive && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onArchive(sprint.spec_id ?? sprint.id);
+              }}
+              title="Archive sprint"
+              className="p-1 rounded-md text-content-muted hover:text-content hover:bg-surface-hover transition-colors"
+            >
+              <Archive className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       )}
 
       {/* Header */}

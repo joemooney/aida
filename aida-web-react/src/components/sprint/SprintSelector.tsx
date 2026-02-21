@@ -7,9 +7,11 @@ interface SprintSelectorProps {
   selectedId: string | null;
   onSelect: (id: string) => void;
   onArchive?: (sprintId: string) => void;
+  onEdit?: (sprintId: string) => void;
+  onClose?: (sprintId: string) => void;
 }
 
-export function SprintSelector({ sprints, sprintItemsMap, selectedId, onSelect, onArchive }: SprintSelectorProps) {
+export function SprintSelector({ sprints, sprintItemsMap, selectedId, onSelect, onArchive, onEdit, onClose }: SprintSelectorProps) {
   if (sprints.length === 0) return null;
 
   return (
@@ -22,6 +24,8 @@ export function SprintSelector({ sprints, sprintItemsMap, selectedId, onSelect, 
           selected={sprint.id === selectedId}
           onClick={() => onSelect(sprint.id)}
           onArchive={onArchive}
+          onEdit={onEdit}
+          onClose={onClose}
         />
       ))}
     </div>

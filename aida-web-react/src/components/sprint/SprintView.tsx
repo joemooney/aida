@@ -19,6 +19,8 @@ import { SprintSelector } from './SprintSelector';
 import { SprintBoard } from './SprintBoard';
 import { SprintItemCard } from './SprintItemCard';
 import { CreateSprintModal } from './CreateSprintModal';
+import { EditSprintModal } from './EditSprintModal';
+import { CloseSprintModal } from './CloseSprintModal';
 import { SprintCharts } from './charts/SprintCharts';
 import {
   isSprintAssignment,
@@ -36,6 +38,8 @@ export function SprintView() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [editingSprint, setEditingSprint] = useState<Requirement | null>(null);
+  const [closingSprint, setClosingSprint] = useState<Requirement | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -158,6 +162,22 @@ export function SprintView() {
     [updateMutation],
   );
 
+  const handleEdit = useCallback(
+    (sprintId: string) => {
+      const sprint = allSprints.find((s) => s.id === sprintId);
+      if (sprint) setEditingSprint(sprint);
+    },
+    [allSprints],
+  );
+
+  const handleCloseSprint = useCallback(
+    (sprintId: string) => {
+      const sprint = allSprints.find((s) => s.id === sprintId);
+      if (sprint) setClosingSprint(sprint);
+    },
+    [allSprints],
+  );
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -221,6 +241,8 @@ export function SprintView() {
             selectedId={selectedSprintId}
             onSelect={setSelectedSprintId}
             onArchive={handleArchive}
+            onEdit={handleEdit}
+            onClose={handleCloseSprint}
           />
 
           {selectedSprintId && (
@@ -260,6 +282,22 @@ export function SprintView() {
         <CreateSprintModal
           nextSprintNumber={nextSprintNumber}
           onClose={() => setShowCreateModal(false)}
+        />
+      )}
+
+      {editingSprint && (
+        <EditSprintModal
+          sprint={editingSprint}
+          onClose={() => setEditingSprint(null)}
+        />
+      )}
+
+      {closingSprint && (
+        <CloseSprintModal
+          sprint={closingSprint}
+          items={allSprintItemsMap[closingSprint.id] ?? []}
+          nextSprintNumber={nextSprintNumber}
+          onClose={() => setClosingSprint(null)}
         />
       )}
     </div>
