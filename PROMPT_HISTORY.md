@@ -3336,3 +3336,21 @@ Implement API key management in Settings Admin tab so PMs/stakeholders can set A
 
 #### Git
 - Commit: feat(server): add .env file support via dotenvy
+
+### Add Timestamps and Owner to Chat Requirements Context (2026-02-21)
+
+**Prompt**: Chat couldn't answer "what requirements were added today" because the requirements summary sent to Claude lacked timestamps.
+
+#### Actions Taken
+- Updated `build_all_requirements_summary()` in `aida-core/src/ai/prompts.rs` to include `created_at` date, `modified_at` date, and `owner` for each requirement
+- Added today's date to the summary header so Claude knows what "today" means
+- Format: `- SPEC-ID [type|status|priority] created:YYYY-MM-DD modified:YYYY-MM-DD owner:name: title — description`
+
+#### Files Changed
+- `aida-core/src/ai/prompts.rs` — Added date/owner fields to `build_all_requirements_summary()`
+
+#### Verification
+- Chat correctly answered "what requirements were created today 2026-02-21?" listing all 20 requirements with spec IDs
+
+#### Git
+- Commit: fix(chat): include timestamps and owner in requirements context

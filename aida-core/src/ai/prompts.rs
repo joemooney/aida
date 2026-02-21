@@ -191,34 +191,44 @@ pub fn build_requirements_summary(store: &RequirementsStore, exclude_id: uuid::U
     )
 }
 
-/// Build a full requirements summary for chat context (no exclusions, includes status/priority)
+/// Build a full requirements summary for chat context (no exclusions, includes status/priority/dates)
 pub fn build_all_requirements_summary(store: &RequirementsStore) -> String {
     let summaries: Vec<String> = store
         .requirements
         .iter()
         .filter(|r| !r.archived)
         .map(|r| {
+            let desc = if r.description.len() > 120 {
+                format!("{}...", &r.description[..120])
+            } else if r.description.is_empty() {
+                "(no description)".to_string()
+            } else {
+                r.description.clone()
+            };
+            let owner = if r.owner.is_empty() { "" } else { &r.owner };
             format!(
-                "- {} [{}|{}|{}]: {} — {}",
+                "- {} [{}|{}|{}] created:{} modified:{}{}: {} — {}",
                 r.spec_id.as_deref().unwrap_or("?"),
                 r.req_type,
                 r.status,
                 r.priority,
-                r.title,
-                if r.description.len() > 120 {
-                    format!("{}...", &r.description[..120])
-                } else if r.description.is_empty() {
-                    "(no description)".to_string()
+                r.created_at.format("%Y-%m-%d"),
+                r.modified_at.format("%Y-%m-%d"),
+                if owner.is_empty() {
+                    String::new()
                 } else {
-                    r.description.clone()
-                }
+                    format!(" owner:{}", owner)
+                },
+                r.title,
+                desc,
             )
         })
         .collect();
 
     format!(
-        "## All Requirements ({} active)\n{}",
+        "## All Requirements ({} active)\nToday's date is {}.\n{}",
         summaries.len(),
+        chrono::Utc::now().format("%Y-%m-%d"),
         summaries.join("\n")
     )
 }
