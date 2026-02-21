@@ -67,17 +67,17 @@ export function AdminTab() {
           </div>
           <div>
             <span className="text-content-secondary">Dev Mode</span>
-            <p className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
               <span className={`inline-block w-2 h-2 rounded-full ${status?.devMode ? 'bg-green-500' : 'bg-red-500'}`} />
               <span className="text-content">{status?.devMode ? 'Enabled' : 'Disabled'}</span>
-            </p>
+            </div>
           </div>
           <div>
             <span className="text-content-secondary">Status</span>
-            <p className="text-content flex items-center gap-2">
+            <div className="text-content flex items-center gap-2">
               {isBuilding && <Spinner size="sm" />}
               {phaseLabel(phase)}
-            </p>
+            </div>
           </div>
         </div>
       </Card>
@@ -132,10 +132,10 @@ export function AdminTab() {
       {/* Reconnecting banner */}
       {phase === 'reconnecting' && (
         <Card className="border-blue-500/50 bg-blue-500/10">
-          <p className="text-blue-400 flex items-center gap-2">
+          <div className="text-blue-400 flex items-center gap-2">
             <Spinner size="sm" />
             Server is restarting. The page will reload automatically when the server is back...
-          </p>
+          </div>
         </Card>
       )}
 
