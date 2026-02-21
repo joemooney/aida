@@ -89,6 +89,16 @@ pub fn create_rest_router_legacy(state: Arc<ServerState>) -> Router {
         // Docs browser endpoints
         .route("/api/v2/docs", get(list_docs))
         .route("/api/v2/docs/*path", get(get_doc))
+        // Settings endpoints
+        .route("/api/v2/settings/metadata", get(get_settings_metadata).put(update_settings_metadata))
+        .route("/api/v2/settings/relationship-definitions", get(list_relationship_defs).post(create_relationship_def))
+        .route("/api/v2/settings/relationship-definitions/:name", put(update_relationship_def).delete(delete_relationship_def))
+        .route("/api/v2/settings/type-definitions", get(list_type_defs).post(create_type_def))
+        .route("/api/v2/settings/type-definitions/:name", put(update_type_def).delete(delete_type_def))
+        .route("/api/v2/settings/reaction-definitions", get(list_reaction_defs).post(create_reaction_def))
+        .route("/api/v2/settings/reaction-definitions/:name", put(update_reaction_def).delete(delete_reaction_def))
+        .route("/api/v2/settings/id-config", get(get_id_config).put(update_id_config))
+        .route("/api/v2/settings/prefixes", get(get_prefixes).put(update_prefixes))
         .with_state(state)
 }
 
@@ -1896,4 +1906,351 @@ async fn get_doc(
         section,
         content,
     }))
+}
+
+// ============================================================================
+// Settings handlers
+// ============================================================================
+
+// trace:TASK-0001 | ai:claude
+#[derive(Deserialize)]
+struct UpdateMetadataRequest {
+    name: Option<String>,
+    title: Option<String>,
+    description: Option<String>,
+}
+
+#[derive(Serialize)]
+struct MetadataResponse {
+    name: String,
+    title: String,
+    description: String,
+}
+
+async fn get_settings_metadata(
+    State(state): State<Arc<ServerState>>,
+) -> Result<Json<MetadataResponse>, (StatusCode, Json<ApiError>)> {
+    let store = state.store.read().await;
+    Ok(Json(MetadataResponse {
+        name: store.name.clone(),
+        title: store.title.clone(),
+        description: store.description.clone(),
+    }))
+}
+
+async fn update_settings_metadata(
+    State(state): State<Arc<ServerState>>,
+    Json(body): Json<UpdateMetadataRequest>,
+) -> Result<Json<MetadataResponse>, (StatusCode, Json<ApiError>)> {
+    let mut store = state.store.write().await;
+    if let Some(name) = body.name {
+        store.name = name;
+    }
+    if let Some(title) = body.title {
+        store.title = title;
+    }
+    if let Some(description) = body.description {
+        store.description = description;
+    }
+    let resp = MetadataResponse {
+        name: store.name.clone(),
+        title: store.title.clone(),
+        description: store.description.clone(),
+    };
+    if let Err(e) = state.backend.save(&store) {
+        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+    }
+    Ok(Json(resp))
+}
+
+// --- Relationship definitions ---
+
+async fn list_relationship_defs(
+    State(state): State<Arc<ServerState>>,
+) -> Result<Json<Vec<models::RelationshipDefinition>>, (StatusCode, Json<ApiError>)> {
+    let store = state.store.read().await;
+    Ok(Json(store.relationship_definitions.clone()))
+}
+
+async fn create_relationship_def(
+    State(state): State<Arc<ServerState>>,
+    Json(body): Json<models::RelationshipDefinition>,
+) -> Result<(StatusCode, Json<models::RelationshipDefinition>), (StatusCode, Json<ApiError>)> {
+    let mut store = state.store.write().await;
+    store.add_relationship_definition(body.clone())
+        .map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, e.to_string()))?;
+    let created = store.relationship_definitions.last().cloned()
+        .ok_or_else(|| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Failed to retrieve created definition"))?;
+    if let Err(e) = state.backend.save(&store) {
+        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+    }
+    Ok((StatusCode::CREATED, Json(created)))
+}
+
+async fn update_relationship_def(
+    State(state): State<Arc<ServerState>>,
+    Path(name): Path<String>,
+    Json(body): Json<models::RelationshipDefinition>,
+) -> Result<Json<models::RelationshipDefinition>, (StatusCode, Json<ApiError>)> {
+    let mut store = state.store.write().await;
+    store.update_relationship_definition(&name, body)
+        .map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, e.to_string()))?;
+    let updated = store.relationship_definitions.iter()
+        .find(|d| d.name == name.to_lowercase())
+        .cloned()
+        .ok_or_else(|| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Definition not found after update"))?;
+    if let Err(e) = state.backend.save(&store) {
+        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+    }
+    Ok(Json(updated))
+}
+
+async fn delete_relationship_def(
+    State(state): State<Arc<ServerState>>,
+    Path(name): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
+    let mut store = state.store.write().await;
+    store.remove_relationship_definition(&name)
+        .map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, e.to_string()))?;
+    if let Err(e) = state.backend.save(&store) {
+        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+    }
+    Ok(Json(serde_json::json!({"message": "Deleted"})))
+}
+
+// --- Type definitions ---
+
+async fn list_type_defs(
+    State(state): State<Arc<ServerState>>,
+) -> Result<Json<Vec<models::CustomTypeDefinition>>, (StatusCode, Json<ApiError>)> {
+    let store = state.store.read().await;
+    Ok(Json(store.type_definitions.clone()))
+}
+
+async fn create_type_def(
+    State(state): State<Arc<ServerState>>,
+    Json(body): Json<models::CustomTypeDefinition>,
+) -> Result<(StatusCode, Json<models::CustomTypeDefinition>), (StatusCode, Json<ApiError>)> {
+    if body.name.trim().is_empty() {
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, "Type name cannot be empty"));
+    }
+    let mut store = state.store.write().await;
+    if store.type_definitions.iter().any(|d| d.name.eq_ignore_ascii_case(&body.name)) {
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, format!("Type definition '{}' already exists", body.name)));
+    }
+    let def = models::CustomTypeDefinition {
+        built_in: false,
+        ..body
+    };
+    store.type_definitions.push(def.clone());
+    if let Err(e) = state.backend.save(&store) {
+        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+    }
+    Ok((StatusCode::CREATED, Json(def)))
+}
+
+async fn update_type_def(
+    State(state): State<Arc<ServerState>>,
+    Path(name): Path<String>,
+    Json(body): Json<models::CustomTypeDefinition>,
+) -> Result<Json<models::CustomTypeDefinition>, (StatusCode, Json<ApiError>)> {
+    let mut store = state.store.write().await;
+    let def = store.type_definitions.iter_mut()
+        .find(|d| d.name.eq_ignore_ascii_case(&name))
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Type definition '{}' not found", name)))?;
+
+    if def.built_in {
+        // For built-in types, only update non-critical fields
+        def.display_name = body.display_name;
+        def.description = body.description;
+        def.color = body.color;
+        def.statuses = body.statuses;
+        def.priorities = body.priorities;
+        def.custom_fields = body.custom_fields;
+    } else {
+        let was_name = def.name.clone();
+        *def = models::CustomTypeDefinition {
+            name: was_name,
+            built_in: false,
+            ..body
+        };
+    }
+    let updated = def.clone();
+    if let Err(e) = state.backend.save(&store) {
+        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+    }
+    Ok(Json(updated))
+}
+
+async fn delete_type_def(
+    State(state): State<Arc<ServerState>>,
+    Path(name): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
+    let mut store = state.store.write().await;
+    let def = store.type_definitions.iter()
+        .find(|d| d.name.eq_ignore_ascii_case(&name))
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Type definition '{}' not found", name)))?;
+    if def.built_in {
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, format!("Cannot delete built-in type '{}'", name)));
+    }
+    store.type_definitions.retain(|d| !d.name.eq_ignore_ascii_case(&name));
+    if let Err(e) = state.backend.save(&store) {
+        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+    }
+    Ok(Json(serde_json::json!({"message": "Deleted"})))
+}
+
+// --- Reaction definitions ---
+
+async fn list_reaction_defs(
+    State(state): State<Arc<ServerState>>,
+) -> Result<Json<Vec<models::ReactionDefinition>>, (StatusCode, Json<ApiError>)> {
+    let store = state.store.read().await;
+    Ok(Json(store.reaction_definitions.clone()))
+}
+
+async fn create_reaction_def(
+    State(state): State<Arc<ServerState>>,
+    Json(body): Json<models::ReactionDefinition>,
+) -> Result<(StatusCode, Json<models::ReactionDefinition>), (StatusCode, Json<ApiError>)> {
+    if body.name.trim().is_empty() {
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, "Reaction name cannot be empty"));
+    }
+    let mut store = state.store.write().await;
+    if store.reaction_definitions.iter().any(|d| d.name.eq_ignore_ascii_case(&body.name)) {
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, format!("Reaction '{}' already exists", body.name)));
+    }
+    let def = models::ReactionDefinition {
+        built_in: false,
+        ..body
+    };
+    store.reaction_definitions.push(def.clone());
+    if let Err(e) = state.backend.save(&store) {
+        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+    }
+    Ok((StatusCode::CREATED, Json(def)))
+}
+
+async fn update_reaction_def(
+    State(state): State<Arc<ServerState>>,
+    Path(name): Path<String>,
+    Json(body): Json<models::ReactionDefinition>,
+) -> Result<Json<models::ReactionDefinition>, (StatusCode, Json<ApiError>)> {
+    let mut store = state.store.write().await;
+    let def = store.reaction_definitions.iter_mut()
+        .find(|d| d.name.eq_ignore_ascii_case(&name))
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Reaction '{}' not found", name)))?;
+
+    if def.built_in {
+        // For built-in reactions, only update non-critical fields
+        def.emoji = body.emoji;
+        def.label = body.label;
+        def.description = body.description;
+    } else {
+        let was_name = def.name.clone();
+        *def = models::ReactionDefinition {
+            name: was_name,
+            built_in: false,
+            ..body
+        };
+    }
+    let updated = def.clone();
+    if let Err(e) = state.backend.save(&store) {
+        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+    }
+    Ok(Json(updated))
+}
+
+async fn delete_reaction_def(
+    State(state): State<Arc<ServerState>>,
+    Path(name): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
+    let mut store = state.store.write().await;
+    let def = store.reaction_definitions.iter()
+        .find(|d| d.name.eq_ignore_ascii_case(&name))
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Reaction '{}' not found", name)))?;
+    if def.built_in {
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, format!("Cannot delete built-in reaction '{}'", name)));
+    }
+    store.reaction_definitions.retain(|d| !d.name.eq_ignore_ascii_case(&name));
+    if let Err(e) = state.backend.save(&store) {
+        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+    }
+    Ok(Json(serde_json::json!({"message": "Deleted"})))
+}
+
+// --- ID config ---
+
+async fn get_id_config(
+    State(state): State<Arc<ServerState>>,
+) -> Result<Json<models::IdConfiguration>, (StatusCode, Json<ApiError>)> {
+    let store = state.store.read().await;
+    Ok(Json(store.id_config.clone()))
+}
+
+async fn update_id_config(
+    State(state): State<Arc<ServerState>>,
+    Json(body): Json<models::IdConfiguration>,
+) -> Result<Json<models::IdConfiguration>, (StatusCode, Json<ApiError>)> {
+    if body.digits < 1 || body.digits > 6 {
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, "Digits must be between 1 and 6"));
+    }
+    let mut store = state.store.write().await;
+    store.id_config = body;
+    let updated = store.id_config.clone();
+    if let Err(e) = state.backend.save(&store) {
+        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+    }
+    Ok(Json(updated))
+}
+
+// --- Prefixes ---
+
+#[derive(Serialize, Deserialize)]
+struct PrefixConfigResponse {
+    allowed_prefixes: Vec<String>,
+    restrict_prefixes: bool,
+}
+
+async fn get_prefixes(
+    State(state): State<Arc<ServerState>>,
+) -> Result<Json<PrefixConfigResponse>, (StatusCode, Json<ApiError>)> {
+    let store = state.store.read().await;
+    Ok(Json(PrefixConfigResponse {
+        allowed_prefixes: store.allowed_prefixes.clone(),
+        restrict_prefixes: store.restrict_prefixes,
+    }))
+}
+
+async fn update_prefixes(
+    State(state): State<Arc<ServerState>>,
+    Json(body): Json<PrefixConfigResponse>,
+) -> Result<Json<PrefixConfigResponse>, (StatusCode, Json<ApiError>)> {
+    // Validate prefixes are non-empty uppercase strings
+    for prefix in &body.allowed_prefixes {
+        if prefix.trim().is_empty() {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, "Prefix cannot be empty"));
+        }
+        if prefix != &prefix.to_uppercase() {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, format!("Prefix '{}' must be uppercase", prefix)));
+        }
+    }
+    // Check for duplicates
+    let mut seen = std::collections::HashSet::new();
+    for prefix in &body.allowed_prefixes {
+        if !seen.insert(prefix) {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, format!("Duplicate prefix '{}'", prefix)));
+        }
+    }
+    let mut store = state.store.write().await;
+    store.allowed_prefixes = body.allowed_prefixes;
+    store.restrict_prefixes = body.restrict_prefixes;
+    let resp = PrefixConfigResponse {
+        allowed_prefixes: store.allowed_prefixes.clone(),
+        restrict_prefixes: store.restrict_prefixes,
+    };
+    if let Err(e) = state.backend.save(&store) {
+        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+    }
+    Ok(Json(resp))
 }

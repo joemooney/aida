@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Columns3, List, Zap, Clock, Sparkles, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Columns3, List, Zap, Clock, Sparkles, FileText, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useRequirements } from '../../hooks/useRequirements';
 import {
@@ -19,6 +19,7 @@ const navItems = [
   { to: '/timeline', icon: Clock, label: 'Timeline' },
   { to: '/skills', icon: Sparkles, label: 'Skills' },
   { to: '/docs', icon: FileText, label: 'Docs' },
+  { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 
 interface SidebarProps {

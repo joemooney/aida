@@ -2961,3 +2961,34 @@ Add a List/Tree toggle to the web List View so requirements can be viewed as a f
 ### Files Changed
 - 2 modified (`App.tsx`, `Sidebar.tsx`)
 - 6 created (`timeline-utils.ts`, `TimelineEventCard.tsx`, `TimelineDateGroup.tsx`, `TimelineDetailPanel.tsx`, `TimelineFilterBar.tsx`, `TimelineView.tsx`)
+
+### Settings View for Web Dashboard
+- **Prompt**: Implement Settings view with backend CRUD endpoints and frontend tab-based UI for managing store metadata, relationship definitions, type definitions, reaction definitions, ID configuration, and prefix management
+- **Actions**:
+  - **Backend**: Added 15 REST endpoint handlers in `aida-server/src/rest.rs` under `/api/v2/settings/...`:
+    - Metadata: GET/PUT at `/api/v2/settings/metadata`
+    - Relationship definitions: GET/POST at `/api/v2/settings/relationship-definitions`, PUT/DELETE at `/:name`
+    - Type definitions: GET/POST at `/api/v2/settings/type-definitions`, PUT/DELETE at `/:name`
+    - Reaction definitions: GET/POST at `/api/v2/settings/reaction-definitions`, PUT/DELETE at `/:name`
+    - ID config: GET/PUT at `/api/v2/settings/id-config`
+    - Prefixes: GET/PUT at `/api/v2/settings/prefixes`
+    - Uses existing `ServerState` pattern with built-in protection validation
+  - **Frontend API**: Created `aida-web-react/src/api/settings.ts` with all CRUD functions
+  - **Frontend Hooks**: Created `aida-web-react/src/hooks/useSettings.ts` with `useQuery`/`useMutation` hooks
+  - **Frontend Components**: Created 8 components in `aida-web-react/src/components/settings/`:
+    - `SettingsView.tsx` — Tab-based layout (General, Relationships, Types, Reactions, IDs & Prefixes)
+    - `GeneralTab.tsx` — Store name/title/description form
+    - `RelationshipsTab.tsx` — Table with add/edit/delete, built-in badge
+    - `RelationshipForm.tsx` — Modal form for relationship CRUD
+    - `TypesTab.tsx` — Table with add/edit/delete, field count, color indicator
+    - `TypeForm.tsx` — Modal form with statuses/priorities tag lists, custom fields section
+    - `ReactionsTab.tsx` — Card grid with emoji display, hover actions
+    - `ReactionForm.tsx` — Simple modal for reaction CRUD
+    - `IdsTab.tsx` — ID format/numbering/digits config + prefix management
+  - Modified `App.tsx` to add `/settings` route
+  - Modified `Sidebar.tsx` to add Settings nav item with gear icon
+  - Saved plan to `docs/plans/2026-02-20-settings-view.md`
+
+### Files Changed
+- 3 modified (`aida-server/src/rest.rs`, `App.tsx`, `Sidebar.tsx`)
+- 11 created (`api/settings.ts`, `hooks/useSettings.ts`, `SettingsView.tsx`, `GeneralTab.tsx`, `RelationshipsTab.tsx`, `RelationshipForm.tsx`, `TypesTab.tsx`, `TypeForm.tsx`, `ReactionsTab.tsx`, `ReactionForm.tsx`, `IdsTab.tsx`)
