@@ -3354,3 +3354,21 @@ Implement API key management in Settings Admin tab so PMs/stakeholders can set A
 
 #### Git
 - Commit: fix(chat): include timestamps and owner in requirements context
+
+### Add Git History to Chat Context (2026-02-21)
+
+**Prompt**: Chat couldn't answer "what git commits happened today" — it only had requirements context. Include recent git log in the system prompt.
+
+#### Actions Taken
+- Added `build_git_context()` async function in `aida-server/src/chat.rs` that runs `git log` to get last 50 commits (hash, date, author, message)
+- Included git context in the system prompt alongside requirements context
+- Runs in a blocking task since it spawns a subprocess; returns empty string gracefully if not in a git repo
+
+#### Files Changed
+- `aida-server/src/chat.rs` — Added `build_git_context()` and included in system prompt
+
+#### Verification
+- Chat correctly listed all 15 commits from today, grouped by feature area, with linked requirement IDs
+
+#### Git
+- Commit: feat(chat): include recent git history in chat context

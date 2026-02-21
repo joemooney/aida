@@ -149,10 +149,13 @@ async fn chat_stream(
     let requirements_summary = prompts::build_all_requirements_summary(&store);
     drop(store);
 
+    // 3b. Gather recent git history (best-effort, empty string if not in a repo)
+    let git_context = build_git_context().await;
+
     let system_prompt = format!(
         r#"You are AIDA Chat, an AI assistant that helps project managers and stakeholders understand project requirements, status, priorities, and progress.
 
-You have access to the full requirements database for this project. When answering questions:
+You have access to the full requirements database and recent git history for this project. When answering questions:
 - Always reference specific requirement IDs (spec IDs like FR-0042, STORY-0365, etc.) so they can be linked
 - Be concise and actionable
 - Focus on status, priorities, blockers, and progress
@@ -161,7 +164,9 @@ You have access to the full requirements database for this project. When answeri
 
 {project_context}
 
-{requirements_summary}"#
+{requirements_summary}
+
+{git_context}"#
     );
 
     let model = std::env::var("AIDA_CHAT_MODEL")
@@ -290,4 +295,42 @@ You have access to the full requirements database for this project. When answeri
     });
 
     Ok(Sse::new(ReceiverStream::new(rx)))
+}
+
+// ============================================================================
+// Git context helper
+// ============================================================================
+
+/// Gather recent git log for chat context. Returns empty string if not in a git repo.
+async fn build_git_context() -> String {
+    // Run git log in a blocking task since it spawns a process
+    tokio::task::spawn_blocking(|| {
+        use std::process::Command;
+
+        // Get last 50 commits with date, author, and message
+        let output = Command::new("git")
+            .args([
+                "log",
+                "--pretty=format:%h %ad %an | %s",
+                "--date=short",
+                "-50",
+            ])
+            .output();
+
+        match output {
+            Ok(out) if out.status.success() => {
+                let log = String::from_utf8_lossy(&out.stdout).to_string();
+                if log.is_empty() {
+                    return String::new();
+                }
+                format!(
+                    "## Recent Git Commits (last 50)\n{}",
+                    log
+                )
+            }
+            _ => String::new(),
+        }
+    })
+    .await
+    .unwrap_or_default()
 }
