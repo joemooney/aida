@@ -115,7 +115,7 @@ pub fn create_admin_router(admin_state: Arc<AdminState>) -> Router {
         .route("/api/v2/admin/status", get(admin_status))
         .route("/api/v2/admin/rebuild", get(admin_rebuild_sse))
         .route("/api/v2/admin/api-keys", get(list_api_keys))
-        .route("/api/v2/admin/api-keys/{name}", put(set_api_key).delete(delete_api_key))
+        .route("/api/v2/admin/api-keys/:name", put(set_api_key).delete(delete_api_key))
         .with_state(admin_state)
 }
 
