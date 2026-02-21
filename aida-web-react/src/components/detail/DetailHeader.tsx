@@ -1,4 +1,4 @@
-import { X } from 'lucide-react';
+import { X, ExternalLink } from 'lucide-react';
 import type { Requirement, RequirementPriority, RequirementType } from '@shared/types';
 import { StatusBadge, PriorityBadge, TypeBadge } from '../ui/Badge';
 import { EditableText, EditableSelect } from '../ui/EditableField';
@@ -12,9 +12,10 @@ const TYPES = Object.keys(TYPE_CONFIG) as RequirementType[];
 interface DetailHeaderProps {
   requirement: Requirement;
   onClose: () => void;
+  hideClose?: boolean;
 }
 
-export function DetailHeader({ requirement, onClose }: DetailHeaderProps) {
+export function DetailHeader({ requirement, onClose, hideClose }: DetailHeaderProps) {
   const updateReq = useUpdateRequirement();
   const reqId = requirement.spec_id ?? requirement.id;
 
@@ -24,15 +25,28 @@ export function DetailHeader({ requirement, onClose }: DetailHeaderProps) {
 
   return (
     <div className="border-b border-edge px-6 py-4 shrink-0">
-      {/* Top row: spec_id + close */}
+      {/* Top row: spec_id + actions */}
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-mono text-content-muted">{requirement.spec_id}</span>
-        <button
-          onClick={onClose}
-          className="flex h-7 w-7 items-center justify-center rounded-lg text-content-muted hover:text-content hover:bg-surface-hover transition-colors cursor-pointer"
-        >
-          <X className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          {!hideClose && (
+            <button
+              onClick={() => window.open(`/req/${reqId}`, '_blank')}
+              title="Open in new tab"
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-content-muted hover:text-content hover:bg-surface-hover transition-colors cursor-pointer"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {!hideClose && (
+            <button
+              onClick={onClose}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-content-muted hover:text-content hover:bg-surface-hover transition-colors cursor-pointer"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Editable title */}

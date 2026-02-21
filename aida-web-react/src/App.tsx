@@ -7,6 +7,7 @@ import { SprintView } from './components/sprint/SprintView';
 import { SkillsView } from './components/skills/SkillsView';
 import { DocsView } from './components/docs/DocsView';
 import { DocFullPage } from './components/docs/DocFullPage';
+import { RequirementFullPage } from './components/detail/RequirementFullPage';
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
           <Route path="skills" element={<SkillsView />} />
           <Route path="docs" element={<DocsView />} />
           <Route path="docs/view/*" element={<DocFullPage />} />
+          <Route path="req/:id" element={<RequirementFullPage />} />
         </Route>
       </Routes>
     </BrowserRouter>
