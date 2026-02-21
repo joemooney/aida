@@ -299,6 +299,22 @@ Requirements are stored using a pluggable backend system:
   - Customize prompts by editing META requirements in GUI/CLI
   - Prompt names: "Evaluate Requirement", "Find Duplicates", "Suggest Relationships", "Improve Description", "Generate Children"
 
+## Environment Configuration
+
+The server supports a `.env` file for convenient local configuration via `dotenvy`:
+
+```bash
+cp .env.example .env
+# Edit .env with your values
+```
+
+Available variables:
+- `ANTHROPIC_API_KEY` — API key for AI chat features
+- `AIDA_DEV_MODE` — Enable dev mode (`true`/`1`)
+- `AIDA_DATABASE_URL` — Override database path
+
+The `.env` file is loaded automatically at server startup (before arg parsing). If absent, it's silently ignored. The `.env` file is gitignored; `.env.example` is committed as a template.
+
 ## Getting Started
 
 ```bash

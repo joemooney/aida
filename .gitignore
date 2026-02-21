@@ -42,6 +42,9 @@ _ignore
 aida-gui/dist/
 aida-web/dist/
 
+# Environment secrets
+.env
+
 # Docker secrets (contain credentials)
 docker/secrets/*.txt
 docker/*.new

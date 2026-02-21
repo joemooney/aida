@@ -3308,3 +3308,31 @@ Implement API key management in Settings Admin tab so PMs/stakeholders can set A
 #### Git
 - Commit: feat(admin): add runtime API key management via Settings UI
 - Requirement: TASK-0374
+
+### Add .env File Support to aida-server (2026-02-21)
+
+**Prompt**: Add dotenvy support so the server auto-loads `.env` on startup for convenient local API key configuration.
+
+#### Actions Taken
+- Added `dotenvy = "0.15"` to workspace `Cargo.toml` and `aida-server/Cargo.toml`
+- Added `dotenvy::dotenv().ok()` as first line of `main()` in `aida-server/src/main.rs`, before `Args::parse()` so env vars are available for all downstream initialization including `AdminState::new()`
+- Created `.env` file with `ANTHROPIC_API_KEY` for local development
+- Added `.env` to root `.gitignore` to prevent secret leakage
+- Created `.env.example` template documenting available environment variables
+
+#### Files Changed
+- `Cargo.toml` — Added `dotenvy = "0.15"` to workspace dependencies
+- `aida-server/Cargo.toml` — Added `dotenvy = { workspace = true }`
+- `aida-server/src/main.rs` — Added `dotenvy::dotenv().ok()` at start of `main()`
+- `.env` — Created with ANTHROPIC_API_KEY (gitignored)
+- `.env.example` — Created with documented placeholder variables
+- `.gitignore` — Added `.env` pattern
+
+#### Design Decisions
+- Using `dotenvy` (maintained fork of `dotenv`) rather than the unmaintained `dotenv` crate
+- `.ok()` silently ignores missing `.env` — not an error if absent
+- Loaded before `Args::parse()` so env vars are available for clap defaults and all downstream code
+- `.env` gitignored; `.env.example` committed as documentation for developers
+
+#### Git
+- Commit: feat(server): add .env file support via dotenvy

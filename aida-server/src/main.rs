@@ -167,6 +167,8 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    dotenvy::dotenv().ok(); // Load .env if present, silently ignore if missing
+
     let args = Args::parse();
 
     // Kill existing processes on ports if --force is specified
