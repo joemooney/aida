@@ -99,6 +99,8 @@ pub fn create_rest_router_legacy(state: Arc<ServerState>) -> Router {
         .route("/api/v2/settings/reaction-definitions/:name", put(update_reaction_def).delete(delete_reaction_def))
         .route("/api/v2/settings/id-config", get(get_id_config).put(update_id_config))
         .route("/api/v2/settings/prefixes", get(get_prefixes).put(update_prefixes))
+        // Reload endpoint
+        .route("/api/v2/reload", post(reload_legacy))
         .with_state(state)
 }
 
@@ -1267,6 +1269,7 @@ fn parse_req_type(s: &str) -> aida_core::RequirementType {
 async fn list_requirements_v2_legacy(
     State(state): State<Arc<ServerState>>,
 ) -> Result<Json<Vec<models::Requirement>>, (StatusCode, Json<ApiError>)> {
+    state.check_reload().await;
     let store = state.store.read().await;
     Ok(Json(store.requirements.clone()))
 }
@@ -1275,6 +1278,7 @@ async fn get_requirement_v2_legacy(
     State(state): State<Arc<ServerState>>,
     Path(id): Path<String>,
 ) -> Result<Json<models::Requirement>, (StatusCode, Json<ApiError>)> {
+    state.check_reload().await;
     let store = state.store.read().await;
     let req = find_requirement(&store, &id)
         .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {id}")))?;
@@ -1410,6 +1414,7 @@ async fn search_requirements_v2_legacy(
     State(state): State<Arc<ServerState>>,
     Query(query): Query<SearchQuery>,
 ) -> Result<Json<Vec<models::Requirement>>, (StatusCode, Json<ApiError>)> {
+    state.check_reload().await;
     let store = state.store.read().await;
     let search_text = query.q.unwrap_or_default().to_lowercase();
 
@@ -1477,6 +1482,25 @@ async fn search_requirements_v2_legacy(
     }
 
     Ok(Json(results))
+}
+
+// ============================================================================
+// Reload handler (legacy)
+// ============================================================================
+
+async fn reload_legacy(
+    State(state): State<Arc<ServerState>>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
+    match state.reload().await {
+        Ok(count) => Ok(Json(serde_json::json!({
+            "reloaded": true,
+            "requirements": count
+        }))),
+        Err(e) => Err(ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Reload failed: {}", e),
+        )),
+    }
 }
 
 // ============================================================================

@@ -2,7 +2,7 @@
 //! gRPC service implementation for AIDA requirements management
 
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Instant, SystemTime};
 use tokio::sync::RwLock;
 use tonic::{Request, Response, Status};
 use uuid::Uuid;
@@ -22,10 +22,14 @@ pub struct ServerState {
     pub start_time: Instant,
     pub version: String,
     pub shutdown_requested: RwLock<bool>,
+    last_loaded_mtime: RwLock<SystemTime>,
 }
 
 impl ServerState {
     pub fn new(backend: Box<dyn DatabaseBackend>) -> anyhow::Result<Self> {
+        let mtime = std::fs::metadata(backend.path())
+            .and_then(|m| m.modified())
+            .unwrap_or(SystemTime::UNIX_EPOCH);
         let store = backend.load()?;
         Ok(Self {
             backend,
@@ -33,6 +37,7 @@ impl ServerState {
             start_time: Instant::now(),
             version: env!("CARGO_PKG_VERSION").to_string(),
             shutdown_requested: RwLock::new(false),
+            last_loaded_mtime: RwLock::new(mtime),
         })
     }
 
@@ -42,6 +47,33 @@ impl ServerState {
         self.backend
             .save(&store)
             .map_err(|e| Status::internal(format!("Failed to save: {}", e)))
+    }
+
+    /// Reload the store from the database backend
+    pub async fn reload(&self) -> anyhow::Result<usize> {
+        let new_store = self.backend.load()?;
+        let count = new_store.requirements.len();
+        let mtime = std::fs::metadata(self.backend.path())
+            .and_then(|m| m.modified())
+            .unwrap_or(SystemTime::UNIX_EPOCH);
+        *self.store.write().await = new_store;
+        *self.last_loaded_mtime.write().await = mtime;
+        tracing::info!("Reloaded store from disk ({} requirements)", count);
+        Ok(count)
+    }
+
+    /// Check if the DB file has been modified since last load and reload if so
+    pub async fn check_reload(&self) {
+        let current_mtime = match std::fs::metadata(self.backend.path()).and_then(|m| m.modified()) {
+            Ok(t) => t,
+            Err(_) => return,
+        };
+        let last = *self.last_loaded_mtime.read().await;
+        if current_mtime > last {
+            if let Err(e) = self.reload().await {
+                tracing::warn!("Auto-reload failed: {}", e);
+            }
+        }
     }
 
     /// Find a requirement by UUID or SPEC-ID
