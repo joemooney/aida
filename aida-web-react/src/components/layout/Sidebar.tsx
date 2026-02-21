@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Columns3, List, Zap, Clock, Sparkles, FileText, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Inbox, Columns3, List, Zap, Clock, Sparkles, FileText, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useRequirements } from '../../hooks/useRequirements';
 import {
@@ -13,6 +13,7 @@ import {
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/queue', icon: Inbox, label: 'My Queue' },
   { to: '/board', icon: Columns3, label: 'Kanban Board' },
   { to: '/list', icon: List, label: 'List View' },
   { to: '/sprints', icon: Zap, label: 'Sprints' },

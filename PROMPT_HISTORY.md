@@ -3100,3 +3100,87 @@ Saved to `docs/plans/2026-02-20-tag-filtering-structured-search-markdown.md`
 #### Plan Saved
 - `docs/plans/2026-02-20-my-queue-personal-focus-inbox.md`
 - 6-phase plan: Database → API → CLI + Web UI (parallel) → Dashboard Widget → Inbox
+
+### My Queue: Full-Stack Implementation (EPIC-0365)
+**Date**: 2026-02-21
+
+#### Prompt
+Implement the full My Queue feature across all 6 phases.
+
+#### Actions Taken
+
+**Phase 1: Database Storage (STORY-0366)**
+- Added `QueueEntry` model to `aida-core/src/models.rs`
+- Added 5 queue trait methods to `DatabaseBackend` trait in `aida-core/src/db/traits.rs`
+- Updated `schema.sql` and `postgres_schema.sql` with `queue_entries` table (schema v7)
+- Implemented SQLite migration v6→v7 and all 5 queue methods in `sqlite_backend.rs`
+- Implemented PostgreSQL migration v6→v7 and all 5 queue methods in `postgres_backend.rs`
+- Added queue wrapper methods to `Storage` class for CLI access
+- Exported `QueueEntry` from `aida-core/src/lib.rs`
+
+**Phase 2: REST API Endpoints (STORY-0367)**
+- Added 5 queue routes to `create_rest_router_legacy()` in `aida-server/src/rest.rs`
+- Implemented handlers: `queue_list`, `queue_add`, `queue_remove`, `queue_update`, `queue_reorder`
+- Request/response types with camelCase JSON serialization
+- Enrichment: each queue entry joined with requirement title/status/priority/type
+
+**Phase 3: CLI Commands (STORY-0368)**
+- Added `QueueCommand` enum (List, Add, Remove, Move, Clear) to `aida-cli/src/cli.rs`
+- Implemented `handle_queue_command` in `aida-cli/src/main.rs`
+- User resolution: AIDA_USER → USER → USERNAME → "default"
+- Colored terminal output with status indicators
+
+**Phase 4: React Web UI (STORY-0369)**
+- Added `QueueEntry` type to `shared/types.ts`
+- Created `aida-web-react/src/api/queue.ts` — API client
+- Created `aida-web-react/src/hooks/useQueue.ts` — React Query hooks with optimistic updates
+- Created `QueuePage.tsx` with @dnd-kit/sortable drag-to-reorder
+- Created `QueueItem.tsx` with drag handle, badges, remove button
+- Added `/queue` route to `App.tsx`
+- Added "My Queue" nav item with Inbox icon to `Sidebar.tsx`
+- Added "Add to Queue" button (ListPlus icon) to `DetailHeader.tsx`
+- Added hover "Add to Queue" button to `RequirementsRow.tsx`
+
+**Phase 5: Dashboard Widget (STORY-0370)**
+- Created `QueueWidget.tsx` — compact card with top 5 items
+- Auto-hides when queue is empty
+- Added to `DashboardPage.tsx` after SprintSummary
+
+**Phase 6: Assign-to-Queue (STORY-0371)**
+- Handled by design: `added_by` field, `note` field, visual badge in QueueItem, CLI `--user` flag
+
+#### Files Modified (Backend — 8)
+- `aida-core/src/models.rs` — QueueEntry struct
+- `aida-core/src/db/traits.rs` — 5 queue trait methods
+- `aida-core/src/db/schema.sql` — queue_entries table, v7
+- `aida-core/src/db/sqlite_backend.rs` — queue methods + migration
+- `aida-core/src/db/postgres_schema.sql` — queue_entries table, v7
+- `aida-core/src/db/postgres_backend.rs` — queue methods + migration
+- `aida-core/src/storage.rs` — queue wrapper methods
+- `aida-core/src/lib.rs` — export QueueEntry
+
+#### Files Modified (Server — 1)
+- `aida-server/src/rest.rs` — 5 queue route handlers
+
+#### Files Modified (CLI — 2)
+- `aida-cli/src/cli.rs` — QueueCommand enum
+- `aida-cli/src/main.rs` — handle_queue_command
+
+#### Files Created (Frontend — 5)
+- `aida-web-react/src/api/queue.ts`
+- `aida-web-react/src/hooks/useQueue.ts`
+- `aida-web-react/src/components/queue/QueuePage.tsx`
+- `aida-web-react/src/components/queue/QueueItem.tsx`
+- `aida-web-react/src/components/dashboard/QueueWidget.tsx`
+
+#### Files Modified (Frontend — 5)
+- `shared/types.ts` — QueueEntry type
+- `aida-web-react/src/App.tsx` — /queue route
+- `aida-web-react/src/components/layout/Sidebar.tsx` — My Queue nav item
+- `aida-web-react/src/components/detail/DetailHeader.tsx` — Add to Queue button
+- `aida-web-react/src/components/list/RequirementsRow.tsx` — Add to Queue hover button
+
+#### Verification
+- `cargo build` — all workspace members compile
+- `cargo test -p aida-core` — 68/68 tests pass
+- `npx tsc --noEmit` — no TypeScript errors

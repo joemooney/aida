@@ -177,13 +177,16 @@ Define connections between requirements:
 - Zoom controls (Ctrl+MouseWheel, keyboard shortcuts)
 - Collapsible comment trees
 - Tabbed interface (Description, Comments, Links, History)
-- **Personal Work Queue**: User-managed priority inbox
-  - Rankings 1-100 (lower = higher priority)
-  - Same-rank items use requirement priority as tiebreaker
-  - Hotkeys: `q t` (top), `q m` (middle), `q b` (bottom), `q d` (remove)
-  - Queue view: `q v` or `v q`
-  - Reorder: `Ctrl+Up/Down` or `Ctrl+k/j` in queue view
-  - Stored per-user in settings (~/.config/aida/aida_gui_settings.yaml)
+- **Personal Work Queue** (EPIC-0365): User-managed priority inbox
+  - **GUI (aida-gui)**: Rankings 1-100, hotkeys, stored in local YAML settings
+  - **Full-stack (My Queue)**: Database-backed, REST API, CLI, React web UI
+    - Database: `queue_entries` table (SQLite/PostgreSQL), gapped-integer positions
+    - REST API: `GET/POST /api/v2/queue/:user_id`, `DELETE/PATCH /:req_id`, `POST /reorder`
+    - CLI: `aida queue list|add|remove|move|clear` with `--user`, `--top`, `--note` flags
+    - React: `/queue` route with drag-to-reorder (@dnd-kit/sortable)
+    - Dashboard widget: top 5 items, auto-hidden when empty
+    - "Add to Queue" buttons in detail panel and list view (hover)
+    - Cross-user assignment via `added_by` field with visual badges
 
 ### GitLab Integration (STORY-0321 - STORY-0327)
 Bidirectional integration with GitLab for issue tracking:

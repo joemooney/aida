@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER NOT NULL
 );
 
-INSERT INTO schema_version (version) VALUES (6);
+INSERT INTO schema_version (version) VALUES (7);
 
 -- Requirements table
 CREATE TABLE IF NOT EXISTS requirements (
@@ -116,3 +116,17 @@ CREATE INDEX IF NOT EXISTS idx_gitlab_sync_issue ON gitlab_sync_state(gitlab_pro
 
 -- Index for filtering by sync status
 CREATE INDEX IF NOT EXISTS idx_gitlab_sync_status ON gitlab_sync_state(sync_status);
+
+-- Queue entries table (STORY-0366) - personal work queue per user
+CREATE TABLE IF NOT EXISTS queue_entries (
+    user_id TEXT NOT NULL,
+    requirement_id TEXT NOT NULL,
+    position INTEGER NOT NULL,
+    added_by TEXT NOT NULL,
+    note TEXT,
+    added_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, requirement_id)
+);
+
+-- Index for efficient queue listing ordered by position
+CREATE INDEX IF NOT EXISTS idx_queue_user_position ON queue_entries(user_id, position);

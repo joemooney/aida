@@ -1412,6 +1412,61 @@ impl Storage {
         let backend = SqliteBackend::new(&self.file_path)?;
         backend.delete_sync_state(requirement_id, issue_iid)
     }
+
+    // =========================================================================
+    // Queue Operations (STORY-0366)
+    // =========================================================================
+    // trace:STORY-0366 | ai:claude
+
+    /// List queue entries for a user
+    pub fn queue_list(&self, user_id: &str, include_completed: bool) -> Result<Vec<crate::models::QueueEntry>> {
+        if !self.is_sqlite() {
+            anyhow::bail!("Queue is only supported for SQLite databases");
+        }
+        use crate::db::{SqliteBackend, DatabaseBackend};
+        let backend = SqliteBackend::new(&self.file_path)?;
+        backend.queue_list(user_id, include_completed)
+    }
+
+    /// Add an entry to a user's queue
+    pub fn queue_add(&self, entry: crate::models::QueueEntry) -> Result<()> {
+        if !self.is_sqlite() {
+            anyhow::bail!("Queue is only supported for SQLite databases");
+        }
+        use crate::db::{SqliteBackend, DatabaseBackend};
+        let backend = SqliteBackend::new(&self.file_path)?;
+        backend.queue_add(entry)
+    }
+
+    /// Remove an entry from a user's queue
+    pub fn queue_remove(&self, user_id: &str, requirement_id: &uuid::Uuid) -> Result<()> {
+        if !self.is_sqlite() {
+            anyhow::bail!("Queue is only supported for SQLite databases");
+        }
+        use crate::db::{SqliteBackend, DatabaseBackend};
+        let backend = SqliteBackend::new(&self.file_path)?;
+        backend.queue_remove(user_id, requirement_id)
+    }
+
+    /// Reorder queue entries
+    pub fn queue_reorder(&self, user_id: &str, items: &[(uuid::Uuid, i64)]) -> Result<()> {
+        if !self.is_sqlite() {
+            anyhow::bail!("Queue is only supported for SQLite databases");
+        }
+        use crate::db::{SqliteBackend, DatabaseBackend};
+        let backend = SqliteBackend::new(&self.file_path)?;
+        backend.queue_reorder(user_id, items)
+    }
+
+    /// Clear queue entries
+    pub fn queue_clear(&self, user_id: &str, completed_only: bool) -> Result<()> {
+        if !self.is_sqlite() {
+            anyhow::bail!("Queue is only supported for SQLite databases");
+        }
+        use crate::db::{SqliteBackend, DatabaseBackend};
+        let backend = SqliteBackend::new(&self.file_path)?;
+        backend.queue_clear(user_id, completed_only)
+    }
 }
 
 #[cfg(test)]

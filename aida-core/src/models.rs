@@ -6056,3 +6056,26 @@ mod tests {
         assert_eq!(RelationshipType::Custom("test".to_string()).inverse(), None);
     }
 }
+
+// =========================================================================
+// Queue Entry (STORY-0366)
+// =========================================================================
+
+/// Represents an entry in a user's personal work queue
+// trace:STORY-0366 | ai:claude
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueueEntry {
+    /// The user whose queue this entry belongs to
+    pub user_id: String,
+    /// The requirement in the queue
+    pub requirement_id: Uuid,
+    /// Position in the queue (lower = higher priority)
+    pub position: i64,
+    /// Who added this entry (may differ from user_id for assigned items)
+    pub added_by: String,
+    /// Optional note explaining why this was queued
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+    /// When the entry was added
+    pub added_at: DateTime<Utc>,
+}

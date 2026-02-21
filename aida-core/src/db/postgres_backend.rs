@@ -28,15 +28,15 @@ use uuid::Uuid;
 
 use crate::models::{
     Comment, CustomTypeDefinition, FeatureDefinition, HistoryEntry, IdConfiguration,
-    ImplementationInfo, ReactionDefinition, RelationshipDefinition, Relationship, Requirement,
-    RequirementPriority, RequirementStatus, RequirementType, RequirementsStore, TraceLink,
-    UrlLink, User,
+    ImplementationInfo, QueueEntry, ReactionDefinition, RelationshipDefinition, Relationship,
+    Requirement, RequirementPriority, RequirementStatus, RequirementType, RequirementsStore,
+    TraceLink, UrlLink, User,
 };
 
 use super::traits::{BackendType, DatabaseBackend, UpdateResult, VersionConflict};
 
-/// Current schema version
-const SCHEMA_VERSION: i32 = 5;
+/// Current schema version - updated to 7 for queue_entries table
+const SCHEMA_VERSION: i32 = 7;
 
 /// PostgreSQL backend implementation with connection pooling
 pub struct PostgresBackend {
@@ -179,6 +179,29 @@ impl PostgresBackend {
                 ALTER TABLE requirements ADD COLUMN IF NOT EXISTS meta_subtype TEXT;
 
                 UPDATE schema_version SET version = 6;
+                "#,
+            )?;
+        }
+
+        // Migrate from version 6 to version 7 (add queue_entries table)
+        // trace:STORY-0366 | ai:claude
+        if from_version < 7 {
+            client.batch_execute(
+                r#"
+                -- Queue entries table for personal work queue per user
+                CREATE TABLE IF NOT EXISTS queue_entries (
+                    user_id TEXT NOT NULL,
+                    requirement_id UUID NOT NULL,
+                    position INTEGER NOT NULL,
+                    added_by TEXT NOT NULL,
+                    note TEXT,
+                    added_at TIMESTAMPTZ NOT NULL,
+                    PRIMARY KEY (user_id, requirement_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_queue_user_position ON queue_entries(user_id, position);
+
+                UPDATE schema_version SET version = 7;
                 "#,
             )?;
         }
@@ -1216,6 +1239,118 @@ impl DatabaseBackend for PostgresBackend {
             .pool
             .get()
             .context("Failed to get connection from pool")?;
+        Ok(())
+    }
+
+    // =========================================================================
+    // Queue Operations (STORY-0366)
+    // =========================================================================
+    // trace:STORY-0366 | ai:claude
+
+    fn queue_list(&self, user_id: &str, include_completed: bool) -> Result<Vec<QueueEntry>> {
+        let mut client = self.pool.get().context("Failed to get connection")?;
+        let rows = if include_completed {
+            client.query(
+                "SELECT q.user_id, q.requirement_id, q.position, q.added_by, q.note, q.added_at \
+                 FROM queue_entries q \
+                 WHERE q.user_id = $1 \
+                 ORDER BY q.position ASC",
+                &[&user_id],
+            )?
+        } else {
+            client.query(
+                "SELECT q.user_id, q.requirement_id, q.position, q.added_by, q.note, q.added_at \
+                 FROM queue_entries q \
+                 LEFT JOIN requirements r ON q.requirement_id = r.id \
+                 WHERE q.user_id = $1 AND (r.status IS NULL OR r.status != 'Completed') \
+                 ORDER BY q.position ASC",
+                &[&user_id],
+            )?
+        };
+
+        let entries = rows
+            .iter()
+            .map(|row| {
+                QueueEntry {
+                    user_id: row.get(0),
+                    requirement_id: row.get(1),
+                    position: row.get::<_, i32>(2) as i64,
+                    added_by: row.get(3),
+                    note: row.get(4),
+                    added_at: row.get(5),
+                }
+            })
+            .collect();
+
+        Ok(entries)
+    }
+
+    fn queue_add(&self, entry: QueueEntry) -> Result<()> {
+        let mut client = self.pool.get().context("Failed to get connection")?;
+
+        let position = if entry.position == 0 {
+            let row = client.query_one(
+                "SELECT COALESCE(MAX(position), 0) FROM queue_entries WHERE user_id = $1",
+                &[&entry.user_id],
+            )?;
+            let max_pos: i32 = row.get(0);
+            (max_pos as i64) + 1000
+        } else {
+            entry.position
+        };
+
+        client.execute(
+            "INSERT INTO queue_entries (user_id, requirement_id, position, added_by, note, added_at) \
+             VALUES ($1, $2, $3, $4, $5, $6) \
+             ON CONFLICT (user_id, requirement_id) DO UPDATE SET position = $3, note = $5",
+            &[
+                &entry.user_id,
+                &entry.requirement_id,
+                &(position as i32),
+                &entry.added_by,
+                &entry.note,
+                &entry.added_at,
+            ],
+        )?;
+        Ok(())
+    }
+
+    fn queue_remove(&self, user_id: &str, requirement_id: &Uuid) -> Result<()> {
+        let mut client = self.pool.get().context("Failed to get connection")?;
+        client.execute(
+            "DELETE FROM queue_entries WHERE user_id = $1 AND requirement_id = $2",
+            &[&user_id, requirement_id],
+        )?;
+        Ok(())
+    }
+
+    fn queue_reorder(&self, user_id: &str, items: &[(Uuid, i64)]) -> Result<()> {
+        let mut client = self.pool.get().context("Failed to get connection")?;
+        let mut tx = client.transaction()?;
+        for (req_id, position) in items {
+            tx.execute(
+                "UPDATE queue_entries SET position = $1 WHERE user_id = $2 AND requirement_id = $3",
+                &[&(*position as i32), &user_id, req_id],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn queue_clear(&self, user_id: &str, completed_only: bool) -> Result<()> {
+        let mut client = self.pool.get().context("Failed to get connection")?;
+        if completed_only {
+            client.execute(
+                "DELETE FROM queue_entries WHERE user_id = $1 AND requirement_id IN \
+                 (SELECT id FROM requirements WHERE status = 'Completed')",
+                &[&user_id],
+            )?;
+        } else {
+            client.execute(
+                "DELETE FROM queue_entries WHERE user_id = $1",
+                &[&user_id],
+            )?;
+        }
         Ok(())
     }
 }

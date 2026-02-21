@@ -1,9 +1,11 @@
-import { X, ExternalLink } from 'lucide-react';
+import { X, ExternalLink, ListPlus, Check } from 'lucide-react';
+import { useState } from 'react';
 import type { Requirement, RequirementPriority, RequirementType } from '@shared/types';
 import { StatusBadge, PriorityBadge, TypeBadge } from '../ui/Badge';
 import { EditableText, EditableSelect } from '../ui/EditableField';
 import { STATUS_ORDER, STATUS_CONFIG, PRIORITY_CONFIG, TYPE_CONFIG } from '../../lib/constants';
 import { useUpdateRequirement } from '../../hooks/useRequirements';
+import { useAddToQueue } from '../../hooks/useQueue';
 import { cn } from '../../lib/utils';
 
 const PRIORITIES: RequirementPriority[] = ['High', 'Medium', 'Low'];
@@ -17,6 +19,8 @@ interface DetailHeaderProps {
 
 export function DetailHeader({ requirement, onClose, hideClose }: DetailHeaderProps) {
   const updateReq = useUpdateRequirement();
+  const addToQueue = useAddToQueue();
+  const [queued, setQueued] = useState(false);
   const reqId = requirement.spec_id ?? requirement.id;
 
   function save(data: Partial<Requirement>) {
@@ -29,6 +33,21 @@ export function DetailHeader({ requirement, onClose, hideClose }: DetailHeaderPr
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-mono text-content-muted">{requirement.spec_id}</span>
         <div className="flex items-center gap-1">
+          <button
+            onClick={() => {
+              addToQueue.mutate({ requirement_id: requirement.id });
+              setQueued(true);
+              setTimeout(() => setQueued(false), 2000);
+            }}
+            title="Add to queue"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-content-muted hover:text-accent hover:bg-accent/10 transition-colors cursor-pointer"
+          >
+            {queued ? (
+              <Check className="h-3.5 w-3.5 text-green-500" />
+            ) : (
+              <ListPlus className="h-3.5 w-3.5" />
+            )}
+          </button>
           {!hideClose && (
             <button
               onClick={() => window.open(`/req/${reqId}`, '_blank')}

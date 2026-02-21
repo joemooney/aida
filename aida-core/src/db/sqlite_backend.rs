@@ -12,15 +12,15 @@ use uuid::Uuid;
 
 use crate::models::{
     Comment, CustomTypeDefinition, FeatureDefinition,
-    HistoryEntry, IdConfiguration, ImplementationInfo, ReactionDefinition,
+    HistoryEntry, IdConfiguration, ImplementationInfo, QueueEntry, ReactionDefinition,
     RelationshipDefinition, Relationship, Requirement, RequirementPriority,
     RequirementStatus, RequirementType, RequirementsStore, TraceLink, UrlLink, User,
 };
 
 use super::traits::{BackendType, DatabaseBackend};
 
-/// Current schema version - updated to 4 for pin_hash in users
-const SCHEMA_VERSION: i32 = 5;
+/// Current schema version - updated to 7 for queue_entries table
+const SCHEMA_VERSION: i32 = 7;
 
 /// SQLite backend implementation
 pub struct SqliteBackend {
@@ -213,6 +213,36 @@ impl SqliteBackend {
 
             // Ensure schema version is updated
             let _ = conn.execute("UPDATE schema_version SET version = 6", []);
+        }
+
+        // Migrate from version 6 to version 7 (add queue_entries table)
+        // trace:STORY-0366 | ai:claude
+        if from_version < 7 {
+            conn.execute_batch(
+                r#"
+                -- Queue entries table for personal work queue per user
+                CREATE TABLE IF NOT EXISTS queue_entries (
+                    user_id TEXT NOT NULL,
+                    requirement_id TEXT NOT NULL,
+                    position INTEGER NOT NULL,
+                    added_by TEXT NOT NULL,
+                    note TEXT,
+                    added_at TEXT NOT NULL,
+                    PRIMARY KEY (user_id, requirement_id)
+                );
+
+                -- Index for efficient queue listing ordered by position
+                CREATE INDEX IF NOT EXISTS idx_queue_user_position ON queue_entries(user_id, position);
+
+                -- Update schema version
+                UPDATE schema_version SET version = 7;
+                "#,
+            ).unwrap_or_else(|e| {
+                eprintln!("Note: Some v7 migration may already exist: {}", e);
+            });
+
+            // Ensure schema version is updated
+            let _ = conn.execute("UPDATE schema_version SET version = 7", []);
         }
 
         Ok(())
@@ -1298,6 +1328,125 @@ impl DatabaseBackend for SqliteBackend {
         )?;
         if rows_affected == 0 {
             anyhow::bail!("User not found: {}", id)
+        }
+        Ok(())
+    }
+
+    // =========================================================================
+    // Queue Operations (STORY-0366)
+    // =========================================================================
+    // trace:STORY-0366 | ai:claude
+
+    fn queue_list(&self, user_id: &str, include_completed: bool) -> Result<Vec<QueueEntry>> {
+        let conn = self.conn.lock().unwrap();
+        let sql = if include_completed {
+            "SELECT q.user_id, q.requirement_id, q.position, q.added_by, q.note, q.added_at \
+             FROM queue_entries q \
+             WHERE q.user_id = ?1 \
+             ORDER BY q.position ASC"
+        } else {
+            "SELECT q.user_id, q.requirement_id, q.position, q.added_by, q.note, q.added_at \
+             FROM queue_entries q \
+             LEFT JOIN requirements r ON q.requirement_id = r.id \
+             WHERE q.user_id = ?1 AND (r.status IS NULL OR r.status != 'Completed') \
+             ORDER BY q.position ASC"
+        };
+
+        let mut stmt = conn.prepare(sql)?;
+        let entries = stmt.query_map([user_id], |row| {
+            let user_id: String = row.get(0)?;
+            let req_id_str: String = row.get(1)?;
+            let position: i64 = row.get(2)?;
+            let added_by: String = row.get(3)?;
+            let note: Option<String> = row.get(4)?;
+            let added_at_str: String = row.get(5)?;
+
+            let requirement_id = Uuid::parse_str(&req_id_str).unwrap_or_else(|_| Uuid::new_v4());
+            let added_at = chrono::DateTime::parse_from_rfc3339(&added_at_str)
+                .map(|dt| dt.with_timezone(&chrono::Utc))
+                .unwrap_or_else(|_| chrono::Utc::now());
+
+            Ok(QueueEntry {
+                user_id,
+                requirement_id,
+                position,
+                added_by,
+                note,
+                added_at,
+            })
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(entries)
+    }
+
+    fn queue_add(&self, entry: QueueEntry) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+
+        // Auto-assign position if 0: max + 1000
+        let position = if entry.position == 0 {
+            let max_pos: i64 = conn
+                .query_row(
+                    "SELECT COALESCE(MAX(position), 0) FROM queue_entries WHERE user_id = ?1",
+                    [&entry.user_id],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+            max_pos + 1000
+        } else {
+            entry.position
+        };
+
+        conn.execute(
+            "INSERT OR REPLACE INTO queue_entries (user_id, requirement_id, position, added_by, note, added_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                entry.user_id,
+                entry.requirement_id.to_string(),
+                position,
+                entry.added_by,
+                entry.note,
+                entry.added_at.to_rfc3339(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    fn queue_remove(&self, user_id: &str, requirement_id: &Uuid) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "DELETE FROM queue_entries WHERE user_id = ?1 AND requirement_id = ?2",
+            params![user_id, requirement_id.to_string()],
+        )?;
+        Ok(())
+    }
+
+    fn queue_reorder(&self, user_id: &str, items: &[(Uuid, i64)]) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let tx = conn.unchecked_transaction()?;
+        for (req_id, position) in items {
+            tx.execute(
+                "UPDATE queue_entries SET position = ?1 WHERE user_id = ?2 AND requirement_id = ?3",
+                params![position, user_id, req_id.to_string()],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn queue_clear(&self, user_id: &str, completed_only: bool) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        if completed_only {
+            conn.execute(
+                "DELETE FROM queue_entries WHERE user_id = ?1 AND requirement_id IN \
+                 (SELECT id FROM requirements WHERE status = 'Completed')",
+                [user_id],
+            )?;
+        } else {
+            conn.execute(
+                "DELETE FROM queue_entries WHERE user_id = ?1",
+                [user_id],
+            )?;
         }
         Ok(())
     }

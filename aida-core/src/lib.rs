@@ -67,6 +67,8 @@ pub use models::{
     RelationshipDefinition,
     RelationshipType,
     RelationshipValidation,
+    // Queue types
+    QueueEntry,
     Requirement,
     RequirementPriority,
     RequirementSnapshot,

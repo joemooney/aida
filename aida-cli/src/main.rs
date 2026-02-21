@@ -22,8 +22,8 @@ use aida_core::{
 
 use crate::cli::{
     Cli, Command, CommentCommand, ConfigCommand, DbCommand, FeatureCommand, GitLabCommand,
-    RelDefCommand, RelationshipCommand, ReportCommand, ScaffoldCommand, ServerCommand,
-    TraceCommand, TypeCommand,
+    QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand, ScaffoldCommand,
+    ServerCommand, TraceCommand, TypeCommand,
 };
 
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
@@ -266,6 +266,9 @@ fn main() -> Result<()> {
                 *count,
                 *invert_match,
             )?;
+        }
+        Command::Queue(queue_cmd) => {
+            handle_queue_command(queue_cmd, &storage)?;
         }
         Command::Search {
             query,
@@ -4345,6 +4348,159 @@ fn html_escape(s: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+}
+
+// trace:STORY-0368 | ai:claude
+/// Handle queue commands
+fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
+    let get_user = |user: &Option<String>| -> String {
+        user.clone().unwrap_or_else(|| {
+            std::env::var("AIDA_USER")
+                .or_else(|_| std::env::var("USER"))
+                .or_else(|_| std::env::var("USERNAME"))
+                .unwrap_or_else(|_| "default".to_string())
+        })
+    };
+
+    match cmd {
+        QueueCommand::List { user, include_completed } => {
+            let user_id = get_user(user);
+            let entries = storage.queue_list(&user_id, *include_completed)?;
+            let store = storage.load()?;
+
+            if entries.is_empty() {
+                println!("{}", "Your queue is empty.".dimmed());
+                return Ok(());
+            }
+
+            println!("{}", format!("My Queue ({} items)", entries.len()).bold());
+            println!("{}", "─".repeat(80));
+
+            for (i, entry) in entries.iter().enumerate() {
+                let req = store.requirements.iter().find(|r| r.id == entry.requirement_id);
+                let spec_id = req
+                    .and_then(|r| r.spec_id.as_deref())
+                    .unwrap_or("???");
+                let title = req
+                    .map(|r| r.title.as_str())
+                    .unwrap_or("(deleted)");
+                let status = req
+                    .map(|r| format!("{}", r.status))
+                    .unwrap_or_else(|| "Unknown".to_string());
+
+                let status_colored = match status.as_str() {
+                    "Draft" => status.dimmed(),
+                    "Approved" => status.blue(),
+                    "Planned" => status.cyan(),
+                    "In Progress" => status.yellow(),
+                    "Completed" => status.green(),
+                    "Rejected" => status.red(),
+                    _ => status.normal(),
+                };
+
+                print!("  {}. {} {}", (i + 1).to_string().dimmed(), spec_id.bold(), title);
+                print!("  [{}]", status_colored);
+                if entry.added_by != user_id {
+                    print!("  {}", format!("(from @{})", entry.added_by).dimmed());
+                }
+                if let Some(ref note) = entry.note {
+                    print!("  {}", format!("\"{}\"", note).dimmed().italic());
+                }
+                println!();
+            }
+        }
+        QueueCommand::Add { id, top, bottom: _, user, note } => {
+            let user_id = get_user(user);
+            let store = storage.load()?;
+
+            // Resolve requirement ID
+            let req = if let Ok(uuid) = uuid::Uuid::parse_str(id) {
+                store.requirements.iter().find(|r| r.id == uuid)
+            } else {
+                store.requirements.iter().find(|r| r.spec_id.as_deref() == Some(id.as_str()))
+            }.ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", id))?;
+
+            let position = if *top {
+                let entries = storage.queue_list(&user_id, true)?;
+                entries.first().map(|e| e.position - 1000).unwrap_or(0)
+            } else {
+                0 // queue_add auto-assigns max+1000
+            };
+
+            let entry = aida_core::QueueEntry {
+                user_id: user_id.clone(),
+                requirement_id: req.id,
+                position,
+                added_by: user_id.clone(),
+                note: note.clone(),
+                added_at: chrono::Utc::now(),
+            };
+            storage.queue_add(entry)?;
+
+            let spec_id = req.spec_id.as_deref().unwrap_or("???");
+            println!("{} Added {} ({}) to queue", "✓".green(), spec_id.bold(), req.title);
+        }
+        QueueCommand::Remove { id, user } => {
+            let user_id = get_user(user);
+            let store = storage.load()?;
+
+            let req = if let Ok(uuid) = uuid::Uuid::parse_str(id) {
+                store.requirements.iter().find(|r| r.id == uuid)
+            } else {
+                store.requirements.iter().find(|r| r.spec_id.as_deref() == Some(id.as_str()))
+            }.ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", id))?;
+
+            storage.queue_remove(&user_id, &req.id)?;
+            let spec_id = req.spec_id.as_deref().unwrap_or("???");
+            println!("{} Removed {} from queue", "✓".green(), spec_id.bold());
+        }
+        QueueCommand::Move { id, top, bottom, before } => {
+            let user_id = std::env::var("AIDA_USER")
+                .or_else(|_| std::env::var("USER"))
+                .unwrap_or_else(|_| "default".to_string());
+            let store = storage.load()?;
+
+            let req = if let Ok(uuid) = uuid::Uuid::parse_str(id) {
+                store.requirements.iter().find(|r| r.id == uuid)
+            } else {
+                store.requirements.iter().find(|r| r.spec_id.as_deref() == Some(id.as_str()))
+            }.ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", id))?;
+
+            let entries = storage.queue_list(&user_id, true)?;
+            let new_position = if *top {
+                entries.first().map(|e| e.position - 1000).unwrap_or(0)
+            } else if *bottom {
+                entries.last().map(|e| e.position + 1000).unwrap_or(1000)
+            } else if let Some(ref before_id) = before {
+                let before_req = if let Ok(uuid) = uuid::Uuid::parse_str(before_id) {
+                    store.requirements.iter().find(|r| r.id == uuid)
+                } else {
+                    store.requirements.iter().find(|r| r.spec_id.as_deref() == Some(before_id.as_str()))
+                }.ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", before_id))?;
+
+                entries.iter()
+                    .find(|e| e.requirement_id == before_req.id)
+                    .map(|e| e.position - 1)
+                    .unwrap_or(0)
+            } else {
+                anyhow::bail!("Specify --top, --bottom, or --before <ID>");
+            };
+
+            storage.queue_reorder(&user_id, &[(req.id, new_position)])?;
+            let spec_id = req.spec_id.as_deref().unwrap_or("???");
+            println!("{} Moved {} in queue", "✓".green(), spec_id.bold());
+        }
+        QueueCommand::Clear { user, completed } => {
+            let user_id = get_user(user);
+            storage.queue_clear(&user_id, *completed)?;
+            if *completed {
+                println!("{} Cleared completed items from queue", "✓".green());
+            } else {
+                println!("{} Cleared all items from queue", "✓".green());
+            }
+        }
+    }
+    Ok(())
 }
 
 // trace:STORY-0321 | ai:claude

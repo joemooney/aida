@@ -10,6 +10,7 @@ import { DocsView } from './components/docs/DocsView';
 import { DocFullPage } from './components/docs/DocFullPage';
 import { RequirementFullPage } from './components/detail/RequirementFullPage';
 import { SettingsView } from './components/settings/SettingsView';
+import { QueuePage } from './components/queue/QueuePage';
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
       <Routes>
         <Route element={<AppLayout />}>
           <Route index element={<DashboardPage />} />
+          <Route path="queue" element={<QueuePage />} />
           <Route path="board" element={<KanbanBoard />} />
           <Route path="list" element={<RequirementsList />} />
           <Route path="sprints" element={<SprintView />} />

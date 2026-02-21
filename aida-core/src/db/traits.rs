@@ -6,7 +6,7 @@ use anyhow::Result;
 use std::path::PathBuf;
 use uuid::Uuid;
 
-use crate::models::{Requirement, RequirementsStore, User};
+use crate::models::{QueueEntry, Requirement, RequirementsStore, User};
 
 /// Error type for version conflicts during optimistic locking
 #[derive(Debug, Clone)]
@@ -398,6 +398,41 @@ pub trait DatabaseBackend: Send + Sync {
         }
         Ok(())
     }
+
+    // =========================================================================
+    // Queue Operations (STORY-0366)
+    // =========================================================================
+
+    /// Lists queue entries for a user
+    /// If include_completed is false, excludes entries whose requirement is Completed
+    fn queue_list(&self, _user_id: &str, _include_completed: bool) -> Result<Vec<QueueEntry>> {
+        anyhow::bail!("Queue not supported for this backend")
+    }
+
+    /// Adds an entry to a user's queue
+    fn queue_add(&self, _entry: QueueEntry) -> Result<()> {
+        anyhow::bail!("Queue not supported for this backend")
+    }
+
+    /// Removes an entry from a user's queue
+    fn queue_remove(&self, _user_id: &str, _requirement_id: &Uuid) -> Result<()> {
+        anyhow::bail!("Queue not supported for this backend")
+    }
+
+    /// Reorders queue entries by updating positions
+    fn queue_reorder(&self, _user_id: &str, _items: &[(Uuid, i64)]) -> Result<()> {
+        anyhow::bail!("Queue not supported for this backend")
+    }
+
+    /// Clears queue entries. If completed_only is true, only removes entries
+    /// whose requirement has status Completed.
+    fn queue_clear(&self, _user_id: &str, _completed_only: bool) -> Result<()> {
+        anyhow::bail!("Queue not supported for this backend")
+    }
+
+    // =========================================================================
+    // Utility Operations
+    // =========================================================================
 
     /// Returns statistics about the database
     fn stats(&self) -> Result<DatabaseStats> {

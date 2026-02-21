@@ -11,7 +11,7 @@ use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
-    routing::{delete, get, post, put},
+    routing::{delete, get, patch, post, put},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -20,7 +20,7 @@ use crate::convert::*;
 use crate::projects::ProjectManager;
 use crate::proto;
 use crate::service::ServerState;
-use aida_core::models;
+use aida_core::models::{self, QueueEntry};
 
 /// Application state containing the ProjectManager
 pub struct AppState {
@@ -99,6 +99,10 @@ pub fn create_rest_router_legacy(state: Arc<ServerState>) -> Router {
         .route("/api/v2/settings/reaction-definitions/:name", put(update_reaction_def).delete(delete_reaction_def))
         .route("/api/v2/settings/id-config", get(get_id_config).put(update_id_config))
         .route("/api/v2/settings/prefixes", get(get_prefixes).put(update_prefixes))
+        // Queue endpoints (STORY-0367)
+        .route("/api/v2/queue/:user_id", get(queue_list).post(queue_add))
+        .route("/api/v2/queue/:user_id/:req_id", delete(queue_remove).patch(queue_update))
+        .route("/api/v2/queue/:user_id/reorder", post(queue_reorder))
         // Reload endpoint
         .route("/api/v2/reload", post(reload_legacy))
         .with_state(state)
@@ -2277,4 +2281,241 @@ async fn update_prefixes(
         return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
     }
     Ok(Json(resp))
+}
+
+// ============================================================================
+// Queue endpoints (STORY-0367)
+// ============================================================================
+// trace:STORY-0367 | ai:claude
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct QueueAddRequest {
+    requirement_id: String,
+    position: Option<String>,
+    note: Option<String>,
+    added_by: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct QueueUpdateRequest {
+    position: Option<i64>,
+    note: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct QueueReorderRequest {
+    items: Vec<QueueReorderItem>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct QueueReorderItem {
+    requirement_id: String,
+    position: i64,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct QueueListQuery {
+    include_completed: Option<bool>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct QueueEntryResponse {
+    requirement_id: String,
+    spec_id: Option<String>,
+    title: String,
+    status: String,
+    priority: String,
+    req_type: String,
+    position: i64,
+    added_by: String,
+    note: Option<String>,
+    added_at: String,
+}
+
+#[derive(Serialize)]
+struct QueueListResponse {
+    entries: Vec<QueueEntryResponse>,
+    total: usize,
+}
+
+fn enrich_queue_entry(
+    entry: &QueueEntry,
+    store: &aida_core::RequirementsStore,
+) -> QueueEntryResponse {
+    let req = store.requirements.iter().find(|r| r.id == entry.requirement_id);
+    QueueEntryResponse {
+        requirement_id: entry.requirement_id.to_string(),
+        spec_id: req.and_then(|r| r.spec_id.clone()),
+        title: req.map(|r| r.title.clone()).unwrap_or_else(|| "(deleted)".to_string()),
+        status: req.map(|r| format!("{:?}", r.status)).unwrap_or_else(|| "Unknown".to_string()),
+        priority: req.map(|r| format!("{:?}", r.priority)).unwrap_or_else(|| "Medium".to_string()),
+        req_type: req.map(|r| format!("{:?}", r.req_type)).unwrap_or_else(|| "Task".to_string()),
+        position: entry.position,
+        added_by: entry.added_by.clone(),
+        note: entry.note.clone(),
+        added_at: entry.added_at.to_rfc3339(),
+    }
+}
+
+async fn queue_list(
+    State(state): State<Arc<ServerState>>,
+    Path(user_id): Path<String>,
+    Query(query): Query<QueueListQuery>,
+) -> Result<Json<QueueListResponse>, (StatusCode, Json<ApiError>)> {
+    state.check_reload().await;
+    let include_completed = query.include_completed.unwrap_or(false);
+
+    let entries = state.backend.queue_list(&user_id, include_completed)
+        .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let store = state.store.read().await;
+    let response_entries: Vec<QueueEntryResponse> = entries
+        .iter()
+        .map(|e| enrich_queue_entry(e, &store))
+        .collect();
+    let total = response_entries.len();
+
+    Ok(Json(QueueListResponse {
+        entries: response_entries,
+        total,
+    }))
+}
+
+async fn queue_add(
+    State(state): State<Arc<ServerState>>,
+    Path(user_id): Path<String>,
+    Json(body): Json<QueueAddRequest>,
+) -> Result<(StatusCode, Json<QueueEntryResponse>), (StatusCode, Json<ApiError>)> {
+    state.check_reload().await;
+    let store = state.store.read().await;
+
+    // Resolve requirement_id (UUID or spec_id)
+    let req = find_requirement(&store, &body.requirement_id)
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {}", body.requirement_id)))?;
+    let requirement_id = req.id;
+
+    // Compute position
+    let position = match body.position.as_deref() {
+        Some("top") => {
+            let existing = state.backend.queue_list(&user_id, true)
+                .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            existing.first().map(|e| e.position - 1000).unwrap_or(0)
+        }
+        Some(n) if n != "bottom" => {
+            n.parse::<i64>().unwrap_or(0)
+        }
+        _ => 0, // bottom or unspecified: queue_add auto-assigns max+1000
+    };
+
+    let added_by = body.added_by.unwrap_or_else(|| user_id.clone());
+
+    let entry = QueueEntry {
+        user_id: user_id.clone(),
+        requirement_id,
+        position,
+        added_by,
+        note: body.note.clone(),
+        added_at: chrono::Utc::now(),
+    };
+
+    state.backend.queue_add(entry.clone())
+        .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let response = enrich_queue_entry(&entry, &store);
+    Ok((StatusCode::CREATED, Json(response)))
+}
+
+async fn queue_remove(
+    State(state): State<Arc<ServerState>>,
+    Path((user_id, req_id)): Path<(String, String)>,
+) -> Result<StatusCode, (StatusCode, Json<ApiError>)> {
+    state.check_reload().await;
+    let store = state.store.read().await;
+
+    let requirement_id = if let Ok(uuid) = uuid::Uuid::parse_str(&req_id) {
+        uuid
+    } else if let Some(req) = find_requirement(&store, &req_id) {
+        req.id
+    } else {
+        return Err(ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {}", req_id)));
+    };
+
+    drop(store);
+
+    state.backend.queue_remove(&user_id, &requirement_id)
+        .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn queue_update(
+    State(state): State<Arc<ServerState>>,
+    Path((user_id, req_id)): Path<(String, String)>,
+    Json(body): Json<QueueUpdateRequest>,
+) -> Result<Json<QueueEntryResponse>, (StatusCode, Json<ApiError>)> {
+    state.check_reload().await;
+    let store = state.store.read().await;
+
+    let requirement_id = if let Ok(uuid) = uuid::Uuid::parse_str(&req_id) {
+        uuid
+    } else if let Some(req) = find_requirement(&store, &req_id) {
+        req.id
+    } else {
+        return Err(ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {}", req_id)));
+    };
+
+    // Get current entry
+    let entries = state.backend.queue_list(&user_id, true)
+        .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let current = entries.iter().find(|e| e.requirement_id == requirement_id)
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "Entry not in queue"))?;
+
+    let mut updated = current.clone();
+    if let Some(position) = body.position {
+        updated.position = position;
+    }
+    if let Some(note) = body.note {
+        updated.note = if note.is_empty() { None } else { Some(note) };
+    }
+
+    state.backend.queue_add(updated.clone())
+        .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let response = enrich_queue_entry(&updated, &store);
+    Ok(Json(response))
+}
+
+async fn queue_reorder(
+    State(state): State<Arc<ServerState>>,
+    Path(user_id): Path<String>,
+    Json(body): Json<QueueReorderRequest>,
+) -> Result<StatusCode, (StatusCode, Json<ApiError>)> {
+    state.check_reload().await;
+    let store = state.store.read().await;
+
+    let items: Vec<(uuid::Uuid, i64)> = body.items.iter()
+        .filter_map(|item| {
+            let uuid = if let Ok(uuid) = uuid::Uuid::parse_str(&item.requirement_id) {
+                uuid
+            } else if let Some(req) = find_requirement(&store, &item.requirement_id) {
+                req.id
+            } else {
+                return None;
+            };
+            Some((uuid, item.position))
+        })
+        .collect();
+
+    drop(store);
+
+    state.backend.queue_reorder(&user_id, &items)
+        .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(StatusCode::NO_CONTENT)
 }

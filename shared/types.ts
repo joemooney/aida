@@ -1095,3 +1095,17 @@ export type ImproveDescriptionResponse = { improved_description: string, changes
 export type GeneratedChild = { title: string, description: string, type: string, rationale: string, };
 
 export type GenerateChildrenResponse = { suggested_children: Array<GeneratedChild>, };
+
+// Queue entry type (STORY-0369)
+export type QueueEntry = {
+    requirementId: string;
+    specId: string | null;
+    title: string;
+    status: string;
+    priority: string;
+    reqType: string;
+    position: number;
+    addedBy: string;
+    note: string | null;
+    addedAt: string;
+};

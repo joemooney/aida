@@ -6,6 +6,7 @@ import { MetricsCards } from './MetricsCards';
 import { SprintSummary } from './SprintSummary';
 import { StatusChart } from './StatusChart';
 import { FeatureProgress } from './FeatureProgress';
+import { QueueWidget } from './QueueWidget';
 import { LayoutDashboard } from 'lucide-react';
 import { getSprintState, getSprintAssignmentTarget } from '../../lib/sprint-utils';
 
@@ -68,6 +69,7 @@ export function DashboardPage() {
           {activeSprint && (
             <SprintSummary sprint={activeSprint.sprint} items={activeSprint.items} />
           )}
+          <QueueWidget />
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <StatusChart requirements={stateful} />
             <FeatureProgress requirements={stateful} />

@@ -687,6 +687,68 @@ pub enum GitLabCommand {
     },
 }
 
+/// Personal work queue commands (STORY-0368)
+#[derive(Subcommand, Debug)]
+pub enum QueueCommand {
+    /// List items in your queue
+    List {
+        /// User ID (defaults to AIDA_USER or system user)
+        #[clap(long)]
+        user: Option<String>,
+        /// Include completed requirements
+        #[clap(long)]
+        include_completed: bool,
+    },
+    /// Add a requirement to your queue
+    Add {
+        /// Requirement ID (UUID or SPEC-ID)
+        id: String,
+        /// Add to top of queue
+        #[clap(long)]
+        top: bool,
+        /// Add to bottom of queue (default)
+        #[clap(long)]
+        bottom: bool,
+        /// User ID (defaults to AIDA_USER or system user)
+        #[clap(long)]
+        user: Option<String>,
+        /// Note explaining why this was queued
+        #[clap(long)]
+        note: Option<String>,
+    },
+    /// Remove a requirement from your queue
+    Remove {
+        /// Requirement ID (UUID or SPEC-ID)
+        id: String,
+        /// User ID (defaults to AIDA_USER or system user)
+        #[clap(long)]
+        user: Option<String>,
+    },
+    /// Move a queue item to a new position
+    Move {
+        /// Requirement ID (UUID or SPEC-ID)
+        id: String,
+        /// Move to top of queue
+        #[clap(long)]
+        top: bool,
+        /// Move to bottom of queue
+        #[clap(long)]
+        bottom: bool,
+        /// Move before this requirement ID
+        #[clap(long)]
+        before: Option<String>,
+    },
+    /// Clear queue entries
+    Clear {
+        /// User ID (defaults to AIDA_USER or system user)
+        #[clap(long)]
+        user: Option<String>,
+        /// Only clear completed requirements
+        #[clap(long)]
+        completed: bool,
+    },
+}
+
 #[derive(Subcommand, Debug)]
 pub enum Command {
     /// Add a new requirement
@@ -960,6 +1022,10 @@ pub enum Command {
         #[clap(long, short = 'v')]
         invert_match: bool,
     },
+
+    /// Personal work queue commands
+    #[clap(subcommand)]
+    Queue(QueueCommand),
 
     /// Simple search for requirements (case-insensitive by default)
     Search {
