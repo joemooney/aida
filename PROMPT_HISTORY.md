@@ -3075,3 +3075,28 @@ Saved to `docs/plans/2026-02-20-tag-filtering-structured-search-markdown.md`
 ### Files Changed
 - 2 modified (`DashboardPage.tsx`, `MetricsCards.tsx`)
 - 1 created (`SprintSummary.tsx`)
+
+---
+
+### My Queue: Personal Focus Inbox — Requirements & Plan
+- **Prompt**: Formalize the My Queue concept from aida-gui into requirements and draft an implementation plan
+- **Actions**:
+
+#### Research
+- Explored existing My Queue implementation in aida-gui (local-only, rank-based, stored in YAML settings)
+- Identified existing related requirements: FR-0189 (Work Queue View), FR-0340 (Team Queue View), FR-0313 (filter completed)
+- Analyzed limitations: no backend storage, no API, no CLI, no collaboration
+
+#### Requirements Created
+- **EPIC-0365**: My Queue: Personal Focus Inbox (parent epic)
+- **STORY-0366**: Queue: Database storage model (gapped-integer positions, SQLite/PostgreSQL)
+- **STORY-0367**: Queue: REST API endpoints (CRUD + bulk reorder + summary)
+- **STORY-0368**: Queue: CLI commands (aida queue list/add/remove/move/clear)
+- **STORY-0369**: Queue: React web UI — My Queue view (drag-to-reorder, /queue route)
+- **STORY-0370**: Queue: Dashboard focus widget (top items + count on dashboard)
+- **STORY-0371**: Queue: Assign-to-queue inbox capability (cross-user assignment with notes)
+- Linked existing FR-0189, FR-0340, FR-0313 as references to EPIC-0365
+
+#### Plan Saved
+- `docs/plans/2026-02-20-my-queue-personal-focus-inbox.md`
+- 6-phase plan: Database → API → CLI + Web UI (parallel) → Dashboard Widget → Inbox
