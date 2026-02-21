@@ -3184,3 +3184,15 @@ Implement the full My Queue feature across all 6 phases.
 - `cargo build` — all workspace members compile
 - `cargo test -p aida-core` — 68/68 tests pass
 - `npx tsc --noEmit` — no TypeScript errors
+
+---
+
+### Auto-Link Spec IDs in Markdown (2026-02-21)
+- **Prompt**: Auto-link spec IDs (e.g., EPIC-0365, FR-0042) in markdown content so they become clickable hyperlinks
+- **Requirement**: STORY-0372 (under EPIC-0365)
+- **Actions**:
+  - Created `remarkSpecLinks` remark plugin that detects XXX-NNNN patterns in markdown text nodes and converts them to link nodes
+  - Created `LinkedMarkdown` wrapper component around `react-markdown` that injects the plugin and handles click navigation to open the detail panel
+  - Applied `LinkedMarkdown` to all 4 markdown rendering locations: DetailBody, DocFullPage, DocDetailPanel, SkillDetailPanel
+  - Spec ID patterns supported: 1-8 uppercase letters followed by hyphen and 1-6 digits (e.g., FR-0042, EPIC-0365, STORY-0372)
+- **Commit**: 7386495
