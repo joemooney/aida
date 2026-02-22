@@ -55,6 +55,13 @@ export function useGlobalHotkeys(): void {
       handler: () => navigate('/queue'),
     },
     {
+      id: 'nav:activity',
+      description: 'Go to My Activity',
+      category: 'Navigation',
+      keys: ['g', 'a'],
+      handler: () => navigate('/activity'),
+    },
+    {
       id: 'nav:board',
       description: 'Go to Kanban Board',
       category: 'Navigation',

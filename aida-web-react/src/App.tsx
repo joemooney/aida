@@ -11,6 +11,7 @@ import { DocFullPage } from './components/docs/DocFullPage';
 import { RequirementFullPage } from './components/detail/RequirementFullPage';
 import { SettingsView } from './components/settings/SettingsView';
 import { QueuePage } from './components/queue/QueuePage';
+import { ActivityPage } from './components/activity/ActivityPage';
 import { ChatPage } from './components/chat/ChatPage';
 
 export default function App() {
@@ -20,6 +21,7 @@ export default function App() {
         <Route element={<AppLayout />}>
           <Route index element={<DashboardPage />} />
           <Route path="queue" element={<QueuePage />} />
+          <Route path="activity" element={<ActivityPage />} />
           <Route path="board" element={<KanbanBoard />} />
           <Route path="list" element={<RequirementsList />} />
           <Route path="sprints" element={<SprintView />} />
