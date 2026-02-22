@@ -1,15 +1,27 @@
 import { useState, useMemo, useCallback } from 'react';
-import { ArrowUpDown, List, GitBranch, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
+import {
+  DndContext,
+  DragOverlay,
+  pointerWithin,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+  type DragStartEvent,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { ArrowUpDown, List, GitBranch, ChevronsDownUp, ChevronsUpDown, ListPlus, XCircle } from 'lucide-react';
 import type { Requirement } from '@shared/types';
 import { cn } from '../../lib/utils';
-import { useRequirements } from '../../hooks/useRequirements';
+import { useRequirements, useSetParent } from '../../hooks/useRequirements';
 import { useFilters } from '../../hooks/useFilters';
+import { useAddToQueue } from '../../hooks/useQueue';
 import { Spinner } from '../ui/Spinner';
 import { EmptyState } from '../ui/EmptyState';
 import { KanbanFilterBar } from '../kanban/KanbanFilterBar';
 import { RequirementsRow } from './RequirementsRow';
 import { TreeRow } from './TreeRow';
-import { buildTree, flattenTree, collectParentIds } from '../../lib/tree-utils';
+import { buildTree, flattenTree, collectParentIds, isDescendant } from '../../lib/tree-utils';
 
 type SortKey = 'spec_id' | 'title' | 'status' | 'priority' | 'req_type' | 'owner' | 'modified_at';
 type SortDir = 'asc' | 'desc';
@@ -34,13 +46,62 @@ function sortRequirements(reqs: Requirement[], key: SortKey, dir: SortDir): Requ
   });
 }
 
+function QueueDropZone({ isActive }: { isActive: boolean }) {
+  const { setNodeRef, isOver } = useDroppable({ id: 'queue-drop-zone' });
+
+  if (!isActive) return null;
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'flex items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-3 text-sm font-medium transition-colors',
+        isOver
+          ? 'border-accent bg-accent/10 text-accent'
+          : 'border-edge text-content-muted',
+      )}
+    >
+      <ListPlus className="h-4 w-4" />
+      Drop here to add to My Queue
+    </div>
+  );
+}
+
+function RootDropZone({ isActive }: { isActive: boolean }) {
+  const { setNodeRef, isOver } = useDroppable({ id: 'root-drop-zone' });
+
+  if (!isActive) return null;
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'flex items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-3 text-sm font-medium transition-colors',
+        isOver
+          ? 'border-orange-400 bg-orange-400/10 text-orange-400'
+          : 'border-edge text-content-muted',
+      )}
+    >
+      <XCircle className="h-4 w-4" />
+      Drop here to make root-level (remove parent)
+    </div>
+  );
+}
+
 export function RequirementsList() {
   const { data: requirements, isLoading, error } = useRequirements();
   const { applyFilters } = useFilters();
+  const addToQueue = useAddToQueue();
+  const setParent = useSetParent();
   const [sortKey, setSortKey] = useState<SortKey>('spec_id');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [viewMode, setViewMode] = useState<ViewMode>('flat');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  );
 
   const filtered = useMemo(
     () => (requirements ? applyFilters(requirements) : []),
@@ -96,6 +157,46 @@ export function RequirementsList() {
     }
   }
 
+  const activeReq = useMemo(
+    () => (requirements ?? []).find((r) => r.id === activeId) ?? null,
+    [requirements, activeId],
+  );
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  }, []);
+
+  const isTree = viewMode === 'tree';
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      setActiveId(null);
+      const { active, over } = event;
+      if (!over) return;
+
+      const draggedId = active.id as string;
+      const overId = over.id as string;
+
+      if (overId === 'queue-drop-zone') {
+        addToQueue.mutate({ requirement_id: draggedId });
+        return;
+      }
+
+      if (isTree && overId === 'root-drop-zone') {
+        setParent.mutate({ id: draggedId, parentId: null });
+        return;
+      }
+
+      // Tree reparent: drop onto another requirement row
+      if (isTree && overId !== draggedId) {
+        // Prevent circular reference
+        if (isDescendant(roots, draggedId, overId)) return;
+        setParent.mutate({ id: draggedId, parentId: overId });
+      }
+    },
+    [addToQueue, setParent, isTree, roots],
+  );
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -113,7 +214,6 @@ export function RequirementsList() {
     );
   }
 
-  const isTree = viewMode === 'tree';
   const displayCount = isTree ? treeRows.length : sorted.length;
 
   return (
@@ -180,49 +280,72 @@ export function RequirementsList() {
           description="Try adjusting your filters."
         />
       ) : (
-        <div className="rounded-xl border border-edge bg-surface-alt overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-edge">
-                  {columns.map((col) => (
-                    <th
-                      key={col.key}
-                      onClick={isTree ? undefined : () => handleSort(col.key)}
-                      className={cn(
-                        'px-4 py-3 text-xs font-medium uppercase tracking-wider text-content-muted whitespace-nowrap',
-                        col.align === 'right' ? 'text-right' : 'text-left',
-                        isTree ? 'cursor-default' : 'cursor-pointer hover:text-content transition-colors',
-                      )}
-                    >
-                      <span className="inline-flex items-center gap-1">
-                        {col.label}
-                        {!isTree && sortKey === col.key && (
-                          <ArrowUpDown className="h-3 w-3 text-accent" />
+        <DndContext
+          sensors={sensors}
+          collisionDetection={pointerWithin}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <QueueDropZone isActive={activeId !== null} />
+
+          <div className="rounded-xl border border-edge bg-surface-alt overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-edge">
+                    <th className="w-8" />
+                    {columns.map((col) => (
+                      <th
+                        key={col.key}
+                        onClick={isTree ? undefined : () => handleSort(col.key)}
+                        className={cn(
+                          'px-4 py-3 text-xs font-medium uppercase tracking-wider text-content-muted whitespace-nowrap',
+                          col.align === 'right' ? 'text-right' : 'text-left',
+                          isTree ? 'cursor-default' : 'cursor-pointer hover:text-content transition-colors',
                         )}
-                      </span>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {isTree
-                  ? treeRows.map((row) => (
-                      <TreeRow
-                        key={row.node.requirement.id}
-                        node={row.node}
-                        isCollapsed={collapsed.has(row.node.requirement.id)}
-                        onToggle={handleToggle}
-                        isDimmed={row.isAncestorOnly}
-                      />
-                    ))
-                  : sorted.map((req) => (
-                      <RequirementsRow key={req.id} requirement={req} />
+                      >
+                        <span className="inline-flex items-center gap-1">
+                          {col.label}
+                          {!isTree && sortKey === col.key && (
+                            <ArrowUpDown className="h-3 w-3 text-accent" />
+                          )}
+                        </span>
+                      </th>
                     ))}
-              </tbody>
-            </table>
+                  </tr>
+                </thead>
+                <tbody>
+                  {isTree
+                    ? treeRows.map((row) => (
+                        <TreeRow
+                          key={row.node.requirement.id}
+                          node={row.node}
+                          isCollapsed={collapsed.has(row.node.requirement.id)}
+                          onToggle={handleToggle}
+                          isDimmed={row.isAncestorOnly}
+                        />
+                      ))
+                    : sorted.map((req) => (
+                        <RequirementsRow key={req.id} requirement={req} />
+                      ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+
+          {isTree && activeId !== null && (
+            <RootDropZone isActive={true} />
+          )}
+
+          <DragOverlay>
+            {activeReq ? (
+              <div className="flex items-center gap-2 rounded-lg border border-accent/50 bg-surface-raised px-3 py-2 shadow-xl shadow-black/30">
+                <span className="text-[11px] font-mono text-content-muted">{activeReq.spec_id}</span>
+                <span className="text-sm font-medium text-content">{activeReq.title}</span>
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       )}
     </div>
   );

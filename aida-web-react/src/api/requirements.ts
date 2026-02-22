@@ -36,6 +36,13 @@ export function reloadServer(): Promise<{ reloaded: boolean; requirements: numbe
   return apiFetch('/v2/reload', { method: 'POST' });
 }
 
+export function setParent(id: string, parentId: string | null): Promise<Requirement> {
+  return apiFetch<Requirement>(`/v2/requirements/${id}/parent`, {
+    method: 'PUT',
+    body: JSON.stringify({ parent_id: parentId }),
+  });
+}
+
 export function addComment(
   id: string,
   content: string,

@@ -134,6 +134,30 @@ export function flattenTree(
 }
 
 /**
+ * Check if candidateId is a descendant of ancestorId in the tree.
+ * Used to prevent circular references when reparenting.
+ */
+export function isDescendant(roots: TreeNode[], ancestorId: string, candidateId: string): boolean {
+  function search(nodes: TreeNode[]): boolean {
+    for (const node of nodes) {
+      if (node.requirement.id === ancestorId) {
+        return findInChildren(node.children);
+      }
+      if (search(node.children)) return true;
+    }
+    return false;
+  }
+  function findInChildren(nodes: TreeNode[]): boolean {
+    for (const node of nodes) {
+      if (node.requirement.id === candidateId) return true;
+      if (findInChildren(node.children)) return true;
+    }
+    return false;
+  }
+  return search(roots);
+}
+
+/**
  * Collect all node IDs that have children (for expand/collapse all).
  */
 export function collectParentIds(roots: TreeNode[]): Set<string> {

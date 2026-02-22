@@ -1,5 +1,7 @@
-import { ListPlus } from 'lucide-react';
+import { useDraggable } from '@dnd-kit/core';
+import { GripVertical, ListPlus } from 'lucide-react';
 import type { Requirement } from '@shared/types';
+import { cn } from '../../lib/utils';
 import { StatusBadge, PriorityBadge, TypeBadge } from '../ui/Badge';
 import { Avatar } from '../ui/Avatar';
 import { formatRelativeDate } from '../../lib/utils';
@@ -13,12 +15,38 @@ interface RequirementsRowProps {
 export function RequirementsRow({ requirement }: RequirementsRowProps) {
   const { open } = useDetailPanel();
   const addToQueue = useAddToQueue();
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    isDragging,
+  } = useDraggable({ id: requirement.id });
+
+  const style = transform
+    ? { transform: `translate(${transform.x}px, ${transform.y}px)` }
+    : undefined;
 
   return (
     <tr
-      onClick={() => open(requirement.spec_id ?? requirement.id)}
-      className="border-b border-edge hover:bg-surface-hover/50 transition-colors cursor-pointer group"
+      ref={setNodeRef}
+      style={style}
+      onClick={() => !isDragging && open(requirement.spec_id ?? requirement.id)}
+      className={cn(
+        'border-b border-edge hover:bg-surface-hover/50 transition-colors cursor-pointer group',
+        isDragging && 'opacity-40',
+      )}
     >
+      <td className="py-3 px-1 w-8">
+        <div
+          {...attributes}
+          {...listeners}
+          className="flex items-center justify-center h-6 w-6 rounded text-content-muted opacity-0 group-hover:opacity-100 hover:text-content cursor-grab active:cursor-grabbing transition-opacity"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <GripVertical className="h-3.5 w-3.5" />
+        </div>
+      </td>
       <td className="py-3 px-4">
         <span className="text-[11px] font-mono text-content-muted">{requirement.spec_id}</span>
       </td>
@@ -57,7 +85,7 @@ export function RequirementsRow({ requirement }: RequirementsRowProps) {
             <span className="text-xs text-content-secondary">{requirement.owner}</span>
           </div>
         ) : (
-          <span className="text-xs text-content-muted">—</span>
+          <span className="text-xs text-content-muted">&mdash;</span>
         )}
       </td>
       <td className="py-3 px-4 text-right">

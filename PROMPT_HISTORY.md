@@ -3400,3 +3400,57 @@ Implement API key management in Settings Admin tab so PMs/stakeholders can set A
 
 #### Git
 - Commit: feat(evaluate): add REST evaluate endpoint and React UI (STORY-0375)
+
+---
+
+### List View Drag-and-Drop: Queue + Tree Reparenting (2026-02-21)
+
+**Prompt**: Add drag-and-drop to the List View for two capabilities: drag any row to add it to My Queue, and drag to reparent items in tree mode.
+
+#### Actions Taken
+
+**Phase 1: Backend — `PUT /api/v2/requirements/:id/parent` endpoint**
+- Added `SetParentRequest` struct with `parent_id: Option<String>`
+- Handler resolves child and parent by UUID or spec_id
+- When `parent_id` is set: calls `store.set_relationship()` with `RelationshipType::Parent` (auto-removes existing parent)
+- When `parent_id` is null: finds and removes existing Parent relationship via `store.remove_relationship()`
+- Saves store and returns updated requirement
+- File modified: `aida-server/src/rest.rs`
+
+**Phase 2: Frontend API + Hook**
+- Added `setParent(id, parentId)` API function in `api/requirements.ts`
+- Added `useSetParent()` mutation hook in `hooks/useRequirements.ts` — invalidates requirements on settle
+
+**Phase 3: Tree Utility — Circular Reference Prevention**
+- Added `isDescendant(roots, ancestorId, candidateId)` to `lib/tree-utils.ts`
+- Walks tree from ancestorId, returns true if candidateId found among descendants
+- Used in drag-end handler to prevent dropping a parent onto its own child/grandchild
+
+**Phase 4: Draggable List Rows**
+- `RequirementsRow.tsx` — Added `useDraggable({ id })`, drag handle (GripVertical icon visible on hover), transform style, isDragging opacity
+- `TreeRow.tsx` — Added both `useDraggable` and `useDroppable` on same element, drag handle, `isOver` highlight (ring-2 accent glow), combined refs
+
+**Phase 5: DndContext in RequirementsList**
+- Wrapped table in `DndContext` with `PointerSensor` (5px distance) and `pointerWithin` collision detection
+- Queue drop zone: appears above table when dragging, "Drop here to add to My Queue" with ListPlus icon
+- Root drop zone (tree mode only): appears below table, "Drop here to make root-level (remove parent)" with XCircle icon
+- DragOverlay: compact card with spec_id + title
+- Drag handle column header (narrow empty `<th>`) added to align with handle cells
+
+**handleDragEnd logic**:
+- `queue-drop-zone` → `addToQueue.mutate()`
+- `root-drop-zone` → `setParent.mutate({ parentId: null })`
+- tree row → `setParent.mutate({ parentId: overId })` with circular reference check
+
+#### Files Modified
+- `aida-server/src/rest.rs` — Added route + handler for parent assignment
+- `aida-web-react/src/api/requirements.ts` — Added `setParent()` function
+- `aida-web-react/src/hooks/useRequirements.ts` — Added `useSetParent()` hook
+- `aida-web-react/src/lib/tree-utils.ts` — Added `isDescendant()` helper
+- `aida-web-react/src/components/list/RequirementsList.tsx` — Added DndContext, drop zones, drag overlay
+- `aida-web-react/src/components/list/RequirementsRow.tsx` — Added useDraggable, drag handle
+- `aida-web-react/src/components/list/TreeRow.tsx` — Added useDraggable + useDroppable, drag handle, drop highlight
+
+#### Verification
+- `cargo build -p aida-server` — compiles with no new warnings
+- `npx tsc --noEmit` — no TypeScript errors

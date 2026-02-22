@@ -125,7 +125,7 @@ Define connections between requirements:
 - **Features**:
   - Dashboard metrics (requirement counts by status, priority, type)
   - Kanban board with drag-and-drop (via @dnd-kit)
-  - List view with filtering, sorting, and parent/child tree toggle (flat/tree modes with collapsible hierarchy)
+  - List view with filtering, sorting, parent/child tree toggle (flat/tree modes with collapsible hierarchy), and drag-and-drop (drag to queue, drag to reparent in tree mode via @dnd-kit)
   - Detail panel for viewing/editing requirements
   - Full-text search with structured query parsing (`owner:joe`, `tag:frontend`, `status:approved` syntax)
   - Tag-based filtering across views (kanban, list, timeline) with active filter chips

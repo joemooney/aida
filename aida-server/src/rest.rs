@@ -103,6 +103,8 @@ pub fn create_rest_router_legacy(state: Arc<ServerState>) -> Router {
         .route("/api/v2/queue/:user_id", get(queue_list).post(queue_add))
         .route("/api/v2/queue/:user_id/:req_id", delete(queue_remove).patch(queue_update))
         .route("/api/v2/queue/:user_id/reorder", post(queue_reorder))
+        // Parent assignment endpoint
+        .route("/api/v2/requirements/:id/parent", put(set_parent_legacy))
         // Reload endpoint
         .route("/api/v2/reload", post(reload_legacy))
         .with_state(state)
@@ -1571,6 +1573,76 @@ async fn remove_sprint_legacy(
 
     let updated = find_requirement(&store, &id)
         .ok_or_else(|| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Requirement disappeared after removal"))?
+        .clone();
+
+    if let Err(e) = state.backend.save(&store) {
+        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+    }
+
+    Ok(Json(updated))
+}
+
+// ============================================================================
+// Parent assignment handler (legacy)
+// ============================================================================
+
+// trace:STORY-0375 | ai:claude
+#[derive(Deserialize)]
+struct SetParentRequest {
+    parent_id: Option<String>,
+}
+
+async fn set_parent_legacy(
+    State(state): State<Arc<ServerState>>,
+    Path(id): Path<String>,
+    Json(body): Json<SetParentRequest>,
+) -> Result<Json<models::Requirement>, (StatusCode, Json<ApiError>)> {
+    let mut store = state.store.write().await;
+
+    // Look up the child requirement
+    let child_id = {
+        let req = find_requirement(&store, &id)
+            .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {id}")))?;
+        req.id
+    };
+
+    match body.parent_id {
+        Some(pid) => {
+            // Resolve parent to UUID
+            let parent_id = {
+                let parent = find_requirement(&store, &pid)
+                    .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Parent not found: {pid}")))?;
+                parent.id
+            };
+
+            // set_relationship removes any existing Parent relationship first
+            store
+                .set_relationship(&child_id, aida_core::RelationshipType::Parent, &parent_id, true)
+                .map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, e.to_string()))?;
+        }
+        None => {
+            // Remove existing Parent relationship if any
+            let parent_target: Option<uuid::Uuid> = {
+                let req = find_requirement(&store, &id)
+                    .ok_or_else(|| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Requirement disappeared"))?;
+                req.relationships
+                    .iter()
+                    .find(|r| r.rel_type == aida_core::RelationshipType::Parent)
+                    .map(|r| r.target_id)
+            };
+            if let Some(target) = parent_target {
+                let _ = store.remove_relationship(
+                    &child_id,
+                    &aida_core::RelationshipType::Parent,
+                    &target,
+                    true,
+                );
+            }
+        }
+    }
+
+    let updated = find_requirement(&store, &id)
+        .ok_or_else(|| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Requirement disappeared after update"))?
         .clone();
 
     if let Err(e) = state.backend.save(&store) {
