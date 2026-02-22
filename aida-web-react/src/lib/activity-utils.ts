@@ -54,9 +54,11 @@ export function buildUserActivity(
 
   const cutoff = getTimeRangeCutoff(timeRange);
 
+  const filterByAuthor = userId !== 'default';
+
   return allEvents
     .filter((e) => {
-      if (e.author.toLowerCase() !== userId.toLowerCase()) return false;
+      if (filterByAuthor && e.author.toLowerCase() !== userId.toLowerCase()) return false;
       if (cutoff && new Date(e.timestamp) < cutoff) return false;
       return true;
     })
