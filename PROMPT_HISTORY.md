@@ -3604,3 +3604,59 @@ Implement API key management in Settings Admin tab so PMs/stakeholders can set A
 
 #### Verification
 - `npx tsc --noEmit` — no TypeScript errors
+
+---
+
+### Enhanced Description Editor: Expand, Preview, and Markdown Help (2026-02-22)
+
+- **Prompt**: Add expand/collapse, live markdown preview, and help cheat sheet to the description editor in the detail panel
+- **Actions**:
+  - Modified `src/components/detail/DetailBody.tsx` — added 3 state variables (`expanded`, `showPreview`, `showHelp`), toolbar row with icon buttons (Maximize2/Minimize2, Eye/EyeOff, HelpCircle from lucide), expanded mode (min-h-[50vh] vs rows=8), live preview pane using LinkedMarkdown with same prose classes, and markdown help card with syntax reference
+  - Added `Maximize2`, `Minimize2`, `Eye`, `EyeOff`, `HelpCircle` icon imports from lucide-react
+
+#### Files Modified (1)
+- `src/components/detail/DetailBody.tsx` — Toolbar, expand mode, preview pane, help card
+
+#### Verification
+- `npx tsc --noEmit` — no TypeScript errors
+
+---
+
+### Colored Text Markdown Syntax (2026-02-22)
+
+- **Prompt**: Add color support to LinkedMarkdown
+- **Actions**:
+  - Created `src/lib/remarkColorText.ts` — custom remark plugin that converts `::color[text]` syntax to link nodes with `#color:<name>` URLs; supports 20 colors (red, green, blue, yellow, orange, purple, pink, cyan, gray, grey, amber, lime, teal, indigo, violet, rose, emerald, sky, slate, white); exports `COLOR_CLASSES` map to Tailwind classes
+  - Modified `src/components/ui/LinkedMarkdown.tsx` — imported remarkColorText plugin, added `#color:` href detection in AnchorComponent to render `<span>` with Tailwind color class
+  - Modified `src/components/detail/DetailBody.tsx` — updated help card with color syntax reference
+
+#### Files Created (1)
+- `src/lib/remarkColorText.ts` — Remark plugin for `::color[text]` syntax
+
+#### Files Modified (2)
+- `src/components/ui/LinkedMarkdown.tsx` — Color text rendering via link-component pattern
+- `src/components/detail/DetailBody.tsx` — Help card updated with color syntax
+
+#### Verification
+- `npx tsc --noEmit` — no TypeScript errors
+
+---
+
+### Syntax Highlighting for Code Blocks (2026-02-22)
+
+- **Prompt**: Add program language syntax highlighting for code blocks
+- **Actions**:
+  - Installed `react-syntax-highlighter` and `@types/react-syntax-highlighter`
+  - Modified `src/components/ui/LinkedMarkdown.tsx` — imported Prism SyntaxHighlighter with oneDark theme, added `CodeComponent` callback that detects `language-*` class on fenced code blocks and renders via SyntaxHighlighter, multi-line blocks without language render as plain text, inline code unchanged
+  - Modified `src/components/detail/DetailBody.tsx` — updated help card to mention syntax highlighting
+
+#### Dependencies Added
+- `react-syntax-highlighter` — Syntax highlighting component (Prism-based)
+- `@types/react-syntax-highlighter` — TypeScript definitions
+
+#### Files Modified (2)
+- `src/components/ui/LinkedMarkdown.tsx` — SyntaxHighlighter integration with oneDark theme
+- `src/components/detail/DetailBody.tsx` — Help card mentions syntax highlighting
+
+#### Verification
+- `npx tsc --noEmit` — no TypeScript errors

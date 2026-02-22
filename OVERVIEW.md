@@ -130,7 +130,8 @@ Define connections between requirements:
   - Full-text search with structured query parsing (`owner:joe`, `tag:frontend`, `status:approved` syntax)
   - Tag-based filtering across views (kanban, list, timeline) with active filter chips
   - Inline tag pills in list rows (up to 3 visible + overflow indicator)
-  - Markdown description rendering in detail panel (react-markdown + remark-gfm) with auto-linked spec IDs (e.g., EPIC-0365, FR-0042) rendered as clickable hyperlinks that open the detail panel
+  - Markdown description rendering in detail panel (react-markdown + remark-gfm) with auto-linked spec IDs (e.g., EPIC-0365, FR-0042) rendered as clickable hyperlinks that open the detail panel, `::color[text]` colored text syntax (20 colors), and syntax-highlighted code blocks (react-syntax-highlighter + Prism oneDark theme)
+  - Enhanced description editor with toolbar: expand/collapse toggle (compact vs 50vh), live markdown preview pane, and markdown cheat sheet help card
   - Dark/light theme toggle using CSS custom properties
   - Sprint planning with drag-and-drop between backlog and sprints (via @dnd-kit)
   - Sprint creation modal, archive/unarchive toggle
