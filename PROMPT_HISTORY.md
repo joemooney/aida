@@ -3454,3 +3454,76 @@ Implement API key management in Settings Admin tab so PMs/stakeholders can set A
 #### Verification
 - `cargo build -p aida-server` — compiles with no new warnings
 - `npx tsc --noEmit` — no TypeScript errors
+
+---
+
+### Keyboard Shortcuts System (2026-02-21)
+
+**Prompt**: Implement a centralized keyboard shortcuts system for the React web dashboard, matching the aida-gui's capabilities with chord navigation, list selection, and quick pickers.
+
+#### Actions Taken
+
+**Phase 1: Core Infrastructure**
+- Created `src/hooks/useHotkeys.ts` — `HotkeyBinding` interface, `HotkeyContext`, `useHotkeys()` consumer hook, `isInputFocused()` helper
+- Created `src/components/hotkeys/HotkeyProvider.tsx` — single `document.addEventListener('keydown')` handler with:
+  - Key normalization (modifier keys, shifted chars like `?`)
+  - Chord sequence support (two-key sequences like `g` then `l`)
+  - 1000ms chord timeout with automatic clear
+  - Input field exclusion (skip shortcuts when typing in INPUT/TEXTAREA/SELECT/contentEditable)
+  - Dynamic binding registration/unregistration
+- Created `src/components/hotkeys/ChordIndicator.tsx` — fixed bottom-right badge showing pending chord key (e.g., `g...`)
+- Created `src/components/hotkeys/KeyboardHelp.tsx` — `?` triggered modal showing all shortcuts grouped by category with key badges
+
+**Phase 2: Global & Navigation Shortcuts**
+- Created `src/hooks/useGlobalHotkeys.ts` — registers global shortcuts:
+  - `?` — Show keyboard help modal
+  - `/` — Focus search input
+  - `Escape` — Close detail panel
+  - `g+d/q/b/l/s/t/c/x` — Navigate to Dashboard/Queue/Board/List/Sprints/Timeline/Chat/Settings
+- Created `src/components/layout/GlobalHotkeys.tsx` — wrapper component calling `useGlobalHotkeys()` inside HotkeyProvider
+- Modified `AppLayout.tsx` — wrapped in `<HotkeyProvider>`, rendered `<GlobalHotkeys />`
+- Modified `Header.tsx` — removed standalone `/` keydown listener (now centralized)
+- Modified `DetailPanel.tsx` — removed standalone `Escape` keydown listener (now centralized)
+
+**Phase 3: List View Selection**
+- Created `src/hooks/useListSelection.ts` — manages selected row with hotkeys:
+  - `j` / `ArrowDown` — Select next row
+  - `k` / `ArrowUp` — Select previous row
+  - `Enter` — Open detail panel for selected row
+  - `q` — Add selected row to queue
+  - `Escape` — Clear selection (when no detail panel open)
+- Modified `RequirementsList.tsx` — integrated `useListSelection`, passes `isSelected` to rows, scrolls selected into view
+- Modified `RequirementsRow.tsx` — converted to `forwardRef`, added `isSelected` prop with `ring-2 ring-accent/40 bg-accent/5` styling
+- Modified `TreeRow.tsx` — converted to `forwardRef`, added `isSelected` prop with selection styling
+
+**Phase 4: Quick Pickers**
+- Created `src/components/ui/QuickPicker.tsx` — keyboard-navigable popover for changing properties:
+  - Arrow keys / j/k to navigate options
+  - Enter to select, Escape to close
+  - Positioned near selected row via anchor ref
+  - Capture-phase keydown listener to intercept before hotkey system
+- Added `s/p/o` shortcuts in RequirementsList for status/priority/owner pickers
+  - `s` — Open status picker (Draft, Approved, In-Progress, Completed, Rejected)
+  - `p` — Open priority picker (High, Medium, Low)
+  - `o` — Open owner picker (derived from existing requirement owners)
+
+#### Files Created (8)
+- `src/hooks/useHotkeys.ts`
+- `src/hooks/useGlobalHotkeys.ts`
+- `src/hooks/useListSelection.ts`
+- `src/components/hotkeys/HotkeyProvider.tsx`
+- `src/components/hotkeys/ChordIndicator.tsx`
+- `src/components/hotkeys/KeyboardHelp.tsx`
+- `src/components/layout/GlobalHotkeys.tsx`
+- `src/components/ui/QuickPicker.tsx`
+
+#### Files Modified (6)
+- `src/components/layout/AppLayout.tsx` — HotkeyProvider wrapper
+- `src/components/layout/Header.tsx` — Removed standalone `/` listener
+- `src/components/detail/DetailPanel.tsx` — Removed standalone `Escape` listener
+- `src/components/list/RequirementsList.tsx` — Selection + pickers integration
+- `src/components/list/RequirementsRow.tsx` — forwardRef + isSelected
+- `src/components/list/TreeRow.tsx` — forwardRef + isSelected
+
+#### Verification
+- `npx tsc --noEmit` — no TypeScript errors
