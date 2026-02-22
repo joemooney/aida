@@ -142,7 +142,8 @@ Define connections between requirements:
   - Settings view: manage store metadata, relationship/type/reaction definitions, ID configuration, prefix management, and Admin tab (dev-mode server rebuild & restart, runtime API key management) via tab-based UI
 - **Source organization**: 45+ files across `api/`, `lib/`, `hooks/`, `components/` (ui, layout, kanban, list, detail, dashboard, sprint, skills, settings)
 - **Shared types**: TypeScript types in `shared/types.ts` generated from Rust structs via ts-rs
-- **Keyboard shortcuts**: Centralized hotkey system (`useHotkeys` + `HotkeyProvider`) with chord navigation (`g+d/q/b/l/s/t/c/x` for view switching), `?` help modal, `/` search focus, `j/k` list row selection, `Enter` to open detail, `q` to queue, `s/p/o` quick pickers for status/priority/owner changes, chord indicator badge, and input field exclusion
+- My Activity: planned vs. actual work reconciliation — shows user's actual work (changes, comments, creations) cross-referenced against their queue, with stats bar highlighting unqueued work and untouched queue items, time range filtering (today/week/month/all), and owner-scoped via `?user=` URL param
+- **Keyboard shortcuts**: Centralized hotkey system (`useHotkeys` + `HotkeyProvider`) with chord navigation (`g+d/q/a/b/l/s/t/c/x` for view switching), `?` help modal, `/` search focus, `j/k` list row selection, `Enter` to open detail, `q` to queue, `s/p/o` quick pickers for status/priority/owner changes, chord indicator badge, and input field exclusion
 - **Design choices**: URL-based filter and detail state, optimistic updates for drag-and-drop status changes
 
 ### WASM Browser Client (FR-0273)

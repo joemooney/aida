@@ -3574,3 +3574,33 @@ Implement API key management in Settings Admin tab so PMs/stakeholders can set A
 
 #### Verification
 - `npx tsc --noEmit` — no TypeScript errors
+
+---
+
+### My Activity: Planned vs. Actual Work Reconciliation (2026-02-22)
+
+- **Prompt**: Implement "My Activity" page that shows actual work cross-referenced against queue to surface delta between planned and actual work
+- **Actions**:
+  - Created `src/lib/activity-utils.ts` — data transformation layer: `buildUserActivity()` reuses `buildTimelineEvents()` to extract per-user activity, cross-references with queue entries to tag items as "in queue" or not; `computeActivityStats()` computes worked-on/in-queue/unqueued-work/queue-untouched stats; `groupActivityByDate()` wraps `groupEventsByDate()` for date grouping; time range filtering (today/week/month/all)
+  - Created `src/components/activity/ActivityStatsBar.tsx` — 4 compact stat cards (Worked On blue, In Queue green, Unqueued Work amber, Queue Untouched slate) showing planned vs. actual delta
+  - Created `src/components/activity/ActivityItemCard.tsx` — single activity event card with event type icon (Sparkles/Pencil/MessageSquare), spec ID, title, relative timestamp, "In Queue" green badge, change/comment description preview
+  - Created `src/components/activity/ActivityDateGroup.tsx` — date-grouped event list with sticky date header and event count
+  - Created `src/components/activity/ActivityPage.tsx` — main page composing all components: owner picker dropdown (same `?user=` URL param pattern as QueuePage), time range selector, stats bar, two-column layout with scrollable activity feed and detail panel (reuses `TimelineDetailPanel`)
+  - Modified `src/App.tsx` — added `/activity` route after `/queue`
+  - Modified `src/components/layout/Sidebar.tsx` — added "My Activity" nav item with `Activity` icon after "My Queue"
+  - Modified `src/hooks/useGlobalHotkeys.ts` — added `g+a` chord shortcut for navigation
+
+#### Files Created (5)
+- `src/lib/activity-utils.ts` — Activity data transformation + stats computation
+- `src/components/activity/ActivityPage.tsx` — Main page with user scoping, time filter, two-column layout
+- `src/components/activity/ActivityStatsBar.tsx` — 4 stat cards showing planned vs. actual delta
+- `src/components/activity/ActivityItemCard.tsx` — Single activity event with queue badge
+- `src/components/activity/ActivityDateGroup.tsx` — Date-grouped event list
+
+#### Files Modified (3)
+- `src/App.tsx` — Add `/activity` route
+- `src/components/layout/Sidebar.tsx` — Add "My Activity" nav item
+- `src/hooks/useGlobalHotkeys.ts` — Add `g+a` chord shortcut
+
+#### Verification
+- `npx tsc --noEmit` — no TypeScript errors
