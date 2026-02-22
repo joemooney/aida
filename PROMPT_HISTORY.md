@@ -3372,3 +3372,31 @@ Implement API key management in Settings Admin tab so PMs/stakeholders can set A
 
 #### Git
 - Commit: feat(chat): include recent git history in chat context
+
+### Add REST Evaluate Endpoint + React UI (2026-02-21)
+
+**Prompt**: The React web UI has no way to trigger AI evaluation of requirements. Add a dedicated evaluate endpoint and UI components.
+
+#### Actions Taken
+- Created `aida-server/src/evaluate.rs` — new module with `POST /api/v2/requirements/:id/evaluate` endpoint
+  - Reuses `build_evaluation_prompt()` and `parse_evaluation_response()` from `aida-core`
+  - Calls Claude API directly via `reqwest` (non-streaming, needs structured JSON)
+  - Stores result as `StoredAiEvaluation` on the requirement and persists to database
+- Wired `mod evaluate` and `create_evaluate_router()` into `aida-server/src/main.rs`
+- Created `aida-web-react/src/api/evaluate.ts` — API function using `apiFetch`
+- Created `aida-web-react/src/hooks/useEvaluation.ts` — `useMutation` hook that invalidates requirement queries on success
+- Added Sparkles evaluate button to `DetailHeader.tsx` (shows spinner during eval, checkmark on success)
+- Added AI Evaluation results section to `DetailBody.tsx` (score badge, strengths, issues with severity, suggested improvements, timestamp)
+
+#### Files Created
+- `aida-server/src/evaluate.rs`
+- `aida-web-react/src/api/evaluate.ts`
+- `aida-web-react/src/hooks/useEvaluation.ts`
+
+#### Files Modified
+- `aida-server/src/main.rs` — Added `mod evaluate` and router merge
+- `aida-web-react/src/components/detail/DetailHeader.tsx` — Added evaluate button
+- `aida-web-react/src/components/detail/DetailBody.tsx` — Added evaluation results section
+
+#### Git
+- Commit: feat(evaluate): add REST evaluate endpoint and React UI (STORY-0375)
