@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -17,6 +17,7 @@ import {
 import { Inbox, Trash2 } from 'lucide-react';
 import { useQueue, useRemoveFromQueue, useReorderQueue } from '../../hooks/useQueue';
 import { useDetailPanel } from '../../hooks/useDetailPanel';
+import { useListSelection } from '../../hooks/useListSelection';
 import { Spinner } from '../ui/Spinner';
 import { EmptyState } from '../ui/EmptyState';
 import { QueueItem } from './QueueItem';
@@ -42,6 +43,20 @@ export function QueuePage() {
   const filtered = showCompleted
     ? entries
     : entries.filter((e) => e.status !== 'Completed');
+
+  const displayItemIds = useMemo(
+    () => filtered.map((e) => e.specId ?? e.requirementId),
+    [filtered],
+  );
+
+  const { selectedId, setSelectedId } = useListSelection(displayItemIds);
+  const selectedRowRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (selectedId && selectedRowRef.current) {
+      selectedRowRef.current.scrollIntoView({ block: 'nearest' });
+    }
+  }, [selectedId]);
 
   const activeEntry = activeId
     ? entries.find((e) => e.requirementId === activeId) ?? null
@@ -142,16 +157,25 @@ export function QueuePage() {
             strategy={verticalListSortingStrategy}
           >
             <div className="space-y-1.5">
-              {filtered.map((entry, index) => (
-                <QueueItem
-                  key={entry.requirementId}
-                  entry={entry}
-                  index={index}
-                  userId={USER_ID}
-                  onRemove={(reqId) => removeFromQueue.mutate(reqId)}
-                  onClick={(id) => open(id)}
-                />
-              ))}
+              {filtered.map((entry, index) => {
+                const rowId = entry.specId ?? entry.requirementId;
+                const isRowSelected = selectedId === rowId;
+                return (
+                  <QueueItem
+                    key={entry.requirementId}
+                    ref={isRowSelected ? selectedRowRef : undefined}
+                    entry={entry}
+                    index={index}
+                    userId={USER_ID}
+                    onRemove={(reqId) => removeFromQueue.mutate(reqId)}
+                    onClick={(id) => {
+                      setSelectedId(rowId);
+                      open(id);
+                    }}
+                    isSelected={isRowSelected}
+                  />
+                );
+              })}
             </div>
           </SortableContext>
           <DragOverlay>

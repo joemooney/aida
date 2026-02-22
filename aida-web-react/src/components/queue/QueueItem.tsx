@@ -1,3 +1,4 @@
+import { forwardRef, useCallback } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, X } from 'lucide-react';
@@ -13,15 +14,18 @@ interface QueueItemProps {
   userId: string;
   onRemove: (reqId: string) => void;
   onClick: (id: string) => void;
+  isSelected?: boolean;
 }
 
-export function QueueItem({
+export const QueueItem = forwardRef<HTMLDivElement, QueueItemProps>(
+function QueueItem({
   entry,
   index,
   userId,
   onRemove,
   onClick,
-}: QueueItemProps) {
+  isSelected,
+}, ref) {
   const {
     attributes,
     listeners,
@@ -31,6 +35,15 @@ export function QueueItem({
     isDragging,
   } = useSortable({ id: entry.requirementId });
 
+  const setRefs = useCallback(
+    (el: HTMLDivElement | null) => {
+      setNodeRef(el);
+      if (typeof ref === 'function') ref(el);
+      else if (ref) ref.current = el;
+    },
+    [setNodeRef, ref],
+  );
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -38,11 +51,12 @@ export function QueueItem({
 
   return (
     <div
-      ref={setNodeRef}
+      ref={setRefs}
       style={style}
       className={cn(
         'group flex items-center gap-3 rounded-lg border border-edge bg-surface px-3 py-2.5 transition-colors hover:bg-surface-hover/50',
         isDragging && 'opacity-50 shadow-lg',
+        isSelected && 'ring-2 ring-accent/40 bg-accent/5',
       )}
     >
       {/* Drag handle */}
@@ -108,4 +122,4 @@ export function QueueItem({
       </button>
     </div>
   );
-}
+});
