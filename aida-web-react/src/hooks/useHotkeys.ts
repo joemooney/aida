@@ -1,5 +1,5 @@
 // trace:STORY-0375 | ai:claude
-import { createContext, useContext, useEffect, useRef, useCallback } from 'react';
+import { createContext, useContext, useEffect, useRef } from 'react';
 
 export interface HotkeyBinding {
   id: string;
@@ -12,8 +12,8 @@ export interface HotkeyBinding {
 }
 
 export interface HotkeyContextValue {
-  register: (bindings: HotkeyBinding[]) => () => void;
-  bindings: HotkeyBinding[];
+  register: (ref: React.RefObject<HotkeyBinding[]>) => () => void;
+  getBindings: () => HotkeyBinding[];
   pendingChord: string | null;
   helpOpen: boolean;
   setHelpOpen: (open: boolean) => void;
@@ -27,19 +27,17 @@ export function useHotkeyContext(): HotkeyContextValue {
   return ctx;
 }
 
-export function useHotkeys(bindings: HotkeyBinding[], deps: unknown[] = []): void {
+export function useHotkeys(bindings: HotkeyBinding[]): void {
   const ctx = useHotkeyContext();
-  const bindingsRef = useRef(bindings);
+  const bindingsRef = useRef<HotkeyBinding[]>(bindings);
   bindingsRef.current = bindings;
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const stableBindings = useCallback(() => bindingsRef.current, deps);
-
   useEffect(() => {
-    const unregister = ctx.register(stableBindings());
+    const unregister = ctx.register(bindingsRef);
     return unregister;
+    // Only register/unregister on mount/unmount — bindings are read via ref
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ctx.register, stableBindings, ...deps]);
+  }, [ctx.register]);
 }
 
 export function isInputFocused(): boolean {

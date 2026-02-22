@@ -1,5 +1,5 @@
 // trace:STORY-0375 | ai:claude
-import { useState, useCallback, useRef, useEffect, type ReactNode } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo, type ReactNode, type RefObject } from 'react';
 import { HotkeyContext, isInputFocused, type HotkeyBinding } from '../../hooks/useHotkeys';
 import { ChordIndicator } from './ChordIndicator';
 import { KeyboardHelp } from './KeyboardHelp';
@@ -27,6 +27,14 @@ function normalizeKeyEvent(e: KeyboardEvent): string {
   return parts.join('+');
 }
 
+function collectBindings(refsMap: Map<object, RefObject<HotkeyBinding[]>>): HotkeyBinding[] {
+  const all: HotkeyBinding[] = [];
+  for (const ref of refsMap.values()) {
+    if (ref.current) all.push(...ref.current);
+  }
+  return all;
+}
+
 interface Props {
   children: ReactNode;
 }
@@ -34,8 +42,7 @@ interface Props {
 export function HotkeyProvider({ children }: Props) {
   const [helpOpen, setHelpOpen] = useState(false);
   const [pendingChord, setPendingChord] = useState<string | null>(null);
-  const [allBindings, setAllBindings] = useState<HotkeyBinding[]>([]);
-  const bindingsMapRef = useRef(new Map<object, HotkeyBinding[]>());
+  const bindingsMapRef = useRef(new Map<object, RefObject<HotkeyBinding[]>>());
   const chordTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingChordRef = useRef<string | null>(null);
 
@@ -44,36 +51,30 @@ export function HotkeyProvider({ children }: Props) {
     pendingChordRef.current = pendingChord;
   }, [pendingChord]);
 
-  const rebuildBindings = useCallback(() => {
-    const all: HotkeyBinding[] = [];
-    for (const bindings of bindingsMapRef.current.values()) {
-      all.push(...bindings);
-    }
-    setAllBindings(all);
-  }, []);
-
+  // register stores a ref — no state updates, no re-renders
   const register = useCallback(
-    (bindings: HotkeyBinding[]) => {
+    (ref: RefObject<HotkeyBinding[]>) => {
       const key = {};
-      bindingsMapRef.current.set(key, bindings);
-      rebuildBindings();
+      bindingsMapRef.current.set(key, ref);
       return () => {
         bindingsMapRef.current.delete(key);
-        rebuildBindings();
       };
     },
-    [rebuildBindings],
+    [],
   );
 
-  // Single keydown listener
+  // getBindings collects current bindings from all refs (for help modal)
+  const getBindings = useCallback(() => collectBindings(bindingsMapRef.current), []);
+
+  // Single keydown listener — reads from refs each time, no stale closures
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const pressed = normalizeKeyEvent(e);
       const currentChord = pendingChordRef.current;
       const inputActive = isInputFocused();
 
-      // Get enabled bindings
-      const enabled = allBindings.filter((b) => b.enabled !== false);
+      // Get enabled bindings from all registered refs
+      const enabled = collectBindings(bindingsMapRef.current).filter((b) => b.enabled !== false);
 
       if (currentChord) {
         // We're in chord mode — look for second key match
@@ -151,7 +152,7 @@ export function HotkeyProvider({ children }: Props) {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [allBindings]);
+  }, []); // No deps — reads everything from refs
 
   // Cleanup chord timeout
   useEffect(() => {
@@ -160,10 +161,13 @@ export function HotkeyProvider({ children }: Props) {
     };
   }, []);
 
+  const contextValue = useMemo(
+    () => ({ register, getBindings, pendingChord, helpOpen, setHelpOpen }),
+    [register, getBindings, pendingChord, helpOpen, setHelpOpen],
+  );
+
   return (
-    <HotkeyContext.Provider
-      value={{ register, bindings: allBindings, pendingChord, helpOpen, setHelpOpen }}
-    >
+    <HotkeyContext.Provider value={contextValue}>
       {children}
       <ChordIndicator chord={pendingChord} />
       {helpOpen && <KeyboardHelp />}

@@ -203,7 +203,7 @@ export function RequirementsList() {
     [selectedId],
   );
 
-  useHotkeys(pickerBindings, [selectedId]);
+  useHotkeys(pickerBindings);
 
   const handlePickerSelect = useCallback(
     (value: string) => {

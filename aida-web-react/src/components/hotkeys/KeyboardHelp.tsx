@@ -25,7 +25,8 @@ function KeySequence({ keys }: { keys: string[] }) {
 }
 
 export function KeyboardHelp() {
-  const { bindings, setHelpOpen } = useHotkeyContext();
+  const { getBindings, setHelpOpen } = useHotkeyContext();
+  const bindings = getBindings();
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
