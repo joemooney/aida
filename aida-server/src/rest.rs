@@ -1355,6 +1355,8 @@ async fn update_requirement_v2_legacy(
     if let Err(e) = state.backend.save(&store) {
         return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
     }
+    drop(store);
+    state.mark_saved().await;
 
     Ok(Json(updated))
 }
@@ -1416,6 +1418,7 @@ async fn create_requirement_v2_legacy(
     if let Err(e) = state.backend.save(&*state.store.read().await) {
         return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to save: {}", e)));
     }
+    state.mark_saved().await;
 
     Ok((StatusCode::CREATED, Json(added)))
 }
@@ -1558,6 +1561,8 @@ async fn assign_sprint_legacy(
     if let Err(e) = state.backend.save(&store) {
         return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
     }
+    drop(store);
+    state.mark_saved().await;
 
     Ok(Json(updated))
 }
@@ -1584,6 +1589,8 @@ async fn remove_sprint_legacy(
     if let Err(e) = state.backend.save(&store) {
         return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
     }
+    drop(store);
+    state.mark_saved().await;
 
     Ok(Json(updated))
 }
@@ -1655,6 +1662,8 @@ async fn set_parent_legacy(
     if let Err(e) = state.backend.save(&store) {
         return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
     }
+    drop(store);
+    state.mark_saved().await;
 
     Ok(Json(updated))
 }

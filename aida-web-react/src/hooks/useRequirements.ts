@@ -26,23 +26,32 @@ export function useUpdateRequirement() {
       updateRequirement(id, data),
     onMutate: async ({ id, data }) => {
       await queryClient.cancelQueries({ queryKey: ['requirements'] });
+      await queryClient.cancelQueries({ queryKey: ['requirement', id] });
       const previous = queryClient.getQueryData<Requirement[]>(['requirements']);
+      const previousSingle = queryClient.getQueryData<Requirement>(['requirement', id]);
 
       queryClient.setQueryData<Requirement[]>(['requirements'], (old) =>
         old?.map((req) =>
           req.id === id || req.spec_id === id ? { ...req, ...data } : req,
         ),
       );
+      if (previousSingle) {
+        queryClient.setQueryData<Requirement>(['requirement', id], { ...previousSingle, ...data });
+      }
 
-      return { previous };
+      return { previous, previousSingle };
     },
-    onError: (_err, _vars, context) => {
+    onError: (_err, { id }, context) => {
       if (context?.previous) {
         queryClient.setQueryData(['requirements'], context.previous);
       }
+      if (context?.previousSingle) {
+        queryClient.setQueryData(['requirement', id], context.previousSingle);
+      }
     },
-    onSettled: () => {
+    onSettled: (_data, _err, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['requirements'] });
+      queryClient.invalidateQueries({ queryKey: ['requirement', id] });
     },
   });
 }
@@ -63,8 +72,9 @@ export function useSetParent() {
   return useMutation({
     mutationFn: ({ id, parentId }: { id: string; parentId: string | null }) =>
       setParent(id, parentId),
-    onSettled: () => {
+    onSettled: (_data, _err, { id }) => {
       queryClient.invalidateQueries({ queryKey: ['requirements'] });
+      queryClient.invalidateQueries({ queryKey: ['requirement', id] });
     },
   });
 }

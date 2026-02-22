@@ -39,12 +39,19 @@ impl ServerState {
         })
     }
 
-    /// Save the current store to disk
+    /// Save the current store to disk and update mtime to prevent unnecessary reloads
     async fn save(&self) -> Result<(), Status> {
         let store = self.store.read().await;
         self.backend
             .save(&store)
-            .map_err(|e| Status::internal(format!("Failed to save: {}", e)))
+            .map_err(|e| Status::internal(format!("Failed to save: {}", e)))?;
+        self.mark_saved().await;
+        Ok(())
+    }
+
+    /// Update last_loaded_mtime after a direct backend.save() to prevent spurious reloads
+    pub async fn mark_saved(&self) {
+        *self.last_loaded_mtime.write().await = Self::compute_db_mtime(self.backend.path());
     }
 
     /// Get the latest mtime across the DB file and its WAL file (for SQLite WAL mode)
