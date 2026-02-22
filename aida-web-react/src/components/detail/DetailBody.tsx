@@ -118,7 +118,7 @@ export function DetailBody({ requirement }: DetailBodyProps) {
                   <span>## Heading 2</span><span>*italic*</span>
                   <span>### Heading 3</span><span>`inline code`</span>
                   <span>- list item</span><span>1. numbered list</span>
-                  <span>[link](url)</span><span>```code block```</span>
+                  <span>[link](url)</span><span>```lang ← syntax highlight</span>
                 </div>
                 <div className="mt-1.5 pt-1.5 border-t border-edge text-content-muted space-y-0.5">
                   <div>::red[colored text] → <span className="text-red-400">colored</span>, <span className="text-blue-400">blue</span>, <span className="text-green-400">green</span>, <span className="text-yellow-400">yellow</span>, ...</div>

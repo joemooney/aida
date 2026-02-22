@@ -4,6 +4,8 @@
 import { useCallback, type ComponentPropsWithoutRef } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { remarkSpecLinks } from '../../lib/remarkSpecLinks';
 import { remarkColorText, COLOR_CLASSES } from '../../lib/remarkColorText';
 import { useDetailPanel } from '../../hooks/useDetailPanel';
@@ -51,11 +53,47 @@ export function LinkedMarkdown({ children, className }: LinkedMarkdownProps) {
     [open],
   );
 
+  const CodeComponent = useCallback(
+    ({ className: codeClassName, children: codeChildren, ...props }: ComponentPropsWithoutRef<'code'>) => {
+      const match = /language-(\w+)/.exec(codeClassName || '');
+      const codeString = String(codeChildren).replace(/\n$/, '');
+      // Fenced code block with language
+      if (match) {
+        return (
+          <SyntaxHighlighter
+            style={oneDark}
+            language={match[1]}
+            PreTag="div"
+            customStyle={{ margin: 0, borderRadius: '0.5rem', fontSize: '0.75rem' }}
+          >
+            {codeString}
+          </SyntaxHighlighter>
+        );
+      }
+      // Fenced code block without language (detect by presence of newlines)
+      if (codeString.includes('\n')) {
+        return (
+          <SyntaxHighlighter
+            style={oneDark}
+            language="text"
+            PreTag="div"
+            customStyle={{ margin: 0, borderRadius: '0.5rem', fontSize: '0.75rem' }}
+          >
+            {codeString}
+          </SyntaxHighlighter>
+        );
+      }
+      // Inline code
+      return <code className={codeClassName} {...props}>{codeChildren}</code>;
+    },
+    [],
+  );
+
   return (
     <div className={className}>
       <Markdown
         remarkPlugins={[remarkGfm, remarkSpecLinks, remarkColorText]}
-        components={{ a: AnchorComponent }}
+        components={{ a: AnchorComponent, code: CodeComponent }}
       >
         {children}
       </Markdown>
