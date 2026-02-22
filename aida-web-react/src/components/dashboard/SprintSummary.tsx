@@ -14,11 +14,24 @@ interface SprintSummaryProps {
   items: Requirement[];
 }
 
+function buildSprintFilterUrl(sprintId: string, status?: RequirementStatus): string {
+  const rules: { field: string; operator: string; value: string }[] = [
+    { field: '_sprint', operator: '=', value: sprintId },
+  ];
+  if (status) {
+    rules.push({ field: 'status', operator: '=', value: status });
+  }
+  const query = { combinator: 'and', rules };
+  const aq = btoa(JSON.stringify(query));
+  return `/list?aq=${aq}`;
+}
+
 export function SprintSummary({ sprint, items }: SprintSummaryProps) {
   const navigate = useNavigate();
   const num = getSprintNumber(sprint);
   const { start, end } = getSprintDates(sprint);
   const progress = computeSprintProgress(items);
+  const sprintId = sprint.spec_id ?? sprint.id;
 
   let daysLeft: number | null = null;
   if (end) {
@@ -74,7 +87,7 @@ export function SprintSummary({ sprint, items }: SprintSummaryProps) {
           <button
             key={card.label}
             type="button"
-            onClick={() => navigate(card.status ? `/list?status=${card.status}` : '/list')}
+            onClick={() => navigate(buildSprintFilterUrl(sprintId, card.status ?? undefined))}
             className="rounded-lg border border-edge bg-surface p-3 transition-all hover:border-accent/50 hover:bg-surface-hover cursor-pointer text-left"
           >
             <div className="flex items-center gap-1.5 mb-1">
