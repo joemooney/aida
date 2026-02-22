@@ -104,7 +104,8 @@ aida add \
   --title "<generated title from code context>" \
   --description "Implementation of <feature description>" \
   --type functional \
-  --status completed
+  --status completed \
+  --tags "comma,separated"
 ```
 
 ### Step 5: Determine Commit Message Components
@@ -163,7 +164,7 @@ Environment variables:
 ```bash
 # Search requirements database
 aida search "<keyword>"
-aida add --title "..." --description "..." --status completed
+aida add --title "..." --description "..." --status completed --tags "comma,separated"
 aida edit <SPEC-ID> --status completed
 aida comment add <SPEC-ID> "..."
 ```

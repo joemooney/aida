@@ -104,8 +104,8 @@ Based on the evaluation, offer:
 ## CLI Reference
 
 ```bash
-# Add requirement
-aida add --title "..." --description "..." --type functional --priority high --status draft
+# Add requirement (NOTE: use --tags not --tag)
+aida add --title "..." --description "..." --type functional --priority high --status draft --tags "comma,separated"
 
 # Show requirement details
 aida show <SPEC-ID>

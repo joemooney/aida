@@ -40,7 +40,7 @@ aida list --status draft               # Filter by status
 aida search "<query>"                  # Simple case-insensitive search
 aida grep "<pattern>" -i               # Advanced regex search
 aida show <ID>                         # Show requirement details (e.g., FR-0042)
-aida add --title "..." --description "..." --status draft  # Add new requirement
+aida add --title "..." --description "..." --status draft --tags "tag1,tag2"  # Add new requirement
 aida edit <ID> --status completed      # Update status
 aida comment add <ID> "..."            # Add implementation note
 ```

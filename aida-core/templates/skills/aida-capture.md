@@ -71,7 +71,7 @@ For each finding, offer to:
 
 For new requirements:
 ```bash
-aida add --title "..." --description "..." --type functional --status completed
+aida add --title "..." --description "..." --type functional --status completed --tags "tag1,tag2"
 ```
 
 For existing requirements:
@@ -86,8 +86,8 @@ aida edit <SPEC-ID> --status completed
 # Search for existing requirements
 aida list --search "<keyword>"
 
-# Add new requirement
-aida add --title "..." --description "..." --status <status>
+# Add new requirement (NOTE: use --tags not --tag)
+aida add --title "..." --description "..." --status <status> --tags "comma,separated"
 
 # Update requirement
 aida edit <SPEC-ID> --status <status>

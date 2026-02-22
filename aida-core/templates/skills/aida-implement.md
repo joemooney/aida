@@ -77,8 +77,8 @@ Before writing code:
 
 If the requirement is too broad, suggest splitting:
 ```bash
-# Create child requirements
-aida add --title "..." --description "..." --type functional --status draft
+# Create child requirements (NOTE: use --tags not --tag)
+aida add --title "..." --description "..." --type functional --status draft --tags "comma,separated"
 
 # Link as child
 aida rel add --from <PARENT-ID> --to <CHILD-ID> --type Parent
@@ -192,8 +192,8 @@ aida comment add <SPEC-ID> "Comment text"
 # Add relationship
 aida rel add --from <FROM-ID> --to <TO-ID> --type <Parent|Verifies|References|Duplicate>
 
-# Create new requirement
-aida add --title "..." --description "..." --type <type> --status draft
+# Create new requirement (NOTE: use --tags not --tag)
+aida add --title "..." --description "..." --type <type> --status draft --tags "comma,separated"
 
 # List requirements by feature
 aida list --feature <feature-name>
