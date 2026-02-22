@@ -15,8 +15,12 @@ interface SprintSummaryProps {
 }
 
 function buildSprintFilterUrl(sprintId: string, status?: RequirementStatus): string {
-  const rules: { field: string; operator: string; value: string }[] = [
+  const rules: Record<string, unknown>[] = [
     { field: '_sprint', operator: '=', value: sprintId },
+    // Exclude stateless types to match dashboard counts
+    { field: 'req_type', operator: '!=', value: 'Folder' },
+    { field: 'req_type', operator: '!=', value: 'Meta' },
+    { field: 'req_type', operator: '!=', value: 'Sprint' },
   ];
   if (status) {
     rules.push({ field: 'status', operator: '=', value: status });
