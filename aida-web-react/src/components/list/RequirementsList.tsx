@@ -10,17 +10,20 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import { ArrowUpDown, List, GitBranch, ChevronsDownUp, ChevronsUpDown, ListPlus, XCircle } from 'lucide-react';
+import { ArrowUpDown, List, GitBranch, ChevronsDownUp, ChevronsUpDown, ListPlus, XCircle, SlidersHorizontal } from 'lucide-react';
 import type { Requirement } from '@shared/types';
 import { cn } from '../../lib/utils';
 import { useRequirements, useSetParent, useUpdateRequirement } from '../../hooks/useRequirements';
 import { useFilters } from '../../hooks/useFilters';
+import { useAdvancedQuery } from '../../hooks/useAdvancedQuery';
 import { useAddToQueue } from '../../hooks/useQueue';
 import { useListSelection } from '../../hooks/useListSelection';
 import { useHotkeys, type HotkeyBinding } from '../../hooks/useHotkeys';
+import { buildQueryFields } from '../../lib/query-fields';
 import { Spinner } from '../ui/Spinner';
 import { EmptyState } from '../ui/EmptyState';
 import { KanbanFilterBar } from '../kanban/KanbanFilterBar';
+import { AdvancedQueryBuilder } from '../filters/AdvancedQueryBuilder';
 import { QuickPicker } from '../ui/QuickPicker';
 import { RequirementsRow } from './RequirementsRow';
 import { TreeRow } from './TreeRow';
@@ -99,6 +102,19 @@ const PRIORITY_OPTIONS = ['High', 'Medium', 'Low'];
 export function RequirementsList() {
   const { data: requirements, isLoading, error } = useRequirements();
   const { applyFilters } = useFilters();
+  const {
+    query: advancedQuery,
+    onQueryChange,
+    clearQuery,
+    isOpen: advancedOpen,
+    toggleOpen: toggleAdvanced,
+    applyAdvancedFilter,
+    hasActiveQuery,
+    savedQueries,
+    saveQuery,
+    loadSavedQuery,
+    deleteSavedQuery,
+  } = useAdvancedQuery();
   const addToQueue = useAddToQueue();
   const setParent = useSetParent();
   const updateReq = useUpdateRequirement();
@@ -116,9 +132,18 @@ export function RequirementsList() {
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
 
+  // Build dynamic fields for the query builder
+  const queryFields = useMemo(
+    () => buildQueryFields(requirements ?? []),
+    [requirements],
+  );
+
   const filtered = useMemo(
-    () => (requirements ? applyFilters(requirements) : []),
-    [requirements, applyFilters],
+    () => {
+      const simple = requirements ? applyFilters(requirements) : [];
+      return applyAdvancedFilter(simple);
+    },
+    [requirements, applyFilters, applyAdvancedFilter],
   );
 
   const sorted = useMemo(
@@ -199,8 +224,15 @@ export function RequirementsList() {
         handler: () => setPickerKind('owner'),
         enabled: selectedId !== null,
       },
+      {
+        id: 'list:toggle-advanced-filter',
+        description: 'Toggle advanced filter',
+        category: 'List View',
+        keys: ['f'],
+        handler: toggleAdvanced,
+      },
     ],
-    [selectedId],
+    [selectedId, toggleAdvanced],
   );
 
   useHotkeys(pickerBindings);
@@ -348,10 +380,44 @@ export function RequirementsList() {
             </div>
           )}
         </div>
-        <span className="text-sm text-content-muted">{displayCount} items</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-content-muted">{displayCount} items</span>
+          <button
+            onClick={toggleAdvanced}
+            className={cn(
+              'flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors',
+              advancedOpen || hasActiveQuery
+                ? 'border-accent bg-accent/10 text-accent'
+                : 'border-edge text-content-muted hover:text-content hover:bg-surface-hover',
+            )}
+            title="Toggle advanced query builder (f)"
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            Advanced
+            {hasActiveQuery && (
+              <span className="rounded-full bg-accent px-1.5 text-[10px] font-bold text-white">
+                ON
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
       <KanbanFilterBar requirements={requirements ?? []} />
+
+      {advancedOpen && (
+        <AdvancedQueryBuilder
+          query={advancedQuery}
+          onQueryChange={onQueryChange}
+          fields={queryFields}
+          onClear={clearQuery}
+          hasActiveQuery={hasActiveQuery}
+          savedQueries={savedQueries}
+          onSaveQuery={saveQuery}
+          onLoadQuery={loadSavedQuery}
+          onDeleteQuery={deleteSavedQuery}
+        />
+      )}
 
       {displayCount === 0 ? (
         <EmptyState
