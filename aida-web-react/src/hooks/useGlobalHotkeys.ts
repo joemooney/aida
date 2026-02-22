@@ -18,6 +18,13 @@ export function useGlobalHotkeys(): void {
       handler: () => setHelpOpen(true),
     },
     {
+      id: 'global:create',
+      description: 'Create requirement',
+      category: 'Global',
+      keys: ['c'],
+      handler: () => document.dispatchEvent(new CustomEvent('aida:quick-create')),
+    },
+    {
       id: 'global:search',
       description: 'Focus search',
       category: 'Global',

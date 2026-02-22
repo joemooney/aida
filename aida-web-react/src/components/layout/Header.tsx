@@ -1,12 +1,14 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Search, Sun, Moon, X, RefreshCw } from 'lucide-react';
+import { Search, Sun, Moon, X, RefreshCw, Plus } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '../../lib/utils';
 import { useTheme } from '../../hooks/useTheme';
 import { useSearch } from '../../hooks/useSearch';
 import { useFilters, type Filters } from '../../hooks/useFilters';
 import { reloadServer } from '../../api/requirements';
+import { QuickCreateDropdown } from '../create/QuickCreateDropdown';
+import { CreateRequirementModal } from '../create/CreateRequirementModal';
 import type { Requirement } from '@shared/types';
 
 const FILTER_FIELDS = new Set<keyof Filters>(['status', 'priority', 'type', 'feature', 'owner', 'tag']);
@@ -50,9 +52,21 @@ export function Header() {
   const [query, setQuery] = useState(searchParams.get('q') ?? '');
   const [showResults, setShowResults] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalPreFill, setModalPreFill] = useState<{ type?: string; title?: string }>({});
   const { data: results, isLoading } = useSearch(query);
   const { setFilter } = useFilters();
   const inputRef = useRef<HTMLInputElement>(null);
+  const createBtnRef = useRef<HTMLDivElement>(null);
+
+  const openDropdown = useCallback(() => setDropdownOpen(true), []);
+
+  // Listen for custom event from hotkey
+  useEffect(() => {
+    document.addEventListener('aida:quick-create', openDropdown);
+    return () => document.removeEventListener('aida:quick-create', openDropdown);
+  }, [openDropdown]);
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -142,6 +156,34 @@ export function Header() {
 
       {/* Spacer */}
       <div className="flex-1" />
+
+      {/* Create requirement */}
+      <div ref={createBtnRef} className="relative">
+        <button
+          onClick={() => setDropdownOpen((v) => !v)}
+          className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent/90 transition-colors cursor-pointer"
+        >
+          <Plus className="h-4 w-4" />
+          New
+        </button>
+        {dropdownOpen && (
+          <QuickCreateDropdown
+            onClose={() => setDropdownOpen(false)}
+            onMoreOptions={(type, title) => {
+              setDropdownOpen(false);
+              setModalPreFill({ type, title });
+              setModalOpen(true);
+            }}
+          />
+        )}
+      </div>
+      {modalOpen && (
+        <CreateRequirementModal
+          onClose={() => { setModalOpen(false); setModalPreFill({}); }}
+          initialType={modalPreFill.type}
+          initialTitle={modalPreFill.title}
+        />
+      )}
 
       {/* Refresh data */}
       <button

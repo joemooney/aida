@@ -22,7 +22,7 @@ export function updateRequirement(
 export function createRequirement(
   data: Partial<Requirement>,
 ): Promise<Requirement> {
-  return apiFetch<Requirement>('/requirements', {
+  return apiFetch<Requirement>('/v2/requirements', {
     method: 'POST',
     body: JSON.stringify(data),
   });
