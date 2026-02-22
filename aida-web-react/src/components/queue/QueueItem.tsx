@@ -15,6 +15,7 @@ interface QueueItemProps {
   onRemove: (reqId: string) => void;
   onClick: (id: string) => void;
   isSelected?: boolean;
+  readOnly?: boolean;
 }
 
 export const QueueItem = forwardRef<HTMLDivElement, QueueItemProps>(
@@ -25,6 +26,7 @@ function QueueItem({
   onRemove,
   onClick,
   isSelected,
+  readOnly,
 }, ref) {
   const {
     attributes,
@@ -33,7 +35,7 @@ function QueueItem({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: entry.requirementId });
+  } = useSortable({ id: entry.requirementId, disabled: readOnly });
 
   const setRefs = useCallback(
     (el: HTMLDivElement | null) => {
@@ -60,13 +62,15 @@ function QueueItem({
       )}
     >
       {/* Drag handle */}
-      <button
-        {...attributes}
-        {...listeners}
-        className="flex items-center text-content-muted hover:text-content cursor-grab active:cursor-grabbing shrink-0"
-      >
-        <GripVertical className="h-4 w-4" />
-      </button>
+      {!readOnly && (
+        <button
+          {...attributes}
+          {...listeners}
+          className="flex items-center text-content-muted hover:text-content cursor-grab active:cursor-grabbing shrink-0"
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+      )}
 
       {/* Position number */}
       <span className="text-xs font-mono text-content-muted w-5 text-right shrink-0">
@@ -110,16 +114,18 @@ function QueueItem({
       </div>
 
       {/* Remove button */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onRemove(entry.requirementId);
-        }}
-        className="flex h-6 w-6 items-center justify-center rounded text-content-muted opacity-0 group-hover:opacity-100 hover:text-red-500 hover:bg-red-500/10 transition-all cursor-pointer shrink-0"
-        title="Remove from queue"
-      >
-        <X className="h-3.5 w-3.5" />
-      </button>
+      {!readOnly && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove(entry.requirementId);
+          }}
+          className="flex h-6 w-6 items-center justify-center rounded text-content-muted opacity-0 group-hover:opacity-100 hover:text-red-500 hover:bg-red-500/10 transition-all cursor-pointer shrink-0"
+          title="Remove from queue"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      )}
     </div>
   );
 });
