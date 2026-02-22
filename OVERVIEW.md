@@ -186,7 +186,7 @@ Define connections between requirements:
     - Database: `queue_entries` table (SQLite/PostgreSQL), gapped-integer positions
     - REST API: `GET/POST /api/v2/queue/:user_id`, `DELETE/PATCH /:req_id`, `POST /reorder`
     - CLI: `aida queue list|add|remove|move|clear` with `--user`, `--top`, `--note` flags
-    - React: `/queue` route with drag-to-reorder (@dnd-kit/sortable)
+    - React: `/queue` route with drag-to-reorder (@dnd-kit/sortable), owner-scoped via `?user=` URL param with owner-picker dropdown and read-only mode for other users' queues
     - Dashboard widget: top 5 items, auto-hidden when empty
     - "Add to Queue" buttons in detail panel and list view (hover)
     - Cross-user assignment via `added_by` field with visual badges

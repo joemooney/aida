@@ -3557,3 +3557,20 @@ Implement API key management in Settings Admin tab so PMs/stakeholders can set A
 
 #### Verification
 - `npx tsc --noEmit` — no TypeScript errors
+
+---
+
+### Owner-Scoped Queues: View Any User's Queue (2026-02-22)
+
+- **Prompt**: Add `?user=` URL param to Queue page so users can view any owner's queue, with owner-picker dropdown and read-only mode
+- **Actions**:
+  - Modified `QueuePage.tsx` — replaced hardcoded `USER_ID = 'default'` with `useSearchParams` to read `?user=` param, added owner-picker `<select>` dropdown populated from `useRequirements`, dynamic title/subtitle (`My Queue` vs `{userId}'s Queue`), read-only badge, conditional empty state text
+  - Modified `QueueItem.tsx` — added `readOnly` prop that hides drag handle and remove button, disables `useSortable` drag, while keeping click-to-open detail panel working
+  - Cleaned up unused `Trash2` import from QueuePage
+
+#### Files Modified (2)
+- `src/components/queue/QueuePage.tsx` — URL param, owner picker, read-only mode
+- `src/components/queue/QueueItem.tsx` — readOnly prop for drag/remove controls
+
+#### Verification
+- `npx tsc --noEmit` — no TypeScript errors
