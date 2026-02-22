@@ -5,6 +5,7 @@ import { useCallback, type ComponentPropsWithoutRef } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { remarkSpecLinks } from '../../lib/remarkSpecLinks';
+import { remarkColorText, COLOR_CLASSES } from '../../lib/remarkColorText';
 import { useDetailPanel } from '../../hooks/useDetailPanel';
 
 interface LinkedMarkdownProps {
@@ -34,6 +35,12 @@ export function LinkedMarkdown({ children, className }: LinkedMarkdownProps) {
           </a>
         );
       }
+      // Colored text: ::red[text] → <span class="text-red-400">text</span>
+      if (href?.startsWith('#color:')) {
+        const colorName = href.slice(7);
+        const colorClass = COLOR_CLASSES[colorName] ?? '';
+        return <span className={colorClass}>{linkChildren}</span>;
+      }
       // Normal external links
       return (
         <a href={href} {...props} target="_blank" rel="noopener noreferrer">
@@ -47,7 +54,7 @@ export function LinkedMarkdown({ children, className }: LinkedMarkdownProps) {
   return (
     <div className={className}>
       <Markdown
-        remarkPlugins={[remarkGfm, remarkSpecLinks]}
+        remarkPlugins={[remarkGfm, remarkSpecLinks, remarkColorText]}
         components={{ a: AnchorComponent }}
       >
         {children}
