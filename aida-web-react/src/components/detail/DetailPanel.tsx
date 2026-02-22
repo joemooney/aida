@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { useRequirement } from '../../hooks/useRequirements';
 import { useDetailPanel } from '../../hooks/useDetailPanel';
 import { Spinner } from '../ui/Spinner';
@@ -13,15 +12,6 @@ interface DetailPanelProps {
 export function DetailPanel({ id }: DetailPanelProps) {
   const { close } = useDetailPanel();
   const { data: requirement, isLoading, error } = useRequirement(id);
-
-  // Close on Escape
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') close();
-    }
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [close]);
 
   return (
     <>

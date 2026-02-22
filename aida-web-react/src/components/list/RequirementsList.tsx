@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -13,12 +13,15 @@ import {
 import { ArrowUpDown, List, GitBranch, ChevronsDownUp, ChevronsUpDown, ListPlus, XCircle } from 'lucide-react';
 import type { Requirement } from '@shared/types';
 import { cn } from '../../lib/utils';
-import { useRequirements, useSetParent } from '../../hooks/useRequirements';
+import { useRequirements, useSetParent, useUpdateRequirement } from '../../hooks/useRequirements';
 import { useFilters } from '../../hooks/useFilters';
 import { useAddToQueue } from '../../hooks/useQueue';
+import { useListSelection } from '../../hooks/useListSelection';
+import { useHotkeys, type HotkeyBinding } from '../../hooks/useHotkeys';
 import { Spinner } from '../ui/Spinner';
 import { EmptyState } from '../ui/EmptyState';
 import { KanbanFilterBar } from '../kanban/KanbanFilterBar';
+import { QuickPicker } from '../ui/QuickPicker';
 import { RequirementsRow } from './RequirementsRow';
 import { TreeRow } from './TreeRow';
 import { buildTree, flattenTree, collectParentIds, isDescendant } from '../../lib/tree-utils';
@@ -88,16 +91,26 @@ function RootDropZone({ isActive }: { isActive: boolean }) {
   );
 }
 
+type PickerKind = 'status' | 'priority' | 'owner' | null;
+
+const STATUS_OPTIONS = ['Draft', 'Approved', 'In-Progress', 'Completed', 'Rejected'];
+const PRIORITY_OPTIONS = ['High', 'Medium', 'Low'];
+
 export function RequirementsList() {
   const { data: requirements, isLoading, error } = useRequirements();
   const { applyFilters } = useFilters();
   const addToQueue = useAddToQueue();
   const setParent = useSetParent();
+  const updateReq = useUpdateRequirement();
   const [sortKey, setSortKey] = useState<SortKey>('spec_id');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [viewMode, setViewMode] = useState<ViewMode>('flat');
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [pickerKind, setPickerKind] = useState<PickerKind>(null);
+  const selectedRowRef = useRef<HTMLTableRowElement | null>(null);
+
+  const isTree = viewMode === 'tree';
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -133,6 +146,75 @@ export function RequirementsList() {
 
   const parentIds = useMemo(() => collectParentIds(roots), [roots]);
 
+  // Derive display item IDs for keyboard selection (use spec_id for detail panel compat)
+  const displayItemIds = useMemo(() => {
+    if (isTree) {
+      return treeRows.map((row) => row.node.requirement.spec_id ?? row.node.requirement.id);
+    }
+    return sorted.map((req) => req.spec_id ?? req.id);
+  }, [isTree, treeRows, sorted]);
+
+  const { selectedId, setSelectedId } = useListSelection(displayItemIds);
+
+  // Scroll selected row into view
+  useEffect(() => {
+    if (selectedId && selectedRowRef.current) {
+      selectedRowRef.current.scrollIntoView({ block: 'nearest' });
+    }
+  }, [selectedId]);
+
+  // Derive unique owners from requirements for owner picker
+  const ownerOptions = useMemo(() => {
+    const owners = new Set<string>();
+    for (const r of requirements ?? []) {
+      if (r.owner) owners.add(r.owner);
+    }
+    return Array.from(owners).sort();
+  }, [requirements]);
+
+  // Quick picker shortcuts (Phase 3)
+  const pickerBindings: HotkeyBinding[] = useMemo(
+    () => [
+      {
+        id: 'list:status-picker',
+        description: 'Change status',
+        category: 'List View',
+        keys: ['s'],
+        handler: () => setPickerKind('status'),
+        enabled: selectedId !== null,
+      },
+      {
+        id: 'list:priority-picker',
+        description: 'Change priority',
+        category: 'List View',
+        keys: ['p'],
+        handler: () => setPickerKind('priority'),
+        enabled: selectedId !== null,
+      },
+      {
+        id: 'list:owner-picker',
+        description: 'Change owner',
+        category: 'List View',
+        keys: ['o'],
+        handler: () => setPickerKind('owner'),
+        enabled: selectedId !== null,
+      },
+    ],
+    [selectedId],
+  );
+
+  useHotkeys(pickerBindings, [selectedId]);
+
+  const handlePickerSelect = useCallback(
+    (value: string) => {
+      if (!selectedId) return;
+      const field = pickerKind === 'status' ? 'status' : pickerKind === 'priority' ? 'priority' : 'owner';
+      updateReq.mutate({ id: selectedId, data: { [field]: value } });
+      setPickerKind(null);
+    },
+    [selectedId, pickerKind, updateReq],
+  );
+
   const handleToggle = useCallback((id: string) => {
     setCollapsed((prev) => {
       const next = new Set(prev);
@@ -165,8 +247,6 @@ export function RequirementsList() {
   const handleDragStart = useCallback((event: DragStartEvent) => {
     setActiveId(event.active.id as string);
   }, []);
-
-  const isTree = viewMode === 'tree';
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
@@ -316,18 +396,35 @@ export function RequirementsList() {
                 </thead>
                 <tbody>
                   {isTree
-                    ? treeRows.map((row) => (
-                        <TreeRow
-                          key={row.node.requirement.id}
-                          node={row.node}
-                          isCollapsed={collapsed.has(row.node.requirement.id)}
-                          onToggle={handleToggle}
-                          isDimmed={row.isAncestorOnly}
-                        />
-                      ))
-                    : sorted.map((req) => (
-                        <RequirementsRow key={req.id} requirement={req} />
-                      ))}
+                    ? treeRows.map((row) => {
+                        const rowSpecId = row.node.requirement.spec_id ?? row.node.requirement.id;
+                        const isRowSelected = selectedId === rowSpecId;
+                        return (
+                          <TreeRow
+                            key={row.node.requirement.id}
+                            ref={isRowSelected ? selectedRowRef : undefined}
+                            node={row.node}
+                            isCollapsed={collapsed.has(row.node.requirement.id)}
+                            onToggle={handleToggle}
+                            isDimmed={row.isAncestorOnly}
+                            isSelected={isRowSelected}
+                            onClick={() => setSelectedId(rowSpecId)}
+                          />
+                        );
+                      })
+                    : sorted.map((req) => {
+                        const rowSpecId = req.spec_id ?? req.id;
+                        const isRowSelected = selectedId === rowSpecId;
+                        return (
+                          <RequirementsRow
+                            key={req.id}
+                            ref={isRowSelected ? selectedRowRef : undefined}
+                            requirement={req}
+                            isSelected={isRowSelected}
+                            onClick={() => setSelectedId(rowSpecId)}
+                          />
+                        );
+                      })}
                 </tbody>
               </table>
             </div>
@@ -346,6 +443,22 @@ export function RequirementsList() {
             ) : null}
           </DragOverlay>
         </DndContext>
+      )}
+
+      {pickerKind && selectedId && (
+        <QuickPicker
+          anchorRef={selectedRowRef}
+          options={
+            pickerKind === 'status'
+              ? STATUS_OPTIONS
+              : pickerKind === 'priority'
+                ? PRIORITY_OPTIONS
+                : ownerOptions
+          }
+          label={pickerKind === 'status' ? 'Status' : pickerKind === 'priority' ? 'Priority' : 'Owner'}
+          onSelect={handlePickerSelect}
+          onClose={() => setPickerKind(null)}
+        />
       )}
     </div>
   );
