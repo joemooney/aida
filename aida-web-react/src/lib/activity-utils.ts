@@ -11,11 +11,21 @@ export interface ActivityItem extends TimelineEvent {
   inQueue: boolean;
 }
 
+export interface StatusBreakdown {
+  completed: number;
+  inProgress: number;
+  approved: number;
+  created: number;
+  commented: number;
+  other: number;
+}
+
 export interface ActivityStats {
   workedOn: number;
   queueSize: number;
   unqueuedWork: number;
   queueUntouched: number;
+  statusBreakdown: StatusBreakdown;
 }
 
 export type TimeRange = 'today' | 'week' | 'month' | 'all';
@@ -78,11 +88,61 @@ export function computeActivityStats(
   const unqueuedWork = [...touchedReqIds].filter((id) => !queueReqIds.has(id)).length;
   const queueUntouched = [...queueReqIds].filter((id) => !touchedReqIds.has(id)).length;
 
+  // Count status transitions and event types across activity
+  const breakdown: StatusBreakdown = {
+    completed: 0,
+    inProgress: 0,
+    approved: 0,
+    created: 0,
+    commented: 0,
+    other: 0,
+  };
+
+  // Track unique reqs per category to avoid double-counting
+  const completedReqs = new Set<string>();
+  const inProgressReqs = new Set<string>();
+  const approvedReqs = new Set<string>();
+  const createdReqs = new Set<string>();
+  const commentedReqs = new Set<string>();
+  const otherReqs = new Set<string>();
+
+  for (const item of activityItems) {
+    if (item.eventType === 'Created') {
+      createdReqs.add(item.reqId);
+    } else if (item.eventType === 'CommentAdded') {
+      commentedReqs.add(item.reqId);
+    } else if (item.eventType === 'Modified') {
+      const statusChange = item.changes.find((c) => c.field_name === 'status');
+      if (statusChange) {
+        const newStatus = statusChange.new_value.toLowerCase();
+        if (newStatus === 'completed') {
+          completedReqs.add(item.reqId);
+        } else if (newStatus === 'inprogress' || newStatus === 'in-progress') {
+          inProgressReqs.add(item.reqId);
+        } else if (newStatus === 'approved') {
+          approvedReqs.add(item.reqId);
+        } else {
+          otherReqs.add(item.reqId);
+        }
+      } else {
+        otherReqs.add(item.reqId);
+      }
+    }
+  }
+
+  breakdown.completed = completedReqs.size;
+  breakdown.inProgress = inProgressReqs.size;
+  breakdown.approved = approvedReqs.size;
+  breakdown.created = createdReqs.size;
+  breakdown.commented = commentedReqs.size;
+  breakdown.other = otherReqs.size;
+
   return {
     workedOn: touchedReqIds.size,
     queueSize: queueEntries.length,
     unqueuedWork,
     queueUntouched,
+    statusBreakdown: breakdown,
   };
 }
 
