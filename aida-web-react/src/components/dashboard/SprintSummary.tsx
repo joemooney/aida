@@ -31,7 +31,7 @@ export function SprintSummary({ sprint, items }: SprintSummaryProps) {
   const num = getSprintNumber(sprint);
   const { start, end } = getSprintDates(sprint);
   const progress = computeSprintProgress(items);
-  const sprintId = sprint.spec_id ?? sprint.id;
+  const sprintId = sprint.id; // UUID — matches _sprint field values in query builder
 
   let daysLeft: number | null = null;
   if (end) {
