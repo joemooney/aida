@@ -261,11 +261,13 @@ async fn get_project_backend(
             )
         })?;
 
-    app_state
+    let backend = app_state
         .project_manager
         .get_backend(project)
         .await
-        .map_err(|e| ApiError::new(StatusCode::NOT_FOUND, format!("Project error: {}", e)))
+        .map_err(|e| ApiError::new(StatusCode::NOT_FOUND, format!("Project error: {}", e)))?;
+    backend.check_reload().await;
+    Ok(backend)
 }
 
 // ============================================================================
@@ -1310,6 +1312,7 @@ async fn update_requirement_v2_legacy(
     Path(id): Path<String>,
     Json(body): Json<UpdateRequirementV2Request>,
 ) -> Result<Json<models::Requirement>, (StatusCode, Json<ApiError>)> {
+    state.check_reload().await;
     let mut store = state.store.write().await;
     let idx = find_requirement_index(&store, &id)
         .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {id}")))?;
@@ -1373,6 +1376,7 @@ async fn create_requirement_v2_legacy(
     State(state): State<Arc<ServerState>>,
     Json(body): Json<CreateRequirementV2Request>,
 ) -> Result<(StatusCode, Json<models::Requirement>), (StatusCode, Json<ApiError>)> {
+    state.check_reload().await;
     let mut store = state.store.write().await;
 
     let mut new_req = aida_core::Requirement::new(
@@ -1524,6 +1528,7 @@ async fn assign_sprint_legacy(
     Path(id): Path<String>,
     Json(body): Json<SprintAssignRequest>,
 ) -> Result<Json<models::Requirement>, (StatusCode, Json<ApiError>)> {
+    state.check_reload().await;
     let mut store = state.store.write().await;
 
     // Look up the requirement to assign
@@ -1561,6 +1566,7 @@ async fn remove_sprint_legacy(
     State(state): State<Arc<ServerState>>,
     Path(id): Path<String>,
 ) -> Result<Json<models::Requirement>, (StatusCode, Json<ApiError>)> {
+    state.check_reload().await;
     let mut store = state.store.write().await;
 
     let req_id = {
@@ -1597,6 +1603,7 @@ async fn set_parent_legacy(
     Path(id): Path<String>,
     Json(body): Json<SetParentRequest>,
 ) -> Result<Json<models::Requirement>, (StatusCode, Json<ApiError>)> {
+    state.check_reload().await;
     let mut store = state.store.write().await;
 
     // Look up the child requirement
@@ -2030,6 +2037,7 @@ struct MetadataResponse {
 async fn get_settings_metadata(
     State(state): State<Arc<ServerState>>,
 ) -> Result<Json<MetadataResponse>, (StatusCode, Json<ApiError>)> {
+    state.check_reload().await;
     let store = state.store.read().await;
     Ok(Json(MetadataResponse {
         name: store.name.clone(),
@@ -2068,6 +2076,7 @@ async fn update_settings_metadata(
 async fn list_relationship_defs(
     State(state): State<Arc<ServerState>>,
 ) -> Result<Json<Vec<models::RelationshipDefinition>>, (StatusCode, Json<ApiError>)> {
+    state.check_reload().await;
     let store = state.store.read().await;
     Ok(Json(store.relationship_definitions.clone()))
 }
@@ -2123,6 +2132,7 @@ async fn delete_relationship_def(
 async fn list_type_defs(
     State(state): State<Arc<ServerState>>,
 ) -> Result<Json<Vec<models::CustomTypeDefinition>>, (StatusCode, Json<ApiError>)> {
+    state.check_reload().await;
     let store = state.store.read().await;
     Ok(Json(store.type_definitions.clone()))
 }
@@ -2205,6 +2215,7 @@ async fn delete_type_def(
 async fn list_reaction_defs(
     State(state): State<Arc<ServerState>>,
 ) -> Result<Json<Vec<models::ReactionDefinition>>, (StatusCode, Json<ApiError>)> {
+    state.check_reload().await;
     let store = state.store.read().await;
     Ok(Json(store.reaction_definitions.clone()))
 }
@@ -2284,6 +2295,7 @@ async fn delete_reaction_def(
 async fn get_id_config(
     State(state): State<Arc<ServerState>>,
 ) -> Result<Json<models::IdConfiguration>, (StatusCode, Json<ApiError>)> {
+    state.check_reload().await;
     let store = state.store.read().await;
     Ok(Json(store.id_config.clone()))
 }
@@ -2315,6 +2327,7 @@ struct PrefixConfigResponse {
 async fn get_prefixes(
     State(state): State<Arc<ServerState>>,
 ) -> Result<Json<PrefixConfigResponse>, (StatusCode, Json<ApiError>)> {
+    state.check_reload().await;
     let store = state.store.read().await;
     Ok(Json(PrefixConfigResponse {
         allowed_prefixes: store.allowed_prefixes.clone(),
