@@ -3527,3 +3527,33 @@ Implement API key management in Settings Admin tab so PMs/stakeholders can set A
 
 #### Verification
 - `npx tsc --noEmit` — no TypeScript errors
+
+---
+
+### Advanced Query Builder for List View (2026-02-22)
+
+- **Prompt**: Implement advanced query builder for AIDA List View with react-querybuilder, json-logic evaluation, AND/OR grouping, saved queries, and URL persistence
+- **Actions**:
+  - Installed `react-querybuilder` and `json-logic-js` dependencies
+  - Created type declarations for json-logic-js (`src/types/json-logic-js.d.ts`)
+  - Created field definitions builder (`src/lib/query-fields.ts`) — dynamically discovers owners, features, sprints, and custom fields from data; supports 15+ field types with appropriate operators
+  - Created json-logic evaluation engine (`src/lib/query-eval.ts`) — enriches requirements with virtual `_sprint` and `_cf_*` fields, registers custom json-logic operations for case-insensitive text/array matching
+  - Created `useAdvancedQuery` hook (`src/hooks/useAdvancedQuery.ts`) — manages query state, URL persistence via base64-encoded `?aq=` param, localStorage saved queries with save/load/delete
+  - Created `AdvancedQueryBuilder` component (`src/components/filters/AdvancedQueryBuilder.tsx`) — wraps react-querybuilder with Tailwind dark-theme styling matching existing filter bar
+  - Created `SavedQueryPicker` component (`src/components/filters/SavedQueryPicker.tsx`) — dropdown for saving current query, loading saved queries, and deleting queries
+  - Modified `RequirementsList.tsx` — added "Advanced" toggle button (highlights when active with ON badge), chained filter pipeline (dropdowns → advanced query), rendered query builder between filter bar and table, added `f` hotkey for toggle
+
+#### Files Created (6)
+- `src/types/json-logic-js.d.ts`
+- `src/lib/query-fields.ts`
+- `src/lib/query-eval.ts`
+- `src/hooks/useAdvancedQuery.ts`
+- `src/components/filters/AdvancedQueryBuilder.tsx`
+- `src/components/filters/SavedQueryPicker.tsx`
+
+#### Files Modified (2)
+- `aida-web-react/package.json` — added react-querybuilder + json-logic-js
+- `src/components/list/RequirementsList.tsx` — integrated advanced query builder
+
+#### Verification
+- `npx tsc --noEmit` — no TypeScript errors
