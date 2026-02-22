@@ -22,6 +22,7 @@ use aida_core::db::create_backend;
 mod admin;
 mod chat;
 mod convert;
+mod evaluate;
 mod projects;
 mod rest;
 mod service;
@@ -350,6 +351,7 @@ async fn main() -> Result<()> {
             let rest_router = rest::create_rest_router_legacy(state.clone())
                 .merge(admin::create_admin_router(admin_state.clone()))
                 .merge(chat::create_chat_router(state.clone(), admin_state.clone()))
+                .merge(evaluate::create_evaluate_router(state.clone(), admin_state.clone()))
                 .layer(cors.clone());
 
             let rest_listener = tokio::net::TcpListener::bind(rest_addr).await?;

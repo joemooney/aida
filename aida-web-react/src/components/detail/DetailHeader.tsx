@@ -1,4 +1,4 @@
-import { X, ExternalLink, ListPlus, Check } from 'lucide-react';
+import { X, ExternalLink, ListPlus, Check, Sparkles, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import type { Requirement, RequirementPriority, RequirementType } from '@shared/types';
 import { StatusBadge, PriorityBadge, TypeBadge } from '../ui/Badge';
@@ -6,6 +6,7 @@ import { EditableText, EditableSelect } from '../ui/EditableField';
 import { STATUS_ORDER, STATUS_CONFIG, PRIORITY_CONFIG, TYPE_CONFIG } from '../../lib/constants';
 import { useUpdateRequirement } from '../../hooks/useRequirements';
 import { useAddToQueue } from '../../hooks/useQueue';
+import { useEvaluateRequirement } from '../../hooks/useEvaluation';
 import { cn } from '../../lib/utils';
 
 const PRIORITIES: RequirementPriority[] = ['High', 'Medium', 'Low'];
@@ -20,6 +21,7 @@ interface DetailHeaderProps {
 export function DetailHeader({ requirement, onClose, hideClose }: DetailHeaderProps) {
   const updateReq = useUpdateRequirement();
   const addToQueue = useAddToQueue();
+  const evaluate = useEvaluateRequirement();
   const [queued, setQueued] = useState(false);
   const reqId = requirement.spec_id ?? requirement.id;
 
@@ -33,6 +35,20 @@ export function DetailHeader({ requirement, onClose, hideClose }: DetailHeaderPr
       <div className="flex items-center justify-between mb-3">
         <span className="text-xs font-mono text-content-muted">{requirement.spec_id}</span>
         <div className="flex items-center gap-1">
+          <button
+            onClick={() => evaluate.mutate(reqId)}
+            disabled={evaluate.isPending}
+            title="AI Evaluate"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-content-muted hover:text-amber-400 hover:bg-amber-400/10 disabled:opacity-50 transition-colors cursor-pointer disabled:cursor-not-allowed"
+          >
+            {evaluate.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : evaluate.isSuccess ? (
+              <Check className="h-3.5 w-3.5 text-green-500" />
+            ) : (
+              <Sparkles className="h-3.5 w-3.5" />
+            )}
+          </button>
           <button
             onClick={() => {
               addToQueue.mutate({ requirement_id: requirement.id });

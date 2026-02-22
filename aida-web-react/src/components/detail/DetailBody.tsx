@@ -4,7 +4,7 @@ import type { Requirement } from '@shared/types';
 import { LinkedMarkdown } from '../ui/LinkedMarkdown';
 import { Avatar } from '../ui/Avatar';
 import { EditableText } from '../ui/EditableField';
-import { formatDate } from '../../lib/utils';
+import { formatDate, cn } from '../../lib/utils';
 import { useUpdateRequirement } from '../../hooks/useRequirements';
 
 interface DetailBodyProps {
@@ -194,6 +194,94 @@ export function DetailBody({ requirement }: DetailBodyProps) {
           </button>
         </div>
       </div>
+
+      {/* AI Evaluation */}
+      {requirement.ai_evaluation && (
+        <div>
+          <h3 className="text-xs font-medium uppercase tracking-wider text-content-muted mb-3">AI Evaluation</h3>
+          <div className="space-y-3">
+            {/* Score badge */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-content-muted">Quality Score</span>
+              <span className={cn(
+                'inline-flex items-center justify-center rounded-full px-2 py-0.5 text-xs font-bold min-w-[28px]',
+                requirement.ai_evaluation.evaluation.quality_score >= 7
+                  ? 'bg-green-500/20 text-green-400'
+                  : requirement.ai_evaluation.evaluation.quality_score >= 4
+                    ? 'bg-yellow-500/20 text-yellow-400'
+                    : 'bg-red-500/20 text-red-400',
+              )}>
+                {requirement.ai_evaluation.evaluation.quality_score}/10
+              </span>
+            </div>
+
+            {/* Strengths */}
+            {requirement.ai_evaluation.evaluation.strengths.length > 0 && (
+              <div>
+                <span className="text-xs text-content-muted block mb-1">Strengths</span>
+                <ul className="space-y-1">
+                  {requirement.ai_evaluation.evaluation.strengths.map((s, i) => (
+                    <li key={i} className="text-xs text-content-secondary flex items-start gap-1.5">
+                      <span className="text-green-400 mt-0.5 shrink-0">+</span>
+                      <span>{s}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Issues */}
+            {requirement.ai_evaluation.evaluation.issues.length > 0 && (
+              <div>
+                <span className="text-xs text-content-muted block mb-1">Issues</span>
+                <div className="space-y-2">
+                  {requirement.ai_evaluation.evaluation.issues.map((issue, i) => (
+                    <div key={i} className="rounded-md bg-surface-hover px-2.5 py-2 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className={cn(
+                          'text-[10px] font-medium uppercase tracking-wide',
+                          issue.severity === 'high' ? 'text-red-400'
+                            : issue.severity === 'medium' ? 'text-yellow-400'
+                              : 'text-content-muted',
+                        )}>
+                          {issue.severity}
+                        </span>
+                        <span className="text-[10px] text-content-muted">{issue.type}</span>
+                      </div>
+                      <p className="text-xs text-content-secondary">{issue.text}</p>
+                      {issue.suggestion && (
+                        <p className="text-xs text-accent/80 italic">{issue.suggestion}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Suggested improvements */}
+            {requirement.ai_evaluation.evaluation.suggested_improvements && (
+              <div>
+                <span className="text-xs text-content-muted block mb-1">Suggested Improvements</span>
+                <div className="rounded-md bg-surface-hover px-2.5 py-2 space-y-1">
+                  {requirement.ai_evaluation.evaluation.suggested_improvements.description && (
+                    <p className="text-xs text-content-secondary">
+                      {requirement.ai_evaluation.evaluation.suggested_improvements.description}
+                    </p>
+                  )}
+                  <p className="text-xs text-content-muted italic">
+                    {requirement.ai_evaluation.evaluation.suggested_improvements.rationale}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Evaluated timestamp */}
+            <div className="text-[10px] text-content-muted pt-1">
+              Evaluated {formatDate(requirement.ai_evaluation.evaluated_at)}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Dependencies */}
       {requirement.dependencies && requirement.dependencies.length > 0 && (
