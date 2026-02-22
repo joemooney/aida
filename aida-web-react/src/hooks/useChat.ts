@@ -106,13 +106,20 @@ export function useChat() {
           } else if (eventType === 'done') {
             break;
           } else if (eventType === 'error') {
+            let errorText = 'Sorry, an error occurred. Please try again.';
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.error) errorText = `Error: ${parsed.error}`;
+            } catch {
+              if (data) errorText = `Error: ${data}`;
+            }
             setMessages((prev) => {
               const updated = [...prev];
               const last = updated[updated.length - 1];
               if (last && last.id === assistantMsg.id) {
                 updated[updated.length - 1] = {
                   ...last,
-                  content: 'Sorry, an error occurred. Please try again.',
+                  content: errorText,
                 };
               }
               return updated;

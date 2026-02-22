@@ -170,7 +170,7 @@ You have access to the full requirements database and recent git history for thi
     );
 
     let model = std::env::var("AIDA_CHAT_MODEL")
-        .unwrap_or_else(|_| "claude-sonnet-4-20250514".to_string());
+        .unwrap_or_else(|_| "claude-sonnet-4-6".to_string());
 
     let claude_req = ClaudeRequest {
         model,
