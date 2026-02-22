@@ -111,21 +111,25 @@ You can start with `aida init` and a YAML file, and grow into a multi-project Po
 
 AIDA doesn't exist in a vacuum. Here's how it compares to the alternatives, honestly.
 
+Before diving in, an important nuance: nearly every tool on this list now has *some* form of AI integration. MCP servers exist for Jira, GitHub, Linear, Notion, and more. Claude Code can talk to all of them. The question isn't "can AI access this tool?" - it can. The question is **whether the tool was designed around the AI-assisted development workflow, or whether AI was bolted onto a product designed for humans filling out forms in a browser.**
+
+AIDA was born into the AI era. It evolved alongside Claude Code, not before it. That shapes everything - from the data model to the workflow to the interface.
+
 ### Traditional Project Management (Jira, Linear, Shortcut, Azure DevOps)
 
 **What they do well:**
 - Mature, battle-tested, team-oriented
-- Rich ecosystem of integrations
+- Rich ecosystem of integrations (including MCP servers for AI access)
 - Proven workflows (scrum, kanban, SAFe)
 - Enterprise features (permissions, audit, compliance)
 
 **Where AIDA differs:**
-- Traditional tools have zero awareness of AI-assisted development. They don't know what Claude Code is, can't read its output, and can't provide context to it.
+- These tools were designed for humans coordinating with humans. AI integration is an add-on - you can query Jira through MCP, but the data model, workflows, and UI were all designed around a human clicking through a web form. The AI is a consumer of the tool, not a participant in the workflow.
 - They're external to your codebase. Requirements live in a browser tab, not in your repo.
-- They're designed for human-to-human coordination, not human-to-AI coordination.
-- They're heavy. A solo developer doesn't need Jira.
+- There's no concept of code traceability. A Jira ticket doesn't know which lines of code implement it.
+- They're heavy. A solo developer doesn't need Jira, and adding an MCP server to Jira doesn't change that.
 
-**Honest assessment:** For large teams with established processes, Jira/Linear aren't going away. AIDA's opportunity is as a **complement** - the layer between the project management tool and the code, where AI needs structured context. For smaller teams and solo developers, AIDA can *replace* these tools entirely.
+**Honest assessment:** For large teams with established processes, Jira/Linear aren't going away - and they shouldn't. AIDA's opportunity is as a **complement** - the developer-side layer between the project management tool and the code, where AI needs structured context that's shaped for development, not project management. For smaller teams and solo developers, AIDA can *replace* these tools entirely.
 
 ### GitHub/GitLab Issues + Projects
 
@@ -133,14 +137,15 @@ AIDA doesn't exist in a vacuum. Here's how it compares to the alternatives, hone
 - Free, lightweight, close to the code
 - Good enough for many projects
 - Native to the development workflow
+- MCP servers exist for AI access to issues, PRs, and projects
 
 **Where AIDA differs:**
-- Issues are flat text. No structured fields, no typed requirements, no queryable database.
-- No AI integration. Claude Code can't query GitHub Issues through MCP.
-- No traceability. There's no automated link between an issue and the code that implements it.
-- No requirement relationships (parent/child, verifies, references).
+- Issues are flat text with labels. Even with MCP access, the AI is reading unstructured prose - there are no typed requirements, no relationship graphs, no queryable custom fields.
+- AI can *read* issues through MCP, but the tool wasn't designed to *guide* AI development. There's no concept of trace comments, implementation plans, or commit validation against requirements.
+- No automated traceability. You can manually reference issue numbers in commits, but there's no system enforcing or verifying it.
+- No requirement relationships (parent/child, verifies, references) beyond basic labels and milestones.
 
-**Honest assessment:** GitHub Issues work fine for tracking bugs and features. AIDA adds the structured data layer, AI integration, and traceability that Issues lack. They can coexist - AIDA already has GitLab integration, and GitHub integration would be natural.
+**Honest assessment:** GitHub Issues with an MCP server gives AI basic access to your project backlog. AIDA gives AI a structured development context with typed requirements, relationships, traceability, and workflow skills. They serve different depths of the same need. They can coexist - AIDA already has GitLab integration, and GitHub integration would be natural.
 
 ### Notion / Confluence / Wiki-based Approaches
 
@@ -148,29 +153,30 @@ AIDA doesn't exist in a vacuum. Here's how it compares to the alternatives, hone
 - Flexible, rich formatting, good for documentation
 - Low barrier to entry
 - Good for non-technical stakeholders
+- MCP/API integrations make content accessible to AI
 
 **Where AIDA differs:**
-- Wikis are unstructured. You can't query "all approved requirements for the auth feature."
-- No programmatic access that an AI can use effectively.
-- No traceability to code.
-- They drift. Requirements documents in Notion become stale within weeks.
+- Even with MCP access, wikis are unstructured documents. The AI can read them, but it can't query "all approved requirements for the auth feature" - it has to parse prose.
+- No traceability to code. A Notion page describing a feature doesn't link to the code implementing it.
+- They drift. Requirements documents in Notion become stale within weeks. There's no workflow to keep them current as code evolves.
+- They're designed for humans reading documents, not for AI querying structured data.
 
-**Honest assessment:** Notion is great for high-level product documents and stakeholder communication. AIDA is for the structured, queryable, traceable layer that wikis can't provide. They serve different purposes.
+**Honest assessment:** Notion is great for high-level product documents and stakeholder communication. AIDA is for the structured, queryable, traceable layer underneath. An ideal setup might use Notion for product strategy and AIDA for development-level requirements.
 
 ### AI Coding Assistants Alone (Claude Code, Cursor, Windsurf, Copilot)
 
 **What they do well:**
 - Write code fast
-- Understand context from CLAUDE.md and open files
+- Understand context from CLAUDE.md, open files, and MCP tools
 - Getting better every month
+- Can access external tools through MCP, extensions, and APIs
 
 **Where AIDA differs:**
-- AI assistants are stateless between sessions. Claude Code doesn't remember what you discussed yesterday unless you write it down.
-- CLAUDE.md is a static file. It can't answer "what requirements are in the current sprint?"
-- Without structure, the AI builds what you ask for in the moment, not what the system needs.
-- No traceability. Great code gets written, but nobody can trace it back to a decision.
+- AI assistants are stateless between sessions. Claude Code doesn't remember what you discussed yesterday unless you write it down somewhere.
+- They're general-purpose. They can talk to any MCP server, but they don't impose a *development workflow*. AIDA's skills encode opinions about how to develop (requirements first, trace your code, validate your commits).
+- Without structure, the AI builds what you ask for in the moment, not what the system needs. Context from an MCP-connected Jira is better than no context, but it's still context designed for human project managers, not for AI writing code.
 
-**Honest assessment:** AI coding assistants are the engine. AIDA is the steering wheel. You need both. Claude Code without AIDA is powerful but undirected. AIDA without Claude Code is just another requirements tool.
+**Honest assessment:** AI coding assistants are the engine. AIDA is the steering wheel. You need both. Claude Code without AIDA is powerful but undirected. AIDA without Claude Code is just another requirements tool. The unique value is in the combination.
 
 ### Plain CLAUDE.md / Markdown Convention Files
 
@@ -178,14 +184,15 @@ AIDA doesn't exist in a vacuum. Here's how it compares to the alternatives, hone
 - Zero setup, zero dependencies
 - Claude Code reads them natively
 - Version controlled
+- Immediate, no learning curve
 
 **Where AIDA differs:**
-- A CLAUDE.md file doesn't scale. At 500 lines it's already unwieldy.
-- It's not queryable. Claude reads the whole thing every time.
+- A CLAUDE.md file doesn't scale. At 500 lines it's already unwieldy. At 1000 lines it's consuming context window for information the AI doesn't need right now.
+- It's not queryable. Claude reads the whole thing every time. AIDA's MCP server lets the AI fetch only what's relevant.
 - No structure. You can't filter by status, type, or sprint.
 - No history. When you change a requirement, the old version is gone (unless you diff git history).
 
-**Honest assessment:** CLAUDE.md is where every project should start. AIDA is where you go when CLAUDE.md isn't enough - when you need to query, filter, track status, and give the AI structured data instead of a wall of text.
+**Honest assessment:** CLAUDE.md is where every project should start. AIDA is where you go when CLAUDE.md isn't enough - when you need to query, filter, track status, and give the AI structured data instead of a wall of text. AIDA generates and maintains the CLAUDE.md as part of its workflow, so you get both.
 
 ### Emerging AI-Native Dev Tools (Devin, SWE-Agent, OpenHands)
 
@@ -197,9 +204,19 @@ AIDA doesn't exist in a vacuum. Here's how it compares to the alternatives, hone
 **Where AIDA differs:**
 - These tools focus on *doing the work*, not *managing what work should be done*.
 - They need a source of truth for what to build. AIDA can be that source.
-- They don't solve the traceability problem.
+- They don't solve the traceability problem - they make it worse, because even more code is being written without a human in the loop.
 
-**Honest assessment:** Autonomous agents are complementary to AIDA, not competitive. An agent that can query AIDA for its next task, implement it with traceability, and update the requirement status is the dream workflow.
+**Honest assessment:** Autonomous agents are complementary to AIDA, not competitive. An agent that can query AIDA for its next task, implement it with traceability, and update the requirement status is the dream workflow. AIDA's MCP server already makes this possible.
+
+### The Real Differentiator
+
+The common thread across all these comparisons isn't "they lack AI integration" - most of them have it or are adding it. The differentiator is **where AI sits in the design**.
+
+In traditional tools, AI is a feature you add. An MCP server that lets Claude read your Jira tickets. A Copilot plugin that suggests code. The tool was designed for humans, and AI was invited in later.
+
+In AIDA, AI is a co-designer of the workflow. The data model was shaped by what AI needs to write better code. The skills encode workflows that assume AI is doing the implementation. The traceability system exists because AI-written code needs *more* traceability, not less, since there's no human who "just knows" why that function exists.
+
+This is a meaningful architectural difference, not a marketing claim. It's the difference between a car designed for electric from the ground up versus a gas car with a battery bolted on. Both drive. One was designed around the new reality.
 
 ---
 
