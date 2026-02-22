@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Plus, X, Pencil, Check } from 'lucide-react';
+import { Plus, X, Pencil, Check, Maximize2, Minimize2, Eye, EyeOff, HelpCircle } from 'lucide-react';
 import type { Requirement } from '@shared/types';
 import { LinkedMarkdown } from '../ui/LinkedMarkdown';
 import { Avatar } from '../ui/Avatar';
@@ -18,6 +18,9 @@ export function DetailBody({ requirement }: DetailBodyProps) {
   const [editingDesc, setEditingDesc] = useState(false);
   const [descDraft, setDescDraft] = useState(requirement.description);
   const descRef = useRef<HTMLTextAreaElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   // Sync draft when requirement changes externally
   useEffect(() => {
@@ -73,6 +76,57 @@ export function DetailBody({ requirement }: DetailBodyProps) {
         <h3 className="text-xs font-medium uppercase tracking-wider text-content-muted mb-2">Description</h3>
         {editingDesc ? (
           <div className="space-y-2">
+            {/* Toolbar */}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setExpanded((v) => !v)}
+                className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] text-content-muted hover:text-content hover:bg-surface-hover transition-colors cursor-pointer"
+                title={expanded ? 'Collapse editor' : 'Expand editor'}
+              >
+                {expanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+                <span>{expanded ? 'Collapse' : 'Expand'}</span>
+              </button>
+              <button
+                onClick={() => setShowPreview((v) => !v)}
+                className={cn(
+                  'flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] transition-colors cursor-pointer',
+                  showPreview ? 'text-accent bg-accent/10' : 'text-content-muted hover:text-content hover:bg-surface-hover',
+                )}
+                title={showPreview ? 'Hide preview' : 'Show preview'}
+              >
+                {showPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                <span>Preview</span>
+              </button>
+              <button
+                onClick={() => setShowHelp((v) => !v)}
+                className={cn(
+                  'flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] transition-colors cursor-pointer',
+                  showHelp ? 'text-accent bg-accent/10' : 'text-content-muted hover:text-content hover:bg-surface-hover',
+                )}
+                title="Markdown help"
+              >
+                <HelpCircle className="h-3.5 w-3.5" />
+                <span>Help</span>
+              </button>
+            </div>
+
+            {/* Markdown Help Card */}
+            {showHelp && (
+              <div className="rounded-lg border border-edge bg-surface p-3 text-xs font-mono text-content-secondary leading-relaxed">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                  <span># Heading 1</span><span>**bold**</span>
+                  <span>## Heading 2</span><span>*italic*</span>
+                  <span>### Heading 3</span><span>`inline code`</span>
+                  <span>- list item</span><span>1. numbered list</span>
+                  <span>[link](url)</span><span>```code block```</span>
+                </div>
+                <div className="mt-1.5 pt-1.5 border-t border-edge text-content-muted">
+                  SPEC-001 → auto-linked to requirements
+                </div>
+              </div>
+            )}
+
+            {/* Textarea */}
             <textarea
               ref={descRef}
               value={descDraft}
@@ -81,10 +135,33 @@ export function DetailBody({ requirement }: DetailBodyProps) {
                 if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveDesc(); }
                 if (e.key === 'Escape') { e.preventDefault(); cancelDesc(); }
               }}
-              rows={8}
-              className="w-full rounded-lg border border-accent bg-surface px-3 py-1.5 text-sm text-content focus:outline-none focus:ring-1 focus:ring-accent resize-y min-h-[80px]"
+              rows={expanded ? undefined : 8}
+              className={cn(
+                'w-full rounded-lg border border-accent bg-surface px-3 py-1.5 text-sm text-content focus:outline-none focus:ring-1 focus:ring-accent resize-y',
+                expanded ? 'min-h-[50vh]' : 'min-h-[80px]',
+              )}
               placeholder="Add a description (markdown supported)..."
             />
+
+            {/* Preview Pane */}
+            {showPreview && (
+              <div>
+                <span className="text-[10px] font-medium uppercase tracking-wider text-content-muted">Preview</span>
+                <div className={cn(
+                  'mt-1 rounded-lg border border-edge bg-surface px-3 py-2 overflow-y-auto',
+                  expanded ? '' : 'max-h-[40vh]',
+                )}>
+                  {descDraft.trim() ? (
+                    <LinkedMarkdown className="prose prose-sm prose-invert max-w-none text-content prose-headings:text-content prose-strong:text-content prose-code:text-accent prose-code:bg-surface-hover prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:before:content-none prose-code:after:content-none prose-pre:bg-surface-hover prose-pre:border prose-pre:border-edge prose-a:text-accent">
+                      {descDraft}
+                    </LinkedMarkdown>
+                  ) : (
+                    <span className="text-sm text-content-muted italic">Nothing to preview</span>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center gap-1.5">
               <button
                 onClick={saveDesc}
