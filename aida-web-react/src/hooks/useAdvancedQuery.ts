@@ -60,10 +60,7 @@ export function useAdvancedQuery() {
   }, []);
 
   const [query, setQuery] = useState<RuleGroupType>(initialQuery);
-  const [isOpen, setIsOpen] = useState(() => {
-    const aq = searchParams.get('aq');
-    return aq !== null && aq !== '';
-  });
+  const [isOpen, setIsOpen] = useState(false);
   const [savedQueries, setSavedQueries] = useState<SavedQuery[]>(loadSavedQueries);
 
   // Sync query to URL param
