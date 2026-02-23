@@ -1925,8 +1925,19 @@ fn extract_md_title(content: &str) -> String {
 }
 
 /// Get the docs/ directory relative to cwd
-fn docs_dir() -> PathBuf {
-    std::env::current_dir().unwrap_or_default().join("docs")
+fn docs_dir(state: &ServerState) -> PathBuf {
+    // Resolve docs/ relative to the database file's parent directory,
+    // so it works in Docker where CWD differs from the project root.
+    if let Some(parent) = std::path::Path::new(state.backend.path()).parent() {
+        if parent.as_os_str().is_empty() {
+            // Relative path like "requirements.db" — use CWD
+            std::env::current_dir().unwrap_or_default().join("docs")
+        } else {
+            parent.join("docs")
+        }
+    } else {
+        std::env::current_dir().unwrap_or_default().join("docs")
+    }
 }
 
 /// Recursively scan for .md files under a directory
@@ -1972,9 +1983,9 @@ fn scan_docs_recursive(dir: &std::path::Path, base: &std::path::Path) -> Vec<Doc
 }
 
 async fn list_docs(
-    State(_state): State<Arc<ServerState>>,
+    State(state): State<Arc<ServerState>>,
 ) -> Result<Json<Vec<DocInfo>>, (StatusCode, Json<ApiError>)> {
-    let base = docs_dir();
+    let base = docs_dir(&state);
     if !base.exists() {
         return Ok(Json(Vec::new()));
     }
@@ -1982,10 +1993,10 @@ async fn list_docs(
 }
 
 async fn get_doc(
-    State(_state): State<Arc<ServerState>>,
+    State(state): State<Arc<ServerState>>,
     Path(rel_path): Path<String>,
 ) -> Result<Json<DocDetail>, (StatusCode, Json<ApiError>)> {
-    let base = docs_dir();
+    let base = docs_dir(&state);
     let file_path = base.join(&rel_path);
 
     // Prevent path traversal
