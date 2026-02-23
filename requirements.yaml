@@ -11,7 +11,7 @@ requirements:
   owner: ''
   feature: 1-REQ
   created_at: 2025-11-25T19:45:25.234562378Z
-  modified_at: 2026-02-22T20:35:22.615285143Z
+  modified_at: 2026-02-23T05:27:36.784560695Z
   req_type: Functional
   relationships:
   - rel_type: Parent
@@ -20,6 +20,12 @@ requirements:
     target_id: 404b7457-67a2-4376-a0d3-9c5ea1547951
     created_at: 2025-12-07T17:02:44.462006633Z
     created_by: Joe Mooney
+  comments:
+  - id: 7a443387-ba19-4a8f-8705-8483889125be
+    author: joe
+    content: Testing pre-commit hook
+    created_at: 2026-02-23T05:27:36.784551188Z
+    modified_at: 2026-02-23T05:27:36.784551188Z
   history:
   - id: eb0f853e-6465-4a10-b0b2-72090bde5303
     author: '@joe'
@@ -369,8 +375,8 @@ requirements:
   modified_at: 2026-02-21T06:30:04.096306180Z
   req_type: Functional
   tags:
-  - keyboard
   - gui
+  - keyboard
   relationships:
   - rel_type: Parent
     target_id: fa1eaffc-7c05-4d09-95a0-d5e61e9b8529
@@ -9238,10 +9244,10 @@ requirements:
 
         ID should now be sprint?
   custom_fields:
-    sprint_goal: get front end web up to speed
-    end_date: 2026-03-06
-    start_date: 2026-02-27
     sprint_number: '2'
+    start_date: 2026-02-27
+    end_date: 2026-03-06
+    sprint_goal: get front end web up to speed
 - id: d1e58dd4-fd26-437a-8856-2cf0d4f2adda
   spec_id: REQ-0211
   title: Bug 123
@@ -9519,9 +9525,9 @@ requirements:
       old_value: SPIKE-0335
       new_value: SPRINT-0336
   custom_fields:
+    sprint_number: '3'
     start_date: 2026-03-06
     end_date: 2026-03-13
-    sprint_number: '3'
 - id: 332b3215-b99b-43c2-8bef-a7b2bd664dd7
   spec_id: FR-0220
   title: New Sprint add should remain in Sprint Planning...
@@ -14591,8 +14597,8 @@ requirements:
   modified_at: 2026-02-22T18:19:43.969387847Z
   req_type: Story
   tags:
-  - react
   - frontend
+  - react
   relationships:
   - rel_type: Parent
     target_id: 7622e213-28e8-4401-970e-a55111e7fc2f
@@ -14645,8 +14651,8 @@ requirements:
   modified_at: 2026-02-22T18:23:12.714451542Z
   req_type: Bug
   tags:
-  - docs
   - tooling
+  - docs
 - id: e3421e3b-155b-4fca-8429-a8e0653d0f9d
   spec_id: BUG-0381
   title: 'Web UI shows stale data: v2 API path does not call check_reload()'
@@ -14687,9 +14693,9 @@ requirements:
   modified_at: 2026-02-22T20:35:47.917818690Z
   req_type: Story
   tags:
-  - create
-  - ui
   - web
+  - ui
+  - create
 - id: 167164e4-2d64-4d24-b41f-16499162e6b3
   spec_id: BUG-0383
   title: 'Fix: Requirement edits revert in detail panel due to stale React Query cache'
@@ -14702,10 +14708,10 @@ requirements:
   modified_at: 2026-02-22T20:35:56.318350326Z
   req_type: Bug
   tags:
-  - bugfix
-  - web
-  - api
   - cache
+  - bugfix
+  - api
+  - web
 - id: ca86240c-1723-4d10-bb55-527e92211bd0
   spec_id: STORY-0384
   title: Enhanced description editor with expand, preview, and markdown help
@@ -14719,9 +14725,9 @@ requirements:
   req_type: Story
   tags:
   - editor
-  - markdown
   - web
   - ui
+  - markdown
 - id: 3a4d90f3-7b60-4eb7-a32d-15b20fbbb679
   spec_id: FR-0385
   title: 'Web UI Skill Invocation with SSE streaming (pilot: compiler-warnings)'
@@ -14745,9 +14751,9 @@ requirements:
   modified_at: 2026-02-23T02:49:24.757611723Z
   req_type: Functional
   tags:
-  - sse
   - web
   - skills
+  - sse
   relationships:
   - rel_type: Parent
     target_id: c9697f28-3a0f-4133-b2e3-9c0dd6220e89
@@ -14770,9 +14776,9 @@ requirements:
   modified_at: 2026-02-23T02:49:30.683744854Z
   req_type: Bug
   tags:
-  - web
   - skills
   - ux
+  - web
 - id: 433f2b0d-0f82-4e32-9b4a-5efd3738d1cf
   spec_id: BUG-0387
   title: 'Fix: Advanced filter blank screen from duplicate React in Vite bundle'
@@ -14790,8 +14796,8 @@ requirements:
   modified_at: 2026-02-23T02:49:37.994722750Z
   req_type: Bug
   tags:
-  - react
   - vite
+  - react
   - web
 users:
 - id: 150164ef-32ed-4d61-8cec-e887ac78cfd7
@@ -15199,8 +15205,8 @@ reaction_definitions:
   description: Please Note
   built_in: false
 meta_counters:
-  $USER: 7
   $TEAM: 4
+  $USER: 7
 type_definitions:
 - name: Functional
   display_name: Functional

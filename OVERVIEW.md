@@ -285,6 +285,11 @@ Requirements are stored using a pluggable backend system:
 - Optimistic locking with version columns
 - Connection string format: `postgres://user:password@host:port/database`
 
+### Git-Friendly Auto-Export
+- A git pre-commit hook auto-exports `requirements.db` to `requirements.yaml` before each commit
+- The SQLite binary is **not** tracked in git; only the diffable YAML is committed
+- This gives full text-based diff history for requirements while keeping SQLite as the runtime backend
+
 ### Migration & Export
 - Migrate between YAML, SQLite, and PostgreSQL formats
 - JSON import/export for interoperability

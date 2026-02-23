@@ -3907,3 +3907,29 @@ Implement the plan for Web UI Skill Invocation — allow running skills from the
 
 #### Git
 - Commit: pending
+
+---
+
+### Prompt: Auto-export requirements.yaml via pre-commit hook
+- **Date**: 2026-02-22
+
+#### Problem
+`requirements.db` (SQLite binary) was tracked in git, causing binary bloat and undiffable history.
+
+#### Solution
+- Created `.git/hooks/pre-commit` that auto-exports `requirements.db` to `requirements.yaml` before each commit
+- Hook checks for WAL journal freshness (SQLite WAL mode writes to `-wal` file, not the main `.db`)
+- Skips gracefully if `aida` binary is not available
+- Updated `.gitignore`: removed `requirements.yaml` ignore rule so the YAML gets tracked
+- Ran `git rm --cached requirements.db` to untrack the binary
+- Initial export: 351 requirements to `requirements.yaml`
+
+#### Files Changed
+- `.git/hooks/pre-commit` — Created: auto-export hook
+- `.gitignore` — Modified: un-ignore `requirements.yaml`
+- `requirements.yaml` — Generated: initial full export
+- `requirements.db` — Untracked from git
+
+#### Git
+- Commit: `04c79b1` — `chore: replace binary requirements.db with diffable requirements.yaml`
+- Pushed to main
