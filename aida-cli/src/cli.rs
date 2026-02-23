@@ -955,6 +955,21 @@ pub enum Command {
     #[clap(subcommand)]
     Report(ReportCommand),
 
+    /// Initialize AIDA in the current project
+    Init {
+        /// Skip generating Claude Code skills and commands
+        #[clap(long)]
+        no_skills: bool,
+
+        /// Skip generating commit validation hooks
+        #[clap(long)]
+        no_hooks: bool,
+
+        /// Overwrite existing files if already initialized
+        #[clap(long)]
+        force: bool,
+    },
+
     /// Scaffolding management commands
     #[clap(subcommand)]
     Scaffold(ScaffoldCommand),

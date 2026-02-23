@@ -12,10 +12,11 @@ use uuid::Uuid;
 
 use aida_core::{
     check_migration_status, check_scaffold_status, determine_requirements_path, export,
-    get_registry_path, ArtifactType, Cardinality, Comment, FieldChange, FileStatus, IdFormat,
-    MigrationCheck, NumberingStrategy, Registry, RelationshipDefinition, RelationshipType,
-    ReportFormat, ReportGenerator, Requirement, RequirementPriority, RequirementStatus,
-    RequirementType, RequirementsStore, ScaffoldConfig, Scaffolder, Storage, TraceLink,
+    get_registry_path, seed_meta_requirements, ArtifactType, Cardinality, Comment, FieldChange,
+    FileStatus, IdFormat, MigrationCheck, NumberingStrategy, Registry, RelationshipDefinition,
+    RelationshipType, ReportFormat, ReportGenerator, Requirement, RequirementPriority,
+    RequirementStatus, RequirementType, RequirementsStore, ScaffoldConfig, Scaffolder, Storage,
+    TraceLink,
     // GitLab integration
     GitLabClient, GitLabConfig, IssueFilter, IssueState,
 };
@@ -47,6 +48,17 @@ fn main() -> Result<()> {
         cli.server = std::env::var("AIDA_SERVER").ok();
     }
 
+    // Handle init before path resolution (no DB exists yet)
+    if let Command::Init {
+        no_skills,
+        no_hooks,
+        force,
+    } = &cli.command
+    {
+        handle_init_command(*no_skills, *no_hooks, *force)?;
+        return Ok(());
+    }
+
     // Determine which requirements file to use
     // trace:REQ-0231 | ai:claude:high
     let requirements_path = if let Some(ref explicit_file) = cli.file {
@@ -56,6 +68,10 @@ fn main() -> Result<()> {
         // Auto-detect: first find the base path, then check migration status
         let initial_path = determine_requirements_path(cli.project.as_deref())?;
 
+        // If path is already a .db file, skip migration check (no YAML to migrate from)
+        if initial_path.extension().and_then(|e| e.to_str()) == Some("db") {
+            initial_path
+        } else {
         // Check for migration status (REQ-0231)
         // Storage class now auto-detects SQLite vs YAML by file extension
         match check_migration_status(&initial_path) {
@@ -78,6 +94,7 @@ fn main() -> Result<()> {
                 eprintln!("Use --file requirements.yaml to use YAML instead.");
                 sqlite_path
             }
+        }
         }
     };
 
@@ -296,7 +313,190 @@ fn main() -> Result<()> {
                 false, // don't invert match
             )?;
         }
+        Command::Init { .. } => {
+            // Handled before path resolution above; unreachable
+            unreachable!("Init command should be handled before path resolution");
+        }
     }
+
+    Ok(())
+}
+
+// trace:TASK-0001 | ai:claude:high
+fn handle_init_command(no_skills: bool, no_hooks: bool, force: bool) -> Result<()> {
+    let db_path = std::path::PathBuf::from("requirements.db");
+
+    // Check existing state
+    if db_path.exists() && !force {
+        eprintln!(
+            "{} AIDA is already initialized in this directory (requirements.db exists).",
+            "!".yellow()
+        );
+        eprintln!("  Use {} to reinitialize.", "--force".bold());
+        return Ok(());
+    }
+
+    // Create the database
+    let storage = Storage::new(db_path.clone());
+    let mut store = if db_path.exists() && force {
+        storage.load()?
+    } else {
+        RequirementsStore::default()
+    };
+
+    // Seed META requirements
+    seed_meta_requirements(&mut store)?;
+    storage.save(&store)?;
+
+    // Create docs/plans/
+    std::fs::create_dir_all("docs/plans")?;
+
+    // Build ScaffoldConfig with escape hatches
+    let mut config = ScaffoldConfig::default();
+    if no_skills {
+        config.generate_skills = false;
+        config.generate_commands = false;
+        config.include_aida_req_skill = false;
+        config.include_aida_plan_skill = false;
+        config.include_aida_implement_skill = false;
+        config.include_aida_capture_skill = false;
+        config.include_aida_docs_skill = false;
+        config.include_aida_release_skill = false;
+        config.include_aida_evaluate_skill = false;
+        config.include_aida_commit_skill = false;
+        config.include_aida_sync_skill = false;
+        config.include_aida_test_skill = false;
+        config.include_aida_review_skill = false;
+        config.include_aida_onboard_skill = false;
+        config.include_aida_sprint_skill = false;
+        config.include_aida_search_skill = false;
+        config.include_aida_standup_skill = false;
+    }
+    if no_hooks {
+        config.generate_git_hooks = false;
+        config.generate_claude_code_hooks = false;
+        config.include_commit_msg_hook = false;
+        config.include_pre_commit_hook = false;
+        config.include_validate_commit_hook = false;
+        config.include_track_commits_hook = false;
+    }
+
+    // Run scaffold
+    let root = std::env::current_dir().unwrap_or_default();
+    let mut scaffolder = Scaffolder::with_database(root.clone(), config, db_path);
+    let preview = scaffolder.preview(&store);
+
+    let mut _created_count = 0;
+    let mut updated_count = 0;
+    let mut skipped_count = 0;
+
+    for artifact in &preview.artifacts {
+        let full_path = root.join(&artifact.path);
+        let exists = full_path.exists();
+
+        if exists && !force {
+            skipped_count += 1;
+            continue;
+        }
+
+        // Create parent directories if needed
+        if let Some(parent) = full_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&full_path, &artifact.content)?;
+
+        if exists {
+            updated_count += 1;
+        } else {
+            _created_count += 1;
+        }
+    }
+
+    // Print post-init message
+    println!();
+    println!("{}", "AIDA initialized ✓".green().bold());
+    println!();
+    println!("  {}:", "Created".bold());
+    println!(
+        "    {}{}Requirements database (SQLite)",
+        "requirements.db".white().bold(),
+        " ".repeat(24)
+    );
+    println!(
+        "    {}{}Claude Code MCP integration",
+        ".mcp.json".white().bold(),
+        " ".repeat(29)
+    );
+    println!(
+        "    {}{}Project context for AI sessions",
+        "CLAUDE.md".white().bold(),
+        " ".repeat(29)
+    );
+    if !no_skills {
+        println!(
+            "    {}{}Workflow skills",
+            ".claude/skills/".white().bold(),
+            " ".repeat(23)
+        );
+        println!(
+            "    {}{}Slash commands",
+            ".claude/commands/".white().bold(),
+            " ".repeat(21)
+        );
+    }
+    if !no_hooks {
+        println!(
+            "    {}{}Commit validation hooks",
+            ".claude/hooks/".white().bold(),
+            " ".repeat(24)
+        );
+    }
+    println!(
+        "    {}{}Implementation plan archive",
+        "docs/plans/".white().bold(),
+        " ".repeat(27)
+    );
+
+    if skipped_count > 0 {
+        println!();
+        println!(
+            "  {} files skipped (already exist, use --force to overwrite)",
+            skipped_count.to_string().yellow(),
+        );
+    }
+    if updated_count > 0 {
+        println!(
+            "  {} files updated",
+            updated_count.to_string().blue(),
+        );
+    }
+
+    println!();
+    println!("  {}:", "Quick start".bold());
+    println!(
+        "    {}",
+        "aida add --title \"User auth\" --type story --status draft".cyan()
+    );
+    println!("    {}", "aida list".cyan());
+
+    println!();
+    println!("  {}:", "In Claude Code".bold());
+    println!(
+        "    {}{}Interactive project walkthrough",
+        "/aida-onboard".cyan(),
+        " ".repeat(15)
+    );
+    println!(
+        "    {}{}Add a requirement",
+        "/aida-req".cyan(),
+        " ".repeat(19)
+    );
+    println!(
+        "    {}{}See all available skills",
+        "/aida-".cyan(),
+        " ".repeat(22)
+    );
+    println!();
 
     Ok(())
 }

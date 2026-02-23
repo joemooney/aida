@@ -3660,3 +3660,34 @@ Implement API key management in Settings Admin tab so PMs/stakeholders can set A
 
 #### Verification
 - `npx tsc --noEmit` — no TypeScript errors
+
+---
+
+### Prompt: Implement `aida init` command (2026-02-22)
+
+#### Request
+Implement a proper `aida init` command that creates the database, scaffolds all files, creates `docs/plans/`, seeds META requirements, and prints getting-started guidance. Add `--no-hooks` and `--no-skills` escape hatches. Also fix `determine_requirements_path()` to detect `requirements.db`.
+
+#### Actions Taken
+1. **`aida-core/src/project.rs`** — Added `requirements.db` detection before `requirements.yaml` check in `determine_requirements_path()`
+2. **`aida-cli/src/cli.rs`** — Added `Init { no_skills, no_hooks, force }` variant to `Command` enum
+3. **`aida-cli/src/main.rs`** — Added early dispatch before path resolution, `handle_init_command()` function with:
+   - Idempotency check (refuses without `--force` if already initialized)
+   - SQLite database creation + META requirement seeding
+   - `docs/plans/` directory creation
+   - Scaffold execution with configurable `ScaffoldConfig`
+   - Colored post-init guidance message
+4. **Migration check fix** — Skip migration check when path is already `.db` to avoid false "Both YAML and SQLite exist" warning
+
+#### Files Modified (3)
+- `aida-core/src/project.rs` — `requirements.db` detection, updated error message
+- `aida-cli/src/cli.rs` — `Init` command variant
+- `aida-cli/src/main.rs` — `handle_init_command()`, early dispatch, migration check fix
+
+#### Verification
+- Fresh `aida init` creates all expected files
+- `aida list` works immediately after init
+- `aida init` again shows "already initialized" message
+- `--force` allows reinitializing
+- `--no-skills` omits `.claude/skills/` and `.claude/commands/`
+- `--no-hooks` omits `.claude/hooks/`

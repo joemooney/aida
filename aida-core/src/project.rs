@@ -59,11 +59,17 @@ pub fn check_migration_status(yaml_path: &PathBuf) -> MigrationCheck {
 /// This version does NOT check for migration - use `determine_requirements_path_with_migration_check`
 /// for migration-aware path resolution.
 pub fn determine_requirements_path(project_option: Option<&str>) -> Result<PathBuf> {
-    // Check if requirements.yaml exists in current directory - but only if we're not explicitly
+    // Check if requirements file exists in current directory - but only if we're not explicitly
     // specifying a project via command line option or environment variable
     let use_local_file = project_option.is_none() && env::var("REQ_DB_NAME").is_err();
-    let current_dir_path = PathBuf::from("requirements.yaml");
 
+    // Check for requirements.db first (SQLite preferred for MCP/concurrent access)
+    let current_dir_db = PathBuf::from("requirements.db");
+    if use_local_file && current_dir_db.exists() {
+        return Ok(current_dir_db);
+    }
+
+    let current_dir_path = PathBuf::from("requirements.yaml");
     if use_local_file && current_dir_path.exists() {
         return Ok(current_dir_path);
     }
@@ -112,7 +118,7 @@ pub fn determine_requirements_path(project_option: Option<&str>) -> Result<PathB
     // If we got here, there's no clear project to use
     anyhow::bail!(
         "Could not determine requirements file. Please specify a project with -p, \
-         set REQ_DB_NAME environment variable, or ensure requirements.yaml exists in current directory"
+         set REQ_DB_NAME environment variable, or run `aida init` in your project directory"
     )
 }
 
