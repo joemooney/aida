@@ -28,6 +28,8 @@ requirements.yaml
 *.requirements.yaml
 !default_requirements.yaml
 requirements.db
+requirements.db-shm
+requirements.db-wal
 *.yaml.bak
 *.yaml.lock
 
