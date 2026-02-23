@@ -16,7 +16,10 @@ The React dashboard is located at `aida-web-react/` and runs on port 5173 (dev) 
 
 This project uses AIDA for requirements tracking. **Do NOT maintain a separate REQUIREMENTS.md file.**
 
-Requirements database: `requirements.db`
+Requirements database: `requirements.db` (SQLite, runtime) / `requirements.yaml` (tracked in git)
+
+### Git Pre-commit Hook
+A `.git/hooks/pre-commit` script auto-exports `requirements.db` to `requirements.yaml` before each commit. The SQLite binary is **not** tracked in git — only the diffable YAML is committed. This gives full text-based diff history while keeping SQLite as the runtime backend. The hook skips gracefully if `aida` is not installed.
 
 ### Database Storage
 AIDA supports three storage backends:
