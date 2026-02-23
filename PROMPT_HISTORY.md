@@ -3691,3 +3691,28 @@ Implement a proper `aida init` command that creates the database, scaffolds all 
 - `--force` allows reinitializing
 - `--no-skills` omits `.claude/skills/` and `.claude/commands/`
 - `--no-hooks` omits `.claude/hooks/`
+
+---
+
+### Prompt: Modernize documentation — OVERVIEW.md, User Guide, Getting Started (2026-02-22)
+
+#### Request
+Update OVERVIEW.md with the new init command. Modernize the User Guide (aida-gui is the desktop app, web dashboard is the preferred UI). Create a standalone Getting Started guide.
+
+#### Actions Taken
+1. **OVERVIEW.md** — Updated Vision (AI-native, SQLite default), Project Structure (added aida-web-react as primary UI), renamed "Dual Interface" to "Three Interfaces", rewrote Getting Started to use `aida init` + web dashboard, fixed Data Storage (SQLite now default), fixed Use Case 3 (requirements.db not .yaml), updated Documentation section
+2. **docs/getting-started.md** — Created standalone guide covering: install, `aida init`, first CLI steps, launching web dashboard, launching desktop app, Claude Code skills, storage backends, next steps
+3. **docs/user-guide.md** — Major modernization:
+   - Getting Started now uses `aida init` and references standalone guide
+   - Added new "Web Dashboard" section documenting all 10 views, search/filtering, keyboard shortcuts, description rendering, AI features
+   - Renamed "GUI Usage" to "Desktop App (aida-gui)" and condensed it
+   - Updated Multi-Project resolution order (requirements.db before .yaml)
+   - Updated Storage Backends (SQLite as default, added PostgreSQL, updated examples)
+   - Updated keyboard shortcuts section title
+   - Updated troubleshooting for web dashboard + `aida init`
+   - Updated tips for SQLite-first world
+
+#### Files Modified (3) + Created (1)
+- `OVERVIEW.md` — Modernized vision, structure, getting started, storage defaults
+- `docs/user-guide.md` — Web dashboard section, desktop app reframe, init command, storage updates
+- `docs/getting-started.md` — New standalone Getting Started guide

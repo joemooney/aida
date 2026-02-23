@@ -1,8 +1,9 @@
 # AIDA User Guide
 
-A professional requirements management system with both CLI and GUI interfaces.
+An AI-native requirements management system with CLI, web dashboard, and desktop app.
 
 **Related Documentation:**
+- [Getting Started](getting-started.md) - Quick setup and first steps
 - [Developer's Guide](DEVELOPER_GUIDE.md) - For developers maintaining and extending AIDA
 - [Administrator's Guide](admin-guide.md) - For project configuration and administration
 
@@ -10,7 +11,8 @@ A professional requirements management system with both CLI and GUI interfaces.
 
 - [Getting Started](#getting-started)
 - [CLI Usage](#cli-usage)
-- [GUI Usage](#gui-usage)
+- [Web Dashboard](#web-dashboard)
+- [Desktop App (aida-gui)](#desktop-app-aida-gui)
 - [Working with Requirements](#working-with-requirements)
   - [Meta Requirements](#meta-requirements)
 - [Features and Organization](#features-and-organization)
@@ -24,6 +26,8 @@ A professional requirements management system with both CLI and GUI interfaces.
 
 ## Getting Started
 
+For a detailed walkthrough, see the [Getting Started guide](getting-started.md).
+
 ### Installation
 
 Build the project from source:
@@ -32,23 +36,39 @@ Build the project from source:
 cargo build --workspace --release
 ```
 
-This creates two binaries in `target/release/`:
-- `aida` - Command-line interface
-- `aida-gui` - Graphical user interface
+This creates three binaries in `target/release/`:
+- `aida` — Command-line interface
+- `aida-server` — REST API + gRPC server
+- `aida-gui` — Native desktop app
 
 ### Quick Start
 
-1. **Create your first requirement:**
+1. **Initialize your project:**
    ```bash
-   aida add --title "User login" --description "Users can log in with email and password"
+   aida init
+   ```
+   This creates `requirements.db`, scaffolds Claude Code config (`.claude/skills/`, `.mcp.json`, `CLAUDE.md`), and creates `docs/plans/`.
+
+2. **Add your first requirement:**
+   ```bash
+   aida add --title "User login" --type story --status draft
    ```
 
-2. **List all requirements:**
+3. **List all requirements:**
    ```bash
    aida list
    ```
 
-3. **Or launch the GUI:**
+4. **Launch the web dashboard** (preferred UI):
+   ```bash
+   # Terminal 1: REST API
+   cd aida-server && cargo run
+   # Terminal 2: React dashboard
+   cd aida-web-react && pnpm dev
+   # Opens at http://localhost:5173
+   ```
+
+5. **Or launch the desktop app:**
    ```bash
    aida-gui
    ```
@@ -195,33 +215,104 @@ aida user-guide --dark
 
 ---
 
-## GUI Usage
+## Web Dashboard
 
-Launch the GUI application:
+The React web dashboard (`aida-web-react/`) is the primary UI for most users. It connects to the REST API server (`aida-server`) running on port 8080.
+
+### Starting the Web Dashboard
+
 ```bash
-aida-gui
+# Terminal 1: Start the REST API server
+cd aida-server && cargo run       # Runs on http://localhost:8080
+
+# Terminal 2: Start the React dev server
+cd aida-web-react && pnpm dev     # Opens at http://localhost:5173
 ```
 
-Or open a specific requirements file:
+### Views
+
+| View | Shortcut | Description |
+|------|----------|-------------|
+| **Dashboard** | `g+d` | Project-wide status cards, active sprint summary, queue widget |
+| **Kanban Board** | `g+b` | Drag-and-drop columns by status, tag filter dropdown |
+| **List View** | `g+l` | Flat/tree toggle, advanced query builder, drag-to-queue, drag-to-reparent |
+| **My Queue** | `g+q` | Personal focus inbox with drag-to-reorder, owner-scoped |
+| **My Activity** | `g+a` | Planned vs. actual work reconciliation with time range filtering |
+| **Sprint Planning** | `g+s` | Drag-and-drop backlog/sprint assignment, burndown/velocity charts |
+| **Timeline** | `g+t` | Chronological event feed (history, comments, creation) |
+| **Skills Browser** | `g+x` | View and edit Claude Code skills and commands |
+| **Chat** | `g+c` | AI-powered Q&A with streaming responses and auto-linked spec IDs |
+| **Settings** | — | Store metadata, type definitions, admin controls |
+
+### Search and Filtering
+
+**Structured search** in the search bar supports field-specific queries:
+- `owner:joe` — filter by owner
+- `tag:frontend` — filter by tag
+- `status:approved` — filter by status
+
+**Advanced query builder** (press `f` or click the filter icon):
+- AND/OR grouping via react-querybuilder
+- Sprint, tags, and custom field support
+- Saved queries persisted in localStorage
+- URL-persisted via `?aq=` parameter
+
+### Keyboard Shortcuts (Web Dashboard)
+
+Press `?` to see all shortcuts. Key bindings:
+
+| Shortcut | Action |
+|----------|--------|
+| `g+d/b/l/q/a/s/t/c/x` | Switch views (chord navigation) |
+| `j/k` | Navigate rows up/down |
+| `Enter` | Open detail panel |
+| `/` | Focus search bar |
+| `f` | Toggle advanced filter |
+| `s/p/o` | Quick pickers for status/priority/owner |
+| `q` | Add to queue |
+| `?` | Help modal |
+
+### Description Rendering
+
+Markdown descriptions render with:
+- Auto-linked spec IDs (e.g., `FR-0042` becomes a clickable link)
+- `::color[text]` colored text syntax (20 colors)
+- Syntax-highlighted code blocks (Prism oneDark theme)
+- Tables, task lists, and standard GFM features
+
+The description editor includes expand/collapse, live preview, and a markdown help toolbar.
+
+### AI Features
+
+- **Chat**: Ask questions about requirements in natural language. Requires `ANTHROPIC_API_KEY` (set via environment variable or Admin settings). Model configurable via `AIDA_CHAT_MODEL`.
+- **AI Evaluate**: One-click quality evaluation via the sparkles button in the detail header. Results (score, strengths, issues, suggestions) display inline and persist on the requirement.
+
+---
+
+## Desktop App (aida-gui)
+
+The native desktop app is an egui-based application that also builds to WASM for browser use.
+
+### Launching
+
 ```bash
-aida-gui --file /path/to/requirements.yaml
+aida-gui                                    # Launch with auto-detected database
+aida-gui --file /path/to/requirements.db    # Open specific database
 ```
 
 ### Main Interface
 
-The GUI consists of three main areas:
+The desktop app consists of three main areas:
 
-1. **Top Bar** - Contains action buttons, requirement count, and settings
-2. **Left Panel** - Requirements list with search filter (collapsible in edit mode)
-3. **Main Area** - Detail view, forms, or welcome screen
+1. **Top Bar** — Action buttons, requirement count, and settings
+2. **Left Panel** — Requirements list with search filter (collapsible in edit mode)
+3. **Main Area** — Detail view, forms, or welcome screen
 
 ### Responsive Layout
 
 When editing or adding requirements, the left panel remains visible if the window is wide enough (900+ pixels). You can:
 - Click the **▶ Hide** button in the left panel header to collapse it
 - Click **◀ Show List** in the form area to restore the panel
-
-This allows you to reference other requirements while editing, or maximize form space on smaller screens.
 
 ### Navigation
 
@@ -246,8 +337,6 @@ This allows you to reference other requirements while editing, or maximize form 
 
 ### View Perspectives
 
-The requirements list can be displayed in different organizational views. Select your preferred view from the dropdown in the top bar or set a default in Settings > Appearance.
-
 | View | Description |
 |------|-------------|
 | **Flat List** | Simple list of all requirements |
@@ -259,109 +348,35 @@ In tree views, use the +/- buttons or press Space to expand/collapse nodes.
 
 ### View Presets
 
-You can save your current view configuration (perspective, direction, and filters) as a named preset for quick access later.
+Save your current view configuration (perspective, direction, and filters) as a named preset:
 
-**To save a preset:**
-1. Configure your view using the View dropdown, direction selector, and filter options
-2. When you have unsaved changes, a "💾 Save As..." button appears
-3. Click it, enter a name, and click Save
-
-**To use a preset:**
-- Select it from the View dropdown under "Saved Presets"
-- The preset will restore all saved settings (perspective, direction, root filters, child filters)
-
-**To delete a preset:**
-- Click the ✕ button next to the preset name in the dropdown
-- Confirm deletion in the dialog
-
-**Modified indicator:**
-- If you modify an active preset, its name shows with an asterisk (e.g., "My View*")
-- Use "Save As..." to save changes to the same name or create a new preset
-
-**Reset button (↺):**
-- Click to return to the default Flat List view with no filters
+- **Save**: Configure your view, click "💾 Save As...", enter a name
+- **Use**: Select from the View dropdown under "Saved Presets"
+- **Delete**: Click the ✕ button next to the preset name
+- **Modified indicator**: An asterisk (e.g., "My View*") shows unsaved changes
+- **Reset (↺)**: Return to default Flat List view with no filters
 
 ### Filtering Requirements
 
-The GUI provides powerful filtering capabilities to help you focus on specific subsets of requirements.
+Click the "Filters" dropdown in the top bar. Two-level filtering:
 
-**Accessing Filters:**
-- Click the "Filters" dropdown button in the top bar
-- The filter panel shows two tabs: **Root** and **Children**
+- **Root filters**: Apply to top-level requirements
+- **Children filters**: Apply to nested requirements in hierarchical views (uncheck "Same as root" for independent filtering)
 
-**Root vs Children Filters:**
-- **Root filters**: Apply to top-level requirements displayed in the list or tree view
-- **Children filters**: Apply to nested requirements in hierarchical views (Parent/Child, Verification, References)
-- By default, "Same as root" is checked, meaning children use the same filters as root requirements
-- Uncheck "Same as root" to set independent filters for child requirements
+Filter by type, feature, ID prefix, or archived status.
 
-This two-level filtering allows you to:
-- Show only specific root requirements (e.g., all Functional Requirements)
-- While displaying all their children regardless of type
-- Or filter children independently (e.g., show all root requirements but only their Change Request children)
+### Comments and Reactions
 
-**Filter Types:**
-- **Type Filters**: Show only FR (Functional), NFR (Non-Functional), SR (System), UR (User), or CR (Change Request)
-- **Feature Filters**: Show only requirements from selected features
-- **ID Prefix Filters**: Show only requirements with specific ID prefixes (e.g., SEC, API, AUTH)
-- **Show Archived**: Toggle visibility of archived requirements
-
-**Quick Actions:**
-- Click "Clear" next to any filter category to remove all selections in that category
-- Empty filters (none selected) means "show all" for that category
-
-### Adding Comments
-
-1. Select a requirement
-2. Click the "Comments" tab
-3. Click "+ Add Comment"
-4. Enter your comment and click Save
-
-Comments support threading - click "Reply" on any comment to add a nested reply. Comments are displayed in a collapsible tree structure.
-
-### Comment Reactions
-
-You can add emoji reactions to comments to quickly indicate your response:
-
-**Adding a reaction:**
-- Click the 😊 button on any comment to open the reaction picker
-- Select an emoji to add your reaction
-- Click the same emoji again to remove your reaction
-
-**Default reactions:**
-| Emoji | Name | Use Case |
-|-------|------|----------|
-| ✅ | Resolved | Mark comment as addressed |
-| ❌ | Rejected | Mark comment as declined |
-| 👍 | Thumbs Up | Agree or approve |
-| 👎 | Thumbs Down | Disagree or disapprove |
-| ❓ | Question | Needs clarification |
-| ⚠️ | Important | Attention needed |
-
-**Customizing reactions:**
-- Go to Settings > Reactions tab
-- Add new custom reactions with your own emoji and labels
-- Edit existing reactions (emoji, label, description)
-- Delete custom reactions (built-in reactions cannot be deleted)
-- Reset to defaults to restore the standard reaction set
+- **Adding comments**: Select requirement → Comments tab → "+ Add Comment"
+- **Threading**: Click "Reply" on any comment for nested replies
+- **Reactions**: Click 😊 on a comment to add emoji reactions (✅ Resolved, ❌ Rejected, 👍 👎 ❓ ⚠️)
+- **Custom reactions**: Configure in Settings > Reactions tab
 
 ### Links Tab
 
-The Links tab provides two sections for connecting requirements to other resources:
+**External Links:** Add URLs with titles and descriptions, with format verification.
 
-**External Links:**
-- Click "+ New URL" to add an external URL link
-- Enter the URL, optional title, and description
-- Click "Verify" to validate the URL format
-- Links show verification status (✅ valid, ❌ invalid)
-- Click a link to open it in your browser
-- Edit or remove links using the ✏ and x buttons
-
-**Relationships:**
-- View and manage relationships to other requirements
-- Double-click a related requirement to navigate to it
-- Remove relationships using the x button
-- See relationship types with color indicators
+**Relationships:** View, navigate (double-click), and manage relationships to other requirements with color-coded type indicators.
 
 ---
 
@@ -641,12 +656,12 @@ Override with: `AIDA_REGISTRY_PATH` environment variable
 
 ### Project Resolution Order
 
-1. Local `requirements.yaml` in current directory
-2. `--project` command line option
-3. `AIDA_DB_NAME` environment variable
-4. Single project in registry (if only one exists)
-5. Default project from registry
-6. Interactive prompt
+1. Local `requirements.db` in current directory (SQLite, preferred)
+2. Local `requirements.yaml` in current directory (YAML fallback)
+3. `--project` command line option
+4. `AIDA_DB_NAME` environment variable
+5. Single project in registry (if only one exists)
+6. Default project from registry
 
 ### Example Setup
 
@@ -666,50 +681,65 @@ aida list --project backend
 
 ## Storage Backends
 
-The system supports two storage formats for your requirements data.
+AIDA supports three storage backends. `aida init` creates a SQLite database by default.
 
-### YAML Storage (Default)
+### SQLite Storage (Default)
 
-Requirements are stored in human-readable YAML files (`.yaml` or `.yml`).
+SQLite database storage (`.db`) is created by `aida init` and recommended for most use cases.
+
+**Advantages:**
+- Better concurrent access (CLI + web dashboard + MCP server)
+- Faster for large datasets (1000+ requirements)
+- Efficient single-record operations with optimistic locking
+
+**Best for:**
+- Most projects (this is the default)
+- Scenarios with concurrent access from multiple tools
+- Web dashboard and MCP server usage
+
+### YAML Storage
+
+Requirements stored in human-readable YAML files (`.yaml` or `.yml`).
 
 **Advantages:**
 - Human-readable and editable with any text editor
-- Version control friendly - meaningful Git diffs
+- Version control friendly — meaningful Git diffs
 - Easy to backup (just copy the file)
 
 **Best for:**
-- Small to medium projects
-- Teams using Git for collaboration
+- Small projects with single-user access
 - When you need to manually inspect or edit data
+- Teams using Git for collaboration on requirements files
 
-### SQLite Storage
+### PostgreSQL Storage
 
-For larger projects, SQLite database storage (`.db`, `.sqlite`) offers better performance.
-
-**Advantages:**
-- Faster for large datasets (1000+ requirements)
-- Better concurrent access handling
-- Efficient single-record operations
+Enterprise-grade database for multi-user/team deployments.
 
 **Best for:**
-- Large projects with many requirements
-- Scenarios with frequent concurrent access
-- When performance is critical
+- Team environments with multiple concurrent users
+- Integration with existing PostgreSQL infrastructure
+
+```bash
+aida --file "postgres://user:pass@localhost:5432/aida" list
+```
 
 ### Choosing Your Storage Format
 
 The system automatically detects the storage format based on file extension:
-- `.yaml`, `.yml` → YAML storage
 - `.db`, `.sqlite`, `.sqlite3` → SQLite storage
-
-When registering a project, simply use the appropriate file extension:
+- `.yaml`, `.yml` → YAML storage
+- `postgres://...` → PostgreSQL
 
 ```bash
-# YAML storage (default)
-aida db add --name "my-project" --path ~/project/requirements.yaml
+# Initialize with SQLite (recommended)
+aida init
 
-# SQLite storage
+# Or register a specific path
 aida db add --name "my-project" --path ~/project/requirements.db
+
+# Migrate between backends
+aida db migrate --from yaml --to sqlite
+aida db migrate --from sqlite --to postgres --output "postgres://user:pass@host:5432/db"
 ```
 
 ### Exporting and Importing
@@ -773,7 +803,7 @@ For detailed migration procedures and storage administration, see the [Administr
 
 ## Keyboard Shortcuts
 
-### GUI Shortcuts
+### Desktop App Shortcuts
 
 | Shortcut | Action |
 |----------|--------|
@@ -874,7 +904,7 @@ User settings are stored in: `~/.aida_gui_settings.yaml`
 
 ### Project Settings
 
-Configure how requirement IDs are formatted and numbered. These settings are stored in the project's `requirements.yaml` file.
+Configure how requirement IDs are formatted and numbered. These settings are stored in the project's requirements database.
 
 | Setting | Description |
 |---------|-------------|
@@ -957,7 +987,7 @@ These relationships can be added through the Links tab when viewing a requiremen
 
 5. **Regular status updates**: Keep status current to track project progress
 
-6. **Backup your data**: The YAML format is human-readable and version-control friendly
+6. **Backup your data**: SQLite databases can be copied directly; YAML format is also available for git-friendly storage
 
 7. **Use Markdown in descriptions**: Format requirements with headers, lists, and code blocks for clarity
 
@@ -973,15 +1003,19 @@ These relationships can be added through the Links tab when viewing a requiremen
 
 ### Common Issues
 
-**"No requirements file found"**
-- Create a `requirements.yaml` in the current directory, or
+**"Could not determine requirements file"**
+- Run `aida init` to initialize AIDA in the current directory, or
 - Register a project with `aida db add`
 
 **"Failed to save"**
 - Check file permissions
 - Ensure the directory exists
 
-**GUI won't start**
+**Web dashboard won't connect**
+- Ensure `aida-server` is running on port 8080
+- Check that Vite dev proxy is configured (automatic in dev mode)
+
+**Desktop app won't start**
 - Ensure you have a display server running
 - Check for missing system libraries (OpenGL, etc.)
 

@@ -4,22 +4,23 @@ A professional requirements management system built in Rust, providing both CLI 
 
 ## Vision
 
-Create a lightweight, file-based requirements management tool that is:
-- Version-control friendly (YAML storage)
-- Flexible enough for different project needs
-- Usable from both command line and graphical interface
-- Capable of tracking requirement relationships and history
+Create a lightweight, AI-native requirements management tool that is:
+- Usable from CLI, web dashboard, and desktop app
+- Flexible enough for different project needs (SQLite default, YAML and PostgreSQL also supported)
+- Deeply integrated with AI development workflows (Claude Code skills, MCP server)
+- Capable of tracking requirement relationships, history, and code traceability
 
 ## Project Structure
 
-This is a Cargo workspace with five crates:
+This is a Cargo workspace with multiple crates plus a React web dashboard:
 
 ```
 aida/
 ├── aida-core/           # Shared library - models, storage, business logic
 ├── aida-cli/            # CLI tool (aida binary)
-├── aida-gui/            # GUI application (native + WASM dual-target, egui-based)
-├── aida-server/         # gRPC server for headless/remote operation
+├── aida-server/         # REST API + gRPC server (port 8080)
+├── aida-web-react/      # React web dashboard (port 5173) — primary UI
+├── aida-gui/            # Desktop app (native egui, also builds to WASM)
 ├── aida-web/            # Lightweight WASM browser client (alternative)
 ├── proto/               # Protocol Buffers definitions
 ├── docs/                # User documentation (markdown + HTML)
@@ -28,9 +29,10 @@ aida/
 
 ## Key Features
 
-### Dual Interface
-- **CLI (`req`)**: Full-featured command-line interface for scripting and quick operations
-- **GUI (`req-gui`)**: Modern egui-based graphical interface with tabbed views
+### Three Interfaces
+- **CLI (`aida`)**: Full-featured command-line interface for scripting and quick operations
+- **Web Dashboard (`aida-web-react`)**: React-based browser UI — the preferred interface for most users, with kanban boards, sprint planning, advanced filtering, AI chat, and keyboard shortcuts
+- **Desktop App (`aida-gui`)**: Native egui-based desktop application with tabbed views (also builds to WASM)
 
 ### SPEC-ID System
 Human-friendly identifiers (SPEC-001, SPEC-002) alongside internal UUIDs. Configurable ID formats with feature-based prefixes. ID prefix filtering and management with optional admin-controlled restriction.
@@ -260,20 +262,21 @@ Model Context Protocol server for Claude Code integration:
 
 Requirements are stored using a pluggable backend system:
 
-### YAML Backend (Default)
-- Human-readable YAML format (`requirements.yaml`)
-- Git-friendly for version control
-- Includes metadata, relationships, comments, and history
-
-### SQLite Backend
-- High-performance database storage (`.db` files)
-- WAL mode for better concurrent access
+### SQLite Backend (Default)
+- High-performance database storage (`.db` files) — created by `aida init`
+- WAL mode for better concurrent access (GUI + CLI + MCP server)
 - Efficient single-record CRUD operations
 - Complex fields (relationships, comments, history) stored as JSON
 - **Optimistic Locking (REQ-0231)**: Per-record version columns prevent concurrent edit conflicts
   - Each requirement/user has a `version` field incremented on update
   - Updates with stale versions are rejected with conflict details
   - Store-level `store_version` for detecting any external modifications
+
+### YAML Backend
+- Human-readable YAML format (`requirements.yaml`)
+- Git-friendly for version control
+- Good for single-user scenarios
+- Includes metadata, relationships, comments, and history
 
 ### PostgreSQL Backend (FR-0316)
 - Enterprise-grade database for multi-user/team deployments
@@ -321,9 +324,17 @@ The `.env` file is loaded automatically at server startup (before arg parsing). 
 
 ## Getting Started
 
+For a full walkthrough, see [docs/getting-started.md](docs/getting-started.md).
+
 ```bash
 # Build
 cargo build --workspace --release
+
+# Initialize a new project
+mkdir my-project && cd my-project
+aida init                         # Creates requirements.db, scaffolds Claude Code config
+aida init --no-skills             # Skip .claude/skills/ and .claude/commands/
+aida init --no-hooks              # Skip .claude/hooks/ and git hooks
 
 # CLI usage
 aida list                         # List requirements
@@ -331,34 +342,21 @@ aida add --interactive            # Add requirement interactively
 aida show FR-0001                 # Show requirement details
 aida rel add --from FR-0001 --to FR-0002 --type parent  # Add relationship
 
-# GUI usage
-aida-gui                          # Launch graphical interface
+# Web dashboard (preferred UI)
+cd aida-server && cargo run       # Start REST API on port 8080
+cd aida-web-react && npm run dev  # Start React dashboard on port 5173
+
+# Desktop app
+aida-gui                          # Launch native desktop app
 
 # Server mode
 aida-server --port 50051          # Start gRPC server
 aida --server localhost:50051 server list  # Remote list
-aida --server localhost:50051 server ping  # Check connectivity
-
-# WASM browser client
-make web-deps                     # Install trunk and wasm32 target
-make web-build                    # Build WASM client
-make web-serve                    # Serve on http://localhost:8088
-
-# Build CLI with remote feature
-cargo build -p aida-cli --features remote
-
-# GUI with remote server
-cargo build -p aida-gui --features remote  # Build GUI with remote support
-aida-gui --server localhost:50051          # Connect to remote server
 
 # Database migration
 aida db info                              # Show database info and statistics
 aida db migrate --from yaml --to sqlite   # Migrate YAML to SQLite
-aida db migrate --from sqlite --to yaml   # Export SQLite back to YAML
 aida db migrate --from sqlite --to postgres --output "postgres://user:pass@host:5432/db"
-
-# Use PostgreSQL directly
-aida --file "postgres://user:pass@localhost:5432/aida" list
 
 # Open user guide
 aida user-guide                   # Open in browser (light mode)
@@ -486,11 +484,11 @@ aida user-guide --dark            # Open in browser (dark mode)
 
 **Step-by-step**:
 
-1. **Initialize a new AIDA database**:
+1. **Initialize a new AIDA project**:
    ```bash
    mkdir my-new-project && cd my-new-project
    aida init
-   # Creates requirements.yaml with default configuration
+   # Creates requirements.db (SQLite), CLAUDE.md, .mcp.json, .claude/skills/, docs/plans/
    ```
 
 2. **Verify META requirements were seeded**:
@@ -677,6 +675,7 @@ aida user-guide --dark            # Open in browser (dark mode)
 
 - **README.md**: Quick start and project structure
 - **CLAUDE.md**: AI assistant instructions and technical details
-- **docs/user-guide.md**: Comprehensive user documentation
-- **docs/user-guide.html**: Pre-generated HTML (light mode)
-- **docs/user-guide-dark.html**: Pre-generated HTML (dark mode)
+- **docs/getting-started.md**: Getting started guide — project setup, first steps, launching UIs
+- **docs/user-guide.md**: Comprehensive user documentation (CLI, web dashboard, desktop app)
+- **docs/admin-guide.md**: Storage administration, migration, multi-user configuration
+- **docs/user-guide.html**: Pre-generated HTML (light mode, served by `aida user-guide`)
