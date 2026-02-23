@@ -152,7 +152,7 @@ docs: update README
 
 ## Claude Code Skills
 
-This project uses AIDA requirements-driven development with 15 skills:
+This project uses AIDA requirements-driven development with 16 skills:
 
 ### Core Skills
 - `/aida-req` — Add new requirements with AI evaluation, quality feedback, and follow-up actions
@@ -171,6 +171,9 @@ This project uses AIDA requirements-driven development with 15 skills:
 - `/aida-standup` — Generate daily standup from recent commits and requirement progress
 - `/aida-onboard` — Interactive project onboarding: architecture summary, requirement stats, first task suggestions
 - `/aida-search` — Unified search across requirements database and codebase
+
+### Code Quality
+- `/aida-compiler-warnings` — Analyze compiler/clippy warnings, categorize by risk level, recommend prioritized action plan
 
 ### Maintenance
 - `/aida-release` — Release management: version bump, changelog generation, requirement status updates

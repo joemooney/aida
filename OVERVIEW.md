@@ -231,7 +231,7 @@ Bidirectional integration with GitLab for issue tracking:
 
 ### AI Integration — Claude Code Scaffolding
 AIDA scaffolds Claude Code configuration into projects via `aida init`:
-- **15 Skills**: `/aida-req`, `/aida-implement`, `/aida-capture`, `/aida-evaluate`, `/aida-commit`, `/aida-plan`, `/aida-sync`, `/aida-docs`, `/aida-release`, `/aida-test`, `/aida-review`, `/aida-onboard`, `/aida-sprint`, `/aida-search`, `/aida-standup`
+- **16 Skills**: `/aida-req`, `/aida-implement`, `/aida-capture`, `/aida-evaluate`, `/aida-commit`, `/aida-plan`, `/aida-sync`, `/aida-docs`, `/aida-release`, `/aida-test`, `/aida-review`, `/aida-onboard`, `/aida-sprint`, `/aida-search`, `/aida-standup`, `/aida-compiler-warnings`
 - **YAML Frontmatter**: All skills have Claude Code frontmatter (`name`, `description`, `allowed-tools`, `disable-model-invocation`)
 - **Dynamic Context Injection**: Skills use `!`command`` to inject live project data at load time
 - **Template System**: 4-tier priority (project `.aida/templates/` → org `~/.config/aida/org-templates/` → user `~/.config/aida/templates/` → embedded)
