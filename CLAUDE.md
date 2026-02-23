@@ -33,6 +33,23 @@ To use PostgreSQL directly:
 aida --file "postgres://user:pass@localhost:5432/aida" list
 ```
 
+### Project Initialization
+```bash
+aida init                              # Initialize AIDA in current directory
+aida init --no-skills                  # Skip .claude/skills/ and .claude/commands/
+aida init --no-hooks                   # Skip .claude/hooks/ and git hooks
+aida init --force                      # Overwrite existing files if already initialized
+```
+
+`aida init` creates:
+- `requirements.db` — SQLite database with seeded META requirements
+- `.mcp.json` — Claude Code MCP integration config
+- `CLAUDE.md` — Project context for AI sessions
+- `.claude/skills/` — 15 workflow skills (unless `--no-skills`)
+- `.claude/commands/` — Slash commands (unless `--no-skills`)
+- `.claude/hooks/` — Commit validation hooks (unless `--no-hooks`)
+- `docs/plans/` — Implementation plan archive
+
 ### CLI Commands
 ```bash
 aida list                              # List all requirements
