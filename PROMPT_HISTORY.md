@@ -3933,3 +3933,27 @@ Implement the plan for Web UI Skill Invocation — allow running skills from the
 #### Git
 - Commit: `04c79b1` — `chore: replace binary requirements.db with diffable requirements.yaml`
 - Pushed to main
+
+---
+
+### Prompt: Fix Docker — docs, skills, and chat not loading
+- **Date**: 2026-02-22
+
+#### Problem
+In Docker, the server's CWD is `/app` but the project is mounted at `/repo`. The `docs_dir()` and `claude_dir()` functions resolved relative to CWD, so Docs, Plans, and Skills views were empty. Additionally, `ANTHROPIC_API_KEY` was not forwarded into the container, so Chat was unavailable.
+
+#### Solution
+- Extracted shared `project_root()` helper that derives the project directory from the database file's parent path
+- Updated `docs_dir()` and `claude_dir()` to use `project_root()` instead of `std::env::current_dir()`
+- Added `env_file: ../.env` to docker-compose.yml to forward secrets into the container
+
+#### Requirements Captured
+- TASK-0388: Pre-commit hook: auto-export requirements.yaml from SQLite (completed)
+- BUG-0389: Fix: resolve docs/ and .claude/ relative to database path for Docker (completed)
+- BUG-0390: Fix: forward ANTHROPIC_API_KEY from .env to Docker container (completed)
+
+#### Git
+- `6a0513b` — fix(server): resolve docs/ relative to database path, not CWD
+- `d78fd2a` — fix(server): resolve .claude/ and docs/ relative to database path
+- `ec52103` — fix(docker): load .env file for ANTHROPIC_API_KEY in container
+- Pushed to main

@@ -9137,8 +9137,8 @@ requirements:
     created_at: 2025-12-07T17:00:49.761868107Z
     created_by: Joe Mooney
   custom_fields:
-    end_date: 2026-02-27
     sprint_goal: Clean up baseline
+    end_date: 2026-02-27
     sprint_number: '1'
     start_date: 2026-02-20
 - id: 49b91b7d-77d3-4717-af8a-921ab4e05685
@@ -9245,9 +9245,9 @@ requirements:
         ID should now be sprint?
   custom_fields:
     sprint_number: '2'
-    start_date: 2026-02-27
-    end_date: 2026-03-06
     sprint_goal: get front end web up to speed
+    end_date: 2026-03-06
+    start_date: 2026-02-27
 - id: d1e58dd4-fd26-437a-8856-2cf0d4f2adda
   spec_id: REQ-0211
   title: Bug 123
@@ -14615,8 +14615,8 @@ requirements:
   modified_at: 2026-02-22T18:19:54.564209314Z
   req_type: Bug
   tags:
-  - frontend
   - bugfix
+  - frontend
   relationships:
   - rel_type: Parent
     target_id: e88eb8dd-1ed5-4076-9c9e-eeaac44dd994
@@ -14633,8 +14633,8 @@ requirements:
   modified_at: 2026-02-22T18:23:02.151416315Z
   req_type: Story
   tags:
-  - react
   - frontend
+  - react
   relationships:
   - rel_type: Parent
     target_id: e88eb8dd-1ed5-4076-9c9e-eeaac44dd994
@@ -14651,8 +14651,8 @@ requirements:
   modified_at: 2026-02-22T18:23:12.714451542Z
   req_type: Bug
   tags:
-  - tooling
   - docs
+  - tooling
 - id: e3421e3b-155b-4fca-8429-a8e0653d0f9d
   spec_id: BUG-0381
   title: 'Web UI shows stale data: v2 API path does not call check_reload()'
@@ -14665,8 +14665,8 @@ requirements:
   modified_at: 2026-02-22T18:27:52.675485513Z
   req_type: Bug
   tags:
-  - backend
   - server
+  - backend
   comments:
   - id: e583f777-10c9-4442-b9d9-49345b479392
     author: joe
@@ -14693,8 +14693,8 @@ requirements:
   modified_at: 2026-02-22T20:35:47.917818690Z
   req_type: Story
   tags:
-  - web
   - ui
+  - web
   - create
 - id: 167164e4-2d64-4d24-b41f-16499162e6b3
   spec_id: BUG-0383
@@ -14724,9 +14724,9 @@ requirements:
   modified_at: 2026-02-22T21:30:34.418112889Z
   req_type: Story
   tags:
-  - editor
-  - web
   - ui
+  - web
+  - editor
   - markdown
 - id: 3a4d90f3-7b60-4eb7-a32d-15b20fbbb679
   spec_id: FR-0385
@@ -14751,9 +14751,9 @@ requirements:
   modified_at: 2026-02-23T02:49:24.757611723Z
   req_type: Functional
   tags:
-  - web
   - skills
   - sse
+  - web
   relationships:
   - rel_type: Parent
     target_id: c9697f28-3a0f-4133-b2e3-9c0dd6220e89
@@ -14776,9 +14776,9 @@ requirements:
   modified_at: 2026-02-23T02:49:30.683744854Z
   req_type: Bug
   tags:
-  - skills
-  - ux
   - web
+  - ux
+  - skills
 - id: 433f2b0d-0f82-4e32-9b4a-5efd3738d1cf
   spec_id: BUG-0387
   title: 'Fix: Advanced filter blank screen from duplicate React in Vite bundle'
@@ -14796,9 +14796,72 @@ requirements:
   modified_at: 2026-02-23T02:49:37.994722750Z
   req_type: Bug
   tags:
-  - vite
   - react
   - web
+  - vite
+- id: 36d3908b-cfc6-490e-83e2-76ed28927ff3
+  spec_id: TASK-0388
+  title: 'Pre-commit hook: auto-export requirements.yaml from SQLite'
+  description: A git pre-commit hook (.git/hooks/pre-commit) that auto-exports requirements.db to requirements.yaml before each commit. The SQLite binary is not tracked in git; only the diffable YAML is committed. Hook handles SQLite WAL mode (checks both .db and .db-wal timestamps), skips gracefully if aida is not installed. Gives full text-based diff history while keeping SQLite as the runtime backend.
+  status: Completed
+  priority: Medium
+  owner: joe
+  feature: 236-Uncategorized
+  created_at: 2026-02-23T05:49:01.227228469Z
+  modified_at: 2026-02-23T05:49:18.702404260Z
+  req_type: Task
+  tags:
+  - infrastructure
+  - git
+  - docker
+  comments:
+  - id: f2fcc2f8-6c33-443e-bc80-8b6293fdfdbc
+    author: joe
+    content: 'Committed in 04c79b1, hook fix in be5d467. Plan: docs/plans/2026-02-22-auto-export-yaml-hook.md'
+    created_at: 2026-02-23T05:49:18.702398977Z
+    modified_at: 2026-02-23T05:49:18.702398977Z
+- id: 3901c582-a83f-47f3-aadb-1359b8c1d5d1
+  spec_id: BUG-0389
+  title: 'Fix: resolve docs/ and .claude/ relative to database path for Docker'
+  description: Server endpoints for docs, plans, and skills resolved paths relative to CWD, which fails in Docker where CWD (/app) differs from the project root (/repo). Extracted a shared project_root() helper that derives the project directory from the database file's parent path. Fixes docs_dir() and claude_dir() to work in both local dev and Docker environments.
+  status: Completed
+  priority: Medium
+  owner: joe
+  feature: 237-Uncategorized
+  created_at: 2026-02-23T05:49:07.717765371Z
+  modified_at: 2026-02-23T05:49:19.891365340Z
+  req_type: Bug
+  tags:
+  - docker
+  - bug-fix
+  - server
+  comments:
+  - id: c951820f-912f-4a61-8b43-ffd3117a3055
+    author: joe
+    content: Committed in 6a0513b (initial docs fix) and d78fd2a (skills + shared project_root helper)
+    created_at: 2026-02-23T05:49:19.891355330Z
+    modified_at: 2026-02-23T05:49:19.891355330Z
+- id: 68e98b36-5113-4933-9dfd-c3d8a97a98fe
+  spec_id: BUG-0390
+  title: 'Fix: forward ANTHROPIC_API_KEY from .env to Docker container'
+  description: Docker compose was not loading the ANTHROPIC_API_KEY from the project .env file into the container, causing Chat to be unavailable. Added env_file directive pointing to ../.env in docker-compose.yml so environment secrets are forwarded to the container automatically.
+  status: Completed
+  priority: Medium
+  owner: joe
+  feature: 238-Uncategorized
+  created_at: 2026-02-23T05:49:13.080129296Z
+  modified_at: 2026-02-23T05:49:20.485197884Z
+  req_type: Bug
+  tags:
+  - chat
+  - docker
+  - bug-fix
+  comments:
+  - id: d53834d4-cbaa-40ec-83e1-a2c855e08c0c
+    author: joe
+    content: Committed in ec52103
+    created_at: 2026-02-23T05:49:20.485192754Z
+    modified_at: 2026-02-23T05:49:20.485192754Z
 users:
 - id: 150164ef-32ed-4d61-8cec-e887ac78cfd7
   spec_id: $USER-001
@@ -14914,8 +14977,8 @@ id_config:
     prefix: META
     description: Database configuration and templates
 features: []
-next_feature_number: 236
-next_spec_number: 388
+next_feature_number: 239
+next_spec_number: 391
 prefix_counters: {}
 relationship_definitions:
 - name: parent
