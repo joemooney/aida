@@ -43,9 +43,13 @@ aida-web/dist/
 
 # Node
 node_modules/
+package.json
 
 # Unrelated projects
 vibe-kanban/
+
+# Other AI tools
+GEMINI.md
 
 # Environment secrets
 .env
