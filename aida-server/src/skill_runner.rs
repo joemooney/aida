@@ -152,9 +152,9 @@ pub fn create_skill_runner_router(server: Arc<ServerState>, admin: Arc<AdminStat
         running: AtomicBool::new(false),
     });
     Router::new()
-        .route("/api/v2/skills/{name}/run", post(run_skill_sse))
-        .route("/api/v2/skills/{name}/action", post(skill_action))
-        .route("/api/v2/skills/{name}/chat", post(skill_chat_stream))
+        .route("/api/v2/skills/:name/run", post(run_skill_sse))
+        .route("/api/v2/skills/:name/action", post(skill_action))
+        .route("/api/v2/skills/:name/chat", post(skill_chat_stream))
         .with_state(state)
 }
 
