@@ -17,4 +17,4 @@ services:
       - --static-dir=/app/static
     environment:
       RUST_LOG: info
-      # ANTHROPIC_API_KEY: sk-ant-...  # Uncomment for AI chat features
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}  # Forwarded from host env; set via export or .env file

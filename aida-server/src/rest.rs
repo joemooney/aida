@@ -1731,9 +1731,23 @@ fn parse_skill_frontmatter(content: &str) -> (String, String, Vec<String>) {
     }
 }
 
-/// Get the .claude directory relative to cwd
-fn claude_dir() -> PathBuf {
-    std::env::current_dir().unwrap_or_default().join(".claude")
+/// Get the .claude directory relative to the project root (database parent)
+fn claude_dir(state: &ServerState) -> PathBuf {
+    project_root(state).join(".claude")
+}
+
+/// Get the project root directory, derived from the database file's parent.
+/// Falls back to CWD for relative paths like "requirements.db".
+fn project_root(state: &ServerState) -> PathBuf {
+    if let Some(parent) = std::path::Path::new(state.backend.path()).parent() {
+        if parent.as_os_str().is_empty() {
+            std::env::current_dir().unwrap_or_default()
+        } else {
+            parent.to_path_buf()
+        }
+    } else {
+        std::env::current_dir().unwrap_or_default()
+    }
 }
 
 /// Scan a directory for .md files and return skill info entries
@@ -1785,9 +1799,9 @@ fn scan_skill_dir(dir: &std::path::Path, kind: &str) -> Vec<(SkillInfo, PathBuf)
 }
 
 async fn list_skills(
-    State(_state): State<Arc<ServerState>>,
+    State(state): State<Arc<ServerState>>,
 ) -> Result<Json<Vec<SkillInfo>>, (StatusCode, Json<ApiError>)> {
-    let base = claude_dir();
+    let base = claude_dir(&state);
     let mut all: Vec<SkillInfo> = Vec::new();
 
     for (info, _) in scan_skill_dir(&base.join("skills"), "skill") {
@@ -1801,10 +1815,10 @@ async fn list_skills(
 }
 
 async fn get_skill(
-    State(_state): State<Arc<ServerState>>,
+    State(state): State<Arc<ServerState>>,
     Path(name): Path<String>,
 ) -> Result<Json<SkillDetail>, (StatusCode, Json<ApiError>)> {
-    let base = claude_dir();
+    let base = claude_dir(&state);
 
     // Search skills then commands
     let dirs = [
@@ -1844,11 +1858,11 @@ async fn get_skill(
 }
 
 async fn update_skill(
-    State(_state): State<Arc<ServerState>>,
+    State(state): State<Arc<ServerState>>,
     Path(name): Path<String>,
     Json(body): Json<UpdateSkillRequest>,
 ) -> Result<Json<SkillDetail>, (StatusCode, Json<ApiError>)> {
-    let base = claude_dir();
+    let base = claude_dir(&state);
 
     let dirs = [
         (base.join("skills"), "skill"),
@@ -1926,18 +1940,7 @@ fn extract_md_title(content: &str) -> String {
 
 /// Get the docs/ directory relative to cwd
 fn docs_dir(state: &ServerState) -> PathBuf {
-    // Resolve docs/ relative to the database file's parent directory,
-    // so it works in Docker where CWD differs from the project root.
-    if let Some(parent) = std::path::Path::new(state.backend.path()).parent() {
-        if parent.as_os_str().is_empty() {
-            // Relative path like "requirements.db" — use CWD
-            std::env::current_dir().unwrap_or_default().join("docs")
-        } else {
-            parent.join("docs")
-        }
-    } else {
-        std::env::current_dir().unwrap_or_default().join("docs")
-    }
+    project_root(state).join("docs")
 }
 
 /// Recursively scan for .md files under a directory
