@@ -17,7 +17,8 @@ export function remarkColorText() {
   return (tree: Root) => {
     visit(tree, 'text', (node: Text, index, parent) => {
       if (!parent || index === undefined) return;
-      if (parent.type === 'link' || parent.type === 'code' || parent.type === 'inlineCode') return;
+      const ptype = parent.type as string;
+      if (ptype === 'link' || ptype === 'code' || ptype === 'inlineCode') return;
 
       const matches = [...node.value.matchAll(COLOR_RE)];
       if (matches.length === 0) return;

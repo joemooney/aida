@@ -1,7 +1,7 @@
 // trace:TASK-0001 | ai:claude
 import { useCallback, useRef, useState } from 'react';
 import { runSkill, executeSkillAction } from '../api/skillRunner';
-import type { WarningsReport, ActionResponse } from '../api/skillRunner';
+import type { WarningsReport } from '../api/skillRunner';
 
 export type SkillPhase = 'idle' | 'running' | 'done' | 'error';
 

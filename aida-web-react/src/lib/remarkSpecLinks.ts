@@ -14,7 +14,8 @@ export function remarkSpecLinks() {
       if (!parent || index === undefined) return;
 
       // Don't transform text inside existing links or code blocks
-      if (parent.type === 'link' || parent.type === 'code' || parent.type === 'inlineCode') return;
+      const ptype = parent.type as string;
+      if (ptype === 'link' || ptype === 'code' || ptype === 'inlineCode') return;
 
       const matches = [...node.value.matchAll(SPEC_ID_RE)];
       if (matches.length === 0) return;

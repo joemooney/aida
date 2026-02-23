@@ -23,7 +23,7 @@ import { useListSelection } from '../../hooks/useListSelection';
 import { Spinner } from '../ui/Spinner';
 import { EmptyState } from '../ui/EmptyState';
 import { QueueItem } from './QueueItem';
-import type { QueueEntry } from '@shared/types';
+
 
 // trace:STORY-0369 | ai:claude
 
