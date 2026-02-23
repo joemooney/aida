@@ -41,6 +41,12 @@ _ignore
 aida-gui/dist/
 aida-web/dist/
 
+# Node
+node_modules/
+
+# Unrelated projects
+vibe-kanban/
+
 # Environment secrets
 .env
 
