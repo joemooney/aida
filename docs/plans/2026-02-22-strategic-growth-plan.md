@@ -13,84 +13,57 @@
 
 ### Current State
 
-`aida scaffold apply` generates ~30+ files: CLAUDE.md, 15 skills, 13 commands, hooks, .mcp.json, git hooks. This is powerful but overwhelming for someone just trying AIDA for the first time. The "just write a CLAUDE.md" alternative is literally one file.
+`aida scaffold apply` generates ~30+ files: CLAUDE.md, 15 skills, 13 commands, hooks, .mcp.json, git hooks. This is the right default.
 
-### The Problem
+### Why Not Progressive Tiers
 
-The bootstrapping experience has two failure modes:
-1. **Too much too fast** — A new user runs `aida init` and gets 30 files they don't understand. They feel like they've signed up for a methodology, not a tool.
-2. **Nothing without setup** — If you don't scaffold, you don't get MCP, skills, or traceability. There's no middle ground.
+An earlier draft proposed hiding skills and hooks behind opt-in flags to reduce "overwhelm." On reflection, that's solving an imagined problem by removing the features that make AIDA worth adopting.
 
-### Proposed: Progressive Bootstrapping (Three Tiers)
+The skills are **text files**. They cost nothing at runtime, change no behavior unless invoked, and are the primary way users discover AIDA's workflow. A user who runs `aida init` and only gets a database + MCP config would never find `/aida-req`, `/aida-commit`, or `/aida-capture` — which is where the actual value lives. Without skills, AIDA is just another requirements database.
 
-#### Tier 1: "Just Works" (Zero Config)
+The real adoption friction isn't "too many files." It's **not understanding what those files do**. The fix is better onboarding, not fewer files.
 
-```bash
-aida init
-```
+### Proposed: Full Scaffold + Better First-Run Guidance
 
-Creates only:
-- `requirements.db` (empty SQLite database)
-- `.mcp.json` (MCP server config — this is the critical one)
-- `CLAUDE.md` (minimal, auto-generated from project state)
-
-That's it. Three files. The MCP server gives Claude Code full access to requirements. The user can start with `aida add --title "My first requirement"` and Claude Code can query it immediately. No skills, no hooks, no commands. Just a database and an AI bridge.
-
-**Why this works:** The MCP server is the highest-value, lowest-friction integration point. Once Claude Code can `list_requirements` and `show_requirement`, the user gets value without learning any skills.
-
-#### Tier 2: "Guided Workflow" (Opt-In Skills)
-
-```bash
-aida init --with-skills
-```
-
-Adds to Tier 1:
-- `.claude/skills/` (the 15 skills)
-- `.claude/commands/` (the 13 commands)
-
-But still no hooks, no git hooks, no traceability enforcement. The user discovers skills organically: they type `/aida-` in Claude Code and see the autocomplete list. They try `/aida-req` and it works. They gradually learn the workflow.
-
-#### Tier 3: "Full Governance" (Everything)
-
-```bash
-aida init --full
-```
-
-Adds to Tier 2:
-- `.claude/hooks/` (commit validation, trace checking)
-- `.git/hooks/` (commit message format enforcement)
-- Trace comment validation
-
-This is for teams or regulated environments where traceability isn't optional.
-
-### Migration Between Tiers
-
-```bash
-aida scaffold apply --tier 2    # Upgrade from Tier 1 to Tier 2
-aida scaffold apply --tier 3    # Upgrade to full governance
-```
-
-Each tier is additive. No files are removed when upgrading.
-
-### First-Run Experience
-
-After `aida init`, print a concise getting-started message:
+`aida init` continues to scaffold everything. What changes is the post-init experience:
 
 ```
-AIDA initialized.
+AIDA initialized. Created:
 
-  Database:  requirements.db
-  MCP:       .mcp.json (Claude Code can now query requirements)
+  requirements.db          Requirements database
+  .mcp.json                Claude Code MCP integration (AI can query requirements)
+  CLAUDE.md                Project context for AI sessions
+  .claude/skills/          15 workflow skills (/aida-req, /aida-commit, etc.)
+  .claude/commands/        13 slash commands
+  .claude/hooks/           Commit validation and traceability hooks
+  docs/plans/              Implementation plan archive
 
 Quick start:
   aida add --title "User authentication" --type story --status draft
   aida list
 
-In Claude Code, the AI can now search and manage requirements directly.
+In Claude Code:
+  Type /aida- to see available workflow skills
+  Try /aida-onboard for an interactive project walkthrough
 
-Want skills and workflow commands? Run: aida init --with-skills
-Want full traceability enforcement? Run: aida init --full
+Full docs: aida user-guide
 ```
+
+**Key improvements:**
+1. **Explain what was created and why** — not just a file list, but what each piece does.
+2. **Point to `/aida-onboard`** — the interactive onboarding skill that already exists. This is the real first-run experience: an AI-guided tour of the project.
+3. **Show the discovery path** — "type `/aida-` to see skills" teaches the user how to find things organically.
+
+### Optional Flags (Subtract, Don't Add)
+
+For users who genuinely want less (e.g., using AIDA with a non-Claude AI tool where skills are irrelevant):
+
+```bash
+aida init --no-hooks       # Skip commit validation hooks
+aida init --no-skills      # Skip Claude Code skills/commands
+```
+
+These are escape hatches, not the recommended path. The default gives you everything.
 
 ---
 
@@ -547,7 +520,7 @@ Sequenced by value delivered per effort:
 
 | Priority | Item | Effort | Impact |
 |----------|------|--------|--------|
-| 1 | Progressive bootstrapping (Tier 1) | 2-3 days | Removes biggest adoption barrier |
+| 1 | Better first-run guidance + onboarding polish | 1-2 days | Removes adoption confusion without removing features |
 | 2 | CLAUDE.md managed sections | 2-3 days | Keeps AI context fresh automatically |
 | 3 | Docker quick-start image | 2-3 days | "Try AIDA in 30 seconds" |
 | 4 | `aida export --format context` | 1 day | Better AI context for non-MCP scenarios |
@@ -562,7 +535,7 @@ Sequenced by value delivered per effort:
 
 ## Open Questions
 
-1. **Tier 1 default storage:** Should `aida init` create SQLite (better for MCP/concurrent) or YAML (simpler, visible)? Recommendation: SQLite, since the MCP server and web dashboard both benefit from it.
+1. **Default storage:** Should `aida init` create SQLite (better for MCP/concurrent) or YAML (simpler, visible)? Recommendation: SQLite, since the MCP server and web dashboard both benefit from it.
 
 2. **CLAUDE.md section markers:** Should we use HTML comments (`<!-- AIDA MANAGED -->`) or a custom syntax? HTML comments are invisible in rendered markdown, which is clean but means users might accidentally delete them.
 
