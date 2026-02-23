@@ -3716,3 +3716,67 @@ Update OVERVIEW.md with the new init command. Modernize the User Guide (aida-gui
 - `OVERVIEW.md` — Modernized vision, structure, getting started, storage defaults
 - `docs/user-guide.md` — Web dashboard section, desktop app reframe, init command, storage updates
 - `docs/getting-started.md` — New standalone Getting Started guide
+
+---
+
+### Rename aida-gui to aida-desktop (2026-02-22)
+
+#### Prompt
+Rename `aida-gui` to `aida-desktop`. The web dashboard (`aida-web-react`) is now the primary UI, making `aida-gui` ambiguous. The new name aligns with how docs already describe it ("Desktop App") and parallels the naming convention: `aida` (CLI), `aida-server`, `aida-desktop`, `aida-web-react`.
+
+#### Actions Taken
+1. **Phase 1 — Directory + Cargo rename**:
+   - Renamed `aida-gui/` directory to `aida-desktop/`
+   - Updated `aida-desktop/Cargo.toml` package name and binary name
+   - Updated root `Cargo.toml` workspace member
+   - Updated `aida-web/Cargo.toml` dependency path
+   - Updated `pnpm-workspace.yaml`
+
+2. **Phase 2 — Rust source updates**:
+   - Updated `aida-desktop/src/main.rs`: `use aida_desktop::`, help text, version string
+   - Updated `aida-web/src/lib.rs`, `client.rs`, `app.rs`: all `aida_gui` → `aida_desktop`
+   - Updated `aida-desktop/src/lib.rs`, `build.rs`, `Trunk.toml`, `storage/embedded.rs`, `ui/mod.rs`: comments
+   - Updated `aida-desktop/src/app.rs`: cargo build command, binary fallback strings, migration messages
+   - Kept `aida_gui_settings` key for backward compatibility (user data path)
+
+3. **Phase 3 — Build infrastructure**:
+   - Updated `Makefile`: all target names, paths, cargo commands (~18 occurrences)
+   - Updated `.github/workflows/ci.yml`: gui_binary references
+   - Updated `docker/Dockerfile.web` and `docker/Dockerfile.server`: COPY paths, WORKDIR
+
+4. **Phase 4 — Templates**:
+   - Updated `aida-core/templates/skills/aida-req.md` and `aida-implement.md`
+
+5. **Phase 5 — Documentation**:
+   - Updated OVERVIEW.md, README.md, docs/user-guide.md, docs/getting-started.md, docs/DEVELOPER_GUIDE.md, PLAN.md
+   - Left historical docs unchanged (PROMPT_HISTORY.md, unified-gui-plan.md, plans/*.md)
+   - Regenerated user-guide.html and user-guide-dark.html
+
+6. **Verification**:
+   - `cargo build --workspace` — full workspace compiles successfully
+   - `./target/debug/aida-desktop --version` — shows `aida-desktop 0.1.0`
+   - `./target/debug/aida-desktop --help` — shows correct binary name
+   - No stale `aida-gui` references in .rs, .toml, or Makefile
+   - Only `aida_gui_settings` remains in .rs (intentional backward compat)
+
+#### Files Modified (24+)
+- `Cargo.toml` — workspace member
+- `aida-desktop/Cargo.toml` — package + binary name
+- `aida-web/Cargo.toml` — dependency path
+- `pnpm-workspace.yaml` — package list
+- `aida-desktop/src/main.rs` — imports, help text
+- `aida-desktop/src/lib.rs`, `build.rs`, `Trunk.toml` — comments
+- `aida-desktop/src/app.rs` — strings, cargo commands
+- `aida-desktop/src/storage/embedded.rs`, `src/ui/mod.rs` — comments
+- `aida-web/src/lib.rs`, `src/client.rs`, `src/app.rs` — imports, comments
+- `Makefile` — all targets and paths
+- `.github/workflows/ci.yml` — release matrix
+- `docker/Dockerfile.web`, `docker/Dockerfile.server` — COPY paths
+- `aida-core/templates/skills/aida-req.md`, `aida-implement.md`
+- `OVERVIEW.md`, `README.md`, `PLAN.md`
+- `docs/user-guide.md`, `docs/getting-started.md`, `docs/DEVELOPER_GUIDE.md`
+- `docs/user-guide.html`, `docs/user-guide-dark.html` — regenerated
+
+#### Git
+- Commit: `refactor: rename aida-gui to aida-desktop`
+- Pushed to main
