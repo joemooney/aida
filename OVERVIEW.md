@@ -1,6 +1,6 @@
 # Requirements Manager - Project Overview
 
-A professional requirements management system built in Rust, providing both CLI and GUI interfaces for managing software requirements with rich features including relationships, comments, history tracking, and multi-project support.
+A professional requirements management system built in Rust, providing CLI, web dashboard, and desktop app interfaces for managing software requirements with rich features including relationships, comments, history tracking, and multi-project support.
 
 ## Vision
 
@@ -20,7 +20,7 @@ aida/
 ├── aida-cli/            # CLI tool (aida binary)
 ├── aida-server/         # REST API + gRPC server (port 8080)
 ├── aida-web-react/      # React web dashboard (port 5173) — primary UI
-├── aida-desktop/            # Desktop app (native egui, also builds to WASM)
+├── aida-desktop/        # Desktop app (native egui, also builds to WASM)
 ├── aida-web/            # Lightweight WASM browser client (alternative)
 ├── proto/               # Protocol Buffers definitions
 ├── docs/                # User documentation (markdown + HTML)
@@ -98,7 +98,7 @@ Define connections between requirements:
 - Remote CLI operations via `--server` flag or `AIDA_SERVER` environment variable
 - Server commands: `aida server status`, `aida server list`, `aida server get <ID>`, `aida server ping`
 - Configurable port (default 50051), host, database path, and logging
-- **GUI Remote Client**: Connect GUI to remote server with `aida-desktop --server <addr>`
+- **Desktop Remote Client**: Connect desktop app to remote server with `aida-desktop --server <addr>`
   - Requires `--features remote` at build time
   - StorageBackend abstraction for transparent local/remote switching
 - **gRPC-Web Support**: Server supports gRPC-Web protocol for browser clients
@@ -150,7 +150,7 @@ Define connections between requirements:
 - **Design choices**: URL-based filter and detail state, optimistic updates for drag-and-drop status changes
 
 ### WASM Browser Client (FR-0273)
-- **Dual-Target GUI (`aida-desktop`)**: Same codebase for native desktop and WASM browser
+- **Dual-Target Desktop App (`aida-desktop`)**: Same codebase for native desktop and WASM browser
   - Full-featured web client with nearly identical UI to desktop
   - Uses conditional compilation to gate native-only features
   - Native-only: threads, file system, AI evaluation, edit locks
@@ -177,7 +177,7 @@ Define connections between requirements:
 - `aida-web` re-exports proto types from `aida-desktop` for type compatibility
 - Consistent UI rendering between native desktop and browser clients
 
-### GUI-Specific Features
+### Desktop App Features
 - Multiple view perspectives (Flat, Parent/Child, Verification, References)
 - Two-level filtering (Root/Children) for hierarchical views
 - User settings (name, email, handle, font size)
