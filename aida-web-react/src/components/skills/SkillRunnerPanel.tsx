@@ -27,7 +27,13 @@ export function SkillRunnerPanel({ skillName, skillDescription, onClose }: Skill
   } = useSkillRunner();
 
   const [actionPending, setActionPending] = useState(false);
-  const [actionMessage, setActionMessage] = useState('');
+  const [actionFeedback, setActionFeedback] = useState<{
+    message: string;
+    diffSummary?: string;
+    specId?: string;
+    isError: boolean;
+    suggestRerun: boolean;
+  } | null>(null);
   const [logsExpanded, setLogsExpanded] = useState(true);
   const logEndRef = useRef<HTMLDivElement>(null);
 
@@ -51,17 +57,30 @@ export function SkillRunnerPanel({ skillName, skillDescription, onClose }: Skill
   }, [onClose]);
 
   const handleRun = () => {
+    setActionFeedback(null);
     run(skillName);
   };
 
   const handleAction = async (action: string, params: Record<string, unknown>) => {
     setActionPending(true);
-    setActionMessage('');
+    setActionFeedback(null);
     try {
       const response = await executeAction(skillName, action, params);
-      setActionMessage(response.message);
+      const isAutoFix = action === 'auto_fix';
+      const hasChanges = !!response.diffSummary?.trim();
+      setActionFeedback({
+        message: response.message,
+        diffSummary: response.diffSummary || undefined,
+        specId: response.specId || undefined,
+        isError: !response.success,
+        suggestRerun: isAutoFix && hasChanges,
+      });
     } catch (err) {
-      setActionMessage(`Error: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setActionFeedback({
+        message: err instanceof Error ? err.message : 'Unknown error',
+        isError: true,
+        suggestRerun: false,
+      });
     } finally {
       setActionPending(false);
     }
@@ -69,7 +88,7 @@ export function SkillRunnerPanel({ skillName, skillDescription, onClose }: Skill
 
   const handleReset = () => {
     reset();
-    setActionMessage('');
+    setActionFeedback(null);
   };
 
   return (
@@ -150,14 +169,38 @@ export function SkillRunnerPanel({ skillName, skillDescription, onClose }: Skill
           )}
 
           {/* Action feedback */}
-          {actionMessage && (
+          {actionFeedback && (
             <div className={cn(
-              'rounded-lg border p-3 text-xs',
-              actionMessage.startsWith('Error')
-                ? 'border-red-500/50 bg-red-500/10 text-red-300'
-                : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300',
+              'rounded-lg border p-3 text-xs space-y-2',
+              actionFeedback.isError
+                ? 'border-red-500/50 bg-red-500/10'
+                : 'border-emerald-500/50 bg-emerald-500/10',
             )}>
-              {actionMessage}
+              <p className={actionFeedback.isError ? 'text-red-300 font-medium' : 'text-emerald-300 font-medium'}>
+                {actionFeedback.message}
+              </p>
+              {actionFeedback.specId && (
+                <p className="text-emerald-400">
+                  Created: <span className="font-mono font-semibold">{actionFeedback.specId}</span>
+                </p>
+              )}
+              {actionFeedback.diffSummary?.trim() ? (
+                <div>
+                  <p className="text-content-secondary mb-1">Files changed:</p>
+                  <pre className="bg-gray-950 rounded p-2 text-gray-400 font-mono text-[11px] leading-relaxed whitespace-pre-wrap">{actionFeedback.diffSummary}</pre>
+                </div>
+              ) : actionFeedback.suggestRerun === false && !actionFeedback.isError && !actionFeedback.specId ? (
+                <p className="text-emerald-400/70">No files were modified — code may already be clean.</p>
+              ) : null}
+              {actionFeedback.suggestRerun && (
+                <button
+                  onClick={handleRun}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium bg-accent text-white hover:bg-accent-hover transition-colors cursor-pointer mt-1"
+                >
+                  <Play className="h-3 w-3" />
+                  Re-Run to see updated warnings
+                </button>
+              )}
             </div>
           )}
 
