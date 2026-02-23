@@ -23,8 +23,7 @@ release/
 .DS_Store
 Thumbs.db
 
-# Requirements data (user-specific)
-requirements.yaml
+# Requirements data
 *.requirements.yaml
 !default_requirements.yaml
 requirements.db
