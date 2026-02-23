@@ -338,8 +338,8 @@ Open [http://localhost:8080](http://localhost:8080) — the dashboard and API ar
 
 **CLI via Docker:**
 ```bash
-docker compose exec aida aida --file /data/default/requirements.db list
-docker compose exec aida aida --file /data/default/requirements.db show FR-0001
+docker compose exec aida aida --file /repo/requirements.db list
+docker compose exec aida aida --file /repo/requirements.db show FR-0001
 ```
 
 **Stop/restart:**

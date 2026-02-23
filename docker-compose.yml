@@ -4,10 +4,13 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - aida-data:/data
+      - .:/repo
+    command:
+      - /app/aida-server
+      - --host=0.0.0.0
+      - --rest-port=8080
+      - --database=/repo/requirements.db
+      - --static-dir=/app/static
     environment:
       RUST_LOG: info
       # ANTHROPIC_API_KEY: sk-ant-...  # Uncomment for AI chat features
-
-volumes:
-  aida-data:
