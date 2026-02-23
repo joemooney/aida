@@ -26,6 +26,7 @@ mod evaluate;
 mod projects;
 mod rest;
 mod service;
+mod skill_runner;
 
 // Include the generated protobuf code
 pub mod proto {
@@ -352,6 +353,7 @@ async fn main() -> Result<()> {
                 .merge(admin::create_admin_router(admin_state.clone()))
                 .merge(chat::create_chat_router(state.clone(), admin_state.clone()))
                 .merge(evaluate::create_evaluate_router(state.clone(), admin_state.clone()))
+                .merge(skill_runner::create_skill_runner_router(state.clone(), admin_state.clone()))
                 .layer(cors.clone());
 
             let rest_listener = tokio::net::TcpListener::bind(rest_addr).await?;

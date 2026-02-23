@@ -138,7 +138,7 @@ Define connections between requirements:
   - Sprint planning with drag-and-drop between backlog and sprints (via @dnd-kit)
   - Sprint creation modal, archive/unarchive toggle
   - Sprint charts: burndown, burn-up, velocity (pure SVG, no charting library)
-  - Skills browser: view, search, and edit skills/commands with card grid and detail panel
+  - Skills browser: view, search, and edit skills/commands with card grid and detail panel; run executable skills (e.g., compiler-warnings) with real-time SSE output, structured results with risk-level categorization, action buttons (auto-fix, create defect/task), and context-aware AI chat follow-up
   - Docs browser: browse and read markdown documentation from `docs/` and `docs/plans/` with rendered markdown
   - Chat: AI-powered Q&A for PMs/stakeholders — streams Claude API responses with full requirements context, spec IDs auto-linked via `LinkedMarkdown` (requires `ANTHROPIC_API_KEY` env var or runtime key via Admin settings, model configurable via `AIDA_CHAT_MODEL`)
   - AI Evaluate: One-click requirement quality evaluation via Claude API — Sparkles button in detail header triggers `POST /api/v2/requirements/:id/evaluate`, results (quality score, strengths, issues, suggestions) displayed in detail body and persisted on the requirement

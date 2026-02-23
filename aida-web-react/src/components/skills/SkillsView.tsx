@@ -7,6 +7,7 @@ import { Spinner } from '../ui/Spinner';
 import { EmptyState } from '../ui/EmptyState';
 import { SkillCard } from './SkillCard';
 import { SkillDetailPanel } from './SkillDetailPanel';
+import { SkillRunnerPanel } from './SkillRunnerPanel';
 
 type FilterKind = 'all' | 'skill' | 'command';
 
@@ -22,6 +23,7 @@ export function SkillsView() {
   const [search, setSearch] = useState('');
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedSkill = searchParams.get('skill');
+  const [runningSkill, setRunningSkill] = useState<{ name: string; description: string } | null>(null);
 
   const filtered = useMemo(() => {
     if (!skills) return [];
@@ -129,6 +131,7 @@ export function SkillsView() {
               key={`${skill.kind}-${skill.name}`}
               skill={skill}
               onClick={() => openSkill(skill.name)}
+              onRun={() => setRunningSkill({ name: skill.name, description: skill.description })}
             />
           ))}
         </div>
@@ -137,6 +140,15 @@ export function SkillsView() {
       {/* Detail panel */}
       {selectedSkill && (
         <SkillDetailPanel name={selectedSkill} onClose={closeSkill} />
+      )}
+
+      {/* Skill runner panel */}
+      {runningSkill && (
+        <SkillRunnerPanel
+          skillName={runningSkill.name}
+          skillDescription={runningSkill.description}
+          onClose={() => setRunningSkill(null)}
+        />
       )}
     </div>
   );

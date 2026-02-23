@@ -3780,3 +3780,61 @@ Rename `aida-gui` to `aida-desktop`. The web dashboard (`aida-web-react`) is now
 #### Git
 - Commit: `refactor: rename aida-gui to aida-desktop`
 - Pushed to main
+
+---
+
+## Session — 2026-02-22: Web UI Skill Invocation (Pilot: `/aida-compiler-warnings`)
+
+### Prompt
+Implement the plan for Web UI Skill Invocation — allow running skills from the React dashboard, starting with `/aida-compiler-warnings` as a pilot. Three phases: server skill runner infrastructure, React UI, and chat integration.
+
+### Actions Taken
+
+#### Phase 1: Server — Skill Runner Infrastructure
+- **Created** `aida-server/src/skill_runner.rs` (~450 lines):
+  - SSE streaming endpoint: `POST /api/v2/skills/:name/run` — runs `cargo clippy --workspace --all-targets --message-format=json`, parses JSON diagnostics, categorizes warnings by risk level (Safe Auto-Fix / Low Risk / Medium Risk / Review Needed), streams real-time log events and structured `WarningsReport` result
+  - Action endpoint: `POST /api/v2/skills/:name/action` — handles `auto_fix` (runs `cargo clippy --fix`), `create_defect` (creates bug requirement), `create_task` (creates task requirement) with warning details in description
+  - Chat endpoint: `POST /api/v2/skills/:name/chat` — context-aware AI Q&A with warnings report injected as system context, streams Claude API responses
+  - Warning categorization by lint code: `unused_imports`/`unused_mut` → Safe Auto-Fix, `dead_code` → Low Risk, `unused_assignments` → Medium Risk, clippy correctness lints → Review Needed
+  - Reuses existing patterns: SSE from admin.rs, requirement creation from rest.rs, Claude API streaming from chat.rs
+- **Modified** `aida-server/src/main.rs` — Added `mod skill_runner` and merged router into legacy mode setup
+
+#### Phase 2: React — Skill Runner UI
+- **Created** `aida-web-react/src/api/skillRunner.ts` — API client with types for Warning, WarningCategory, WarningsReport, ActionResponse; functions for `runSkill()` (SSE), `executeSkillAction()` (JSON), `sendSkillChat()` (SSE)
+- **Created** `aida-web-react/src/hooks/useSkillRunner.ts` — React hook managing phase (idle/running/done/error), logs, result, progress, error state; SSE event parsing for log/progress/result/error/done events
+- **Created** `aida-web-react/src/components/skills/WarningsReport.tsx` — Structured results display with:
+  - Summary bar (total warnings, crate breakdown)
+  - Expandable category cards with risk-level color coding (green/yellow/orange/red)
+  - Per-category action buttons: Auto-Fix All, Create Task, Create Defect
+  - Individual warning rows with file:line, code, suggestion
+- **Created** `aida-web-react/src/components/skills/SkillRunnerPanel.tsx` — Slide-out panel with:
+  - Header with Run/Re-Run/Reset buttons and spinner
+  - Collapsible terminal-style log output
+  - Structured results via WarningsReport component
+  - Progress indicator and error banners
+  - Action feedback messages
+- **Modified** `aida-web-react/src/components/skills/SkillCard.tsx` — Added "Run" button for runnable skills (client-side allowlist: `aida-compiler-warnings`)
+- **Modified** `aida-web-react/src/components/skills/SkillsView.tsx` — Wired up SkillRunnerPanel with state management
+
+#### Phase 3: Chat Integration
+- **Created** `aida-web-react/src/components/skills/SkillChat.tsx` — Context-aware AI chat:
+  - Collapsible chat section at bottom of SkillRunnerPanel
+  - Starter questions (e.g., "Which dead_code warnings are safe to remove?")
+  - Full SSE streaming with Claude API
+  - Warnings report passed as context
+  - LinkedMarkdown rendering for assistant responses
+
+#### Documentation
+- **Created** `docs/plans/2026-02-22-skill-runner-ui.md`
+- **Updated** `CLAUDE.md` — Skills Browser description updated
+- **Updated** `OVERVIEW.md` — Skills browser feature description updated
+- **Updated** `PROMPT_HISTORY.md` — This session
+
+#### Verification
+- `cargo build -p aida-server` — compiles with only pre-existing warnings
+- `npx tsc --noEmit` — TypeScript check passes
+- `npx vite build` — production build succeeds
+
+#### Git
+- Commit: `feat(skills): add web UI skill invocation with compiler-warnings pilot`
+- Pushed to main
