@@ -1,0 +1,43 @@
+# Build artifacts
+target/
+**/target/
+debug/
+release/
+
+# Node modules (each stage installs its own)
+**/node_modules/
+
+# Git
+.git/
+.gitignore
+
+# Database files (user data, not source)
+*.db
+*.db-wal
+*.db-shm
+
+# Docker secrets
+docker/secrets/
+
+# Environment files
+.env
+
+# Unrelated projects
+vibe-kanban/
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Documentation (not needed in image)
+docs/
+OVERVIEW.md
+PROMPT_HISTORY.md
+GEMINI.md
+
+# Test/temp files
+test_*.yaml
+_ignore
+*.yaml.bak
+*.yaml.lock

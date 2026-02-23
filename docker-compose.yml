@@ -1,0 +1,13 @@
+services:
+  aida:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - aida-data:/data
+    environment:
+      RUST_LOG: info
+      # ANTHROPIC_API_KEY: sk-ant-...  # Uncomment for AI chat features
+
+volumes:
+  aida-data:

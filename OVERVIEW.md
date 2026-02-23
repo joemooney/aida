@@ -324,7 +324,35 @@ The `.env` file is loaded automatically at server startup (before arg parsing). 
 
 ## Getting Started
 
+### Quick Start with Docker (Recommended)
+
+The fastest way to get a fully working AIDA instance (REST API + React dashboard):
+
+```bash
+git clone https://github.com/yourusername/aida.git
+cd aida
+docker compose up
+```
+
+Open [http://localhost:8080](http://localhost:8080) — the dashboard and API are served from a single container.
+
+**CLI via Docker:**
+```bash
+docker compose exec aida aida --file /data/default/requirements.db list
+docker compose exec aida aida --file /data/default/requirements.db show FR-0001
+```
+
+**Stop/restart:**
+```bash
+docker compose down           # Stop (data persists in volume)
+docker compose up -d          # Run in background
+```
+
+### Native Installation (for contributors/developers)
+
 For a full walkthrough, see [docs/getting-started.md](docs/getting-started.md).
+
+**Prerequisites:** Rust toolchain (1.85+), Node.js (22+), protobuf compiler
 
 ```bash
 # Build

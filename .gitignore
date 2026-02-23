@@ -1,7 +1,6 @@
 # Build artifacts
 /target/
 **/target/
-Cargo.lock
 debug/
 release/
 

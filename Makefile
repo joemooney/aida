@@ -7,7 +7,8 @@
         db-info db-migrate-sqlite db-migrate-yaml db-export \
         docs proto fmt lint check \
         web-build web-build-release web-serve web-serve-force web-clean web-deps \
-        sync-templates check-templates
+        sync-templates check-templates \
+        docker-build docker-up docker-up-d docker-down docker-shell
 
 # Default database path
 DB ?= requirements.db
@@ -55,6 +56,10 @@ help: ## Show this help message
 	@echo "$(CYAN)Web/WASM:$(RESET)"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; /^web/ {printf "  $(GREEN)%-20s$(RESET) %s\n", $$1, $$2}'
+	@echo ""
+	@echo "$(CYAN)Docker:$(RESET)"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+		awk 'BEGIN {FS = ":.*?## "}; /^docker/ {printf "  $(GREEN)%-20s$(RESET) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(YELLOW)Variables:$(RESET)"
 	@echo "  DB=<path>           Database file (default: requirements.db)"
@@ -388,3 +393,22 @@ check-templates: ## Check if .claude/ templates are properly linked
 		exit 1; \
 	fi
 	@echo "All templates OK!"
+
+#==============================================================================
+# DOCKER TARGETS
+#==============================================================================
+
+docker-build: ## Build Docker image (API + React dashboard)
+	docker compose build
+
+docker-up: ## Start AIDA in Docker (foreground)
+	docker compose up
+
+docker-up-d: ## Start AIDA in Docker (background)
+	docker compose up -d
+
+docker-down: ## Stop AIDA Docker containers
+	docker compose down
+
+docker-shell: ## Open a shell in the running AIDA container
+	docker compose exec aida bash

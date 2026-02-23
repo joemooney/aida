@@ -14,6 +14,7 @@ use clap::Parser;
 use http::{header, Method};
 use tonic::transport::Server;
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::services::{ServeDir, ServeFile};
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
@@ -165,6 +166,10 @@ struct Args {
     /// Kill any existing process using the specified ports before starting
     #[arg(short, long)]
     force: bool,
+
+    /// Directory containing static web files (React dashboard build output)
+    #[arg(long)]
+    static_dir: Option<String>,
 }
 
 #[tokio::main]
@@ -239,6 +244,9 @@ async fn main() -> Result<()> {
     let grpc_addr: SocketAddr = format!("{}:{}", args.host, args.port).parse()?;
 
     info!("Starting AIDA server v{}", env!("CARGO_PKG_VERSION"));
+    if let Some(ref dir) = args.static_dir {
+        info!("Static files: {}", dir);
+    }
     info!("gRPC/gRPC-Web: http://{}", grpc_addr);
 
     // Create a shutdown signal that can be shared between gRPC and REST servers
@@ -283,6 +291,15 @@ async fn main() -> Result<()> {
                 .merge(admin::create_admin_router(admin_state.clone()))
                 .merge(chat::create_chat_router_stub())
                 .layer(cors.clone());
+
+            let rest_router = if let Some(ref dir) = args.static_dir {
+                let index = format!("{}/index.html", dir);
+                rest_router.fallback_service(
+                    ServeDir::new(dir).not_found_service(ServeFile::new(index)),
+                )
+            } else {
+                rest_router
+            };
 
             let rest_listener = tokio::net::TcpListener::bind(rest_addr).await?;
             let mut rest_shutdown_rx = shutdown_rx.clone();
@@ -355,6 +372,15 @@ async fn main() -> Result<()> {
                 .merge(evaluate::create_evaluate_router(state.clone(), admin_state.clone()))
                 .merge(skill_runner::create_skill_runner_router(state.clone(), admin_state.clone()))
                 .layer(cors.clone());
+
+            let rest_router = if let Some(ref dir) = args.static_dir {
+                let index = format!("{}/index.html", dir);
+                rest_router.fallback_service(
+                    ServeDir::new(dir).not_found_service(ServeFile::new(index)),
+                )
+            } else {
+                rest_router
+            };
 
             let rest_listener = tokio::net::TcpListener::bind(rest_addr).await?;
             let mut rest_shutdown_rx = shutdown_rx.clone();

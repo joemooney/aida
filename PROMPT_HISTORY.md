@@ -3887,3 +3887,23 @@ Implement the plan for Web UI Skill Invocation — allow running skills from the
 #### Git
 - Commit: `178c5d2` — `fix(web): dedupe React in Vite config to fix Advanced filter crash`
 - Pushed to main
+
+---
+
+### Prompt: Docker Quickstart — zero-dependency path to run AIDA via `docker compose up`
+- **Date**: 2026-02-22
+
+#### Docker Quickstart Implementation
+- Added `--static-dir` flag to aida-server for serving React SPA via tower-http `ServeDir` with fallback to `index.html`
+- Added `"fs"` feature to tower-http in workspace `Cargo.toml`
+- Created 3-stage `Dockerfile`: Node frontend build → Rust binary build → slim Debian runtime
+- Created `docker-compose.yml` for single-service quickstart (port 8080, SQLite volume)
+- Created `.dockerignore` to exclude build artifacts, node_modules, git, databases
+- Removed `Cargo.lock` from `.gitignore` (Rust best practice for applications)
+- Updated `OVERVIEW.md` Getting Started: Docker as recommended path, native install for contributors
+- Added Docker targets to `Makefile`: docker-build, docker-up, docker-up-d, docker-down, docker-shell
+- Updated `CLAUDE.md` with Docker quickstart section
+- Saved implementation plan to `docs/plans/2026-02-22-docker-quickstart.md`
+
+#### Git
+- Commit: pending
