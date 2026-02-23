@@ -3836,5 +3836,54 @@ Implement the plan for Web UI Skill Invocation — allow running skills from the
 - `npx vite build` — production build succeeds
 
 #### Git
-- Commit: `feat(skills): add web UI skill invocation with compiler-warnings pilot`
+- Commit: `bfc0e8f` — `feat(skills): add web UI skill invocation with compiler-warnings pilot`
+- Pushed to main
+
+### Prompt: Run server and test from browser
+- **Date**: 2026-02-22
+
+#### Bug Fix: Axum 0.7 Route Syntax
+- Skill runner endpoints returned 404 because routes used `{name}` syntax (axum 0.8+) instead of `:name` (axum 0.7)
+- **Fixed** `aida-server/src/skill_runner.rs` — Changed all route patterns from `"/api/v2/skills/{name}/..."` to `"/api/v2/skills/:name/..."`
+- Rebuilt server and verified: SSE endpoint returns 483 warnings across 6 crates, action endpoint creates requirements
+
+#### Git
+- Commit: `bff9690` — `fix(skills): use axum 0.7 route syntax (:name not {name})`
+- Pushed to main
+
+### Prompt: Auto-fix feedback unclear — user clicked Auto-Fix All and was unsure what happened
+- **Date**: 2026-02-22
+
+#### Bug Fix: Show Diff Summary After Auto-Fix
+- `handleAction` only displayed `response.message`, ignoring `diffSummary` and `specId` fields
+- `handleRun` didn't clear action messages, so stale "Auto-Fix completed successfully" persisted across re-runs
+- **Fixed** `aida-web-react/src/components/skills/SkillRunnerPanel.tsx`:
+  - Replaced `actionMessage` string with `actionFeedback` object (message, diffSummary, specId, isError, suggestRerun)
+  - Shows git diff --stat summary in `<pre>` block
+  - Shows created spec IDs as links
+  - Shows "Re-Run to see updated warnings" button after auto-fix
+  - Clears feedback on new run start
+
+#### Git
+- Commit: `bdadfe4` — `fix(skills): show diff summary and suggest re-run after auto-fix`
+- Pushed to main
+
+### Prompt: Advanced filter blank screen — clicking Advanced in List View crashes with white screen
+- **Date**: 2026-02-22
+
+#### Bug Fix: Duplicate React in Vite Bundle
+- react-querybuilder (v8.14.0) uses react-redux internally, which imports React
+- Vite's dependency pre-bundling inlined a complete separate copy of React inside `react-querybuilder.js`
+- Main app used `react.js` → `react-Bbo7wkWA.js`, while react-querybuilder used its own inline React
+- Two React instances caused hooks to fail: `resolveDispatcher() is null`, `Invalid hook call`
+- **Fixed** `aida-web-react/vite.config.ts` — Added `resolve.dedupe: ['react', 'react-dom']` to force single React instance
+- Cleared Vite dep cache to trigger re-optimization
+
+#### Requirements Captured (FR-0385, BUG-0386, BUG-0387)
+- FR-0385: Web UI Skill Invocation with SSE streaming (completed)
+- BUG-0386: Auto-fix feedback shows diff summary (completed)
+- BUG-0387: Advanced filter blank screen from duplicate React (completed)
+
+#### Git
+- Commit: `178c5d2` — `fix(web): dedupe React in Vite config to fix Advanced filter crash`
 - Pushed to main
