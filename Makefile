@@ -398,17 +398,19 @@ check-templates: ## Check if .claude/ templates are properly linked
 # DOCKER TARGETS
 #==============================================================================
 
+COMPOSE_FILE := .aida/docker-compose.yml
+
 docker-build: ## Build Docker image (API + React dashboard)
-	docker compose build
+	docker compose -f $(COMPOSE_FILE) build
 
 docker-up: ## Start AIDA in Docker (foreground)
-	docker compose up
+	docker compose -f $(COMPOSE_FILE) up
 
 docker-up-d: ## Start AIDA in Docker (background)
-	docker compose up -d
+	docker compose -f $(COMPOSE_FILE) up -d
 
 docker-down: ## Stop AIDA Docker containers
-	docker compose down
+	docker compose -f $(COMPOSE_FILE) down
 
 docker-shell: ## Open a shell in the running AIDA container
-	docker compose exec aida bash
+	docker compose -f $(COMPOSE_FILE) exec aida bash

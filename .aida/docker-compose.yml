@@ -1,10 +1,14 @@
+# AIDA quickstart — run from project root: docker compose -f .aida/docker-compose.yml up
+# Or use: make docker-up
 services:
   aida:
-    build: .
+    build:
+      context: ..
+      dockerfile: Dockerfile
     ports:
       - "8080:8080"
     volumes:
-      - .:/repo
+      - ..:/repo
     command:
       - /app/aida-server
       - --host=0.0.0.0

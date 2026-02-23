@@ -331,21 +331,22 @@ The fastest way to get a fully working AIDA instance (REST API + React dashboard
 ```bash
 git clone https://github.com/yourusername/aida.git
 cd aida
-docker compose up
+make docker-up                # or: docker compose -f .aida/docker-compose.yml up
 ```
 
-Open [http://localhost:8080](http://localhost:8080) — the dashboard and API are served from a single container.
+Open [http://localhost:8080](http://localhost:8080) — the dashboard and API are served from a single container, using your project's `requirements.db` directly.
 
 **CLI via Docker:**
 ```bash
-docker compose exec aida aida --file /repo/requirements.db list
-docker compose exec aida aida --file /repo/requirements.db show FR-0001
+make docker-shell             # opens bash in container
+aida --file /repo/requirements.db list
+aida --file /repo/requirements.db show FR-0001
 ```
 
 **Stop/restart:**
 ```bash
-docker compose down           # Stop (data persists in volume)
-docker compose up -d          # Run in background
+make docker-down              # Stop
+make docker-up-d              # Run in background
 ```
 
 ### Native Installation (for contributors/developers)
