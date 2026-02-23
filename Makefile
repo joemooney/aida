@@ -93,25 +93,25 @@ cli: ## Build CLI only (aida binary)
 cli-remote: ## Build CLI with remote server support
 	cargo build -p aida-cli --features remote
 
-gui: ## Build GUI only (aida-gui binary)
-	cargo build -p aida-gui
+gui: ## Build GUI only (aida-desktop binary)
+	cargo build -p aida-desktop
 
 gui-remote: ## Build GUI with remote server support
-	cargo build -p aida-gui --features remote
+	cargo build -p aida-desktop --features remote
 
 server: ## Build gRPC/REST server (aida-server binary)
 	cargo build -p aida-server
 
 install: build-release ## Install binaries to ~/.cargo/bin
 	cargo install --path aida-cli
-	cargo install --path aida-gui
+	cargo install --path aida-desktop
 	cargo install --path aida-server
 
 install-cli: ## Install CLI only
 	cargo install --path aida-cli
 
 install-gui: ## Install GUI only
-	cargo install --path aida-gui
+	cargo install --path aida-desktop
 
 install-server: ## Install server only
 	cargo install --path aida-server
@@ -124,10 +124,10 @@ run-cli: cli ## Run CLI (use ARGS="..." for arguments)
 	./target/debug/aida $(ARGS)
 
 run-gui: gui ## Run GUI application
-	./target/debug/aida-gui
+	./target/debug/aida-desktop
 
 run-gui-remote: gui-remote ## Run GUI connected to remote server
-	./target/debug/aida-gui --server 127.0.0.1:$(SERVER_PORT)
+	./target/debug/aida-desktop --server 127.0.0.1:$(SERVER_PORT)
 
 run-server: server ## Run gRPC/REST server (use DB=path, FORCE=1 to kill existing)
 	./target/debug/aida-server --port $(SERVER_PORT) --rest-port $(REST_PORT) --database $(DB) $(FORCE_FLAG)
@@ -146,19 +146,19 @@ stop-server: ## Stop running AIDA server
 stop-web: ## Stop running trunk/web server
 	@pkill -f "^trunk serve" 2>/dev/null && echo "Stopped trunk" || echo "No trunk running"
 
-stop-all: ## Stop all running servers (aida-server, trunk, aida-gui)
+stop-all: ## Stop all running servers (aida-server, trunk, aida-desktop)
 	@echo "Stopping all AIDA processes..."
 	@pkill -x "aida-server" 2>/dev/null && echo "  Stopped aida-server" || echo "  No aida-server running"
 	@pkill -f "^trunk serve" 2>/dev/null && echo "  Stopped trunk" || echo "  No trunk running"
-	@pkill -x "aida-gui" 2>/dev/null && echo "  Stopped aida-gui" || echo "  No aida-gui running"
+	@pkill -x "aida-desktop" 2>/dev/null && echo "  Stopped aida-desktop" || echo "  No aida-desktop running"
 	@echo "Done."
 
 ps-servers: ## Show running AIDA processes
 	@echo "Running AIDA processes:"
 	@pgrep -x "aida-server" 2>/dev/null | while read pid; do echo "  aida-server (PID $$pid)"; done || true
 	@pgrep -f "^trunk serve" 2>/dev/null | while read pid; do echo "  trunk (PID $$pid)"; done || true
-	@pgrep -x "aida-gui" 2>/dev/null | while read pid; do echo "  aida-gui (PID $$pid)"; done || true
-	@pgrep -x "aida-server" >/dev/null 2>&1 || pgrep -f "^trunk serve" >/dev/null 2>&1 || pgrep -x "aida-gui" >/dev/null 2>&1 || echo "  (none)"
+	@pgrep -x "aida-desktop" 2>/dev/null | while read pid; do echo "  aida-desktop (PID $$pid)"; done || true
+	@pgrep -x "aida-server" >/dev/null 2>&1 || pgrep -f "^trunk serve" >/dev/null 2>&1 || pgrep -x "aida-desktop" >/dev/null 2>&1 || echo "  (none)"
 
 #==============================================================================
 # DATABASE TARGETS
@@ -282,34 +282,34 @@ test-grpc-ping: cli-remote ## Test gRPC ping
 #==============================================================================
 # WASM WEB CLIENT TARGETS
 #==============================================================================
-# Primary web client is aida-gui (full-featured, same codebase as desktop)
+# Primary web client is aida-desktop (full-featured, same codebase as desktop)
 # Alternative: aida-web (lightweight, separate crate - use web-*-lite targets)
 
 WEB_PORT ?= 8088
 
 web-build: ## Build WASM web client (requires trunk)
-	cd aida-gui && trunk build
+	cd aida-desktop && trunk build
 
 web-build-release: ## Build WASM web client (release/optimized)
-	cd aida-gui && trunk build --release
+	cd aida-desktop && trunk build --release
 
 web-serve: ## Serve WASM web client for development (port 8088)
-	cd aida-gui && trunk serve --port $(WEB_PORT)
+	cd aida-desktop && trunk serve --port $(WEB_PORT)
 
 web-serve-force: ## Serve web client, killing any existing trunk process on port
 	@-pkill -f "trunk serve.*$(WEB_PORT)" 2>/dev/null || true
 	@sleep 0.2
-	cd aida-gui && trunk serve --port $(WEB_PORT)
+	cd aida-desktop && trunk serve --port $(WEB_PORT)
 
 web-clean: ## Clean web build artifacts
-	rm -rf aida-gui/dist aida-web/dist
+	rm -rf aida-desktop/dist aida-web/dist
 
 web-deps: ## Install WASM build dependencies
 	rustup target add wasm32-unknown-unknown
 	cargo install --locked trunk
 	@echo "WASM dependencies installed"
 
-# Lightweight web client (aida-web) - alternative to full aida-gui
+# Lightweight web client (aida-web) - alternative to full aida-desktop
 web-build-lite: ## Build lightweight web client (aida-web)
 	cd aida-web && trunk build
 

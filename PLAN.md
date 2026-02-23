@@ -55,7 +55,7 @@ pub struct Attachment {
 - The `attachments` field will be stored as JSON (like comments, history)
 - No schema changes needed - just ensure serialization handles the new field
 
-### Phase 4: GUI - Drag-and-Drop Detection (aida-gui/src/app.rs)
+### Phase 4: GUI - Drag-and-Drop Detection (aida-desktop/src/app.rs)
 
 1. Add `DetailTab::Attachments` variant to the enum
 
@@ -78,7 +78,7 @@ detail_panel_drag_hover: bool,
    - Save requirement
    - Show success notification
 
-### Phase 5: GUI - Attachments Tab (aida-gui/src/app.rs)
+### Phase 5: GUI - Attachments Tab (aida-desktop/src/app.rs)
 
 1. Add "Attachments" tab to `show_detail_tab_menu_popup()`
 
@@ -111,7 +111,7 @@ detail_panel_drag_hover: bool,
    - Add `add_attachment()`
    - Add `remove_attachment()`
 
-3. `aida-gui/src/app.rs`
+3. `aida-desktop/src/app.rs`
    - Add `DetailTab::Attachments`
    - Add drag-hover state
    - Implement drag-drop detection in `draw_detail_view()`

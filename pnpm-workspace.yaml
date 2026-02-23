@@ -1,0 +1,10 @@
+packages:
+  - 'aida-core'
+  - 'aida-cli'
+  - 'aida-desktop'
+  - 'aida-server'
+  - 'aida-web'
+  - 'aida-generate-types'
+  - 'aida-web-react'
+  - 'vibe-kanban'
+  - 'shared'

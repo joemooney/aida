@@ -12,7 +12,7 @@ An AI-native requirements management system with CLI, web dashboard, and desktop
 - [Getting Started](#getting-started)
 - [CLI Usage](#cli-usage)
 - [Web Dashboard](#web-dashboard)
-- [Desktop App (aida-gui)](#desktop-app-aida-gui)
+- [Desktop App (aida-desktop)](#desktop-app-aida-desktop)
 - [Working with Requirements](#working-with-requirements)
   - [Meta Requirements](#meta-requirements)
 - [Features and Organization](#features-and-organization)
@@ -39,7 +39,7 @@ cargo build --workspace --release
 This creates three binaries in `target/release/`:
 - `aida` — Command-line interface
 - `aida-server` — REST API + gRPC server
-- `aida-gui` — Native desktop app
+- `aida-desktop` — Native desktop app
 
 ### Quick Start
 
@@ -70,7 +70,7 @@ This creates three binaries in `target/release/`:
 
 5. **Or launch the desktop app:**
    ```bash
-   aida-gui
+   aida-desktop
    ```
 
 ---
@@ -289,15 +289,15 @@ The description editor includes expand/collapse, live preview, and a markdown he
 
 ---
 
-## Desktop App (aida-gui)
+## Desktop App (aida-desktop)
 
 The native desktop app is an egui-based application that also builds to WASM for browser use.
 
 ### Launching
 
 ```bash
-aida-gui                                    # Launch with auto-detected database
-aida-gui --file /path/to/requirements.db    # Open specific database
+aida-desktop                                    # Launch with auto-detected database
+aida-desktop --file /path/to/requirements.db    # Open specific database
 ```
 
 ### Main Interface

@@ -2,7 +2,7 @@
 //! Shared UI components for AIDA GUI
 //!
 //! This module provides reusable UI rendering functions that work with proto types
-//! and can be shared between native (aida-gui) and web (aida-web) builds.
+//! and can be shared between native (aida-desktop) and web (aida-web) builds.
 //!
 //! All functions are pure rendering functions that take egui::Ui and proto types,
 //! making them suitable for both platforms.

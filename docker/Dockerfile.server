@@ -13,7 +13,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY aida-core ./aida-core
 COPY aida-cli ./aida-cli
 COPY aida-server ./aida-server
-COPY aida-gui ./aida-gui
+COPY aida-desktop ./aida-desktop
 COPY aida-web ./aida-web
 COPY proto ./proto
 

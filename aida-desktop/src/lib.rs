@@ -36,7 +36,7 @@ pub mod ui;
 #[cfg(feature = "native")]
 pub use app::RequirementsApp;
 
-// Web entry point for WASM builds of aida-gui itself (full GUI)
+// Web entry point for WASM builds of aida-desktop itself (full GUI)
 // Requires native-types feature (for app/aida-core types) and web feature
 // This is activated when building with: --features "native-types,web" for wasm32 target
 #[cfg(all(target_arch = "wasm32", feature = "native-types", feature = "web"))]

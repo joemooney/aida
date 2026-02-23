@@ -73,7 +73,7 @@ aida/
 │       ├── main.rs
 │       ├── cli.rs             # Clap argument definitions
 │       └── prompts.rs         # Interactive prompts
-├── aida-gui/                  # GUI application
+├── aida-desktop/                  # GUI application
 │   ├── Cargo.toml
 │   ├── assets/                # Fonts and licenses
 │   └── src/
@@ -88,7 +88,7 @@ aida/
 ### Crate Dependencies
 
 ```
-aida-gui ──depends──> aida-core
+aida-desktop ──depends──> aida-core
 aida-cli ──depends──> aida-core
 ```
 
@@ -194,7 +194,7 @@ pub struct RequirementsStore {
 
 ### 4.1 Application Entry Point
 
-`aida-gui/src/main.rs`:
+`aida-desktop/src/main.rs`:
 
 ```rust
 fn main() -> eframe::Result<()> {
@@ -214,7 +214,7 @@ fn main() -> eframe::Result<()> {
 
 ### 4.2 RequirementsApp Structure
 
-The main application struct (`aida-gui/src/app.rs`) contains 200+ fields organized into logical groups:
+The main application struct (`aida-desktop/src/app.rs`) contains 200+ fields organized into logical groups:
 
 ```rust
 pub struct RequirementsApp {
@@ -859,7 +859,7 @@ fn show_tree_node(&mut self, ui: &mut egui::Ui, idx: usize, depth: usize) {
 
 ### 10.1 User Settings
 
-**Location**: `~/.local/share/aida-gui/settings.yaml` (XDG compliant)
+**Location**: `~/.local/share/aida-desktop/settings.yaml` (XDG compliant)
 
 ```rust
 pub struct UserSettings {
@@ -941,7 +941,7 @@ pub struct Requirement {
 
 2. **Update serialization** (if needed, serde handles it automatically)
 
-3. **Add to form state** (`aida-gui/src/app.rs`):
+3. **Add to form state** (`aida-desktop/src/app.rs`):
 ```rust
 pub struct RequirementsApp {
     // ...
@@ -1364,9 +1364,9 @@ pub struct ScaffoldConfig {
 |------|---------|
 | `aida-core/src/models.rs` | Core data structures |
 | `aida-core/src/storage.rs` | YAML persistence |
-| `aida-gui/src/app.rs` | Main GUI application |
-| `aida-gui/src/main.rs` | Entry point |
-| `~/.local/share/aida-gui/settings.yaml` | User settings |
+| `aida-desktop/src/app.rs` | Main GUI application |
+| `aida-desktop/src/main.rs` | Entry point |
+| `~/.local/share/aida-desktop/settings.yaml` | User settings |
 | `~/.requirements.config` | Project registry |
 | `requirements.yaml` | Project data (per project) |
 

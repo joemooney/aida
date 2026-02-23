@@ -1,15 +1,15 @@
 [package]
-name = "aida-gui"
+name = "aida-desktop"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
-description = "GUI for AIDA requirements management (egui-based)"
+description = "Desktop app for AIDA requirements management (egui-based)"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [[bin]]
-name = "aida-gui"
+name = "aida-desktop"
 path = "src/main.rs"
 
 [dependencies]

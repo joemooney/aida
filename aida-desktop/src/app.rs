@@ -4439,7 +4439,7 @@ impl RequirementsApp {
         {
             if server_addr.is_some() {
                 eprintln!("WARNING: Remote server support is not enabled.");
-                eprintln!("Build with: cargo build -p aida-gui --features remote");
+                eprintln!("Build with: cargo build -p aida-desktop --features remote");
             }
         }
         Self::new_with_file(cc, file_path)
@@ -6473,7 +6473,7 @@ impl RequirementsApp {
                 .as_ref()
                 .and_then(|p| p.file_name())
                 .and_then(|n| n.to_str())
-                .unwrap_or("aida-gui");
+                .unwrap_or("aida-desktop");
 
             // Check if this is a release build
             let is_release = exe_path
@@ -6529,7 +6529,7 @@ impl RequirementsApp {
                 .as_ref()
                 .and_then(|p| p.file_name())
                 .and_then(|n| n.to_str())
-                .unwrap_or("aida-gui");
+                .unwrap_or("aida-desktop");
 
             let is_release = exe_path
                 .as_ref()
@@ -6583,7 +6583,7 @@ impl RequirementsApp {
                 .as_ref()
                 .and_then(|p| p.file_name())
                 .and_then(|n| n.to_str())
-                .unwrap_or("aida-gui");
+                .unwrap_or("aida-desktop");
 
             let is_release = exe_path
                 .as_ref()
@@ -6765,7 +6765,7 @@ impl RequirementsApp {
                     format!(
                         "✓ Migrated {} requirements to SQLite: {}\n\
                         YAML backed up to: {}\n\n\
-                        Please restart the GUI with:\n  aida-gui --file {}",
+                        Please restart the GUI with:\n  aida-desktop --file {}",
                         count,
                         sqlite_path.display(),
                         backup_path.display(),
@@ -9225,7 +9225,7 @@ impl RequirementsApp {
                 "Both a YAML file and SQLite database exist in this location. \
                 The SQLite database is being used as it likely contains more recent data.\n\n\
                 If you need to use the YAML file instead, restart with:\n  \
-                aida-gui --file requirements.yaml",
+                aida-desktop --file requirements.yaml",
             ),
             MigrationWarningKind::None => {
                 self.show_migration_warning = false;

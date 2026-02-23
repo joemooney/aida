@@ -6,7 +6,7 @@
 //!
 //! ## Architecture
 //! This crate uses two sets of proto types:
-//! - `proto` - Re-exported from `aida_gui::storage::proto` for UI component compatibility
+//! - `proto` - Re-exported from `aida_desktop::storage::proto` for UI component compatibility
 //! - `generated` - Web-specific generated proto with gRPC-Web client and auth types
 
 pub mod app;
@@ -19,5 +19,5 @@ pub mod generated {
     }
 }
 
-/// Re-export proto types from aida-gui for type compatibility with shared UI components
-pub use aida_gui::storage::proto;
+/// Re-export proto types from aida-desktop for type compatibility with shared UI components
+pub use aida_desktop::storage::proto;

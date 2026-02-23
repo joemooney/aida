@@ -1,6 +1,6 @@
 # Trunk configuration for WASM builds
-# Build with: cd aida-gui && trunk build --release
-# Serve with: cd aida-gui && trunk serve --port 8088
+# Build with: cd aida-desktop && trunk build --release
+# Serve with: cd aida-desktop && trunk serve --port 8088
 
 [build]
 # Target index.html
@@ -21,4 +21,4 @@ open = false
 [[hooks]]
 stage = "build"
 command = "sh"
-command_arguments = ["-c", "echo 'Building AIDA GUI for web...'"]
+command_arguments = ["-c", "echo 'Building AIDA Desktop for web...'"]

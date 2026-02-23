@@ -95,7 +95,8 @@ configuration and administration</p>
 <li><a href="#getting-started">Getting Started</a></li>
 <li><a href="#cli-usage">CLI Usage</a></li>
 <li><a href="#web-dashboard">Web Dashboard</a></li>
-<li><a href="#desktop-app-aida-gui">Desktop App (aida-gui)</a></li>
+<li><a href="#desktop-app-aida-desktop">Desktop App
+(aida-desktop)</a></li>
 <li><a href="#working-with-requirements">Working with Requirements</a>
 <ul>
 <li><a href="#meta-requirements">Meta Requirements</a></li>
@@ -120,7 +121,8 @@ href="getting-started.md">Getting Started guide</a>.</p>
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">cargo</span> build <span class="at">--workspace</span> <span class="at">--release</span></span></code></pre></div>
 <p>This creates three binaries in <code>target/release/</code>: -
 <code>aida</code> — Command-line interface - <code>aida-server</code> —
-REST API + gRPC server - <code>aida-gui</code> — Native desktop app</p>
+REST API + gRPC server - <code>aida-desktop</code> — Native desktop
+app</p>
 <h3 id="quick-start">Quick Start</h3>
 <ol type="1">
 <li><p><strong>Initialize your project:</strong></p>
@@ -144,7 +146,7 @@ class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="
 <span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Opens at http://localhost:5173</span></span></code></pre></div></li>
 <li><p><strong>Or launch the desktop app:</strong></p>
 <div class="sourceCode" id="cb6"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ex">aida-gui</span></span></code></pre></div></li>
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ex">aida-desktop</span></span></code></pre></div></li>
 </ol>
 <hr />
 <h2 id="cli-usage">CLI Usage</h2>
@@ -435,13 +437,13 @@ sparkles button in the detail header. Results (score, strengths, issues,
 suggestions) display inline and persist on the requirement.</li>
 </ul>
 <hr />
-<h2 id="desktop-app-aida-gui">Desktop App (aida-gui)</h2>
+<h2 id="desktop-app-aida-desktop">Desktop App (aida-desktop)</h2>
 <p>The native desktop app is an egui-based application that also builds
 to WASM for browser use.</p>
 <h3 id="launching">Launching</h3>
 <div class="sourceCode" id="cb17"><pre
-class="sourceCode bash"><code class="sourceCode bash"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="ex">aida-gui</span>                                    <span class="co"># Launch with auto-detected database</span></span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="ex">aida-gui</span> <span class="at">--file</span> /path/to/requirements.db    <span class="co"># Open specific database</span></span></code></pre></div>
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="ex">aida-desktop</span>                                    <span class="co"># Launch with auto-detected database</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="ex">aida-desktop</span> <span class="at">--file</span> /path/to/requirements.db    <span class="co"># Open specific database</span></span></code></pre></div>
 <h3 id="main-interface">Main Interface</h3>
 <p>The desktop app consists of three main areas:</p>
 <ol type="1">

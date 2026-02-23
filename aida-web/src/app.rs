@@ -11,22 +11,22 @@ use crate::client::AidaClient;
 // Use generated proto types for all gRPC operations
 use crate::generated::aida::*;
 
-// Type conversion for aida_gui UI component compatibility
+// Type conversion for aida_desktop UI component compatibility
 // Both proto types are generated from the same .proto file but are distinct Rust types
 mod gui_convert {
     use super::*;
 
-    /// Convert generated Timestamp to aida_gui Timestamp
-    fn to_gui_timestamp(ts: &Option<Timestamp>) -> Option<aida_gui::storage::proto::Timestamp> {
-        ts.as_ref().map(|t| aida_gui::storage::proto::Timestamp {
+    /// Convert generated Timestamp to aida_desktop Timestamp
+    fn to_gui_timestamp(ts: &Option<Timestamp>) -> Option<aida_desktop::storage::proto::Timestamp> {
+        ts.as_ref().map(|t| aida_desktop::storage::proto::Timestamp {
             seconds: t.seconds,
             nanos: t.nanos,
         })
     }
 
-    /// Convert generated Relationship to aida_gui Relationship
-    fn to_gui_relationship(r: &Relationship) -> aida_gui::storage::proto::Relationship {
-        aida_gui::storage::proto::Relationship {
+    /// Convert generated Relationship to aida_desktop Relationship
+    fn to_gui_relationship(r: &Relationship) -> aida_desktop::storage::proto::Relationship {
+        aida_desktop::storage::proto::Relationship {
             target_id: r.target_id.clone(),
             target_spec_id: r.target_spec_id.clone(),
             rel_type: r.rel_type,
@@ -36,18 +36,18 @@ mod gui_convert {
         }
     }
 
-    /// Convert generated CommentReaction to aida_gui CommentReaction
-    fn to_gui_reaction(r: &CommentReaction) -> aida_gui::storage::proto::CommentReaction {
-        aida_gui::storage::proto::CommentReaction {
+    /// Convert generated CommentReaction to aida_desktop CommentReaction
+    fn to_gui_reaction(r: &CommentReaction) -> aida_desktop::storage::proto::CommentReaction {
+        aida_desktop::storage::proto::CommentReaction {
             reaction: r.reaction.clone(),
             author: r.author.clone(),
             added_at: to_gui_timestamp(&r.added_at),
         }
     }
 
-    /// Convert generated Comment to aida_gui Comment
-    fn to_gui_comment(c: &Comment) -> aida_gui::storage::proto::Comment {
-        aida_gui::storage::proto::Comment {
+    /// Convert generated Comment to aida_desktop Comment
+    fn to_gui_comment(c: &Comment) -> aida_desktop::storage::proto::Comment {
+        aida_desktop::storage::proto::Comment {
             id: c.id.clone(),
             content: c.content.clone(),
             author: c.author.clone(),
@@ -58,13 +58,13 @@ mod gui_convert {
         }
     }
 
-    /// Convert generated HistoryEntry to aida_gui HistoryEntry
-    fn to_gui_history_entry(h: &HistoryEntry) -> aida_gui::storage::proto::HistoryEntry {
-        aida_gui::storage::proto::HistoryEntry {
+    /// Convert generated HistoryEntry to aida_desktop HistoryEntry
+    fn to_gui_history_entry(h: &HistoryEntry) -> aida_desktop::storage::proto::HistoryEntry {
+        aida_desktop::storage::proto::HistoryEntry {
             id: h.id.clone(),
             author: h.author.clone(),
             timestamp: to_gui_timestamp(&h.timestamp),
-            changes: h.changes.iter().map(|c| aida_gui::storage::proto::FieldChange {
+            changes: h.changes.iter().map(|c| aida_desktop::storage::proto::FieldChange {
                 field_name: c.field_name.clone(),
                 old_value: c.old_value.clone(),
                 new_value: c.new_value.clone(),
@@ -72,9 +72,9 @@ mod gui_convert {
         }
     }
 
-    /// Convert generated UrlLink to aida_gui UrlLink
-    fn to_gui_url_link(u: &UrlLink) -> aida_gui::storage::proto::UrlLink {
-        aida_gui::storage::proto::UrlLink {
+    /// Convert generated UrlLink to aida_desktop UrlLink
+    fn to_gui_url_link(u: &UrlLink) -> aida_desktop::storage::proto::UrlLink {
+        aida_desktop::storage::proto::UrlLink {
             id: u.id.clone(),
             url: u.url.clone(),
             title: u.title.clone(),
@@ -85,9 +85,9 @@ mod gui_convert {
         }
     }
 
-    /// Convert generated Requirement to aida_gui Requirement for UI components
-    pub fn to_gui_requirement(req: &Requirement) -> aida_gui::storage::proto::Requirement {
-        aida_gui::storage::proto::Requirement {
+    /// Convert generated Requirement to aida_desktop Requirement for UI components
+    pub fn to_gui_requirement(req: &Requirement) -> aida_desktop::storage::proto::Requirement {
+        aida_desktop::storage::proto::Requirement {
             id: req.id.clone(),
             spec_id: req.spec_id.clone(),
             prefix_override: req.prefix_override.clone(),
@@ -114,15 +114,15 @@ mod gui_convert {
         }
     }
 
-    /// Convert Vec<Comment> to aida_gui Comments for comment_list
-    pub fn to_gui_comments(comments: &[Comment]) -> Vec<aida_gui::storage::proto::Comment> {
+    /// Convert Vec<Comment> to aida_desktop Comments for comment_list
+    pub fn to_gui_comments(comments: &[Comment]) -> Vec<aida_desktop::storage::proto::Comment> {
         comments.iter().map(to_gui_comment).collect()
     }
 }
 
-// Import shared UI components from aida-gui
+// Import shared UI components from aida-desktop
 // These functions provide consistent rendering between native and web
-use aida_gui::ui::{
+use aida_desktop::ui::{
     // Formatters
     format_status, format_priority, format_type,
     // Badge colors
@@ -658,7 +658,7 @@ impl AidaWebApp {
 
                         let selected = is_selected || is_search_selected;
 
-                        // Use shared list item component (convert to aida_gui proto type)
+                        // Use shared list item component (convert to aida_desktop proto type)
                         if requirement_list_item(ui, &gui_convert::to_gui_requirement(req), selected, &list_config) {
                             // Find the actual index in requirements list
                             if let Some(actual_idx) = self.requirements.iter().position(|r| r.id == req.id) {
@@ -854,7 +854,7 @@ impl AidaWebApp {
                     egui::CollapsingHeader::new(format!("Comments ({})", req.comments.len()))
                         .default_open(true)
                         .show(ui, |ui| {
-                            // Use shared comment list component (convert to aida_gui proto type)
+                            // Use shared comment list component (convert to aida_desktop proto type)
                             let gui_comments = gui_convert::to_gui_comments(&req.comments);
                             comment_list(ui, &gui_comments);
                         });
@@ -1006,7 +1006,7 @@ fn get_server_url() -> Option<String> {
 }
 
 // Local helper functions (format_status, format_priority, etc.) have been moved to
-// the shared aida_gui::ui module for code reuse between native and web builds
+// the shared aida_desktop::ui module for code reuse between native and web builds
 
 // Session storage constants
 const SESSION_STORAGE_KEY: &str = "aida_session";

@@ -20,7 +20,7 @@ aida/
 ├── aida-cli/            # CLI tool (aida binary)
 ├── aida-server/         # REST API + gRPC server (port 8080)
 ├── aida-web-react/      # React web dashboard (port 5173) — primary UI
-├── aida-gui/            # Desktop app (native egui, also builds to WASM)
+├── aida-desktop/            # Desktop app (native egui, also builds to WASM)
 ├── aida-web/            # Lightweight WASM browser client (alternative)
 ├── proto/               # Protocol Buffers definitions
 ├── docs/                # User documentation (markdown + HTML)
@@ -32,7 +32,7 @@ aida/
 ### Three Interfaces
 - **CLI (`aida`)**: Full-featured command-line interface for scripting and quick operations
 - **Web Dashboard (`aida-web-react`)**: React-based browser UI — the preferred interface for most users, with kanban boards, sprint planning, advanced filtering, AI chat, and keyboard shortcuts
-- **Desktop App (`aida-gui`)**: Native egui-based desktop application with tabbed views (also builds to WASM)
+- **Desktop App (`aida-desktop`)**: Native egui-based desktop application with tabbed views (also builds to WASM)
 
 ### SPEC-ID System
 Human-friendly identifiers (SPEC-001, SPEC-002) alongside internal UUIDs. Configurable ID formats with feature-based prefixes. ID prefix filtering and management with optional admin-controlled restriction.
@@ -98,7 +98,7 @@ Define connections between requirements:
 - Remote CLI operations via `--server` flag or `AIDA_SERVER` environment variable
 - Server commands: `aida server status`, `aida server list`, `aida server get <ID>`, `aida server ping`
 - Configurable port (default 50051), host, database path, and logging
-- **GUI Remote Client**: Connect GUI to remote server with `aida-gui --server <addr>`
+- **GUI Remote Client**: Connect GUI to remote server with `aida-desktop --server <addr>`
   - Requires `--features remote` at build time
   - StorageBackend abstraction for transparent local/remote switching
 - **gRPC-Web Support**: Server supports gRPC-Web protocol for browser clients
@@ -150,12 +150,12 @@ Define connections between requirements:
 - **Design choices**: URL-based filter and detail state, optimistic updates for drag-and-drop status changes
 
 ### WASM Browser Client (FR-0273)
-- **Dual-Target GUI (`aida-gui`)**: Same codebase for native desktop and WASM browser
+- **Dual-Target GUI (`aida-desktop`)**: Same codebase for native desktop and WASM browser
   - Full-featured web client with nearly identical UI to desktop
   - Uses conditional compilation to gate native-only features
   - Native-only: threads, file system, AI evaluation, edit locks
   - Web: uses gRPC-Web protocol via `tonic-web-wasm-client`
-  - Build: `make web-build` or `cd aida-gui && trunk build`
+  - Build: `make web-build` or `cd aida-desktop && trunk build`
   - Serve: `make web-serve` (port 8088)
 - **Lightweight Client (`aida-web`)**: Alternative simplified browser client
   - Separate crate for minimal WASM bundle size
@@ -167,14 +167,14 @@ Define connections between requirements:
   - Connect to server via gRPC-Web protocol
 
 ### Shared UI Components
-- **Reusable egui components** in `aida-gui/src/ui/` for native and WASM
+- **Reusable egui components** in `aida-desktop/src/ui/` for native and WASM
   - `formatters.rs`: Text formatters for status/priority/type/timestamps
   - `badges.rs`: Colored badge/dot rendering
   - `list_item.rs`: Requirement list item rendering
   - `requirement_form.rs`: Form components with combo boxes
   - `comment_list.rs`: Comment rendering and input
   - `detail_view.rs`: Full requirement detail view
-- `aida-web` re-exports proto types from `aida-gui` for type compatibility
+- `aida-web` re-exports proto types from `aida-desktop` for type compatibility
 - Consistent UI rendering between native desktop and browser clients
 
 ### GUI-Specific Features
@@ -185,7 +185,7 @@ Define connections between requirements:
 - Collapsible comment trees
 - Tabbed interface (Description, Comments, Links, History)
 - **Personal Work Queue** (EPIC-0365): User-managed priority inbox
-  - **GUI (aida-gui)**: Rankings 1-100, hotkeys, stored in local YAML settings
+  - **GUI (aida-desktop)**: Rankings 1-100, hotkeys, stored in local YAML settings
   - **Full-stack (My Queue)**: Database-backed, REST API, CLI, React web UI
     - Database: `queue_entries` table (SQLite/PostgreSQL), gapped-integer positions
     - REST API: `GET/POST /api/v2/queue/:user_id`, `DELETE/PATCH /:req_id`, `POST /reorder`
@@ -347,7 +347,7 @@ cd aida-server && cargo run       # Start REST API on port 8080
 cd aida-web-react && npm run dev  # Start React dashboard on port 5173
 
 # Desktop app
-aida-gui                          # Launch native desktop app
+aida-desktop                          # Launch native desktop app
 
 # Server mode
 aida-server --port 50051          # Start gRPC server

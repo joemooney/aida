@@ -121,4 +121,4 @@ aida feature list
 
 - Requirements are stored in `requirements.yaml` or the configured project database
 - SPEC-IDs are auto-generated based on type prefix configuration
-- The GUI (aida-gui) can be used to view and manage requirements with full AI features
+- The GUI (aida-desktop) can be used to view and manage requirements with full AI features

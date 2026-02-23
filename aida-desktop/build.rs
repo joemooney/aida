@@ -1,5 +1,5 @@
 // trace:FR-0227 | ai:claude:high
-//! Build script for aida-gui - generates gRPC client code when remote feature is enabled
+//! Build script for aida-desktop - generates gRPC client code when remote feature is enabled
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "remote")]

@@ -169,7 +169,7 @@ fn find_server_binary() -> Result<PathBuf> {
 
     anyhow::bail!(
         "Could not find aida-server binary. Ensure it is built and either:\n\
-         - In the same directory as aida-gui\n\
+         - In the same directory as aida-desktop\n\
          - In ./target/debug/ or ./target/release/\n\
          - In your system PATH"
     )

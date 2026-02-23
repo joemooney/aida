@@ -10,7 +10,7 @@ Cargo workspace with six crates plus a React dashboard:
 aida/
 ├── aida-core/             # Shared library — models, storage, business logic
 ├── aida-cli/              # CLI tool (aida binary)
-├── aida-gui/              # Native + WASM GUI (egui, dual-target)
+├── aida-desktop/              # Native + WASM GUI (egui, dual-target)
 ├── aida-server/           # gRPC + REST server for headless/remote operation
 ├── aida-web/              # Lightweight WASM browser client
 ├── aida-generate-types/   # TypeScript type generation from Rust structs
@@ -39,7 +39,7 @@ cargo run -p aida-server -- --database requirements.db --rest-port 8080
 cd aida-web-react && npm install && npm run dev
 
 # Launch the native GUI
-cargo run -p aida-gui
+cargo run -p aida-desktop
 
 # Initialize AIDA in a new project
 aida init
@@ -62,7 +62,7 @@ aida init
 
 ### Interfaces
 - **CLI** (`aida`) — Full-featured with interactive prompts, search, export/import
-- **Native GUI** (`aida-gui`) — egui-based with multiple views, drag-and-drop, AI evaluation
+- **Native GUI** (`aida-desktop`) — egui-based with multiple views, drag-and-drop, AI evaluation
 - **WASM GUI** — Same codebase as native, runs in browser via trunk
 - **React Dashboard** (`aida-web-react/`) — Modern web UI on port 5173
   - Dashboard with metrics charts
@@ -118,7 +118,7 @@ cargo test --workspace
 
 # Build with remote client support
 cargo build -p aida-cli --features remote
-cargo build -p aida-gui --features remote
+cargo build -p aida-desktop --features remote
 
 # Build WASM client
 make web-build && make web-serve    # Serves on port 8088

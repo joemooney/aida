@@ -22,7 +22,7 @@ cargo build --workspace --release
 This produces binaries in `target/release/`:
 - `aida` — Command-line interface
 - `aida-server` — REST API + gRPC server
-- `aida-gui` — Native desktop app
+- `aida-desktop` — Native desktop app
 
 The web dashboard (`aida-web-react/`) requires Node.js — see [Launching the Web Dashboard](#4-launch-the-web-dashboard) below.
 
@@ -151,16 +151,16 @@ The Vite dev server proxies `/api` requests to the REST API on port 8080.
 The native desktop app (egui-based) is an alternative to the web dashboard:
 
 ```bash
-aida-gui
+aida-desktop
 ```
 
 Or open a specific database:
 
 ```bash
-aida-gui --file /path/to/requirements.db
+aida-desktop --file /path/to/requirements.db
 ```
 
-For desktop app features and shortcuts, see the [User Guide — Desktop App](user-guide.md#desktop-app-aida-gui).
+For desktop app features and shortcuts, see the [User Guide — Desktop App](user-guide.md#desktop-app-aida-desktop).
 
 ---
 

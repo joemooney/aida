@@ -4,7 +4,7 @@
 // This main.rs only compiles for native (non-WASM) targets
 #[cfg(not(target_arch = "wasm32"))]
 mod native_main {
-    use aida_gui::RequirementsApp;
+    use aida_desktop::RequirementsApp;
     use eframe::egui;
     use std::env;
 
@@ -37,7 +37,7 @@ mod native_main {
                     std::process::exit(0);
                 }
                 "--version" | "-V" => {
-                    println!("aida-gui {}", env!("CARGO_PKG_VERSION"));
+                    println!("aida-desktop {}", env!("CARGO_PKG_VERSION"));
                     std::process::exit(0);
                 }
                 _ => {
@@ -57,7 +57,7 @@ mod native_main {
     fn print_help() {
         println!("AIDA GUI - Requirements Management System");
         println!();
-        println!("Usage: aida-gui [OPTIONS]");
+        println!("Usage: aida-desktop [OPTIONS]");
         println!();
         println!("Options:");
         println!("  --file <PATH>       Path to the requirements file (local storage)");
@@ -70,10 +70,10 @@ mod native_main {
         println!("  AIDA_SERVER         Server address (used if --server not specified)");
         println!();
         println!("Examples:");
-        println!("  aida-gui                          # Open with default local file");
-        println!("  aida-gui --file project.yaml      # Open specific file");
-        println!("  aida-gui --server localhost:50051 # Connect to remote server");
-        println!("  AIDA_SERVER=localhost:50051 aida-gui  # Via environment variable");
+        println!("  aida-desktop                          # Open with default local file");
+        println!("  aida-desktop --file project.yaml      # Open specific file");
+        println!("  aida-desktop --server localhost:50051 # Connect to remote server");
+        println!("  AIDA_SERVER=localhost:50051 aida-desktop  # Via environment variable");
         #[cfg(not(feature = "remote"))]
         println!();
         #[cfg(not(feature = "remote"))]

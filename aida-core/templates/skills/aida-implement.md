@@ -20,7 +20,7 @@ Implement an approved requirement with full traceability, evolving the requireme
 
 Use this skill when:
 - User says "implement <SPEC-ID>" or "work on <requirement>"
-- User triggers "Copy for Claude Code" from the aida-gui AI menu
+- User triggers "Copy for Claude Code" from the aida-desktop AI menu
 - An approved requirement is ready to be implemented
 - Continuing implementation of a requirement from a previous session
 

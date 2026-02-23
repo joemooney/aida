@@ -59,15 +59,15 @@ jobs:
           - os: ubuntu-latest
             artifact: aida-linux-x86_64
             cli_binary: aida
-            gui_binary: aida-gui
+            gui_binary: aida-desktop
           - os: windows-latest
             artifact: aida-windows-x86_64
             cli_binary: aida.exe
-            gui_binary: aida-gui.exe
+            gui_binary: aida-desktop.exe
           - os: macos-latest
             artifact: aida-macos-x86_64
             cli_binary: aida
-            gui_binary: aida-gui
+            gui_binary: aida-desktop
 
     steps:
       - uses: actions/checkout@v4
