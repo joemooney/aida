@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Inbox, Activity, Columns3, List, Zap, Clock, Sparkles, FileText, MessageCircle, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Inbox, Activity, Columns3, List, Zap, Clock, Sparkles, FileText, MessageCircle, Settings, ChevronLeft, ChevronRight, Bookmark } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useRequirements } from '../../hooks/useRequirements';
+import { useSavedViews } from '../../hooks/useSavedViews';
 import {
   getSprintNumber,
   getSprintState,
@@ -32,6 +33,15 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { data: requirements } = useRequirements();
+  const { views } = useSavedViews();
+
+  const pinnedViews = useMemo(
+    () =>
+      views
+        .filter((view) => view.showInSidebar)
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    [views],
+  );
 
   const activeSprint = useMemo(() => {
     if (!requirements) return null;
@@ -127,6 +137,31 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             )}
           </div>
         ))}
+
+        {!collapsed && pinnedViews.length > 0 && (
+          <div className="pt-3 mt-2 border-t border-edge space-y-1">
+            <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-content-muted">
+              Saved Views
+            </div>
+            {pinnedViews.map((view) => (
+              <NavLink
+                key={view.id}
+                to={`${view.page === 'list' ? '/list' : '/board'}?sv=${encodeURIComponent(view.id)}`}
+                className={({ isActive }) =>
+                  cn(
+                    'flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
+                    isActive
+                      ? 'bg-accent/10 text-accent'
+                      : 'text-content-secondary hover:text-content hover:bg-surface-hover',
+                  )
+                }
+              >
+                <Bookmark className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{view.name}</span>
+              </NavLink>
+            ))}
+          </div>
+        )}
       </nav>
 
       {/* Collapse toggle */}

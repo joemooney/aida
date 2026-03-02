@@ -1,4 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import type { RuleGroupType } from 'react-querybuilder';
 import {
   DndContext,
   DragOverlay,
@@ -24,10 +26,12 @@ import { Spinner } from '../ui/Spinner';
 import { EmptyState } from '../ui/EmptyState';
 import { KanbanFilterBar } from '../kanban/KanbanFilterBar';
 import { AdvancedQueryBuilder } from '../filters/AdvancedQueryBuilder';
+import { SavedViewsPicker, type SavedViewSettingsPatch } from '../filters/SavedViewsPicker';
 import { QuickPicker } from '../ui/QuickPicker';
 import { RequirementsRow } from './RequirementsRow';
 import { TreeRow } from './TreeRow';
 import { buildTree, flattenTree, collectParentIds, isDescendant } from '../../lib/tree-utils';
+import { useSavedViews } from '../../hooks/useSavedViews';
 
 type SortKey = 'spec_id' | 'title' | 'status' | 'priority' | 'req_type' | 'owner' | 'modified_at';
 type SortDir = 'asc' | 'desc';
@@ -98,9 +102,11 @@ type PickerKind = 'status' | 'priority' | 'owner' | null;
 
 const STATUS_OPTIONS = ['Draft', 'Approved', 'In-Progress', 'Completed', 'Rejected'];
 const PRIORITY_OPTIONS = ['High', 'Medium', 'Low'];
+const EMPTY_ADVANCED_QUERY: RuleGroupType = { combinator: 'and', rules: [] };
 
 export function RequirementsList() {
   const { data: requirements, isLoading, error } = useRequirements();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { applyFilters } = useFilters();
   const {
     query: advancedQuery,
@@ -121,10 +127,24 @@ export function RequirementsList() {
   const [sortKey, setSortKey] = useState<SortKey>('spec_id');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [viewMode, setViewMode] = useState<ViewMode>('flat');
+  const [showFilterBar, setShowFilterBar] = useState(true);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [activeId, setActiveId] = useState<string | null>(null);
   const [pickerKind, setPickerKind] = useState<PickerKind>(null);
   const selectedRowRef = useRef<HTMLTableRowElement | null>(null);
+  const lastAppliedSavedViewRef = useRef<string | null>(null);
+  const {
+    views: allSavedViews,
+    saveView,
+    deleteView,
+    getViewById,
+    getDefaultView,
+  } = useSavedViews();
+
+  const savedViews = useMemo(
+    () => allSavedViews.filter((view) => view.page === 'list'),
+    [allSavedViews],
+  );
 
   const isTree = viewMode === 'tree';
 
@@ -309,6 +329,66 @@ export function RequirementsList() {
     [addToQueue, setParent, isTree, roots],
   );
 
+  const applySavedView = useCallback(
+    (viewId: string) => {
+      const view = getViewById(viewId);
+      if (!view || view.page !== 'list') return;
+      lastAppliedSavedViewRef.current = view.id;
+      setViewMode(view.listViewMode ?? 'flat');
+      setShowFilterBar(view.showFilterBar);
+      onQueryChange(view.advancedQuery ?? EMPTY_ADVANCED_QUERY);
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        const keysToReset = ['status', 'priority', 'type', 'feature', 'owner', 'tag'];
+        for (const key of keysToReset) next.delete(key);
+        const nextFilters = view.filters;
+        if (nextFilters.status) next.set('status', nextFilters.status);
+        if (nextFilters.priority) next.set('priority', nextFilters.priority);
+        if (nextFilters.type) next.set('type', nextFilters.type);
+        if (nextFilters.feature) next.set('feature', nextFilters.feature);
+        if (nextFilters.owner) next.set('owner', nextFilters.owner);
+        if (nextFilters.tag) next.set('tag', nextFilters.tag);
+        next.set('sv', view.id);
+        return next;
+      });
+    },
+    [getViewById, onQueryChange, setSearchParams],
+  );
+
+  const handleUpdateSavedViewSettings = useCallback(
+    (id: string, patch: SavedViewSettingsPatch) => {
+      const existing = getViewById(id);
+      if (!existing || existing.page !== 'list') return;
+      const saved = saveView({
+        id: existing.id,
+        name: existing.name,
+        page: existing.page,
+        isDefault: patch.isDefault ?? existing.isDefault,
+        showFilterBar: patch.showFilterBar ?? existing.showFilterBar,
+        showInSidebar: patch.showInSidebar ?? existing.showInSidebar,
+        filters: existing.filters,
+        advancedQuery: existing.advancedQuery,
+        listViewMode: patch.listViewMode ?? existing.listViewMode ?? 'flat',
+      });
+      applySavedView(saved.id);
+    },
+    [applySavedView, getViewById, saveView],
+  );
+
+  useEffect(() => {
+    const selectedSavedViewId = searchParams.get('sv');
+    if (selectedSavedViewId) {
+      if (lastAppliedSavedViewRef.current !== selectedSavedViewId) {
+        applySavedView(selectedSavedViewId);
+      }
+      return;
+    }
+    const defaultView = getDefaultView('list');
+    if (defaultView && lastAppliedSavedViewRef.current !== defaultView.id) {
+      applySavedView(defaultView.id);
+    }
+  }, [applySavedView, getDefaultView, searchParams]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -383,6 +463,25 @@ export function RequirementsList() {
         <div className="flex items-center gap-3">
           <span className="text-sm text-content-muted">{displayCount} items</span>
           <button
+            onClick={() => setShowFilterBar((prev) => !prev)}
+            className={cn(
+              'rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors',
+              showFilterBar
+                ? 'border-accent/40 bg-accent/10 text-accent'
+                : 'border-edge text-content-muted hover:text-content hover:bg-surface-hover',
+            )}
+            title="Show or hide basic filters"
+          >
+            {showFilterBar ? 'Hide Filters' : 'Show Filters'}
+          </button>
+          <SavedViewsPicker
+            page="list"
+            views={savedViews}
+            onLoad={(view) => applySavedView(view.id)}
+            onDelete={deleteView}
+            onUpdateSettings={handleUpdateSavedViewSettings}
+          />
+          <button
             onClick={toggleAdvanced}
             className={cn(
               'flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors',
@@ -403,7 +502,7 @@ export function RequirementsList() {
         </div>
       </div>
 
-      <KanbanFilterBar requirements={requirements ?? []} />
+      {showFilterBar && <KanbanFilterBar requirements={requirements ?? []} />}
 
       {advancedOpen && (
         <AdvancedQueryBuilder

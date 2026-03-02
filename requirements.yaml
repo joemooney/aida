@@ -64,7 +64,7 @@ requirements:
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-11-25T19:47:01.146320499Z
-  modified_at: 2026-02-20T22:48:36.427465286Z
+  modified_at: 2026-03-01T07:07:23.150738906Z
   req_type: Functional
   relationships:
   - rel_type: Parent
@@ -77,12 +77,12 @@ requirements:
   spec_id: FR-0003
   title: Drag a requirement to make child
   description: dragging a requirement in the left panel on top of another requirement should make it a child (or whatever the relationship view that we have selected)
-  status: Approved
+  status: Planned
   priority: High
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-11-25T19:48:24.400247266Z
-  modified_at: 2026-02-20T22:47:34.096443710Z
+  modified_at: 2026-03-01T18:48:30.466451700Z
   req_type: Functional
   relationships:
   - rel_type: Child
@@ -98,7 +98,7 @@ requirements:
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-11-25T21:06:58.790215612Z
-  modified_at: 2025-12-13T19:46:33.567757330Z
+  modified_at: 2026-03-01T21:21:19.290960573Z
   req_type: Spike
   relationships:
   - rel_type: Parent
@@ -367,16 +367,16 @@ requirements:
     # aida-gui
 
     The arrow keys should work for the same the different panels where we have lists and behave intuitively.
-  status: Draft
+  status: Approved
   priority: Medium
   owner: joe
   feature: 14-NAV
   created_at: 2025-11-25T22:36:17.393702816Z
-  modified_at: 2026-02-21T06:30:04.096306180Z
+  modified_at: 2026-03-01T01:11:56.854813385Z
   req_type: Functional
   tags:
-  - gui
   - keyboard
+  - gui
   relationships:
   - rel_type: Parent
     target_id: fa1eaffc-7c05-4d09-95a0-d5e61e9b8529
@@ -483,7 +483,7 @@ requirements:
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-11-25T22:48:26.624041526Z
-  modified_at: 2025-12-09T04:25:23.789776986Z
+  modified_at: 2026-03-02T03:16:09.921813970Z
   req_type: Functional
   relationships:
   - rel_type: Parent
@@ -792,12 +792,12 @@ requirements:
   spec_id: FR-0018
   title: Break link relationship
   description: support breaking a relationship, a button to delete a relationship.
-  status: Draft
+  status: Approved
   priority: Medium
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-11-26T00:44:24.763195784Z
-  modified_at: 2025-11-26T00:44:24.763195784Z
+  modified_at: 2026-03-01T01:12:00.910066366Z
   req_type: Functional
   relationships:
   - rel_type: Parent
@@ -1041,7 +1041,7 @@ requirements:
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-11-26T05:59:43.548438869Z
-  modified_at: 2025-12-14T18:33:18.278970626Z
+  modified_at: 2026-03-02T04:44:17.691655151Z
   req_type: Functional
   history:
   - id: 85c8ba87-e9f7-4814-81ed-19b1f46ccf45
@@ -1117,18 +1117,48 @@ requirements:
       old_value: Medium
       new_value: High
   custom_status: To Do
+  ai_evaluation:
+    evaluation:
+      quality_score: 6
+      issues:
+      - type: incomplete
+        severity: medium
+        text: Acceptance criteria are inconsistent with strikethrough text indicating removed features, making it unclear what should actually be implemented
+        suggestion: Remove strikethrough text and clearly state only the features that should be implemented
+      - type: missing_criteria
+        severity: medium
+        text: Missing specific acceptance criteria for how change detection works and what constitutes a 'change'
+        suggestion: Add clear acceptance criteria specifying exactly which field modifications trigger the 'has changes' state
+      - type: ambiguous
+        severity: low
+        text: The phrase 'ESC while dialog is open closes the dialog' could be clearer about the expected behavior
+        suggestion: Clarify that ESC in the dialog should dismiss the dialog and return to editing mode
+      - type: incomplete
+        severity: medium
+        text: No specification of visual feedback or UI state changes when ESC is pressed
+        suggestion: Add acceptance criteria for any loading states, button states, or visual feedback during the cancel operation
+      strengths:
+      - Clearly identifies the core functionality needed (ESC key handling)
+      - Provides comprehensive list of form fields that should be tracked for changes
+      - Aligns well with vim-style keyboard navigation patterns used throughout AIDA
+      - Addresses important UX concern about accidental data loss
+      suggested_improvements:
+        description: "ESC key handling for Add/Edit requirement forms:\n\nAcceptance Criteria:\n1. When ESC is pressed and no form fields have been modified:\n   - Form closes immediately without confirmation\n   - User returns to previous view\n   \n2. Change detection tracks modifications to all fields:\n   - title, description, status, priority, type, owner, feature, tags, prefix, and custom fields\n   - Comparison is made against original values when form was opened\n   \n3. When ESC is pressed with unsaved changes:\n   - Form remains open (no confirmation dialog in current implementation)\n   - No action is taken\n   \n4. Implementation details:\n   - Track original form state when entering Add/Edit mode\n   - Compare current values against original on ESC key press\n   - Apply same logic to Cancel button interactions"
+        rationale: This removes the ambiguous strikethrough text, provides clear testable acceptance criteria, and aligns with the apparent simplified implementation approach while maintaining all technical implementation details.
+    evaluated_at: 2026-03-02T04:44:17.691642753Z
+    content_hash: ac27816c6acd4a17
 - id: 7897d5c8-0159-4920-8ce4-0bc29c6df517
   spec_id: FR-0025
   title: user guide should have requirements best practices
   description: |-
     Put a good primer into the User Guide as to what constitutes a good requirements and what are industry best practices.
     We may want to identify some conventions that was can opt-in/opt-out and see if we can enforce.
-  status: Draft
+  status: Approved
   priority: Medium
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-11-26T22:15:57.031832023Z
-  modified_at: 2025-11-26T22:15:57.031832023Z
+  modified_at: 2026-03-01T18:40:16.354031127Z
   req_type: Functional
   relationships:
   - rel_type: Parent
@@ -1271,12 +1301,12 @@ requirements:
   prefix_override: RELATIONSHIPS
   title: Links behvior
   description: ''
-  status: Draft
+  status: Approved
   priority: Medium
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-11-26T23:02:51.508668144Z
-  modified_at: 2025-11-26T23:02:51.508668144Z
+  modified_at: 2026-03-01T18:40:25.019782822Z
   req_type: Functional
   relationships:
   - rel_type: Child
@@ -1294,12 +1324,12 @@ requirements:
   prefix_override: ADMIN
   title: Settings & Admin
   description: ''
-  status: Draft
+  status: Approved
   priority: Medium
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-11-26T23:04:21.820329556Z
-  modified_at: 2025-12-03T05:51:25.286507586Z
+  modified_at: 2026-03-01T18:41:33.916747126Z
   req_type: Folder
   relationships:
   - rel_type: Child
@@ -1324,7 +1354,7 @@ requirements:
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-11-26T23:08:24.143381728Z
-  modified_at: 2025-11-26T23:08:34.439346889Z
+  modified_at: 2026-03-01T18:40:39.811426243Z
   req_type: Functional
   relationships:
   - rel_type: Parent
@@ -1567,12 +1597,12 @@ requirements:
         - Updated user-guide.md with Type Definitions section
         - Updated OVERVIEW.md with custom type definitions feature
         - Updated PROMPT_HISTORY.md with Session 7 details
-  status: Draft
+  status: Approved
   priority: Medium
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-11-27T03:25:22.148185263Z
-  modified_at: 2025-11-27T03:36:59.734206504Z
+  modified_at: 2026-03-01T21:21:27.407465841Z
   req_type: Functional
   relationships:
   - rel_type: Parent
@@ -3572,8 +3602,10 @@ requirements:
   owner: ''
   feature: 97-Uncategorized
   created_at: 2025-11-27T21:54:16.298495675Z
-  modified_at: 2025-11-27T21:55:18.829529030Z
+  modified_at: 2026-03-02T04:51:43.055559198Z
   req_type: Functional
+  tags:
+  - crud
   relationships:
   - rel_type: Child
     target_id: 5d7fd7b2-a29e-439b-8212-0f9f6be0d468
@@ -9137,10 +9169,10 @@ requirements:
     created_at: 2025-12-07T17:00:49.761868107Z
     created_by: Joe Mooney
   custom_fields:
-    sprint_goal: Clean up baseline
-    end_date: 2026-02-27
-    sprint_number: '1'
     start_date: 2026-02-20
+    sprint_number: '1'
+    end_date: 2026-02-27
+    sprint_goal: Clean up baseline
 - id: 49b91b7d-77d3-4717-af8a-921ab4e05685
   spec_id: EPIC-0208
   title: Epic123
@@ -9245,9 +9277,9 @@ requirements:
         ID should now be sprint?
   custom_fields:
     sprint_number: '2'
+    start_date: 2026-02-27
     sprint_goal: get front end web up to speed
     end_date: 2026-03-06
-    start_date: 2026-02-27
 - id: d1e58dd4-fd26-437a-8856-2cf0d4f2adda
   spec_id: REQ-0211
   title: Bug 123
@@ -9525,9 +9557,9 @@ requirements:
       old_value: SPIKE-0335
       new_value: SPRINT-0336
   custom_fields:
-    sprint_number: '3'
     start_date: 2026-03-06
     end_date: 2026-03-13
+    sprint_number: '3'
 - id: 332b3215-b99b-43c2-8bef-a7b2bd664dd7
   spec_id: FR-0220
   title: New Sprint add should remain in Sprint Planning...
@@ -14597,8 +14629,8 @@ requirements:
   modified_at: 2026-02-22T18:19:43.969387847Z
   req_type: Story
   tags:
-  - frontend
   - react
+  - frontend
   relationships:
   - rel_type: Parent
     target_id: 7622e213-28e8-4401-970e-a55111e7fc2f
@@ -14693,9 +14725,9 @@ requirements:
   modified_at: 2026-02-22T20:35:47.917818690Z
   req_type: Story
   tags:
+  - create
   - ui
   - web
-  - create
 - id: 167164e4-2d64-4d24-b41f-16499162e6b3
   spec_id: BUG-0383
   title: 'Fix: Requirement edits revert in detail panel due to stale React Query cache'
@@ -14709,9 +14741,9 @@ requirements:
   req_type: Bug
   tags:
   - cache
-  - bugfix
-  - api
   - web
+  - api
+  - bugfix
 - id: ca86240c-1723-4d10-bb55-527e92211bd0
   spec_id: STORY-0384
   title: Enhanced description editor with expand, preview, and markdown help
@@ -14724,10 +14756,10 @@ requirements:
   modified_at: 2026-02-22T21:30:34.418112889Z
   req_type: Story
   tags:
+  - markdown
+  - editor
   - ui
   - web
-  - editor
-  - markdown
 - id: 3a4d90f3-7b60-4eb7-a32d-15b20fbbb679
   spec_id: FR-0385
   title: 'Web UI Skill Invocation with SSE streaming (pilot: compiler-warnings)'
@@ -14751,9 +14783,9 @@ requirements:
   modified_at: 2026-02-23T02:49:24.757611723Z
   req_type: Functional
   tags:
-  - skills
-  - sse
   - web
+  - sse
+  - skills
   relationships:
   - rel_type: Parent
     target_id: c9697f28-3a0f-4133-b2e3-9c0dd6220e89
@@ -14811,9 +14843,9 @@ requirements:
   modified_at: 2026-02-23T05:49:18.702404260Z
   req_type: Task
   tags:
-  - infrastructure
   - git
   - docker
+  - infrastructure
   comments:
   - id: f2fcc2f8-6c33-443e-bc80-8b6293fdfdbc
     author: joe
@@ -14832,8 +14864,8 @@ requirements:
   modified_at: 2026-02-23T05:49:19.891365340Z
   req_type: Bug
   tags:
-  - docker
   - bug-fix
+  - docker
   - server
   comments:
   - id: c951820f-912f-4a61-8b43-ffd3117a3055
