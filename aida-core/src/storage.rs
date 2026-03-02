@@ -248,8 +248,7 @@ impl Storage {
             fs::create_dir_all(parent)?;
         }
 
-        let yaml = serde_yaml::to_string(info)
-            .context("Failed to serialize lock info")?;
+        let yaml = serde_yaml::to_string(info).context("Failed to serialize lock info")?;
 
         fs::write(&self.lock_file_path, yaml)
             .with_context(|| format!("Failed to write lock file: {:?}", self.lock_file_path))?;
@@ -272,7 +271,11 @@ impl Storage {
     }
 
     /// Update heartbeat for a session
-    pub fn update_heartbeat(&self, session_id: &str, editing: Option<EditLock>) -> Result<LockFileInfo> {
+    pub fn update_heartbeat(
+        &self,
+        session_id: &str,
+        editing: Option<EditLock>,
+    ) -> Result<LockFileInfo> {
         let mut info = self.read_lock_info().unwrap_or_default();
 
         // Clean up stale sessions
@@ -454,7 +457,12 @@ impl Storage {
         drop(_lock);
 
         // Save back if we assigned any SPEC-IDs, added missing types, or repaired duplicates
-        if had_missing_spec_ids || had_missing_user_spec_ids || had_missing_types || had_missing_id_config_types || repaired_duplicates > 0 {
+        if had_missing_spec_ids
+            || had_missing_user_spec_ids
+            || had_missing_types
+            || had_missing_id_config_types
+            || repaired_duplicates > 0
+        {
             self.save(&store)?;
         }
 
@@ -466,7 +474,7 @@ impl Storage {
 
     /// Loads requirements from a SQLite database file
     fn load_sqlite(&self) -> Result<RequirementsStore> {
-        use crate::db::{SqliteBackend, DatabaseBackend};
+        use crate::db::{DatabaseBackend, SqliteBackend};
 
         let backend = SqliteBackend::new(&self.file_path)?;
         let mut store = backend.load()?;
@@ -483,7 +491,12 @@ impl Storage {
         let repaired_duplicates = store.repair_duplicate_spec_ids();
 
         // Save back if we made any changes
-        if had_missing_spec_ids || had_missing_user_spec_ids || had_missing_types || had_missing_id_config_types || repaired_duplicates > 0 {
+        if had_missing_spec_ids
+            || had_missing_user_spec_ids
+            || had_missing_types
+            || had_missing_id_config_types
+            || repaired_duplicates > 0
+        {
             backend.save(&store)?;
         }
 
@@ -530,7 +543,7 @@ impl Storage {
 
     /// Saves requirements to a SQLite database file
     fn save_sqlite(&self, store: &RequirementsStore) -> Result<()> {
-        use crate::db::{SqliteBackend, DatabaseBackend};
+        use crate::db::{DatabaseBackend, SqliteBackend};
 
         let backend = SqliteBackend::new(&self.file_path)?;
         backend.save(store)?;
@@ -697,13 +710,17 @@ impl Storage {
 
                         // No real conflicts - merge: take our changes + disk's other changes
                         let merged = Self::merge_requirement(local, disk);
-                        if let Some(idx) = final_store.requirements.iter().position(|r| r.id == req_id) {
+                        if let Some(idx) =
+                            final_store.requirements.iter().position(|r| r.id == req_id)
+                        {
                             final_store.requirements[idx] = merged;
                         }
                         merged_count += 1;
                     } else {
                         // No external changes - just use our version
-                        if let Some(idx) = final_store.requirements.iter().position(|r| r.id == req_id) {
+                        if let Some(idx) =
+                            final_store.requirements.iter().position(|r| r.id == req_id)
+                        {
                             final_store.requirements[idx] = local.clone();
                         }
                     }
@@ -712,7 +729,8 @@ impl Storage {
                 // Requirement exists on disk but we don't have original timestamp
                 // This is a fallback - just overwrite (legacy behavior)
                 (Some(local), Some(_disk), None) => {
-                    if let Some(idx) = final_store.requirements.iter().position(|r| r.id == req_id) {
+                    if let Some(idx) = final_store.requirements.iter().position(|r| r.id == req_id)
+                    {
                         final_store.requirements[idx] = local.clone();
                     }
                 }
@@ -940,8 +958,16 @@ impl Storage {
         match resolution {
             ConflictResolution::ForceLocal => {
                 // Replace disk requirement with local version
-                if let Some(local_req) = local_store.requirements.iter().find(|r| r.id == requirement_id) {
-                    if let Some(idx) = disk_store.requirements.iter().position(|r| r.id == requirement_id) {
+                if let Some(local_req) = local_store
+                    .requirements
+                    .iter()
+                    .find(|r| r.id == requirement_id)
+                {
+                    if let Some(idx) = disk_store
+                        .requirements
+                        .iter()
+                        .position(|r| r.id == requirement_id)
+                    {
                         disk_store.requirements[idx] = local_req.clone();
                     } else {
                         disk_store.requirements.push(local_req.clone());
@@ -953,10 +979,22 @@ impl Storage {
             }
             ConflictResolution::Merge => {
                 // Merge local changes into disk version
-                if let Some(local_req) = local_store.requirements.iter().find(|r| r.id == requirement_id) {
-                    if let Some(disk_req) = disk_store.requirements.iter().find(|r| r.id == requirement_id) {
+                if let Some(local_req) = local_store
+                    .requirements
+                    .iter()
+                    .find(|r| r.id == requirement_id)
+                {
+                    if let Some(disk_req) = disk_store
+                        .requirements
+                        .iter()
+                        .find(|r| r.id == requirement_id)
+                    {
                         let merged = Self::merge_requirement(local_req, disk_req);
-                        if let Some(idx) = disk_store.requirements.iter().position(|r| r.id == requirement_id) {
+                        if let Some(idx) = disk_store
+                            .requirements
+                            .iter()
+                            .position(|r| r.id == requirement_id)
+                        {
                             disk_store.requirements[idx] = merged;
                         }
                     } else {
@@ -1016,7 +1054,12 @@ impl Storage {
     ) -> Result<AddResult> {
         // Use appropriate backend based on file extension
         if self.is_sqlite() {
-            return self.add_requirement_atomic_sqlite(local_store, new_req, feature_prefix, type_prefix);
+            return self.add_requirement_atomic_sqlite(
+                local_store,
+                new_req,
+                feature_prefix,
+                type_prefix,
+            );
         }
 
         // YAML implementation follows
@@ -1040,11 +1083,8 @@ impl Storage {
         };
 
         // Count external requirement additions (requirements in disk but not in local)
-        let local_req_ids: std::collections::HashSet<Uuid> = local_store
-            .requirements
-            .iter()
-            .map(|r| r.id)
-            .collect();
+        let local_req_ids: std::collections::HashSet<Uuid> =
+            local_store.requirements.iter().map(|r| r.id).collect();
         let external_changes_merged = disk_store
             .requirements
             .iter()
@@ -1083,7 +1123,10 @@ impl Storage {
             let check_ctrl = |s: &str, name: &str| {
                 for (i, c) in s.chars().enumerate() {
                     if c.is_control() && c != '\n' && c != '\t' && c != '\r' {
-                        eprintln!("Control char in {}: position {}, char code {}", name, i, c as u32);
+                        eprintln!(
+                            "Control char in {}: position {}, char code {}",
+                            name, i, c as u32
+                        );
                     }
                 }
             };
@@ -1119,7 +1162,7 @@ impl Storage {
         feature_prefix: Option<&str>,
         type_prefix: Option<&str>,
     ) -> Result<AddResult> {
-        use crate::db::{SqliteBackend, DatabaseBackend};
+        use crate::db::{DatabaseBackend, SqliteBackend};
 
         let backend = SqliteBackend::new(&self.file_path)?;
 
@@ -1127,11 +1170,8 @@ impl Storage {
         let mut disk_store = backend.load()?;
 
         // Count external requirement additions (requirements in disk but not in local)
-        let local_req_ids: std::collections::HashSet<Uuid> = local_store
-            .requirements
-            .iter()
-            .map(|r| r.id)
-            .collect();
+        let local_req_ids: std::collections::HashSet<Uuid> =
+            local_store.requirements.iter().map(|r| r.id).collect();
         let external_changes_merged = disk_store
             .requirements
             .iter()
@@ -1181,8 +1221,12 @@ impl Storage {
         let attachments_dir = parent.join("attachments").join(spec_id);
 
         if !attachments_dir.exists() {
-            fs::create_dir_all(&attachments_dir)
-                .with_context(|| format!("Failed to create attachments directory: {:?}", attachments_dir))?;
+            fs::create_dir_all(&attachments_dir).with_context(|| {
+                format!(
+                    "Failed to create attachments directory: {:?}",
+                    attachments_dir
+                )
+            })?;
         }
 
         Ok(attachments_dir)
@@ -1190,7 +1234,11 @@ impl Storage {
 
     /// Copies a file to the attachments directory for a requirement
     /// Returns the relative path to the stored file and the file size
-    pub fn store_attachment_file(&self, spec_id: &str, source_path: &Path) -> Result<(String, u64)> {
+    pub fn store_attachment_file(
+        &self,
+        spec_id: &str,
+        source_path: &Path,
+    ) -> Result<(String, u64)> {
         let attachments_dir = self.get_attachments_dir(spec_id)?;
 
         // Get the filename from the source path
@@ -1248,7 +1296,12 @@ impl Storage {
     }
 
     /// Stores attachment data from bytes (for drag-drop where path isn't available)
-    pub fn store_attachment_bytes(&self, spec_id: &str, filename: &str, data: &[u8]) -> Result<(String, u64)> {
+    pub fn store_attachment_bytes(
+        &self,
+        spec_id: &str,
+        filename: &str,
+        data: &[u8],
+    ) -> Result<(String, u64)> {
         let attachments_dir = self.get_attachments_dir(spec_id)?;
 
         // Handle potential filename conflicts
@@ -1419,11 +1472,15 @@ impl Storage {
     // trace:STORY-0366 | ai:claude
 
     /// List queue entries for a user
-    pub fn queue_list(&self, user_id: &str, include_completed: bool) -> Result<Vec<crate::models::QueueEntry>> {
+    pub fn queue_list(
+        &self,
+        user_id: &str,
+        include_completed: bool,
+    ) -> Result<Vec<crate::models::QueueEntry>> {
         if !self.is_sqlite() {
             anyhow::bail!("Queue is only supported for SQLite databases");
         }
-        use crate::db::{SqliteBackend, DatabaseBackend};
+        use crate::db::{DatabaseBackend, SqliteBackend};
         let backend = SqliteBackend::new(&self.file_path)?;
         backend.queue_list(user_id, include_completed)
     }
@@ -1433,7 +1490,7 @@ impl Storage {
         if !self.is_sqlite() {
             anyhow::bail!("Queue is only supported for SQLite databases");
         }
-        use crate::db::{SqliteBackend, DatabaseBackend};
+        use crate::db::{DatabaseBackend, SqliteBackend};
         let backend = SqliteBackend::new(&self.file_path)?;
         backend.queue_add(entry)
     }
@@ -1443,7 +1500,7 @@ impl Storage {
         if !self.is_sqlite() {
             anyhow::bail!("Queue is only supported for SQLite databases");
         }
-        use crate::db::{SqliteBackend, DatabaseBackend};
+        use crate::db::{DatabaseBackend, SqliteBackend};
         let backend = SqliteBackend::new(&self.file_path)?;
         backend.queue_remove(user_id, requirement_id)
     }
@@ -1453,7 +1510,7 @@ impl Storage {
         if !self.is_sqlite() {
             anyhow::bail!("Queue is only supported for SQLite databases");
         }
-        use crate::db::{SqliteBackend, DatabaseBackend};
+        use crate::db::{DatabaseBackend, SqliteBackend};
         let backend = SqliteBackend::new(&self.file_path)?;
         backend.queue_reorder(user_id, items)
     }
@@ -1463,7 +1520,7 @@ impl Storage {
         if !self.is_sqlite() {
             anyhow::bail!("Queue is only supported for SQLite databases");
         }
-        use crate::db::{SqliteBackend, DatabaseBackend};
+        use crate::db::{DatabaseBackend, SqliteBackend};
         let backend = SqliteBackend::new(&self.file_path)?;
         backend.queue_clear(user_id, completed_only)
     }
@@ -1574,7 +1631,10 @@ mod tests {
             SaveResult::Conflict(info) => {
                 assert_eq!(info.requirement_id, req_id);
                 assert!(!info.conflicting_fields.is_empty());
-                assert!(info.conflicting_fields.iter().any(|f| f.field_name == "title"));
+                assert!(info
+                    .conflicting_fields
+                    .iter()
+                    .any(|f| f.field_name == "title"));
             }
             _ => panic!("Expected SaveResult::Conflict"),
         }

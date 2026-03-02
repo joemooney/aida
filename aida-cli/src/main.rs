@@ -11,14 +11,39 @@ use std::collections::HashSet;
 use uuid::Uuid;
 
 use aida_core::{
-    check_migration_status, check_scaffold_status, determine_requirements_path, export,
-    get_registry_path, seed_meta_requirements, ArtifactType, Cardinality, Comment, FieldChange,
-    FileStatus, IdFormat, MigrationCheck, NumberingStrategy, Registry, RelationshipDefinition,
-    RelationshipType, ReportFormat, ReportGenerator, Requirement, RequirementPriority,
-    RequirementStatus, RequirementType, RequirementsStore, ScaffoldConfig, Scaffolder, Storage,
-    TraceLink,
+    check_migration_status,
+    check_scaffold_status,
+    determine_requirements_path,
+    export,
+    get_registry_path,
+    seed_meta_requirements,
+    ArtifactType,
+    Cardinality,
+    Comment,
+    FieldChange,
+    FileStatus,
     // GitLab integration
-    GitLabClient, GitLabConfig, IssueFilter, IssueState,
+    GitLabClient,
+    GitLabConfig,
+    IdFormat,
+    IssueFilter,
+    IssueState,
+    MigrationCheck,
+    NumberingStrategy,
+    Registry,
+    RelationshipDefinition,
+    RelationshipType,
+    ReportFormat,
+    ReportGenerator,
+    Requirement,
+    RequirementPriority,
+    RequirementStatus,
+    RequirementType,
+    RequirementsStore,
+    ScaffoldConfig,
+    Scaffolder,
+    Storage,
+    TraceLink,
 };
 
 use crate::cli::{
@@ -72,29 +97,35 @@ fn main() -> Result<()> {
         if initial_path.extension().and_then(|e| e.to_str()) == Some("db") {
             initial_path
         } else {
-        // Check for migration status (REQ-0231)
-        // Storage class now auto-detects SQLite vs YAML by file extension
-        match check_migration_status(&initial_path) {
-            MigrationCheck::NoMigration(path) => path,
-            MigrationCheck::MigratedToSqlite { yaml_path: _, sqlite_path } => {
-                // YAML was officially migrated - use SQLite
-                eprintln!(
-                    "{}: Using SQLite database: {}",
-                    "INFO".blue(),
-                    sqlite_path.display()
-                );
-                sqlite_path
+            // Check for migration status (REQ-0231)
+            // Storage class now auto-detects SQLite vs YAML by file extension
+            match check_migration_status(&initial_path) {
+                MigrationCheck::NoMigration(path) => path,
+                MigrationCheck::MigratedToSqlite {
+                    yaml_path: _,
+                    sqlite_path,
+                } => {
+                    // YAML was officially migrated - use SQLite
+                    eprintln!(
+                        "{}: Using SQLite database: {}",
+                        "INFO".blue(),
+                        sqlite_path.display()
+                    );
+                    sqlite_path
+                }
+                MigrationCheck::PossibleStaleYaml {
+                    yaml_path: _,
+                    sqlite_path,
+                } => {
+                    // Both exist but no marker - default to SQLite as it's likely more current
+                    eprintln!(
+                        "{}: Both YAML and SQLite exist. Using SQLite.",
+                        "INFO".blue()
+                    );
+                    eprintln!("Use --file requirements.yaml to use YAML instead.");
+                    sqlite_path
+                }
             }
-            MigrationCheck::PossibleStaleYaml { yaml_path: _, sqlite_path } => {
-                // Both exist but no marker - default to SQLite as it's likely more current
-                eprintln!(
-                    "{}: Both YAML and SQLite exist. Using SQLite.",
-                    "INFO".blue()
-                );
-                eprintln!("Use --file requirements.yaml to use YAML instead.");
-                sqlite_path
-            }
-        }
         }
     };
 
@@ -465,10 +496,7 @@ fn handle_init_command(no_skills: bool, no_hooks: bool, force: bool) -> Result<(
         );
     }
     if updated_count > 0 {
-        println!(
-            "  {} files updated",
-            updated_count.to_string().blue(),
-        );
+        println!("  {} files updated", updated_count.to_string().blue(),);
     }
 
     println!();
@@ -517,7 +545,11 @@ fn handle_server_command(cmd: &ServerCommand, server_addr: Option<&str>) -> Resu
             ServerCommand::Status => {
                 rt.block_on(client::get_server_status(server_addr))?;
             }
-            ServerCommand::List { status, feature, limit } => {
+            ServerCommand::List {
+                status,
+                feature,
+                limit,
+            } => {
                 rt.block_on(client::list_requirements(
                     server_addr,
                     status.as_deref(),
@@ -633,9 +665,7 @@ fn add_requirement_cli(
     }
 
     // Set owner: use explicit value, AIDA_AUTHOR env var, or system username
-    requirement.owner = owner
-        .clone()
-        .unwrap_or_else(get_default_author);
+    requirement.owner = owner.clone().unwrap_or_else(get_default_author);
 
     if let Some(feature_val) = feature {
         requirement.feature = feature_val.clone();
@@ -952,7 +982,11 @@ fn edit_requirement_cli(
     // Update title
     if let Some(new_title) = title {
         if !new_title.is_empty() && new_title != &req.title {
-            changes.push(Requirement::field_change("title", req.title.clone(), new_title.clone()));
+            changes.push(Requirement::field_change(
+                "title",
+                req.title.clone(),
+                new_title.clone(),
+            ));
             req.title = new_title.clone();
         }
     }
@@ -960,7 +994,11 @@ fn edit_requirement_cli(
     // Update description
     if let Some(new_desc) = description {
         if new_desc != &req.description {
-            changes.push(Requirement::field_change("description", req.description.clone(), new_desc.clone()));
+            changes.push(Requirement::field_change(
+                "description",
+                req.description.clone(),
+                new_desc.clone(),
+            ));
             req.description = new_desc.clone();
         }
     }
@@ -977,7 +1015,11 @@ fn edit_requirement_cli(
             _ => anyhow::bail!("Invalid status '{}'. Use: draft, approved, planned, in_progress, completed, rejected", status_str),
         };
         if new_status != req.status {
-            changes.push(Requirement::field_change("status", format!("{:?}", req.status), format!("{:?}", new_status)));
+            changes.push(Requirement::field_change(
+                "status",
+                format!("{:?}", req.status),
+                format!("{:?}", new_status),
+            ));
             req.status = new_status;
         }
     }
@@ -988,10 +1030,17 @@ fn edit_requirement_cli(
             "high" => RequirementPriority::High,
             "medium" | "med" => RequirementPriority::Medium,
             "low" => RequirementPriority::Low,
-            _ => anyhow::bail!("Invalid priority '{}'. Use: high, medium, low", priority_str),
+            _ => anyhow::bail!(
+                "Invalid priority '{}'. Use: high, medium, low",
+                priority_str
+            ),
         };
         if new_priority != req.priority {
-            changes.push(Requirement::field_change("priority", format!("{:?}", req.priority), format!("{:?}", new_priority)));
+            changes.push(Requirement::field_change(
+                "priority",
+                format!("{:?}", req.priority),
+                format!("{:?}", new_priority),
+            ));
             req.priority = new_priority;
         }
     }
@@ -1015,7 +1064,11 @@ fn edit_requirement_cli(
             _ => anyhow::bail!("Invalid type '{}'. Use: functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta", type_str),
         };
         if new_type != req.req_type {
-            changes.push(Requirement::field_change("type", format!("{:?}", req.req_type), format!("{:?}", new_type)));
+            changes.push(Requirement::field_change(
+                "type",
+                format!("{:?}", req.req_type),
+                format!("{:?}", new_type),
+            ));
             req.req_type = new_type;
         }
     }
@@ -1023,7 +1076,11 @@ fn edit_requirement_cli(
     // Update owner
     if let Some(new_owner) = owner {
         if new_owner != &req.owner {
-            changes.push(Requirement::field_change("owner", req.owner.clone(), new_owner.clone()));
+            changes.push(Requirement::field_change(
+                "owner",
+                req.owner.clone(),
+                new_owner.clone(),
+            ));
             req.owner = new_owner.clone();
         }
     }
@@ -1031,7 +1088,11 @@ fn edit_requirement_cli(
     // Update feature
     if let Some(new_feature) = feature {
         if new_feature != &req.feature {
-            changes.push(Requirement::field_change("feature", req.feature.clone(), new_feature.clone()));
+            changes.push(Requirement::field_change(
+                "feature",
+                req.feature.clone(),
+                new_feature.clone(),
+            ));
             req.feature = new_feature.clone();
         }
     }
@@ -1061,7 +1122,12 @@ fn edit_requirement_cli(
 
     // Save changes
     storage.save(&store)?;
-    println!("{} Updated {} ({} field(s) changed)", "✓".green(), spec_id, changes.len());
+    println!(
+        "{} Updated {} ({} field(s) changed)",
+        "✓".green(),
+        spec_id,
+        changes.len()
+    );
 
     Ok(())
 }
@@ -1787,7 +1853,12 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
                 println!("{}", requirements_path.display());
             }
         }
-        DbCommand::Migrate { from, to, output, force } => {
+        DbCommand::Migrate {
+            from,
+            to,
+            output,
+            force,
+        } => {
             // trace:REQ-0231,FR-0316 | ai:claude:high
             use aida_core::create_backend;
 
@@ -1796,7 +1867,11 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
                 "sqlite" | "db" => "sqlite",
                 "postgres" | "postgresql" | "pg" => "postgres",
                 _ => {
-                    println!("{} Invalid source format '{}'. Use 'yaml', 'sqlite', or 'postgres'.", "!".red(), from);
+                    println!(
+                        "{} Invalid source format '{}'. Use 'yaml', 'sqlite', or 'postgres'.",
+                        "!".red(),
+                        from
+                    );
                     return Ok(());
                 }
             };
@@ -1806,7 +1881,11 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
                 "sqlite" | "db" => "sqlite",
                 "postgres" | "postgresql" | "pg" => "postgres",
                 _ => {
-                    println!("{} Invalid target format '{}'. Use 'yaml', 'sqlite', or 'postgres'.", "!".red(), to);
+                    println!(
+                        "{} Invalid target format '{}'. Use 'yaml', 'sqlite', or 'postgres'.",
+                        "!".red(),
+                        to
+                    );
                     return Ok(());
                 }
             };
@@ -1822,7 +1901,10 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
                     anyhow::anyhow!("PostgreSQL migration requires --output with a connection string (e.g., postgres://user:pass@host:5432/db)")
                 })?;
 
-                println!("Migrating from {} to PostgreSQL...", requirements_path.display());
+                println!(
+                    "Migrating from {} to PostgreSQL...",
+                    requirements_path.display()
+                );
 
                 let source_backend = create_backend(requirements_path, None)?;
                 let count = aida_core::migrate_to_postgres(source_backend.as_ref(), conn_string)?;
@@ -1837,16 +1919,24 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
 
             if source_format == "postgres" {
                 let conn_string = requirements_path.to_string_lossy();
-                if !conn_string.starts_with("postgres://") && !conn_string.starts_with("postgresql://") {
+                if !conn_string.starts_with("postgres://")
+                    && !conn_string.starts_with("postgresql://")
+                {
                     println!("{} For PostgreSQL source, use --file with a connection string (e.g., postgres://user:pass@host:5432/db)", "!".red());
                     return Ok(());
                 }
 
-                let target_ext = if target_format == "yaml" { "yaml" } else { "db" };
+                let target_ext = if target_format == "yaml" {
+                    "yaml"
+                } else {
+                    "db"
+                };
                 let target_path = output
                     .as_ref()
                     .map(|s| std::path::PathBuf::from(s))
-                    .unwrap_or_else(|| std::path::PathBuf::from(format!("requirements.{}", target_ext)));
+                    .unwrap_or_else(|| {
+                        std::path::PathBuf::from(format!("requirements.{}", target_ext))
+                    });
 
                 if target_path.exists() && !*force {
                     println!(
@@ -1860,7 +1950,8 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
                 println!("Migrating from PostgreSQL to {}...", target_path.display());
 
                 let target_backend = create_backend(&target_path, None)?;
-                let count = aida_core::migrate_from_postgres(&conn_string, target_backend.as_ref())?;
+                let count =
+                    aida_core::migrate_from_postgres(&conn_string, target_backend.as_ref())?;
 
                 println!(
                     "{} Successfully migrated {} requirements to '{}'",
@@ -1872,7 +1963,11 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
             }
 
             // Standard YAML <-> SQLite migration
-            let target_ext = if target_format == "yaml" { "yaml" } else { "db" };
+            let target_ext = if target_format == "yaml" {
+                "yaml"
+            } else {
+                "db"
+            };
             let target_path = output
                 .as_ref()
                 .map(|s| std::path::PathBuf::from(s))
@@ -1887,7 +1982,11 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
                 return Ok(());
             }
 
-            println!("Migrating from {} to {}...", requirements_path.display(), target_path.display());
+            println!(
+                "Migrating from {} to {}...",
+                requirements_path.display(),
+                target_path.display()
+            );
 
             let count = if source_format == "yaml" {
                 aida_core::migrate_yaml_to_sqlite(requirements_path, &target_path)?
@@ -1904,7 +2003,7 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
         }
         DbCommand::Info => {
             // trace:REQ-0231,FR-0316 | ai:claude:high
-            use aida_core::{BackendType, create_backend};
+            use aida_core::{create_backend, BackendType};
 
             let backend = create_backend(requirements_path, None)?;
             let store = backend.load()?;
@@ -2059,13 +2158,23 @@ fn handle_import_command(
     if !result.unresolved_refs.is_empty() {
         println!(
             "  {}",
-            format!("Unresolved external references: {}", result.unresolved_refs.len()).yellow()
+            format!(
+                "Unresolved external references: {}",
+                result.unresolved_refs.len()
+            )
+            .yellow()
         );
         for ext_ref in &result.unresolved_refs {
             if let Some(ref spec_id) = ext_ref.original_target_spec_id {
-                println!("    - {} -> {} ({})", spec_id, ext_ref.original_target_uuid, ext_ref.rel_type);
+                println!(
+                    "    - {} -> {} ({})",
+                    spec_id, ext_ref.original_target_uuid, ext_ref.rel_type
+                );
             } else {
-                println!("    - {} ({})", ext_ref.original_target_uuid, ext_ref.rel_type);
+                println!(
+                    "    - {} ({})",
+                    ext_ref.original_target_uuid, ext_ref.rel_type
+                );
             }
         }
     }
@@ -3251,15 +3360,34 @@ fn trace_scan(
     ).unwrap();
 
     // (req_id, file_path, line_content, line_num, tool, confidence, title, impl_date, by_user)
-    let mut found_traces: Vec<(String, String, String, u32, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>)> =
-        Vec::new();
+    let mut found_traces: Vec<(
+        String,
+        String,
+        String,
+        u32,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    )> = Vec::new();
 
     // Walk through files
     fn scan_dir(
         dir: &std::path::Path,
         ext_list: &[&str],
         pattern: &regex::Regex,
-        found: &mut Vec<(String, String, String, u32, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>)>,
+        found: &mut Vec<(
+            String,
+            String,
+            String,
+            u32,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        )>,
         verbose: bool,
     ) -> Result<()> {
         if dir.is_file() {
@@ -3301,7 +3429,17 @@ fn trace_scan(
     fn scan_file(
         path: &std::path::Path,
         pattern: &regex::Regex,
-        found: &mut Vec<(String, String, String, u32, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>)>,
+        found: &mut Vec<(
+            String,
+            String,
+            String,
+            u32,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        )>,
         verbose: bool,
     ) -> Result<()> {
         let file = fs::File::open(path)?;
@@ -3322,7 +3460,11 @@ fn trace_scan(
                     println!(
                         "  Found: {}{} in {}:{}",
                         req_id.yellow(),
-                        if title_str.is_empty() { "".to_string() } else { format!(" - {}", title_str) },
+                        if title_str.is_empty() {
+                            "".to_string()
+                        } else {
+                            format!(" - {}", title_str)
+                        },
                         path.display(),
                         line_num + 1
                     );
@@ -3366,14 +3508,31 @@ fn trace_scan(
     for (req_id, traces) in &by_req {
         println!("\n  {} ({} links):", req_id.yellow(), traces.len());
         for (_, file, _, line, tool, conf, title, impl_date, by_user) in traces {
-            let title_info = title.as_ref().map(|t| format!(" - {}", t)).unwrap_or_default();
+            let title_info = title
+                .as_ref()
+                .map(|t| format!(" - {}", t))
+                .unwrap_or_default();
             let ai_info = match (tool, conf) {
                 (Some(t), Some(c)) => format!(" [ai:{t}:{c}]").dimmed().to_string(),
                 _ => String::new(),
             };
-            let impl_info = impl_date.as_ref().map(|d| format!(" impl:{}", d)).unwrap_or_default();
-            let by_info = by_user.as_ref().map(|u| format!(" by:{}", u)).unwrap_or_default();
-            println!("    {}:{}{}{}{}{}", file.cyan(), line, title_info, ai_info, impl_info.dimmed(), by_info.dimmed());
+            let impl_info = impl_date
+                .as_ref()
+                .map(|d| format!(" impl:{}", d))
+                .unwrap_or_default();
+            let by_info = by_user
+                .as_ref()
+                .map(|u| format!(" by:{}", u))
+                .unwrap_or_default();
+            println!(
+                "    {}:{}{}{}{}{}",
+                file.cyan(),
+                line,
+                title_info,
+                ai_info,
+                impl_info.dimmed(),
+                by_info.dimmed()
+            );
         }
     }
 
@@ -3382,7 +3541,9 @@ fn trace_scan(
         let mut store = storage.load()?;
         let mut added = 0;
 
-        for (req_id, file_path, _, line_num, tool, confidence, _title, impl_date, by_user) in found_traces {
+        for (req_id, file_path, _, line_num, tool, confidence, _title, impl_date, by_user) in
+            found_traces
+        {
             // Find requirement by spec_id
             if let Some(req) = store
                 .requirements
@@ -3390,9 +3551,10 @@ fn trace_scan(
                 .find(|r| r.spec_id.as_deref() == Some(&req_id))
             {
                 // Check if trace link already exists for this file and line
-                let exists = req.trace_links.iter().any(|t| {
-                    t.file_path == file_path && t.line_start == Some(line_num)
-                });
+                let exists = req
+                    .trace_links
+                    .iter()
+                    .any(|t| t.file_path == file_path && t.line_start == Some(line_num));
 
                 if !exists {
                     let mut trace = TraceLink::new(ArtifactType::SourceCode, file_path.clone());
@@ -3404,7 +3566,10 @@ fn trace_scan(
                     // Build notes from available info
                     let mut notes_parts = Vec::new();
                     if let Some(t) = &tool {
-                        let conf_str = confidence.as_ref().map(|c| format!(":{}", c)).unwrap_or_default();
+                        let conf_str = confidence
+                            .as_ref()
+                            .map(|c| format!(":{}", c))
+                            .unwrap_or_default();
                         notes_parts.push(format!("AI tool: {}{}", t, conf_str));
                     }
                     if let Some(date) = &impl_date {
@@ -3465,7 +3630,10 @@ fn trace_sweep(
     let output = cmd.output().context("Failed to run git log")?;
 
     if !output.status.success() {
-        anyhow::bail!("git log failed: {}", String::from_utf8_lossy(&output.stderr));
+        anyhow::bail!(
+            "git log failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     let log_output = String::from_utf8_lossy(&output.stdout);
@@ -3503,11 +3671,7 @@ fn trace_sweep(
                 );
             }
 
-            found_refs.push((
-                commit_hash.to_string(),
-                req_id,
-                subject.to_string(),
-            ));
+            found_refs.push((commit_hash.to_string(), req_id, subject.to_string()));
         }
     }
 
@@ -3635,7 +3799,11 @@ fn handle_report_command(cmd: &ReportCommand, storage: &Storage, storage_path: &
 }
 
 // trace:FR-0260 | ai:claude:high
-fn handle_scaffold_command(cmd: &ScaffoldCommand, storage: &Storage, db_path: &std::path::Path) -> Result<()> {
+fn handle_scaffold_command(
+    cmd: &ScaffoldCommand,
+    storage: &Storage,
+    db_path: &std::path::Path,
+) -> Result<()> {
     match cmd {
         ScaffoldCommand::Status {
             project_root,
@@ -3663,7 +3831,11 @@ fn handle_scaffold_command(cmd: &ScaffoldCommand, storage: &Storage, db_path: &s
                 let html = generate_scaffold_html_report(&store, &root, &config, db_path, &status)?;
                 if let Some(output_path) = output {
                     std::fs::write(output_path, &html)?;
-                    println!("{} Scaffold report generated: {}", "✓".green(), output_path.display());
+                    println!(
+                        "{} Scaffold report generated: {}",
+                        "✓".green(),
+                        output_path.display()
+                    );
                 } else {
                     println!("{}", html);
                 }
@@ -3742,7 +3914,8 @@ fn handle_scaffold_command(cmd: &ScaffoldCommand, storage: &Storage, db_path: &s
                 .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
             let config = ScaffoldConfig::default();
-            let mut scaffolder = Scaffolder::with_database(root.clone(), config, db_path.to_path_buf());
+            let mut scaffolder =
+                Scaffolder::with_database(root.clone(), config, db_path.to_path_buf());
             let preview = scaffolder.preview(&store);
 
             println!("{} Scaffold preview for: {}", "📁".blue(), root.display());
@@ -3787,7 +3960,8 @@ fn handle_scaffold_command(cmd: &ScaffoldCommand, storage: &Storage, db_path: &s
                 .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
             let config = ScaffoldConfig::default();
-            let mut scaffolder = Scaffolder::with_database(root.clone(), config, db_path.to_path_buf());
+            let mut scaffolder =
+                Scaffolder::with_database(root.clone(), config, db_path.to_path_buf());
 
             if *dry_run {
                 println!("{} Dry run - no files will be modified", "ℹ".blue());
@@ -3842,7 +4016,11 @@ fn handle_scaffold_command(cmd: &ScaffoldCommand, storage: &Storage, db_path: &s
                     .unwrap_or_else(|| std::path::PathBuf::from("templates"))
             });
 
-            println!("{} Extracting embedded templates to: {}", "📦".blue(), dest.display());
+            println!(
+                "{} Extracting embedded templates to: {}",
+                "📦".blue(),
+                dest.display()
+            );
 
             // Create the destination directory if it doesn't exist
             if !dest.exists() {
@@ -3937,10 +4115,18 @@ fn grep_requirements(
     let fields: HashSet<&str> = if let Some(f) = field_filter {
         f.split(',').map(|s| s.trim()).collect()
     } else {
-        ["title", "description", "comments", "tags", "owner", "feature", "spec_id"]
-            .iter()
-            .copied()
-            .collect()
+        [
+            "title",
+            "description",
+            "comments",
+            "tags",
+            "owner",
+            "feature",
+            "spec_id",
+        ]
+        .iter()
+        .copied()
+        .collect()
     };
 
     // Context lines (C overrides A and B)
@@ -3967,7 +4153,11 @@ fn grep_requirements(
         }
 
         if let Some(feature_str) = feature_filter {
-            if !req.feature.to_lowercase().contains(&feature_str.to_lowercase()) {
+            if !req
+                .feature
+                .to_lowercase()
+                .contains(&feature_str.to_lowercase())
+            {
                 continue;
             }
         }
@@ -3984,7 +4174,13 @@ fn grep_requirements(
 
         // Search description
         if fields.contains("description") {
-            for m in search_multiline_field(&regex, "description", &req.description, ctx_before, ctx_after) {
+            for m in search_multiline_field(
+                &regex,
+                "description",
+                &req.description,
+                ctx_before,
+                ctx_after,
+            ) {
                 matches.push(m);
             }
         }
@@ -4024,14 +4220,24 @@ fn grep_requirements(
         // Search comments
         if fields.contains("comments") {
             for comment in &req.comments {
-                for m in search_multiline_field(&regex, &format!("comment:{}", comment.author), &comment.content, ctx_before, ctx_after) {
+                for m in search_multiline_field(
+                    &regex,
+                    &format!("comment:{}", comment.author),
+                    &comment.content,
+                    ctx_before,
+                    ctx_after,
+                ) {
                     matches.push(m);
                 }
             }
         }
 
         let has_matches = !matches.is_empty();
-        let should_show = if invert_match { !has_matches } else { has_matches };
+        let should_show = if invert_match {
+            !has_matches
+        } else {
+            has_matches
+        };
 
         if should_show {
             matching_reqs += 1;
@@ -4200,7 +4406,8 @@ fn generate_scaffold_html_report(
 ) -> Result<String> {
     use std::fmt::Write;
 
-    let mut scaffolder = Scaffolder::with_database(root.to_path_buf(), config.clone(), db_path.to_path_buf());
+    let mut scaffolder =
+        Scaffolder::with_database(root.to_path_buf(), config.clone(), db_path.to_path_buf());
     let preview = scaffolder.preview(store);
 
     let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
@@ -4208,7 +4415,9 @@ fn generate_scaffold_html_report(
     let mut html = String::new();
 
     // HTML header with inline styles
-    writeln!(html, r#"<!DOCTYPE html>
+    writeln!(
+        html,
+        r#"<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -4321,16 +4530,24 @@ fn generate_scaffold_html_report(
     </style>
 </head>
 <body>
-<div class="container">"#)?;
+<div class="container">"#
+    )?;
 
     // Header
-    writeln!(html, r#"<header>
+    writeln!(
+        html,
+        r#"<header>
     <h1>📊 AIDA Scaffold Status Report</h1>
     <p class="meta">Project: {} • Generated: {}</p>
-</header>"#, root.display(), timestamp)?;
+</header>"#,
+        root.display(),
+        timestamp
+    )?;
 
     // Summary cards
-    writeln!(html, r#"<div class="summary">
+    writeln!(
+        html,
+        r#"<div class="summary">
     <div class="summary-card">
         <div class="count green">{}</div>
         <div class="label">Matching</div>
@@ -4351,7 +4568,8 @@ fn generate_scaffold_html_report(
         status.matching.len(),
         status.modified.len(),
         status.missing.len(),
-        status.extra.len())?;
+        status.extra.len()
+    )?;
 
     // Overall status
     let overall_status = if status.is_current {
@@ -4359,27 +4577,45 @@ fn generate_scaffold_html_report(
     } else {
         r#"<p class="status-warn">⚠ Scaffold drift detected</p>"#
     };
-    writeln!(html, r#"<section><h2>Status</h2><div style="padding: 1rem 1.5rem;">{}</div></section>"#, overall_status)?;
+    writeln!(
+        html,
+        r#"<section><h2>Status</h2><div style="padding: 1rem 1.5rem;">{}</div></section>"#,
+        overall_status
+    )?;
 
     // Matching files section
     if !status.matching.is_empty() {
-        writeln!(html, r#"<section>
+        writeln!(
+            html,
+            r#"<section>
     <h2 class="status-ok">✓ Matching Files ({})</h2>
-    <ul class="file-list">"#, status.matching.len())?;
+    <ul class="file-list">"#,
+            status.matching.len()
+        )?;
         for path in &status.matching {
-            writeln!(html, r#"        <li><span class="icon">✓</span>{}</li>"#, path.display())?;
+            writeln!(
+                html,
+                r#"        <li><span class="icon">✓</span>{}</li>"#,
+                path.display()
+            )?;
         }
         writeln!(html, "    </ul>\n</section>")?;
     }
 
     // Modified files section with diffs
     if !status.modified.is_empty() {
-        writeln!(html, r#"<section>
-    <h2 class="status-warn">~ Modified Files ({})</h2>"#, status.modified.len())?;
+        writeln!(
+            html,
+            r#"<section>
+    <h2 class="status-warn">~ Modified Files ({})</h2>"#,
+            status.modified.len()
+        )?;
 
         for (path, file_status) in &status.modified {
             // Get expected content from scaffold preview
-            let expected_content = preview.artifacts.iter()
+            let expected_content = preview
+                .artifacts
+                .iter()
                 .find(|a| &a.path == path)
                 .map(|a| a.content.as_str())
                 .unwrap_or("");
@@ -4389,30 +4625,53 @@ fn generate_scaffold_html_report(
             let actual_content = std::fs::read_to_string(&full_path).unwrap_or_default();
 
             // Generate diff
-            let diff = generate_unified_diff(path.to_string_lossy().as_ref(), expected_content, &actual_content);
+            let diff = generate_unified_diff(
+                path.to_string_lossy().as_ref(),
+                expected_content,
+                &actual_content,
+            );
 
             let status_info = match file_status {
-                FileStatus::Modified { expected_lines, actual_lines } => {
-                    format!(" (expected {} lines, found {})", expected_lines, actual_lines)
+                FileStatus::Modified {
+                    expected_lines,
+                    actual_lines,
+                } => {
+                    format!(
+                        " (expected {} lines, found {})",
+                        expected_lines, actual_lines
+                    )
                 }
                 _ => String::new(),
             };
 
-            writeln!(html, r#"    <details>
+            writeln!(
+                html,
+                r#"    <details>
         <summary><span class="icon status-warn">~</span>{}{}</summary>
-        <div class="diff">"#, path.display(), status_info)?;
+        <div class="diff">"#,
+                path.display(),
+                status_info
+            )?;
 
             for line in diff.lines() {
                 let class = if line.starts_with('+') && !line.starts_with("+++") {
                     "add"
                 } else if line.starts_with('-') && !line.starts_with("---") {
                     "remove"
-                } else if line.starts_with("@@") || line.starts_with("---") || line.starts_with("+++") {
+                } else if line.starts_with("@@")
+                    || line.starts_with("---")
+                    || line.starts_with("+++")
+                {
                     "header"
                 } else {
                     "context"
                 };
-                writeln!(html, r#"<div class="diff-line {}">{}</div>"#, class, html_escape(line))?;
+                writeln!(
+                    html,
+                    r#"<div class="diff-line {}">{}</div>"#,
+                    class,
+                    html_escape(line)
+                )?;
             }
 
             writeln!(html, "        </div>\n    </details>")?;
@@ -4422,30 +4681,49 @@ fn generate_scaffold_html_report(
 
     // Missing files section
     if !status.missing.is_empty() {
-        writeln!(html, r#"<section>
+        writeln!(
+            html,
+            r#"<section>
     <h2 class="status-error">✗ Missing Files ({})</h2>
-    <ul class="file-list">"#, status.missing.len())?;
+    <ul class="file-list">"#,
+            status.missing.len()
+        )?;
         for path in &status.missing {
-            writeln!(html, r#"        <li><span class="icon status-error">✗</span>{}</li>"#, path.display())?;
+            writeln!(
+                html,
+                r#"        <li><span class="icon status-error">✗</span>{}</li>"#,
+                path.display()
+            )?;
         }
         writeln!(html, "    </ul>\n</section>")?;
     }
 
     // Extra files section
     if !status.extra.is_empty() {
-        writeln!(html, r#"<section>
+        writeln!(
+            html,
+            r#"<section>
     <h2 class="status-info">+ Extra Files ({})</h2>
-    <ul class="file-list">"#, status.extra.len())?;
+    <ul class="file-list">"#,
+            status.extra.len()
+        )?;
         for path in &status.extra {
-            writeln!(html, r#"        <li><span class="icon status-info">+</span>{}</li>"#, path.display())?;
+            writeln!(
+                html,
+                r#"        <li><span class="icon status-info">+</span>{}</li>"#,
+                path.display()
+            )?;
         }
         writeln!(html, "    </ul>\n</section>")?;
     }
 
     // Footer
-    writeln!(html, r#"</div>
+    writeln!(
+        html,
+        r#"</div>
 </body>
-</html>"#)?;
+</html>"#
+    )?;
 
     Ok(html)
 }
@@ -4509,9 +4787,15 @@ fn generate_unified_diff(filename: &str, expected: &str, actual: &str) -> String
                 // End the hunk
                 let exp_count = hunk_lines.iter().filter(|l| !l.starts_with('+')).count();
                 let act_count = hunk_lines.iter().filter(|l| !l.starts_with('-')).count();
-                writeln!(diff, "@@ -{},{} +{},{} @@",
-                    hunk_start_expected + 1, exp_count,
-                    hunk_start_actual + 1, act_count).ok();
+                writeln!(
+                    diff,
+                    "@@ -{},{} +{},{} @@",
+                    hunk_start_expected + 1,
+                    exp_count,
+                    hunk_start_actual + 1,
+                    act_count
+                )
+                .ok();
                 for line in &hunk_lines {
                     writeln!(diff, "{}", line).ok();
                 }
@@ -4525,9 +4809,15 @@ fn generate_unified_diff(filename: &str, expected: &str, actual: &str) -> String
     if !hunk_lines.is_empty() {
         let exp_count = hunk_lines.iter().filter(|l| !l.starts_with('+')).count();
         let act_count = hunk_lines.iter().filter(|l| !l.starts_with('-')).count();
-        writeln!(diff, "@@ -{},{} +{},{} @@",
-            hunk_start_expected + 1, exp_count,
-            hunk_start_actual + 1, act_count).ok();
+        writeln!(
+            diff,
+            "@@ -{},{} +{},{} @@",
+            hunk_start_expected + 1,
+            exp_count,
+            hunk_start_actual + 1,
+            act_count
+        )
+        .ok();
         for line in &hunk_lines {
             writeln!(diff, "{}", line).ok();
         }
@@ -4563,7 +4853,10 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
     };
 
     match cmd {
-        QueueCommand::List { user, include_completed } => {
+        QueueCommand::List {
+            user,
+            include_completed,
+        } => {
             let user_id = get_user(user);
             let entries = storage.queue_list(&user_id, *include_completed)?;
             let store = storage.load()?;
@@ -4577,13 +4870,12 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             println!("{}", "─".repeat(80));
 
             for (i, entry) in entries.iter().enumerate() {
-                let req = store.requirements.iter().find(|r| r.id == entry.requirement_id);
-                let spec_id = req
-                    .and_then(|r| r.spec_id.as_deref())
-                    .unwrap_or("???");
-                let title = req
-                    .map(|r| r.title.as_str())
-                    .unwrap_or("(deleted)");
+                let req = store
+                    .requirements
+                    .iter()
+                    .find(|r| r.id == entry.requirement_id);
+                let spec_id = req.and_then(|r| r.spec_id.as_deref()).unwrap_or("???");
+                let title = req.map(|r| r.title.as_str()).unwrap_or("(deleted)");
                 let status = req
                     .map(|r| format!("{}", r.status))
                     .unwrap_or_else(|| "Unknown".to_string());
@@ -4598,7 +4890,12 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     _ => status.normal(),
                 };
 
-                print!("  {}. {} {}", (i + 1).to_string().dimmed(), spec_id.bold(), title);
+                print!(
+                    "  {}. {} {}",
+                    (i + 1).to_string().dimmed(),
+                    spec_id.bold(),
+                    title
+                );
                 print!("  [{}]", status_colored);
                 if entry.added_by != user_id {
                     print!("  {}", format!("(from @{})", entry.added_by).dimmed());
@@ -4609,7 +4906,13 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 println!();
             }
         }
-        QueueCommand::Add { id, top, bottom: _, user, note } => {
+        QueueCommand::Add {
+            id,
+            top,
+            bottom: _,
+            user,
+            note,
+        } => {
             let user_id = get_user(user);
             let store = storage.load()?;
 
@@ -4617,8 +4920,12 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             let req = if let Ok(uuid) = uuid::Uuid::parse_str(id) {
                 store.requirements.iter().find(|r| r.id == uuid)
             } else {
-                store.requirements.iter().find(|r| r.spec_id.as_deref() == Some(id.as_str()))
-            }.ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", id))?;
+                store
+                    .requirements
+                    .iter()
+                    .find(|r| r.spec_id.as_deref() == Some(id.as_str()))
+            }
+            .ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", id))?;
 
             let position = if *top {
                 let entries = storage.queue_list(&user_id, true)?;
@@ -4638,7 +4945,12 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             storage.queue_add(entry)?;
 
             let spec_id = req.spec_id.as_deref().unwrap_or("???");
-            println!("{} Added {} ({}) to queue", "✓".green(), spec_id.bold(), req.title);
+            println!(
+                "{} Added {} ({}) to queue",
+                "✓".green(),
+                spec_id.bold(),
+                req.title
+            );
         }
         QueueCommand::Remove { id, user } => {
             let user_id = get_user(user);
@@ -4647,14 +4959,23 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             let req = if let Ok(uuid) = uuid::Uuid::parse_str(id) {
                 store.requirements.iter().find(|r| r.id == uuid)
             } else {
-                store.requirements.iter().find(|r| r.spec_id.as_deref() == Some(id.as_str()))
-            }.ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", id))?;
+                store
+                    .requirements
+                    .iter()
+                    .find(|r| r.spec_id.as_deref() == Some(id.as_str()))
+            }
+            .ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", id))?;
 
             storage.queue_remove(&user_id, &req.id)?;
             let spec_id = req.spec_id.as_deref().unwrap_or("???");
             println!("{} Removed {} from queue", "✓".green(), spec_id.bold());
         }
-        QueueCommand::Move { id, top, bottom, before } => {
+        QueueCommand::Move {
+            id,
+            top,
+            bottom,
+            before,
+        } => {
             let user_id = std::env::var("AIDA_USER")
                 .or_else(|_| std::env::var("USER"))
                 .unwrap_or_else(|_| "default".to_string());
@@ -4663,8 +4984,12 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             let req = if let Ok(uuid) = uuid::Uuid::parse_str(id) {
                 store.requirements.iter().find(|r| r.id == uuid)
             } else {
-                store.requirements.iter().find(|r| r.spec_id.as_deref() == Some(id.as_str()))
-            }.ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", id))?;
+                store
+                    .requirements
+                    .iter()
+                    .find(|r| r.spec_id.as_deref() == Some(id.as_str()))
+            }
+            .ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", id))?;
 
             let entries = storage.queue_list(&user_id, true)?;
             let new_position = if *top {
@@ -4675,10 +5000,15 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 let before_req = if let Ok(uuid) = uuid::Uuid::parse_str(before_id) {
                     store.requirements.iter().find(|r| r.id == uuid)
                 } else {
-                    store.requirements.iter().find(|r| r.spec_id.as_deref() == Some(before_id.as_str()))
-                }.ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", before_id))?;
+                    store
+                        .requirements
+                        .iter()
+                        .find(|r| r.spec_id.as_deref() == Some(before_id.as_str()))
+                }
+                .ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", before_id))?;
 
-                entries.iter()
+                entries
+                    .iter()
                     .find(|e| e.requirement_id == before_req.id)
                     .map(|e| e.position - 1)
                     .unwrap_or(0)
@@ -4710,7 +5040,12 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
     let rt = tokio::runtime::Runtime::new()?;
 
     match cmd {
-        GitLabCommand::Config { url, project, token, show } => {
+        GitLabCommand::Config {
+            url,
+            project,
+            token,
+            show,
+        } => {
             if *show {
                 // Show current configuration
                 match GitLabConfig::load() {
@@ -4718,7 +5053,10 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
                         println!("{}", "GitLab Configuration:".bold());
                         println!("  URL:        {}", config.url);
                         println!("  Project ID: {}", config.project_id);
-                        println!("  Enabled:    {}", if config.enabled { "yes" } else { "no" });
+                        println!(
+                            "  Enabled:    {}",
+                            if config.enabled { "yes" } else { "no" }
+                        );
                         if config.effective_token().is_some() {
                             println!("  Token:      {}", "(configured)".green());
                         } else {
@@ -4770,8 +5108,9 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
 
         GitLabCommand::Test => {
             // Test connection to GitLab
-            let config = GitLabConfig::load()?
-                .ok_or_else(|| anyhow::anyhow!("GitLab not configured. Run 'aida gitlab config' first."))?;
+            let config = GitLabConfig::load()?.ok_or_else(|| {
+                anyhow::anyhow!("GitLab not configured. Run 'aida gitlab config' first.")
+            })?;
 
             println!("Testing connection to {}...", config.url);
 
@@ -4788,9 +5127,15 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
             }
         }
 
-        GitLabCommand::List { state, labels, search, limit } => {
-            let config = GitLabConfig::load()?
-                .ok_or_else(|| anyhow::anyhow!("GitLab not configured. Run 'aida gitlab config' first."))?;
+        GitLabCommand::List {
+            state,
+            labels,
+            search,
+            limit,
+        } => {
+            let config = GitLabConfig::load()?.ok_or_else(|| {
+                anyhow::anyhow!("GitLab not configured. Run 'aida gitlab config' first.")
+            })?;
 
             let client = GitLabClient::new(config)?;
 
@@ -4845,8 +5190,9 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
         }
 
         GitLabCommand::Show { iid } => {
-            let config = GitLabConfig::load()?
-                .ok_or_else(|| anyhow::anyhow!("GitLab not configured. Run 'aida gitlab config' first."))?;
+            let config = GitLabConfig::load()?.ok_or_else(|| {
+                anyhow::anyhow!("GitLab not configured. Run 'aida gitlab config' first.")
+            })?;
 
             let client = GitLabClient::new(config)?;
 
@@ -4891,11 +5237,14 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
 
         // trace:STORY-0325 | ai:claude
         GitLabCommand::Status { id, diverged } => {
-            use aida_core::{GitLabSyncState, SyncStatus, LinkOrigin};
+            use aida_core::{GitLabSyncState, LinkOrigin, SyncStatus};
 
             // Check if storage is SQLite (sync state only works with SQLite)
             if !storage.is_sqlite() {
-                println!("{}", "GitLab sync status is only available for SQLite databases.".yellow());
+                println!(
+                    "{}",
+                    "GitLab sync status is only available for SQLite databases.".yellow()
+                );
                 return Ok(());
             }
 
@@ -4904,11 +5253,9 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
             // Load sync states based on filter
             let sync_states = if let Some(req_id) = id {
                 // Find the requirement by spec_id or UUID
-                let requirement = store.requirements.iter()
-                    .find(|r| {
-                        r.spec_id.as_deref() == Some(req_id.as_str())
-                            || r.id.to_string() == *req_id
-                    });
+                let requirement = store.requirements.iter().find(|r| {
+                    r.spec_id.as_deref() == Some(req_id.as_str()) || r.id.to_string() == *req_id
+                });
 
                 if let Some(req) = requirement {
                     storage.load_sync_states_for_requirement(req.id)?
@@ -4922,7 +5269,8 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
 
             // Filter by diverged if requested
             let sync_states: Vec<_> = if *diverged {
-                sync_states.into_iter()
+                sync_states
+                    .into_iter()
                     .filter(|s| !matches!(s.sync_status, SyncStatus::InSync))
                     .collect()
             } else {
@@ -4945,7 +5293,9 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
 
             for state in &sync_states {
                 // Find the requirement for this sync state
-                let req = store.requirements.iter()
+                let req = store
+                    .requirements
+                    .iter()
                     .find(|r| r.id == state.requirement_id);
 
                 let req_display = if let Some(r) = req {
@@ -4986,7 +5336,11 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
                     origin_text.dimmed(),
                     state.gitlab_issue_iid,
                     status_text,
-                    state.last_sync.format("%Y-%m-%d %H:%M").to_string().dimmed()
+                    state
+                        .last_sync
+                        .format("%Y-%m-%d %H:%M")
+                        .to_string()
+                        .dimmed()
                 );
 
                 if let Some(error) = &state.last_error {
@@ -4998,13 +5352,23 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
             println!(
                 "Total: {} links ({} in sync, {} diverged)",
                 sync_states.len(),
-                sync_states.iter().filter(|s| matches!(s.sync_status, SyncStatus::InSync)).count(),
-                sync_states.iter().filter(|s| !matches!(s.sync_status, SyncStatus::InSync)).count()
+                sync_states
+                    .iter()
+                    .filter(|s| matches!(s.sync_status, SyncStatus::InSync))
+                    .count(),
+                sync_states
+                    .iter()
+                    .filter(|s| !matches!(s.sync_status, SyncStatus::InSync))
+                    .count()
             );
         }
 
         // trace:STORY-0326 | ai:claude
-        GitLabCommand::Labels { validate, create_missing, init } => {
+        GitLabCommand::Labels {
+            validate,
+            create_missing,
+            init,
+        } => {
             // Load or create config
             let mut config = GitLabConfig::load()?.unwrap_or_default();
 
@@ -5025,7 +5389,10 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
 
             println!("\n{}", "Type Mappings:".bold());
             if config.labels.types.is_empty() {
-                println!("  {} (use --init to set defaults)", "(none configured)".dimmed());
+                println!(
+                    "  {} (use --init to set defaults)",
+                    "(none configured)".dimmed()
+                );
             } else {
                 for (aida_type, gitlab_label) in &config.labels.types {
                     println!("  {} → {}", aida_type, gitlab_label.cyan());
@@ -5034,7 +5401,10 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
 
             println!("\n{}", "Priority Mappings:".bold());
             if config.labels.priorities.is_empty() {
-                println!("  {} (use --init to set defaults)", "(none configured)".dimmed());
+                println!(
+                    "  {} (use --init to set defaults)",
+                    "(none configured)".dimmed()
+                );
             } else {
                 for (priority, gitlab_label) in &config.labels.priorities {
                     println!("  {} → {}", priority, gitlab_label.cyan());
@@ -5043,14 +5413,24 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
 
             println!("\n{}", "Status Mappings:".bold());
             if config.labels.statuses.is_empty() {
-                println!("  {} (use --init to set defaults)", "(none configured)".dimmed());
+                println!(
+                    "  {} (use --init to set defaults)",
+                    "(none configured)".dimmed()
+                );
             } else {
                 for (status, gitlab_label) in &config.labels.statuses {
                     println!("  {} → {}", status, gitlab_label.cyan());
                 }
             }
 
-            println!("\nAuto-create labels: {}", if config.labels.auto_create_labels { "yes".green() } else { "no".dimmed() });
+            println!(
+                "\nAuto-create labels: {}",
+                if config.labels.auto_create_labels {
+                    "yes".green()
+                } else {
+                    "no".dimmed()
+                }
+            );
 
             // Validate labels if requested
             if *validate || *create_missing {
@@ -5066,9 +5446,8 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
 
                 // Get all labels from GitLab project
                 let gitlab_labels = rt.block_on(client.list_labels())?;
-                let gitlab_label_names: std::collections::HashSet<_> = gitlab_labels.iter()
-                    .map(|l| l.name.clone())
-                    .collect();
+                let gitlab_label_names: std::collections::HashSet<_> =
+                    gitlab_labels.iter().map(|l| l.name.clone()).collect();
 
                 // Get all mapped labels
                 let mapped_labels = config.labels.all_labels();
@@ -5084,9 +5463,15 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
                 }
 
                 println!("\n{}", "Validation Results:".bold());
-                println!("  {} labels found in GitLab", found_labels.len().to_string().green());
+                println!(
+                    "  {} labels found in GitLab",
+                    found_labels.len().to_string().green()
+                );
                 if !missing_labels.is_empty() {
-                    println!("  {} labels missing:", missing_labels.len().to_string().yellow());
+                    println!(
+                        "  {} labels missing:",
+                        missing_labels.len().to_string().yellow()
+                    );
                     for label in &missing_labels {
                         println!("    - {}", label.yellow());
                     }
@@ -5100,9 +5485,13 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
                         let color = if label.starts_with("type::") {
                             "#428BCA" // Blue for types
                         } else if label.starts_with("priority::") {
-                            if label.contains("high") { "#DC3545" }
-                            else if label.contains("low") { "#28A745" }
-                            else { "#FFC107" }
+                            if label.contains("high") {
+                                "#DC3545"
+                            } else if label.contains("low") {
+                                "#28A745"
+                            } else {
+                                "#FFC107"
+                            }
                         } else if label.starts_with("status::") {
                             "#6C757D" // Gray for status
                         } else {
@@ -5120,17 +5509,21 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
 
         // trace:STORY-0327 | ai:claude
         GitLabCommand::Refresh { id, force } => {
-            use aida_core::{GitLabSyncState, SyncStatus, IssueFilter};
+            use aida_core::{GitLabSyncState, IssueFilter, SyncStatus};
 
             // Check if storage is SQLite (sync state only works with SQLite)
             if !storage.is_sqlite() {
-                println!("{}", "GitLab refresh is only available for SQLite databases.".yellow());
+                println!(
+                    "{}",
+                    "GitLab refresh is only available for SQLite databases.".yellow()
+                );
                 return Ok(());
             }
 
             // Load GitLab config
-            let config = GitLabConfig::load()?
-                .ok_or_else(|| anyhow::anyhow!("GitLab not configured. Run 'aida gitlab config' first."))?;
+            let config = GitLabConfig::load()?.ok_or_else(|| {
+                anyhow::anyhow!("GitLab not configured. Run 'aida gitlab config' first.")
+            })?;
 
             let Some(token) = config.effective_token() else {
                 return Err(anyhow::anyhow!("GitLab token required. Set AIDA_GITLAB_TOKEN or run 'aida gitlab config --token <TOKEN>'"));
@@ -5145,11 +5538,9 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
             // Get sync states to refresh
             let sync_states = if let Some(req_id) = id {
                 // Find the requirement by spec_id or UUID
-                let requirement = store.requirements.iter()
-                    .find(|r| {
-                        r.spec_id.as_deref() == Some(req_id.as_str())
-                            || r.id.to_string() == *req_id
-                    });
+                let requirement = store.requirements.iter().find(|r| {
+                    r.spec_id.as_deref() == Some(req_id.as_str()) || r.id.to_string() == *req_id
+                });
 
                 if let Some(req) = requirement {
                     storage.load_sync_states_for_requirement(req.id)?
@@ -5171,26 +5562,24 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
             println!("{}", "─".repeat(60));
 
             // Collect all issue IIDs to fetch
-            let iids: Vec<u64> = sync_states.iter()
-                .map(|s| s.gitlab_issue_iid)
-                .collect();
+            let iids: Vec<u64> = sync_states.iter().map(|s| s.gitlab_issue_iid).collect();
 
             // Fetch issues from GitLab
             let filter = IssueFilter::default().with_iids(iids);
             let issues = rt.block_on(client.list_issues(Some(filter)))?;
 
             // Create a map of IID -> Issue for quick lookup
-            let issue_map: std::collections::HashMap<u64, _> = issues
-                .into_iter()
-                .map(|i| (i.iid, i))
-                .collect();
+            let issue_map: std::collections::HashMap<u64, _> =
+                issues.into_iter().map(|i| (i.iid, i)).collect();
 
             let mut updated_count = 0;
             let mut error_count = 0;
 
             for mut state in sync_states {
                 // Find the requirement
-                let req = store.requirements.iter()
+                let req = store
+                    .requirements
+                    .iter()
                     .find(|r| r.id == state.requirement_id);
 
                 let req_display = if let Some(r) = req {
@@ -5236,7 +5625,13 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
                         }
 
                         if let Err(e) = storage.save_sync_state(&state) {
-                            println!("  {} {} GL-{}: {}", "✗".red(), req_display, state.gitlab_issue_iid, e);
+                            println!(
+                                "  {} {} GL-{}: {}",
+                                "✗".red(),
+                                req_display,
+                                state.gitlab_issue_iid,
+                                e
+                            );
                             error_count += 1;
                         } else {
                             let status_indicator = match new_status {
@@ -5246,14 +5641,29 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
                                 SyncStatus::Conflict => "⚠".red(),
                                 _ => "?".dimmed(),
                             };
-                            println!("  {} {} GL-{}: {}", status_indicator, req_display, state.gitlab_issue_iid, new_status);
+                            println!(
+                                "  {} {} GL-{}: {}",
+                                status_indicator, req_display, state.gitlab_issue_iid, new_status
+                            );
                             updated_count += 1;
                         }
                     } else {
-                        println!("  {} {} GL-{}: {} (unchanged)", "·".dimmed(), req_display, state.gitlab_issue_iid, old_status);
+                        println!(
+                            "  {} {} GL-{}: {} (unchanged)",
+                            "·".dimmed(),
+                            req_display,
+                            state.gitlab_issue_iid,
+                            old_status
+                        );
                     }
                 } else {
-                    println!("  {} {} GL-{}: {}", "?".yellow(), req_display, state.gitlab_issue_iid, "Issue not found in GitLab");
+                    println!(
+                        "  {} {} GL-{}: {}",
+                        "?".yellow(),
+                        req_display,
+                        state.gitlab_issue_iid,
+                        "Issue not found in GitLab"
+                    );
                     error_count += 1;
                 }
             }
@@ -5262,53 +5672,82 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
             println!(
                 "Refreshed: {} updated, {} errors",
                 updated_count.to_string().green(),
-                if error_count > 0 { error_count.to_string().red() } else { "0".dimmed() }
+                if error_count > 0 {
+                    error_count.to_string().red()
+                } else {
+                    "0".dimmed()
+                }
             );
         }
 
         // trace:STORY-0327 | ai:claude
-        GitLabCommand::Poll { action, interval } => {
-            match action.to_lowercase().as_str() {
-                "status" => {
-                    let config = GitLabConfig::load()?;
-                    if let Some(config) = config {
-                        println!("{}", "GitLab Polling Configuration".bold());
-                        println!("{}", "─".repeat(40));
-                        println!("Polling enabled: {}", if config.polling.enabled { "yes".green() } else { "no".dimmed() });
-                        println!("Interval: {} seconds ({} minutes)", config.polling.interval_seconds, config.polling.interval_seconds / 60);
-                        println!("Batch size: {}", config.polling.batch_size);
-                        println!("Max concurrent: {}", config.polling.max_concurrent);
-                        println!();
-                        println!("{}", "Note: Background polling runs in the AIDA GUI.".dimmed());
-                        println!("{}", "Use 'aida gitlab refresh' for manual sync.".dimmed());
-                    } else {
-                        println!("{}", "GitLab not configured.".yellow());
-                    }
-                }
-                "start" => {
-                    println!("{}", "Background polling is managed by the AIDA GUI.".yellow());
+        GitLabCommand::Poll { action, interval } => match action.to_lowercase().as_str() {
+            "status" => {
+                let config = GitLabConfig::load()?;
+                if let Some(config) = config {
+                    println!("{}", "GitLab Polling Configuration".bold());
+                    println!("{}", "─".repeat(40));
+                    println!(
+                        "Polling enabled: {}",
+                        if config.polling.enabled {
+                            "yes".green()
+                        } else {
+                            "no".dimmed()
+                        }
+                    );
+                    println!(
+                        "Interval: {} seconds ({} minutes)",
+                        config.polling.interval_seconds,
+                        config.polling.interval_seconds / 60
+                    );
+                    println!("Batch size: {}", config.polling.batch_size);
+                    println!("Max concurrent: {}", config.polling.max_concurrent);
                     println!();
-                    println!("To enable polling:");
-                    println!("  1. Open AIDA GUI");
-                    println!("  2. Go to Settings > GitLab");
-                    println!("  3. Enable 'Background Polling'");
-                    println!();
-                    println!("For CLI-based polling, use a cron job or scheduled task:");
-                    println!("  {} aida gitlab refresh", format!("*/{} * * * *", interval / 60).dimmed());
-                }
-                "stop" => {
-                    println!("{}", "Background polling is managed by the AIDA GUI.".yellow());
-                    println!();
-                    println!("To disable polling:");
-                    println!("  1. Open AIDA GUI");
-                    println!("  2. Go to Settings > GitLab");
-                    println!("  3. Disable 'Background Polling'");
-                }
-                _ => {
-                    println!("{}: Unknown action '{}'. Use: status, start, stop", "Error".red(), action);
+                    println!(
+                        "{}",
+                        "Note: Background polling runs in the AIDA GUI.".dimmed()
+                    );
+                    println!("{}", "Use 'aida gitlab refresh' for manual sync.".dimmed());
+                } else {
+                    println!("{}", "GitLab not configured.".yellow());
                 }
             }
-        }
+            "start" => {
+                println!(
+                    "{}",
+                    "Background polling is managed by the AIDA GUI.".yellow()
+                );
+                println!();
+                println!("To enable polling:");
+                println!("  1. Open AIDA GUI");
+                println!("  2. Go to Settings > GitLab");
+                println!("  3. Enable 'Background Polling'");
+                println!();
+                println!("For CLI-based polling, use a cron job or scheduled task:");
+                println!(
+                    "  {} aida gitlab refresh",
+                    format!("*/{} * * * *", interval / 60).dimmed()
+                );
+            }
+            "stop" => {
+                println!(
+                    "{}",
+                    "Background polling is managed by the AIDA GUI.".yellow()
+                );
+                println!();
+                println!("To disable polling:");
+                println!("  1. Open AIDA GUI");
+                println!("  2. Go to Settings > GitLab");
+                println!("  3. Disable 'Background Polling'");
+            }
+            _ => {
+                println!(
+                    "{}: Unknown action '{}'. Use: status, start, stop",
+                    "Error".red(),
+                    action
+                );
+            }
+        },
     }
 
     Ok(())

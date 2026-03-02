@@ -11,16 +11,16 @@ use std::sync::Mutex;
 use uuid::Uuid;
 
 use crate::models::{
-    Comment, CustomTypeDefinition, FeatureDefinition,
-    HistoryEntry, IdConfiguration, ImplementationInfo, QueueEntry, ReactionDefinition,
-    RelationshipDefinition, Relationship, Requirement, RequirementPriority,
-    RequirementStatus, RequirementType, RequirementsStore, TraceLink, UrlLink, User,
+    Attachment, Comment, CustomTypeDefinition, FeatureDefinition, GitLabIssueLink, HistoryEntry,
+    IdConfiguration, ImplementationInfo, QueueEntry, ReactionDefinition, Relationship,
+    RelationshipDefinition, Requirement, RequirementPriority, RequirementStatus, RequirementType,
+    RequirementsStore, TraceLink, UrlLink, User,
 };
 
 use super::traits::{BackendType, DatabaseBackend};
 
-/// Current schema version - updated to 7 for queue_entries table
-const SCHEMA_VERSION: i32 = 7;
+/// Current schema version - updated to 8 for requirement weight/attachments/gitlab issues
+const SCHEMA_VERSION: i32 = 8;
 
 /// SQLite backend implementation
 pub struct SqliteBackend {
@@ -58,11 +58,9 @@ impl SqliteBackend {
 
         // Check current schema version
         let current_version: i32 = conn
-            .query_row(
-                "SELECT version FROM schema_version LIMIT 1",
-                [],
-                |row| row.get(0),
-            )
+            .query_row("SELECT version FROM schema_version LIMIT 1", [], |row| {
+                row.get(0)
+            })
             .unwrap_or(0);
 
         if current_version == 0 {
@@ -103,7 +101,8 @@ impl SqliteBackend {
                 -- Update schema version
                 UPDATE schema_version SET version = 2;
                 "#,
-            ).unwrap_or_else(|e| {
+            )
+            .unwrap_or_else(|e| {
                 // Some columns may already exist, ignore those errors
                 eprintln!("Note: Some migration columns may already exist: {}", e);
             });
@@ -126,7 +125,8 @@ impl SqliteBackend {
                 -- Update schema version
                 UPDATE schema_version SET version = 3;
                 "#,
-            ).unwrap_or_else(|e| {
+            )
+            .unwrap_or_else(|e| {
                 // Some columns may already exist, ignore those errors
                 eprintln!("Note: Some v3 migration columns may already exist: {}", e);
             });
@@ -146,7 +146,8 @@ impl SqliteBackend {
                 -- Update schema version
                 UPDATE schema_version SET version = 4;
                 "#,
-            ).unwrap_or_else(|e| {
+            )
+            .unwrap_or_else(|e| {
                 // Column may already exist, ignore those errors
                 eprintln!("Note: Some v4 migration columns may already exist: {}", e);
             });
@@ -207,7 +208,8 @@ impl SqliteBackend {
                 -- Update schema version
                 UPDATE schema_version SET version = 6;
                 "#,
-            ).unwrap_or_else(|e| {
+            )
+            .unwrap_or_else(|e| {
                 eprintln!("Note: Some v6 migration may already exist: {}", e);
             });
 
@@ -243,6 +245,24 @@ impl SqliteBackend {
 
             // Ensure schema version is updated
             let _ = conn.execute("UPDATE schema_version SET version = 7", []);
+        }
+
+        // Migrate from version 7 to version 8 (persist additional requirement fields)
+        if from_version < 8 {
+            conn.execute_batch(
+                r#"
+                ALTER TABLE requirements ADD COLUMN weight REAL;
+                ALTER TABLE requirements ADD COLUMN attachments TEXT NOT NULL DEFAULT '[]';
+                ALTER TABLE requirements ADD COLUMN gitlab_issues TEXT NOT NULL DEFAULT '[]';
+
+                UPDATE schema_version SET version = 8;
+                "#,
+            )
+            .unwrap_or_else(|e| {
+                eprintln!("Note: Some v8 migration columns may already exist: {}", e);
+            });
+
+            let _ = conn.execute("UPDATE schema_version SET version = 8", []);
         }
 
         Ok(())
@@ -344,25 +364,28 @@ impl SqliteBackend {
     /// Load requirements from database
     fn load_requirements(&self, conn: &Connection) -> Result<Vec<Requirement>> {
         // Check if new columns exist (for schema migration compatibility)
-        let has_trace_links = conn.query_row(
-            "SELECT COUNT(*) FROM pragma_table_info('requirements') WHERE name='trace_links'",
-            [],
-            |row| row.get::<_, i32>(0),
-        ).unwrap_or(0) > 0;
+        let has_trace_links = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('requirements') WHERE name='trace_links'",
+                [],
+                |row| row.get::<_, i32>(0),
+            )
+            .unwrap_or(0)
+            > 0;
 
         let query = if has_trace_links {
             "SELECT id, spec_id, prefix_override, title, description, status, priority,
                     owner, feature, created_at, created_by, modified_at, req_type,
                     dependencies, tags, relationships, comments, history, archived,
                     custom_status, custom_priority, custom_fields, urls, trace_links,
-                    implementation_info, ai_evaluation, version
+                    implementation_info, ai_evaluation, weight, attachments, gitlab_issues, version
              FROM requirements ORDER BY created_at"
         } else {
             "SELECT id, spec_id, prefix_override, title, description, status, priority,
                     owner, feature, created_at, created_by, modified_at, req_type,
                     dependencies, tags, relationships, comments, history, archived,
                     custom_status, custom_priority, custom_fields, urls, NULL as trace_links,
-                    NULL as implementation_info, ai_evaluation, version
+                    NULL as implementation_info, ai_evaluation, NULL as weight, '[]' as attachments, '[]' as gitlab_issues, version
              FROM requirements ORDER BY created_at"
         };
 
@@ -395,25 +418,78 @@ impl SqliteBackend {
             let trace_links_json: Option<String> = row.get(23)?;
             let implementation_info_json: Option<String> = row.get(24)?;
             let ai_evaluation_json: Option<String> = row.get(25)?;
-            let version: i64 = row.get(26)?;
+            let weight: Option<f32> = row.get(26)?;
+            let attachments_json: String = row.get(27)?;
+            let gitlab_issues_json: String = row.get(28)?;
+            let version: i64 = row.get(29)?;
 
             Ok((
-                id_str, spec_id, prefix_override, title, description, status_str, priority_str,
-                owner, feature, created_at_str, created_by, modified_at_str, req_type_str,
-                dependencies_json, tags_json, relationships_json, comments_json, history_json,
-                archived, custom_status, custom_priority, custom_fields_json, urls_json,
-                trace_links_json, implementation_info_json, ai_evaluation_json, version
+                id_str,
+                spec_id,
+                prefix_override,
+                title,
+                description,
+                status_str,
+                priority_str,
+                owner,
+                feature,
+                created_at_str,
+                created_by,
+                modified_at_str,
+                req_type_str,
+                dependencies_json,
+                tags_json,
+                relationships_json,
+                comments_json,
+                history_json,
+                archived,
+                custom_status,
+                custom_priority,
+                custom_fields_json,
+                urls_json,
+                trace_links_json,
+                implementation_info_json,
+                ai_evaluation_json,
+                weight,
+                attachments_json,
+                gitlab_issues_json,
+                version,
             ))
         })?;
 
         let mut requirements = Vec::new();
         for row_result in rows {
             let (
-                id_str, spec_id, prefix_override, title, description, status_str, priority_str,
-                owner, feature, created_at_str, created_by, modified_at_str, req_type_str,
-                dependencies_json, tags_json, relationships_json, comments_json, history_json,
-                archived, custom_status, custom_priority, custom_fields_json, urls_json,
-                trace_links_json, implementation_info_json, ai_evaluation_json, version
+                id_str,
+                spec_id,
+                prefix_override,
+                title,
+                description,
+                status_str,
+                priority_str,
+                owner,
+                feature,
+                created_at_str,
+                created_by,
+                modified_at_str,
+                req_type_str,
+                dependencies_json,
+                tags_json,
+                relationships_json,
+                comments_json,
+                history_json,
+                archived,
+                custom_status,
+                custom_priority,
+                custom_fields_json,
+                urls_json,
+                trace_links_json,
+                implementation_info_json,
+                ai_evaluation_json,
+                weight,
+                attachments_json,
+                gitlab_issues_json,
+                version,
             ) = row_result?;
 
             let id = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4());
@@ -428,18 +504,23 @@ impl SqliteBackend {
                 .unwrap_or_else(|_| chrono::Utc::now());
             let dependencies: Vec<Uuid> = Self::from_json(&dependencies_json).unwrap_or_default();
             let tags: HashSet<String> = Self::from_json(&tags_json).unwrap_or_default();
-            let relationships: Vec<Relationship> = Self::from_json(&relationships_json).unwrap_or_default();
+            let relationships: Vec<Relationship> =
+                Self::from_json(&relationships_json).unwrap_or_default();
             let comments: Vec<Comment> = Self::from_json(&comments_json).unwrap_or_default();
             let history: Vec<HistoryEntry> = Self::from_json(&history_json).unwrap_or_default();
-            let custom_fields: HashMap<String, String> = Self::from_json(&custom_fields_json).unwrap_or_default();
+            let custom_fields: HashMap<String, String> =
+                Self::from_json(&custom_fields_json).unwrap_or_default();
             let urls: Vec<UrlLink> = Self::from_json(&urls_json).unwrap_or_default();
             let trace_links: Vec<TraceLink> = trace_links_json
                 .and_then(|json| Self::from_json(&json).ok())
                 .unwrap_or_default();
-            let implementation_info: Option<ImplementationInfo> = implementation_info_json
-                .and_then(|json| Self::from_json(&json).ok());
-            let ai_evaluation = ai_evaluation_json
-                .and_then(|json| Self::from_json(&json).ok());
+            let implementation_info: Option<ImplementationInfo> =
+                implementation_info_json.and_then(|json| Self::from_json(&json).ok());
+            let ai_evaluation = ai_evaluation_json.and_then(|json| Self::from_json(&json).ok());
+            let attachments: Vec<Attachment> =
+                Self::from_json(&attachments_json).unwrap_or_default();
+            let gitlab_issues: Vec<GitLabIssueLink> =
+                Self::from_json(&gitlab_issues_json).unwrap_or_default();
 
             requirements.push(Requirement {
                 id,
@@ -455,10 +536,10 @@ impl SqliteBackend {
                 created_by,
                 modified_at,
                 req_type,
-                meta_subtype: None,  // Loaded separately if needed
+                meta_subtype: None, // Loaded separately if needed
                 dependencies,
                 tags,
-                weight: None,  // TODO: Add weight column to schema
+                weight,
                 relationships,
                 comments,
                 history,
@@ -467,9 +548,9 @@ impl SqliteBackend {
                 custom_priority,
                 custom_fields,
                 urls,
-                attachments: Vec::new(),  // TODO: Add attachments column to schema
+                attachments,
                 trace_links,
-                gitlab_issues: Vec::new(),  // TODO: Add gitlab_issues column to schema
+                gitlab_issues,
                 implementation_info,
                 ai_evaluation,
                 version,
@@ -495,7 +576,17 @@ impl SqliteBackend {
             let created_at_str: String = row.get(6)?;
             let archived: bool = row.get(7)?;
             let version: i64 = row.get(8)?;
-            Ok((id_str, spec_id, name, email, handle, pin_hash, created_at_str, archived, version))
+            Ok((
+                id_str,
+                spec_id,
+                name,
+                email,
+                handle,
+                pin_hash,
+                created_at_str,
+                archived,
+                version,
+            ))
         })?;
 
         let mut users = Vec::new();
@@ -523,7 +614,19 @@ impl SqliteBackend {
     }
 
     /// Load metadata from database
-    fn load_metadata(&self, conn: &Connection) -> Result<(String, String, String, IdConfiguration, u32, u32, HashMap<String, u32>, HashMap<String, u32>)> {
+    fn load_metadata(
+        &self,
+        conn: &Connection,
+    ) -> Result<(
+        String,
+        String,
+        String,
+        IdConfiguration,
+        u32,
+        u32,
+        HashMap<String, u32>,
+        HashMap<String, u32>,
+    )> {
         let row = conn.query_row(
             "SELECT name, title, description, id_config, next_feature_number, next_spec_number, prefix_counters, meta_counters
              FROM metadata WHERE id = 1",
@@ -542,22 +645,52 @@ impl SqliteBackend {
         ).optional()?;
 
         match row {
-            Some((name, title, description, id_config_json, next_feature_number, next_spec_number, prefix_counters_json, meta_counters_json)) => {
-                let id_config: IdConfiguration = Self::from_json(&id_config_json).unwrap_or_default();
-                let prefix_counters: HashMap<String, u32> = Self::from_json(&prefix_counters_json).unwrap_or_default();
-                let meta_counters: HashMap<String, u32> = Self::from_json(&meta_counters_json).unwrap_or_default();
-                Ok((name, title, description, id_config, next_feature_number, next_spec_number, prefix_counters, meta_counters))
+            Some((
+                name,
+                title,
+                description,
+                id_config_json,
+                next_feature_number,
+                next_spec_number,
+                prefix_counters_json,
+                meta_counters_json,
+            )) => {
+                let id_config: IdConfiguration =
+                    Self::from_json(&id_config_json).unwrap_or_default();
+                let prefix_counters: HashMap<String, u32> =
+                    Self::from_json(&prefix_counters_json).unwrap_or_default();
+                let meta_counters: HashMap<String, u32> =
+                    Self::from_json(&meta_counters_json).unwrap_or_default();
+                Ok((
+                    name,
+                    title,
+                    description,
+                    id_config,
+                    next_feature_number,
+                    next_spec_number,
+                    prefix_counters,
+                    meta_counters,
+                ))
             }
-            None => {
-                Ok((String::new(), String::new(), String::new(), IdConfiguration::default(), 1, 1, HashMap::new(), HashMap::new()))
-            }
+            None => Ok((
+                String::new(),
+                String::new(),
+                String::new(),
+                IdConfiguration::default(),
+                1,
+                1,
+                HashMap::new(),
+                HashMap::new(),
+            )),
         }
     }
 
     /// Load features from database
     fn load_features(&self, conn: &Connection) -> Result<Vec<FeatureDefinition>> {
         let json: String = conn
-            .query_row("SELECT features FROM metadata WHERE id = 1", [], |row| row.get(0))
+            .query_row("SELECT features FROM metadata WHERE id = 1", [], |row| {
+                row.get(0)
+            })
             .unwrap_or_else(|_| "[]".to_string());
         Self::from_json(&json)
     }
@@ -565,7 +698,11 @@ impl SqliteBackend {
     /// Load type definitions from database
     fn load_type_definitions(&self, conn: &Connection) -> Result<Vec<CustomTypeDefinition>> {
         let json: String = conn
-            .query_row("SELECT type_definitions FROM metadata WHERE id = 1", [], |row| row.get(0))
+            .query_row(
+                "SELECT type_definitions FROM metadata WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
             .unwrap_or_else(|_| "[]".to_string());
         let defs: Vec<CustomTypeDefinition> = Self::from_json(&json)?;
         if defs.is_empty() {
@@ -576,9 +713,16 @@ impl SqliteBackend {
     }
 
     /// Load relationship definitions from database
-    fn load_relationship_definitions(&self, conn: &Connection) -> Result<Vec<RelationshipDefinition>> {
+    fn load_relationship_definitions(
+        &self,
+        conn: &Connection,
+    ) -> Result<Vec<RelationshipDefinition>> {
         let json: String = conn
-            .query_row("SELECT relationship_definitions FROM metadata WHERE id = 1", [], |row| row.get(0))
+            .query_row(
+                "SELECT relationship_definitions FROM metadata WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
             .unwrap_or_else(|_| "[]".to_string());
         let defs: Vec<RelationshipDefinition> = Self::from_json(&json)?;
         if defs.is_empty() {
@@ -591,7 +735,11 @@ impl SqliteBackend {
     /// Load reaction definitions from database
     fn load_reaction_definitions(&self, conn: &Connection) -> Result<Vec<ReactionDefinition>> {
         let json: String = conn
-            .query_row("SELECT reaction_definitions FROM metadata WHERE id = 1", [], |row| row.get(0))
+            .query_row(
+                "SELECT reaction_definitions FROM metadata WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
             .unwrap_or_else(|_| "[]".to_string());
         let defs: Vec<ReactionDefinition> = Self::from_json(&json)?;
         if defs.is_empty() {
@@ -603,40 +751,51 @@ impl SqliteBackend {
 
     /// Load allowed prefixes from database
     fn load_allowed_prefixes(&self, conn: &Connection) -> Result<(Vec<String>, bool)> {
-        let row = conn.query_row(
-            "SELECT allowed_prefixes, restrict_prefixes FROM metadata WHERE id = 1",
-            [],
-            |row| {
-                let json: String = row.get(0)?;
-                let restrict: bool = row.get(1)?;
-                Ok((json, restrict))
-            }
-        ).optional()?;
+        let row = conn
+            .query_row(
+                "SELECT allowed_prefixes, restrict_prefixes FROM metadata WHERE id = 1",
+                [],
+                |row| {
+                    let json: String = row.get(0)?;
+                    let restrict: bool = row.get(1)?;
+                    Ok((json, restrict))
+                },
+            )
+            .optional()?;
 
         match row {
             Some((json, restrict)) => {
                 let prefixes: Vec<String> = Self::from_json(&json).unwrap_or_default();
                 Ok((prefixes, restrict))
             }
-            None => Ok((Vec::new(), false))
+            None => Ok((Vec::new(), false)),
         }
     }
 
     /// Save a requirement to the database (for full store save)
     fn save_requirement(&self, conn: &Connection, req: &Requirement) -> Result<()> {
-        let ai_eval_json = req.ai_evaluation.as_ref()
+        let ai_eval_json = req
+            .ai_evaluation
+            .as_ref()
             .map(|e| Self::to_json(e))
             .transpose()?;
-        let impl_info_json = req.implementation_info.as_ref()
+        let impl_info_json = req
+            .implementation_info
+            .as_ref()
             .map(|i| Self::to_json(i))
             .transpose()?;
+        let attachments_json = Self::to_json(&req.attachments)?;
+        let gitlab_issues_json = Self::to_json(&req.gitlab_issues)?;
 
         // Check if new columns exist and use appropriate query
-        let has_trace_links = conn.query_row(
-            "SELECT COUNT(*) FROM pragma_table_info('requirements') WHERE name='trace_links'",
-            [],
-            |row| row.get::<_, i32>(0),
-        ).unwrap_or(0) > 0;
+        let has_trace_links = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('requirements') WHERE name='trace_links'",
+                [],
+                |row| row.get::<_, i32>(0),
+            )
+            .unwrap_or(0)
+            > 0;
 
         if has_trace_links {
             conn.execute(
@@ -644,8 +803,8 @@ impl SqliteBackend {
                  (id, spec_id, prefix_override, title, description, status, priority, owner, feature,
                   created_at, created_by, modified_at, req_type, dependencies, tags, relationships,
                   comments, history, archived, custom_status, custom_priority, custom_fields, urls,
-                  trace_links, implementation_info, ai_evaluation, version)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)",
+                  trace_links, implementation_info, ai_evaluation, weight, attachments, gitlab_issues, version)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30)",
                 params![
                     req.id.to_string(),
                     req.spec_id,
@@ -673,6 +832,9 @@ impl SqliteBackend {
                     Self::to_json(&req.trace_links)?,
                     impl_info_json,
                     ai_eval_json,
+                    req.weight,
+                    attachments_json,
+                    gitlab_issues_json,
                     req.version,
                 ],
             )?;
@@ -772,7 +934,11 @@ impl SqliteBackend {
     /// Load store_version from metadata
     fn load_store_version(&self, conn: &Connection) -> Result<i64> {
         let version: i64 = conn
-            .query_row("SELECT store_version FROM metadata WHERE id = 1", [], |row| row.get(0))
+            .query_row(
+                "SELECT store_version FROM metadata WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
             .unwrap_or(1);
         Ok(version)
     }
@@ -780,7 +946,9 @@ impl SqliteBackend {
     /// Load ai_prompts from metadata
     fn load_ai_prompts(&self, conn: &Connection) -> Result<crate::models::AiPromptConfig> {
         let json: String = conn
-            .query_row("SELECT ai_prompts FROM metadata WHERE id = 1", [], |row| row.get(0))
+            .query_row("SELECT ai_prompts FROM metadata WHERE id = 1", [], |row| {
+                row.get(0)
+            })
             .unwrap_or_else(|_| "{}".to_string());
         Self::from_json(&json).or_else(|_| Ok(crate::models::AiPromptConfig::default()))
     }
@@ -788,7 +956,9 @@ impl SqliteBackend {
     /// Load baselines from metadata
     fn load_baselines(&self, conn: &Connection) -> Result<Vec<crate::models::Baseline>> {
         let json: String = conn
-            .query_row("SELECT baselines FROM metadata WHERE id = 1", [], |row| row.get(0))
+            .query_row("SELECT baselines FROM metadata WHERE id = 1", [], |row| {
+                row.get(0)
+            })
             .unwrap_or_else(|_| "[]".to_string());
         Self::from_json(&json)
     }
@@ -796,7 +966,9 @@ impl SqliteBackend {
     /// Load teams from metadata
     fn load_teams(&self, conn: &Connection) -> Result<Vec<crate::models::Team>> {
         let json: String = conn
-            .query_row("SELECT teams FROM metadata WHERE id = 1", [], |row| row.get(0))
+            .query_row("SELECT teams FROM metadata WHERE id = 1", [], |row| {
+                row.get(0)
+            })
             .unwrap_or_else(|_| "[]".to_string());
         Self::from_json(&json)
     }
@@ -833,7 +1005,11 @@ impl SqliteBackend {
 
     /// Load sync state for a specific requirement and issue
     /// trace:STORY-0325 | ai:claude
-    pub fn load_sync_state(&self, requirement_id: Uuid, issue_iid: u64) -> Result<Option<crate::models::GitLabSyncState>> {
+    pub fn load_sync_state(
+        &self,
+        requirement_id: Uuid,
+        issue_iid: u64,
+    ) -> Result<Option<crate::models::GitLabSyncState>> {
         let conn = self.conn.lock().unwrap();
         let result = conn.query_row(
             r#"SELECT requirement_id, spec_id, gitlab_project_id, gitlab_issue_iid, gitlab_issue_id,
@@ -853,7 +1029,10 @@ impl SqliteBackend {
 
     /// Load all sync states for a requirement
     /// trace:STORY-0325 | ai:claude
-    pub fn load_sync_states_for_requirement(&self, requirement_id: Uuid) -> Result<Vec<crate::models::GitLabSyncState>> {
+    pub fn load_sync_states_for_requirement(
+        &self,
+        requirement_id: Uuid,
+    ) -> Result<Vec<crate::models::GitLabSyncState>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
             r#"SELECT requirement_id, spec_id, gitlab_project_id, gitlab_issue_iid, gitlab_issue_id,
@@ -863,7 +1042,9 @@ impl SqliteBackend {
         )?;
 
         let states = stmt
-            .query_map([requirement_id.to_string()], |row| Self::row_to_sync_state(row))?
+            .query_map([requirement_id.to_string()], |row| {
+                Self::row_to_sync_state(row)
+            })?
             .filter_map(|r| r.ok())
             .collect();
 
@@ -891,7 +1072,10 @@ impl SqliteBackend {
 
     /// Load sync states by status (e.g., all diverged items)
     /// trace:STORY-0325 | ai:claude
-    pub fn load_sync_states_by_status(&self, status: crate::models::SyncStatus) -> Result<Vec<crate::models::GitLabSyncState>> {
+    pub fn load_sync_states_by_status(
+        &self,
+        status: crate::models::SyncStatus,
+    ) -> Result<Vec<crate::models::GitLabSyncState>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
             r#"SELECT requirement_id, spec_id, gitlab_project_id, gitlab_issue_iid, gitlab_issue_id,
@@ -901,7 +1085,9 @@ impl SqliteBackend {
         )?;
 
         let states = stmt
-            .query_map([format!("{:?}", status)], |row| Self::row_to_sync_state(row))?
+            .query_map([format!("{:?}", status)], |row| {
+                Self::row_to_sync_state(row)
+            })?
             .filter_map(|r| r.ok())
             .collect();
 
@@ -975,8 +1161,16 @@ impl DatabaseBackend for SqliteBackend {
 
         let requirements = self.load_requirements(&conn)?;
         let users = self.load_users(&conn)?;
-        let (name, title, description, id_config, next_feature_number, next_spec_number, prefix_counters, meta_counters) =
-            self.load_metadata(&conn)?;
+        let (
+            name,
+            title,
+            description,
+            id_config,
+            next_feature_number,
+            next_spec_number,
+            prefix_counters,
+            meta_counters,
+        ) = self.load_metadata(&conn)?;
         let features = self.load_features(&conn)?;
         let type_definitions = self.load_type_definitions(&conn)?;
         let relationship_definitions = self.load_relationship_definitions(&conn)?;
@@ -1084,32 +1278,33 @@ impl DatabaseBackend for SqliteBackend {
         let conn = self.conn.lock().unwrap();
 
         // Check if new columns exist (for schema migration compatibility)
-        let has_trace_links = conn.query_row(
-            "SELECT COUNT(*) FROM pragma_table_info('requirements') WHERE name='trace_links'",
-            [],
-            |row| row.get::<_, i32>(0),
-        ).unwrap_or(0) > 0;
+        let has_trace_links = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('requirements') WHERE name='trace_links'",
+                [],
+                |row| row.get::<_, i32>(0),
+            )
+            .unwrap_or(0)
+            > 0;
 
         let query = if has_trace_links {
             "SELECT id, spec_id, prefix_override, title, description, status, priority,
                     owner, feature, created_at, created_by, modified_at, req_type,
                     dependencies, tags, relationships, comments, history, archived,
                     custom_status, custom_priority, custom_fields, urls, trace_links,
-                    implementation_info, ai_evaluation, version
+                    implementation_info, ai_evaluation, weight, attachments, gitlab_issues, version
              FROM requirements WHERE id = ?1"
         } else {
             "SELECT id, spec_id, prefix_override, title, description, status, priority,
                     owner, feature, created_at, created_by, modified_at, req_type,
                     dependencies, tags, relationships, comments, history, archived,
                     custom_status, custom_priority, custom_fields, urls, NULL as trace_links,
-                    NULL as implementation_info, ai_evaluation, version
+                    NULL as implementation_info, ai_evaluation, NULL as weight, '[]' as attachments, '[]' as gitlab_issues, version
              FROM requirements WHERE id = ?1"
         };
 
-        let result = conn.query_row(
-            query,
-            [id.to_string()],
-            |row| {
+        let result = conn
+            .query_row(query, [id.to_string()], |row| {
                 let id_str: String = row.get(0)?;
                 let spec_id: Option<String> = row.get(1)?;
                 let prefix_override: Option<String> = row.get(2)?;
@@ -1136,25 +1331,78 @@ impl DatabaseBackend for SqliteBackend {
                 let trace_links_json: Option<String> = row.get(23)?;
                 let implementation_info_json: Option<String> = row.get(24)?;
                 let ai_evaluation_json: Option<String> = row.get(25)?;
-                let version: i64 = row.get(26)?;
+                let weight: Option<f32> = row.get(26)?;
+                let attachments_json: String = row.get(27)?;
+                let gitlab_issues_json: String = row.get(28)?;
+                let version: i64 = row.get(29)?;
 
                 Ok((
-                    id_str, spec_id, prefix_override, title, description, status_str, priority_str,
-                    owner, feature, created_at_str, created_by, modified_at_str, req_type_str,
-                    dependencies_json, tags_json, relationships_json, comments_json, history_json,
-                    archived, custom_status, custom_priority, custom_fields_json, urls_json,
-                    trace_links_json, implementation_info_json, ai_evaluation_json, version
+                    id_str,
+                    spec_id,
+                    prefix_override,
+                    title,
+                    description,
+                    status_str,
+                    priority_str,
+                    owner,
+                    feature,
+                    created_at_str,
+                    created_by,
+                    modified_at_str,
+                    req_type_str,
+                    dependencies_json,
+                    tags_json,
+                    relationships_json,
+                    comments_json,
+                    history_json,
+                    archived,
+                    custom_status,
+                    custom_priority,
+                    custom_fields_json,
+                    urls_json,
+                    trace_links_json,
+                    implementation_info_json,
+                    ai_evaluation_json,
+                    weight,
+                    attachments_json,
+                    gitlab_issues_json,
+                    version,
                 ))
-            }
-        ).optional()?;
+            })
+            .optional()?;
 
         match result {
             Some((
-                id_str, spec_id, prefix_override, title, description, status_str, priority_str,
-                owner, feature, created_at_str, created_by, modified_at_str, req_type_str,
-                dependencies_json, tags_json, relationships_json, comments_json, history_json,
-                archived, custom_status, custom_priority, custom_fields_json, urls_json,
-                trace_links_json, implementation_info_json, ai_evaluation_json, version
+                id_str,
+                spec_id,
+                prefix_override,
+                title,
+                description,
+                status_str,
+                priority_str,
+                owner,
+                feature,
+                created_at_str,
+                created_by,
+                modified_at_str,
+                req_type_str,
+                dependencies_json,
+                tags_json,
+                relationships_json,
+                comments_json,
+                history_json,
+                archived,
+                custom_status,
+                custom_priority,
+                custom_fields_json,
+                urls_json,
+                trace_links_json,
+                implementation_info_json,
+                ai_evaluation_json,
+                weight,
+                attachments_json,
+                gitlab_issues_json,
+                version,
             )) => {
                 let id = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4());
                 let status = Self::str_to_status(&status_str);
@@ -1166,20 +1414,26 @@ impl DatabaseBackend for SqliteBackend {
                 let modified_at = chrono::DateTime::parse_from_rfc3339(&modified_at_str)
                     .map(|dt| dt.with_timezone(&chrono::Utc))
                     .unwrap_or_else(|_| chrono::Utc::now());
-                let dependencies: Vec<Uuid> = Self::from_json(&dependencies_json).unwrap_or_default();
+                let dependencies: Vec<Uuid> =
+                    Self::from_json(&dependencies_json).unwrap_or_default();
                 let tags: HashSet<String> = Self::from_json(&tags_json).unwrap_or_default();
-                let relationships: Vec<Relationship> = Self::from_json(&relationships_json).unwrap_or_default();
+                let relationships: Vec<Relationship> =
+                    Self::from_json(&relationships_json).unwrap_or_default();
                 let comments: Vec<Comment> = Self::from_json(&comments_json).unwrap_or_default();
                 let history: Vec<HistoryEntry> = Self::from_json(&history_json).unwrap_or_default();
-                let custom_fields: HashMap<String, String> = Self::from_json(&custom_fields_json).unwrap_or_default();
+                let custom_fields: HashMap<String, String> =
+                    Self::from_json(&custom_fields_json).unwrap_or_default();
                 let urls: Vec<UrlLink> = Self::from_json(&urls_json).unwrap_or_default();
                 let trace_links: Vec<TraceLink> = trace_links_json
                     .and_then(|json| Self::from_json(&json).ok())
                     .unwrap_or_default();
-                let implementation_info: Option<ImplementationInfo> = implementation_info_json
-                    .and_then(|json| Self::from_json(&json).ok());
-                let ai_evaluation = ai_evaluation_json
-                    .and_then(|json| Self::from_json(&json).ok());
+                let implementation_info: Option<ImplementationInfo> =
+                    implementation_info_json.and_then(|json| Self::from_json(&json).ok());
+                let ai_evaluation = ai_evaluation_json.and_then(|json| Self::from_json(&json).ok());
+                let attachments: Vec<Attachment> =
+                    Self::from_json(&attachments_json).unwrap_or_default();
+                let gitlab_issues: Vec<GitLabIssueLink> =
+                    Self::from_json(&gitlab_issues_json).unwrap_or_default();
 
                 Ok(Some(Requirement {
                     id,
@@ -1195,10 +1449,10 @@ impl DatabaseBackend for SqliteBackend {
                     created_by,
                     modified_at,
                     req_type,
-                    meta_subtype: None,  // Loaded separately if needed
+                    meta_subtype: None, // Loaded separately if needed
                     dependencies,
                     tags,
-                    weight: None,  // TODO: Add weight column to schema
+                    weight,
                     relationships,
                     comments,
                     history,
@@ -1207,9 +1461,9 @@ impl DatabaseBackend for SqliteBackend {
                     custom_priority,
                     custom_fields,
                     urls,
-                    attachments: Vec::new(),  // TODO: Add attachments column to schema
+                    attachments,
                     trace_links,
-                    gitlab_issues: Vec::new(),  // TODO: Add gitlab_issues column to schema
+                    gitlab_issues,
                     implementation_info,
                     ai_evaluation,
                     version,
@@ -1224,17 +1478,22 @@ impl DatabaseBackend for SqliteBackend {
         self.save_requirement(&conn, requirement)
     }
 
-    fn update_requirement_versioned(&self, requirement: &Requirement) -> Result<super::traits::UpdateResult> {
+    fn update_requirement_versioned(
+        &self,
+        requirement: &Requirement,
+    ) -> Result<super::traits::UpdateResult> {
         use super::traits::{UpdateResult, VersionConflict};
 
         let conn = self.conn.lock().unwrap();
 
         // Get current version from database
-        let current_version: Option<i64> = conn.query_row(
-            "SELECT version FROM requirements WHERE id = ?1",
-            [requirement.id.to_string()],
-            |row| row.get(0),
-        ).optional()?;
+        let current_version: Option<i64> = conn
+            .query_row(
+                "SELECT version FROM requirements WHERE id = ?1",
+                [requirement.id.to_string()],
+                |row| row.get(0),
+            )
+            .optional()?;
 
         match current_version {
             Some(db_version) => {
@@ -1244,7 +1503,10 @@ impl DatabaseBackend for SqliteBackend {
                         id: requirement.id,
                         expected_version: requirement.version,
                         current_version: db_version,
-                        display_id: requirement.spec_id.clone().unwrap_or_else(|| requirement.id.to_string()),
+                        display_id: requirement
+                            .spec_id
+                            .clone()
+                            .unwrap_or_else(|| requirement.id.to_string()),
                     }));
                 }
 
@@ -1268,10 +1530,8 @@ impl DatabaseBackend for SqliteBackend {
 
     fn delete_requirement(&self, id: &Uuid) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        let rows_affected = conn.execute(
-            "DELETE FROM requirements WHERE id = ?1",
-            [id.to_string()],
-        )?;
+        let rows_affected =
+            conn.execute("DELETE FROM requirements WHERE id = ?1", [id.to_string()])?;
         if rows_affected == 0 {
             anyhow::bail!("Requirement not found: {}", id)
         }
@@ -1322,10 +1582,7 @@ impl DatabaseBackend for SqliteBackend {
 
     fn delete_user(&self, id: &Uuid) -> Result<()> {
         let conn = self.conn.lock().unwrap();
-        let rows_affected = conn.execute(
-            "DELETE FROM users WHERE id = ?1",
-            [id.to_string()],
-        )?;
+        let rows_affected = conn.execute("DELETE FROM users WHERE id = ?1", [id.to_string()])?;
         if rows_affected == 0 {
             anyhow::bail!("User not found: {}", id)
         }
@@ -1353,29 +1610,31 @@ impl DatabaseBackend for SqliteBackend {
         };
 
         let mut stmt = conn.prepare(sql)?;
-        let entries = stmt.query_map([user_id], |row| {
-            let user_id: String = row.get(0)?;
-            let req_id_str: String = row.get(1)?;
-            let position: i64 = row.get(2)?;
-            let added_by: String = row.get(3)?;
-            let note: Option<String> = row.get(4)?;
-            let added_at_str: String = row.get(5)?;
+        let entries = stmt
+            .query_map([user_id], |row| {
+                let user_id: String = row.get(0)?;
+                let req_id_str: String = row.get(1)?;
+                let position: i64 = row.get(2)?;
+                let added_by: String = row.get(3)?;
+                let note: Option<String> = row.get(4)?;
+                let added_at_str: String = row.get(5)?;
 
-            let requirement_id = Uuid::parse_str(&req_id_str).unwrap_or_else(|_| Uuid::new_v4());
-            let added_at = chrono::DateTime::parse_from_rfc3339(&added_at_str)
-                .map(|dt| dt.with_timezone(&chrono::Utc))
-                .unwrap_or_else(|_| chrono::Utc::now());
+                let requirement_id =
+                    Uuid::parse_str(&req_id_str).unwrap_or_else(|_| Uuid::new_v4());
+                let added_at = chrono::DateTime::parse_from_rfc3339(&added_at_str)
+                    .map(|dt| dt.with_timezone(&chrono::Utc))
+                    .unwrap_or_else(|_| chrono::Utc::now());
 
-            Ok(QueueEntry {
-                user_id,
-                requirement_id,
-                position,
-                added_by,
-                note,
-                added_at,
-            })
-        })?
-        .collect::<std::result::Result<Vec<_>, _>>()?;
+                Ok(QueueEntry {
+                    user_id,
+                    requirement_id,
+                    position,
+                    added_by,
+                    note,
+                    added_at,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
 
         Ok(entries)
     }
@@ -1443,10 +1702,7 @@ impl DatabaseBackend for SqliteBackend {
                 [user_id],
             )?;
         } else {
-            conn.execute(
-                "DELETE FROM queue_entries WHERE user_id = ?1",
-                [user_id],
-            )?;
+            conn.execute("DELETE FROM queue_entries WHERE user_id = ?1", [user_id])?;
         }
         Ok(())
     }

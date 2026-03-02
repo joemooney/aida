@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::env;
 use std::fmt;
-use uuid::Uuid;
 use ts_rs::TS;
+use uuid::Uuid;
 
 /// Represents the status of a requirement
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
@@ -64,7 +64,7 @@ pub enum RequirementType {
     Story,
     Task,
     Spike,
-    Sprint,  // Time-boxed iteration for work planning
+    Sprint, // Time-boxed iteration for work planning
     // Organizational types (stateless)
     Folder,
     // Meta type for database configuration (prompts, skills, etc.)
@@ -548,11 +548,7 @@ impl CustomTypeDefinition {
     pub fn get_priorities(&self) -> Vec<String> {
         if self.priorities.is_empty() {
             // Default priorities
-            vec![
-                "High".to_string(),
-                "Medium".to_string(),
-                "Low".to_string(),
-            ]
+            vec!["High".to_string(), "Medium".to_string(), "Low".to_string()]
         } else {
             self.priorities.clone()
         }
@@ -666,12 +662,7 @@ pub fn default_type_definitions() -> Vec<CustomTypeDefinition> {
         CustomTypeDefinition::built_in("Epic", "Epic")
             .with_prefix("EPIC")
             .with_description("Large feature or initiative spanning multiple stories")
-            .with_statuses(vec![
-                "Draft",
-                "Ready",
-                "In Progress",
-                "Done",
-            ])
+            .with_statuses(vec!["Draft", "Ready", "In Progress", "Done"])
             .with_color("#7c3aed")
             .with_field(
                 CustomFieldDefinition::text("business_value", "Business Value")
@@ -692,13 +683,7 @@ pub fn default_type_definitions() -> Vec<CustomTypeDefinition> {
         CustomTypeDefinition::built_in("Story", "Story")
             .with_prefix("STORY")
             .with_description("User story for agile development")
-            .with_statuses(vec![
-                "Draft",
-                "Ready",
-                "In Progress",
-                "In Review",
-                "Done",
-            ])
+            .with_statuses(vec!["Draft", "Ready", "In Progress", "In Review", "Done"])
             .with_color("#10b981")
             .with_field(
                 CustomFieldDefinition::textarea("acceptance_criteria", "Acceptance Criteria")
@@ -718,12 +703,7 @@ pub fn default_type_definitions() -> Vec<CustomTypeDefinition> {
         CustomTypeDefinition::built_in("Task", "Task")
             .with_prefix("TASK")
             .with_description("Implementation task or work item")
-            .with_statuses(vec![
-                "To Do",
-                "In Progress",
-                "In Review",
-                "Done",
-            ])
+            .with_statuses(vec!["To Do", "In Progress", "In Review", "Done"])
             .with_color("#0891b2")
             .with_field(
                 CustomFieldDefinition::number("estimate_hours", "Estimate (hours)")
@@ -738,11 +718,7 @@ pub fn default_type_definitions() -> Vec<CustomTypeDefinition> {
         CustomTypeDefinition::built_in("Spike", "Spike")
             .with_prefix("SPIKE")
             .with_description("Research or investigation task with time-boxed exploration")
-            .with_statuses(vec![
-                "Planned",
-                "In Progress",
-                "Completed",
-            ])
+            .with_statuses(vec!["Planned", "In Progress", "Completed"])
             .with_color("#ca8a04")
             .with_field(
                 CustomFieldDefinition::text("research_question", "Research Question")
@@ -1913,10 +1889,7 @@ pub struct TraceLink {
 
 impl TraceLink {
     /// Creates a new trace link
-    pub fn new(
-        artifact_type: ArtifactType,
-        file_path: impl Into<String>,
-    ) -> Self {
+    pub fn new(artifact_type: ArtifactType, file_path: impl Into<String>) -> Self {
         Self {
             id: Uuid::new_v4(),
             artifact_type,
@@ -2236,7 +2209,7 @@ impl GitLabSyncState {
     /// Includes: title, description, status, priority, owner
     /// Excludes: timestamps, comments, history (too volatile)
     pub fn hash_requirement(req: &Requirement) -> String {
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
         let mut hasher = Sha256::new();
 
         // Include stable content fields
@@ -2262,7 +2235,7 @@ impl GitLabSyncState {
     /// Excludes: timestamps, comment count, vote count (too volatile)
     #[cfg(feature = "gitlab")]
     pub fn hash_gitlab_issue(issue: &crate::integrations::gitlab::GitLabIssue) -> String {
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
         let mut hasher = Sha256::new();
 
         // Include stable content fields
@@ -2763,7 +2736,7 @@ impl User {
 
     /// Set the user's PIN (stores SHA-256 hash)
     pub fn set_pin(&mut self, pin: &str) {
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
         let mut hasher = Sha256::new();
         hasher.update(pin.as_bytes());
         let result = hasher.finalize();
@@ -2775,7 +2748,7 @@ impl User {
     /// Returns false if no PIN is set
     pub fn verify_pin(&self, pin: &str) -> bool {
         if let Some(ref stored_hash) = self.pin_hash {
-            use sha2::{Sha256, Digest};
+            use sha2::{Digest, Sha256};
             let mut hasher = Sha256::new();
             hasher.update(pin.as_bytes());
             let result = hasher.finalize();
@@ -3575,13 +3548,7 @@ impl RequirementsStore {
     pub fn get_priorities_for_type(&self, req_type: &RequirementType) -> Vec<String> {
         self.get_type_definition(req_type)
             .map(|td| td.get_priorities())
-            .unwrap_or_else(|| {
-                vec![
-                    "High".to_string(),
-                    "Medium".to_string(),
-                    "Low".to_string(),
-                ]
-            })
+            .unwrap_or_else(|| vec!["High".to_string(), "Medium".to_string(), "Low".to_string()])
     }
 
     /// Gets the custom field definitions for a requirement type
@@ -4008,9 +3975,7 @@ impl RequirementsStore {
             if &id == team_id {
                 return true;
             }
-            current_id = self
-                .find_team_by_id(&id)
-                .and_then(|t| t.parent_team_id);
+            current_id = self.find_team_by_id(&id).and_then(|t| t.parent_team_id);
         }
         false
     }
@@ -4261,7 +4226,10 @@ impl RequirementsStore {
         for default_type in defaults {
             // Only add built-in types that are missing
             if default_type.built_in {
-                let exists = self.type_definitions.iter().any(|t| t.name == default_type.name);
+                let exists = self
+                    .type_definitions
+                    .iter()
+                    .any(|t| t.name == default_type.name);
                 if !exists {
                     self.type_definitions.push(default_type);
                     added = true;
@@ -4990,7 +4958,13 @@ impl RequirementsStore {
         }
 
         // Now add the new relationship
-        self.add_relationship_with_creator(source_id, rel_type, target_id, bidirectional, created_by)
+        self.add_relationship_with_creator(
+            source_id,
+            rel_type,
+            target_id,
+            bidirectional,
+            created_by,
+        )
     }
 
     /// Remove a relationship between two requirements
@@ -5439,11 +5413,17 @@ impl RequirementsStore {
     ) -> Option<BaselineComparison> {
         let source = self.get_baseline(source_id)?;
         let target = self.get_baseline(target_id)?;
-        Some(Self::compare_snapshot_sets(&source.requirements, &target.requirements))
+        Some(Self::compare_snapshot_sets(
+            &source.requirements,
+            &target.requirements,
+        ))
     }
 
     /// Helper: compare snapshots to current requirements
-    fn compare_snapshots_to_current(&self, snapshots: &[RequirementSnapshot]) -> BaselineComparison {
+    fn compare_snapshots_to_current(
+        &self,
+        snapshots: &[RequirementSnapshot],
+    ) -> BaselineComparison {
         use std::collections::HashMap;
 
         let snapshot_map: HashMap<Uuid, &RequirementSnapshot> =
@@ -5827,10 +5807,7 @@ mod tests {
             "IMPL"
         );
         // Edge cases
-        assert_eq!(
-            RequirementsStore::extract_prefix_from_spec_id(""),
-            "REQ"
-        );
+        assert_eq!(RequirementsStore::extract_prefix_from_spec_id(""), "REQ");
         assert_eq!(
             RequirementsStore::extract_prefix_from_spec_id("no-numbers"),
             "no-numbers"

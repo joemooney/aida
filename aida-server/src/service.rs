@@ -93,15 +93,24 @@ impl ServerState {
     }
 
     /// Find a requirement by UUID or SPEC-ID
-    fn find_requirement<'a>(store: &'a RequirementsStore, id: &str) -> Option<(usize, &'a Requirement)> {
+    fn find_requirement<'a>(
+        store: &'a RequirementsStore,
+        id: &str,
+    ) -> Option<(usize, &'a Requirement)> {
         // Try UUID first
         if let Ok(uuid) = Uuid::parse_str(id) {
-            return store.requirements.iter().enumerate().find(|(_, r)| r.id == uuid);
+            return store
+                .requirements
+                .iter()
+                .enumerate()
+                .find(|(_, r)| r.id == uuid);
         }
         // Try SPEC-ID
-        store.requirements.iter().enumerate().find(|(_, r)| {
-            r.spec_id.as_ref().map(|s| s == id).unwrap_or(false)
-        })
+        store
+            .requirements
+            .iter()
+            .enumerate()
+            .find(|(_, r)| r.spec_id.as_ref().map(|s| s == id).unwrap_or(false))
     }
 }
 
@@ -191,7 +200,10 @@ impl RequirementsService for AidaService {
         }
 
         Ok(Response::new(proto::ListRequirementsResponse {
-            requirements: requirements.iter().map(|r| requirement_to_proto(r)).collect(),
+            requirements: requirements
+                .iter()
+                .map(|r| requirement_to_proto(r))
+                .collect(),
             total_count,
         }))
     }
@@ -248,11 +260,22 @@ impl RequirementsService for AidaService {
         };
 
         // Add to store with SPEC-ID assignment
-        let feature_prefix = store.features.iter()
+        let feature_prefix = store
+            .features
+            .iter()
             .find(|f| f.name == new_req.feature)
             .map(|f| f.prefix.clone());
-        let type_prefix = store.type_definitions.iter()
-            .find(|td| td.name == new_req.req_type.to_string().replace(" ", "").replace("-", ""))
+        let type_prefix = store
+            .type_definitions
+            .iter()
+            .find(|td| {
+                td.name
+                    == new_req
+                        .req_type
+                        .to_string()
+                        .replace(" ", "")
+                        .replace("-", "")
+            })
             .and_then(|td| td.prefix.clone());
 
         store.add_requirement_with_id(
@@ -262,7 +285,9 @@ impl RequirementsService for AidaService {
         );
 
         // Get the added requirement with its SPEC-ID
-        let added_req = store.requirements.last()
+        let added_req = store
+            .requirements
+            .last()
             .ok_or_else(|| Status::internal("Failed to add requirement"))?;
         let spec_id = added_req.spec_id.clone().unwrap_or_default();
 
@@ -272,7 +297,11 @@ impl RequirementsService for AidaService {
 
         // Re-read to get the final requirement
         let store = self.state.store.read().await;
-        let (_, final_req) = store.requirements.iter().enumerate().last()
+        let (_, final_req) = store
+            .requirements
+            .iter()
+            .enumerate()
+            .last()
             .ok_or_else(|| Status::internal("Requirement not found after save"))?;
 
         Ok(Response::new(proto::CreateRequirementResponse {
@@ -303,13 +332,21 @@ impl RequirementsService for AidaService {
         // Apply updates
         if let Some(title) = req.title {
             if requirement.title != title {
-                changes.push(Requirement::field_change("title", requirement.title.clone(), title.clone()));
+                changes.push(Requirement::field_change(
+                    "title",
+                    requirement.title.clone(),
+                    title.clone(),
+                ));
                 requirement.title = title;
             }
         }
         if let Some(description) = req.description {
             if requirement.description != description {
-                changes.push(Requirement::field_change("description", requirement.description.clone(), description.clone()));
+                changes.push(Requirement::field_change(
+                    "description",
+                    requirement.description.clone(),
+                    description.clone(),
+                ));
                 requirement.description = description;
             }
         }
@@ -319,7 +356,11 @@ impl RequirementsService for AidaService {
             if status_enum != proto::RequirementStatus::Unspecified {
                 let new_status = proto_to_status(status_enum);
                 if requirement.status != new_status {
-                    changes.push(Requirement::field_change("status", requirement.status.to_string(), new_status.to_string()));
+                    changes.push(Requirement::field_change(
+                        "status",
+                        requirement.status.to_string(),
+                        new_status.to_string(),
+                    ));
                     requirement.status = new_status;
                 }
             }
@@ -330,20 +371,32 @@ impl RequirementsService for AidaService {
             if priority_enum != proto::RequirementPriority::Unspecified {
                 let new_priority = proto_to_priority(priority_enum);
                 if requirement.priority != new_priority {
-                    changes.push(Requirement::field_change("priority", requirement.priority.to_string(), new_priority.to_string()));
+                    changes.push(Requirement::field_change(
+                        "priority",
+                        requirement.priority.to_string(),
+                        new_priority.to_string(),
+                    ));
                     requirement.priority = new_priority;
                 }
             }
         }
         if let Some(owner) = req.owner {
             if requirement.owner != owner {
-                changes.push(Requirement::field_change("owner", requirement.owner.clone(), owner.clone()));
+                changes.push(Requirement::field_change(
+                    "owner",
+                    requirement.owner.clone(),
+                    owner.clone(),
+                ));
                 requirement.owner = owner;
             }
         }
         if let Some(feature) = req.feature {
             if requirement.feature != feature {
-                changes.push(Requirement::field_change("feature", requirement.feature.clone(), feature.clone()));
+                changes.push(Requirement::field_change(
+                    "feature",
+                    requirement.feature.clone(),
+                    feature.clone(),
+                ));
                 requirement.feature = feature;
             }
         }
@@ -353,25 +406,41 @@ impl RequirementsService for AidaService {
             if type_enum != proto::RequirementType::Unspecified {
                 let new_type = proto_to_req_type(type_enum);
                 if requirement.req_type != new_type {
-                    changes.push(Requirement::field_change("type", requirement.req_type.to_string(), new_type.to_string()));
+                    changes.push(Requirement::field_change(
+                        "type",
+                        requirement.req_type.to_string(),
+                        new_type.to_string(),
+                    ));
                     requirement.req_type = new_type;
                 }
             }
         }
         if let Some(archived) = req.archived {
             if requirement.archived != archived {
-                changes.push(Requirement::field_change("archived", requirement.archived.to_string(), archived.to_string()));
+                changes.push(Requirement::field_change(
+                    "archived",
+                    requirement.archived.to_string(),
+                    archived.to_string(),
+                ));
                 requirement.archived = archived;
             }
         }
         if let Some(custom_status) = req.custom_status {
             if requirement.custom_status.as_deref() != Some(&custom_status) {
-                requirement.custom_status = if custom_status.is_empty() { None } else { Some(custom_status) };
+                requirement.custom_status = if custom_status.is_empty() {
+                    None
+                } else {
+                    Some(custom_status)
+                };
             }
         }
         if let Some(custom_priority) = req.custom_priority {
             if requirement.custom_priority.as_deref() != Some(&custom_priority) {
-                requirement.custom_priority = if custom_priority.is_empty() { None } else { Some(custom_priority) };
+                requirement.custom_priority = if custom_priority.is_empty() {
+                    None
+                } else {
+                    Some(custom_priority)
+                };
             }
         }
 
@@ -534,14 +603,18 @@ impl RequirementsService for AidaService {
         let req = request.into_inner();
         let mut store = self.state.store.write().await;
 
-        let (idx, _) = ServerState::find_requirement(&store, &req.requirement_id)
-            .ok_or_else(|| Status::not_found(format!("Requirement not found: {}", req.requirement_id)))?;
+        let (idx, _) =
+            ServerState::find_requirement(&store, &req.requirement_id).ok_or_else(|| {
+                Status::not_found(format!("Requirement not found: {}", req.requirement_id))
+            })?;
 
         let parent_id = if req.parent_comment_id.is_empty() {
             None
         } else {
-            Some(Uuid::parse_str(&req.parent_comment_id)
-                .map_err(|_| Status::invalid_argument("Invalid parent comment ID"))?)
+            Some(
+                Uuid::parse_str(&req.parent_comment_id)
+                    .map_err(|_| Status::invalid_argument("Invalid parent comment ID"))?,
+            )
         };
 
         let comment = aida_core::Comment {
@@ -572,8 +645,10 @@ impl RequirementsService for AidaService {
         let req = request.into_inner();
         let mut store = self.state.store.write().await;
 
-        let (idx, _) = ServerState::find_requirement(&store, &req.requirement_id)
-            .ok_or_else(|| Status::not_found(format!("Requirement not found: {}", req.requirement_id)))?;
+        let (idx, _) =
+            ServerState::find_requirement(&store, &req.requirement_id).ok_or_else(|| {
+                Status::not_found(format!("Requirement not found: {}", req.requirement_id))
+            })?;
 
         let comment_id = Uuid::parse_str(&req.comment_id)
             .map_err(|_| Status::invalid_argument("Invalid comment ID"))?;
@@ -604,14 +679,18 @@ impl RequirementsService for AidaService {
         let req = request.into_inner();
         let mut store = self.state.store.write().await;
 
-        let (idx, _) = ServerState::find_requirement(&store, &req.requirement_id)
-            .ok_or_else(|| Status::not_found(format!("Requirement not found: {}", req.requirement_id)))?;
+        let (idx, _) =
+            ServerState::find_requirement(&store, &req.requirement_id).ok_or_else(|| {
+                Status::not_found(format!("Requirement not found: {}", req.requirement_id))
+            })?;
 
         let comment_id = Uuid::parse_str(&req.comment_id)
             .map_err(|_| Status::invalid_argument("Invalid comment ID"))?;
 
         let original_len = store.requirements[idx].comments.len();
-        store.requirements[idx].comments.retain(|c| c.id != comment_id);
+        store.requirements[idx]
+            .comments
+            .retain(|c| c.id != comment_id);
 
         if store.requirements[idx].comments.len() == original_len {
             return Err(Status::not_found("Comment not found"));
@@ -620,7 +699,9 @@ impl RequirementsService for AidaService {
         drop(store);
         self.state.save().await?;
 
-        Ok(Response::new(proto::DeleteCommentResponse { success: true }))
+        Ok(Response::new(proto::DeleteCommentResponse {
+            success: true,
+        }))
     }
 
     // ========================================================================
@@ -634,11 +715,15 @@ impl RequirementsService for AidaService {
         let req = request.into_inner();
         let mut store = self.state.store.write().await;
 
-        let (source_idx, _) = ServerState::find_requirement(&store, &req.source_id)
-            .ok_or_else(|| Status::not_found(format!("Source requirement not found: {}", req.source_id)))?;
+        let (source_idx, _) =
+            ServerState::find_requirement(&store, &req.source_id).ok_or_else(|| {
+                Status::not_found(format!("Source requirement not found: {}", req.source_id))
+            })?;
 
-        let (_, target) = ServerState::find_requirement(&store, &req.target_id)
-            .ok_or_else(|| Status::not_found(format!("Target requirement not found: {}", req.target_id)))?;
+        let (_, target) =
+            ServerState::find_requirement(&store, &req.target_id).ok_or_else(|| {
+                Status::not_found(format!("Target requirement not found: {}", req.target_id))
+            })?;
 
         let rel_type_enum = proto::RelationshipType::try_from(req.rel_type)
             .unwrap_or(proto::RelationshipType::References);
@@ -647,10 +732,16 @@ impl RequirementsService for AidaService {
             target_id: target.id,
             rel_type: proto_to_rel_type(rel_type_enum, &req.custom_type_name),
             created_at: Some(chrono::Utc::now()),
-            created_by: if req.created_by.is_empty() { None } else { Some(req.created_by) },
+            created_by: if req.created_by.is_empty() {
+                None
+            } else {
+                Some(req.created_by)
+            },
         };
 
-        store.requirements[source_idx].relationships.push(relationship);
+        store.requirements[source_idx]
+            .relationships
+            .push(relationship);
 
         drop(store);
         self.state.save().await?;
@@ -668,8 +759,10 @@ impl RequirementsService for AidaService {
         let req = request.into_inner();
         let mut store = self.state.store.write().await;
 
-        let (source_idx, _) = ServerState::find_requirement(&store, &req.source_id)
-            .ok_or_else(|| Status::not_found(format!("Source requirement not found: {}", req.source_id)))?;
+        let (source_idx, _) =
+            ServerState::find_requirement(&store, &req.source_id).ok_or_else(|| {
+                Status::not_found(format!("Source requirement not found: {}", req.source_id))
+            })?;
 
         let target_uuid = if let Ok(uuid) = Uuid::parse_str(&req.target_id) {
             uuid
@@ -677,7 +770,9 @@ impl RequirementsService for AidaService {
             // Find by SPEC-ID
             ServerState::find_requirement(&store, &req.target_id)
                 .map(|(_, r)| r.id)
-                .ok_or_else(|| Status::not_found(format!("Target requirement not found: {}", req.target_id)))?
+                .ok_or_else(|| {
+                    Status::not_found(format!("Target requirement not found: {}", req.target_id))
+                })?
         };
 
         let rel_type_enum = proto::RelationshipType::try_from(req.rel_type)
@@ -698,7 +793,9 @@ impl RequirementsService for AidaService {
         drop(store);
         self.state.save().await?;
 
-        Ok(Response::new(proto::RemoveRelationshipResponse { success: true }))
+        Ok(Response::new(proto::RemoveRelationshipResponse {
+            success: true,
+        }))
     }
 
     // ========================================================================
@@ -713,22 +810,33 @@ impl RequirementsService for AidaService {
         let store = self.state.store.read().await;
         let query = req.query.to_lowercase();
 
-        let mut matches: Vec<&Requirement> = store.requirements.iter().filter(|r| {
-            let mut found = false;
-            if req.search_title {
-                found = found || r.title.to_lowercase().contains(&query);
-            }
-            if req.search_description {
-                found = found || r.description.to_lowercase().contains(&query);
-            }
-            if req.search_spec_id {
-                found = found || r.spec_id.as_ref().map(|s| s.to_lowercase().contains(&query)).unwrap_or(false);
-            }
-            if req.search_comments {
-                found = found || r.comments.iter().any(|c| c.content.to_lowercase().contains(&query));
-            }
-            found
-        }).collect();
+        let mut matches: Vec<&Requirement> = store
+            .requirements
+            .iter()
+            .filter(|r| {
+                let mut found = false;
+                if req.search_title {
+                    found = found || r.title.to_lowercase().contains(&query);
+                }
+                if req.search_description {
+                    found = found || r.description.to_lowercase().contains(&query);
+                }
+                if req.search_spec_id {
+                    found = found
+                        || r.spec_id
+                            .as_ref()
+                            .map(|s| s.to_lowercase().contains(&query))
+                            .unwrap_or(false);
+                }
+                if req.search_comments {
+                    found = found
+                        || r.comments
+                            .iter()
+                            .any(|c| c.content.to_lowercase().contains(&query));
+                }
+                found
+            })
+            .collect();
 
         // Apply additional filters
         if !req.status_filter.is_empty() {
@@ -765,7 +873,11 @@ impl RequirementsService for AidaService {
         _request: Request<proto::GetServerStatusRequest>,
     ) -> Result<Response<proto::GetServerStatusResponse>, Status> {
         let shutdown_requested = *self.state.shutdown_requested.read().await;
-        let status = if shutdown_requested { "shutting_down" } else { "running" };
+        let status = if shutdown_requested {
+            "shutting_down"
+        } else {
+            "running"
+        };
 
         let backend_type = self.state.backend.backend_type();
         Ok(Response::new(proto::GetServerStatusResponse {
@@ -809,9 +921,12 @@ impl RequirementsService for AidaService {
 
         // Find user by handle or name
         let user = store.users.iter().find(|u| {
-            u.handle.eq_ignore_ascii_case(&req.identifier) ||
-            u.name.eq_ignore_ascii_case(&req.identifier) ||
-            u.spec_id.as_ref().map(|s| s.eq_ignore_ascii_case(&req.identifier)).unwrap_or(false)
+            u.handle.eq_ignore_ascii_case(&req.identifier)
+                || u.name.eq_ignore_ascii_case(&req.identifier)
+                || u.spec_id
+                    .as_ref()
+                    .map(|s| s.eq_ignore_ascii_case(&req.identifier))
+                    .unwrap_or(false)
         });
 
         match user {
@@ -867,9 +982,12 @@ impl RequirementsService for AidaService {
 
         // Find user by UUID or SPEC-ID
         let user_idx = store.users.iter().position(|u| {
-            u.id.to_string() == req.user_id ||
-            u.spec_id.as_ref().map(|s| s == &req.user_id).unwrap_or(false) ||
-            u.handle.eq_ignore_ascii_case(&req.user_id)
+            u.id.to_string() == req.user_id
+                || u.spec_id
+                    .as_ref()
+                    .map(|s| s == &req.user_id)
+                    .unwrap_or(false)
+                || u.handle.eq_ignore_ascii_case(&req.user_id)
         });
 
         match user_idx {
@@ -898,12 +1016,10 @@ impl RequirementsService for AidaService {
                     message: "PIN set successfully".to_string(),
                 }))
             }
-            None => {
-                Ok(Response::new(proto::SetUserPinResponse {
-                    success: false,
-                    message: "User not found".to_string(),
-                }))
-            }
+            None => Ok(Response::new(proto::SetUserPinResponse {
+                success: false,
+                message: "User not found".to_string(),
+            })),
         }
     }
 }
@@ -929,9 +1045,7 @@ impl AidaServiceMultiProject {
             .get("x-project")
             .and_then(|v| v.to_str().ok())
             .map(|s| s.to_string())
-            .ok_or_else(|| {
-                Status::invalid_argument("Missing x-project metadata header")
-            })
+            .ok_or_else(|| Status::invalid_argument("Missing x-project metadata header"))
     }
 
     /// Get the backend for a project
@@ -1014,7 +1128,10 @@ impl RequirementsService for AidaServiceMultiProject {
         }
 
         Ok(Response::new(proto::ListRequirementsResponse {
-            requirements: requirements.iter().map(|r| requirement_to_proto(r)).collect(),
+            requirements: requirements
+                .iter()
+                .map(|r| requirement_to_proto(r))
+                .collect(),
             total_count,
         }))
     }
@@ -1074,11 +1191,22 @@ impl RequirementsService for AidaServiceMultiProject {
             Some(req.created_by)
         };
 
-        let feature_prefix = store.features.iter()
+        let feature_prefix = store
+            .features
+            .iter()
             .find(|f| f.name == new_req.feature)
             .map(|f| f.prefix.clone());
-        let type_prefix = store.type_definitions.iter()
-            .find(|td| td.name == new_req.req_type.to_string().replace(" ", "").replace("-", ""))
+        let type_prefix = store
+            .type_definitions
+            .iter()
+            .find(|td| {
+                td.name
+                    == new_req
+                        .req_type
+                        .to_string()
+                        .replace(" ", "")
+                        .replace("-", "")
+            })
             .and_then(|td| td.prefix.clone());
 
         store.add_requirement_with_id(
@@ -1087,7 +1215,9 @@ impl RequirementsService for AidaServiceMultiProject {
             type_prefix.as_deref(),
         );
 
-        let added_req = store.requirements.last()
+        let added_req = store
+            .requirements
+            .last()
             .ok_or_else(|| Status::internal("Failed to add requirement"))?;
         let spec_id = added_req.spec_id.clone().unwrap_or_default();
 
@@ -1095,7 +1225,11 @@ impl RequirementsService for AidaServiceMultiProject {
         state.save().await?;
 
         let store = state.store.read().await;
-        let (_, final_req) = store.requirements.iter().enumerate().last()
+        let (_, final_req) = store
+            .requirements
+            .iter()
+            .enumerate()
+            .last()
             .ok_or_else(|| Status::internal("Requirement not found after save"))?;
 
         Ok(Response::new(proto::CreateRequirementResponse {
@@ -1127,13 +1261,21 @@ impl RequirementsService for AidaServiceMultiProject {
 
         if let Some(title) = req.title {
             if requirement.title != title {
-                changes.push(Requirement::field_change("title", requirement.title.clone(), title.clone()));
+                changes.push(Requirement::field_change(
+                    "title",
+                    requirement.title.clone(),
+                    title.clone(),
+                ));
                 requirement.title = title;
             }
         }
         if let Some(description) = req.description {
             if requirement.description != description {
-                changes.push(Requirement::field_change("description", requirement.description.clone(), description.clone()));
+                changes.push(Requirement::field_change(
+                    "description",
+                    requirement.description.clone(),
+                    description.clone(),
+                ));
                 requirement.description = description;
             }
         }
@@ -1143,7 +1285,11 @@ impl RequirementsService for AidaServiceMultiProject {
             if status_enum != proto::RequirementStatus::Unspecified {
                 let new_status = proto_to_status(status_enum);
                 if requirement.status != new_status {
-                    changes.push(Requirement::field_change("status", requirement.status.to_string(), new_status.to_string()));
+                    changes.push(Requirement::field_change(
+                        "status",
+                        requirement.status.to_string(),
+                        new_status.to_string(),
+                    ));
                     requirement.status = new_status;
                 }
             }
@@ -1154,20 +1300,32 @@ impl RequirementsService for AidaServiceMultiProject {
             if priority_enum != proto::RequirementPriority::Unspecified {
                 let new_priority = proto_to_priority(priority_enum);
                 if requirement.priority != new_priority {
-                    changes.push(Requirement::field_change("priority", requirement.priority.to_string(), new_priority.to_string()));
+                    changes.push(Requirement::field_change(
+                        "priority",
+                        requirement.priority.to_string(),
+                        new_priority.to_string(),
+                    ));
                     requirement.priority = new_priority;
                 }
             }
         }
         if let Some(owner) = req.owner {
             if requirement.owner != owner {
-                changes.push(Requirement::field_change("owner", requirement.owner.clone(), owner.clone()));
+                changes.push(Requirement::field_change(
+                    "owner",
+                    requirement.owner.clone(),
+                    owner.clone(),
+                ));
                 requirement.owner = owner;
             }
         }
         if let Some(feature) = req.feature {
             if requirement.feature != feature {
-                changes.push(Requirement::field_change("feature", requirement.feature.clone(), feature.clone()));
+                changes.push(Requirement::field_change(
+                    "feature",
+                    requirement.feature.clone(),
+                    feature.clone(),
+                ));
                 requirement.feature = feature;
             }
         }
@@ -1177,25 +1335,41 @@ impl RequirementsService for AidaServiceMultiProject {
             if type_enum != proto::RequirementType::Unspecified {
                 let new_type = proto_to_req_type(type_enum);
                 if requirement.req_type != new_type {
-                    changes.push(Requirement::field_change("type", requirement.req_type.to_string(), new_type.to_string()));
+                    changes.push(Requirement::field_change(
+                        "type",
+                        requirement.req_type.to_string(),
+                        new_type.to_string(),
+                    ));
                     requirement.req_type = new_type;
                 }
             }
         }
         if let Some(archived) = req.archived {
             if requirement.archived != archived {
-                changes.push(Requirement::field_change("archived", requirement.archived.to_string(), archived.to_string()));
+                changes.push(Requirement::field_change(
+                    "archived",
+                    requirement.archived.to_string(),
+                    archived.to_string(),
+                ));
                 requirement.archived = archived;
             }
         }
         if let Some(custom_status) = req.custom_status {
             if requirement.custom_status.as_deref() != Some(&custom_status) {
-                requirement.custom_status = if custom_status.is_empty() { None } else { Some(custom_status) };
+                requirement.custom_status = if custom_status.is_empty() {
+                    None
+                } else {
+                    Some(custom_status)
+                };
             }
         }
         if let Some(custom_priority) = req.custom_priority {
             if requirement.custom_priority.as_deref() != Some(&custom_priority) {
-                requirement.custom_priority = if custom_priority.is_empty() { None } else { Some(custom_priority) };
+                requirement.custom_priority = if custom_priority.is_empty() {
+                    None
+                } else {
+                    Some(custom_priority)
+                };
             }
         }
 
@@ -1270,7 +1444,9 @@ impl RequirementsService for AidaServiceMultiProject {
 
         for create_req in req.requirements {
             let mut inner_request = Request::new(create_req);
-            inner_request.metadata_mut().insert("x-project", project.parse().unwrap());
+            inner_request
+                .metadata_mut()
+                .insert("x-project", project.parse().unwrap());
             match self.create_requirement(inner_request).await {
                 Ok(response) => {
                     results.push(response.into_inner());
@@ -1301,7 +1477,9 @@ impl RequirementsService for AidaServiceMultiProject {
 
         for update_req in req.requirements {
             let mut inner_request = Request::new(update_req);
-            inner_request.metadata_mut().insert("x-project", project.parse().unwrap());
+            inner_request
+                .metadata_mut()
+                .insert("x-project", project.parse().unwrap());
             match self.update_requirement(inner_request).await {
                 Ok(response) => {
                     results.push(response.into_inner());
@@ -1333,7 +1511,9 @@ impl RequirementsService for AidaServiceMultiProject {
         for id in req.ids {
             let delete_req = proto::DeleteRequirementRequest { id: id.clone() };
             let mut inner_request = Request::new(delete_req);
-            inner_request.metadata_mut().insert("x-project", project.parse().unwrap());
+            inner_request
+                .metadata_mut()
+                .insert("x-project", project.parse().unwrap());
             match self.delete_requirement(inner_request).await {
                 Ok(_) => success_count += 1,
                 Err(_) => {
@@ -1359,14 +1539,18 @@ impl RequirementsService for AidaServiceMultiProject {
         let req = request.into_inner();
         let mut store = state.store.write().await;
 
-        let (idx, _) = ServerState::find_requirement(&store, &req.requirement_id)
-            .ok_or_else(|| Status::not_found(format!("Requirement not found: {}", req.requirement_id)))?;
+        let (idx, _) =
+            ServerState::find_requirement(&store, &req.requirement_id).ok_or_else(|| {
+                Status::not_found(format!("Requirement not found: {}", req.requirement_id))
+            })?;
 
         let parent_id = if req.parent_comment_id.is_empty() {
             None
         } else {
-            Some(Uuid::parse_str(&req.parent_comment_id)
-                .map_err(|_| Status::invalid_argument("Invalid parent comment ID"))?)
+            Some(
+                Uuid::parse_str(&req.parent_comment_id)
+                    .map_err(|_| Status::invalid_argument("Invalid parent comment ID"))?,
+            )
         };
 
         let comment = aida_core::Comment {
@@ -1399,8 +1583,10 @@ impl RequirementsService for AidaServiceMultiProject {
         let req = request.into_inner();
         let mut store = state.store.write().await;
 
-        let (idx, _) = ServerState::find_requirement(&store, &req.requirement_id)
-            .ok_or_else(|| Status::not_found(format!("Requirement not found: {}", req.requirement_id)))?;
+        let (idx, _) =
+            ServerState::find_requirement(&store, &req.requirement_id).ok_or_else(|| {
+                Status::not_found(format!("Requirement not found: {}", req.requirement_id))
+            })?;
 
         let comment_id = Uuid::parse_str(&req.comment_id)
             .map_err(|_| Status::invalid_argument("Invalid comment ID"))?;
@@ -1433,14 +1619,18 @@ impl RequirementsService for AidaServiceMultiProject {
         let req = request.into_inner();
         let mut store = state.store.write().await;
 
-        let (idx, _) = ServerState::find_requirement(&store, &req.requirement_id)
-            .ok_or_else(|| Status::not_found(format!("Requirement not found: {}", req.requirement_id)))?;
+        let (idx, _) =
+            ServerState::find_requirement(&store, &req.requirement_id).ok_or_else(|| {
+                Status::not_found(format!("Requirement not found: {}", req.requirement_id))
+            })?;
 
         let comment_id = Uuid::parse_str(&req.comment_id)
             .map_err(|_| Status::invalid_argument("Invalid comment ID"))?;
 
         let original_len = store.requirements[idx].comments.len();
-        store.requirements[idx].comments.retain(|c| c.id != comment_id);
+        store.requirements[idx]
+            .comments
+            .retain(|c| c.id != comment_id);
 
         if store.requirements[idx].comments.len() == original_len {
             return Err(Status::not_found("Comment not found"));
@@ -1449,7 +1639,9 @@ impl RequirementsService for AidaServiceMultiProject {
         drop(store);
         state.save().await?;
 
-        Ok(Response::new(proto::DeleteCommentResponse { success: true }))
+        Ok(Response::new(proto::DeleteCommentResponse {
+            success: true,
+        }))
     }
 
     async fn add_relationship(
@@ -1461,11 +1653,15 @@ impl RequirementsService for AidaServiceMultiProject {
         let req = request.into_inner();
         let mut store = state.store.write().await;
 
-        let (source_idx, _) = ServerState::find_requirement(&store, &req.source_id)
-            .ok_or_else(|| Status::not_found(format!("Source requirement not found: {}", req.source_id)))?;
+        let (source_idx, _) =
+            ServerState::find_requirement(&store, &req.source_id).ok_or_else(|| {
+                Status::not_found(format!("Source requirement not found: {}", req.source_id))
+            })?;
 
-        let (_, target) = ServerState::find_requirement(&store, &req.target_id)
-            .ok_or_else(|| Status::not_found(format!("Target requirement not found: {}", req.target_id)))?;
+        let (_, target) =
+            ServerState::find_requirement(&store, &req.target_id).ok_or_else(|| {
+                Status::not_found(format!("Target requirement not found: {}", req.target_id))
+            })?;
 
         let rel_type_enum = proto::RelationshipType::try_from(req.rel_type)
             .unwrap_or(proto::RelationshipType::References);
@@ -1474,10 +1670,16 @@ impl RequirementsService for AidaServiceMultiProject {
             target_id: target.id,
             rel_type: proto_to_rel_type(rel_type_enum, &req.custom_type_name),
             created_at: Some(chrono::Utc::now()),
-            created_by: if req.created_by.is_empty() { None } else { Some(req.created_by) },
+            created_by: if req.created_by.is_empty() {
+                None
+            } else {
+                Some(req.created_by)
+            },
         };
 
-        store.requirements[source_idx].relationships.push(relationship);
+        store.requirements[source_idx]
+            .relationships
+            .push(relationship);
 
         drop(store);
         state.save().await?;
@@ -1497,15 +1699,19 @@ impl RequirementsService for AidaServiceMultiProject {
         let req = request.into_inner();
         let mut store = state.store.write().await;
 
-        let (source_idx, _) = ServerState::find_requirement(&store, &req.source_id)
-            .ok_or_else(|| Status::not_found(format!("Source requirement not found: {}", req.source_id)))?;
+        let (source_idx, _) =
+            ServerState::find_requirement(&store, &req.source_id).ok_or_else(|| {
+                Status::not_found(format!("Source requirement not found: {}", req.source_id))
+            })?;
 
         let target_uuid = if let Ok(uuid) = Uuid::parse_str(&req.target_id) {
             uuid
         } else {
             ServerState::find_requirement(&store, &req.target_id)
                 .map(|(_, r)| r.id)
-                .ok_or_else(|| Status::not_found(format!("Target requirement not found: {}", req.target_id)))?
+                .ok_or_else(|| {
+                    Status::not_found(format!("Target requirement not found: {}", req.target_id))
+                })?
         };
 
         let rel_type_enum = proto::RelationshipType::try_from(req.rel_type)
@@ -1526,7 +1732,9 @@ impl RequirementsService for AidaServiceMultiProject {
         drop(store);
         state.save().await?;
 
-        Ok(Response::new(proto::RemoveRelationshipResponse { success: true }))
+        Ok(Response::new(proto::RemoveRelationshipResponse {
+            success: true,
+        }))
     }
 
     async fn search_requirements(
@@ -1539,22 +1747,33 @@ impl RequirementsService for AidaServiceMultiProject {
         let store = state.store.read().await;
         let query = req.query.to_lowercase();
 
-        let mut matches: Vec<&Requirement> = store.requirements.iter().filter(|r| {
-            let mut found = false;
-            if req.search_title {
-                found = found || r.title.to_lowercase().contains(&query);
-            }
-            if req.search_description {
-                found = found || r.description.to_lowercase().contains(&query);
-            }
-            if req.search_spec_id {
-                found = found || r.spec_id.as_ref().map(|s| s.to_lowercase().contains(&query)).unwrap_or(false);
-            }
-            if req.search_comments {
-                found = found || r.comments.iter().any(|c| c.content.to_lowercase().contains(&query));
-            }
-            found
-        }).collect();
+        let mut matches: Vec<&Requirement> = store
+            .requirements
+            .iter()
+            .filter(|r| {
+                let mut found = false;
+                if req.search_title {
+                    found = found || r.title.to_lowercase().contains(&query);
+                }
+                if req.search_description {
+                    found = found || r.description.to_lowercase().contains(&query);
+                }
+                if req.search_spec_id {
+                    found = found
+                        || r.spec_id
+                            .as_ref()
+                            .map(|s| s.to_lowercase().contains(&query))
+                            .unwrap_or(false);
+                }
+                if req.search_comments {
+                    found = found
+                        || r.comments
+                            .iter()
+                            .any(|c| c.content.to_lowercase().contains(&query));
+                }
+                found
+            })
+            .collect();
 
         if !req.status_filter.is_empty() {
             matches.retain(|r| r.effective_status() == req.status_filter);
@@ -1591,7 +1810,11 @@ impl RequirementsService for AidaServiceMultiProject {
             uptime_seconds: 0,
             active_connections: 0,
             storage_backend: "multi-project".to_string(),
-            storage_path: self.project_manager.data_dir().to_string_lossy().to_string(),
+            storage_path: self
+                .project_manager
+                .data_dir()
+                .to_string_lossy()
+                .to_string(),
         }))
     }
 
@@ -1618,9 +1841,12 @@ impl RequirementsService for AidaServiceMultiProject {
         let store = state.store.read().await;
 
         let user = store.users.iter().find(|u| {
-            u.handle.eq_ignore_ascii_case(&req.identifier) ||
-            u.name.eq_ignore_ascii_case(&req.identifier) ||
-            u.spec_id.as_ref().map(|s| s.eq_ignore_ascii_case(&req.identifier)).unwrap_or(false)
+            u.handle.eq_ignore_ascii_case(&req.identifier)
+                || u.name.eq_ignore_ascii_case(&req.identifier)
+                || u.spec_id
+                    .as_ref()
+                    .map(|s| s.eq_ignore_ascii_case(&req.identifier))
+                    .unwrap_or(false)
         });
 
         match user {
@@ -1673,9 +1899,12 @@ impl RequirementsService for AidaServiceMultiProject {
         let mut store = state.store.write().await;
 
         let user_idx = store.users.iter().position(|u| {
-            u.id.to_string() == req.user_id ||
-            u.spec_id.as_ref().map(|s| s == &req.user_id).unwrap_or(false) ||
-            u.handle.eq_ignore_ascii_case(&req.user_id)
+            u.id.to_string() == req.user_id
+                || u.spec_id
+                    .as_ref()
+                    .map(|s| s == &req.user_id)
+                    .unwrap_or(false)
+                || u.handle.eq_ignore_ascii_case(&req.user_id)
         });
 
         match user_idx {
@@ -1702,12 +1931,10 @@ impl RequirementsService for AidaServiceMultiProject {
                     message: "PIN set successfully".to_string(),
                 }))
             }
-            None => {
-                Ok(Response::new(proto::SetUserPinResponse {
-                    success: false,
-                    message: "User not found".to_string(),
-                }))
-            }
+            None => Ok(Response::new(proto::SetUserPinResponse {
+                success: false,
+                message: "User not found".to_string(),
+            })),
         }
     }
 }

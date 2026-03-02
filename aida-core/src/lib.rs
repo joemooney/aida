@@ -23,6 +23,33 @@ pub use ai::{
     AiClient, AiMode, BackgroundEvaluator, EvaluationResponse, EvaluationResult, EvaluatorConfig,
     EvaluatorStatus, IssueReport, StoredAiEvaluation, SuggestedImprovement,
 };
+#[cfg(feature = "postgres")]
+pub use db::PostgresBackend;
+#[cfg(feature = "native")]
+pub use db::{
+    create_backend, export_to_json, import_from_json, migrate_sqlite_to_yaml,
+    migrate_yaml_to_sqlite, open_or_create, SqliteBackend, YamlBackend,
+};
+#[cfg(all(feature = "native", feature = "postgres"))]
+pub use db::{migrate_from_postgres, migrate_to_postgres};
+pub use db::{BackendType, DatabaseBackend, DatabaseConfig, UpdateResult, VersionConflict};
+pub use import::{
+    create_backup, execute_import, validate_import_content, validate_import_file, ImportConfig,
+    ImportIssue, ImportIssueType, ImportMergeMode, ImportSummary, ImportValidation,
+    IssueResolution, RawImportStore,
+};
+#[cfg(feature = "gitlab")]
+pub use integrations::gitlab::{
+    ClientError as GitLabClientError, ConfigError as GitLabConfigError, ConflictStrategy,
+    CreateIssueRequest, CreateNoteRequest, FieldSyncDirection, FieldSyncRules, GitLabClient,
+    GitLabConfig, GitLabIssue, GitLabLabel, GitLabMilestone, GitLabProject, GitLabUser,
+    IssueFilter, IssueState, LabelConfig, PollingConfig, SyncConfig, SyncMode, UpdateIssueRequest,
+};
+pub use meta::{
+    get_prompt_template, needs_meta_seeding, seed_meta_requirements, DEFAULT_DUPLICATES_PROMPT,
+    DEFAULT_EVALUATION_PROMPT, DEFAULT_GENERATE_CHILDREN_PROMPT, DEFAULT_IMPROVE_PROMPT,
+    DEFAULT_RELATIONSHIPS_PROMPT,
+};
 pub use models::{
     default_reaction_definitions,
     default_type_definitions,
@@ -32,15 +59,6 @@ pub use models::{
     AiTypePromptConfig,
     // Traceability types
     ArtifactType,
-    TraceLink,
-    ConfidenceLevel,
-    ImplementationInfo,
-    // GitLab integration types
-    GitLabIssueLink,
-    GitLabLinkType,
-    GitLabSyncState,
-    LinkOrigin,
-    SyncStatus,
     // Baseline types
     Baseline,
     BaselineComparison,
@@ -49,50 +67,64 @@ pub use models::{
     Comment,
     // Comment reaction types
     CommentReaction,
+    ConfidenceLevel,
     CustomFieldDefinition,
     // Custom type definition types
     CustomFieldType,
     CustomTypeDefinition,
     FeatureDefinition,
     FieldChange,
+    // GitLab integration types
+    GitLabIssueLink,
+    GitLabLinkType,
+    GitLabSyncState,
     HistoryEntry,
     IdConfigValidation,
     IdConfiguration,
     // New ID system types
     IdFormat,
+    ImplementationInfo,
+    LinkOrigin,
+    MetaSubtype,
     NumberingStrategy,
+    // Queue types
+    QueueEntry,
     ReactionDefinition,
     Relationship,
     // Relationship definition types
     RelationshipDefinition,
     RelationshipType,
     RelationshipValidation,
-    // Queue types
-    QueueEntry,
     Requirement,
     RequirementPriority,
     RequirementSnapshot,
     RequirementStatus,
     RequirementType,
     RequirementTypeDefinition,
-    MetaSubtype,
     RequirementsStore,
+    SyncStatus,
+    // Team type
+    Team,
+    TraceLink,
     // URL link types
     UrlLink,
     UrlOpenMode,
     User,
-    // Team type
-    Team,
     META_PREFIX_FEATURE,
+    META_PREFIX_TEAM,
     // Meta-type prefixes
     META_PREFIX_USER,
     META_PREFIX_VIEW,
-    META_PREFIX_TEAM,
 };
 #[cfg(feature = "native")]
 pub use project::{check_migration_status, determine_requirements_path, MigrationCheck};
 #[cfg(feature = "native")]
 pub use registry::{get_config_dir, get_registry_path, get_templates_dir, Registry};
+#[cfg(feature = "native")]
+pub use report::{
+    check_scaffold_status, AiIntegrationReport, AiPromptsSection, FileStatus, PromptCustomization,
+    ReportFormat, ReportGenerator, ScaffoldStatus, TraceabilityStats, TypePromptCustomization,
+};
 #[cfg(feature = "native")]
 pub use scaffolding::{
     ProjectType, ScaffoldArtifact, ScaffoldConfig, ScaffoldError, ScaffoldPreview, Scaffolder,
@@ -102,44 +134,8 @@ pub use storage::{
     AddResult, ConflictInfo, ConflictResolution, EditLock, FieldConflict, LockFileInfo, SaveResult,
     SessionInfo, Storage, StorageError,
 };
-pub use db::{
-    BackendType, DatabaseBackend, DatabaseConfig, UpdateResult, VersionConflict,
-};
-#[cfg(feature = "native")]
-pub use db::{
-    YamlBackend, SqliteBackend, create_backend, open_or_create,
-    migrate_yaml_to_sqlite, migrate_sqlite_to_yaml, export_to_json, import_from_json,
-};
-#[cfg(feature = "postgres")]
-pub use db::PostgresBackend;
-#[cfg(all(feature = "native", feature = "postgres"))]
-pub use db::{migrate_to_postgres, migrate_from_postgres};
-pub use import::{
-    ImportConfig, ImportIssue, ImportIssueType, ImportMergeMode, ImportSummary, ImportValidation,
-    IssueResolution, RawImportStore, create_backup, execute_import, validate_import_content,
-    validate_import_file,
-};
-pub use meta::{
-    get_prompt_template, needs_meta_seeding, seed_meta_requirements,
-    DEFAULT_EVALUATION_PROMPT, DEFAULT_DUPLICATES_PROMPT, DEFAULT_RELATIONSHIPS_PROMPT,
-    DEFAULT_IMPROVE_PROMPT, DEFAULT_GENERATE_CHILDREN_PROMPT,
-};
-#[cfg(feature = "native")]
-pub use report::{
-    AiIntegrationReport, AiPromptsSection, FileStatus, PromptCustomization, ReportFormat,
-    ReportGenerator, ScaffoldStatus, TraceabilityStats, TypePromptCustomization,
-    check_scaffold_status,
-};
 #[cfg(feature = "native")]
 pub use templates::{
-    TemplateInfo, TemplateLoader, TemplateSource,
-    get_embedded_templates, get_templates_by_category, get_template_categories,
-};
-#[cfg(feature = "gitlab")]
-pub use integrations::gitlab::{
-    ClientError as GitLabClientError, ConfigError as GitLabConfigError,
-    ConflictStrategy, FieldSyncDirection, FieldSyncRules, GitLabClient, GitLabConfig,
-    GitLabIssue, GitLabLabel, GitLabMilestone, GitLabProject, GitLabUser,
-    IssueFilter, IssueState, LabelConfig, PollingConfig, SyncConfig, SyncMode,
-    CreateIssueRequest, UpdateIssueRequest, CreateNoteRequest,
+    get_embedded_templates, get_template_categories, get_templates_by_category, TemplateInfo,
+    TemplateLoader, TemplateSource,
 };

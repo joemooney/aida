@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useMetadata, useUpdateMetadata } from '../../hooks/useSettings';
 import { Spinner } from '../ui/Spinner';
+import { usePermissions } from '../../hooks/usePermissions';
 
 export function GeneralTab() {
+  const { canWrite } = usePermissions();
   const { data, isLoading } = useMetadata();
   const updateMutation = useUpdateMetadata();
 
@@ -36,6 +38,7 @@ export function GeneralTab() {
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
+          disabled={!canWrite}
           className="rounded-lg border border-edge bg-surface px-3 py-2 text-sm text-content placeholder-content-muted focus:border-accent focus:outline-none"
           placeholder="e.g., my-project"
         />
@@ -47,6 +50,7 @@ export function GeneralTab() {
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
+          disabled={!canWrite}
           className="rounded-lg border border-edge bg-surface px-3 py-2 text-sm text-content placeholder-content-muted focus:border-accent focus:outline-none"
           placeholder="Project title"
         />
@@ -57,6 +61,7 @@ export function GeneralTab() {
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
+          disabled={!canWrite}
           rows={4}
           className="rounded-lg border border-edge bg-surface px-3 py-2 text-sm text-content placeholder-content-muted focus:border-accent focus:outline-none resize-y"
           placeholder="Describe this project..."
@@ -73,7 +78,7 @@ export function GeneralTab() {
       <div>
         <button
           onClick={handleSave}
-          disabled={!hasChanges || updateMutation.isPending}
+          disabled={!canWrite || !hasChanges || updateMutation.isPending}
           className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-50 transition-colors"
         >
           {updateMutation.isPending ? 'Saving...' : 'Save'}

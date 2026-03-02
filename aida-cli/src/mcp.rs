@@ -11,8 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use aida_core::{
-    Comment, Requirement, RequirementPriority, RequirementStatus, RequirementType,
-    Storage,
+    Comment, Requirement, RequirementPriority, RequirementStatus, RequirementType, Storage,
 };
 
 // ============================================================================
@@ -312,10 +311,7 @@ impl<'a> McpServer<'a> {
         let status_filter = args.get("status").and_then(|v| v.as_str());
         let type_filter = args.get("type").and_then(|v| v.as_str());
         let feature_filter = args.get("feature").and_then(|v| v.as_str());
-        let limit = args
-            .get("limit")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(50) as usize;
+        let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
 
         let filtered: Vec<&Requirement> = store
             .requirements
@@ -353,7 +349,11 @@ impl<'a> McpServer<'a> {
         for r in &filtered {
             output.push_str(&format!(
                 "- [{}] {} (Status: {}, Priority: {}, Type: {})\n",
-                spec_id(r), r.title, r.status, r.priority, r.req_type
+                spec_id(r),
+                r.title,
+                r.status,
+                r.priority,
+                r.req_type
             ));
         }
         Ok(output)
@@ -375,7 +375,11 @@ impl<'a> McpServer<'a> {
              **Status:** {}\n\
              **Priority:** {}\n\
              **Type:** {}\n",
-            spec_id(req), req.title, req.status, req.priority, req.req_type
+            spec_id(req),
+            req.title,
+            req.status,
+            req.priority,
+            req.req_type
         );
 
         if !req.feature.is_empty() {
@@ -386,7 +390,13 @@ impl<'a> McpServer<'a> {
         }
         if !req.tags.is_empty() {
             let tags: Vec<&String> = req.tags.iter().collect();
-            output.push_str(&format!("**Tags:** {}\n", tags.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")));
+            output.push_str(&format!(
+                "**Tags:** {}\n",
+                tags.iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
         }
 
         output.push_str(&format!("\n## Description\n\n{}\n", req.description));
@@ -411,10 +421,7 @@ impl<'a> McpServer<'a> {
                     .find(|r| r.id == rel.target_id)
                     .and_then(|r| r.spec_id.clone())
                     .unwrap_or_else(|| rel.target_id.to_string());
-                output.push_str(&format!(
-                    "- {} → {}\n",
-                    rel.rel_type, target_label
-                ));
+                output.push_str(&format!("- {} → {}\n", rel.rel_type, target_label));
             }
         }
 
@@ -466,10 +473,7 @@ impl<'a> McpServer<'a> {
 
         self.storage.save(&store).map_err(|e| e.to_string())?;
 
-        Ok(format!(
-            "Requirement added: {} — {}",
-            new_spec_id, title
-        ))
+        Ok(format!("Requirement added: {} — {}", new_spec_id, title))
     }
 
     fn tool_update_requirement(&self, args: &Value) -> Result<String, String> {
@@ -502,11 +506,7 @@ impl<'a> McpServer<'a> {
         }
 
         self.storage.save(&store).map_err(|e| e.to_string())?;
-        Ok(format!(
-            "Updated {}: {}",
-            id,
-            changes.join(", ")
-        ))
+        Ok(format!("Updated {}: {}", id, changes.join(", ")))
     }
 
     fn tool_search_requirements(&self, args: &Value) -> Result<String, String> {
@@ -524,7 +524,11 @@ impl<'a> McpServer<'a> {
             .filter(|r| {
                 r.title.to_lowercase().contains(&query_lower)
                     || r.description.to_lowercase().contains(&query_lower)
-                    || r.spec_id.as_deref().unwrap_or("").to_lowercase().contains(&query_lower)
+                    || r.spec_id
+                        .as_deref()
+                        .unwrap_or("")
+                        .to_lowercase()
+                        .contains(&query_lower)
             })
             .collect();
 
@@ -534,10 +538,7 @@ impl<'a> McpServer<'a> {
 
         let mut output = format!("Found {} results for '{}':\n\n", matches.len(), query);
         for r in &matches {
-            output.push_str(&format!(
-                "- [{}] {} ({})\n",
-                spec_id(r), r.title, r.status
-            ));
+            output.push_str(&format!("- [{}] {} ({})\n", spec_id(r), r.title, r.status));
         }
         Ok(output)
     }
@@ -586,13 +587,8 @@ impl<'a> McpServer<'a> {
         let store = self.storage.load().map_err(|e| e.to_string())?;
 
         let total = store.requirements.len();
-        let by_status = |s: RequirementStatus| {
-            store
-                .requirements
-                .iter()
-                .filter(|r| r.status == s)
-                .count()
-        };
+        let by_status =
+            |s: RequirementStatus| store.requirements.iter().filter(|r| r.status == s).count();
 
         let mut output = format!(
             "# Project Summary\n\n\
@@ -640,10 +636,7 @@ impl<'a> McpServer<'a> {
         for (feature, reqs) in &by_feature {
             output.push_str(&format!("## {}\n\n", feature));
             for r in reqs {
-                output.push_str(&format!(
-                    "- [{}] {} ({})\n",
-                    spec_id(r), r.title, r.status
-                ));
+                output.push_str(&format!("- [{}] {} ({})\n", spec_id(r), r.title, r.status));
             }
             output.push('\n');
         }
@@ -715,11 +708,8 @@ pub fn run_mcp_server(storage: &Storage) -> Result<()> {
         let request: JsonRpcRequest = match serde_json::from_str(line) {
             Ok(req) => req,
             Err(e) => {
-                let error_response = JsonRpcResponse::error(
-                    Value::Null,
-                    -32700,
-                    format!("Parse error: {}", e),
-                );
+                let error_response =
+                    JsonRpcResponse::error(Value::Null, -32700, format!("Parse error: {}", e));
                 let json = serde_json::to_string(&error_response)?;
                 writeln!(stdout, "{}", json)?;
                 stdout.flush()?;

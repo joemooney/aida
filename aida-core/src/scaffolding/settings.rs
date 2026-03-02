@@ -6,7 +6,8 @@ impl Scaffolder {
         let mut hooks = Vec::new();
 
         if self.config.include_validate_commit_hook {
-            hooks.push(r#"    "PreToolUse": [
+            hooks.push(
+                r#"    "PreToolUse": [
       {
         "matcher": "Bash",
         "hooks": [
@@ -17,11 +18,13 @@ impl Scaffolder {
           }
         ]
       }
-    ]"#);
+    ]"#,
+            );
         }
 
         if self.config.include_track_commits_hook {
-            hooks.push(r#"    "PostToolUse": [
+            hooks.push(
+                r#"    "PostToolUse": [
       {
         "matcher": "Bash",
         "hooks": [
@@ -32,7 +35,8 @@ impl Scaffolder {
           }
         ]
       }
-    ]"#);
+    ]"#,
+            );
         }
 
         if hooks.is_empty() {

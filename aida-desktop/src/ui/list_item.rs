@@ -3,9 +3,9 @@
 //!
 //! Components for rendering requirements in list views (sidebar, search results, etc.)
 
-use egui::{Color32, RichText, Ui, Response};
-use crate::storage::proto::Requirement;
 use super::badges::{status_dot, status_dot_color};
+use crate::storage::proto::Requirement;
+use egui::{Color32, Response, RichText, Ui};
 
 /// Configuration for list item rendering
 #[derive(Clone, Default)]
@@ -73,10 +73,7 @@ pub fn requirement_list_item(
         status_dot(ui, req.status);
 
         // Spec ID (clickable)
-        let response = ui.selectable_label(
-            selected,
-            RichText::new(&req.spec_id).monospace(),
-        );
+        let response = ui.selectable_label(selected, RichText::new(&req.spec_id).monospace());
 
         if response.clicked() {
             clicked = true;
@@ -84,28 +81,29 @@ pub fn requirement_list_item(
 
         // Feature badge (inline)
         if config.show_feature && !req.feature.is_empty() {
-            ui.label(
-                RichText::new(format!("[{}]", &req.feature))
-                    .small()
-                    .weak()
-            );
+            ui.label(RichText::new(format!("[{}]", &req.feature)).small().weak());
         }
     });
 
     // Title on separate line
     if config.show_title && !req.title.is_empty() {
         let title = if config.max_title_len > 0 && req.title.len() > config.max_title_len {
-            format!("{}...", &req.title.chars().take(config.max_title_len - 3).collect::<String>())
+            format!(
+                "{}...",
+                &req.title
+                    .chars()
+                    .take(config.max_title_len - 3)
+                    .collect::<String>()
+            )
         } else {
             req.title.clone()
         };
 
-        ui.label(
-            RichText::new(&title)
-                .small()
-                .weak()
-                .color(if selected { Color32::WHITE } else { Color32::GRAY }),
-        );
+        ui.label(RichText::new(&title).small().weak().color(if selected {
+            Color32::WHITE
+        } else {
+            Color32::GRAY
+        }));
     }
 
     // Tags
@@ -115,7 +113,7 @@ pub fn requirement_list_item(
                 ui.label(
                     RichText::new(format!("#{}", tag))
                         .small()
-                        .color(Color32::from_rgb(100, 150, 200))
+                        .color(Color32::from_rgb(100, 150, 200)),
                 );
             }
         });
@@ -133,7 +131,8 @@ pub fn simple_list_item(ui: &mut Ui, req: &Requirement, selected: bool) -> Respo
     ui.horizontal(|ui| {
         status_dot(ui, req.status);
         ui.selectable_label(selected, RichText::new(&req.spec_id).monospace())
-    }).inner
+    })
+    .inner
 }
 
 /// Render a compact list item suitable for KanBan cards
@@ -160,7 +159,11 @@ pub fn kanban_card_item(ui: &mut Ui, req: &Requirement) {
                     ui.label(RichText::new(format!("#{}", tag)).small().weak());
                 }
                 if req.tags.len() > 3 {
-                    ui.label(RichText::new(format!("+{}", req.tags.len() - 3)).small().weak());
+                    ui.label(
+                        RichText::new(format!("+{}", req.tags.len() - 3))
+                            .small()
+                            .weak(),
+                    );
                 }
             });
         }

@@ -178,8 +178,9 @@ pub fn parse_duplicates_response(response: &str) -> Result<DuplicatesResponse, A
 }
 
 /// Parse relationships response from AI
-pub fn parse_relationships_response(response: &str) -> Result<SuggestRelationshipsResponse, AiError>
-{
+pub fn parse_relationships_response(
+    response: &str,
+) -> Result<SuggestRelationshipsResponse, AiError> {
     let json_str = extract_json(response);
     serde_json::from_str(json_str).map_err(|e| {
         AiError::InvalidResponse(format!(

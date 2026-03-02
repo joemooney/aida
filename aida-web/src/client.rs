@@ -12,7 +12,7 @@ use crate::generated::aida::requirements_service_client::RequirementsServiceClie
 use crate::generated::aida::*;
 
 // Re-export shared storage types from aida-desktop
-pub use aida_desktop::storage::{GrpcStorageClient, proto as shared_proto};
+pub use aida_desktop::storage::{proto as shared_proto, GrpcStorageClient};
 
 /// AIDA gRPC-Web client wrapper
 pub struct AidaClient {

@@ -12,7 +12,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::models::{RequirementsStore, TraceLink};
-use crate::scaffolding::{ScaffoldConfig, Scaffolder, ScaffoldPreview};
+use crate::scaffolding::{ScaffoldConfig, ScaffoldPreview, Scaffolder};
 
 /// Report output format
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -194,13 +194,17 @@ impl ReportGenerator {
         };
 
         // Collect type definitions
-        let type_definitions: Vec<_> = self.store.type_definitions
+        let type_definitions: Vec<_> = self
+            .store
+            .type_definitions
             .iter()
             .map(|td| (td.name.clone(), td.description.clone().unwrap_or_default()))
             .collect();
 
         // Collect features
-        let features: Vec<_> = self.store.features
+        let features: Vec<_> = self
+            .store
+            .features
             .iter()
             .map(|f| (f.name.clone(), f.prefix.clone()))
             .collect();
@@ -394,11 +398,15 @@ impl ReportGenerator {
         (stats, trace_links_by_req)
     }
 
-    fn check_scaffold_status(&self, project_root: &Path) -> (Option<ScaffoldStatus>, Option<ScaffoldConfig>) {
+    fn check_scaffold_status(
+        &self,
+        project_root: &Path,
+    ) -> (Option<ScaffoldStatus>, Option<ScaffoldConfig>) {
         // Use default scaffold config
         let config = ScaffoldConfig::default();
         let db_path = PathBuf::from(&self.database_path);
-        let mut scaffolder = Scaffolder::with_database(project_root.to_path_buf(), config.clone(), db_path);
+        let mut scaffolder =
+            Scaffolder::with_database(project_root.to_path_buf(), config.clone(), db_path);
 
         // Generate expected artifacts
         let preview = scaffolder.preview(&self.store);
@@ -426,10 +434,13 @@ impl ReportGenerator {
                         status.is_current = false;
                     }
                 } else {
-                    status.modified.push((artifact.path.clone(), FileStatus::Modified {
-                        expected_lines: artifact.content.lines().count(),
-                        actual_lines: 0,
-                    }));
+                    status.modified.push((
+                        artifact.path.clone(),
+                        FileStatus::Modified {
+                            expected_lines: artifact.content.lines().count(),
+                            actual_lines: 0,
+                        },
+                    ));
                     status.is_current = false;
                 }
             } else {
@@ -455,7 +466,8 @@ impl ReportGenerator {
                             for sub_entry in sub_entries.flatten() {
                                 let sub_path = sub_entry.path();
                                 if sub_path.is_file() {
-                                    let rel_path = sub_path.strip_prefix(project_root).unwrap_or(&sub_path);
+                                    let rel_path =
+                                        sub_path.strip_prefix(project_root).unwrap_or(&sub_path);
                                     if !preview.artifacts.iter().any(|a| a.path == rel_path) {
                                         status.extra.push(rel_path.to_path_buf());
                                     }
@@ -475,13 +487,22 @@ impl ReportGenerator {
         let mut md = String::new();
 
         // Title
-        md.push_str(&format!("# AI Integration Report: {}\n\n", report.project_name));
-        md.push_str(&format!("*Generated: {}*\n\n", report.generated_at.format("%Y-%m-%d %H:%M UTC")));
+        md.push_str(&format!(
+            "# AI Integration Report: {}\n\n",
+            report.project_name
+        ));
+        md.push_str(&format!(
+            "*Generated: {}*\n\n",
+            report.generated_at.format("%Y-%m-%d %H:%M UTC")
+        ));
 
         // Project Overview
         md.push_str("## Project Overview\n\n");
         md.push_str(&format!("- **Database**: `{}`\n", report.database_path));
-        md.push_str(&format!("- **Total Requirements**: {}\n", report.total_requirements));
+        md.push_str(&format!(
+            "- **Total Requirements**: {}\n",
+            report.total_requirements
+        ));
         if !report.project_description.is_empty() {
             md.push_str(&format!("\n{}\n", report.project_description));
         }
@@ -578,12 +599,17 @@ impl ReportGenerator {
         md.push_str("## Code Traceability\n\n");
 
         md.push_str("### Statistics\n\n");
-        md.push_str(&format!("- **Total Trace Links**: {}\n", report.traceability.total_links));
+        md.push_str(&format!(
+            "- **Total Trace Links**: {}\n",
+            report.traceability.total_links
+        ));
         md.push_str(&format!(
             "- **Requirements with Links**: {} ({:.1}%)\n",
             report.traceability.requirements_with_links,
             if report.total_requirements > 0 {
-                (report.traceability.requirements_with_links as f64 / report.total_requirements as f64) * 100.0
+                (report.traceability.requirements_with_links as f64
+                    / report.total_requirements as f64)
+                    * 100.0
             } else {
                 0.0
             }
@@ -592,7 +618,10 @@ impl ReportGenerator {
             "- **Requirements without Links**: {}\n",
             report.traceability.requirements_without_links
         ));
-        md.push_str(&format!("- **Unique Files Referenced**: {}\n\n", report.traceability.unique_files));
+        md.push_str(&format!(
+            "- **Unique Files Referenced**: {}\n\n",
+            report.traceability.unique_files
+        ));
 
         if !report.traceability.by_type.is_empty() {
             md.push_str("#### By Artifact Type\n\n");
@@ -645,8 +674,14 @@ impl ReportGenerator {
                 md.push_str("**Status: Drift detected**\n\n");
             }
 
-            md.push_str(&format!("- **Matching Files**: {}\n", status.matching.len()));
-            md.push_str(&format!("- **Modified Files**: {}\n", status.modified.len()));
+            md.push_str(&format!(
+                "- **Matching Files**: {}\n",
+                status.matching.len()
+            ));
+            md.push_str(&format!(
+                "- **Modified Files**: {}\n",
+                status.modified.len()
+            ));
             md.push_str(&format!("- **Missing Files**: {}\n", status.missing.len()));
             md.push_str(&format!("- **Extra Files**: {}\n\n", status.extra.len()));
 
@@ -662,7 +697,10 @@ impl ReportGenerator {
                 md.push_str("### Modified Files\n\n");
                 for (path, file_status) in &status.modified {
                     match file_status {
-                        FileStatus::Modified { expected_lines, actual_lines } => {
+                        FileStatus::Modified {
+                            expected_lines,
+                            actual_lines,
+                        } => {
                             md.push_str(&format!(
                                 "- `{}` (expected {} lines, found {} lines)\n",
                                 path.display(),
@@ -699,12 +737,27 @@ impl ReportGenerator {
         if let Some(ref config) = report.scaffold_config {
             md.push_str("### Scaffold Configuration\n\n");
             md.push_str(&format!("- **Project Type**: {:?}\n", config.project_type));
-            md.push_str(&format!("- **Generate CLAUDE.md**: {}\n", config.generate_claude_md));
-            md.push_str(&format!("- **Generate Commands**: {}\n", config.generate_commands));
-            md.push_str(&format!("- **Generate Skills**: {}\n", config.generate_skills));
-            md.push_str(&format!("- **Generate Git Hooks**: {}\n", config.generate_git_hooks));
+            md.push_str(&format!(
+                "- **Generate CLAUDE.md**: {}\n",
+                config.generate_claude_md
+            ));
+            md.push_str(&format!(
+                "- **Generate Commands**: {}\n",
+                config.generate_commands
+            ));
+            md.push_str(&format!(
+                "- **Generate Skills**: {}\n",
+                config.generate_skills
+            ));
+            md.push_str(&format!(
+                "- **Generate Git Hooks**: {}\n",
+                config.generate_git_hooks
+            ));
             if !config.tech_stack.is_empty() {
-                md.push_str(&format!("- **Tech Stack**: {}\n", config.tech_stack.join(", ")));
+                md.push_str(&format!(
+                    "- **Tech Stack**: {}\n",
+                    config.tech_stack.join(", ")
+                ));
             }
             md.push_str("\n");
         }
@@ -720,7 +773,7 @@ impl ReportGenerator {
         let markdown = self.render_markdown(report);
 
         // Use pulldown-cmark for proper markdown to HTML conversion
-        use pulldown_cmark::{Parser, Options, html};
+        use pulldown_cmark::{html, Options, Parser};
 
         let mut options = Options::empty();
         options.insert(Options::ENABLE_STRIKETHROUGH);
@@ -790,8 +843,7 @@ impl ReportGenerator {
 {}
 </body>
 </html>"#,
-            report.project_name,
-            html_body
+            report.project_name, html_body
         )
     }
 }
@@ -803,7 +855,11 @@ pub fn check_scaffold_status(
     config: &ScaffoldConfig,
     database_path: &Path,
 ) -> ScaffoldStatus {
-    let mut scaffolder = Scaffolder::with_database(project_root.to_path_buf(), config.clone(), database_path.to_path_buf());
+    let mut scaffolder = Scaffolder::with_database(
+        project_root.to_path_buf(),
+        config.clone(),
+        database_path.to_path_buf(),
+    );
     let preview = scaffolder.preview(store);
 
     let mut status = ScaffoldStatus::new();
@@ -828,10 +884,13 @@ pub fn check_scaffold_status(
                     status.is_current = false;
                 }
             } else {
-                status.modified.push((artifact.path.clone(), FileStatus::Modified {
-                    expected_lines: artifact.content.lines().count(),
-                    actual_lines: 0,
-                }));
+                status.modified.push((
+                    artifact.path.clone(),
+                    FileStatus::Modified {
+                        expected_lines: artifact.content.lines().count(),
+                        actual_lines: 0,
+                    },
+                ));
                 status.is_current = false;
             }
         } else {

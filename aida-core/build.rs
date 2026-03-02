@@ -41,7 +41,9 @@ fn main() {
     // Generate a list of template categories for introspection
     code.push_str("\n/// Categories of embedded templates\n");
     code.push_str("pub static TEMPLATE_CATEGORIES: &[(&str, &str)] = &[\n");
-    code.push_str("    (\"skills\", \"Claude Code Skills - Requirements-driven development workflows\"),\n");
+    code.push_str(
+        "    (\"skills\", \"Claude Code Skills - Requirements-driven development workflows\"),\n",
+    );
     code.push_str("    (\"commands\", \"Slash Commands - Quick actions for common tasks\"),\n");
     code.push_str("    (\"hooks\", \"Hooks - Git and Claude Code integration hooks\"),\n");
     code.push_str("    (\"settings.json\", \"Settings - Claude Code configuration\"),\n");

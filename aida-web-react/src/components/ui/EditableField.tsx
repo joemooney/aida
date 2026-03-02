@@ -9,9 +9,10 @@ interface EditableTextProps {
   inputClassName?: string;
   placeholder?: string;
   multiline?: boolean;
+  disabled?: boolean;
 }
 
-export function EditableText({ value, onSave, className, inputClassName, placeholder, multiline = false }: EditableTextProps) {
+export function EditableText({ value, onSave, className, inputClassName, placeholder, multiline = false, disabled = false }: EditableTextProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
@@ -117,17 +118,21 @@ export function EditableText({ value, onSave, className, inputClassName, placeho
 
   return (
     <div
-      onClick={() => setEditing(true)}
+      onClick={() => {
+        if (!disabled) setEditing(true);
+      }}
       className={cn(
-        'group/edit relative cursor-pointer rounded-lg transition-colors',
-        'hover:bg-surface-hover/50',
+        'group/edit relative rounded-lg transition-colors',
+        disabled ? 'cursor-default' : 'cursor-pointer hover:bg-surface-hover/50',
         '-mx-2 px-2 py-0.5',
         className,
       )}
-      title="Click to edit"
+      title={disabled ? undefined : "Click to edit"}
     >
       {value || <span className="text-content-muted italic">{placeholder ?? 'Click to add...'}</span>}
-      <Pencil className="absolute right-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-content-muted opacity-0 group-hover/edit:opacity-100 transition-opacity" />
+      {!disabled && (
+        <Pencil className="absolute right-1.5 top-1/2 -translate-y-1/2 h-3 w-3 text-content-muted opacity-0 group-hover/edit:opacity-100 transition-opacity" />
+      )}
     </div>
   );
 }
@@ -139,9 +144,10 @@ interface EditableSelectProps<T extends string> {
   renderOption?: (value: T) => React.ReactNode;
   renderValue?: (value: T) => React.ReactNode;
   className?: string;
+  disabled?: boolean;
 }
 
-export function EditableSelect<T extends string>({ value, options, onSave, renderOption, renderValue, className }: EditableSelectProps<T>) {
+export function EditableSelect<T extends string>({ value, options, onSave, renderOption, renderValue, className, disabled = false }: EditableSelectProps<T>) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -160,8 +166,13 @@ export function EditableSelect<T extends string>({ value, options, onSave, rende
   return (
     <div ref={ref} className={cn('relative', className)}>
       <button
-        onClick={() => setOpen(!open)}
-        className="cursor-pointer hover:opacity-80 transition-opacity"
+        onClick={() => {
+          if (!disabled) setOpen(!open);
+        }}
+        className={cn(
+          'transition-opacity',
+          disabled ? 'cursor-default' : 'cursor-pointer hover:opacity-80',
+        )}
       >
         {renderValue ? renderValue(value) : value}
       </button>

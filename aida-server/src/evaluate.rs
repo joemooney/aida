@@ -1,12 +1,12 @@
 // trace:STORY-0375 | ai:claude
-//! Evaluate endpoint for AIDA — calls Claude API to evaluate requirement quality
+//! Evaluate endpoint for AIDA — calls provider APIs to evaluate requirement quality
 //! and stores the result on the requirement.
 
 use std::sync::Arc;
 
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
     routing::post,
     Json, Router,
@@ -14,17 +14,24 @@ use axum::{
 use serde::Serialize;
 use tracing::error;
 
-use aida_core::ai::{prompts, responses};
-use aida_core::ai::responses::StoredAiEvaluation;
 use crate::admin::AdminState;
+use crate::llm::LlmProvider;
+use crate::projects::ProjectManager;
 use crate::service::ServerState;
+use aida_core::ai::responses::StoredAiEvaluation;
+use aida_core::ai::{prompts, responses};
 
 // ============================================================================
 // Combined state for evaluate handlers
 // ============================================================================
 
+enum EvalBackend {
+    Single(Arc<ServerState>),
+    Multi(Arc<ProjectManager>),
+}
+
 pub struct EvalState {
-    pub server: Arc<ServerState>,
+    backend: EvalBackend,
     pub admin: Arc<AdminState>,
 }
 
@@ -32,19 +39,32 @@ pub struct EvalState {
 // Types
 // ============================================================================
 
-/// Minimal Claude API request (non-streaming)
 #[derive(Serialize)]
-struct ClaudeRequest {
+struct AnthropicRequest {
     model: String,
     max_tokens: u32,
-    messages: Vec<ClaudeMessage>,
+    messages: Vec<AnthropicMessage>,
     stream: bool,
 }
 
 #[derive(Serialize)]
-struct ClaudeMessage {
+struct AnthropicMessage {
     role: String,
     content: String,
+}
+
+#[derive(Serialize)]
+struct OpenAiMessage {
+    role: String,
+    content: String,
+}
+
+#[derive(Serialize)]
+struct OpenAiChatRequest {
+    model: String,
+    max_tokens: u32,
+    stream: bool,
+    messages: Vec<OpenAiMessage>,
 }
 
 // ============================================================================
@@ -52,10 +72,58 @@ struct ClaudeMessage {
 // ============================================================================
 
 pub fn create_evaluate_router(server: Arc<ServerState>, admin: Arc<AdminState>) -> Router {
-    let state = Arc::new(EvalState { server, admin });
+    let state = Arc::new(EvalState {
+        backend: EvalBackend::Single(server),
+        admin,
+    });
     Router::new()
-        .route("/api/v2/requirements/:id/evaluate", post(evaluate_requirement))
+        .route(
+            "/api/v2/requirements/:id/evaluate",
+            post(evaluate_requirement),
+        )
         .with_state(state)
+}
+
+pub fn create_evaluate_router_multi(
+    project_manager: Arc<ProjectManager>,
+    admin: Arc<AdminState>,
+) -> Router {
+    let state = Arc::new(EvalState {
+        backend: EvalBackend::Multi(project_manager),
+        admin,
+    });
+    Router::new()
+        .route(
+            "/api/v2/requirements/:id/evaluate",
+            post(evaluate_requirement),
+        )
+        .with_state(state)
+}
+
+async fn resolve_server_state(
+    state: &EvalState,
+    headers: &HeaderMap,
+) -> Result<Arc<ServerState>, (StatusCode, Json<serde_json::Value>)> {
+    match &state.backend {
+        EvalBackend::Single(server) => Ok(server.clone()),
+        EvalBackend::Multi(project_manager) => {
+            let project = headers
+                .get("x-project")
+                .and_then(|v| v.to_str().ok())
+                .ok_or_else(|| {
+                    (
+                        StatusCode::BAD_REQUEST,
+                        Json(serde_json::json!({ "error": "Missing X-Project header" })),
+                    )
+                })?;
+            project_manager.get_backend(project).await.map_err(|e| {
+                (
+                    StatusCode::NOT_FOUND,
+                    Json(serde_json::json!({ "error": format!("Project error: {}", e) })),
+                )
+            })
+        }
+    }
 }
 
 // ============================================================================
@@ -64,11 +132,21 @@ pub fn create_evaluate_router(server: Arc<ServerState>, admin: Arc<AdminState>) 
 
 async fn evaluate_requirement(
     State(state): State<Arc<EvalState>>,
+    headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Json<StoredAiEvaluation>, impl IntoResponse> {
-    // 1. Validate API key from runtime store
+    if !state.admin.authorize_server(&headers) {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({ "error": "Unauthorized" })),
+        ));
+    }
+
+    let provider = LlmProvider::from_env();
+    let key_name = provider.api_key_name();
+
     let keys = state.admin.api_keys.read().await;
-    let api_key = keys.get("ANTHROPIC_API_KEY").cloned();
+    let api_key = keys.get(key_name).cloned();
     drop(keys);
 
     let api_key = match api_key {
@@ -76,14 +154,15 @@ async fn evaluate_requirement(
         _ => {
             return Err((
                 StatusCode::SERVICE_UNAVAILABLE,
-                Json(serde_json::json!({ "error": "ANTHROPIC_API_KEY not configured — set it in Settings → Admin → API Keys" })),
+                Json(serde_json::json!({ "error": format!("{} not configured", key_name) })),
             ));
         }
     };
 
-    // 2. Load requirement and build prompt
-    state.server.check_reload().await;
-    let store = state.server.store.read().await;
+    let backend = resolve_server_state(&state, &headers).await?;
+
+    backend.check_reload().await;
+    let store = backend.store.read().await;
 
     let req = find_requirement(&store, &id);
     let req = match req {
@@ -99,74 +178,111 @@ async fn evaluate_requirement(
     let prompt = prompts::build_evaluation_prompt(&req, &store);
     drop(store);
 
-    // 3. Call Claude API (non-streaming)
-    let model = std::env::var("AIDA_CHAT_MODEL")
-        .unwrap_or_else(|_| "claude-sonnet-4-20250514".to_string());
-
-    let claude_req = ClaudeRequest {
-        model,
-        max_tokens: 4096,
-        messages: vec![ClaudeMessage {
-            role: "user".to_string(),
-            content: prompt,
-        }],
-        stream: false,
-    };
-
+    let model = provider.resolve_model("AIDA_EVAL_MODEL", provider.default_eval_model());
     let client = reqwest::Client::new();
-    let response = client
-        .post("https://api.anthropic.com/v1/messages")
-        .header("x-api-key", &api_key)
-        .header("anthropic-version", "2023-06-01")
-        .header("content-type", "application/json")
-        .json(&claude_req)
-        .send()
-        .await;
+
+    let response = match provider {
+        LlmProvider::Anthropic => {
+            let body = AnthropicRequest {
+                model,
+                max_tokens: 4096,
+                messages: vec![AnthropicMessage {
+                    role: "user".to_string(),
+                    content: prompt,
+                }],
+                stream: false,
+            };
+            client
+                .post(format!("{}/v1/messages", provider.base_url()))
+                .header("x-api-key", &api_key)
+                .header("anthropic-version", "2023-06-01")
+                .header("content-type", "application/json")
+                .json(&body)
+                .send()
+                .await
+        }
+        LlmProvider::OpenAi => {
+            let body = OpenAiChatRequest {
+                model,
+                max_tokens: 4096,
+                stream: false,
+                messages: vec![
+                    OpenAiMessage {
+                        role: "system".to_string(),
+                        content: "You are a requirements quality evaluator. Return structured content as requested.".to_string(),
+                    },
+                    OpenAiMessage {
+                        role: "user".to_string(),
+                        content: prompt,
+                    },
+                ],
+            };
+            client
+                .post(format!("{}/v1/chat/completions", provider.base_url()))
+                .header("authorization", format!("Bearer {}", api_key))
+                .header("content-type", "application/json")
+                .json(&body)
+                .send()
+                .await
+        }
+    };
 
     let response = match response {
         Ok(r) => {
             if !r.status().is_success() {
                 let status = r.status();
                 let body = r.text().await.unwrap_or_default();
-                error!("Claude API error {}: {}", status, body);
+                error!("Provider API error {}: {}", status, body);
                 return Err((
                     StatusCode::BAD_GATEWAY,
-                    Json(serde_json::json!({ "error": format!("Claude API error: {}", status) })),
+                    Json(serde_json::json!({ "error": format!("Provider API error: {}", status) })),
                 ));
             }
             r
         }
         Err(e) => {
-            error!("Failed to reach Claude API: {}", e);
+            error!("Failed to reach provider API: {}", e);
             return Err((
                 StatusCode::BAD_GATEWAY,
-                Json(serde_json::json!({ "error": format!("Failed to reach Claude API: {}", e) })),
+                Json(
+                    serde_json::json!({ "error": format!("Failed to reach provider API: {}", e) }),
+                ),
             ));
         }
     };
 
-    // 4. Extract text from response
     let body: serde_json::Value = match response.json().await {
         Ok(v) => v,
         Err(e) => {
-            error!("Failed to parse Claude response: {}", e);
+            error!("Failed to parse provider response: {}", e);
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({ "error": "Failed to parse Claude response" })),
+                Json(serde_json::json!({ "error": "Failed to parse provider response" })),
             ));
         }
     };
 
-    let text = body
-        .get("content")
-        .and_then(|c| c.as_array())
-        .and_then(|arr| arr.first())
-        .and_then(|block| block.get("text"))
-        .and_then(|t| t.as_str())
-        .unwrap_or("");
+    let text = match provider {
+        LlmProvider::Anthropic => body
+            .get("content")
+            .and_then(|c| c.as_array())
+            .and_then(|arr| arr.first())
+            .and_then(|block| block.get("text"))
+            .and_then(|t| t.as_str())
+            .unwrap_or("")
+            .to_string(),
+        LlmProvider::OpenAi => body
+            .get("choices")
+            .and_then(|c| c.as_array())
+            .and_then(|arr| arr.first())
+            .and_then(|choice| choice.get("message"))
+            .and_then(|msg| msg.get("content"))
+            .and_then(|t| t.as_str())
+            .unwrap_or("")
+            .to_string(),
+    };
 
-    // 5. Parse evaluation response
-    let eval_response = match responses::parse_evaluation_response(text) {
+    let eval_response = match responses::parse_evaluation_response(&text) {
         Ok(r) => r,
         Err(e) => {
             error!("Failed to parse evaluation: {}", e);
@@ -177,32 +293,30 @@ async fn evaluate_requirement(
         }
     };
 
-    // 6. Store result on the requirement
     let content_hash = req.content_hash();
     let stored_eval = StoredAiEvaluation::new(eval_response, content_hash);
 
-    let mut store = state.server.store.write().await;
+    let mut store = backend.store.write().await;
     let idx = find_requirement_index(&store, &id);
     if let Some(idx) = idx {
         store.requirements[idx].ai_evaluation = Some(stored_eval.clone());
         store.requirements[idx].modified_at = chrono::Utc::now();
 
-        // Persist changes
-        if let Err(e) = state.server.backend.save(&store) {
+        if let Err(e) = backend.backend.save(&store) {
             error!("Failed to save evaluation: {}", e);
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({ "error": format!("Failed to save: {}", e) })),
             ));
         }
+        backend.mark_saved().await;
     }
-    drop(store);
 
     Ok(Json(stored_eval))
 }
 
 // ============================================================================
-// Helpers (same as rest.rs)
+// Helpers
 // ============================================================================
 
 fn find_requirement<'a>(

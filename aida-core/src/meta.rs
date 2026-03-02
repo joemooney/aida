@@ -296,10 +296,7 @@ pub fn seed_meta_requirements(store: &mut RequirementsStore) -> Result<()> {
 
     // Create prompt requirements
     for (title, template, help_text) in prompts {
-        let description = format!(
-            "{}\n\n---\n\n{}",
-            help_text, template
-        );
+        let description = format!("{}\n\n---\n\n{}", help_text, template);
 
         let mut prompt_req = Requirement::new(title.to_string(), description);
         prompt_req.req_type = RequirementType::Meta;
@@ -309,7 +306,12 @@ pub fn seed_meta_requirements(store: &mut RequirementsStore) -> Result<()> {
         store.add_requirement_with_id(prompt_req, None, Some("META"));
 
         // Link as child of prompts folder
-        store.set_relationship(&prompt_id, RelationshipType::Parent, &prompts_folder_id, true)?;
+        store.set_relationship(
+            &prompt_id,
+            RelationshipType::Parent,
+            &prompts_folder_id,
+            true,
+        )?;
     }
 
     Ok(())
@@ -354,14 +356,18 @@ mod tests {
         assert!(!needs_meta_seeding(&store));
 
         // Should have created 6 META requirements (1 folder + 5 prompts)
-        let meta_count = store.requirements.iter()
+        let meta_count = store
+            .requirements
+            .iter()
             .filter(|r| r.req_type == RequirementType::Meta)
             .count();
         assert_eq!(meta_count, 6);
 
         // Seeding again should be a no-op
         seed_meta_requirements(&mut store).unwrap();
-        let meta_count_after = store.requirements.iter()
+        let meta_count_after = store
+            .requirements
+            .iter()
             .filter(|r| r.req_type == RequirementType::Meta)
             .count();
         assert_eq!(meta_count_after, 6);

@@ -3,9 +3,9 @@
 //!
 //! These functions render colored badges/labels for requirement metadata.
 
-use egui::{Color32, RichText, Ui, Response};
+use super::formatters::{format_priority, format_status, format_type};
 use crate::storage::proto::{RequirementPriority, RequirementStatus, RequirementType};
-use super::formatters::{format_status, format_priority, format_type};
+use egui::{Color32, Response, RichText, Ui};
 
 /// Get the color for a status value
 pub fn status_color(status: i32) -> Color32 {
@@ -117,7 +117,7 @@ pub fn tag_list(ui: &mut Ui, tags: &[String]) {
             ui.label(
                 RichText::new(format!("#{}", tag))
                     .small()
-                    .color(Color32::from_rgb(100, 150, 200))
+                    .color(Color32::from_rgb(100, 150, 200)),
             );
         }
     });
@@ -129,7 +129,7 @@ pub fn feature_badge(ui: &mut Ui, feature: &str) {
         ui.label(
             RichText::new(format!("[{}]", feature))
                 .small()
-                .color(Color32::from_rgb(150, 120, 180))
+                .color(Color32::from_rgb(150, 120, 180)),
         );
     }
 }

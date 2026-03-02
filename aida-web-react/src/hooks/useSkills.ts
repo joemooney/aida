@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchSkills, fetchSkill, updateSkill } from '../api/skills';
 import type { SkillInfo, SkillDetail } from '../api/skills';
+import { requireWrite, usePermissions } from './usePermissions';
 
 export function useSkills() {
   return useQuery<SkillInfo[]>({
@@ -19,11 +20,14 @@ export function useSkill(name: string | null) {
 }
 
 export function useUpdateSkill() {
+  const { canWrite } = usePermissions();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ name, content }: { name: string; content: string }) =>
-      updateSkill(name, content),
+    mutationFn: ({ name, content }: { name: string; content: string }) => {
+      requireWrite(canWrite);
+      return updateSkill(name, content);
+    },
     onSuccess: (_data, { name }) => {
       queryClient.invalidateQueries({ queryKey: ['skills'] });
       queryClient.invalidateQueries({ queryKey: ['skill', name] });

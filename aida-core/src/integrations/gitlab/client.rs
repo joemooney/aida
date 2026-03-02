@@ -16,7 +16,9 @@ pub struct GitLabClient {
 impl GitLabClient {
     /// Create a new GitLab client
     pub fn new(config: GitLabConfig) -> Result<Self, ClientError> {
-        config.validate().map_err(|e| ClientError::Config(e.to_string()))?;
+        config
+            .validate()
+            .map_err(|e| ClientError::Config(e.to_string()))?;
 
         let token = config
             .effective_token()
@@ -74,7 +76,10 @@ impl GitLabClient {
     }
 
     /// List issues with optional filter
-    pub async fn list_issues(&self, filter: Option<IssueFilter>) -> Result<Vec<GitLabIssue>, ClientError> {
+    pub async fn list_issues(
+        &self,
+        filter: Option<IssueFilter>,
+    ) -> Result<Vec<GitLabIssue>, ClientError> {
         let url = format!("{}/issues", self.project_url());
         let mut request = self.client.get(&url);
 
@@ -131,7 +136,10 @@ impl GitLabClient {
     }
 
     /// Create a new issue
-    pub async fn create_issue(&self, request: CreateIssueRequest) -> Result<GitLabIssue, ClientError> {
+    pub async fn create_issue(
+        &self,
+        request: CreateIssueRequest,
+    ) -> Result<GitLabIssue, ClientError> {
         let url = format!("{}/issues", self.project_url());
         let response = self
             .client
@@ -157,7 +165,11 @@ impl GitLabClient {
     }
 
     /// Update an existing issue
-    pub async fn update_issue(&self, iid: u64, request: UpdateIssueRequest) -> Result<GitLabIssue, ClientError> {
+    pub async fn update_issue(
+        &self,
+        iid: u64,
+        request: UpdateIssueRequest,
+    ) -> Result<GitLabIssue, ClientError> {
         let url = format!("{}/issues/{}", self.project_url(), iid);
         let response = self
             .client
@@ -211,7 +223,11 @@ impl GitLabClient {
     }
 
     /// Add a note (comment) to an issue
-    pub async fn add_note(&self, iid: u64, request: CreateNoteRequest) -> Result<GitLabNote, ClientError> {
+    pub async fn add_note(
+        &self,
+        iid: u64,
+        request: CreateNoteRequest,
+    ) -> Result<GitLabNote, ClientError> {
         let url = format!("{}/issues/{}/notes", self.project_url(), iid);
         let response = self
             .client
@@ -264,7 +280,12 @@ impl GitLabClient {
 
     // trace:STORY-0326 | ai:claude
     /// Create a new label in the project
-    pub async fn create_label(&self, name: &str, color: &str, description: Option<&str>) -> Result<GitLabLabel, ClientError> {
+    pub async fn create_label(
+        &self,
+        name: &str,
+        color: &str,
+        description: Option<&str>,
+    ) -> Result<GitLabLabel, ClientError> {
         let url = format!("{}/labels", self.project_url());
 
         #[derive(serde::Serialize)]

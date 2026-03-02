@@ -104,20 +104,21 @@ pub struct RemoteStorage {
 impl RemoteStorage {
     /// Create a new remote storage client
     pub fn new(server_addr: &str) -> Result<Self> {
-        let runtime = tokio::runtime::Runtime::new()
-            .context("Failed to create tokio runtime")?;
+        let runtime = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;
 
         let addr = normalize_addr(server_addr);
 
         // Connect using tonic transport (native only)
-        let client = runtime.block_on(async {
-            let channel = Channel::from_shared(addr)
-                .context("Invalid server address")?
-                .connect()
-                .await
-                .context("Failed to connect to server")?;
-            Ok::<_, anyhow::Error>(RequirementsServiceClient::new(channel))
-        }).context("Failed to connect to AIDA server")?;
+        let client = runtime
+            .block_on(async {
+                let channel = Channel::from_shared(addr)
+                    .context("Invalid server address")?
+                    .connect()
+                    .await
+                    .context("Failed to connect to server")?;
+                Ok::<_, anyhow::Error>(RequirementsServiceClient::new(channel))
+            })
+            .context("Failed to connect to AIDA server")?;
 
         Ok(RemoteStorage {
             server_addr: server_addr.to_string(),
@@ -129,14 +130,19 @@ impl RemoteStorage {
     /// Load the requirements store from the server
     pub fn load(&self) -> Result<RequirementsStore> {
         let mut client_guard = self.client.lock().unwrap();
-        let client = client_guard.as_mut()
+        let client = client_guard
+            .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Not connected to server"))?;
 
         let store = self.runtime.block_on(async {
             let request = tonic::Request::new(proto::GetStoreRequest {});
-            let response = client.get_store(request).await
+            let response = client
+                .get_store(request)
+                .await
                 .context("Failed to get store from server")?;
-            let proto_store = response.into_inner().store
+            let proto_store = response
+                .into_inner()
+                .store
                 .ok_or_else(|| anyhow::anyhow!("Server returned empty store"))?;
 
             // Convert proto store to RequirementsStore
@@ -150,19 +156,25 @@ impl RemoteStorage {
     /// This uses batch update to sync all requirements to the server
     pub fn save(&self, store: &RequirementsStore) -> Result<()> {
         let mut client_guard = self.client.lock().unwrap();
-        let client = client_guard.as_mut()
+        let client = client_guard
+            .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Not connected to server"))?;
 
         self.runtime.block_on(async {
             // Get current server state to determine what needs to be created vs updated
             let server_store_request = tonic::Request::new(proto::GetStoreRequest {});
-            let server_response = client.get_store(server_store_request).await
+            let server_response = client
+                .get_store(server_store_request)
+                .await
                 .context("Failed to get current server state")?;
-            let server_store = server_response.into_inner().store
+            let server_store = server_response
+                .into_inner()
+                .store
                 .ok_or_else(|| anyhow::anyhow!("Server returned empty store"))?;
 
             // Build sets of server requirement IDs for comparison
-            let server_req_ids: std::collections::HashSet<String> = server_store.requirements
+            let server_req_ids: std::collections::HashSet<String> = server_store
+                .requirements
                 .iter()
                 .map(|r| r.id.clone())
                 .collect();
@@ -170,7 +182,8 @@ impl RemoteStorage {
             // Separate local requirements into creates and updates
             let mut to_create = Vec::new();
             let mut to_update = Vec::new();
-            let local_req_ids: std::collections::HashSet<String> = store.requirements
+            let local_req_ids: std::collections::HashSet<String> = store
+                .requirements
                 .iter()
                 .map(|r| r.id.to_string())
                 .collect();
@@ -185,10 +198,8 @@ impl RemoteStorage {
             }
 
             // Find requirements to delete (on server but not locally)
-            let to_delete: Vec<String> = server_req_ids
-                .difference(&local_req_ids)
-                .cloned()
-                .collect();
+            let to_delete: Vec<String> =
+                server_req_ids.difference(&local_req_ids).cloned().collect();
 
             // Batch create new requirements
             if !to_create.is_empty() {
@@ -200,7 +211,9 @@ impl RemoteStorage {
                 let batch_create = tonic::Request::new(proto::BatchCreateRequirementsRequest {
                     requirements: create_requests,
                 });
-                client.batch_create_requirements(batch_create).await
+                client
+                    .batch_create_requirements(batch_create)
+                    .await
                     .context("Failed to create new requirements on server")?;
             }
 
@@ -214,16 +227,19 @@ impl RemoteStorage {
                 let batch_update = tonic::Request::new(proto::BatchUpdateRequirementsRequest {
                     requirements: update_requests,
                 });
-                client.batch_update_requirements(batch_update).await
+                client
+                    .batch_update_requirements(batch_update)
+                    .await
                     .context("Failed to update requirements on server")?;
             }
 
             // Batch delete removed requirements
             if !to_delete.is_empty() {
-                let batch_delete = tonic::Request::new(proto::BatchDeleteRequirementsRequest {
-                    ids: to_delete,
-                });
-                client.batch_delete_requirements(batch_delete).await
+                let batch_delete =
+                    tonic::Request::new(proto::BatchDeleteRequirementsRequest { ids: to_delete });
+                client
+                    .batch_delete_requirements(batch_delete)
+                    .await
                     .context("Failed to delete requirements on server")?;
             }
 
@@ -232,16 +248,24 @@ impl RemoteStorage {
     }
 
     /// Create a single requirement on the server
-    pub fn create_requirement(&self, req: &aida_core::Requirement) -> Result<aida_core::Requirement> {
+    pub fn create_requirement(
+        &self,
+        req: &aida_core::Requirement,
+    ) -> Result<aida_core::Requirement> {
         let mut client_guard = self.client.lock().unwrap();
-        let client = client_guard.as_mut()
+        let client = client_guard
+            .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Not connected to server"))?;
 
         self.runtime.block_on(async {
             let request = tonic::Request::new(requirement_to_create_request(req));
-            let response = client.create_requirement(request).await
+            let response = client
+                .create_requirement(request)
+                .await
                 .context("Failed to create requirement on server")?;
-            let created = response.into_inner().requirement
+            let created = response
+                .into_inner()
+                .requirement
                 .ok_or_else(|| anyhow::anyhow!("Server returned empty requirement"))?;
             proto_to_requirement(&created)
                 .ok_or_else(|| anyhow::anyhow!("Failed to parse server response"))
@@ -249,16 +273,24 @@ impl RemoteStorage {
     }
 
     /// Update a single requirement on the server
-    pub fn update_requirement(&self, req: &aida_core::Requirement) -> Result<aida_core::Requirement> {
+    pub fn update_requirement(
+        &self,
+        req: &aida_core::Requirement,
+    ) -> Result<aida_core::Requirement> {
         let mut client_guard = self.client.lock().unwrap();
-        let client = client_guard.as_mut()
+        let client = client_guard
+            .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Not connected to server"))?;
 
         self.runtime.block_on(async {
             let request = tonic::Request::new(requirement_to_update_request(req));
-            let response = client.update_requirement(request).await
+            let response = client
+                .update_requirement(request)
+                .await
                 .context("Failed to update requirement on server")?;
-            let updated = response.into_inner().requirement
+            let updated = response
+                .into_inner()
+                .requirement
                 .ok_or_else(|| anyhow::anyhow!("Server returned empty requirement"))?;
             proto_to_requirement(&updated)
                 .ok_or_else(|| anyhow::anyhow!("Failed to parse server response"))
@@ -268,14 +300,17 @@ impl RemoteStorage {
     /// Delete a requirement on the server
     pub fn delete_requirement(&self, req_id: &str) -> Result<()> {
         let mut client_guard = self.client.lock().unwrap();
-        let client = client_guard.as_mut()
+        let client = client_guard
+            .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Not connected to server"))?;
 
         self.runtime.block_on(async {
             let request = tonic::Request::new(proto::DeleteRequirementRequest {
                 id: req_id.to_string(),
             });
-            let response = client.delete_requirement(request).await
+            let response = client
+                .delete_requirement(request)
+                .await
                 .context("Failed to delete requirement on server")?;
             if response.into_inner().success {
                 Ok(())
@@ -286,9 +321,16 @@ impl RemoteStorage {
     }
 
     /// Add a comment to a requirement on the server
-    pub fn add_comment(&self, req_id: &str, content: &str, author: &str, parent_id: Option<&str>) -> Result<aida_core::Comment> {
+    pub fn add_comment(
+        &self,
+        req_id: &str,
+        content: &str,
+        author: &str,
+        parent_id: Option<&str>,
+    ) -> Result<aida_core::Comment> {
         let mut client_guard = self.client.lock().unwrap();
-        let client = client_guard.as_mut()
+        let client = client_guard
+            .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Not connected to server"))?;
 
         self.runtime.block_on(async {
@@ -298,9 +340,13 @@ impl RemoteStorage {
                 author: author.to_string(),
                 parent_comment_id: parent_id.unwrap_or("").to_string(),
             });
-            let response = client.add_comment(request).await
+            let response = client
+                .add_comment(request)
+                .await
                 .context("Failed to add comment on server")?;
-            let comment = response.into_inner().comment
+            let comment = response
+                .into_inner()
+                .comment
                 .ok_or_else(|| anyhow::anyhow!("Server returned empty comment"))?;
             proto_to_comment(&comment)
                 .ok_or_else(|| anyhow::anyhow!("Failed to parse server response"))
@@ -308,9 +354,16 @@ impl RemoteStorage {
     }
 
     /// Add a relationship between requirements on the server
-    pub fn add_relationship(&self, source_id: &str, target_id: &str, rel_type: &aida_core::RelationshipType, created_by: &str) -> Result<()> {
+    pub fn add_relationship(
+        &self,
+        source_id: &str,
+        target_id: &str,
+        rel_type: &aida_core::RelationshipType,
+        created_by: &str,
+    ) -> Result<()> {
         let mut client_guard = self.client.lock().unwrap();
-        let client = client_guard.as_mut()
+        let client = client_guard
+            .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Not connected to server"))?;
 
         self.runtime.block_on(async {
@@ -322,7 +375,9 @@ impl RemoteStorage {
                 custom_type_name: custom_name,
                 created_by: created_by.to_string(),
             });
-            let response = client.add_relationship(request).await
+            let response = client
+                .add_relationship(request)
+                .await
                 .context("Failed to add relationship on server")?;
             if response.into_inner().success {
                 Ok(())
@@ -336,12 +391,15 @@ impl RemoteStorage {
     #[allow(dead_code)]
     pub fn get_server_status(&self) -> Result<ServerStatus> {
         let mut client_guard = self.client.lock().unwrap();
-        let client = client_guard.as_mut()
+        let client = client_guard
+            .as_mut()
             .ok_or_else(|| anyhow::anyhow!("Not connected to server"))?;
 
         self.runtime.block_on(async {
             let request = tonic::Request::new(proto::GetServerStatusRequest {});
-            let response = client.get_server_status(request).await
+            let response = client
+                .get_server_status(request)
+                .await
                 .context("Failed to get server status")?;
             let status = response.into_inner();
             Ok(ServerStatus {
@@ -375,16 +433,22 @@ fn normalize_addr(server_addr: &str) -> String {
 fn proto_to_store(store: &proto::RequirementsStore) -> Result<RequirementsStore> {
     use aida_core::{FeatureDefinition, IdConfiguration, IdFormat, NumberingStrategy, User};
 
-    let requirements: Vec<aida_core::Requirement> = store.requirements
+    let requirements: Vec<aida_core::Requirement> = store
+        .requirements
         .iter()
         .filter_map(proto_to_requirement)
         .collect();
 
-    let users: Vec<User> = store.users
+    let users: Vec<User> = store
+        .users
         .iter()
         .map(|u| User {
             id: uuid::Uuid::parse_str(&u.id).unwrap_or_else(|_| uuid::Uuid::new_v4()),
-            spec_id: if u.spec_id.is_empty() { None } else { Some(u.spec_id.clone()) },
+            spec_id: if u.spec_id.is_empty() {
+                None
+            } else {
+                Some(u.spec_id.clone())
+            },
             name: u.name.clone(),
             email: u.email.clone(),
             handle: u.handle.clone(),
@@ -395,7 +459,8 @@ fn proto_to_store(store: &proto::RequirementsStore) -> Result<RequirementsStore>
         })
         .collect();
 
-    let features: Vec<FeatureDefinition> = store.features
+    let features: Vec<FeatureDefinition> = store
+        .features
         .iter()
         .map(|f| FeatureDefinition {
             number: f.number as u32,
@@ -405,8 +470,10 @@ fn proto_to_store(store: &proto::RequirementsStore) -> Result<RequirementsStore>
         })
         .collect();
 
-    let id_config = store.id_config.as_ref().map(|c| {
-        IdConfiguration {
+    let id_config = store
+        .id_config
+        .as_ref()
+        .map(|c| IdConfiguration {
             format: match c.format.as_str() {
                 "single_level" => IdFormat::SingleLevel,
                 "two_level" => IdFormat::TwoLevel,
@@ -420,10 +487,11 @@ fn proto_to_store(store: &proto::RequirementsStore) -> Result<RequirementsStore>
             },
             digits: c.digits as u8,
             requirement_types: Vec::new(),
-        }
-    }).unwrap_or_default();
+        })
+        .unwrap_or_default();
 
-    let prefix_counters: std::collections::HashMap<String, u32> = store.prefix_counters
+    let prefix_counters: std::collections::HashMap<String, u32> = store
+        .prefix_counters
         .iter()
         .map(|(k, v)| (k.clone(), *v as u32))
         .collect();
@@ -448,7 +516,7 @@ fn proto_to_store(store: &proto::RequirementsStore) -> Result<RequirementsStore>
         restrict_prefixes: false,
         ai_prompts: aida_core::AiPromptConfig::default(),
         baselines: Vec::new(),
-        store_version: 0, // Remote doesn't track store version locally
+        store_version: 0,  // Remote doesn't track store version locally
         migrated_to: None, // Remote store is never migrated
     })
 }
@@ -459,14 +527,25 @@ fn proto_to_requirement(req: &proto::Requirement) -> Option<aida_core::Requireme
     use uuid::Uuid;
 
     let id = Uuid::parse_str(&req.id).ok()?;
-    let status_enum = proto::RequirementStatus::try_from(req.status).unwrap_or(proto::RequirementStatus::Unspecified);
-    let priority_enum = proto::RequirementPriority::try_from(req.priority).unwrap_or(proto::RequirementPriority::Unspecified);
-    let type_enum = proto::RequirementType::try_from(req.req_type).unwrap_or(proto::RequirementType::Unspecified);
+    let status_enum = proto::RequirementStatus::try_from(req.status)
+        .unwrap_or(proto::RequirementStatus::Unspecified);
+    let priority_enum = proto::RequirementPriority::try_from(req.priority)
+        .unwrap_or(proto::RequirementPriority::Unspecified);
+    let type_enum = proto::RequirementType::try_from(req.req_type)
+        .unwrap_or(proto::RequirementType::Unspecified);
 
     Some(aida_core::Requirement {
         id,
-        spec_id: if req.spec_id.is_empty() { None } else { Some(req.spec_id.clone()) },
-        prefix_override: if req.prefix_override.is_empty() { None } else { Some(req.prefix_override.clone()) },
+        spec_id: if req.spec_id.is_empty() {
+            None
+        } else {
+            Some(req.spec_id.clone())
+        },
+        prefix_override: if req.prefix_override.is_empty() {
+            None
+        } else {
+            Some(req.prefix_override.clone())
+        },
         title: req.title.clone(),
         description: req.description.clone(),
         status: proto_to_status(status_enum),
@@ -474,23 +553,43 @@ fn proto_to_requirement(req: &proto::Requirement) -> Option<aida_core::Requireme
         owner: req.owner.clone(),
         feature: req.feature.clone(),
         created_at: proto_to_datetime(req.created_at.clone()),
-        created_by: if req.created_by.is_empty() { None } else { Some(req.created_by.clone()) },
+        created_by: if req.created_by.is_empty() {
+            None
+        } else {
+            Some(req.created_by.clone())
+        },
         modified_at: proto_to_datetime(req.modified_at.clone()),
         req_type: proto_to_req_type(type_enum),
         meta_subtype: None, // Not exposed via proto
-        dependencies: req.dependency_ids.iter().filter_map(|id| Uuid::parse_str(id).ok()).collect(),
+        dependencies: req
+            .dependency_ids
+            .iter()
+            .filter_map(|id| Uuid::parse_str(id).ok())
+            .collect(),
         tags: req.tags.iter().cloned().collect(),
         weight: None, // Not exposed via proto
-        relationships: req.relationships.iter().filter_map(proto_to_relationship).collect(),
+        relationships: req
+            .relationships
+            .iter()
+            .filter_map(proto_to_relationship)
+            .collect(),
         comments: req.comments.iter().filter_map(proto_to_comment).collect(),
         history: Vec::new(),
         archived: req.archived,
-        custom_status: if req.custom_status.is_empty() { None } else { Some(req.custom_status.clone()) },
-        custom_priority: if req.custom_priority.is_empty() { None } else { Some(req.custom_priority.clone()) },
+        custom_status: if req.custom_status.is_empty() {
+            None
+        } else {
+            Some(req.custom_status.clone())
+        },
+        custom_priority: if req.custom_priority.is_empty() {
+            None
+        } else {
+            Some(req.custom_priority.clone())
+        },
         custom_fields: req.custom_fields.clone(),
         urls: req.urls.iter().map(proto_to_url_link).collect(),
-        attachments: Vec::new(), // Not exposed via proto
-        trace_links: Vec::new(), // Not exposed via proto
+        attachments: Vec::new(),   // Not exposed via proto
+        trace_links: Vec::new(),   // Not exposed via proto
         gitlab_issues: Vec::new(), // Not exposed via proto
         implementation_info: None, // Not exposed via proto
         ai_evaluation: None,
@@ -561,17 +660,25 @@ fn proto_to_relationship(rel: &proto::Relationship) -> Option<aida_core::Relatio
     use uuid::Uuid;
 
     let target_id = Uuid::parse_str(&rel.target_id).ok()?;
-    let rel_type_enum = proto::RelationshipType::try_from(rel.rel_type).unwrap_or(proto::RelationshipType::Unspecified);
+    let rel_type_enum = proto::RelationshipType::try_from(rel.rel_type)
+        .unwrap_or(proto::RelationshipType::Unspecified);
     Some(aida_core::Relationship {
         target_id,
         rel_type: proto_to_rel_type(rel_type_enum, &rel.custom_type_name),
         created_at: rel.created_at.clone().map(|t| proto_to_datetime(Some(t))),
-        created_by: if rel.created_by.is_empty() { None } else { Some(rel.created_by.clone()) },
+        created_by: if rel.created_by.is_empty() {
+            None
+        } else {
+            Some(rel.created_by.clone())
+        },
     })
 }
 
 #[cfg(feature = "remote")]
-fn proto_to_rel_type(rel_type: proto::RelationshipType, custom_name: &str) -> aida_core::RelationshipType {
+fn proto_to_rel_type(
+    rel_type: proto::RelationshipType,
+    custom_name: &str,
+) -> aida_core::RelationshipType {
     use aida_core::RelationshipType::*;
     match rel_type {
         proto::RelationshipType::Parent => Parent,
@@ -596,9 +703,17 @@ fn proto_to_comment(comment: &proto::Comment) -> Option<aida_core::Comment> {
         author: comment.author.clone(),
         created_at: proto_to_datetime(comment.created_at.clone()),
         modified_at: proto_to_datetime(comment.modified_at.clone()),
-        parent_id: if comment.parent_id.is_empty() { None } else { Uuid::parse_str(&comment.parent_id).ok() },
+        parent_id: if comment.parent_id.is_empty() {
+            None
+        } else {
+            Uuid::parse_str(&comment.parent_id).ok()
+        },
         replies: Vec::new(),
-        reactions: comment.reactions.iter().filter_map(proto_to_reaction).collect(),
+        reactions: comment
+            .reactions
+            .iter()
+            .filter_map(proto_to_reaction)
+            .collect(),
     })
 }
 
@@ -619,7 +734,11 @@ fn proto_to_url_link(link: &proto::UrlLink) -> aida_core::UrlLink {
         id: Uuid::parse_str(&link.id).unwrap_or_else(|_| Uuid::new_v4()),
         url: link.url.clone(),
         title: link.title.clone(),
-        description: if link.description.is_empty() { None } else { Some(link.description.clone()) },
+        description: if link.description.is_empty() {
+            None
+        } else {
+            Some(link.description.clone())
+        },
         added_at: proto_to_datetime(link.added_at.clone()),
         added_by: link.added_by.clone(),
         last_verified: None,

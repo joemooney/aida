@@ -1,12 +1,12 @@
 // trace:STORY-0374 | ai:claude
-//! Chat endpoints for AIDA — streams AI responses from the Claude API
+//! Chat endpoints for AIDA — streams AI responses from provider APIs
 //! with full requirements context for PM/stakeholder Q&A.
 
 use std::sync::Arc;
 
 use axum::{
     extract::State,
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{
         sse::{Event, Sse},
         IntoResponse, Json,
@@ -19,16 +19,23 @@ use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{error, warn};
 
-use aida_core::ai::prompts;
 use crate::admin::AdminState;
+use crate::llm::LlmProvider;
+use crate::projects::ProjectManager;
 use crate::service::ServerState;
+use aida_core::ai::prompts;
 
 // ============================================================================
 // Combined state for chat handlers
 // ============================================================================
 
+enum ChatBackend {
+    Single(Arc<ServerState>),
+    Multi(Arc<ProjectManager>),
+}
+
 pub struct ChatState {
-    pub server: Arc<ServerState>,
+    backend: ChatBackend,
     pub admin: Arc<AdminState>,
 }
 
@@ -54,9 +61,8 @@ struct ChatStatusResponse {
     reason: Option<String>,
 }
 
-/// Minimal subset of the Claude API request
 #[derive(Serialize)]
-struct ClaudeRequest {
+struct AnthropicRequest {
     model: String,
     max_tokens: u32,
     system: String,
@@ -64,37 +70,119 @@ struct ClaudeRequest {
     stream: bool,
 }
 
+#[derive(Serialize)]
+struct OpenAiMessage {
+    role: String,
+    content: String,
+}
+
+#[derive(Serialize)]
+struct OpenAiChatRequest {
+    model: String,
+    max_tokens: u32,
+    stream: bool,
+    messages: Vec<OpenAiMessage>,
+}
+
 // ============================================================================
 // Router
 // ============================================================================
 
 pub fn create_chat_router(server: Arc<ServerState>, admin: Arc<AdminState>) -> Router {
-    let state = Arc::new(ChatState { server, admin });
+    let state = Arc::new(ChatState {
+        backend: ChatBackend::Single(server),
+        admin,
+    });
     Router::new()
         .route("/api/v2/chat", post(chat_stream))
         .route("/api/v2/chat/status", get(chat_status))
         .with_state(state)
 }
 
-/// Stub router for multi-project mode (chat not yet supported)
-pub fn create_chat_router_stub() -> Router {
+pub fn create_chat_router_multi(
+    project_manager: Arc<ProjectManager>,
+    admin: Arc<AdminState>,
+) -> Router {
+    let state = Arc::new(ChatState {
+        backend: ChatBackend::Multi(project_manager),
+        admin,
+    });
     Router::new()
-        .route("/api/v2/chat/status", get(chat_status_unavailable))
+        .route("/api/v2/chat", post(chat_stream))
+        .route("/api/v2/chat/status", get(chat_status))
+        .with_state(state)
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+async fn resolve_server_state(
+    state: &ChatState,
+    headers: &HeaderMap,
+) -> Result<Arc<ServerState>, (StatusCode, Json<serde_json::Value>)> {
+    match &state.backend {
+        ChatBackend::Single(server) => Ok(server.clone()),
+        ChatBackend::Multi(project_manager) => {
+            let project = headers
+                .get("x-project")
+                .and_then(|v| v.to_str().ok())
+                .ok_or_else(|| {
+                    (
+                        StatusCode::BAD_REQUEST,
+                        Json(serde_json::json!({ "error": "Missing X-Project header" })),
+                    )
+                })?;
+            project_manager.get_backend(project).await.map_err(|e| {
+                (
+                    StatusCode::NOT_FOUND,
+                    Json(serde_json::json!({ "error": format!("Project error: {}", e) })),
+                )
+            })
+        }
+    }
+}
+
+fn send_unauthorized() -> (StatusCode, Json<serde_json::Value>) {
+    (
+        StatusCode::UNAUTHORIZED,
+        Json(serde_json::json!({ "error": "Unauthorized" })),
+    )
 }
 
 // ============================================================================
 // Handlers
 // ============================================================================
 
-async fn chat_status(State(state): State<Arc<ChatState>>) -> Json<ChatStatusResponse> {
+async fn chat_status(
+    State(state): State<Arc<ChatState>>,
+    headers: HeaderMap,
+) -> Json<ChatStatusResponse> {
+    if !state.admin.authorize_server(&headers) {
+        return Json(ChatStatusResponse {
+            available: false,
+            reason: Some("Unauthorized".to_string()),
+        });
+    }
+
+    let provider = LlmProvider::from_env();
+    let key_name = provider.api_key_name();
     let keys = state.admin.api_keys.read().await;
-    let has_key = keys.get("ANTHROPIC_API_KEY").map(|k| !k.is_empty()).unwrap_or(false);
+    let has_key = keys.get(key_name).map(|k| !k.is_empty()).unwrap_or(false);
     drop(keys);
 
-    // Also verify the store is accessible
-    let store_ok = state.server.store.read().await;
-    let req_count = store_ok.requirements.iter().filter(|r| !r.archived).count();
-    drop(store_ok);
+    let backend = match resolve_server_state(&state, &headers).await {
+        Ok(b) => b,
+        Err(_) => {
+            return Json(ChatStatusResponse {
+                available: false,
+                reason: Some("Missing or invalid project".to_string()),
+            })
+        }
+    };
+
+    let store = backend.store.read().await;
+    let req_count = store.requirements.iter().filter(|r| !r.archived).count();
 
     if has_key {
         Json(ChatStatusResponse {
@@ -104,25 +192,28 @@ async fn chat_status(State(state): State<Arc<ChatState>>) -> Json<ChatStatusResp
     } else {
         Json(ChatStatusResponse {
             available: false,
-            reason: Some("ANTHROPIC_API_KEY not set — configure it in Settings → Admin → API Keys".to_string()),
+            reason: Some(format!(
+                "{} not set — configure it in Settings -> Admin -> API Keys",
+                key_name
+            )),
         })
     }
 }
 
-async fn chat_status_unavailable() -> Json<ChatStatusResponse> {
-    Json(ChatStatusResponse {
-        available: false,
-        reason: Some("Chat is not available in multi-project mode yet".to_string()),
-    })
-}
-
 async fn chat_stream(
     State(state): State<Arc<ChatState>>,
+    headers: HeaderMap,
     Json(req): Json<ChatRequest>,
 ) -> Result<Sse<ReceiverStream<Result<Event, axum::Error>>>, impl IntoResponse> {
-    // 1. Validate API key from runtime store
+    if !state.admin.authorize_server(&headers) {
+        return Err(send_unauthorized());
+    }
+
+    let provider = LlmProvider::from_env();
+    let key_name = provider.api_key_name();
+
     let keys = state.admin.api_keys.read().await;
-    let api_key = keys.get("ANTHROPIC_API_KEY").cloned();
+    let api_key = keys.get(key_name).cloned();
     drop(keys);
 
     let api_key = match api_key {
@@ -130,12 +221,11 @@ async fn chat_stream(
         _ => {
             return Err((
                 StatusCode::SERVICE_UNAVAILABLE,
-                Json(serde_json::json!({ "error": "ANTHROPIC_API_KEY not configured — set it in Settings → Admin → API Keys" })),
+                Json(serde_json::json!({ "error": format!("{} not configured", key_name) })),
             ));
         }
     };
 
-    // 2. Validate request
     if req.messages.is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -143,13 +233,14 @@ async fn chat_stream(
         ));
     }
 
-    // 3. Build system prompt with requirements context
-    let store = state.server.store.read().await;
+    let backend = resolve_server_state(&state, &headers).await?;
+    backend.check_reload().await;
+
+    let store = backend.store.read().await;
     let project_context = prompts::build_project_context(&store);
     let requirements_summary = prompts::build_all_requirements_summary(&store);
     drop(store);
 
-    // 3b. Gather recent git history (best-effort, empty string if not in a repo)
     let git_context = build_git_context().await;
 
     let system_prompt = format!(
@@ -169,60 +260,86 @@ You have access to the full requirements database and recent git history for thi
 {git_context}"#
     );
 
-    let model = std::env::var("AIDA_CHAT_MODEL")
-        .unwrap_or_else(|_| "claude-sonnet-4-6".to_string());
+    let model = provider.resolve_model("AIDA_CHAT_MODEL", provider.default_chat_model());
+    let endpoint = format!("{}/v1/messages", provider.base_url());
 
-    let claude_req = ClaudeRequest {
-        model,
-        max_tokens: 4096,
-        system: system_prompt,
-        messages: req.messages,
-        stream: true,
-    };
-
-    // 4. Set up SSE channel
     let (tx, rx) = tokio::sync::mpsc::channel(64);
 
-    // 5. Spawn background task to call Claude API and forward chunks
     tokio::spawn(async move {
         let client = reqwest::Client::new();
 
-        let response = client
-            .post("https://api.anthropic.com/v1/messages")
-            .header("x-api-key", &api_key)
-            .header("anthropic-version", "2023-06-01")
-            .header("content-type", "application/json")
-            .json(&claude_req)
-            .send()
-            .await;
+        let response = match provider {
+            LlmProvider::Anthropic => {
+                let body = AnthropicRequest {
+                    model,
+                    max_tokens: 4096,
+                    system: system_prompt,
+                    messages: req.messages,
+                    stream: true,
+                };
+                client
+                    .post(endpoint)
+                    .header("x-api-key", &api_key)
+                    .header("anthropic-version", "2023-06-01")
+                    .header("content-type", "application/json")
+                    .json(&body)
+                    .send()
+                    .await
+            }
+            LlmProvider::OpenAi => {
+                let messages = std::iter::once(OpenAiMessage {
+                    role: "system".to_string(),
+                    content: system_prompt,
+                })
+                .chain(req.messages.into_iter().map(|m| OpenAiMessage {
+                    role: m.role,
+                    content: m.content,
+                }))
+                .collect::<Vec<_>>();
+                let body = OpenAiChatRequest {
+                    model,
+                    max_tokens: 4096,
+                    stream: true,
+                    messages,
+                };
+                client
+                    .post(format!("{}/v1/chat/completions", provider.base_url()))
+                    .header("authorization", format!("Bearer {}", api_key))
+                    .header("content-type", "application/json")
+                    .json(&body)
+                    .send()
+                    .await
+            }
+        };
 
         let response = match response {
             Ok(r) => {
                 if !r.status().is_success() {
                     let status = r.status();
                     let body = r.text().await.unwrap_or_default();
-                    error!("Claude API error {}: {}", status, body);
+                    error!("Provider API error {}: {}", status, body);
                     let _ = tx
-                        .send(Ok(Event::default()
-                            .event("error")
-                            .data(format!(r#"{{"error":"Claude API error: {}"}}"#, status))))
+                        .send(Ok(Event::default().event("error").data(format!(
+                            r#"{{"error":"Provider API error: {}"}}"#,
+                            status
+                        ))))
                         .await;
                     return;
                 }
                 r
             }
             Err(e) => {
-                error!("Failed to reach Claude API: {}", e);
+                error!("Failed to reach provider API: {}", e);
                 let _ = tx
-                    .send(Ok(Event::default()
-                        .event("error")
-                        .data(format!(r#"{{"error":"Failed to reach Claude API: {}"}}"#, e))))
+                    .send(Ok(Event::default().event("error").data(format!(
+                        r#"{{"error":"Failed to reach provider API: {}"}}"#,
+                        e
+                    ))))
                     .await;
                 return;
             }
         };
 
-        // 6. Parse Claude's SSE stream
         let mut stream = response.bytes_stream();
         let mut buffer = String::new();
 
@@ -237,12 +354,10 @@ You have access to the full requirements database and recent git history for thi
 
             buffer.push_str(&String::from_utf8_lossy(&chunk));
 
-            // Process complete SSE events from buffer
             while let Some(event_end) = buffer.find("\n\n") {
                 let event_str = buffer[..event_end].to_string();
                 buffer = buffer[event_end + 2..].to_string();
 
-                // Parse SSE event lines
                 let mut event_type = String::new();
                 let mut data = String::new();
 
@@ -250,48 +365,73 @@ You have access to the full requirements database and recent git history for thi
                     if let Some(et) = line.strip_prefix("event: ") {
                         event_type = et.to_string();
                     } else if let Some(d) = line.strip_prefix("data: ") {
-                        data = d.to_string();
+                        data.push_str(d);
                     }
                 }
 
-                // We only care about content_block_delta events with text
-                if event_type == "content_block_delta" {
-                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&data) {
-                        if let Some(text) = parsed
-                            .get("delta")
-                            .and_then(|d| d.get("text"))
-                            .and_then(|t| t.as_str())
-                        {
-                            let payload = serde_json::json!({ "text": text });
-                            if tx
-                                .send(Ok(Event::default()
-                                    .event("delta")
-                                    .data(payload.to_string())))
-                                .await
-                                .is_err()
+                match provider {
+                    LlmProvider::Anthropic => {
+                        if event_type == "content_block_delta" {
+                            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&data) {
+                                if let Some(text) = parsed
+                                    .get("delta")
+                                    .and_then(|d| d.get("text"))
+                                    .and_then(|t| t.as_str())
+                                {
+                                    let payload = serde_json::json!({ "text": text });
+                                    if tx
+                                        .send(Ok(Event::default()
+                                            .event("delta")
+                                            .data(payload.to_string())))
+                                        .await
+                                        .is_err()
+                                    {
+                                        return;
+                                    }
+                                }
+                            }
+                        } else if event_type == "message_stop" {
+                            let _ = tx.send(Ok(Event::default().event("done").data("{}"))).await;
+                            return;
+                        } else if event_type == "error" {
+                            let _ = tx
+                                .send(Ok(Event::default().event("error").data(data)))
+                                .await;
+                            return;
+                        }
+                    }
+                    LlmProvider::OpenAi => {
+                        if data == "[DONE]" {
+                            let _ = tx.send(Ok(Event::default().event("done").data("{}"))).await;
+                            return;
+                        }
+                        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&data) {
+                            if let Some(text) = parsed
+                                .get("choices")
+                                .and_then(|c| c.as_array())
+                                .and_then(|arr| arr.first())
+                                .and_then(|choice| choice.get("delta"))
+                                .and_then(|d| d.get("content"))
+                                .and_then(|t| t.as_str())
                             {
-                                return; // Client disconnected
+                                let payload = serde_json::json!({ "text": text });
+                                if tx
+                                    .send(Ok(Event::default()
+                                        .event("delta")
+                                        .data(payload.to_string())))
+                                    .await
+                                    .is_err()
+                                {
+                                    return;
+                                }
                             }
                         }
                     }
-                } else if event_type == "message_stop" {
-                    let _ = tx
-                        .send(Ok(Event::default().event("done").data("{}")))
-                        .await;
-                    return;
-                } else if event_type == "error" {
-                    let _ = tx
-                        .send(Ok(Event::default().event("error").data(data)))
-                        .await;
-                    return;
                 }
             }
         }
 
-        // Stream ended — send done event
-        let _ = tx
-            .send(Ok(Event::default().event("done").data("{}")))
-            .await;
+        let _ = tx.send(Ok(Event::default().event("done").data("{}"))).await;
     });
 
     Ok(Sse::new(ReceiverStream::new(rx)))
@@ -303,11 +443,9 @@ You have access to the full requirements database and recent git history for thi
 
 /// Gather recent git log for chat context. Returns empty string if not in a git repo.
 async fn build_git_context() -> String {
-    // Run git log in a blocking task since it spawns a process
     tokio::task::spawn_blocking(|| {
         use std::process::Command;
 
-        // Get last 50 commits with date, author, and message
         let output = Command::new("git")
             .args([
                 "log",
@@ -323,10 +461,7 @@ async fn build_git_context() -> String {
                 if log.is_empty() {
                     return String::new();
                 }
-                format!(
-                    "## Recent Git Commits (last 50)\n{}",
-                    log
-                )
+                format!("## Recent Git Commits (last 50)\n{}", log)
             }
             _ => String::new(),
         }

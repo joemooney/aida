@@ -56,7 +56,6 @@ fn generate_types_content() -> String {
         models::AiTypePromptConfig::decl(),
         models::AiPromptConfig::decl(),
         models::RequirementsStore::decl(),
-
         // Models from aida_core::ai::responses
         responses::IssueReport::decl(),
         responses::SuggestedImprovement::decl(),

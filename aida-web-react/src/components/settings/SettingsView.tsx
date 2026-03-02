@@ -7,6 +7,7 @@ import { ReactionsTab } from './ReactionsTab';
 import { IdsTab } from './IdsTab';
 import { AdminTab } from './AdminTab';
 import { ScaffoldTab } from './ScaffoldTab';
+import { usePermissions } from '../../hooks/usePermissions';
 
 type SettingsTab = 'general' | 'relationships' | 'types' | 'reactions' | 'ids' | 'admin' | 'scaffold';
 
@@ -21,21 +22,38 @@ const tabs: { key: SettingsTab; label: string }[] = [
 ];
 
 export function SettingsView() {
-  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+  const { canWrite, canAdmin } = usePermissions();
+  const availableTabs = tabs.filter((tab) => {
+    if (tab.key === 'admin') return canAdmin;
+    if (tab.key === 'scaffold') return canAdmin;
+    if (tab.key === 'general') return true;
+    return canWrite;
+  });
+
+  const firstTab = availableTabs[0]?.key ?? 'general';
+  const [activeTab, setActiveTab] = useState<SettingsTab>(firstTab);
+  const resolvedActiveTab = availableTabs.some((t) => t.key === activeTab)
+    ? activeTab
+    : firstTab;
 
   return (
     <div className="flex flex-col gap-6 p-6">
       <h1 className="text-2xl font-bold text-content">Settings</h1>
+      {!canWrite && (
+        <div className="rounded-lg border border-amber-600/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+          You have read-only access. Settings changes are disabled.
+        </div>
+      )}
 
       {/* Tab bar */}
       <div className="flex gap-1 border-b border-edge">
-        {tabs.map(({ key, label }) => (
+        {availableTabs.map(({ key, label }) => (
           <button
             key={key}
-            onClick={() => setActiveTab(key)}
+            onClick={() => setActiveTab(key as SettingsTab)}
             className={cn(
               'px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px',
-              activeTab === key
+              resolvedActiveTab === key
                 ? 'border-accent text-accent'
                 : 'border-transparent text-content-secondary hover:text-content hover:border-edge',
             )}
@@ -47,13 +65,13 @@ export function SettingsView() {
 
       {/* Tab content */}
       <div>
-        {activeTab === 'general' && <GeneralTab />}
-        {activeTab === 'relationships' && <RelationshipsTab />}
-        {activeTab === 'types' && <TypesTab />}
-        {activeTab === 'reactions' && <ReactionsTab />}
-        {activeTab === 'ids' && <IdsTab />}
-        {activeTab === 'admin' && <AdminTab />}
-        {activeTab === 'scaffold' && <ScaffoldTab />}
+        {resolvedActiveTab === 'general' && <GeneralTab />}
+        {resolvedActiveTab === 'relationships' && <RelationshipsTab />}
+        {resolvedActiveTab === 'types' && <TypesTab />}
+        {resolvedActiveTab === 'reactions' && <ReactionsTab />}
+        {resolvedActiveTab === 'ids' && <IdsTab />}
+        {resolvedActiveTab === 'admin' && <AdminTab />}
+        {resolvedActiveTab === 'scaffold' && <ScaffoldTab />}
       </div>
     </div>
   );

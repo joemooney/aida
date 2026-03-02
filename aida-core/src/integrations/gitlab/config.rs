@@ -97,10 +97,10 @@ impl GitLabConfig {
         if !path.exists() {
             return Ok(None);
         }
-        let content = std::fs::read_to_string(&path)
-            .map_err(|e| ConfigError::IoError(e.to_string()))?;
-        let config: Self = toml::from_str(&content)
-            .map_err(|e| ConfigError::ParseError(e.to_string()))?;
+        let content =
+            std::fs::read_to_string(&path).map_err(|e| ConfigError::IoError(e.to_string()))?;
+        let config: Self =
+            toml::from_str(&content).map_err(|e| ConfigError::ParseError(e.to_string()))?;
         Ok(Some(config))
     }
 
@@ -110,8 +110,7 @@ impl GitLabConfig {
 
         // Create directory if it doesn't exist
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| ConfigError::IoError(e.to_string()))?;
+            std::fs::create_dir_all(parent).map_err(|e| ConfigError::IoError(e.to_string()))?;
         }
 
         // Don't save token to file - it should be in keyring or env var
@@ -120,8 +119,7 @@ impl GitLabConfig {
 
         let content = toml::to_string_pretty(&config_to_save)
             .map_err(|e| ConfigError::SerializeError(e.to_string()))?;
-        std::fs::write(&path, content)
-            .map_err(|e| ConfigError::IoError(e.to_string()))?;
+        std::fs::write(&path, content).map_err(|e| ConfigError::IoError(e.to_string()))?;
         Ok(())
     }
 
@@ -252,7 +250,9 @@ impl LabelConfig {
 
     /// Get all unique label names from all mappings
     pub fn all_labels(&self) -> Vec<String> {
-        let mut labels: Vec<String> = self.types.values()
+        let mut labels: Vec<String> = self
+            .types
+            .values()
             .chain(self.priorities.values())
             .chain(self.statuses.values())
             .cloned()
@@ -418,8 +418,7 @@ mod tests {
         let config = GitLabConfig::default();
         assert!(config.validate().is_err());
 
-        let config = GitLabConfig::new("https://gitlab.com", 12345)
-            .with_token("test-token");
+        let config = GitLabConfig::new("https://gitlab.com", 12345).with_token("test-token");
         assert!(config.validate().is_ok());
     }
 

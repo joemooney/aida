@@ -19,3 +19,25 @@ services:
       - ../.env
     environment:
       RUST_LOG: info
+      # Auth modes: none | pin | oidc
+      AIDA_WEB_AUTH_MODE: ${AIDA_WEB_AUTH_MODE:-none}
+      # Persistent web sessions (memory | sqlite)
+      AIDA_WEB_SESSION_STORE: ${AIDA_WEB_SESSION_STORE:-sqlite}
+      AIDA_WEB_SESSION_SQLITE_PATH: ${AIDA_WEB_SESSION_SQLITE_PATH:-/repo/.aida/web-sessions.sqlite3}
+      AIDA_WEB_SESSION_TTL_HOURS: ${AIDA_WEB_SESSION_TTL_HOURS:-24}
+
+      # RBAC mapping (comma-separated handles)
+      AIDA_WEB_DEFAULT_ROLE: ${AIDA_WEB_DEFAULT_ROLE:-editor}
+      AIDA_WEB_ADMIN_USERS: ${AIDA_WEB_ADMIN_USERS:-}
+      AIDA_WEB_EDITOR_USERS: ${AIDA_WEB_EDITOR_USERS:-}
+      AIDA_WEB_VIEWER_USERS: ${AIDA_WEB_VIEWER_USERS:-}
+
+      # Optional OIDC (required when AIDA_WEB_AUTH_MODE=oidc)
+      AIDA_OIDC_ISSUER_URL: ${AIDA_OIDC_ISSUER_URL:-}
+      AIDA_OIDC_AUTH_URL: ${AIDA_OIDC_AUTH_URL:-}
+      AIDA_OIDC_TOKEN_URL: ${AIDA_OIDC_TOKEN_URL:-}
+      AIDA_OIDC_USERINFO_URL: ${AIDA_OIDC_USERINFO_URL:-}
+      AIDA_OIDC_CLIENT_ID: ${AIDA_OIDC_CLIENT_ID:-}
+      AIDA_OIDC_CLIENT_SECRET: ${AIDA_OIDC_CLIENT_SECRET:-}
+      AIDA_OIDC_REDIRECT_URL: ${AIDA_OIDC_REDIRECT_URL:-http://localhost:8080/auth/callback}
+      AIDA_OIDC_SCOPES: ${AIDA_OIDC_SCOPES:-openid profile email}

@@ -221,8 +221,7 @@ impl PlatformServices for WebPlatform {
 
 /// Helper to get the current window location origin
 pub fn get_origin() -> Option<String> {
-    web_sys::window()
-        .and_then(|w| w.location().origin().ok())
+    web_sys::window().and_then(|w| w.location().origin().ok())
 }
 
 /// Helper to get a query parameter from the URL

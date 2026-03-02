@@ -10,10 +10,10 @@
 //! 2. User config `~/.config/aida/templates/` directory
 //! 3. Embedded templates (compiled into binary)
 
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use once_cell::sync::Lazy;
 
 // Include the auto-generated embedded templates
 include!(concat!(env!("OUT_DIR"), "/embedded_templates.rs"));
@@ -173,7 +173,14 @@ impl TemplateLoader {
     /// Check if a template is available (either external or embedded)
     pub fn has_template(&self, key: &str) -> bool {
         // Check external locations
-        for dir in [self.project_templates.as_ref(), self.org_templates.as_ref(), self.user_templates.as_ref()].into_iter().flatten() {
+        for dir in [
+            self.project_templates.as_ref(),
+            self.org_templates.as_ref(),
+            self.user_templates.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        {
             if dir.join(key).exists() {
                 return true;
             }
@@ -188,7 +195,14 @@ impl TemplateLoader {
         let mut keys: Vec<String> = EMBEDDED_TEMPLATES.keys().map(|k| k.to_string()).collect();
 
         // Add any external templates not in embedded
-        for dir in [self.project_templates.as_ref(), self.org_templates.as_ref(), self.user_templates.as_ref()].into_iter().flatten() {
+        for dir in [
+            self.project_templates.as_ref(),
+            self.org_templates.as_ref(),
+            self.user_templates.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        {
             if let Ok(entries) = fs::read_dir(dir) {
                 for entry in entries.flatten() {
                     if entry.path().is_dir() {

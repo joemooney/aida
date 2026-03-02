@@ -41,11 +41,11 @@ mod models;
 
 pub use client::{ClientError, GitLabClient};
 pub use config::{
-    ConfigError, ConflictStrategy, FieldSyncDirection, FieldSyncRules, GitLabConfig,
-    LabelConfig, PollingConfig, SyncConfig, SyncMode,
+    ConfigError, ConflictStrategy, FieldSyncDirection, FieldSyncRules, GitLabConfig, LabelConfig,
+    PollingConfig, SyncConfig, SyncMode,
 };
 pub use models::{
-    CreateIssueRequest, CreateNoteRequest, GitLabError, GitLabIssue, GitLabLabel,
-    GitLabMilestone, GitLabNote, GitLabProject, GitLabUser, IssueFilter, IssueReferences,
-    IssueState, MilestoneState, StateEvent, UpdateIssueRequest,
+    CreateIssueRequest, CreateNoteRequest, GitLabError, GitLabIssue, GitLabLabel, GitLabMilestone,
+    GitLabNote, GitLabProject, GitLabUser, IssueFilter, IssueReferences, IssueState,
+    MilestoneState, StateEvent, UpdateIssueRequest,
 };

@@ -125,9 +125,7 @@ impl ImportValidation {
     pub fn issues_by_record(&self) -> HashMap<String, Vec<&ImportIssue>> {
         let mut map: HashMap<String, Vec<&ImportIssue>> = HashMap::new();
         for issue in &self.issues {
-            map.entry(issue.record_id.clone())
-                .or_default()
-                .push(issue);
+            map.entry(issue.record_id.clone()).or_default().push(issue);
         }
         map
     }
@@ -347,7 +345,14 @@ const KNOWN_TYPES: &[&str] = &[
 ];
 
 /// Known status strings (for validation)
-const KNOWN_STATUSES: &[&str] = &["Draft", "Approved", "Planned", "In Progress", "Completed", "Rejected"];
+const KNOWN_STATUSES: &[&str] = &[
+    "Draft",
+    "Approved",
+    "Planned",
+    "In Progress",
+    "Completed",
+    "Rejected",
+];
 
 /// Known priority strings (for validation)
 const KNOWN_PRIORITIES: &[&str] = &["High", "Medium", "Low"];
@@ -767,10 +772,7 @@ pub fn execute_import(
                     summary.warnings.push(format!(
                         "Skipped relationship from {} to {} (target not imported)",
                         record_id,
-                        raw_rel
-                            .target_spec_id
-                            .as_deref()
-                            .unwrap_or("unknown")
+                        raw_rel.target_spec_id.as_deref().unwrap_or("unknown")
                     ));
                 }
                 // Note: We'd add the relationship here if we had the full conversion logic

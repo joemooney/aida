@@ -1,5 +1,5 @@
 // trace:TASK-0001 | ai:claude
-import { apiFetch } from './client';
+import { apiFetch, buildApiHeaders } from './client';
 
 // ============================================================================
 // Types
@@ -48,10 +48,7 @@ export interface ActionResponse {
 export async function runSkill(name: string, _params?: object): Promise<Response> {
   const res = await fetch(`/api/v2/skills/${encodeURIComponent(name)}/run`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Project': 'default',
-    },
+    headers: buildApiHeaders(),
   });
 
   if (!res.ok) {
@@ -92,10 +89,7 @@ export async function sendSkillChat(
 ): Promise<Response> {
   const res = await fetch(`/api/v2/skills/${encodeURIComponent(name)}/chat`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Project': 'default',
-    },
+    headers: buildApiHeaders(),
     body: JSON.stringify({ messages, context }),
   });
 

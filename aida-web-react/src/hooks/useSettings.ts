@@ -14,6 +14,7 @@ import {
   fetchPrefixes, updatePrefixes,
   type StoreMetadata, type PrefixConfig,
 } from '../api/settings';
+import { requireWrite, usePermissions } from './usePermissions';
 
 // --- Metadata ---
 
@@ -26,9 +27,13 @@ export function useMetadata() {
 }
 
 export function useUpdateMetadata() {
+  const { canWrite } = usePermissions();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: Partial<StoreMetadata>) => updateMetadata(data),
+    mutationFn: (data: Partial<StoreMetadata>) => {
+      requireWrite(canWrite);
+      return updateMetadata(data);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'metadata'] }),
   });
 }
@@ -44,26 +49,37 @@ export function useRelationshipDefs() {
 }
 
 export function useCreateRelDef() {
+  const { canWrite } = usePermissions();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (def: RelationshipDefinition) => createRelationshipDef(def),
+    mutationFn: (def: RelationshipDefinition) => {
+      requireWrite(canWrite);
+      return createRelationshipDef(def);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'relationship-defs'] }),
   });
 }
 
 export function useUpdateRelDef() {
+  const { canWrite } = usePermissions();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ name, def }: { name: string; def: RelationshipDefinition }) =>
-      updateRelationshipDef(name, def),
+    mutationFn: ({ name, def }: { name: string; def: RelationshipDefinition }) => {
+      requireWrite(canWrite);
+      return updateRelationshipDef(name, def);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'relationship-defs'] }),
   });
 }
 
 export function useDeleteRelDef() {
+  const { canWrite } = usePermissions();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (name: string) => deleteRelationshipDef(name),
+    mutationFn: (name: string) => {
+      requireWrite(canWrite);
+      return deleteRelationshipDef(name);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'relationship-defs'] }),
   });
 }
@@ -79,26 +95,37 @@ export function useTypeDefs() {
 }
 
 export function useCreateTypeDef() {
+  const { canWrite } = usePermissions();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (def: CustomTypeDefinition) => createTypeDef(def),
+    mutationFn: (def: CustomTypeDefinition) => {
+      requireWrite(canWrite);
+      return createTypeDef(def);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'type-defs'] }),
   });
 }
 
 export function useUpdateTypeDef() {
+  const { canWrite } = usePermissions();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ name, def }: { name: string; def: CustomTypeDefinition }) =>
-      updateTypeDef(name, def),
+    mutationFn: ({ name, def }: { name: string; def: CustomTypeDefinition }) => {
+      requireWrite(canWrite);
+      return updateTypeDef(name, def);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'type-defs'] }),
   });
 }
 
 export function useDeleteTypeDef() {
+  const { canWrite } = usePermissions();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (name: string) => deleteTypeDef(name),
+    mutationFn: (name: string) => {
+      requireWrite(canWrite);
+      return deleteTypeDef(name);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'type-defs'] }),
   });
 }
@@ -114,26 +141,37 @@ export function useReactionDefs() {
 }
 
 export function useCreateReactionDef() {
+  const { canWrite } = usePermissions();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (def: ReactionDefinition) => createReactionDef(def),
+    mutationFn: (def: ReactionDefinition) => {
+      requireWrite(canWrite);
+      return createReactionDef(def);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'reaction-defs'] }),
   });
 }
 
 export function useUpdateReactionDef() {
+  const { canWrite } = usePermissions();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ name, def }: { name: string; def: ReactionDefinition }) =>
-      updateReactionDef(name, def),
+    mutationFn: ({ name, def }: { name: string; def: ReactionDefinition }) => {
+      requireWrite(canWrite);
+      return updateReactionDef(name, def);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'reaction-defs'] }),
   });
 }
 
 export function useDeleteReactionDef() {
+  const { canWrite } = usePermissions();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (name: string) => deleteReactionDef(name),
+    mutationFn: (name: string) => {
+      requireWrite(canWrite);
+      return deleteReactionDef(name);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'reaction-defs'] }),
   });
 }
@@ -149,9 +187,13 @@ export function useIdConfig() {
 }
 
 export function useUpdateIdConfig() {
+  const { canWrite } = usePermissions();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (config: IdConfiguration) => updateIdConfig(config),
+    mutationFn: (config: IdConfiguration) => {
+      requireWrite(canWrite);
+      return updateIdConfig(config);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'id-config'] }),
   });
 }
@@ -167,9 +209,13 @@ export function usePrefixes() {
 }
 
 export function useUpdatePrefixes() {
+  const { canWrite } = usePermissions();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (config: PrefixConfig) => updatePrefixes(config),
+    mutationFn: (config: PrefixConfig) => {
+      requireWrite(canWrite);
+      return updatePrefixes(config);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'prefixes'] }),
   });
 }

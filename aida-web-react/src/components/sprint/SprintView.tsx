@@ -13,6 +13,7 @@ import { Zap, Plus, Eye, EyeOff, LayoutGrid, BarChart3 } from 'lucide-react';
 import type { Requirement } from '@shared/types';
 import { useRequirements, useUpdateRequirement } from '../../hooks/useRequirements';
 import { useAssignToSprint, useRemoveFromSprint } from '../../hooks/useSprints';
+import { usePermissions } from '../../hooks/usePermissions';
 import { cn } from '../../lib/utils';
 import { Spinner } from '../ui/Spinner';
 import { EmptyState } from '../ui/EmptyState';
@@ -31,6 +32,7 @@ import {
 } from '../../lib/sprint-utils';
 
 export function SprintView() {
+  const { canWrite } = usePermissions();
   const { data: requirements, isLoading, error } = useRequirements();
   const assignMutation = useAssignToSprint();
   const removeMutation = useRemoveFromSprint();
@@ -131,6 +133,10 @@ export function SprintView() {
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
+      if (!canWrite) {
+        setActiveId(null);
+        return;
+      }
       setActiveId(null);
       const { active, over } = event;
       if (!over || !selectedSprintId) return;
@@ -155,7 +161,7 @@ export function SprintView() {
         assignMutation.mutate({ reqId, sprintId: targetId });
       }
     },
-    [allItems, selectedSprintId, assignMutation, removeMutation],
+    [allItems, canWrite, selectedSprintId, assignMutation, removeMutation],
   );
 
   const handleArchive = useCallback(
@@ -221,14 +227,21 @@ export function SprintView() {
             {showArchived ? 'Hide archived' : `Show archived (${archivedCount})`}
           </button>
         )}
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90 transition-colors"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          New Sprint
-        </button>
+        {canWrite && (
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-accent/90 transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            New Sprint
+          </button>
+        )}
       </div>
+      {!canWrite && (
+        <div className="rounded-lg border border-amber-600/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+          Sprint planning is read-only for your role. Drag-and-drop, sprint creation, and sprint edits are disabled.
+        </div>
+      )}
 
       {sprints.length === 0 && !showCreateModal ? (
         <EmptyState
@@ -243,9 +256,9 @@ export function SprintView() {
             sprintItemsMap={allSprintItemsMap}
             selectedId={selectedSprintId}
             onSelect={setSelectedSprintId}
-            onArchive={handleArchive}
-            onEdit={handleEdit}
-            onClose={handleCloseSprint}
+            onArchive={canWrite ? handleArchive : undefined}
+            onEdit={canWrite ? handleEdit : undefined}
+            onClose={canWrite ? handleCloseSprint : undefined}
           />
 
           {/* Tab toggle */}
@@ -310,7 +323,7 @@ export function SprintView() {
         </>
       )}
 
-      {showCreateModal && (
+      {showCreateModal && canWrite && (
         <CreateSprintModal
           nextSprintNumber={nextSprintNumber}
           onClose={() => setShowCreateModal(false)}

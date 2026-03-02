@@ -3,6 +3,7 @@ import { X, Pencil, Eye, Save } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { LinkedMarkdown } from '../ui/LinkedMarkdown';
 import { useSkill, useUpdateSkill } from '../../hooks/useSkills';
+import { usePermissions } from '../../hooks/usePermissions';
 import { Spinner } from '../ui/Spinner';
 
 interface SkillDetailPanelProps {
@@ -11,6 +12,7 @@ interface SkillDetailPanelProps {
 }
 
 export function SkillDetailPanel({ name, onClose }: SkillDetailPanelProps) {
+  const { canWrite } = usePermissions();
   const { data: skill, isLoading, error } = useSkill(name);
   const updateMutation = useUpdateSkill();
   const [editing, setEditing] = useState(false);
@@ -97,6 +99,11 @@ export function SkillDetailPanel({ name, onClose }: SkillDetailPanelProps) {
                 </span>
               </div>
               <div className="flex items-center gap-2">
+                {!canWrite && (
+                  <span className="text-[11px] text-amber-300 bg-amber-500/10 rounded-md px-2 py-1">
+                    Read-only: skill editing disabled
+                  </span>
+                )}
                 {editing ? (
                   <button
                     onClick={handleSave}
@@ -109,7 +116,9 @@ export function SkillDetailPanel({ name, onClose }: SkillDetailPanelProps) {
                 ) : null}
                 <button
                   onClick={() => setEditing((e) => !e)}
-                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-content-secondary hover:text-content hover:bg-surface-hover transition-colors cursor-pointer"
+                  disabled={!canWrite}
+                  title={!canWrite ? 'Read-only: cannot edit skill content' : undefined}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-content-secondary hover:text-content hover:bg-surface-hover transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {editing ? (
                     <>

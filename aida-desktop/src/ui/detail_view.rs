@@ -3,11 +3,11 @@
 //!
 //! Components for displaying full requirement details.
 
-use egui::{Color32, RichText, ScrollArea, Ui};
-use crate::storage::proto::Requirement;
-use super::badges::{status_badge, priority_badge, type_badge};
-use super::comment_list::{comment_list, comment_input, CommentInputConfig};
+use super::badges::{priority_badge, status_badge, type_badge};
+use super::comment_list::{comment_input, comment_list, CommentInputConfig};
 use super::formatters::format_timestamp;
+use crate::storage::proto::Requirement;
+use egui::{Color32, RichText, ScrollArea, Ui};
 
 /// Actions that can be triggered from the detail view
 #[derive(Debug, Clone, PartialEq)]
@@ -145,8 +145,7 @@ pub fn requirement_detail_view(
             ui.horizontal_wrapped(|ui| {
                 for tag in &req.tags {
                     ui.label(
-                        RichText::new(format!("#{}", tag))
-                            .color(Color32::from_rgb(100, 150, 200))
+                        RichText::new(format!("#{}", tag)).color(Color32::from_rgb(100, 150, 200)),
                     );
                 }
             });
@@ -187,7 +186,8 @@ pub fn requirement_detail_view(
     // Comment input outside ScrollArea to avoid borrow conflicts
     if config.show_comments {
         ui.separator();
-        if let Some(content) = comment_input(ui, comment_input_text, &CommentInputConfig::default()) {
+        if let Some(content) = comment_input(ui, comment_input_text, &CommentInputConfig::default())
+        {
             action = Some(DetailViewAction::AddComment(content));
         }
     }

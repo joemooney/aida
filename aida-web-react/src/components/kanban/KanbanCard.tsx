@@ -1,10 +1,10 @@
-import { useDraggable } from '@dnd-kit/core';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { ArrowUp, Minus, ArrowDown } from 'lucide-react';
 import type { Requirement } from '@shared/types';
 import { cn } from '../../lib/utils';
 import { TypeBadge } from '../ui/Badge';
 import { Avatar } from '../ui/Avatar';
-import { useDetailPanel } from '../../hooks/useDetailPanel';
 
 const priorityIcons = {
   High: ArrowUp,
@@ -21,36 +21,92 @@ const priorityColors = {
 interface KanbanCardProps {
   requirement: Requirement;
   isDragOverlay?: boolean;
+  highlighted?: boolean;
+  selected?: boolean;
+  onActivate?: (id: string) => void;
+  onKeyAction?: (
+    id: string,
+    action: 'left' | 'right' | 'up' | 'down' | 'enter' | 'space' | 'escape',
+  ) => void;
 }
 
-export function KanbanCard({ requirement, isDragOverlay = false }: KanbanCardProps) {
-  const { open } = useDetailPanel();
+export function KanbanCard({
+  requirement,
+  isDragOverlay = false,
+  highlighted = false,
+  selected = false,
+  onActivate,
+  onKeyAction,
+}: KanbanCardProps) {
   const {
     attributes,
     listeners,
     setNodeRef,
     transform,
+    transition,
     isDragging,
-  } = useDraggable({ id: requirement.id });
+  } = useSortable({
+    id: requirement.id,
+    data: {
+      type: 'card',
+      status: requirement.status,
+    },
+  });
 
-  const style = transform
-    ? { transform: `translate(${transform.x}px, ${transform.y}px)` }
-    : undefined;
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
 
   const PriorityIcon = priorityIcons[requirement.priority];
 
   return (
     <div
       ref={setNodeRef}
+      id={`kanban-card-${requirement.id}`}
+      data-kanban-card-id={requirement.id}
       style={style}
       {...attributes}
       {...listeners}
-      onClick={() => !isDragging && open(requirement.spec_id ?? requirement.id)}
+      onClick={() => {
+        if (!isDragging && onActivate) onActivate(requirement.id);
+      }}
+      onKeyDown={(e) => {
+        if (!onKeyAction) return;
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          onKeyAction(requirement.id, 'left');
+        } else if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          onKeyAction(requirement.id, 'right');
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          onKeyAction(requirement.id, 'up');
+        } else if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          onKeyAction(requirement.id, 'down');
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          onKeyAction(requirement.id, 'enter');
+        } else if (e.key === ' ') {
+          e.preventDefault();
+          onKeyAction(requirement.id, 'space');
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          onKeyAction(requirement.id, 'escape');
+        }
+      }}
+      tabIndex={0}
+      aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown Enter Space Escape"
+      aria-label={`Requirement ${requirement.spec_id ?? requirement.id}. Use arrow keys to move.`}
       className={cn(
         'rounded-lg border border-edge bg-surface-raised p-3 cursor-grab active:cursor-grabbing',
         'transition-shadow hover:border-edge-hover hover:shadow-md hover:shadow-black/10',
+        'focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:border-accent focus-visible:bg-accent/5',
         isDragging && 'opacity-40',
         isDragOverlay && 'shadow-xl shadow-black/30 rotate-2 border-accent/50',
+        highlighted && 'ring-2 ring-accent/70 border-accent animate-pulse',
+        selected && 'ring-2 ring-blue-400/70 border-blue-400',
       )}
     >
       {/* Spec ID + Priority */}

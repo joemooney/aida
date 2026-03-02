@@ -6,9 +6,9 @@
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 
+use super::traits::{BackendType, DatabaseBackend};
 use crate::models::RequirementsStore;
 use crate::storage::Storage;
-use super::traits::{BackendType, DatabaseBackend};
 
 /// YAML file backend implementation
 ///
@@ -138,12 +138,10 @@ impl YamlBackend {
             .ok();
 
         match output {
-            Some(o) if o.status.success() => {
-                String::from_utf8_lossy(&o.stdout)
-                    .lines()
-                    .map(|s| s.to_string())
-                    .collect()
-            }
+            Some(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .map(|s| s.to_string())
+                .collect(),
             _ => Vec::new(),
         }
     }

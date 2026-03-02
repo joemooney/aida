@@ -6,12 +6,15 @@ import { Avatar } from '../ui/Avatar';
 import { EditableText } from '../ui/EditableField';
 import { formatDate, cn } from '../../lib/utils';
 import { useUpdateRequirement } from '../../hooks/useRequirements';
+import { usePermissions } from '../../hooks/usePermissions';
 
 interface DetailBodyProps {
   requirement: Requirement;
+  autoEditDescription?: boolean;
 }
 
-export function DetailBody({ requirement }: DetailBodyProps) {
+export function DetailBody({ requirement, autoEditDescription = false }: DetailBodyProps) {
+  const { canWrite } = usePermissions();
   const updateReq = useUpdateRequirement();
   const reqId = requirement.spec_id ?? requirement.id;
   const [newTag, setNewTag] = useState('');
@@ -34,6 +37,12 @@ export function DetailBody({ requirement }: DetailBodyProps) {
       descRef.current.setSelectionRange(len, len);
     }
   }, [editingDesc]);
+
+  useEffect(() => {
+    if (autoEditDescription && canWrite) {
+      setEditingDesc(true);
+    }
+  }, [autoEditDescription, canWrite, requirement.id]);
 
   function saveDesc() {
     const trimmed = descDraft.trim();
@@ -74,6 +83,11 @@ export function DetailBody({ requirement }: DetailBodyProps) {
       {/* Description */}
       <div>
         <h3 className="text-xs font-medium uppercase tracking-wider text-content-muted mb-2">Description</h3>
+        {!canWrite && (
+          <p className="mb-2 text-xs text-content-muted">
+            Read-only: description editing is disabled.
+          </p>
+        )}
         {editingDesc ? (
           <div className="space-y-2">
             {/* Toolbar */}
@@ -181,9 +195,14 @@ export function DetailBody({ requirement }: DetailBodyProps) {
           </div>
         ) : (
           <div
-            onClick={() => setEditingDesc(true)}
-            className="group/desc relative cursor-pointer rounded-lg hover:bg-surface-hover/50 -mx-2 px-2 py-1 transition-colors"
-            title="Click to edit"
+            onClick={() => {
+              if (canWrite) setEditingDesc(true);
+            }}
+            className={cn(
+              'group/desc relative rounded-lg -mx-2 px-2 py-1 transition-colors',
+              canWrite ? 'cursor-pointer hover:bg-surface-hover/50' : 'cursor-default',
+            )}
+            title={canWrite ? 'Click to edit' : undefined}
           >
             {requirement.description ? (
               <LinkedMarkdown className="prose prose-sm prose-invert max-w-none text-content prose-headings:text-content prose-strong:text-content prose-code:text-accent prose-code:bg-surface-hover prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:before:content-none prose-code:after:content-none prose-pre:bg-surface-hover prose-pre:border prose-pre:border-edge prose-a:text-accent">
@@ -192,7 +211,9 @@ export function DetailBody({ requirement }: DetailBodyProps) {
             ) : (
               <span className="text-sm text-content-muted italic">Add a description...</span>
             )}
-            <Pencil className="absolute right-1.5 top-2 h-3 w-3 text-content-muted opacity-0 group-hover/desc:opacity-100 transition-opacity" />
+            {canWrite && (
+              <Pencil className="absolute right-1.5 top-2 h-3 w-3 text-content-muted opacity-0 group-hover/desc:opacity-100 transition-opacity" />
+            )}
           </div>
         )}
       </div>
@@ -200,6 +221,11 @@ export function DetailBody({ requirement }: DetailBodyProps) {
       {/* Metadata */}
       <div>
         <h3 className="text-xs font-medium uppercase tracking-wider text-content-muted mb-3">Details</h3>
+        {!canWrite && (
+          <p className="mb-3 text-xs text-content-muted">
+            Read-only: owner and feature fields cannot be changed.
+          </p>
+        )}
         <div className="space-y-3">
           {/* Owner — editable */}
           <div className="flex items-center justify-between">
@@ -211,6 +237,7 @@ export function DetailBody({ requirement }: DetailBodyProps) {
                 onSave={(owner) => save({ owner })}
                 className="text-sm text-content"
                 placeholder="Assign owner..."
+                disabled={!canWrite}
               />
             </div>
           </div>
@@ -223,6 +250,7 @@ export function DetailBody({ requirement }: DetailBodyProps) {
               onSave={(feature) => save({ feature })}
               className="text-sm text-content"
               placeholder="Set feature..."
+              disabled={!canWrite}
             />
           </div>
 
@@ -241,12 +269,19 @@ export function DetailBody({ requirement }: DetailBodyProps) {
       {/* Tags — editable */}
       <div>
         <h3 className="text-xs font-medium uppercase tracking-wider text-content-muted mb-2">Tags</h3>
+        {!canWrite && (
+          <p className="mb-2 text-xs text-content-muted">
+            Read-only: tag add/remove is disabled.
+          </p>
+        )}
         <div className="flex flex-wrap gap-1.5 mb-2">
           {(requirement.tags ?? []).map((tag) => (
             <span key={tag} className="inline-flex items-center gap-1 rounded-md bg-surface-hover pl-2 pr-1 py-0.5 text-xs text-content-secondary group/tag">
               {tag}
               <button
                 onClick={() => removeTag(tag)}
+                disabled={!canWrite}
+                title={!canWrite ? 'Read-only: cannot remove tags' : 'Remove tag'}
                 className="rounded-sm p-0.5 text-content-muted hover:text-red-400 opacity-0 group-hover/tag:opacity-100 transition-opacity cursor-pointer"
               >
                 <X className="h-2.5 w-2.5" />
@@ -261,11 +296,13 @@ export function DetailBody({ requirement }: DetailBodyProps) {
             onChange={(e) => setNewTag(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && addTag()}
             placeholder="Add tag..."
+            disabled={!canWrite}
             className="flex-1 rounded-md border border-edge bg-surface px-2 py-1 text-xs text-content placeholder:text-content-muted focus:border-accent focus:outline-none"
           />
           <button
             onClick={addTag}
-            disabled={!newTag.trim()}
+            disabled={!newTag.trim() || !canWrite}
+            title={!canWrite ? 'Read-only: cannot add tags' : 'Add tag'}
             className="flex h-6 w-6 items-center justify-center rounded-md text-content-muted hover:text-accent hover:bg-surface-hover disabled:opacity-30 transition-colors cursor-pointer disabled:cursor-not-allowed"
           >
             <Plus className="h-3.5 w-3.5" />

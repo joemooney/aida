@@ -9,8 +9,8 @@
 //! - Tree export/import for portability between databases
 
 use crate::models::{
-    Comment, MetaSubtype, RelationshipType, Requirement, RequirementPriority,
-    RequirementStatus, RequirementType, RequirementsStore,
+    Comment, MetaSubtype, RelationshipType, Requirement, RequirementPriority, RequirementStatus,
+    RequirementType, RequirementsStore,
 };
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Utc};
@@ -149,7 +149,10 @@ pub fn export_requirements_spec(store: &RequirementsStore, output_path: &Path) -
             for req in sorted_reqs {
                 let spec_id = req.spec_id.as_deref().unwrap_or("N/A");
                 output.push_str(&format!("### {} - {}\n\n", spec_id, req.title));
-                output.push_str(&format!("**Status:** {:?} | **Priority:** {:?}\n\n", req.status, req.priority));
+                output.push_str(&format!(
+                    "**Status:** {:?} | **Priority:** {:?}\n\n",
+                    req.status, req.priority
+                ));
 
                 if !req.description.is_empty() {
                     output.push_str(&format!("{}\n\n", req.description));
@@ -158,9 +161,14 @@ pub fn export_requirements_spec(store: &RequirementsStore, output_path: &Path) -
                 // Show parent relationship if exists
                 for rel in &req.relationships {
                     if rel.rel_type == crate::models::RelationshipType::Parent {
-                        if let Some(parent) = store.requirements.iter().find(|r| r.id == rel.target_id) {
+                        if let Some(parent) =
+                            store.requirements.iter().find(|r| r.id == rel.target_id)
+                        {
                             let parent_spec_id = parent.spec_id.as_deref().unwrap_or("N/A");
-                            output.push_str(&format!("**Parent:** {} - {}\n\n", parent_spec_id, parent.title));
+                            output.push_str(&format!(
+                                "**Parent:** {} - {}\n\n",
+                                parent_spec_id, parent.title
+                            ));
                         }
                     }
                 }
@@ -170,11 +178,16 @@ pub fn export_requirements_spec(store: &RequirementsStore, output_path: &Path) -
 
     fs::write(output_path, output)?;
 
-    let req_count = store.requirements.iter()
+    let req_count = store
+        .requirements
+        .iter()
         .filter(|r| !r.spec_id.as_deref().unwrap_or("").starts_with("IMPL-"))
         .count();
 
-    println!("Exported requirements specification: {}", output_path.display());
+    println!(
+        "Exported requirements specification: {}",
+        output_path.display()
+    );
     println!("  Total requirements: {} (excluding IMPL tasks)", req_count);
 
     Ok(())
@@ -196,7 +209,9 @@ pub fn export_implementation_records(store: &RequirementsStore, output_path: &Pa
     output.push_str("This document contains implementation details and design records.\n\n");
 
     // Get all IMPL tasks, sorted
-    let mut impl_tasks: Vec<_> = store.requirements.iter()
+    let mut impl_tasks: Vec<_> = store
+        .requirements
+        .iter()
         .filter(|r| r.spec_id.as_deref().unwrap_or("").starts_with("IMPL-"))
         .collect();
 
@@ -205,7 +220,8 @@ pub fn export_implementation_records(store: &RequirementsStore, output_path: &Pa
     for req in &impl_tasks {
         let spec_id = req.spec_id.as_deref().unwrap_or("N/A");
         output.push_str(&format!("## {} - {}\n\n", spec_id, req.title));
-        output.push_str(&format!("**Status:** {:?} | **Date:** {}\n\n",
+        output.push_str(&format!(
+            "**Status:** {:?} | **Date:** {}\n\n",
             req.status,
             req.created_at.format("%Y-%m-%d")
         ));
@@ -215,7 +231,10 @@ pub fn export_implementation_records(store: &RequirementsStore, output_path: &Pa
             if rel.rel_type == crate::models::RelationshipType::Parent {
                 if let Some(parent) = store.requirements.iter().find(|r| r.id == rel.target_id) {
                     let parent_spec_id = parent.spec_id.as_deref().unwrap_or("N/A");
-                    output.push_str(&format!("**Implements:** {} - {}\n\n", parent_spec_id, parent.title));
+                    output.push_str(&format!(
+                        "**Implements:** {} - {}\n\n",
+                        parent_spec_id, parent.title
+                    ));
                 }
             }
         }
@@ -430,7 +449,10 @@ fn export_requirement_tree(
         .filter(|rel| !tree_uuids.contains(&rel.target_id))
         .filter(|rel| {
             // Exclude Parent/Child relationships (structural)
-            !matches!(rel.rel_type, RelationshipType::Parent | RelationshipType::Child)
+            !matches!(
+                rel.rel_type,
+                RelationshipType::Parent | RelationshipType::Child
+            )
         })
         .map(|rel| {
             let target_spec_id = store

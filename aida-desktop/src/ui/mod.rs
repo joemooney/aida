@@ -8,18 +8,18 @@
 //! making them suitable for both platforms.
 
 mod badges;
+mod comment_list;
+mod detail_view;
 mod formatters;
 mod list_item;
 mod requirement_form;
-mod comment_list;
-mod detail_view;
 
 pub use badges::*;
+pub use comment_list::*;
+pub use detail_view::*;
 pub use formatters::*;
 pub use list_item::*;
 pub use requirement_form::*;
-pub use comment_list::*;
-pub use detail_view::*;
 
 // Re-export proto types for convenience
 pub use crate::storage::proto;

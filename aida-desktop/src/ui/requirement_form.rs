@@ -3,9 +3,9 @@
 //!
 //! Reusable form components for creating and editing requirements.
 
-use egui::{TextEdit, Ui};
+use super::formatters::{format_priority, format_status, format_type};
 use crate::storage::proto::{RequirementPriority, RequirementStatus, RequirementType};
-use super::formatters::{format_status, format_priority, format_type};
+use egui::{TextEdit, Ui};
 
 /// Form data for creating/editing requirements
 #[derive(Default, Clone)]
@@ -68,7 +68,8 @@ impl RequirementFormData {
 
     /// Parse tags from the input string
     pub fn parse_tags(&mut self) {
-        self.tags = self.tags_input
+        self.tags = self
+            .tags_input
             .split(',')
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
@@ -246,22 +247,40 @@ pub fn status_combo(ui: &mut Ui, status: &mut i32) -> bool {
     egui::ComboBox::from_id_salt("status_combo")
         .selected_text(current_text)
         .show_ui(ui, |ui| {
-            if ui.selectable_value(status, RequirementStatus::Draft.into(), "Draft").changed() {
+            if ui
+                .selectable_value(status, RequirementStatus::Draft.into(), "Draft")
+                .changed()
+            {
                 changed = true;
             }
-            if ui.selectable_value(status, RequirementStatus::Approved.into(), "Approved").changed() {
+            if ui
+                .selectable_value(status, RequirementStatus::Approved.into(), "Approved")
+                .changed()
+            {
                 changed = true;
             }
-            if ui.selectable_value(status, RequirementStatus::Planned.into(), "Planned").changed() {
+            if ui
+                .selectable_value(status, RequirementStatus::Planned.into(), "Planned")
+                .changed()
+            {
                 changed = true;
             }
-            if ui.selectable_value(status, RequirementStatus::InProgress.into(), "In Progress").changed() {
+            if ui
+                .selectable_value(status, RequirementStatus::InProgress.into(), "In Progress")
+                .changed()
+            {
                 changed = true;
             }
-            if ui.selectable_value(status, RequirementStatus::Completed.into(), "Completed").changed() {
+            if ui
+                .selectable_value(status, RequirementStatus::Completed.into(), "Completed")
+                .changed()
+            {
                 changed = true;
             }
-            if ui.selectable_value(status, RequirementStatus::Rejected.into(), "Rejected").changed() {
+            if ui
+                .selectable_value(status, RequirementStatus::Rejected.into(), "Rejected")
+                .changed()
+            {
                 changed = true;
             }
         });
@@ -279,13 +298,22 @@ pub fn priority_combo(ui: &mut Ui, priority: &mut i32) -> bool {
     egui::ComboBox::from_id_salt("priority_combo")
         .selected_text(current_text)
         .show_ui(ui, |ui| {
-            if ui.selectable_value(priority, RequirementPriority::High.into(), "High").changed() {
+            if ui
+                .selectable_value(priority, RequirementPriority::High.into(), "High")
+                .changed()
+            {
                 changed = true;
             }
-            if ui.selectable_value(priority, RequirementPriority::Medium.into(), "Medium").changed() {
+            if ui
+                .selectable_value(priority, RequirementPriority::Medium.into(), "Medium")
+                .changed()
+            {
                 changed = true;
             }
-            if ui.selectable_value(priority, RequirementPriority::Low.into(), "Low").changed() {
+            if ui
+                .selectable_value(priority, RequirementPriority::Low.into(), "Low")
+                .changed()
+            {
                 changed = true;
             }
         });
@@ -303,25 +331,50 @@ pub fn type_combo(ui: &mut Ui, req_type: &mut i32) -> bool {
     egui::ComboBox::from_id_salt("type_combo")
         .selected_text(current_text)
         .show_ui(ui, |ui| {
-            if ui.selectable_value(req_type, RequirementType::Functional.into(), "Functional").changed() {
+            if ui
+                .selectable_value(req_type, RequirementType::Functional.into(), "Functional")
+                .changed()
+            {
                 changed = true;
             }
-            if ui.selectable_value(req_type, RequirementType::NonFunctional.into(), "Non-Functional").changed() {
+            if ui
+                .selectable_value(
+                    req_type,
+                    RequirementType::NonFunctional.into(),
+                    "Non-Functional",
+                )
+                .changed()
+            {
                 changed = true;
             }
-            if ui.selectable_value(req_type, RequirementType::Bug.into(), "Bug").changed() {
+            if ui
+                .selectable_value(req_type, RequirementType::Bug.into(), "Bug")
+                .changed()
+            {
                 changed = true;
             }
-            if ui.selectable_value(req_type, RequirementType::Epic.into(), "Epic").changed() {
+            if ui
+                .selectable_value(req_type, RequirementType::Epic.into(), "Epic")
+                .changed()
+            {
                 changed = true;
             }
-            if ui.selectable_value(req_type, RequirementType::Story.into(), "Story").changed() {
+            if ui
+                .selectable_value(req_type, RequirementType::Story.into(), "Story")
+                .changed()
+            {
                 changed = true;
             }
-            if ui.selectable_value(req_type, RequirementType::Task.into(), "Task").changed() {
+            if ui
+                .selectable_value(req_type, RequirementType::Task.into(), "Task")
+                .changed()
+            {
                 changed = true;
             }
-            if ui.selectable_value(req_type, RequirementType::Spike.into(), "Spike").changed() {
+            if ui
+                .selectable_value(req_type, RequirementType::Spike.into(), "Spike")
+                .changed()
+            {
                 changed = true;
             }
         });

@@ -1,11 +1,16 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { assignToSprint, removeFromSprint, createSprint, type CreateSprintData } from '../api/sprints';
+import { requireWrite, usePermissions } from './usePermissions';
 
 export function useCreateSprint() {
+  const { canWrite } = usePermissions();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: CreateSprintData) => createSprint(data),
+    mutationFn: (data: CreateSprintData) => {
+      requireWrite(canWrite);
+      return createSprint(data);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['requirements'] });
     },
@@ -13,11 +18,14 @@ export function useCreateSprint() {
 }
 
 export function useAssignToSprint() {
+  const { canWrite } = usePermissions();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ reqId, sprintId }: { reqId: string; sprintId: string }) =>
-      assignToSprint(reqId, sprintId),
+    mutationFn: ({ reqId, sprintId }: { reqId: string; sprintId: string }) => {
+      requireWrite(canWrite);
+      return assignToSprint(reqId, sprintId);
+    },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['requirements'] });
     },
@@ -25,10 +33,14 @@ export function useAssignToSprint() {
 }
 
 export function useRemoveFromSprint() {
+  const { canWrite } = usePermissions();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (reqId: string) => removeFromSprint(reqId),
+    mutationFn: (reqId: string) => {
+      requireWrite(canWrite);
+      return removeFromSprint(reqId);
+    },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['requirements'] });
     },

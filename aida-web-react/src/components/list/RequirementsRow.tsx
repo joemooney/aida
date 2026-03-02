@@ -8,6 +8,7 @@ import { Avatar } from '../ui/Avatar';
 import { formatRelativeDate } from '../../lib/utils';
 import { useDetailPanel } from '../../hooks/useDetailPanel';
 import { useAddToQueue } from '../../hooks/useQueue';
+import { usePermissions } from '../../hooks/usePermissions';
 
 interface RequirementsRowProps {
   requirement: Requirement;
@@ -19,6 +20,7 @@ export const RequirementsRow = forwardRef<HTMLTableRowElement, RequirementsRowPr
   function RequirementsRow({ requirement, isSelected, onClick }, ref) {
     const { open } = useDetailPanel();
     const addToQueue = useAddToQueue();
+    const { canWrite } = usePermissions();
     const {
       attributes,
       listeners,
@@ -110,16 +112,18 @@ export const RequirementsRow = forwardRef<HTMLTableRowElement, RequirementsRowPr
         <td className="py-3 px-4 text-right">
           <div className="flex items-center justify-end gap-1">
             <span className="text-xs text-content-muted">{formatRelativeDate(requirement.modified_at)}</span>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                addToQueue.mutate({ requirement_id: requirement.id });
-              }}
-              title="Add to queue"
-              className="flex h-6 w-6 items-center justify-center rounded text-content-muted opacity-0 group-hover:opacity-100 hover:text-accent hover:bg-accent/10 transition-all cursor-pointer"
-            >
-              <ListPlus className="h-3.5 w-3.5" />
-            </button>
+            {canWrite && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  addToQueue.mutate({ requirement_id: requirement.id });
+                }}
+                title="Add to queue"
+                className="flex h-6 w-6 items-center justify-center rounded text-content-muted opacity-0 group-hover:opacity-100 hover:text-accent hover:bg-accent/10 transition-all cursor-pointer"
+              >
+                <ListPlus className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
         </td>
       </tr>

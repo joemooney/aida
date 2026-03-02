@@ -172,12 +172,17 @@ pub fn relationship_to_proto(rel: &Relationship) -> proto::Relationship {
 
 pub fn proto_to_relationship(rel: &proto::Relationship) -> Option<Relationship> {
     let target_id = Uuid::parse_str(&rel.target_id).ok()?;
-    let rel_type_enum = proto::RelationshipType::try_from(rel.rel_type).unwrap_or(proto::RelationshipType::Unspecified);
+    let rel_type_enum = proto::RelationshipType::try_from(rel.rel_type)
+        .unwrap_or(proto::RelationshipType::Unspecified);
     Some(Relationship {
         target_id,
         rel_type: proto_to_rel_type(rel_type_enum, &rel.custom_type_name),
         created_at: rel.created_at.clone().map(|t| proto_to_datetime(Some(t))),
-        created_by: if rel.created_by.is_empty() { None } else { Some(rel.created_by.clone()) },
+        created_by: if rel.created_by.is_empty() {
+            None
+        } else {
+            Some(rel.created_by.clone())
+        },
     })
 }
 
@@ -192,7 +197,10 @@ pub fn comment_to_proto(comment: &Comment) -> proto::Comment {
         author: comment.author.clone(),
         created_at: Some(datetime_to_proto(comment.created_at)),
         modified_at: Some(datetime_to_proto(comment.modified_at)),
-        parent_id: comment.parent_id.map(|id| id.to_string()).unwrap_or_default(),
+        parent_id: comment
+            .parent_id
+            .map(|id| id.to_string())
+            .unwrap_or_default(),
         reactions: comment.reactions.iter().map(reaction_to_proto).collect(),
         // Note: replies are nested in the core model but flattened in proto
     }
@@ -206,9 +214,17 @@ pub fn proto_to_comment(comment: &proto::Comment) -> Option<Comment> {
         author: comment.author.clone(),
         created_at: proto_to_datetime(comment.created_at.clone()),
         modified_at: proto_to_datetime(comment.modified_at.clone()),
-        parent_id: if comment.parent_id.is_empty() { None } else { Uuid::parse_str(&comment.parent_id).ok() },
+        parent_id: if comment.parent_id.is_empty() {
+            None
+        } else {
+            Uuid::parse_str(&comment.parent_id).ok()
+        },
         replies: Vec::new(), // Replies handled separately
-        reactions: comment.reactions.iter().filter_map(proto_to_reaction).collect(),
+        reactions: comment
+            .reactions
+            .iter()
+            .filter_map(proto_to_reaction)
+            .collect(),
     })
 }
 
@@ -288,7 +304,11 @@ pub fn proto_to_url_link(link: &proto::UrlLink) -> UrlLink {
         id: Uuid::parse_str(&link.id).unwrap_or_else(|_| Uuid::new_v4()),
         url: link.url.clone(),
         title: link.title.clone(),
-        description: if link.description.is_empty() { None } else { Some(link.description.clone()) },
+        description: if link.description.is_empty() {
+            None
+        } else {
+            Some(link.description.clone())
+        },
         open_mode: proto_to_url_open_mode(link.open_mode),
         added_at: proto_to_datetime(link.added_at.clone()),
         added_by: link.added_by.clone(),
@@ -318,7 +338,11 @@ pub fn requirement_to_proto(req: &Requirement) -> proto::Requirement {
         req_type: req_type_to_proto(&req.req_type).into(),
         dependency_ids: req.dependencies.iter().map(|id| id.to_string()).collect(),
         tags: req.tags.iter().cloned().collect(),
-        relationships: req.relationships.iter().map(relationship_to_proto).collect(),
+        relationships: req
+            .relationships
+            .iter()
+            .map(relationship_to_proto)
+            .collect(),
         comments: req.comments.iter().map(comment_to_proto).collect(),
         history: req.history.iter().map(history_to_proto).collect(),
         archived: req.archived,
@@ -331,14 +355,25 @@ pub fn requirement_to_proto(req: &Requirement) -> proto::Requirement {
 
 pub fn proto_to_requirement(req: &proto::Requirement) -> Option<Requirement> {
     let id = Uuid::parse_str(&req.id).ok()?;
-    let status_enum = proto::RequirementStatus::try_from(req.status).unwrap_or(proto::RequirementStatus::Unspecified);
-    let priority_enum = proto::RequirementPriority::try_from(req.priority).unwrap_or(proto::RequirementPriority::Unspecified);
-    let type_enum = proto::RequirementType::try_from(req.req_type).unwrap_or(proto::RequirementType::Unspecified);
+    let status_enum = proto::RequirementStatus::try_from(req.status)
+        .unwrap_or(proto::RequirementStatus::Unspecified);
+    let priority_enum = proto::RequirementPriority::try_from(req.priority)
+        .unwrap_or(proto::RequirementPriority::Unspecified);
+    let type_enum = proto::RequirementType::try_from(req.req_type)
+        .unwrap_or(proto::RequirementType::Unspecified);
 
     Some(Requirement {
         id,
-        spec_id: if req.spec_id.is_empty() { None } else { Some(req.spec_id.clone()) },
-        prefix_override: if req.prefix_override.is_empty() { None } else { Some(req.prefix_override.clone()) },
+        spec_id: if req.spec_id.is_empty() {
+            None
+        } else {
+            Some(req.spec_id.clone())
+        },
+        prefix_override: if req.prefix_override.is_empty() {
+            None
+        } else {
+            Some(req.prefix_override.clone())
+        },
         title: req.title.clone(),
         description: req.description.clone(),
         status: proto_to_status(status_enum),
@@ -346,26 +381,46 @@ pub fn proto_to_requirement(req: &proto::Requirement) -> Option<Requirement> {
         owner: req.owner.clone(),
         feature: req.feature.clone(),
         created_at: proto_to_datetime(req.created_at.clone()),
-        created_by: if req.created_by.is_empty() { None } else { Some(req.created_by.clone()) },
+        created_by: if req.created_by.is_empty() {
+            None
+        } else {
+            Some(req.created_by.clone())
+        },
         modified_at: proto_to_datetime(req.modified_at.clone()),
         req_type: proto_to_req_type(type_enum),
         meta_subtype: None, // Not exposed via gRPC yet
-        dependencies: req.dependency_ids.iter().filter_map(|id| Uuid::parse_str(id).ok()).collect(),
+        dependencies: req
+            .dependency_ids
+            .iter()
+            .filter_map(|id| Uuid::parse_str(id).ok())
+            .collect(),
         tags: req.tags.iter().cloned().collect(),
-        relationships: req.relationships.iter().filter_map(proto_to_relationship).collect(),
+        relationships: req
+            .relationships
+            .iter()
+            .filter_map(proto_to_relationship)
+            .collect(),
         comments: req.comments.iter().filter_map(proto_to_comment).collect(),
         history: Vec::new(), // History is read-only from server
         archived: req.archived,
-        custom_status: if req.custom_status.is_empty() { None } else { Some(req.custom_status.clone()) },
-        custom_priority: if req.custom_priority.is_empty() { None } else { Some(req.custom_priority.clone()) },
+        custom_status: if req.custom_status.is_empty() {
+            None
+        } else {
+            Some(req.custom_status.clone())
+        },
+        custom_priority: if req.custom_priority.is_empty() {
+            None
+        } else {
+            Some(req.custom_priority.clone())
+        },
         custom_fields: req.custom_fields.clone(),
         urls: req.urls.iter().map(proto_to_url_link).collect(),
-        ai_evaluation: None, // AI evaluation is not exposed via gRPC
-        trace_links: Vec::new(), // Trace links are not exposed via gRPC yet
+        ai_evaluation: None,       // AI evaluation is not exposed via gRPC
+        trace_links: Vec::new(),   // Trace links are not exposed via gRPC yet
         implementation_info: None, // Implementation info is not exposed via gRPC yet
-        weight: None, // Weight is not exposed via gRPC yet
-        version: 1, // New requirements start at version 1
-        attachments: Vec::new(), // Attachments are not exposed via gRPC yet
+        weight: None,              // Weight is not exposed via gRPC yet
+        version: 1,                // New requirements start at version 1
+        attachments: Vec::new(),   // Attachments are not exposed via gRPC yet
         gitlab_issues: Vec::new(), // GitLab issues are not exposed via gRPC yet
     })
 }
@@ -471,7 +526,11 @@ pub fn type_def_to_proto(def: &CustomTypeDefinition) -> proto::CustomTypeDefinit
         description: def.description.clone().unwrap_or_default(),
         prefix: def.prefix.clone().unwrap_or_default(),
         statuses: def.statuses.clone(),
-        custom_fields: def.custom_fields.iter().map(custom_field_to_proto).collect(),
+        custom_fields: def
+            .custom_fields
+            .iter()
+            .map(custom_field_to_proto)
+            .collect(),
         built_in: def.built_in,
         color: def.color.clone().unwrap_or_default(),
         stateless: def.stateless,
@@ -527,7 +586,11 @@ pub fn ai_prompts_to_proto(config: &AiPromptConfig) -> proto::AiPromptConfig {
         relationships: Some(ai_action_to_proto(&config.relationships)),
         improve: Some(ai_action_to_proto(&config.improve)),
         generate_children: Some(ai_action_to_proto(&config.generate_children)),
-        type_prompts: config.type_prompts.iter().map(type_prompt_to_proto).collect(),
+        type_prompts: config
+            .type_prompts
+            .iter()
+            .map(type_prompt_to_proto)
+            .collect(),
     }
 }
 
@@ -540,7 +603,11 @@ pub fn store_to_proto(store: &RequirementsStore) -> proto::RequirementsStore {
         name: store.name.clone(),
         title: store.title.clone(),
         description: store.description.clone(),
-        requirements: store.requirements.iter().map(requirement_to_proto).collect(),
+        requirements: store
+            .requirements
+            .iter()
+            .map(requirement_to_proto)
+            .collect(),
         users: store.users.iter().map(user_to_proto).collect(),
         features: store.features.iter().map(feature_to_proto).collect(),
         id_config: Some(id_config_to_proto(&store.id_config)),

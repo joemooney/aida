@@ -3,12 +3,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useRef, useState } from 'react';
 import { fetchAdminStatus, fetchApiKeys, setApiKey, deleteApiKey } from '../api/admin';
 import type { AdminStatus, ApiKeyInfo, SseStatusEvent, SseLogEvent } from '../api/admin';
+import { getAuthToken } from '../api/client';
+import { requireAdmin, usePermissions } from './usePermissions';
 
 export function useAdminStatus() {
+  const { canAdmin } = usePermissions();
   return useQuery<AdminStatus>({
     queryKey: ['admin', 'status'],
     queryFn: fetchAdminStatus,
     staleTime: 10_000,
+    enabled: canAdmin,
   });
 }
 
@@ -21,6 +25,7 @@ export interface LogEntry {
 }
 
 export function useRebuild() {
+  const { canAdmin } = usePermissions();
   const [phase, setPhase] = useState<BuildPhase>('idle');
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [durationMs, setDurationMs] = useState<number | null>(null);
@@ -28,6 +33,7 @@ export function useRebuild() {
   const eventSourceRef = useRef<EventSource | null>(null);
 
   const startBuild = useCallback((restart: boolean) => {
+    requireAdmin(canAdmin);
     // Close any existing connection
     eventSourceRef.current?.close();
 
@@ -40,6 +46,8 @@ export function useRebuild() {
     const params = new URLSearchParams();
     if (restart) params.set('restart', 'true');
 
+    const token = getAuthToken();
+    if (token) params.set('session_token', token);
     const es = new EventSource(`/api/v2/admin/rebuild?${params.toString()}`);
     eventSourceRef.current = es;
 
@@ -76,7 +84,7 @@ export function useRebuild() {
         pollForRestart();
       }
     };
-  }, [phase]);
+  }, [canAdmin, phase]);
 
   const pollForRestart = useCallback(() => {
     let attempts = 0;
@@ -89,7 +97,11 @@ export function useRebuild() {
         return;
       }
 
-      fetch('/api/v2/admin/status')
+      const token = getAuthToken();
+      const statusUrl = token
+        ? `/api/v2/admin/status?session_token=${encodeURIComponent(token)}`
+        : '/api/v2/admin/status';
+      fetch(statusUrl)
         .then((res) => {
           if (res.ok) {
             // Server is back
@@ -122,18 +134,24 @@ export function useRebuild() {
 // ============================================================================
 
 export function useApiKeys() {
+  const { canAdmin } = usePermissions();
   return useQuery<ApiKeyInfo[]>({
     queryKey: ['admin', 'api-keys'],
     queryFn: fetchApiKeys,
     staleTime: 30_000,
+    enabled: canAdmin,
   });
 }
 
 export function useSetApiKey() {
+  const { canAdmin } = usePermissions();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ name, value }: { name: string; value: string }) =>
-      setApiKey(name, value),
+      {
+        requireAdmin(canAdmin);
+        return setApiKey(name, value);
+      },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'api-keys'] });
       queryClient.invalidateQueries({ queryKey: ['chat-status'] });
@@ -142,9 +160,13 @@ export function useSetApiKey() {
 }
 
 export function useDeleteApiKey() {
+  const { canAdmin } = usePermissions();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (name: string) => deleteApiKey(name),
+    mutationFn: (name: string) => {
+      requireAdmin(canAdmin);
+      return deleteApiKey(name);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin', 'api-keys'] });
       queryClient.invalidateQueries({ queryKey: ['chat-status'] });

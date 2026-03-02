@@ -6,9 +6,9 @@
 use anyhow::{Context, Result};
 use std::path::Path;
 
-use crate::models::RequirementsStore;
-use super::{SqliteBackend, YamlBackend};
 use super::traits::DatabaseBackend;
+use super::{SqliteBackend, YamlBackend};
+use crate::models::RequirementsStore;
 
 /// Migrates data from a YAML file to a SQLite database
 ///
@@ -32,20 +32,23 @@ pub fn migrate_yaml_to_sqlite<P1: AsRef<Path>, P2: AsRef<Path>>(
     let sqlite_backend = SqliteBackend::new(sqlite_path)?;
 
     // Load from YAML
-    let store = yaml_backend.load()
+    let store = yaml_backend
+        .load()
         .context("Failed to load YAML database")?;
 
     let req_count = store.requirements.len();
 
     // Save to SQLite
-    sqlite_backend.save(&store)
+    sqlite_backend
+        .save(&store)
         .context("Failed to save to SQLite database")?;
 
     // Update YAML with migration marker
     // This prevents accidentally opening the stale YAML after migration
     let mut marked_store = store;
     marked_store.migrated_to = Some(sqlite_path.display().to_string());
-    yaml_backend.save(&marked_store)
+    yaml_backend
+        .save(&marked_store)
         .context("Failed to update YAML with migration marker")?;
 
     Ok(req_count)
@@ -67,13 +70,15 @@ pub fn migrate_sqlite_to_yaml<P1: AsRef<Path>, P2: AsRef<Path>>(
     let yaml_backend = YamlBackend::new(yaml_path);
 
     // Load from SQLite
-    let store = sqlite_backend.load()
+    let store = sqlite_backend
+        .load()
         .context("Failed to load SQLite database")?;
 
     let req_count = store.requirements.len();
 
     // Save to YAML
-    yaml_backend.save(&store)
+    yaml_backend
+        .save(&store)
         .context("Failed to save to YAML file")?;
 
     Ok(req_count)
@@ -90,11 +95,9 @@ pub fn migrate_sqlite_to_yaml<P1: AsRef<Path>, P2: AsRef<Path>>(
 /// * `store` - The requirements store to export
 /// * `json_path` - Path to the destination JSON file
 pub fn export_to_json<P: AsRef<Path>>(store: &RequirementsStore, json_path: P) -> Result<()> {
-    let json = serde_json::to_string_pretty(store)
-        .context("Failed to serialize to JSON")?;
+    let json = serde_json::to_string_pretty(store).context("Failed to serialize to JSON")?;
 
-    std::fs::write(json_path, json)
-        .context("Failed to write JSON file")?;
+    std::fs::write(json_path, json).context("Failed to write JSON file")?;
 
     Ok(())
 }
@@ -107,11 +110,9 @@ pub fn export_to_json<P: AsRef<Path>>(store: &RequirementsStore, json_path: P) -
 /// # Returns
 /// The imported RequirementsStore
 pub fn import_from_json<P: AsRef<Path>>(json_path: P) -> Result<RequirementsStore> {
-    let json = std::fs::read_to_string(json_path)
-        .context("Failed to read JSON file")?;
+    let json = std::fs::read_to_string(json_path).context("Failed to read JSON file")?;
 
-    let store: RequirementsStore = serde_json::from_str(&json)
-        .context("Failed to parse JSON")?;
+    let store: RequirementsStore = serde_json::from_str(&json).context("Failed to parse JSON")?;
 
     Ok(store)
 }
@@ -151,22 +152,19 @@ pub fn import_json_to_backend<P: AsRef<Path>>(
 /// # Returns
 /// The number of requirements migrated
 #[cfg(feature = "postgres")]
-pub fn migrate_to_postgres(
-    source: &dyn DatabaseBackend,
-    connection_string: &str,
-) -> Result<usize> {
+pub fn migrate_to_postgres(source: &dyn DatabaseBackend, connection_string: &str) -> Result<usize> {
     use super::PostgresBackend;
 
     let postgres_backend = PostgresBackend::new(connection_string)?;
 
     // Load from source
-    let store = source.load()
-        .context("Failed to load source database")?;
+    let store = source.load().context("Failed to load source database")?;
 
     let req_count = store.requirements.len();
 
     // Save to PostgreSQL
-    postgres_backend.save(&store)
+    postgres_backend
+        .save(&store)
         .context("Failed to save to PostgreSQL database")?;
 
     Ok(req_count)
@@ -190,13 +188,15 @@ pub fn migrate_from_postgres(
     let postgres_backend = PostgresBackend::new(connection_string)?;
 
     // Load from PostgreSQL
-    let store = postgres_backend.load()
+    let store = postgres_backend
+        .load()
         .context("Failed to load PostgreSQL database")?;
 
     let req_count = store.requirements.len();
 
     // Save to target
-    target.save(&store)
+    target
+        .save(&store)
         .context("Failed to save to target database")?;
 
     Ok(req_count)

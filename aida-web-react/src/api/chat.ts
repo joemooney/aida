@@ -1,5 +1,5 @@
 // trace:STORY-0374 | ai:claude
-import { apiFetch } from './client';
+import { apiFetch, buildApiHeaders } from './client';
 
 export interface ChatStatusResponse {
   available: boolean;
@@ -22,10 +22,7 @@ export function fetchChatStatus(): Promise<ChatStatusResponse> {
 export async function sendChatMessage(messages: ChatMessage[]): Promise<Response> {
   const res = await fetch('/api/v2/chat', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Project': 'default',
-    },
+    headers: buildApiHeaders(),
     body: JSON.stringify({ messages }),
   });
 

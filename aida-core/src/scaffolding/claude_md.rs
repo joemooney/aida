@@ -20,7 +20,8 @@ impl Scaffolder {
         let tech_stack_section = if !self.config.tech_stack.is_empty() {
             format!(
                 "\n\n## Tech Stack\n\n{}",
-                self.config.tech_stack
+                self.config
+                    .tech_stack
                     .iter()
                     .map(|t| format!("- {}", t))
                     .collect::<Vec<_>>()
@@ -35,7 +36,11 @@ impl Scaffolder {
                 .features
                 .iter()
                 .map(|f| {
-                    let prefix = if f.prefix.is_empty() { "N/A" } else { &f.prefix };
+                    let prefix = if f.prefix.is_empty() {
+                        "N/A"
+                    } else {
+                        &f.prefix
+                    };
                     format!("- **{}** ({})", f.name, prefix)
                 })
                 .collect::<Vec<_>>()
@@ -94,19 +99,23 @@ Set `AIDA_COMMIT_STRICT=true` to reject non-conforming commits, or create `.aida
 
         let db_filename = self.database_filename();
         let db_storage_section = if self.is_sqlite_database() {
-            format!(r#"Requirements database: `{}`
+            format!(
+                r#"Requirements database: `{}`
 
 ### Database Storage
 AIDA supports both YAML and SQLite backends:
 - **YAML**: Human-readable, git-friendly, good for single-user scenarios
 - **SQLite**: Better for concurrent access (GUI + CLI), optimistic locking
 
-To migrate: `aida db migrate --from yaml --to sqlite`"#, db_filename)
+To migrate: `aida db migrate --from yaml --to sqlite`"#,
+                db_filename
+            )
         } else {
             format!("Requirements database: `{}`", db_filename)
         };
 
-        let requirements_section = format!(r#"
+        let requirements_section = format!(
+            r#"
 ## Requirements Management
 
 This project uses AIDA for requirements tracking. **Do NOT maintain a separate REQUIREMENTS.md file.**
@@ -131,7 +140,9 @@ aida comment add <ID> "..."            # Add implementation note
 
 ### Session Workflow
 If you work conversationally without explicit /aida-req calls, use `/aida-capture` at session end to review and capture any requirements that were discussed but not yet added to the database.
-"#, db_storage_section);
+"#,
+            db_storage_section
+        );
 
         let skills_section = r#"
 ## Claude Code Skills

@@ -95,7 +95,9 @@ impl PlatformServices for NativePlatform {
             use arboard::SetExtLinux;
             arboard::Clipboard::new()
                 .and_then(|mut cb| {
-                    cb.set().clipboard(arboard::LinuxClipboardKind::Primary).text(text.to_string())
+                    cb.set()
+                        .clipboard(arboard::LinuxClipboardKind::Primary)
+                        .text(text.to_string())
                 })
                 .map_err(|e| format!("Primary selection error: {}", e))
         }
@@ -132,7 +134,8 @@ impl PlatformServices for NativePlatform {
     }
 
     fn save_setting(&self, key: &str, value: &str) -> Result<(), String> {
-        let config_dir = self.get_config_dir()
+        let config_dir = self
+            .get_config_dir()
             .ok_or_else(|| "No config directory available".to_string())?;
 
         self.create_dir_all(&config_dir)?;
@@ -162,7 +165,8 @@ impl PlatformServices for NativePlatform {
     }
 
     fn delete_setting(&self, key: &str) -> Result<(), String> {
-        let config_dir = self.get_config_dir()
+        let config_dir = self
+            .get_config_dir()
             .ok_or_else(|| "No config directory available".to_string())?;
 
         let settings_file = config_dir.join("settings.yaml");

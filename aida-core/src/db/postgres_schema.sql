@@ -1,12 +1,12 @@
 -- PostgreSQL schema for AIDA requirements management
--- Schema version 7
+-- Schema version 8
 
 -- Schema version tracking
 CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER NOT NULL
 );
 
-INSERT INTO schema_version (version) VALUES (7) ON CONFLICT DO NOTHING;
+INSERT INTO schema_version (version) VALUES (8) ON CONFLICT DO NOTHING;
 
 -- Requirements table
 CREATE TABLE IF NOT EXISTS requirements (
@@ -35,6 +35,9 @@ CREATE TABLE IF NOT EXISTS requirements (
     custom_fields JSONB NOT NULL DEFAULT '{}',
     urls JSONB NOT NULL DEFAULT '[]',
     trace_links JSONB NOT NULL DEFAULT '[]',
+    weight REAL,
+    attachments JSONB NOT NULL DEFAULT '[]',
+    gitlab_issues JSONB NOT NULL DEFAULT '[]',
     implementation_info JSONB,
     ai_evaluation JSONB,
     version INTEGER NOT NULL DEFAULT 1

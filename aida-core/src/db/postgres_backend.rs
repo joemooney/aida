@@ -27,16 +27,16 @@ use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
 use crate::models::{
-    Comment, CustomTypeDefinition, FeatureDefinition, HistoryEntry, IdConfiguration,
-    ImplementationInfo, QueueEntry, ReactionDefinition, RelationshipDefinition, Relationship,
-    Requirement, RequirementPriority, RequirementStatus, RequirementType, RequirementsStore,
-    TraceLink, UrlLink, User,
+    Attachment, Comment, CustomTypeDefinition, FeatureDefinition, GitLabIssueLink, HistoryEntry,
+    IdConfiguration, ImplementationInfo, QueueEntry, ReactionDefinition, Relationship,
+    RelationshipDefinition, Requirement, RequirementPriority, RequirementStatus, RequirementType,
+    RequirementsStore, TraceLink, UrlLink, User,
 };
 
 use super::traits::{BackendType, DatabaseBackend, UpdateResult, VersionConflict};
 
-/// Current schema version - updated to 7 for queue_entries table
-const SCHEMA_VERSION: i32 = 7;
+/// Current schema version - updated to 8 for requirement weight/attachments/gitlab issues
+const SCHEMA_VERSION: i32 = 8;
 
 /// PostgreSQL backend implementation with connection pooling
 pub struct PostgresBackend {
@@ -71,7 +71,10 @@ impl PostgresBackend {
 
     /// Initialize the database schema
     fn init_schema(&self) -> Result<()> {
-        let mut client = self.pool.get().context("Failed to get connection from pool")?;
+        let mut client = self
+            .pool
+            .get()
+            .context("Failed to get connection from pool")?;
 
         // Check if schema_version table exists
         let table_exists: bool = client
@@ -206,6 +209,18 @@ impl PostgresBackend {
             )?;
         }
 
+        if from_version < 8 {
+            client.batch_execute(
+                r#"
+                ALTER TABLE requirements ADD COLUMN IF NOT EXISTS weight REAL;
+                ALTER TABLE requirements ADD COLUMN IF NOT EXISTS attachments JSONB NOT NULL DEFAULT '[]';
+                ALTER TABLE requirements ADD COLUMN IF NOT EXISTS gitlab_issues JSONB NOT NULL DEFAULT '[]';
+
+                UPDATE schema_version SET version = 8;
+                "#,
+            )?;
+        }
+
         Ok(())
     }
 
@@ -328,6 +343,9 @@ impl PostgresBackend {
         let custom_fields_json: serde_json::Value = row.get("custom_fields");
         let urls_json: serde_json::Value = row.get("urls");
         let trace_links_json: serde_json::Value = row.get("trace_links");
+        let weight: Option<f64> = row.get("weight");
+        let attachments_json: serde_json::Value = row.get("attachments");
+        let gitlab_issues_json: serde_json::Value = row.get("gitlab_issues");
         let implementation_info_json: Option<serde_json::Value> = row.get("implementation_info");
         let ai_evaluation_json: Option<serde_json::Value> = row.get("ai_evaluation");
         let version: i64 = row.get::<_, i32>("version") as i64;
@@ -345,6 +363,9 @@ impl PostgresBackend {
             Self::from_json(&custom_fields_json).unwrap_or_default();
         let urls: Vec<UrlLink> = Self::from_json(&urls_json).unwrap_or_default();
         let trace_links: Vec<TraceLink> = Self::from_json(&trace_links_json).unwrap_or_default();
+        let attachments: Vec<Attachment> = Self::from_json(&attachments_json).unwrap_or_default();
+        let gitlab_issues: Vec<GitLabIssueLink> =
+            Self::from_json(&gitlab_issues_json).unwrap_or_default();
         let implementation_info: Option<ImplementationInfo> =
             implementation_info_json.and_then(|json| Self::from_json(&json).ok());
         let ai_evaluation = ai_evaluation_json.and_then(|json| Self::from_json(&json).ok());
@@ -363,10 +384,10 @@ impl PostgresBackend {
             created_by,
             modified_at,
             req_type,
-            meta_subtype: None,  // Loaded separately if needed
+            meta_subtype: None, // Loaded separately if needed
             dependencies,
             tags,
-            weight: None,
+            weight: weight.map(|w| w as f32),
             relationships,
             comments,
             history,
@@ -375,9 +396,9 @@ impl PostgresBackend {
             custom_priority,
             custom_fields,
             urls,
-            attachments: Vec::new(),
+            attachments,
             trace_links,
-            gitlab_issues: Vec::new(),  // TODO: Add gitlab_issues column to PostgreSQL schema
+            gitlab_issues,
             implementation_info,
             ai_evaluation,
             version,
@@ -402,8 +423,8 @@ impl PostgresBackend {
              (id, spec_id, prefix_override, title, description, status, priority, owner, feature,
               created_at, created_by, modified_at, req_type, dependencies, tags, relationships,
               comments, history, archived, custom_status, custom_priority, custom_fields, urls,
-              trace_links, implementation_info, ai_evaluation, version)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
+              trace_links, implementation_info, ai_evaluation, weight, attachments, gitlab_issues, version)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
              ON CONFLICT (id) DO UPDATE SET
               spec_id = EXCLUDED.spec_id,
               prefix_override = EXCLUDED.prefix_override,
@@ -430,6 +451,9 @@ impl PostgresBackend {
               trace_links = EXCLUDED.trace_links,
               implementation_info = EXCLUDED.implementation_info,
               ai_evaluation = EXCLUDED.ai_evaluation,
+              weight = EXCLUDED.weight,
+              attachments = EXCLUDED.attachments,
+              gitlab_issues = EXCLUDED.gitlab_issues,
               version = EXCLUDED.version",
             &[
                 &req.id,
@@ -458,6 +482,9 @@ impl PostgresBackend {
                 &Self::to_json(&req.trace_links)?,
                 &impl_info_json,
                 &ai_eval_json,
+                &(req.weight.map(|w| w as f64)),
+                &Self::to_json(&req.attachments)?,
+                &Self::to_json(&req.gitlab_issues)?,
                 &(req.version as i32),
             ],
         )?;
@@ -555,7 +582,7 @@ impl PostgresBackend {
                     owner, feature, created_at, created_by, modified_at, req_type,
                     dependencies, tags, relationships, comments, history, archived,
                     custom_status, custom_priority, custom_fields, urls, trace_links,
-                    implementation_info, ai_evaluation, version
+                    implementation_info, ai_evaluation, weight, attachments, gitlab_issues, version
              FROM requirements ORDER BY created_at",
             &[],
         )?;
@@ -697,8 +724,10 @@ impl PostgresBackend {
         &self,
         client: &mut C,
     ) -> Result<Vec<RelationshipDefinition>> {
-        let row =
-            client.query_opt("SELECT relationship_definitions FROM metadata WHERE id = 1", &[])?;
+        let row = client.query_opt(
+            "SELECT relationship_definitions FROM metadata WHERE id = 1",
+            &[],
+        )?;
         match row {
             Some(row) => {
                 let json: serde_json::Value = row.get("relationship_definitions");
@@ -718,7 +747,10 @@ impl PostgresBackend {
         &self,
         client: &mut C,
     ) -> Result<Vec<ReactionDefinition>> {
-        let row = client.query_opt("SELECT reaction_definitions FROM metadata WHERE id = 1", &[])?;
+        let row = client.query_opt(
+            "SELECT reaction_definitions FROM metadata WHERE id = 1",
+            &[],
+        )?;
         match row {
             Some(row) => {
                 let json: serde_json::Value = row.get("reaction_definitions");
@@ -809,7 +841,10 @@ impl PostgresBackend {
     /// Save or update a GitLab sync state
     /// trace:STORY-0325 | ai:claude
     pub fn save_sync_state(&self, state: &crate::models::GitLabSyncState) -> Result<()> {
-        let mut client = self.pool.get().context("Failed to get connection from pool")?;
+        let mut client = self
+            .pool
+            .get()
+            .context("Failed to get connection from pool")?;
         client.execute(
             r#"INSERT INTO gitlab_sync_state
                (requirement_id, spec_id, gitlab_project_id, gitlab_issue_iid, gitlab_issue_id,
@@ -843,8 +878,15 @@ impl PostgresBackend {
 
     /// Load sync state for a specific requirement and issue
     /// trace:STORY-0325 | ai:claude
-    pub fn load_sync_state(&self, requirement_id: Uuid, issue_iid: u64) -> Result<Option<crate::models::GitLabSyncState>> {
-        let mut client = self.pool.get().context("Failed to get connection from pool")?;
+    pub fn load_sync_state(
+        &self,
+        requirement_id: Uuid,
+        issue_iid: u64,
+    ) -> Result<Option<crate::models::GitLabSyncState>> {
+        let mut client = self
+            .pool
+            .get()
+            .context("Failed to get connection from pool")?;
         let row = client.query_opt(
             r#"SELECT requirement_id, spec_id, gitlab_project_id, gitlab_issue_iid, gitlab_issue_id,
                       linked_at, last_sync, aida_content_hash, gitlab_content_hash,
@@ -861,8 +903,14 @@ impl PostgresBackend {
 
     /// Load all sync states for a requirement
     /// trace:STORY-0325 | ai:claude
-    pub fn load_sync_states_for_requirement(&self, requirement_id: Uuid) -> Result<Vec<crate::models::GitLabSyncState>> {
-        let mut client = self.pool.get().context("Failed to get connection from pool")?;
+    pub fn load_sync_states_for_requirement(
+        &self,
+        requirement_id: Uuid,
+    ) -> Result<Vec<crate::models::GitLabSyncState>> {
+        let mut client = self
+            .pool
+            .get()
+            .context("Failed to get connection from pool")?;
         let rows = client.query(
             r#"SELECT requirement_id, spec_id, gitlab_project_id, gitlab_issue_iid, gitlab_issue_id,
                       linked_at, last_sync, aida_content_hash, gitlab_content_hash,
@@ -871,13 +919,18 @@ impl PostgresBackend {
             &[&requirement_id],
         )?;
 
-        rows.iter().map(|row| Self::row_to_sync_state(row)).collect()
+        rows.iter()
+            .map(|row| Self::row_to_sync_state(row))
+            .collect()
     }
 
     /// Load all sync states
     /// trace:STORY-0325 | ai:claude
     pub fn load_all_sync_states(&self) -> Result<Vec<crate::models::GitLabSyncState>> {
-        let mut client = self.pool.get().context("Failed to get connection from pool")?;
+        let mut client = self
+            .pool
+            .get()
+            .context("Failed to get connection from pool")?;
         let rows = client.query(
             r#"SELECT requirement_id, spec_id, gitlab_project_id, gitlab_issue_iid, gitlab_issue_id,
                       linked_at, last_sync, aida_content_hash, gitlab_content_hash,
@@ -886,13 +939,21 @@ impl PostgresBackend {
             &[],
         )?;
 
-        rows.iter().map(|row| Self::row_to_sync_state(row)).collect()
+        rows.iter()
+            .map(|row| Self::row_to_sync_state(row))
+            .collect()
     }
 
     /// Load sync states by status
     /// trace:STORY-0325 | ai:claude
-    pub fn load_sync_states_by_status(&self, status: crate::models::SyncStatus) -> Result<Vec<crate::models::GitLabSyncState>> {
-        let mut client = self.pool.get().context("Failed to get connection from pool")?;
+    pub fn load_sync_states_by_status(
+        &self,
+        status: crate::models::SyncStatus,
+    ) -> Result<Vec<crate::models::GitLabSyncState>> {
+        let mut client = self
+            .pool
+            .get()
+            .context("Failed to get connection from pool")?;
         let rows = client.query(
             r#"SELECT requirement_id, spec_id, gitlab_project_id, gitlab_issue_iid, gitlab_issue_id,
                       linked_at, last_sync, aida_content_hash, gitlab_content_hash,
@@ -901,13 +962,18 @@ impl PostgresBackend {
             &[&format!("{:?}", status)],
         )?;
 
-        rows.iter().map(|row| Self::row_to_sync_state(row)).collect()
+        rows.iter()
+            .map(|row| Self::row_to_sync_state(row))
+            .collect()
     }
 
     /// Delete a sync state
     /// trace:STORY-0325 | ai:claude
     pub fn delete_sync_state(&self, requirement_id: Uuid, issue_iid: u64) -> Result<bool> {
-        let mut client = self.pool.get().context("Failed to get connection from pool")?;
+        let mut client = self
+            .pool
+            .get()
+            .context("Failed to get connection from pool")?;
         let rows_affected = client.execute(
             "DELETE FROM gitlab_sync_state WHERE requirement_id = $1 AND gitlab_issue_iid = $2",
             &[&requirement_id, &(issue_iid as i64)],
@@ -1270,15 +1336,13 @@ impl DatabaseBackend for PostgresBackend {
 
         let entries = rows
             .iter()
-            .map(|row| {
-                QueueEntry {
-                    user_id: row.get(0),
-                    requirement_id: row.get(1),
-                    position: row.get::<_, i32>(2) as i64,
-                    added_by: row.get(3),
-                    note: row.get(4),
-                    added_at: row.get(5),
-                }
+            .map(|row| QueueEntry {
+                user_id: row.get(0),
+                requirement_id: row.get(1),
+                position: row.get::<_, i32>(2) as i64,
+                added_by: row.get(3),
+                note: row.get(4),
+                added_at: row.get(5),
             })
             .collect();
 
@@ -1346,10 +1410,7 @@ impl DatabaseBackend for PostgresBackend {
                 &[&user_id],
             )?;
         } else {
-            client.execute(
-                "DELETE FROM queue_entries WHERE user_id = $1",
-                &[&user_id],
-            )?;
+            client.execute("DELETE FROM queue_entries WHERE user_id = $1", &[&user_id])?;
         }
         Ok(())
     }

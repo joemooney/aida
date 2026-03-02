@@ -18,10 +18,11 @@ mod gui_convert {
 
     /// Convert generated Timestamp to aida_desktop Timestamp
     fn to_gui_timestamp(ts: &Option<Timestamp>) -> Option<aida_desktop::storage::proto::Timestamp> {
-        ts.as_ref().map(|t| aida_desktop::storage::proto::Timestamp {
-            seconds: t.seconds,
-            nanos: t.nanos,
-        })
+        ts.as_ref()
+            .map(|t| aida_desktop::storage::proto::Timestamp {
+                seconds: t.seconds,
+                nanos: t.nanos,
+            })
     }
 
     /// Convert generated Relationship to aida_desktop Relationship
@@ -64,11 +65,15 @@ mod gui_convert {
             id: h.id.clone(),
             author: h.author.clone(),
             timestamp: to_gui_timestamp(&h.timestamp),
-            changes: h.changes.iter().map(|c| aida_desktop::storage::proto::FieldChange {
-                field_name: c.field_name.clone(),
-                old_value: c.old_value.clone(),
-                new_value: c.new_value.clone(),
-            }).collect(),
+            changes: h
+                .changes
+                .iter()
+                .map(|c| aida_desktop::storage::proto::FieldChange {
+                    field_name: c.field_name.clone(),
+                    old_value: c.old_value.clone(),
+                    new_value: c.new_value.clone(),
+                })
+                .collect(),
         }
     }
 
@@ -123,16 +128,24 @@ mod gui_convert {
 // Import shared UI components from aida-desktop
 // These functions provide consistent rendering between native and web
 use aida_desktop::ui::{
-    // Formatters
-    format_status, format_priority, format_type,
-    // Badge colors
-    status_color, priority_color,
-    // List components
-    requirement_list_item, ListItemConfig,
-    // Form components
-    status_combo, priority_combo, type_combo,
+    comment_input,
     // Comment components
-    comment_list, comment_input, CommentInputConfig,
+    comment_list,
+    format_priority,
+    // Formatters
+    format_status,
+    format_type,
+    priority_color,
+    priority_combo,
+    // List components
+    requirement_list_item,
+    // Badge colors
+    status_color,
+    // Form components
+    status_combo,
+    type_combo,
+    CommentInputConfig,
+    ListItemConfig,
 };
 
 /// Connection state to the server
@@ -199,8 +212,8 @@ pub struct AidaWebApp {
 
     // Authentication state
     auth_state: AuthState,
-    login_identifier: String, // User handle or name for login
-    login_pin: String,        // PIN for login
+    login_identifier: String,   // User handle or name for login
+    login_pin: String,          // PIN for login
     current_user: Option<User>, // Currently logged in user
 
     // Data
@@ -360,15 +373,25 @@ impl AidaWebApp {
         let server_url = self.server_url.clone();
         let title = self.form_title.clone();
         let description = self.form_description.clone();
-        let status = RequirementStatus::try_from(self.form_status).unwrap_or(RequirementStatus::Draft);
-        let priority = RequirementPriority::try_from(self.form_priority).unwrap_or(RequirementPriority::Medium);
-        let req_type = RequirementType::try_from(self.form_type).unwrap_or(RequirementType::Functional);
+        let status =
+            RequirementStatus::try_from(self.form_status).unwrap_or(RequirementStatus::Draft);
+        let priority = RequirementPriority::try_from(self.form_priority)
+            .unwrap_or(RequirementPriority::Medium);
+        let req_type =
+            RequirementType::try_from(self.form_type).unwrap_or(RequirementType::Functional);
         let shared_state = self.shared_state.clone();
 
         wasm_bindgen_futures::spawn_local(async move {
             let mut client = AidaClient::new(&server_url);
             let result = client
-                .create_requirement(title, description, status, priority, req_type, "web-user".to_string())
+                .create_requirement(
+                    title,
+                    description,
+                    status,
+                    priority,
+                    req_type,
+                    "web-user".to_string(),
+                )
                 .await;
             shared_state.borrow_mut().pending_result = Some(AsyncResult::Created(result));
         });
@@ -651,17 +674,29 @@ impl AidaWebApp {
                 ScrollArea::vertical().show(ui, |ui| {
                     let list_config = ListItemConfig::with_title();
                     for (idx, req) in items.iter().enumerate() {
-                        let is_selected = self.selected_idx == Some(idx) && self.search_results.is_none();
+                        let is_selected =
+                            self.selected_idx == Some(idx) && self.search_results.is_none();
                         let is_search_selected = self.search_results.is_some()
                             && self.selected_idx.is_some()
-                            && self.requirements.get(self.selected_idx.unwrap()).map(|r| &r.id) == Some(&req.id);
+                            && self
+                                .requirements
+                                .get(self.selected_idx.unwrap())
+                                .map(|r| &r.id)
+                                == Some(&req.id);
 
                         let selected = is_selected || is_search_selected;
 
                         // Use shared list item component (convert to aida_desktop proto type)
-                        if requirement_list_item(ui, &gui_convert::to_gui_requirement(req), selected, &list_config) {
+                        if requirement_list_item(
+                            ui,
+                            &gui_convert::to_gui_requirement(req),
+                            selected,
+                            &list_config,
+                        ) {
                             // Find the actual index in requirements list
-                            if let Some(actual_idx) = self.requirements.iter().position(|r| r.id == req.id) {
+                            if let Some(actual_idx) =
+                                self.requirements.iter().position(|r| r.id == req.id)
+                            {
                                 self.selected_idx = Some(actual_idx);
                                 self.current_view = View::Detail;
                             }
@@ -673,25 +708,23 @@ impl AidaWebApp {
 
     /// Draw the central panel with detail/create/edit views
     fn draw_central_panel(&mut self, ctx: &egui::Context) {
-        egui::CentralPanel::default().show(ctx, |ui| {
-            match self.current_view {
-                View::Login => {
-                    self.draw_login_view(ui);
-                }
-                View::List => {
-                    ui.centered_and_justified(|ui| {
-                        ui.label(RichText::new("Select a requirement from the list").weak());
-                    });
-                }
-                View::Detail => {
-                    self.draw_detail_view(ui);
-                }
-                View::Create => {
-                    self.draw_create_view(ui);
-                }
-                View::Edit => {
-                    self.draw_edit_view(ui);
-                }
+        egui::CentralPanel::default().show(ctx, |ui| match self.current_view {
+            View::Login => {
+                self.draw_login_view(ui);
+            }
+            View::List => {
+                ui.centered_and_justified(|ui| {
+                    ui.label(RichText::new("Select a requirement from the list").weak());
+                });
+            }
+            View::Detail => {
+                self.draw_detail_view(ui);
+            }
+            View::Create => {
+                self.draw_create_view(ui);
+            }
+            View::Edit => {
+                self.draw_edit_view(ui);
             }
         });
     }
@@ -755,23 +788,38 @@ impl AidaWebApp {
                                 ui.label("Logging in...");
                             });
                         } else {
-                            let enter_pressed = (handle_response.lost_focus() || pin_response.lost_focus())
+                            let enter_pressed = (handle_response.lost_focus()
+                                || pin_response.lost_focus())
                                 && ui.input(|i| i.key_pressed(egui::Key::Enter));
 
-                            if ui.button(RichText::new("Login").size(16.0)).clicked() || enter_pressed {
+                            if ui.button(RichText::new("Login").size(16.0)).clicked()
+                                || enter_pressed
+                            {
                                 self.do_login();
                             }
                         }
                     });
 
                     ui.add_space(8.0);
-                    ui.label(RichText::new("Enter your handle or name to login.").small().weak());
-                    ui.label(RichText::new("PIN is optional for users without one set.").small().weak());
+                    ui.label(
+                        RichText::new("Enter your handle or name to login.")
+                            .small()
+                            .weak(),
+                    );
+                    ui.label(
+                        RichText::new("PIN is optional for users without one set.")
+                            .small()
+                            .weak(),
+                    );
                 });
             });
 
             ui.add_space(20.0);
-            ui.label(RichText::new(format!("Server: {}", self.server_url)).small().weak());
+            ui.label(
+                RichText::new(format!("Server: {}", self.server_url))
+                    .small()
+                    .weak(),
+            );
         });
     }
 
@@ -799,7 +847,11 @@ impl AidaWebApp {
                     ui.horizontal(|ui| {
                         let status_text = format_status(req.status);
                         let status_color = status_color(req.status);
-                        ui.label(RichText::new(status_text).background_color(status_color).strong());
+                        ui.label(
+                            RichText::new(status_text)
+                                .background_color(status_color)
+                                .strong(),
+                        );
 
                         let priority_text = format_priority(req.priority);
                         let priority_color = priority_color(req.priority);
@@ -827,27 +879,39 @@ impl AidaWebApp {
                     ui.separator();
 
                     // Metadata
-                    egui::CollapsingHeader::new("Details").default_open(false).show(ui, |ui| {
-                        egui::Grid::new("detail_grid").num_columns(2).show(ui, |ui| {
-                            ui.label("ID:");
-                            ui.label(RichText::new(&req.id).monospace().small());
-                            ui.end_row();
+                    egui::CollapsingHeader::new("Details")
+                        .default_open(false)
+                        .show(ui, |ui| {
+                            egui::Grid::new("detail_grid")
+                                .num_columns(2)
+                                .show(ui, |ui| {
+                                    ui.label("ID:");
+                                    ui.label(RichText::new(&req.id).monospace().small());
+                                    ui.end_row();
 
-                            ui.label("Owner:");
-                            ui.label(if req.owner.is_empty() { "—" } else { &req.owner });
-                            ui.end_row();
+                                    ui.label("Owner:");
+                                    ui.label(if req.owner.is_empty() {
+                                        "—"
+                                    } else {
+                                        &req.owner
+                                    });
+                                    ui.end_row();
 
-                            ui.label("Feature:");
-                            ui.label(if req.feature.is_empty() { "—" } else { &req.feature });
-                            ui.end_row();
+                                    ui.label("Feature:");
+                                    ui.label(if req.feature.is_empty() {
+                                        "—"
+                                    } else {
+                                        &req.feature
+                                    });
+                                    ui.end_row();
 
-                            if !req.tags.is_empty() {
-                                ui.label("Tags:");
-                                ui.label(req.tags.join(", "));
-                                ui.end_row();
-                            }
+                                    if !req.tags.is_empty() {
+                                        ui.label("Tags:");
+                                        ui.label(req.tags.join(", "));
+                                        ui.end_row();
+                                    }
+                                });
                         });
-                    });
 
                     // Comments section - using shared components
                     ui.add_space(16.0);
@@ -863,7 +927,9 @@ impl AidaWebApp {
                 // Comment input outside the ScrollArea to avoid borrow conflicts
                 // Use shared comment input component
                 ui.separator();
-                if let Some(content) = comment_input(ui, &mut self.new_comment, &CommentInputConfig::default()) {
+                if let Some(content) =
+                    comment_input(ui, &mut self.new_comment, &CommentInputConfig::default())
+                {
                     // TODO: Add comment via client - for now just log
                     log::info!("New comment: {}", content);
                 }
@@ -1024,11 +1090,22 @@ fn load_session_from_storage() -> Option<User> {
         let parsed: serde_json::Value = serde_json::from_str(&json).ok()?;
         Some(User {
             id: parsed.get("id")?.as_str()?.to_string(),
-            spec_id: parsed.get("spec_id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            spec_id: parsed
+                .get("spec_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
             name: parsed.get("name")?.as_str()?.to_string(),
-            email: parsed.get("email").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            email: parsed
+                .get("email")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
             handle: parsed.get("handle")?.as_str()?.to_string(),
-            has_pin: parsed.get("has_pin").and_then(|v| v.as_bool()).unwrap_or(false),
+            has_pin: parsed
+                .get("has_pin")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
         })
     }
     #[cfg(not(target_arch = "wasm32"))]

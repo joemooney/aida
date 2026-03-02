@@ -10,8 +10,9 @@ use std::sync::Arc;
 use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
+    Extension,
     response::IntoResponse,
-    routing::{delete, get, patch, post, put},
+    routing::{delete, get, post, put},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -20,6 +21,7 @@ use crate::convert::*;
 use crate::projects::ProjectManager;
 use crate::proto;
 use crate::service::ServerState;
+use crate::web_auth::{extract_token, AuthenticatedUser, OidcError, OidcUserInfo, WebAuthState};
 use aida_core::models::{self, QueueEntry};
 
 /// Application state containing the ProjectManager
@@ -54,6 +56,12 @@ pub fn create_rest_router(project_manager: Arc<ProjectManager>) -> Router {
         // Search
         .route("/api/search", get(search_requirements))
         // New V2 API routes
+        .route("/api/v2/auth/config", get(auth_config))
+        .route("/api/v2/auth/login", post(auth_login))
+        .route("/api/v2/auth/oidc/start", get(auth_oidc_start))
+        .route("/api/v2/auth/oidc/callback", get(auth_oidc_callback))
+        .route("/api/v2/auth/me", get(auth_me))
+        .route("/api/v2/auth/logout", post(auth_logout))
         .route("/api/v2/users", get(list_users))
         .route("/api/v2/requirements", get(list_requirements_v2))
         .with_state(state)
@@ -74,14 +82,26 @@ pub fn create_rest_router_legacy(state: Arc<ServerState>) -> Router {
         .route("/api/requirements/:id/comments", post(add_comment_legacy))
         .route("/api/search", get(search_requirements_legacy))
         // V2 API routes (native JSON matching TypeScript types)
+        .route("/api/v2/auth/config", get(auth_config_legacy))
+        .route("/api/v2/auth/login", post(auth_login_legacy))
+        .route("/api/v2/auth/oidc/start", get(auth_oidc_start_legacy))
+        .route("/api/v2/auth/oidc/callback", get(auth_oidc_callback_legacy))
+        .route("/api/v2/auth/me", get(auth_me))
+        .route("/api/v2/auth/logout", post(auth_logout))
         .route("/api/v2/requirements", get(list_requirements_v2_legacy))
         .route("/api/v2/requirements", post(create_requirement_v2_legacy))
         .route("/api/v2/requirements/:id", get(get_requirement_v2_legacy))
-        .route("/api/v2/requirements/:id", put(update_requirement_v2_legacy))
+        .route(
+            "/api/v2/requirements/:id",
+            put(update_requirement_v2_legacy),
+        )
         .route("/api/v2/search", get(search_requirements_v2_legacy))
         // Sprint assignment endpoints
         .route("/api/v2/requirements/:id/sprint", put(assign_sprint_legacy))
-        .route("/api/v2/requirements/:id/sprint", delete(remove_sprint_legacy))
+        .route(
+            "/api/v2/requirements/:id/sprint",
+            delete(remove_sprint_legacy),
+        )
         // Skills browser endpoints
         .route("/api/v2/skills", get(list_skills))
         .route("/api/v2/skills/:name", get(get_skill))
@@ -90,18 +110,48 @@ pub fn create_rest_router_legacy(state: Arc<ServerState>) -> Router {
         .route("/api/v2/docs", get(list_docs))
         .route("/api/v2/docs/*path", get(get_doc))
         // Settings endpoints
-        .route("/api/v2/settings/metadata", get(get_settings_metadata).put(update_settings_metadata))
-        .route("/api/v2/settings/relationship-definitions", get(list_relationship_defs).post(create_relationship_def))
-        .route("/api/v2/settings/relationship-definitions/:name", put(update_relationship_def).delete(delete_relationship_def))
-        .route("/api/v2/settings/type-definitions", get(list_type_defs).post(create_type_def))
-        .route("/api/v2/settings/type-definitions/:name", put(update_type_def).delete(delete_type_def))
-        .route("/api/v2/settings/reaction-definitions", get(list_reaction_defs).post(create_reaction_def))
-        .route("/api/v2/settings/reaction-definitions/:name", put(update_reaction_def).delete(delete_reaction_def))
-        .route("/api/v2/settings/id-config", get(get_id_config).put(update_id_config))
-        .route("/api/v2/settings/prefixes", get(get_prefixes).put(update_prefixes))
+        .route(
+            "/api/v2/settings/metadata",
+            get(get_settings_metadata).put(update_settings_metadata),
+        )
+        .route(
+            "/api/v2/settings/relationship-definitions",
+            get(list_relationship_defs).post(create_relationship_def),
+        )
+        .route(
+            "/api/v2/settings/relationship-definitions/:name",
+            put(update_relationship_def).delete(delete_relationship_def),
+        )
+        .route(
+            "/api/v2/settings/type-definitions",
+            get(list_type_defs).post(create_type_def),
+        )
+        .route(
+            "/api/v2/settings/type-definitions/:name",
+            put(update_type_def).delete(delete_type_def),
+        )
+        .route(
+            "/api/v2/settings/reaction-definitions",
+            get(list_reaction_defs).post(create_reaction_def),
+        )
+        .route(
+            "/api/v2/settings/reaction-definitions/:name",
+            put(update_reaction_def).delete(delete_reaction_def),
+        )
+        .route(
+            "/api/v2/settings/id-config",
+            get(get_id_config).put(update_id_config),
+        )
+        .route(
+            "/api/v2/settings/prefixes",
+            get(get_prefixes).put(update_prefixes),
+        )
         // Queue endpoints (STORY-0367)
         .route("/api/v2/queue/:user_id", get(queue_list).post(queue_add))
-        .route("/api/v2/queue/:user_id/:req_id", delete(queue_remove).patch(queue_update))
+        .route(
+            "/api/v2/queue/:user_id/:req_id",
+            delete(queue_remove).patch(queue_update),
+        )
         .route("/api/v2/queue/:user_id/reorder", post(queue_reorder))
         // Parent assignment endpoint
         .route("/api/v2/requirements/:id/parent", put(set_parent_legacy))
@@ -243,6 +293,108 @@ struct AddCommentRequest {
     parent_comment_id: Option<String>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AuthLoginRequest {
+    identifier: String,
+    #[serde(default)]
+    pin: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AuthConfigResponse {
+    mode: String,
+    auth_enabled: bool,
+    oidc_enabled: bool,
+    default_role: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AuthUserResponse {
+    id: String,
+    spec_id: Option<String>,
+    name: String,
+    email: String,
+    handle: String,
+    archived: bool,
+    has_pin: bool,
+    role: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AuthLoginResponse {
+    authenticated: bool,
+    mode: String,
+    session_token: String,
+    user: AuthUserResponse,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AuthMeResponse {
+    mode: String,
+    authenticated: bool,
+    user: AuthenticatedUser,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OidcStartResponse {
+    mode: String,
+    authorization_url: String,
+    state: String,
+}
+
+#[derive(Deserialize)]
+struct OidcCallbackQuery {
+    code: String,
+    state: String,
+}
+
+fn find_user<'a>(users: &'a [models::User], identifier: &str) -> Option<&'a models::User> {
+    users.iter().find(|u| {
+        u.handle.eq_ignore_ascii_case(identifier)
+            || u.email.eq_ignore_ascii_case(identifier)
+            || u.name.eq_ignore_ascii_case(identifier)
+            || u.spec_id
+                .as_ref()
+                .map(|s| s.eq_ignore_ascii_case(identifier))
+                .unwrap_or(false)
+    })
+}
+
+fn auth_user_to_response(user: &models::User, role: &str) -> AuthUserResponse {
+    AuthUserResponse {
+        id: user.id.to_string(),
+        spec_id: user.spec_id.clone(),
+        name: user.name.clone(),
+        email: user.email.clone(),
+        handle: user.handle.clone(),
+        archived: user.archived,
+        has_pin: user.has_pin(),
+        role: role.to_string(),
+    }
+}
+
+fn oidc_identifier(info: &OidcUserInfo) -> Option<String> {
+    if let Some(v) = info.preferred_username.as_ref().filter(|v| !v.is_empty()) {
+        return Some(v.clone());
+    }
+    if let Some(v) = info.email.as_ref().filter(|v| !v.is_empty()) {
+        return Some(v.clone());
+    }
+    if let Some(v) = info.sub.as_ref().filter(|v| !v.is_empty()) {
+        return Some(v.clone());
+    }
+    if let Some(v) = info.name.as_ref().filter(|v| !v.is_empty()) {
+        return Some(v.clone());
+    }
+    None
+}
+
 // ============================================================================
 // Helper: Extract project from headers and get backend
 // ============================================================================
@@ -274,6 +426,189 @@ async fn get_project_backend(
 // V2 API Handlers (direct aida_core models)
 // ============================================================================
 
+async fn auth_config(
+    Extension(auth): Extension<Arc<WebAuthState>>,
+) -> Result<Json<AuthConfigResponse>, (StatusCode, Json<ApiError>)> {
+    Ok(Json(AuthConfigResponse {
+        mode: auth.mode().as_str().to_string(),
+        auth_enabled: auth.is_enabled(),
+        oidc_enabled: auth.oidc_enabled(),
+        default_role: auth.role_for_handle("").as_str().to_string(),
+    }))
+}
+
+async fn auth_login(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<Arc<WebAuthState>>,
+    headers: HeaderMap,
+    Json(body): Json<AuthLoginRequest>,
+) -> Result<Json<AuthLoginResponse>, (StatusCode, Json<ApiError>)> {
+    if !auth.is_enabled() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "Authentication is disabled (AIDA_WEB_AUTH_MODE=none)",
+        ));
+    }
+    if auth.mode().as_str() == "oidc" {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PIN login disabled in OIDC mode",
+        ));
+    }
+
+    let backend = get_project_backend(&state, &headers).await?;
+    let project = headers
+        .get("x-project")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("default")
+        .to_string();
+    let store = backend.store.read().await;
+
+    let user = find_user(&store.users, &body.identifier)
+        .ok_or_else(|| ApiError::new(StatusCode::UNAUTHORIZED, "User not found"))?;
+
+    if user.has_pin() && !user.verify_pin(&body.pin) {
+        return Err(ApiError::new(StatusCode::UNAUTHORIZED, "Invalid PIN"));
+    }
+
+    let role = auth.role_for_handle(&user.handle);
+    let session_token = auth
+        .create_session(
+            user.id.to_string(),
+            user.handle.clone(),
+            user.name.clone(),
+            project,
+            role,
+        )
+        .await;
+
+    Ok(Json(AuthLoginResponse {
+        authenticated: true,
+        mode: auth.mode().as_str().to_string(),
+        session_token,
+        user: auth_user_to_response(user, role.as_str()),
+    }))
+}
+
+async fn auth_oidc_start(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<Arc<WebAuthState>>,
+    headers: HeaderMap,
+) -> Result<Json<OidcStartResponse>, (StatusCode, Json<ApiError>)> {
+    if !auth.oidc_enabled() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "OIDC is not configured",
+        ));
+    }
+
+    let project = headers
+        .get("x-project")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("default")
+        .to_string();
+
+    // Validate project early to avoid generating unusable URLs.
+    let _ = state
+        .project_manager
+        .get_backend(&project)
+        .await
+        .map_err(|e| ApiError::new(StatusCode::NOT_FOUND, format!("Project error: {}", e)))?;
+
+    let (authorization_url, state_token) = auth
+        .build_oidc_authorize_url(&project)
+        .await
+        .map_err(|_| ApiError::new(StatusCode::BAD_REQUEST, "Failed to build OIDC URL"))?;
+
+    Ok(Json(OidcStartResponse {
+        mode: auth.mode().as_str().to_string(),
+        authorization_url,
+        state: state_token,
+    }))
+}
+
+async fn auth_oidc_callback(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<Arc<WebAuthState>>,
+    Query(query): Query<OidcCallbackQuery>,
+) -> Result<Json<AuthLoginResponse>, (StatusCode, Json<ApiError>)> {
+    if !auth.oidc_enabled() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "OIDC is not configured",
+        ));
+    }
+
+    let project = auth
+        .consume_oidc_state(&query.state)
+        .await
+        .ok_or_else(|| ApiError::new(StatusCode::UNAUTHORIZED, "Invalid or expired OIDC state"))?;
+
+    let backend = state
+        .project_manager
+        .get_backend(&project)
+        .await
+        .map_err(|e| ApiError::new(StatusCode::NOT_FOUND, format!("Project error: {}", e)))?;
+
+    let userinfo = auth
+        .exchange_oidc_code(&query.code)
+        .await
+        .map_err(|e| match e {
+            OidcError::ExchangeFailed(msg) | OidcError::UserInfoFailed(msg) => {
+                ApiError::new(StatusCode::UNAUTHORIZED, msg)
+            }
+            _ => ApiError::new(StatusCode::UNAUTHORIZED, "OIDC authentication failed"),
+        })?;
+
+    let identifier = oidc_identifier(&userinfo)
+        .ok_or_else(|| ApiError::new(StatusCode::UNAUTHORIZED, "OIDC user payload missing identifier"))?;
+    let store = backend.store.read().await;
+    let user = find_user(&store.users, &identifier)
+        .ok_or_else(|| ApiError::new(StatusCode::UNAUTHORIZED, "No matching AIDA user for OIDC identity"))?;
+
+    let role = auth.role_for_handle(&user.handle);
+    let session_token = auth
+        .create_session(
+            user.id.to_string(),
+            user.handle.clone(),
+            user.name.clone(),
+            project,
+            role,
+        )
+        .await;
+
+    Ok(Json(AuthLoginResponse {
+        authenticated: true,
+        mode: auth.mode().as_str().to_string(),
+        session_token,
+        user: auth_user_to_response(user, role.as_str()),
+    }))
+}
+
+async fn auth_me(
+    Extension(auth): Extension<Arc<WebAuthState>>,
+    user: Option<Extension<AuthenticatedUser>>,
+) -> Result<Json<AuthMeResponse>, (StatusCode, Json<ApiError>)> {
+    let user = user
+        .map(|u| u.0)
+        .ok_or_else(|| ApiError::new(StatusCode::UNAUTHORIZED, "Not authenticated"))?;
+    Ok(Json(AuthMeResponse {
+        mode: auth.mode().as_str().to_string(),
+        authenticated: true,
+        user,
+    }))
+}
+
+async fn auth_logout(
+    Extension(auth): Extension<Arc<WebAuthState>>,
+    headers: HeaderMap,
+) -> Result<StatusCode, (StatusCode, Json<ApiError>)> {
+    if let Some(token) = extract_token(&headers) {
+        auth.remove_session(&token).await;
+    }
+    Ok(StatusCode::NO_CONTENT)
+}
+
 async fn list_users(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -294,6 +629,138 @@ async fn list_requirements_v2(
     Ok(Json(store.requirements.clone()))
 }
 
+async fn auth_config_legacy(
+    Extension(auth): Extension<Arc<WebAuthState>>,
+) -> Result<Json<AuthConfigResponse>, (StatusCode, Json<ApiError>)> {
+    Ok(Json(AuthConfigResponse {
+        mode: auth.mode().as_str().to_string(),
+        auth_enabled: auth.is_enabled(),
+        oidc_enabled: auth.oidc_enabled(),
+        default_role: auth.role_for_handle("").as_str().to_string(),
+    }))
+}
+
+async fn auth_login_legacy(
+    State(state): State<Arc<ServerState>>,
+    Extension(auth): Extension<Arc<WebAuthState>>,
+    Json(body): Json<AuthLoginRequest>,
+) -> Result<Json<AuthLoginResponse>, (StatusCode, Json<ApiError>)> {
+    if !auth.is_enabled() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "Authentication is disabled (AIDA_WEB_AUTH_MODE=none)",
+        ));
+    }
+    if auth.mode().as_str() == "oidc" {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PIN login disabled in OIDC mode",
+        ));
+    }
+
+    state.check_reload().await;
+    let store = state.store.read().await;
+
+    let user = find_user(&store.users, &body.identifier)
+        .ok_or_else(|| ApiError::new(StatusCode::UNAUTHORIZED, "User not found"))?;
+
+    if user.has_pin() && !user.verify_pin(&body.pin) {
+        return Err(ApiError::new(StatusCode::UNAUTHORIZED, "Invalid PIN"));
+    }
+
+    let role = auth.role_for_handle(&user.handle);
+    let session_token = auth
+        .create_session(
+            user.id.to_string(),
+            user.handle.clone(),
+            user.name.clone(),
+            "default".to_string(),
+            role,
+        )
+        .await;
+
+    Ok(Json(AuthLoginResponse {
+        authenticated: true,
+        mode: auth.mode().as_str().to_string(),
+        session_token,
+        user: auth_user_to_response(user, role.as_str()),
+    }))
+}
+
+async fn auth_oidc_start_legacy(
+    Extension(auth): Extension<Arc<WebAuthState>>,
+) -> Result<Json<OidcStartResponse>, (StatusCode, Json<ApiError>)> {
+    if !auth.oidc_enabled() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "OIDC is not configured",
+        ));
+    }
+
+    let (authorization_url, state_token) = auth
+        .build_oidc_authorize_url("default")
+        .await
+        .map_err(|_| ApiError::new(StatusCode::BAD_REQUEST, "Failed to build OIDC URL"))?;
+
+    Ok(Json(OidcStartResponse {
+        mode: auth.mode().as_str().to_string(),
+        authorization_url,
+        state: state_token,
+    }))
+}
+
+async fn auth_oidc_callback_legacy(
+    State(state): State<Arc<ServerState>>,
+    Extension(auth): Extension<Arc<WebAuthState>>,
+    Query(query): Query<OidcCallbackQuery>,
+) -> Result<Json<AuthLoginResponse>, (StatusCode, Json<ApiError>)> {
+    if !auth.oidc_enabled() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "OIDC is not configured",
+        ));
+    }
+
+    let _project = auth
+        .consume_oidc_state(&query.state)
+        .await
+        .ok_or_else(|| ApiError::new(StatusCode::UNAUTHORIZED, "Invalid or expired OIDC state"))?;
+
+    let userinfo = auth
+        .exchange_oidc_code(&query.code)
+        .await
+        .map_err(|e| match e {
+            OidcError::ExchangeFailed(msg) | OidcError::UserInfoFailed(msg) => {
+                ApiError::new(StatusCode::UNAUTHORIZED, msg)
+            }
+            _ => ApiError::new(StatusCode::UNAUTHORIZED, "OIDC authentication failed"),
+        })?;
+    let identifier = oidc_identifier(&userinfo)
+        .ok_or_else(|| ApiError::new(StatusCode::UNAUTHORIZED, "OIDC user payload missing identifier"))?;
+
+    state.check_reload().await;
+    let store = state.store.read().await;
+    let user = find_user(&store.users, &identifier)
+        .ok_or_else(|| ApiError::new(StatusCode::UNAUTHORIZED, "No matching AIDA user for OIDC identity"))?;
+
+    let role = auth.role_for_handle(&user.handle);
+    let session_token = auth
+        .create_session(
+            user.id.to_string(),
+            user.handle.clone(),
+            user.name.clone(),
+            "default".to_string(),
+            role,
+        )
+        .await;
+
+    Ok(Json(AuthLoginResponse {
+        authenticated: true,
+        mode: auth.mode().as_str().to_string(),
+        session_token,
+        user: auth_user_to_response(user, role.as_str()),
+    }))
+}
 
 // ============================================================================
 // Project management handlers
@@ -343,7 +810,12 @@ async fn get_project(
         .project_manager
         .get_project(&name)
         .await
-        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Project not found: {}", name)))?;
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                format!("Project not found: {}", name),
+            )
+        })?;
 
     Ok(Json(ProjectResponse {
         name: project.name,
@@ -408,7 +880,11 @@ async fn get_status(
         uptime_seconds: 0,
         active_connections: 0,
         storage_backend: "multi-project".to_string(),
-        storage_path: state.project_manager.data_dir().to_string_lossy().to_string(),
+        storage_path: state
+            .project_manager
+            .data_dir()
+            .to_string_lossy()
+            .to_string(),
     }))
 }
 
@@ -518,8 +994,12 @@ async fn get_requirement(
     let backend = get_project_backend(&state, &headers).await?;
     let store = backend.store.read().await;
 
-    let req = find_requirement(&store, &id)
-        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {}", id)))?;
+    let req = find_requirement(&store, &id).ok_or_else(|| {
+        ApiError::new(
+            StatusCode::NOT_FOUND,
+            format!("Requirement not found: {}", id),
+        )
+    })?;
 
     Ok(Json(proto::GetRequirementResponse {
         requirement: Some(requirement_to_proto(req)),
@@ -534,10 +1014,7 @@ async fn create_requirement(
     let backend = get_project_backend(&state, &headers).await?;
     let mut store = backend.store.write().await;
 
-    let mut new_req = aida_core::Requirement::new(
-        body.title,
-        body.description.unwrap_or_default(),
-    );
+    let mut new_req = aida_core::Requirement::new(body.title, body.description.unwrap_or_default());
     new_req.status = parse_status(&body.status.unwrap_or_else(|| "Draft".to_string()));
     new_req.priority = parse_priority(&body.priority.unwrap_or_else(|| "Medium".to_string()));
     new_req.req_type = parse_req_type(&body.req_type.unwrap_or_else(|| "Functional".to_string()));
@@ -549,11 +1026,22 @@ async fn create_requirement(
         new_req.tags = tags.into_iter().collect();
     }
 
-    let feature_prefix = store.features.iter()
+    let feature_prefix = store
+        .features
+        .iter()
         .find(|f| f.name == new_req.feature)
         .map(|f| f.prefix.clone());
-    let type_prefix = store.type_definitions.iter()
-        .find(|td| td.name == new_req.req_type.to_string().replace(" ", "").replace("-", ""))
+    let type_prefix = store
+        .type_definitions
+        .iter()
+        .find(|td| {
+            td.name
+                == new_req
+                    .req_type
+                    .to_string()
+                    .replace(" ", "")
+                    .replace("-", "")
+        })
         .and_then(|td| td.prefix.clone());
 
     store.add_requirement_with_id(
@@ -562,8 +1050,12 @@ async fn create_requirement(
         type_prefix.as_deref(),
     );
 
-    let added_req = store.requirements.last()
-        .ok_or_else(|| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Failed to add requirement"))?;
+    let added_req = store.requirements.last().ok_or_else(|| {
+        ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to add requirement",
+        )
+    })?;
     let spec_id = added_req.spec_id.clone().unwrap_or_default();
     let proto_req = requirement_to_proto(added_req);
 
@@ -593,8 +1085,12 @@ async fn update_requirement(
     let backend = get_project_backend(&state, &headers).await?;
     let mut store = backend.store.write().await;
 
-    let idx = find_requirement_index(&store, &id)
-        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {}", id)))?;
+    let idx = find_requirement_index(&store, &id).ok_or_else(|| {
+        ApiError::new(
+            StatusCode::NOT_FOUND,
+            format!("Requirement not found: {}", id),
+        )
+    })?;
 
     let req = &mut store.requirements[idx];
 
@@ -668,8 +1164,12 @@ async fn delete_requirement(
     let backend = get_project_backend(&state, &headers).await?;
     let mut store = backend.store.write().await;
 
-    let idx = find_requirement_index(&store, &id)
-        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {}", id)))?;
+    let idx = find_requirement_index(&store, &id).ok_or_else(|| {
+        ApiError::new(
+            StatusCode::NOT_FOUND,
+            format!("Requirement not found: {}", id),
+        )
+    })?;
 
     store.requirements.remove(idx);
 
@@ -696,8 +1196,12 @@ async fn add_comment(
     let backend = get_project_backend(&state, &headers).await?;
     let mut store = backend.store.write().await;
 
-    let idx = find_requirement_index(&store, &id)
-        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {}", id)))?;
+    let idx = find_requirement_index(&store, &id).ok_or_else(|| {
+        ApiError::new(
+            StatusCode::NOT_FOUND,
+            format!("Requirement not found: {}", id),
+        )
+    })?;
 
     let comment = aida_core::Comment::new(
         body.content,
@@ -922,8 +1426,12 @@ async fn get_requirement_legacy(
 ) -> Result<Json<proto::GetRequirementResponse>, (StatusCode, Json<ApiError>)> {
     let store = state.store.read().await;
 
-    let req = find_requirement(&store, &id)
-        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {}", id)))?;
+    let req = find_requirement(&store, &id).ok_or_else(|| {
+        ApiError::new(
+            StatusCode::NOT_FOUND,
+            format!("Requirement not found: {}", id),
+        )
+    })?;
 
     Ok(Json(proto::GetRequirementResponse {
         requirement: Some(requirement_to_proto(req)),
@@ -936,10 +1444,7 @@ async fn create_requirement_legacy(
 ) -> Result<(StatusCode, Json<proto::CreateRequirementResponse>), (StatusCode, Json<ApiError>)> {
     let mut store = state.store.write().await;
 
-    let mut new_req = aida_core::Requirement::new(
-        body.title,
-        body.description.unwrap_or_default(),
-    );
+    let mut new_req = aida_core::Requirement::new(body.title, body.description.unwrap_or_default());
     new_req.status = parse_status(&body.status.unwrap_or_else(|| "Draft".to_string()));
     new_req.priority = parse_priority(&body.priority.unwrap_or_else(|| "Medium".to_string()));
     new_req.req_type = parse_req_type(&body.req_type.unwrap_or_else(|| "Functional".to_string()));
@@ -951,11 +1456,22 @@ async fn create_requirement_legacy(
         new_req.tags = tags.into_iter().collect();
     }
 
-    let feature_prefix = store.features.iter()
+    let feature_prefix = store
+        .features
+        .iter()
         .find(|f| f.name == new_req.feature)
         .map(|f| f.prefix.clone());
-    let type_prefix = store.type_definitions.iter()
-        .find(|td| td.name == new_req.req_type.to_string().replace(" ", "").replace("-", ""))
+    let type_prefix = store
+        .type_definitions
+        .iter()
+        .find(|td| {
+            td.name
+                == new_req
+                    .req_type
+                    .to_string()
+                    .replace(" ", "")
+                    .replace("-", "")
+        })
         .and_then(|td| td.prefix.clone());
 
     store.add_requirement_with_id(
@@ -964,8 +1480,12 @@ async fn create_requirement_legacy(
         type_prefix.as_deref(),
     );
 
-    let added_req = store.requirements.last()
-        .ok_or_else(|| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Failed to add requirement"))?;
+    let added_req = store.requirements.last().ok_or_else(|| {
+        ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to add requirement",
+        )
+    })?;
     let spec_id = added_req.spec_id.clone().unwrap_or_default();
     let proto_req = requirement_to_proto(added_req);
 
@@ -993,8 +1513,12 @@ async fn update_requirement_legacy(
 ) -> Result<Json<proto::UpdateRequirementResponse>, (StatusCode, Json<ApiError>)> {
     let mut store = state.store.write().await;
 
-    let idx = find_requirement_index(&store, &id)
-        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {}", id)))?;
+    let idx = find_requirement_index(&store, &id).ok_or_else(|| {
+        ApiError::new(
+            StatusCode::NOT_FOUND,
+            format!("Requirement not found: {}", id),
+        )
+    })?;
 
     let req = &mut store.requirements[idx];
 
@@ -1066,8 +1590,12 @@ async fn delete_requirement_legacy(
 ) -> Result<Json<proto::DeleteRequirementResponse>, (StatusCode, Json<ApiError>)> {
     let mut store = state.store.write().await;
 
-    let idx = find_requirement_index(&store, &id)
-        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {}", id)))?;
+    let idx = find_requirement_index(&store, &id).ok_or_else(|| {
+        ApiError::new(
+            StatusCode::NOT_FOUND,
+            format!("Requirement not found: {}", id),
+        )
+    })?;
 
     store.requirements.remove(idx);
 
@@ -1092,8 +1620,12 @@ async fn add_comment_legacy(
 ) -> Result<(StatusCode, Json<proto::AddCommentResponse>), (StatusCode, Json<ApiError>)> {
     let mut store = state.store.write().await;
 
-    let idx = find_requirement_index(&store, &id)
-        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {}", id)))?;
+    let idx = find_requirement_index(&store, &id).ok_or_else(|| {
+        ApiError::new(
+            StatusCode::NOT_FOUND,
+            format!("Requirement not found: {}", id),
+        )
+    })?;
 
     let comment = aida_core::Comment::new(
         body.content,
@@ -1288,8 +1820,12 @@ async fn get_requirement_v2_legacy(
 ) -> Result<Json<models::Requirement>, (StatusCode, Json<ApiError>)> {
     state.check_reload().await;
     let store = state.store.read().await;
-    let req = find_requirement(&store, &id)
-        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {id}")))?;
+    let req = find_requirement(&store, &id).ok_or_else(|| {
+        ApiError::new(
+            StatusCode::NOT_FOUND,
+            format!("Requirement not found: {id}"),
+        )
+    })?;
     Ok(Json(req.clone()))
 }
 
@@ -1314,8 +1850,12 @@ async fn update_requirement_v2_legacy(
 ) -> Result<Json<models::Requirement>, (StatusCode, Json<ApiError>)> {
     state.check_reload().await;
     let mut store = state.store.write().await;
-    let idx = find_requirement_index(&store, &id)
-        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {id}")))?;
+    let idx = find_requirement_index(&store, &id).ok_or_else(|| {
+        ApiError::new(
+            StatusCode::NOT_FOUND,
+            format!("Requirement not found: {id}"),
+        )
+    })?;
 
     if let Some(status) = &body.status {
         store.requirements[idx].status = parse_status(status);
@@ -1353,7 +1893,10 @@ async fn update_requirement_v2_legacy(
 
     // Persist changes
     if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+        return Err(ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            e.to_string(),
+        ));
     }
     drop(store);
     state.mark_saved().await;
@@ -1381,10 +1924,7 @@ async fn create_requirement_v2_legacy(
     state.check_reload().await;
     let mut store = state.store.write().await;
 
-    let mut new_req = aida_core::Requirement::new(
-        body.title,
-        body.description.unwrap_or_default(),
-    );
+    let mut new_req = aida_core::Requirement::new(body.title, body.description.unwrap_or_default());
     new_req.status = parse_status(&body.status.unwrap_or_else(|| "Draft".to_string()));
     new_req.priority = parse_priority(&body.priority.unwrap_or_else(|| "Medium".to_string()));
     new_req.req_type = parse_req_type(&body.req_type.unwrap_or_else(|| "Functional".to_string()));
@@ -1397,26 +1937,43 @@ async fn create_requirement_v2_legacy(
         new_req.custom_fields = custom_fields;
     }
 
-    let feature_prefix = store.features.iter()
+    let feature_prefix = store
+        .features
+        .iter()
         .find(|f| f.name == new_req.feature)
         .map(|f| f.prefix.clone());
-    let type_prefix = store.type_definitions.iter()
-        .find(|td| td.name == new_req.req_type.to_string().replace(" ", "").replace("-", ""))
+    let type_prefix = store
+        .type_definitions
+        .iter()
+        .find(|td| {
+            td.name
+                == new_req
+                    .req_type
+                    .to_string()
+                    .replace(" ", "")
+                    .replace("-", "")
+        })
         .and_then(|td| td.prefix.clone());
 
-    store.add_requirement_with_id(
-        new_req,
-        feature_prefix.as_deref(),
-        type_prefix.as_deref(),
-    );
+    store.add_requirement_with_id(new_req, feature_prefix.as_deref(), type_prefix.as_deref());
 
-    let added = store.requirements.last()
-        .ok_or_else(|| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Failed to add requirement"))?
+    let added = store
+        .requirements
+        .last()
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to add requirement",
+            )
+        })?
         .clone();
 
     drop(store);
     if let Err(e) = state.backend.save(&*state.store.read().await) {
-        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to save: {}", e)));
+        return Err(ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to save: {}", e),
+        ));
     }
     state.mark_saved().await;
 
@@ -1536,17 +2093,28 @@ async fn assign_sprint_legacy(
 
     // Look up the requirement to assign
     let req_id = {
-        let req = find_requirement(&store, &id)
-            .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {id}")))?;
+        let req = find_requirement(&store, &id).ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                format!("Requirement not found: {id}"),
+            )
+        })?;
         req.id
     };
 
     // Look up the sprint
     let sprint_id = {
-        let sprint = find_requirement(&store, &body.sprint_id)
-            .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Sprint not found: {}", body.sprint_id)))?;
+        let sprint = find_requirement(&store, &body.sprint_id).ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                format!("Sprint not found: {}", body.sprint_id),
+            )
+        })?;
         if sprint.req_type != aida_core::RequirementType::Sprint {
-            return Err(ApiError::new(StatusCode::BAD_REQUEST, format!("Target {} is not a Sprint", body.sprint_id)));
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                format!("Target {} is not a Sprint", body.sprint_id),
+            ));
         }
         sprint.id
     };
@@ -1555,11 +2123,19 @@ async fn assign_sprint_legacy(
     store.assign_to_sprint(req_id, sprint_id, &username);
 
     let updated = find_requirement(&store, &id)
-        .ok_or_else(|| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Requirement disappeared after assignment"))?
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Requirement disappeared after assignment",
+            )
+        })?
         .clone();
 
     if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+        return Err(ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            e.to_string(),
+        ));
     }
     drop(store);
     state.mark_saved().await;
@@ -1575,19 +2151,31 @@ async fn remove_sprint_legacy(
     let mut store = state.store.write().await;
 
     let req_id = {
-        let req = find_requirement(&store, &id)
-            .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {id}")))?;
+        let req = find_requirement(&store, &id).ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                format!("Requirement not found: {id}"),
+            )
+        })?;
         req.id
     };
 
     store.remove_from_sprint(req_id, "web-user");
 
     let updated = find_requirement(&store, &id)
-        .ok_or_else(|| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Requirement disappeared after removal"))?
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Requirement disappeared after removal",
+            )
+        })?
         .clone();
 
     if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+        return Err(ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            e.to_string(),
+        ));
     }
     drop(store);
     state.mark_saved().await;
@@ -1615,8 +2203,12 @@ async fn set_parent_legacy(
 
     // Look up the child requirement
     let child_id = {
-        let req = find_requirement(&store, &id)
-            .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {id}")))?;
+        let req = find_requirement(&store, &id).ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                format!("Requirement not found: {id}"),
+            )
+        })?;
         req.id
     };
 
@@ -1624,21 +2216,28 @@ async fn set_parent_legacy(
         Some(pid) => {
             // Resolve parent to UUID
             let parent_id = {
-                let parent = find_requirement(&store, &pid)
-                    .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Parent not found: {pid}")))?;
+                let parent = find_requirement(&store, &pid).ok_or_else(|| {
+                    ApiError::new(StatusCode::NOT_FOUND, format!("Parent not found: {pid}"))
+                })?;
                 parent.id
             };
 
             // set_relationship removes any existing Parent relationship first
             store
-                .set_relationship(&child_id, aida_core::RelationshipType::Parent, &parent_id, true)
+                .set_relationship(
+                    &child_id,
+                    aida_core::RelationshipType::Parent,
+                    &parent_id,
+                    true,
+                )
                 .map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, e.to_string()))?;
         }
         None => {
             // Remove existing Parent relationship if any
             let parent_target: Option<uuid::Uuid> = {
-                let req = find_requirement(&store, &id)
-                    .ok_or_else(|| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Requirement disappeared"))?;
+                let req = find_requirement(&store, &id).ok_or_else(|| {
+                    ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Requirement disappeared")
+                })?;
                 req.relationships
                     .iter()
                     .find(|r| r.rel_type == aida_core::RelationshipType::Parent)
@@ -1656,11 +2255,19 @@ async fn set_parent_legacy(
     }
 
     let updated = find_requirement(&store, &id)
-        .ok_or_else(|| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Requirement disappeared after update"))?
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Requirement disappeared after update",
+            )
+        })?
         .clone();
 
     if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+        return Err(ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            e.to_string(),
+        ));
     }
     drop(store);
     state.mark_saved().await;
@@ -1711,10 +2318,18 @@ fn parse_skill_frontmatter(content: &str) -> (String, String, Vec<String>) {
         for line in yaml_block.lines() {
             let trimmed = line.trim();
             if trimmed.starts_with("name:") {
-                name = trimmed.strip_prefix("name:").unwrap_or("").trim().to_string();
+                name = trimmed
+                    .strip_prefix("name:")
+                    .unwrap_or("")
+                    .trim()
+                    .to_string();
                 in_tools = false;
             } else if trimmed.starts_with("description:") {
-                description = trimmed.strip_prefix("description:").unwrap_or("").trim().to_string();
+                description = trimmed
+                    .strip_prefix("description:")
+                    .unwrap_or("")
+                    .trim()
+                    .to_string();
                 in_tools = false;
             } else if trimmed.starts_with("allowed-tools:") {
                 in_tools = true;
@@ -1762,7 +2377,8 @@ fn scan_skill_dir(dir: &std::path::Path, kind: &str) -> Vec<(SkillInfo, PathBuf)
         if path.extension().and_then(|e| e.to_str()) != Some("md") {
             continue;
         }
-        let file_name = path.file_stem()
+        let file_name = path
+            .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("")
             .to_string();
@@ -1771,10 +2387,15 @@ fn scan_skill_dir(dir: &std::path::Path, kind: &str) -> Vec<(SkillInfo, PathBuf)
             Err(_) => continue,
         };
         let (fm_name, description, _) = parse_skill_frontmatter(&content);
-        let name = if fm_name.is_empty() { file_name } else { fm_name };
+        let name = if fm_name.is_empty() {
+            file_name
+        } else {
+            fm_name
+        };
         // For commands without frontmatter, extract description from first non-empty, non-heading line
         let desc = if description.is_empty() {
-            content.lines()
+            content
+                .lines()
                 .skip_while(|l| l.starts_with("---"))
                 .skip_while(|l| l.trim().is_empty() || l.starts_with('#'))
                 .find(|l| !l.trim().is_empty())
@@ -1832,9 +2453,14 @@ async fn get_skill(
             let content = std::fs::read_to_string(&path)
                 .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             let (fm_name, description, allowed_tools) = parse_skill_frontmatter(&content);
-            let skill_name = if fm_name.is_empty() { name.clone() } else { fm_name };
+            let skill_name = if fm_name.is_empty() {
+                name.clone()
+            } else {
+                fm_name
+            };
             let desc = if description.is_empty() {
-                content.lines()
+                content
+                    .lines()
                     .skip_while(|l| l.starts_with("---"))
                     .skip_while(|l| l.trim().is_empty() || l.starts_with('#'))
                     .find(|l| !l.trim().is_empty())
@@ -1854,7 +2480,10 @@ async fn get_skill(
         }
     }
 
-    Err(ApiError::new(StatusCode::NOT_FOUND, format!("Skill not found: {name}")))
+    Err(ApiError::new(
+        StatusCode::NOT_FOUND,
+        format!("Skill not found: {name}"),
+    ))
 }
 
 async fn update_skill(
@@ -1880,9 +2509,14 @@ async fn update_skill(
                 .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
             let (fm_name, description, allowed_tools) = parse_skill_frontmatter(&body.content);
-            let skill_name = if fm_name.is_empty() { name.clone() } else { fm_name };
+            let skill_name = if fm_name.is_empty() {
+                name.clone()
+            } else {
+                fm_name
+            };
             let desc = if description.is_empty() {
-                body.content.lines()
+                body.content
+                    .lines()
                     .skip_while(|l| l.starts_with("---"))
                     .skip_while(|l| l.trim().is_empty() || l.starts_with('#'))
                     .find(|l| !l.trim().is_empty())
@@ -1903,7 +2537,10 @@ async fn update_skill(
         }
     }
 
-    Err(ApiError::new(StatusCode::NOT_FOUND, format!("Skill not found: {name}")))
+    Err(ApiError::new(
+        StatusCode::NOT_FOUND,
+        format!("Skill not found: {name}"),
+    ))
 }
 
 // ============================================================================
@@ -1968,7 +2605,11 @@ fn scan_docs_recursive(dir: &std::path::Path, base: &std::path::Path) -> Vec<Doc
             .to_string();
         let content = std::fs::read_to_string(&path).unwrap_or_default();
         let title = extract_md_title(&content);
-        let title = if title.is_empty() { name.clone() } else { title };
+        let title = if title.is_empty() {
+            name.clone()
+        } else {
+            title
+        };
         let section = if rel_str.starts_with("plans/") || rel_str.starts_with("plans\\") {
             "plans".to_string()
         } else {
@@ -2022,7 +2663,11 @@ async fn get_doc(
         .unwrap_or("")
         .to_string();
     let title = extract_md_title(&content);
-    let title = if title.is_empty() { name.clone() } else { title };
+    let title = if title.is_empty() {
+        name.clone()
+    } else {
+        title
+    };
     let section = if rel_path.starts_with("plans/") || rel_path.starts_with("plans\\") {
         "plans".to_string()
     } else {
@@ -2089,7 +2734,10 @@ async fn update_settings_metadata(
         description: store.description.clone(),
     };
     if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+        return Err(ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            e.to_string(),
+        ));
     }
     Ok(Json(resp))
 }
@@ -2109,12 +2757,24 @@ async fn create_relationship_def(
     Json(body): Json<models::RelationshipDefinition>,
 ) -> Result<(StatusCode, Json<models::RelationshipDefinition>), (StatusCode, Json<ApiError>)> {
     let mut store = state.store.write().await;
-    store.add_relationship_definition(body.clone())
+    store
+        .add_relationship_definition(body.clone())
         .map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, e.to_string()))?;
-    let created = store.relationship_definitions.last().cloned()
-        .ok_or_else(|| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Failed to retrieve created definition"))?;
+    let created = store
+        .relationship_definitions
+        .last()
+        .cloned()
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to retrieve created definition",
+            )
+        })?;
     if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+        return Err(ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            e.to_string(),
+        ));
     }
     Ok((StatusCode::CREATED, Json(created)))
 }
@@ -2125,14 +2785,25 @@ async fn update_relationship_def(
     Json(body): Json<models::RelationshipDefinition>,
 ) -> Result<Json<models::RelationshipDefinition>, (StatusCode, Json<ApiError>)> {
     let mut store = state.store.write().await;
-    store.update_relationship_definition(&name, body)
+    store
+        .update_relationship_definition(&name, body)
         .map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, e.to_string()))?;
-    let updated = store.relationship_definitions.iter()
+    let updated = store
+        .relationship_definitions
+        .iter()
         .find(|d| d.name == name.to_lowercase())
         .cloned()
-        .ok_or_else(|| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Definition not found after update"))?;
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Definition not found after update",
+            )
+        })?;
     if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+        return Err(ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            e.to_string(),
+        ));
     }
     Ok(Json(updated))
 }
@@ -2142,10 +2813,14 @@ async fn delete_relationship_def(
     Path(name): Path<String>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
     let mut store = state.store.write().await;
-    store.remove_relationship_definition(&name)
+    store
+        .remove_relationship_definition(&name)
         .map_err(|e| ApiError::new(StatusCode::BAD_REQUEST, e.to_string()))?;
     if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+        return Err(ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            e.to_string(),
+        ));
     }
     Ok(Json(serde_json::json!({"message": "Deleted"})))
 }
@@ -2165,11 +2840,21 @@ async fn create_type_def(
     Json(body): Json<models::CustomTypeDefinition>,
 ) -> Result<(StatusCode, Json<models::CustomTypeDefinition>), (StatusCode, Json<ApiError>)> {
     if body.name.trim().is_empty() {
-        return Err(ApiError::new(StatusCode::BAD_REQUEST, "Type name cannot be empty"));
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "Type name cannot be empty",
+        ));
     }
     let mut store = state.store.write().await;
-    if store.type_definitions.iter().any(|d| d.name.eq_ignore_ascii_case(&body.name)) {
-        return Err(ApiError::new(StatusCode::BAD_REQUEST, format!("Type definition '{}' already exists", body.name)));
+    if store
+        .type_definitions
+        .iter()
+        .any(|d| d.name.eq_ignore_ascii_case(&body.name))
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            format!("Type definition '{}' already exists", body.name),
+        ));
     }
     let def = models::CustomTypeDefinition {
         built_in: false,
@@ -2177,7 +2862,10 @@ async fn create_type_def(
     };
     store.type_definitions.push(def.clone());
     if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+        return Err(ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            e.to_string(),
+        ));
     }
     Ok((StatusCode::CREATED, Json(def)))
 }
@@ -2188,9 +2876,16 @@ async fn update_type_def(
     Json(body): Json<models::CustomTypeDefinition>,
 ) -> Result<Json<models::CustomTypeDefinition>, (StatusCode, Json<ApiError>)> {
     let mut store = state.store.write().await;
-    let def = store.type_definitions.iter_mut()
+    let def = store
+        .type_definitions
+        .iter_mut()
         .find(|d| d.name.eq_ignore_ascii_case(&name))
-        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Type definition '{}' not found", name)))?;
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                format!("Type definition '{}' not found", name),
+            )
+        })?;
 
     if def.built_in {
         // For built-in types, only update non-critical fields
@@ -2210,7 +2905,10 @@ async fn update_type_def(
     }
     let updated = def.clone();
     if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+        return Err(ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            e.to_string(),
+        ));
     }
     Ok(Json(updated))
 }
@@ -2220,15 +2918,30 @@ async fn delete_type_def(
     Path(name): Path<String>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
     let mut store = state.store.write().await;
-    let def = store.type_definitions.iter()
+    let def = store
+        .type_definitions
+        .iter()
         .find(|d| d.name.eq_ignore_ascii_case(&name))
-        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Type definition '{}' not found", name)))?;
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                format!("Type definition '{}' not found", name),
+            )
+        })?;
     if def.built_in {
-        return Err(ApiError::new(StatusCode::BAD_REQUEST, format!("Cannot delete built-in type '{}'", name)));
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            format!("Cannot delete built-in type '{}'", name),
+        ));
     }
-    store.type_definitions.retain(|d| !d.name.eq_ignore_ascii_case(&name));
+    store
+        .type_definitions
+        .retain(|d| !d.name.eq_ignore_ascii_case(&name));
     if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+        return Err(ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            e.to_string(),
+        ));
     }
     Ok(Json(serde_json::json!({"message": "Deleted"})))
 }
@@ -2248,11 +2961,21 @@ async fn create_reaction_def(
     Json(body): Json<models::ReactionDefinition>,
 ) -> Result<(StatusCode, Json<models::ReactionDefinition>), (StatusCode, Json<ApiError>)> {
     if body.name.trim().is_empty() {
-        return Err(ApiError::new(StatusCode::BAD_REQUEST, "Reaction name cannot be empty"));
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "Reaction name cannot be empty",
+        ));
     }
     let mut store = state.store.write().await;
-    if store.reaction_definitions.iter().any(|d| d.name.eq_ignore_ascii_case(&body.name)) {
-        return Err(ApiError::new(StatusCode::BAD_REQUEST, format!("Reaction '{}' already exists", body.name)));
+    if store
+        .reaction_definitions
+        .iter()
+        .any(|d| d.name.eq_ignore_ascii_case(&body.name))
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            format!("Reaction '{}' already exists", body.name),
+        ));
     }
     let def = models::ReactionDefinition {
         built_in: false,
@@ -2260,7 +2983,10 @@ async fn create_reaction_def(
     };
     store.reaction_definitions.push(def.clone());
     if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+        return Err(ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            e.to_string(),
+        ));
     }
     Ok((StatusCode::CREATED, Json(def)))
 }
@@ -2271,9 +2997,16 @@ async fn update_reaction_def(
     Json(body): Json<models::ReactionDefinition>,
 ) -> Result<Json<models::ReactionDefinition>, (StatusCode, Json<ApiError>)> {
     let mut store = state.store.write().await;
-    let def = store.reaction_definitions.iter_mut()
+    let def = store
+        .reaction_definitions
+        .iter_mut()
         .find(|d| d.name.eq_ignore_ascii_case(&name))
-        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Reaction '{}' not found", name)))?;
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                format!("Reaction '{}' not found", name),
+            )
+        })?;
 
     if def.built_in {
         // For built-in reactions, only update non-critical fields
@@ -2290,7 +3023,10 @@ async fn update_reaction_def(
     }
     let updated = def.clone();
     if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+        return Err(ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            e.to_string(),
+        ));
     }
     Ok(Json(updated))
 }
@@ -2300,15 +3036,30 @@ async fn delete_reaction_def(
     Path(name): Path<String>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiError>)> {
     let mut store = state.store.write().await;
-    let def = store.reaction_definitions.iter()
+    let def = store
+        .reaction_definitions
+        .iter()
         .find(|d| d.name.eq_ignore_ascii_case(&name))
-        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Reaction '{}' not found", name)))?;
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                format!("Reaction '{}' not found", name),
+            )
+        })?;
     if def.built_in {
-        return Err(ApiError::new(StatusCode::BAD_REQUEST, format!("Cannot delete built-in reaction '{}'", name)));
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            format!("Cannot delete built-in reaction '{}'", name),
+        ));
     }
-    store.reaction_definitions.retain(|d| !d.name.eq_ignore_ascii_case(&name));
+    store
+        .reaction_definitions
+        .retain(|d| !d.name.eq_ignore_ascii_case(&name));
     if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+        return Err(ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            e.to_string(),
+        ));
     }
     Ok(Json(serde_json::json!({"message": "Deleted"})))
 }
@@ -2328,13 +3079,19 @@ async fn update_id_config(
     Json(body): Json<models::IdConfiguration>,
 ) -> Result<Json<models::IdConfiguration>, (StatusCode, Json<ApiError>)> {
     if body.digits < 1 || body.digits > 6 {
-        return Err(ApiError::new(StatusCode::BAD_REQUEST, "Digits must be between 1 and 6"));
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "Digits must be between 1 and 6",
+        ));
     }
     let mut store = state.store.write().await;
     store.id_config = body;
     let updated = store.id_config.clone();
     if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+        return Err(ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            e.to_string(),
+        ));
     }
     Ok(Json(updated))
 }
@@ -2365,17 +3122,26 @@ async fn update_prefixes(
     // Validate prefixes are non-empty uppercase strings
     for prefix in &body.allowed_prefixes {
         if prefix.trim().is_empty() {
-            return Err(ApiError::new(StatusCode::BAD_REQUEST, "Prefix cannot be empty"));
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "Prefix cannot be empty",
+            ));
         }
         if prefix != &prefix.to_uppercase() {
-            return Err(ApiError::new(StatusCode::BAD_REQUEST, format!("Prefix '{}' must be uppercase", prefix)));
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                format!("Prefix '{}' must be uppercase", prefix),
+            ));
         }
     }
     // Check for duplicates
     let mut seen = std::collections::HashSet::new();
     for prefix in &body.allowed_prefixes {
         if !seen.insert(prefix) {
-            return Err(ApiError::new(StatusCode::BAD_REQUEST, format!("Duplicate prefix '{}'", prefix)));
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                format!("Duplicate prefix '{}'", prefix),
+            ));
         }
     }
     let mut store = state.store.write().await;
@@ -2386,7 +3152,10 @@ async fn update_prefixes(
         restrict_prefixes: store.restrict_prefixes,
     };
     if let Err(e) = state.backend.save(&store) {
-        return Err(ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()));
+        return Err(ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            e.to_string(),
+        ));
     }
     Ok(Json(resp))
 }
@@ -2456,14 +3225,25 @@ fn enrich_queue_entry(
     entry: &QueueEntry,
     store: &aida_core::RequirementsStore,
 ) -> QueueEntryResponse {
-    let req = store.requirements.iter().find(|r| r.id == entry.requirement_id);
+    let req = store
+        .requirements
+        .iter()
+        .find(|r| r.id == entry.requirement_id);
     QueueEntryResponse {
         requirement_id: entry.requirement_id.to_string(),
         spec_id: req.and_then(|r| r.spec_id.clone()),
-        title: req.map(|r| r.title.clone()).unwrap_or_else(|| "(deleted)".to_string()),
-        status: req.map(|r| format!("{:?}", r.status)).unwrap_or_else(|| "Unknown".to_string()),
-        priority: req.map(|r| format!("{:?}", r.priority)).unwrap_or_else(|| "Medium".to_string()),
-        req_type: req.map(|r| format!("{:?}", r.req_type)).unwrap_or_else(|| "Task".to_string()),
+        title: req
+            .map(|r| r.title.clone())
+            .unwrap_or_else(|| "(deleted)".to_string()),
+        status: req
+            .map(|r| format!("{:?}", r.status))
+            .unwrap_or_else(|| "Unknown".to_string()),
+        priority: req
+            .map(|r| format!("{:?}", r.priority))
+            .unwrap_or_else(|| "Medium".to_string()),
+        req_type: req
+            .map(|r| format!("{:?}", r.req_type))
+            .unwrap_or_else(|| "Task".to_string()),
         position: entry.position,
         added_by: entry.added_by.clone(),
         note: entry.note.clone(),
@@ -2479,7 +3259,9 @@ async fn queue_list(
     state.check_reload().await;
     let include_completed = query.include_completed.unwrap_or(false);
 
-    let entries = state.backend.queue_list(&user_id, include_completed)
+    let entries = state
+        .backend
+        .queue_list(&user_id, include_completed)
         .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let store = state.store.read().await;
@@ -2504,20 +3286,24 @@ async fn queue_add(
     let store = state.store.read().await;
 
     // Resolve requirement_id (UUID or spec_id)
-    let req = find_requirement(&store, &body.requirement_id)
-        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {}", body.requirement_id)))?;
+    let req = find_requirement(&store, &body.requirement_id).ok_or_else(|| {
+        ApiError::new(
+            StatusCode::NOT_FOUND,
+            format!("Requirement not found: {}", body.requirement_id),
+        )
+    })?;
     let requirement_id = req.id;
 
     // Compute position (i64::MAX = sentinel for "auto-append to bottom")
     let position = match body.position.as_deref() {
         Some("top") => {
-            let existing = state.backend.queue_list(&user_id, true)
+            let existing = state
+                .backend
+                .queue_list(&user_id, true)
                 .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             existing.first().map(|e| e.position - 1000).unwrap_or(1000)
         }
-        Some(n) if n != "bottom" => {
-            n.parse::<i64>().unwrap_or(i64::MAX)
-        }
+        Some(n) if n != "bottom" => n.parse::<i64>().unwrap_or(i64::MAX),
         _ => i64::MAX, // bottom or unspecified: queue_add auto-assigns max+1000
     };
 
@@ -2532,14 +3318,25 @@ async fn queue_add(
         added_at: chrono::Utc::now(),
     };
 
-    state.backend.queue_add(entry)
+    state
+        .backend
+        .queue_add(entry)
         .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     // Read back the actual stored entry (position may have been auto-assigned)
-    let entries = state.backend.queue_list(&user_id, true)
+    let entries = state
+        .backend
+        .queue_list(&user_id, true)
         .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    let saved = entries.iter().find(|e| e.requirement_id == requirement_id)
-        .ok_or_else(|| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, "Entry not found after save"))?;
+    let saved = entries
+        .iter()
+        .find(|e| e.requirement_id == requirement_id)
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Entry not found after save",
+            )
+        })?;
 
     let response = enrich_queue_entry(saved, &store);
     Ok((StatusCode::CREATED, Json(response)))
@@ -2557,12 +3354,17 @@ async fn queue_remove(
     } else if let Some(req) = find_requirement(&store, &req_id) {
         req.id
     } else {
-        return Err(ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {}", req_id)));
+        return Err(ApiError::new(
+            StatusCode::NOT_FOUND,
+            format!("Requirement not found: {}", req_id),
+        ));
     };
 
     drop(store);
 
-    state.backend.queue_remove(&user_id, &requirement_id)
+    state
+        .backend
+        .queue_remove(&user_id, &requirement_id)
         .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(StatusCode::NO_CONTENT)
@@ -2581,13 +3383,20 @@ async fn queue_update(
     } else if let Some(req) = find_requirement(&store, &req_id) {
         req.id
     } else {
-        return Err(ApiError::new(StatusCode::NOT_FOUND, format!("Requirement not found: {}", req_id)));
+        return Err(ApiError::new(
+            StatusCode::NOT_FOUND,
+            format!("Requirement not found: {}", req_id),
+        ));
     };
 
     // Get current entry
-    let entries = state.backend.queue_list(&user_id, true)
+    let entries = state
+        .backend
+        .queue_list(&user_id, true)
         .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    let current = entries.iter().find(|e| e.requirement_id == requirement_id)
+    let current = entries
+        .iter()
+        .find(|e| e.requirement_id == requirement_id)
         .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "Entry not in queue"))?;
 
     let mut updated = current.clone();
@@ -2598,7 +3407,9 @@ async fn queue_update(
         updated.note = if note.is_empty() { None } else { Some(note) };
     }
 
-    state.backend.queue_add(updated.clone())
+    state
+        .backend
+        .queue_add(updated.clone())
         .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let response = enrich_queue_entry(&updated, &store);
@@ -2613,7 +3424,9 @@ async fn queue_reorder(
     state.check_reload().await;
     let store = state.store.read().await;
 
-    let items: Vec<(uuid::Uuid, i64)> = body.items.iter()
+    let items: Vec<(uuid::Uuid, i64)> = body
+        .items
+        .iter()
         .filter_map(|item| {
             let uuid = if let Ok(uuid) = uuid::Uuid::parse_str(&item.requirement_id) {
                 uuid
@@ -2628,7 +3441,9 @@ async fn queue_reorder(
 
     drop(store);
 
-    state.backend.queue_reorder(&user_id, &items)
+    state
+        .backend
+        .queue_reorder(&user_id, &items)
         .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(StatusCode::NO_CONTENT)

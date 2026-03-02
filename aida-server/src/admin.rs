@@ -11,7 +11,7 @@ use std::time::Instant;
 
 use axum::{
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{
         sse::{Event, Sse},
         IntoResponse, Json,
@@ -34,6 +34,10 @@ pub struct AdminState {
     pub version: String,
     pub start_time: Instant,
     pub building: AtomicBool,
+    /// Optional API key for general server endpoint protection.
+    pub server_api_key: Option<String>,
+    /// Optional API key for admin endpoints.
+    pub admin_api_key: Option<String>,
     /// Runtime API key store: name → value (e.g., "ANTHROPIC_API_KEY" → "sk-...")
     pub api_keys: RwLock<HashMap<String, String>>,
     /// Tracks which keys came from env vars vs runtime
@@ -50,14 +54,64 @@ impl AdminState {
                 sources.insert("ANTHROPIC_API_KEY".to_string(), "env".to_string());
             }
         }
+        let server_api_key = std::env::var("AIDA_SERVER_API_KEY")
+            .ok()
+            .filter(|v| !v.is_empty());
+        let admin_api_key = std::env::var("AIDA_ADMIN_API_KEY")
+            .ok()
+            .filter(|v| !v.is_empty());
+
         Self {
             dev_mode,
             version: env!("CARGO_PKG_VERSION").to_string(),
             start_time: Instant::now(),
             building: AtomicBool::new(false),
+            server_api_key,
+            admin_api_key,
             api_keys: RwLock::new(keys),
             api_key_sources: RwLock::new(sources),
         }
+    }
+
+    fn token_from_headers(headers: &HeaderMap, token_header: &str) -> Option<String> {
+        if let Some(value) = headers.get(token_header).and_then(|v| v.to_str().ok()) {
+            if !value.is_empty() {
+                return Some(value.to_string());
+            }
+        }
+        if let Some(value) = headers.get("x-api-key").and_then(|v| v.to_str().ok()) {
+            if !value.is_empty() {
+                return Some(value.to_string());
+            }
+        }
+        if let Some(value) = headers
+            .get("authorization")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.strip_prefix("Bearer "))
+        {
+            if !value.is_empty() {
+                return Some(value.to_string());
+            }
+        }
+        None
+    }
+
+    pub fn authorize_server(&self, headers: &HeaderMap) -> bool {
+        match &self.server_api_key {
+            Some(expected) => Self::token_from_headers(headers, "x-server-token")
+                .map(|provided| provided == *expected)
+                .unwrap_or(false),
+            None => true,
+        }
+    }
+
+    pub fn authorize_admin(&self, headers: &HeaderMap) -> bool {
+        if let Some(expected) = &self.admin_api_key {
+            return Self::token_from_headers(headers, "x-admin-token")
+                .map(|provided| provided == *expected)
+                .unwrap_or(false);
+        }
+        self.authorize_server(headers)
     }
 }
 
@@ -115,7 +169,10 @@ pub fn create_admin_router(admin_state: Arc<AdminState>) -> Router {
         .route("/api/v2/admin/status", get(admin_status))
         .route("/api/v2/admin/rebuild", get(admin_rebuild_sse))
         .route("/api/v2/admin/api-keys", get(list_api_keys))
-        .route("/api/v2/admin/api-keys/:name", put(set_api_key).delete(delete_api_key))
+        .route(
+            "/api/v2/admin/api-keys/:name",
+            put(set_api_key).delete(delete_api_key),
+        )
         .with_state(admin_state)
 }
 
@@ -125,19 +182,35 @@ pub fn create_admin_router(admin_state: Arc<AdminState>) -> Router {
 
 async fn admin_status(
     State(state): State<Arc<AdminState>>,
-) -> Json<AdminStatusResponse> {
-    Json(AdminStatusResponse {
+    headers: HeaderMap,
+) -> Result<Json<AdminStatusResponse>, (StatusCode, Json<serde_json::Value>)> {
+    if !state.authorize_admin(&headers) {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({ "error": "Unauthorized" })),
+        ));
+    }
+
+    Ok(Json(AdminStatusResponse {
         dev_mode: state.dev_mode,
         version: state.version.clone(),
         uptime_seconds: state.start_time.elapsed().as_secs(),
         building: state.building.load(Ordering::Relaxed),
-    })
+    }))
 }
 
 async fn admin_rebuild_sse(
     State(state): State<Arc<AdminState>>,
+    headers: HeaderMap,
     Query(query): Query<RebuildQuery>,
 ) -> Result<Sse<ReceiverStream<Result<Event, std::convert::Infallible>>>, impl IntoResponse> {
+    if !state.authorize_admin(&headers) {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({ "error": "Unauthorized" })),
+        ));
+    }
+
     // Gate behind dev mode
     if !state.dev_mode {
         return Err((
@@ -188,11 +261,19 @@ fn mask_api_key(key: &str) -> String {
 }
 
 /// Known API keys we track — currently just Anthropic, extensible later
-const KNOWN_API_KEYS: &[&str] = &["ANTHROPIC_API_KEY"];
+const KNOWN_API_KEYS: &[&str] = &["ANTHROPIC_API_KEY", "OPENAI_API_KEY"];
 
 async fn list_api_keys(
     State(state): State<Arc<AdminState>>,
-) -> Json<Vec<ApiKeyInfo>> {
+    headers: HeaderMap,
+) -> Result<Json<Vec<ApiKeyInfo>>, (StatusCode, Json<serde_json::Value>)> {
+    if !state.authorize_admin(&headers) {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({ "error": "Unauthorized" })),
+        ));
+    }
+
     let keys = state.api_keys.read().await;
     let sources = state.api_key_sources.read().await;
 
@@ -210,14 +291,22 @@ async fn list_api_keys(
         })
         .collect();
 
-    Json(infos)
+    Ok(Json(infos))
 }
 
 async fn set_api_key(
     State(state): State<Arc<AdminState>>,
+    headers: HeaderMap,
     Path(name): Path<String>,
     Json(req): Json<SetApiKeyRequest>,
 ) -> Result<Json<ApiKeyInfo>, (StatusCode, Json<serde_json::Value>)> {
+    if !state.authorize_admin(&headers) {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({ "error": "Unauthorized" })),
+        ));
+    }
+
     if req.value.is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -248,8 +337,16 @@ async fn set_api_key(
 
 async fn delete_api_key(
     State(state): State<Arc<AdminState>>,
+    headers: HeaderMap,
     Path(name): Path<String>,
-) -> Json<ApiKeyInfo> {
+) -> Result<Json<ApiKeyInfo>, (StatusCode, Json<serde_json::Value>)> {
+    if !state.authorize_admin(&headers) {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({ "error": "Unauthorized" })),
+        ));
+    }
+
     // Remove runtime override
     {
         let mut keys = state.api_keys.write().await;
@@ -272,12 +369,16 @@ async fn delete_api_key(
 
     info!("API key '{}' runtime override removed", name);
 
-    Json(ApiKeyInfo {
+    Ok(Json(ApiKeyInfo {
         name,
         is_set: env_value.is_some(),
-        source: if env_value.is_some() { "env".to_string() } else { "none".to_string() },
+        source: if env_value.is_some() {
+            "env".to_string()
+        } else {
+            "none".to_string()
+        },
         masked_value: env_value.map(|v| mask_api_key(&v)).unwrap_or_default(),
-    })
+    }))
 }
 
 // ============================================================================
@@ -450,11 +551,7 @@ async fn run_build(
 
             // Use setsid to start a new session so the child survives parent exit.
             // sleep gives time for the current process to exit and release ports.
-            let shell_cmd = format!(
-                "sleep 2 && exec {} {}",
-                shell_escape(&binary_str),
-                args_str
-            );
+            let shell_cmd = format!("sleep 2 && exec {} {}", shell_escape(&binary_str), args_str);
 
             std::process::Command::new("setsid")
                 .args(["sh", "-c", &shell_cmd])

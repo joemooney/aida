@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useRequirement } from '../../hooks/useRequirements';
 import { useDetailPanel } from '../../hooks/useDetailPanel';
 import { Spinner } from '../ui/Spinner';
@@ -10,8 +11,34 @@ interface DetailPanelProps {
 }
 
 export function DetailPanel({ id }: DetailPanelProps) {
-  const { close } = useDetailPanel();
+  const { close, detailId, detailMode, open } = useDetailPanel();
   const { data: requirement, isLoading, error } = useRequirement(id);
+
+  const autoEditDescription = detailMode === 'edit-desc';
+
+  // ESC closes detail panel unless inner controls already handled it.
+  // This allows: ESC inside editor -> exit edit; ESC again -> close panel.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName?.toLowerCase();
+      const isTextInput = tag === 'input' || tag === 'textarea' || tag === 'select';
+
+      if (e.key === 'Enter' && !e.defaultPrevented && detailId && detailMode !== 'edit-desc') {
+        if (!isTextInput && tag !== 'button' && tag !== 'a') {
+          e.preventDefault();
+          open(detailId, { startInDescriptionEdit: true });
+          return;
+        }
+      }
+
+      if (e.key === 'Escape' && !e.defaultPrevented) {
+        close();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [close, detailId, detailMode, open]);
 
   return (
     <>
@@ -40,7 +67,7 @@ export function DetailPanel({ id }: DetailPanelProps) {
         ) : (
           <>
             <DetailHeader requirement={requirement} onClose={close} />
-            <DetailBody requirement={requirement} />
+            <DetailBody requirement={requirement} autoEditDescription={autoEditDescription} />
             <DetailComments
               requirementId={requirement.spec_id ?? requirement.id}
               comments={requirement.comments ?? []}

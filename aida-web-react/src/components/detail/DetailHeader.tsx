@@ -8,6 +8,7 @@ import { useUpdateRequirement } from '../../hooks/useRequirements';
 import { useAddToQueue } from '../../hooks/useQueue';
 import { useEvaluateRequirement } from '../../hooks/useEvaluation';
 import { cn } from '../../lib/utils';
+import { usePermissions } from '../../hooks/usePermissions';
 
 const PRIORITIES: RequirementPriority[] = ['High', 'Medium', 'Low'];
 const TYPES = Object.keys(TYPE_CONFIG) as RequirementType[];
@@ -19,6 +20,7 @@ interface DetailHeaderProps {
 }
 
 export function DetailHeader({ requirement, onClose, hideClose }: DetailHeaderProps) {
+  const { canWrite } = usePermissions();
   const updateReq = useUpdateRequirement();
   const addToQueue = useAddToQueue();
   const evaluate = useEvaluateRequirement();
@@ -37,8 +39,8 @@ export function DetailHeader({ requirement, onClose, hideClose }: DetailHeaderPr
         <div className="flex items-center gap-1">
           <button
             onClick={() => evaluate.mutate(reqId)}
-            disabled={evaluate.isPending}
-            title="AI Evaluate"
+            disabled={evaluate.isPending || !canWrite}
+            title={!canWrite ? 'Read-only: cannot run evaluation' : 'AI Evaluate'}
             className="flex h-7 w-7 items-center justify-center rounded-lg text-content-muted hover:text-amber-400 hover:bg-amber-400/10 disabled:opacity-50 transition-colors cursor-pointer disabled:cursor-not-allowed"
           >
             {evaluate.isPending ? (
@@ -55,8 +57,9 @@ export function DetailHeader({ requirement, onClose, hideClose }: DetailHeaderPr
               setQueued(true);
               setTimeout(() => setQueued(false), 2000);
             }}
-            title="Add to queue"
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-content-muted hover:text-accent hover:bg-accent/10 transition-colors cursor-pointer"
+            disabled={!canWrite}
+            title={!canWrite ? 'Read-only: cannot modify queue' : 'Add to queue'}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-content-muted hover:text-accent hover:bg-accent/10 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {queued ? (
               <Check className="h-3.5 w-3.5 text-green-500" />
@@ -83,12 +86,18 @@ export function DetailHeader({ requirement, onClose, hideClose }: DetailHeaderPr
           )}
         </div>
       </div>
+      {!canWrite && (
+        <p className="mb-3 text-xs text-content-muted">
+          Read-only: title, status, priority, type, queue actions, and AI evaluation are disabled for your role.
+        </p>
+      )}
 
       {/* Editable title */}
       <div className="mb-3">
         <EditableText
           value={requirement.title}
           onSave={(title) => save({ title })}
+          disabled={!canWrite}
           className="text-lg font-semibold text-content leading-snug"
           inputClassName="text-lg font-semibold"
           placeholder="Untitled requirement"
@@ -101,6 +110,7 @@ export function DetailHeader({ requirement, onClose, hideClose }: DetailHeaderPr
           value={requirement.status}
           options={STATUS_ORDER}
           onSave={(status) => save({ status })}
+          disabled={!canWrite}
           renderValue={(s) => <StatusBadge status={s} />}
           renderOption={(s) => (
             <span className="flex items-center gap-2">
@@ -113,6 +123,7 @@ export function DetailHeader({ requirement, onClose, hideClose }: DetailHeaderPr
           value={requirement.priority}
           options={PRIORITIES}
           onSave={(priority) => save({ priority })}
+          disabled={!canWrite}
           renderValue={(p) => <PriorityBadge priority={p} />}
           renderOption={(p) => (
             <span className={cn('flex items-center gap-2', PRIORITY_CONFIG[p].color)}>
@@ -124,6 +135,7 @@ export function DetailHeader({ requirement, onClose, hideClose }: DetailHeaderPr
           value={requirement.req_type}
           options={TYPES}
           onSave={(req_type) => save({ req_type })}
+          disabled={!canWrite}
           renderValue={(t) => <TypeBadge type={t} />}
           renderOption={(t) => (
             <span className={cn('flex items-center gap-2', TYPE_CONFIG[t].color)}>

@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER NOT NULL
 );
 
-INSERT INTO schema_version (version) VALUES (7);
+INSERT INTO schema_version (version) VALUES (8);
 
 -- Requirements table
 CREATE TABLE IF NOT EXISTS requirements (
@@ -32,6 +32,9 @@ CREATE TABLE IF NOT EXISTS requirements (
     custom_fields TEXT NOT NULL DEFAULT '{}',
     urls TEXT NOT NULL DEFAULT '[]',
     trace_links TEXT NOT NULL DEFAULT '[]',
+    weight REAL,
+    attachments TEXT NOT NULL DEFAULT '[]',
+    gitlab_issues TEXT NOT NULL DEFAULT '[]',
     implementation_info TEXT,
     ai_evaluation TEXT,
     version INTEGER NOT NULL DEFAULT 1

@@ -12,7 +12,7 @@ use std::time::Instant;
 
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{
         sse::{Event, Sse},
         IntoResponse, Json,
@@ -27,14 +27,21 @@ use tokio_stream::wrappers::ReceiverStream;
 use tracing::{error, info, warn};
 
 use crate::admin::AdminState;
+use crate::llm::LlmProvider;
+use crate::projects::ProjectManager;
 use crate::service::ServerState;
 
 // ============================================================================
 // State
 // ============================================================================
 
+enum SkillBackend {
+    Single(Arc<ServerState>),
+    Multi(Arc<ProjectManager>),
+}
+
 pub struct SkillRunnerState {
-    pub server: Arc<ServerState>,
+    backend: SkillBackend,
     pub admin: Arc<AdminState>,
     pub running: AtomicBool,
 }
@@ -133,12 +140,26 @@ struct SkillChatMessage {
 }
 
 #[derive(Serialize)]
-struct ClaudeRequest {
+struct AnthropicRequest {
     model: String,
     max_tokens: u32,
     system: String,
     messages: Vec<SkillChatMessage>,
     stream: bool,
+}
+
+#[derive(Serialize)]
+struct OpenAiMessage {
+    role: String,
+    content: String,
+}
+
+#[derive(Serialize)]
+struct OpenAiChatRequest {
+    model: String,
+    max_tokens: u32,
+    stream: bool,
+    messages: Vec<OpenAiMessage>,
 }
 
 // ============================================================================
@@ -147,7 +168,23 @@ struct ClaudeRequest {
 
 pub fn create_skill_runner_router(server: Arc<ServerState>, admin: Arc<AdminState>) -> Router {
     let state = Arc::new(SkillRunnerState {
-        server,
+        backend: SkillBackend::Single(server),
+        admin,
+        running: AtomicBool::new(false),
+    });
+    Router::new()
+        .route("/api/v2/skills/:name/run", post(run_skill_sse))
+        .route("/api/v2/skills/:name/action", post(skill_action))
+        .route("/api/v2/skills/:name/chat", post(skill_chat_stream))
+        .with_state(state)
+}
+
+pub fn create_skill_runner_router_multi(
+    project_manager: Arc<ProjectManager>,
+    admin: Arc<AdminState>,
+) -> Router {
+    let state = Arc::new(SkillRunnerState {
+        backend: SkillBackend::Multi(project_manager),
         admin,
         running: AtomicBool::new(false),
     });
@@ -186,19 +223,55 @@ async fn send_progress(tx: &SseTx, phase: &str, pct: Option<u8>) -> Result<(), a
     send_event(tx, "progress", &serde_json::to_string(&data)?).await
 }
 
+async fn resolve_server_state(
+    state: &SkillRunnerState,
+    headers: &HeaderMap,
+) -> Result<Arc<ServerState>, (StatusCode, Json<serde_json::Value>)> {
+    match &state.backend {
+        SkillBackend::Single(server) => Ok(server.clone()),
+        SkillBackend::Multi(project_manager) => {
+            let project = headers
+                .get("x-project")
+                .and_then(|v| v.to_str().ok())
+                .ok_or_else(|| {
+                    (
+                        StatusCode::BAD_REQUEST,
+                        Json(serde_json::json!({ "error": "Missing X-Project header" })),
+                    )
+                })?;
+            project_manager.get_backend(project).await.map_err(|e| {
+                (
+                    StatusCode::NOT_FOUND,
+                    Json(serde_json::json!({ "error": format!("Project error: {}", e) })),
+                )
+            })
+        }
+    }
+}
+
 // ============================================================================
 // Handlers
 // ============================================================================
 
 async fn run_skill_sse(
     State(state): State<Arc<SkillRunnerState>>,
+    headers: HeaderMap,
     Path(name): Path<String>,
 ) -> Result<Sse<ReceiverStream<Result<Event, std::convert::Infallible>>>, impl IntoResponse> {
+    if !state.admin.authorize_server(&headers) {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({ "error": "Unauthorized" })),
+        ));
+    }
+
     // Only compiler-warnings is supported right now
     if name != "aida-compiler-warnings" {
         return Err((
             StatusCode::NOT_FOUND,
-            Json(serde_json::json!({ "error": format!("Skill '{}' is not runnable from the web UI", name) })),
+            Json(
+                serde_json::json!({ "error": format!("Skill '{}' is not runnable from the web UI", name) }),
+            ),
         ));
     }
 
@@ -237,9 +310,17 @@ async fn run_skill_sse(
 
 async fn skill_action(
     State(state): State<Arc<SkillRunnerState>>,
+    headers: HeaderMap,
     Path(name): Path<String>,
     Json(body): Json<ActionRequest>,
 ) -> Result<Json<ActionResponse>, (StatusCode, Json<serde_json::Value>)> {
+    if !state.admin.authorize_server(&headers) {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({ "error": "Unauthorized" })),
+        ));
+    }
+
     if name != "aida-compiler-warnings" {
         return Err((
             StatusCode::NOT_FOUND,
@@ -249,8 +330,14 @@ async fn skill_action(
 
     match body.action.as_str() {
         "auto_fix" => handle_auto_fix().await,
-        "create_defect" => handle_create_requirement(&state, &body.params, "bug").await,
-        "create_task" => handle_create_requirement(&state, &body.params, "task").await,
+        "create_defect" => {
+            let server = resolve_server_state(&state, &headers).await?;
+            handle_create_requirement(&server, &body.params, "bug").await
+        }
+        "create_task" => {
+            let server = resolve_server_state(&state, &headers).await?;
+            handle_create_requirement(&server, &body.params, "task").await
+        }
         other => Err((
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({ "error": format!("Unknown action: {}", other) })),
@@ -401,8 +488,12 @@ async fn run_compiler_warnings(tx: &SseTx) -> Result<(), anyhow::Error> {
 fn categorize_lint(code: &str) -> (&'static str, &'static str, &'static str, &'static str) {
     // Returns (category_name, risk_level, description, recommended_action)
     match code {
-        "unused_imports" | "unused_mut" | "unused_variables" | "unused_parens"
-        | "unused_braces" | "redundant_semicolons" => (
+        "unused_imports"
+        | "unused_mut"
+        | "unused_variables"
+        | "unused_parens"
+        | "unused_braces"
+        | "redundant_semicolons" => (
             "Safe Auto-Fix",
             "none",
             "Trivial cleanups that cargo clippy --fix handles automatically",
@@ -423,27 +514,45 @@ fn categorize_lint(code: &str) -> (&'static str, &'static str, &'static str, &'s
         _ if code.starts_with("clippy::") => {
             let clippy_code = &code["clippy::".len()..];
             match clippy_code {
-                "needless_return" | "redundant_closure" | "len_zero" | "single_match"
-                | "match_bool" | "manual_map" | "unnecessary_cast" | "needless_borrow"
-                | "clone_on_copy" | "redundant_field_names" | "useless_format"
-                | "needless_pass_by_value" | "explicit_auto_deref" | "ptr_arg"
-                | "single_char_pattern" | "manual_is_ascii_check" | "unnecessary_to_owned"
+                "needless_return"
+                | "redundant_closure"
+                | "len_zero"
+                | "single_match"
+                | "match_bool"
+                | "manual_map"
+                | "unnecessary_cast"
+                | "needless_borrow"
+                | "clone_on_copy"
+                | "redundant_field_names"
+                | "useless_format"
+                | "needless_pass_by_value"
+                | "explicit_auto_deref"
+                | "ptr_arg"
+                | "single_char_pattern"
+                | "manual_is_ascii_check"
+                | "unnecessary_to_owned"
                 | "needless_borrows_for_generic_args" => (
                     "Safe Auto-Fix",
                     "none",
                     "Clippy style/simplification suggestions with mechanical fixes",
                     "Run auto-fix",
                 ),
-                "enum_variant_names" | "type_complexity" | "too_many_arguments"
-                | "large_enum_variant" | "cognitive_complexity" | "module_name_repetitions"
-                | "struct_excessive_bools" | "similar_names" | "wildcard_imports" => (
+                "enum_variant_names"
+                | "type_complexity"
+                | "too_many_arguments"
+                | "large_enum_variant"
+                | "cognitive_complexity"
+                | "module_name_repetitions"
+                | "struct_excessive_bools"
+                | "similar_names"
+                | "wildcard_imports" => (
                     "Low Risk",
                     "low",
                     "Code quality and naming suggestions",
                     "Review and refactor",
                 ),
-                "unwrap_used" | "expect_used" | "indexing_slicing" | "panic"
-                | "todo" | "unimplemented" | "unreachable" => (
+                "unwrap_used" | "expect_used" | "indexing_slicing" | "panic" | "todo"
+                | "unimplemented" | "unreachable" => (
                     "Review Needed",
                     "high",
                     "Potential runtime panics or incomplete implementations",
@@ -487,10 +596,7 @@ fn parse_clippy_json(json_lines: &[String], raw_output: &str) -> WarningsReport 
         };
 
         // Skip non-warning levels (errors, notes, help)
-        let level = message
-            .get("level")
-            .and_then(|l| l.as_str())
-            .unwrap_or("");
+        let level = message.get("level").and_then(|l| l.as_str()).unwrap_or("");
         if level != "warning" {
             continue;
         }
@@ -518,7 +624,11 @@ fn parse_clippy_json(json_lines: &[String], raw_output: &str) -> WarningsReport 
         let primary_span = spans.and_then(|spans| {
             spans
                 .iter()
-                .find(|s| s.get("is_primary").and_then(|p| p.as_bool()).unwrap_or(false))
+                .find(|s| {
+                    s.get("is_primary")
+                        .and_then(|p| p.as_bool())
+                        .unwrap_or(false)
+                })
                 .or(spans.first())
         });
 
@@ -581,15 +691,16 @@ fn parse_clippy_json(json_lines: &[String], raw_output: &str) -> WarningsReport 
 
     for warning in &warnings {
         let (cat_name, risk, desc, action) = categorize_lint(&warning.code);
-        let category = category_map
-            .entry(cat_name.to_string())
-            .or_insert_with(|| WarningCategory {
-                name: cat_name.to_string(),
-                risk_level: risk.to_string(),
-                description: desc.to_string(),
-                recommended_action: action.to_string(),
-                warnings: Vec::new(),
-            });
+        let category =
+            category_map
+                .entry(cat_name.to_string())
+                .or_insert_with(|| WarningCategory {
+                    name: cat_name.to_string(),
+                    risk_level: risk.to_string(),
+                    description: desc.to_string(),
+                    recommended_action: action.to_string(),
+                    warnings: Vec::new(),
+                });
         category.warnings.push(warning.clone());
     }
 
@@ -678,7 +789,7 @@ async fn handle_auto_fix() -> Result<Json<ActionResponse>, (StatusCode, Json<ser
 }
 
 async fn handle_create_requirement(
-    state: &SkillRunnerState,
+    server: &Arc<ServerState>,
     params: &serde_json::Value,
     req_type: &str,
 ) -> Result<Json<ActionResponse>, (StatusCode, Json<serde_json::Value>)> {
@@ -721,8 +832,8 @@ async fn handle_create_requirement(
         .to_string();
 
     // Create requirement using the store
-    state.server.check_reload().await;
-    let mut store = state.server.store.write().await;
+    server.check_reload().await;
+    let mut store = server.store.write().await;
 
     let mut new_req = aida_core::Requirement::new(title.clone(), description);
     new_req.status = aida_core::RequirementStatus::Draft;
@@ -733,9 +844,7 @@ async fn handle_create_requirement(
         aida_core::RequirementType::Task
     };
     new_req.owner = assignee;
-    new_req.tags = vec!["compiler-warnings".to_string()]
-        .into_iter()
-        .collect();
+    new_req.tags = vec!["compiler-warnings".to_string()].into_iter().collect();
 
     let type_prefix = store
         .type_definitions
@@ -760,13 +869,13 @@ async fn handle_create_requirement(
 
     drop(store);
 
-    if let Err(e) = state.server.backend.save(&*state.server.store.read().await) {
+    if let Err(e) = server.backend.save(&*server.store.read().await) {
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({ "error": format!("Failed to save: {}", e) })),
         ));
     }
-    state.server.mark_saved().await;
+    server.mark_saved().await;
 
     info!("Created {} requirement: {}", req_type, spec_id);
 
@@ -784,9 +893,17 @@ async fn handle_create_requirement(
 
 async fn skill_chat_stream(
     State(state): State<Arc<SkillRunnerState>>,
+    headers: HeaderMap,
     Path(name): Path<String>,
     Json(req): Json<SkillChatRequest>,
 ) -> Result<Sse<ReceiverStream<Result<Event, axum::Error>>>, impl IntoResponse> {
+    if !state.admin.authorize_server(&headers) {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({ "error": "Unauthorized" })),
+        ));
+    }
+
     if name != "aida-compiler-warnings" {
         return Err((
             StatusCode::NOT_FOUND,
@@ -794,9 +911,11 @@ async fn skill_chat_stream(
         ));
     }
 
-    // Validate API key
+    let provider = LlmProvider::from_env();
+    let key_name = provider.api_key_name();
+
     let keys = state.admin.api_keys.read().await;
-    let api_key = keys.get("ANTHROPIC_API_KEY").cloned();
+    let api_key = keys.get(key_name).cloned();
     drop(keys);
 
     let api_key = match api_key {
@@ -804,7 +923,7 @@ async fn skill_chat_stream(
         _ => {
             return Err((
                 StatusCode::SERVICE_UNAVAILABLE,
-                Json(serde_json::json!({ "error": "ANTHROPIC_API_KEY not configured" })),
+                Json(serde_json::json!({ "error": format!("{} not configured", key_name) })),
             ));
         }
     };
@@ -832,58 +951,86 @@ Your job is to help the developer understand, prioritize, and address compiler w
 {context_str}"#
     );
 
-    let model = std::env::var("AIDA_CHAT_MODEL")
-        .unwrap_or_else(|_| "claude-sonnet-4-6".to_string());
-
-    let claude_req = ClaudeRequest {
-        model,
-        max_tokens: 4096,
-        system: system_prompt,
-        messages: req.messages,
-        stream: true,
-    };
+    let model = provider.resolve_model("AIDA_CHAT_MODEL", provider.default_chat_model());
 
     let (tx, rx) = tokio::sync::mpsc::channel(64);
 
     tokio::spawn(async move {
         let client = reqwest::Client::new();
 
-        let response = client
-            .post("https://api.anthropic.com/v1/messages")
-            .header("x-api-key", &api_key)
-            .header("anthropic-version", "2023-06-01")
-            .header("content-type", "application/json")
-            .json(&claude_req)
-            .send()
-            .await;
+        let response = match provider {
+            LlmProvider::Anthropic => {
+                let body = AnthropicRequest {
+                    model,
+                    max_tokens: 4096,
+                    system: system_prompt,
+                    messages: req.messages,
+                    stream: true,
+                };
+                client
+                    .post(format!("{}/v1/messages", provider.base_url()))
+                    .header("x-api-key", &api_key)
+                    .header("anthropic-version", "2023-06-01")
+                    .header("content-type", "application/json")
+                    .json(&body)
+                    .send()
+                    .await
+            }
+            LlmProvider::OpenAi => {
+                let messages = std::iter::once(OpenAiMessage {
+                    role: "system".to_string(),
+                    content: system_prompt,
+                })
+                .chain(req.messages.into_iter().map(|m| OpenAiMessage {
+                    role: m.role,
+                    content: m.content,
+                }))
+                .collect::<Vec<_>>();
+                let body = OpenAiChatRequest {
+                    model,
+                    max_tokens: 4096,
+                    stream: true,
+                    messages,
+                };
+                client
+                    .post(format!("{}/v1/chat/completions", provider.base_url()))
+                    .header("authorization", format!("Bearer {}", api_key))
+                    .header("content-type", "application/json")
+                    .json(&body)
+                    .send()
+                    .await
+            }
+        };
 
         let response = match response {
             Ok(r) => {
                 if !r.status().is_success() {
                     let status = r.status();
                     let body = r.text().await.unwrap_or_default();
-                    error!("Claude API error {}: {}", status, body);
+                    error!("Provider API error {}: {}", status, body);
                     let _ = tx
-                        .send(Ok(Event::default()
-                            .event("error")
-                            .data(format!(r#"{{"error":"Claude API error: {}"}}"#, status))))
+                        .send(Ok(Event::default().event("error").data(format!(
+                            r#"{{"error":"Provider API error: {}"}}"#,
+                            status
+                        ))))
                         .await;
                     return;
                 }
                 r
             }
             Err(e) => {
-                error!("Failed to reach Claude API: {}", e);
+                error!("Failed to reach provider API: {}", e);
                 let _ = tx
-                    .send(Ok(Event::default()
-                        .event("error")
-                        .data(format!(r#"{{"error":"Failed to reach Claude API: {}"}}"#, e))))
+                    .send(Ok(Event::default().event("error").data(format!(
+                        r#"{{"error":"Failed to reach provider API: {}"}}"#,
+                        e
+                    ))))
                     .await;
                 return;
             }
         };
 
-        // Parse Claude's SSE stream
+        // Parse provider SSE stream
         let mut stream = response.bytes_stream();
         let mut buffer = String::new();
 
@@ -913,42 +1060,69 @@ Your job is to help the developer understand, prioritize, and address compiler w
                     }
                 }
 
-                if event_type == "content_block_delta" {
-                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&data) {
-                        if let Some(text) = parsed
-                            .get("delta")
-                            .and_then(|d| d.get("text"))
-                            .and_then(|t| t.as_str())
-                        {
-                            let payload = serde_json::json!({ "text": text });
-                            if tx
-                                .send(Ok(Event::default()
-                                    .event("delta")
-                                    .data(payload.to_string())))
-                                .await
-                                .is_err()
+                match provider {
+                    LlmProvider::Anthropic => {
+                        if event_type == "content_block_delta" {
+                            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&data) {
+                                if let Some(text) = parsed
+                                    .get("delta")
+                                    .and_then(|d| d.get("text"))
+                                    .and_then(|t| t.as_str())
+                                {
+                                    let payload = serde_json::json!({ "text": text });
+                                    if tx
+                                        .send(Ok(Event::default()
+                                            .event("delta")
+                                            .data(payload.to_string())))
+                                        .await
+                                        .is_err()
+                                    {
+                                        return;
+                                    }
+                                }
+                            }
+                        } else if event_type == "message_stop" {
+                            let _ = tx.send(Ok(Event::default().event("done").data("{}"))).await;
+                            return;
+                        } else if event_type == "error" {
+                            let _ = tx
+                                .send(Ok(Event::default().event("error").data(data)))
+                                .await;
+                            return;
+                        }
+                    }
+                    LlmProvider::OpenAi => {
+                        if data == "[DONE]" {
+                            let _ = tx.send(Ok(Event::default().event("done").data("{}"))).await;
+                            return;
+                        }
+                        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&data) {
+                            if let Some(text) = parsed
+                                .get("choices")
+                                .and_then(|c| c.as_array())
+                                .and_then(|arr| arr.first())
+                                .and_then(|choice| choice.get("delta"))
+                                .and_then(|d| d.get("content"))
+                                .and_then(|t| t.as_str())
                             {
-                                return;
+                                let payload = serde_json::json!({ "text": text });
+                                if tx
+                                    .send(Ok(Event::default()
+                                        .event("delta")
+                                        .data(payload.to_string())))
+                                    .await
+                                    .is_err()
+                                {
+                                    return;
+                                }
                             }
                         }
                     }
-                } else if event_type == "message_stop" {
-                    let _ = tx
-                        .send(Ok(Event::default().event("done").data("{}")))
-                        .await;
-                    return;
-                } else if event_type == "error" {
-                    let _ = tx
-                        .send(Ok(Event::default().event("error").data(data)))
-                        .await;
-                    return;
                 }
             }
         }
 
-        let _ = tx
-            .send(Ok(Event::default().event("done").data("{}")))
-            .await;
+        let _ = tx.send(Ok(Event::default().event("done").data("{}"))).await;
     });
 
     Ok(Sse::new(ReceiverStream::new(rx)))

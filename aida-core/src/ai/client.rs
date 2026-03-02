@@ -2,12 +2,12 @@
 //!
 //! Handles communication with Claude via CLI or direct API.
 
-use crate::models::{Requirement, RequirementsStore};
 use crate::ai::prompts;
 use crate::ai::responses::{
     self, DuplicatesResponse, EvaluationResponse, GenerateChildrenResponse,
     ImproveDescriptionResponse, SuggestRelationshipsResponse,
 };
+use crate::models::{Requirement, RequirementsStore};
 use std::path::PathBuf;
 use std::process::Command;
 use thiserror::Error;
@@ -256,7 +256,9 @@ impl AiClient {
         let response = String::from_utf8_lossy(&output.stdout).to_string();
 
         if response.is_empty() {
-            return Err(AiError::InvalidResponse("Empty response from CLI".to_string()));
+            return Err(AiError::InvalidResponse(
+                "Empty response from CLI".to_string(),
+            ));
         }
 
         Ok(response)

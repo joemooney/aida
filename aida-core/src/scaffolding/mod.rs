@@ -61,8 +61,10 @@ fn find_aida_header_line(content: &str) -> Option<&str> {
         let after_open = if content.starts_with("---\r\n") { 5 } else { 4 };
         if let Some(close_pos) = content[after_open..].find("\n---") {
             let after_close = after_open + close_pos + 4; // past "\n---"
-            // Skip the newline after closing ---
-            let rest = content[after_close..].trim_start_matches('\r').trim_start_matches('\n');
+                                                          // Skip the newline after closing ---
+            let rest = content[after_close..]
+                .trim_start_matches('\r')
+                .trim_start_matches('\n');
             return rest.lines().next();
         }
     }
@@ -81,14 +83,14 @@ fn check_file_status(file_path: &PathBuf, expected_content: &str) -> FileStatus 
     // Try to parse AIDA header (markdown format)
     // Format: <!-- AIDA Generated: v{version} | checksum:{hash} | DO NOT EDIT DIRECTLY -->
     let md_header_pattern = regex::Regex::new(
-        r"^<!-- AIDA Generated: v([0-9.]+) \| checksum:([a-f0-9]+) \| DO NOT EDIT DIRECTLY -->"
-    ).unwrap();
+        r"^<!-- AIDA Generated: v([0-9.]+) \| checksum:([a-f0-9]+) \| DO NOT EDIT DIRECTLY -->",
+    )
+    .unwrap();
 
     // Try to parse AIDA header (shell format)
     // Format: # AIDA Generated: v{version} | checksum:{hash}
-    let shell_header_pattern = regex::Regex::new(
-        r"^# AIDA Generated: v([0-9.]+) \| checksum:([a-f0-9]+)"
-    ).unwrap();
+    let shell_header_pattern =
+        regex::Regex::new(r"^# AIDA Generated: v([0-9.]+) \| checksum:([a-f0-9]+)").unwrap();
 
     // Find the header line, skipping frontmatter if present
     let header_line = find_aida_header_line(&content).unwrap_or("");
@@ -155,7 +157,10 @@ pub enum FileStatus {
     /// File exists and matches expected checksum (safe to overwrite)
     Unmodified,
     /// File exists but checksum differs (user modified)
-    Modified { expected_checksum: String, actual_checksum: String },
+    Modified {
+        expected_checksum: String,
+        actual_checksum: String,
+    },
     /// File exists but has no AIDA header (unknown origin)
     NoHeader,
     /// File exists with older version (can be upgraded)
@@ -358,7 +363,11 @@ impl Scaffolder {
     }
 
     /// Create a new scaffolder with database path for backend-aware scaffolding
-    pub fn with_database(project_root: PathBuf, config: ScaffoldConfig, database_path: PathBuf) -> Self {
+    pub fn with_database(
+        project_root: PathBuf,
+        config: ScaffoldConfig,
+        database_path: PathBuf,
+    ) -> Self {
         let template_loader = TemplateLoader::with_project_root(&project_root);
         Self {
             project_root,
@@ -412,7 +421,11 @@ impl Scaffolder {
         // Generate content with appropriate header
         // For files with YAML frontmatter (---), insert header AFTER the closing ---
         let content = if is_shell {
-            format!("{}{}", generate_aida_header_shell(&raw_content), raw_content)
+            format!(
+                "{}{}",
+                generate_aida_header_shell(&raw_content),
+                raw_content
+            )
         } else if raw_content.starts_with("---\n") {
             // Split at the closing --- and insert header after frontmatter
             let after_open = 4; // past "---\n"
@@ -463,7 +476,11 @@ impl Scaffolder {
                 content,
                 description: "Project instructions for Claude Code".to_string(),
                 exists,
-                file_status: if exists { FileStatus::NoHeader } else { FileStatus::New },
+                file_status: if exists {
+                    FileStatus::NoHeader
+                } else {
+                    FileStatus::New
+                },
             });
         }
 
@@ -479,8 +496,12 @@ impl Scaffolder {
 
                 match &artifact.file_status {
                     FileStatus::New => new_files.push(path),
-                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
-                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
                     FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
                 }
 
@@ -504,8 +525,12 @@ impl Scaffolder {
 
                 match &artifact.file_status {
                     FileStatus::New => new_files.push(path),
-                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
-                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
                     FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
                 }
 
@@ -524,8 +549,12 @@ impl Scaffolder {
 
                 match &artifact.file_status {
                     FileStatus::New => new_files.push(path),
-                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
-                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
                     FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
                 }
 
@@ -544,8 +573,12 @@ impl Scaffolder {
 
                 match &artifact.file_status {
                     FileStatus::New => new_files.push(path),
-                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
-                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
                     FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
                 }
 
@@ -564,8 +597,12 @@ impl Scaffolder {
 
                 match &artifact.file_status {
                     FileStatus::New => new_files.push(path),
-                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
-                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
                     FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
                 }
 
@@ -584,8 +621,12 @@ impl Scaffolder {
 
                 match &artifact.file_status {
                     FileStatus::New => new_files.push(path),
-                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
-                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
                     FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
                 }
 
@@ -604,8 +645,12 @@ impl Scaffolder {
 
                 match &artifact.file_status {
                     FileStatus::New => new_files.push(path),
-                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
-                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
                     FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
                 }
 
@@ -624,8 +669,12 @@ impl Scaffolder {
 
                 match &artifact.file_status {
                     FileStatus::New => new_files.push(path),
-                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
-                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
                     FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
                 }
 
@@ -644,8 +693,12 @@ impl Scaffolder {
 
                 match &artifact.file_status {
                     FileStatus::New => new_files.push(path),
-                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
-                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
                     FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
                 }
 
@@ -664,8 +717,12 @@ impl Scaffolder {
 
                 match &artifact.file_status {
                     FileStatus::New => new_files.push(path),
-                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
-                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
                     FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
                 }
 
@@ -684,8 +741,12 @@ impl Scaffolder {
 
                 match &artifact.file_status {
                     FileStatus::New => new_files.push(path),
-                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
-                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
                     FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
                 }
 
@@ -704,8 +765,12 @@ impl Scaffolder {
 
                 match &artifact.file_status {
                     FileStatus::New => new_files.push(path),
-                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
-                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
                     FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
                 }
 
@@ -724,8 +789,12 @@ impl Scaffolder {
 
                 match &artifact.file_status {
                     FileStatus::New => new_files.push(path),
-                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
-                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
                     FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
                 }
 
@@ -744,8 +813,12 @@ impl Scaffolder {
 
                 match &artifact.file_status {
                     FileStatus::New => new_files.push(path),
-                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
-                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
                     FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
                 }
 
@@ -764,8 +837,12 @@ impl Scaffolder {
 
                 match &artifact.file_status {
                     FileStatus::New => new_files.push(path),
-                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
-                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
                     FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
                 }
 
@@ -784,8 +861,12 @@ impl Scaffolder {
 
                 match &artifact.file_status {
                     FileStatus::New => new_files.push(path),
-                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
-                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
                     FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
                 }
 
@@ -803,7 +884,8 @@ impl Scaffolder {
       "args": ["mcp-serve"]
     }
   }
-}"#.to_string();
+}"#
+            .to_string();
             let path = PathBuf::from(".mcp.json");
             let artifact = self.create_artifact(
                 path.clone(),
@@ -814,7 +896,9 @@ impl Scaffolder {
 
             match &artifact.file_status {
                 FileStatus::New => new_files.push(path),
-                FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
+                FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                    modified_files.push(artifact.path.clone())
+                }
                 FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
                 FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
             }
@@ -838,8 +922,12 @@ impl Scaffolder {
 
                 match &artifact.file_status {
                     FileStatus::New => new_files.push(path),
-                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
-                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
                     FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
                 }
 
@@ -858,8 +946,12 @@ impl Scaffolder {
 
                 match &artifact.file_status {
                     FileStatus::New => new_files.push(path),
-                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
-                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
                     FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
                 }
 
@@ -877,14 +969,19 @@ impl Scaffolder {
                 let artifact = self.create_artifact(
                     path.clone(),
                     self.generate_validate_commit_hook(),
-                    "Claude Code hook for validating commit messages reference requirements".to_string(),
+                    "Claude Code hook for validating commit messages reference requirements"
+                        .to_string(),
                     true, // shell script
                 );
 
                 match &artifact.file_status {
                     FileStatus::New => new_files.push(path),
-                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
-                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
                     FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
                 }
 
@@ -903,8 +1000,12 @@ impl Scaffolder {
 
                 match &artifact.file_status {
                     FileStatus::New => new_files.push(path),
-                    FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
-                    FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
                     FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
                 }
 
@@ -922,7 +1023,9 @@ impl Scaffolder {
 
             match &artifact.file_status {
                 FileStatus::New => new_files.push(path),
-                FileStatus::Modified { .. } | FileStatus::NoHeader => modified_files.push(artifact.path.clone()),
+                FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                    modified_files.push(artifact.path.clone())
+                }
                 FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
                 FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
             }
@@ -1012,7 +1115,9 @@ impl Scaffolder {
 
             // Make git hooks and Claude Code hooks executable on Unix
             #[cfg(unix)]
-            if artifact.path.starts_with(".git/hooks/") || artifact.path.starts_with(".claude/hooks/") {
+            if artifact.path.starts_with(".git/hooks/")
+                || artifact.path.starts_with(".claude/hooks/")
+            {
                 use std::os::unix::fs::PermissionsExt;
                 let mut perms = fs::metadata(&full_path)
                     .map_err(|e| ScaffoldError::IoError {
@@ -1039,27 +1144,79 @@ impl Scaffolder {
 
         // Command definitions: (template_key, output_name, description)
         let command_defs = [
-            ("commands/aida-status.md", "aida-status", "Show project requirements status"),
-            ("commands/aida-review.md", "aida-review", "Review a requirement for quality"),
-            ("commands/aida-req.md", "aida-req", "Add a new requirement with AI evaluation"),
-            ("commands/aida-implement.md", "aida-implement", "Implement a requirement with traceability"),
-            ("commands/aida-capture.md", "aida-capture", "Capture missed requirements from session"),
-            ("commands/aida-evaluate.md", "aida-evaluate", "Evaluate requirement quality with AI"),
-            ("commands/aida-commit.md", "aida-commit", "Commit with requirement linking"),
-            ("commands/aida-sync.md", "aida-sync", "Sync templates and scaffolding"),
-            ("commands/aida-test.md", "aida-test", "Generate tests linked to requirements"),
-            ("commands/aida-onboard.md", "aida-onboard", "Project onboarding for new team members"),
-            ("commands/aida-sprint.md", "aida-sprint", "Sprint planning from approved requirements"),
-            ("commands/aida-search.md", "aida-search", "Unified search across requirements and code"),
-            ("commands/aida-standup.md", "aida-standup", "Daily standup summary from recent activity"),
+            (
+                "commands/aida-status.md",
+                "aida-status",
+                "Show project requirements status",
+            ),
+            (
+                "commands/aida-review.md",
+                "aida-review",
+                "Review a requirement for quality",
+            ),
+            (
+                "commands/aida-req.md",
+                "aida-req",
+                "Add a new requirement with AI evaluation",
+            ),
+            (
+                "commands/aida-implement.md",
+                "aida-implement",
+                "Implement a requirement with traceability",
+            ),
+            (
+                "commands/aida-capture.md",
+                "aida-capture",
+                "Capture missed requirements from session",
+            ),
+            (
+                "commands/aida-evaluate.md",
+                "aida-evaluate",
+                "Evaluate requirement quality with AI",
+            ),
+            (
+                "commands/aida-commit.md",
+                "aida-commit",
+                "Commit with requirement linking",
+            ),
+            (
+                "commands/aida-sync.md",
+                "aida-sync",
+                "Sync templates and scaffolding",
+            ),
+            (
+                "commands/aida-test.md",
+                "aida-test",
+                "Generate tests linked to requirements",
+            ),
+            (
+                "commands/aida-onboard.md",
+                "aida-onboard",
+                "Project onboarding for new team members",
+            ),
+            (
+                "commands/aida-sprint.md",
+                "aida-sprint",
+                "Sprint planning from approved requirements",
+            ),
+            (
+                "commands/aida-search.md",
+                "aida-search",
+                "Unified search across requirements and code",
+            ),
+            (
+                "commands/aida-standup.md",
+                "aida-standup",
+                "Daily standup summary from recent activity",
+            ),
         ];
 
         command_defs
             .iter()
             .filter_map(|(key, name, desc)| {
-                EMBEDDED_TEMPLATES.get(key).map(|content| {
-                    (name.to_string(), content.to_string(), desc.to_string())
-                })
+                EMBEDDED_TEMPLATES
+                    .get(key)
+                    .map(|content| (name.to_string(), content.to_string(), desc.to_string()))
             })
             .collect()
     }
@@ -1067,15 +1224,19 @@ impl Scaffolder {
     /// Generate aida-req skill content (loads from embedded template)
     fn generate_aida_req_skill(&self) -> String {
         use crate::templates::EMBEDDED_TEMPLATES;
-        EMBEDDED_TEMPLATES.get("skills/aida-req.md")
+        EMBEDDED_TEMPLATES
+            .get("skills/aida-req.md")
             .map(|s| s.to_string())
-            .unwrap_or_else(|| "# AIDA Requirement Creation Skill\n\n(template not found)".to_string())
+            .unwrap_or_else(|| {
+                "# AIDA Requirement Creation Skill\n\n(template not found)".to_string()
+            })
     }
 
     /// Generate aida-implement skill content (loads from embedded template)
     fn generate_aida_implement_skill(&self) -> String {
         use crate::templates::EMBEDDED_TEMPLATES;
-        EMBEDDED_TEMPLATES.get("skills/aida-implement.md")
+        EMBEDDED_TEMPLATES
+            .get("skills/aida-implement.md")
             .map(|s| s.to_string())
             .unwrap_or_else(|| "# AIDA Implementation Skill\n\n(template not found)".to_string())
     }
@@ -1083,7 +1244,8 @@ impl Scaffolder {
     /// Generate aida-plan skill content (loads from embedded template)
     fn generate_aida_plan_skill(&self) -> String {
         use crate::templates::EMBEDDED_TEMPLATES;
-        EMBEDDED_TEMPLATES.get("skills/aida-plan.md")
+        EMBEDDED_TEMPLATES
+            .get("skills/aida-plan.md")
             .map(|s| s.to_string())
             .unwrap_or_else(|| "# AIDA Planning Skill\n\n(template not found)".to_string())
     }
@@ -1091,7 +1253,8 @@ impl Scaffolder {
     /// Generate aida-capture skill content (loads from embedded template)
     fn generate_aida_capture_skill(&self) -> String {
         use crate::templates::EMBEDDED_TEMPLATES;
-        EMBEDDED_TEMPLATES.get("skills/aida-capture.md")
+        EMBEDDED_TEMPLATES
+            .get("skills/aida-capture.md")
             .map(|s| s.to_string())
             .unwrap_or_else(|| "# AIDA Session Capture Skill\n\n(template not found)".to_string())
     }
@@ -1099,7 +1262,8 @@ impl Scaffolder {
     /// Generate aida-docs skill content (loads from embedded template)
     fn generate_aida_docs_skill(&self) -> String {
         use crate::templates::EMBEDDED_TEMPLATES;
-        EMBEDDED_TEMPLATES.get("skills/aida-docs.md")
+        EMBEDDED_TEMPLATES
+            .get("skills/aida-docs.md")
             .map(|s| s.to_string())
             .unwrap_or_else(|| "# AIDA Documentation Skill\n\n(template not found)".to_string())
     }
@@ -1107,16 +1271,20 @@ impl Scaffolder {
     /// Generate aida-release skill content (loads from embedded template)
     fn generate_aida_release_skill(&self) -> String {
         use crate::templates::EMBEDDED_TEMPLATES;
-        EMBEDDED_TEMPLATES.get("skills/aida-release.md")
+        EMBEDDED_TEMPLATES
+            .get("skills/aida-release.md")
             .map(|s| s.to_string())
-            .unwrap_or_else(|| "# AIDA Release Management Skill\n\n(template not found)".to_string())
+            .unwrap_or_else(|| {
+                "# AIDA Release Management Skill\n\n(template not found)".to_string()
+            })
     }
 
     /// Generate aida-evaluate skill content (loads from embedded template)
     fn generate_aida_evaluate_skill(&self) -> String {
         // Load from embedded templates at compile time
         use crate::templates::EMBEDDED_TEMPLATES;
-        EMBEDDED_TEMPLATES.get("skills/aida-evaluate.md")
+        EMBEDDED_TEMPLATES
+            .get("skills/aida-evaluate.md")
             .map(|s| s.to_string())
             .unwrap_or_else(|| {
                 r#"# AIDA Requirement Evaluation Skill
@@ -1137,7 +1305,8 @@ Use this skill when:
 2. Run AI evaluation for clarity, testability, completeness, consistency
 3. Display quality score and issues found
 4. Offer follow-up actions: improve, split, or accept
-"#.to_string()
+"#
+                .to_string()
             })
     }
 
@@ -1145,7 +1314,8 @@ Use this skill when:
     fn generate_aida_commit_skill(&self) -> String {
         // Load from embedded templates at compile time
         use crate::templates::EMBEDDED_TEMPLATES;
-        EMBEDDED_TEMPLATES.get("skills/aida-commit.md")
+        EMBEDDED_TEMPLATES
+            .get("skills/aida-commit.md")
             .map(|s| s.to_string())
             .unwrap_or_else(|| {
                 r#"# AIDA Commit Skill
@@ -1167,7 +1337,8 @@ Use this skill when:
 3. Offer to create requirements for untraced work
 4. Create commit with requirement links
 5. Update linked requirement statuses
-"#.to_string()
+"#
+                .to_string()
             })
     }
 
@@ -1175,7 +1346,8 @@ Use this skill when:
     fn generate_aida_sync_skill(&self) -> String {
         // Load from embedded templates at compile time
         use crate::templates::EMBEDDED_TEMPLATES;
-        EMBEDDED_TEMPLATES.get("skills/aida-sync.md")
+        EMBEDDED_TEMPLATES
+            .get("skills/aida-sync.md")
             .map(|s| s.to_string())
             .unwrap_or_else(|| {
                 r#"# AIDA Sync Skill
@@ -1197,14 +1369,16 @@ Use this skill when:
 2. For AIDA repo: Check template integrity
 3. For other projects: Check scaffold status
 4. Ensure templates and skills are consistent
-"#.to_string()
+"#
+                .to_string()
             })
     }
 
     /// Generate aida-test skill content (loads from embedded template)
     fn generate_aida_test_skill(&self) -> String {
         use crate::templates::EMBEDDED_TEMPLATES;
-        EMBEDDED_TEMPLATES.get("skills/aida-test.md")
+        EMBEDDED_TEMPLATES
+            .get("skills/aida-test.md")
             .map(|s| s.to_string())
             .unwrap_or_else(|| "# AIDA Test Generation Skill\n\n(template not found)".to_string())
     }
@@ -1212,7 +1386,8 @@ Use this skill when:
     /// Generate aida-review skill content (loads from embedded template)
     fn generate_aida_review_skill(&self) -> String {
         use crate::templates::EMBEDDED_TEMPLATES;
-        EMBEDDED_TEMPLATES.get("skills/aida-review.md")
+        EMBEDDED_TEMPLATES
+            .get("skills/aida-review.md")
             .map(|s| s.to_string())
             .unwrap_or_else(|| "# AIDA Code Review Skill\n\n(template not found)".to_string())
     }
@@ -1220,15 +1395,19 @@ Use this skill when:
     /// Generate aida-onboard skill content (loads from embedded template)
     fn generate_aida_onboard_skill(&self) -> String {
         use crate::templates::EMBEDDED_TEMPLATES;
-        EMBEDDED_TEMPLATES.get("skills/aida-onboard.md")
+        EMBEDDED_TEMPLATES
+            .get("skills/aida-onboard.md")
             .map(|s| s.to_string())
-            .unwrap_or_else(|| "# AIDA Project Onboarding Skill\n\n(template not found)".to_string())
+            .unwrap_or_else(|| {
+                "# AIDA Project Onboarding Skill\n\n(template not found)".to_string()
+            })
     }
 
     /// Generate aida-sprint skill content (loads from embedded template)
     fn generate_aida_sprint_skill(&self) -> String {
         use crate::templates::EMBEDDED_TEMPLATES;
-        EMBEDDED_TEMPLATES.get("skills/aida-sprint.md")
+        EMBEDDED_TEMPLATES
+            .get("skills/aida-sprint.md")
             .map(|s| s.to_string())
             .unwrap_or_else(|| "# AIDA Sprint Planning Skill\n\n(template not found)".to_string())
     }
@@ -1236,7 +1415,8 @@ Use this skill when:
     /// Generate aida-search skill content (loads from embedded template)
     fn generate_aida_search_skill(&self) -> String {
         use crate::templates::EMBEDDED_TEMPLATES;
-        EMBEDDED_TEMPLATES.get("skills/aida-search.md")
+        EMBEDDED_TEMPLATES
+            .get("skills/aida-search.md")
             .map(|s| s.to_string())
             .unwrap_or_else(|| "# AIDA Unified Search Skill\n\n(template not found)".to_string())
     }
@@ -1244,7 +1424,8 @@ Use this skill when:
     /// Generate aida-standup skill content (loads from embedded template)
     fn generate_aida_standup_skill(&self) -> String {
         use crate::templates::EMBEDDED_TEMPLATES;
-        EMBEDDED_TEMPLATES.get("skills/aida-standup.md")
+        EMBEDDED_TEMPLATES
+            .get("skills/aida-standup.md")
             .map(|s| s.to_string())
             .unwrap_or_else(|| "# AIDA Standup Skill\n\n(template not found)".to_string())
     }

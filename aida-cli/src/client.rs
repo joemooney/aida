@@ -109,7 +109,11 @@ pub async fn list_requirements(
             _ => "Unknown".normal(),
         };
 
-        let spec_id = if req.spec_id.is_empty() { "-".to_string() } else { req.spec_id };
+        let spec_id = if req.spec_id.is_empty() {
+            "-".to_string()
+        } else {
+            req.spec_id
+        };
         let title = if req.title.len() > 28 {
             format!("{}...", &req.title[..28])
         } else {
@@ -118,11 +122,7 @@ pub async fn list_requirements(
 
         println!(
             "{:<10} | {:<36} | {:<30} | {:<10} | {:<15}",
-            spec_id,
-            req.id,
-            title,
-            status_str,
-            req.feature
+            spec_id, req.id, title, status_str, req.feature
         );
     }
 
@@ -136,12 +136,12 @@ pub async fn list_requirements(
 pub async fn get_requirement(server_addr: &str, id: &str) -> Result<()> {
     let mut client = connect(server_addr).await?;
 
-    let request = tonic::Request::new(proto::GetRequirementRequest {
-        id: id.to_string(),
-    });
+    let request = tonic::Request::new(proto::GetRequirementRequest { id: id.to_string() });
 
     let response = client.get_requirement(request).await?;
-    let req = response.into_inner().requirement
+    let req = response
+        .into_inner()
+        .requirement
         .ok_or_else(|| anyhow::anyhow!("Requirement not found"))?;
 
     println!("{}: {}", "ID".blue(), req.id);

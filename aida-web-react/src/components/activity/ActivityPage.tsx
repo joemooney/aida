@@ -4,6 +4,7 @@ import { Activity } from 'lucide-react';
 import { useRequirements } from '../../hooks/useRequirements';
 import { useQueue } from '../../hooks/useQueue';
 import { useDetailPanel } from '../../hooks/useDetailPanel';
+import { useAuth } from '../../hooks/useAuth';
 import { Spinner } from '../ui/Spinner';
 import { EmptyState } from '../ui/EmptyState';
 import { TimelineDetailPanel } from '../timeline/TimelineDetailPanel';
@@ -27,9 +28,12 @@ const TIME_RANGE_OPTIONS: { value: TimeRange; label: string }[] = [
 ];
 
 export function ActivityPage() {
+  const { authEnabled, user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
-  const userId = searchParams.get('user') || 'default';
-  const isOwnActivity = userId === 'default';
+  const requestedUser = searchParams.get('user') || 'default';
+  const ownUserId = authEnabled && user?.handle ? user.handle : 'default';
+  const userId = requestedUser === 'default' ? ownUserId : requestedUser;
+  const isOwnActivity = userId === ownUserId;
 
   const [timeRange, setTimeRange] = useState<TimeRange>('week');
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);

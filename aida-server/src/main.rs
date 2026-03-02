@@ -10,8 +10,9 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use anyhow::Result;
+use axum::{middleware, Extension};
 use clap::Parser;
-use http::{header, Method};
+use http::{header, HeaderValue, Method};
 use tonic::transport::Server;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::{ServeDir, ServeFile};
@@ -24,10 +25,12 @@ mod admin;
 mod chat;
 mod convert;
 mod evaluate;
+mod llm;
 mod projects;
 mod rest;
 mod service;
 mod skill_runner;
+mod web_auth;
 
 // Include the generated protobuf code
 pub mod proto {
@@ -36,6 +39,60 @@ pub mod proto {
 
 use proto::requirements_service_server::RequirementsServiceServer;
 use service::{AidaService, ServerState};
+
+fn build_cors_layer(cors_origins: &str) -> CorsLayer {
+    let base = CorsLayer::new()
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        .allow_headers([
+            header::CONTENT_TYPE,
+            header::AUTHORIZATION,
+            header::ACCEPT,
+            header::HeaderName::from_static("x-grpc-web"),
+            header::HeaderName::from_static("x-user-agent"),
+            header::HeaderName::from_static("x-project"),
+            header::HeaderName::from_static("grpc-timeout"),
+            header::HeaderName::from_static("grpc-accept-encoding"),
+            header::HeaderName::from_static("grpc-encoding"),
+            header::HeaderName::from_static("x-api-key"),
+            header::HeaderName::from_static("x-server-token"),
+            header::HeaderName::from_static("x-admin-token"),
+            header::HeaderName::from_static("x-session-token"),
+        ])
+        .expose_headers([
+            header::HeaderName::from_static("grpc-status"),
+            header::HeaderName::from_static("grpc-message"),
+            header::HeaderName::from_static("grpc-encoding"),
+            header::HeaderName::from_static("grpc-accept-encoding"),
+        ]);
+
+    let trimmed = cors_origins.trim();
+    if trimmed == "*" {
+        return base.allow_origin(Any);
+    }
+
+    let origins: Vec<HeaderValue> = trimmed
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .filter_map(|s| HeaderValue::from_str(s).ok())
+        .collect();
+
+    if origins.is_empty() {
+        tracing::warn!(
+            "No valid CORS origins parsed from --cors-origins='{}'; falling back to wildcard",
+            cors_origins
+        );
+        base.allow_origin(Any)
+    } else {
+        base.allow_origin(origins)
+    }
+}
 
 /// Kill any process using the specified port
 fn kill_process_on_port(port: u16) -> Result<bool> {
@@ -62,9 +119,7 @@ fn kill_process_on_port(port: u16) -> Result<bool> {
                         }
                         Ok(_) => {
                             // Try SIGKILL if SIGTERM didn't work
-                            let _ = Command::new("kill")
-                                .args(["-9", &pid.to_string()])
-                                .status();
+                            let _ = Command::new("kill").args(["-9", &pid.to_string()]).status();
                             info!("Force killed existing process {} on port {}", pid, port);
                             killed_any = true;
                         }
@@ -208,37 +263,17 @@ async fn main() -> Result<()> {
         .map(|v| v == "1" || v == "true")
         .unwrap_or(false);
     let admin_state = Arc::new(admin::AdminState::new(dev_mode));
+    let web_auth_state = web_auth::WebAuthState::new_from_env();
     if dev_mode {
         info!("Dev mode enabled (AIDA_DEV_MODE)");
     }
+    info!(
+        "Web auth mode: {}",
+        web_auth_state.mode().as_str()
+    );
 
     // Build CORS layer - allows gRPC-Web requests from browser clients
-    let cors = CorsLayer::new()
-        .allow_methods([
-            Method::GET,
-            Method::POST,
-            Method::PUT,
-            Method::DELETE,
-            Method::OPTIONS,
-        ])
-        .allow_headers([
-            header::CONTENT_TYPE,
-            header::AUTHORIZATION,
-            header::ACCEPT,
-            header::HeaderName::from_static("x-grpc-web"),
-            header::HeaderName::from_static("x-user-agent"),
-            header::HeaderName::from_static("x-project"),
-            header::HeaderName::from_static("grpc-timeout"),
-            header::HeaderName::from_static("grpc-accept-encoding"),
-            header::HeaderName::from_static("grpc-encoding"),
-        ])
-        .allow_origin(Any)
-        .expose_headers([
-            header::HeaderName::from_static("grpc-status"),
-            header::HeaderName::from_static("grpc-message"),
-            header::HeaderName::from_static("grpc-encoding"),
-            header::HeaderName::from_static("grpc-accept-encoding"),
-        ]);
+    let cors = build_cors_layer(&args.cors_origins);
 
     // Build the gRPC server address
     let grpc_addr: SocketAddr = format!("{}:{}", args.host, args.port).parse()?;
@@ -254,12 +289,13 @@ async fn main() -> Result<()> {
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(());
 
     // Determine mode: multi-project (--data-dir) or single-project (--database)
-    let use_multi_project = args.data_dir.is_some() ||
-        (args.database.is_none() && std::env::var("AIDA_DATABASE_URL").is_err());
+    let use_multi_project = args.data_dir.is_some()
+        || (args.database.is_none() && std::env::var("AIDA_DATABASE_URL").is_err());
 
     if use_multi_project {
         // Multi-project mode
-        let data_dir = args.data_dir
+        let data_dir = args
+            .data_dir
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| {
                 // Default: /data in Docker, ~/.aida locally
@@ -289,14 +325,29 @@ async fn main() -> Result<()> {
 
             let rest_router = rest::create_rest_router(project_manager.clone())
                 .merge(admin::create_admin_router(admin_state.clone()))
-                .merge(chat::create_chat_router_stub())
+                .merge(chat::create_chat_router_multi(
+                    project_manager.clone(),
+                    admin_state.clone(),
+                ))
+                .merge(evaluate::create_evaluate_router_multi(
+                    project_manager.clone(),
+                    admin_state.clone(),
+                ))
+                .merge(skill_runner::create_skill_runner_router_multi(
+                    project_manager.clone(),
+                    admin_state.clone(),
+                ))
+                .layer(middleware::from_fn_with_state(
+                    web_auth_state.clone(),
+                    web_auth::auth_middleware,
+                ))
+                .layer(Extension(web_auth_state.clone()))
                 .layer(cors.clone());
 
             let rest_router = if let Some(ref dir) = args.static_dir {
                 let index = format!("{}/index.html", dir);
-                rest_router.fallback_service(
-                    ServeDir::new(dir).not_found_service(ServeFile::new(index)),
-                )
+                rest_router
+                    .fallback_service(ServeDir::new(dir).not_found_service(ServeFile::new(index)))
             } else {
                 rest_router
             };
@@ -369,15 +420,25 @@ async fn main() -> Result<()> {
             let rest_router = rest::create_rest_router_legacy(state.clone())
                 .merge(admin::create_admin_router(admin_state.clone()))
                 .merge(chat::create_chat_router(state.clone(), admin_state.clone()))
-                .merge(evaluate::create_evaluate_router(state.clone(), admin_state.clone()))
-                .merge(skill_runner::create_skill_runner_router(state.clone(), admin_state.clone()))
+                .merge(evaluate::create_evaluate_router(
+                    state.clone(),
+                    admin_state.clone(),
+                ))
+                .merge(skill_runner::create_skill_runner_router(
+                    state.clone(),
+                    admin_state.clone(),
+                ))
+                .layer(middleware::from_fn_with_state(
+                    web_auth_state.clone(),
+                    web_auth::auth_middleware,
+                ))
+                .layer(Extension(web_auth_state.clone()))
                 .layer(cors.clone());
 
             let rest_router = if let Some(ref dir) = args.static_dir {
                 let index = format!("{}/index.html", dir);
-                rest_router.fallback_service(
-                    ServeDir::new(dir).not_found_service(ServeFile::new(index)),
-                )
+                rest_router
+                    .fallback_service(ServeDir::new(dir).not_found_service(ServeFile::new(index)))
             } else {
                 rest_router
             };

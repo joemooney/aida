@@ -26,12 +26,11 @@ impl EmbeddedServer {
     /// a random available port on localhost.
     pub fn start(db_path: PathBuf) -> Result<Self> {
         // Find an available port
-        let port = find_available_port()
-            .context("Failed to find available port for embedded server")?;
+        let port =
+            find_available_port().context("Failed to find available port for embedded server")?;
 
         // Find the server binary
-        let server_binary = find_server_binary()
-            .context("Failed to find aida-server binary")?;
+        let server_binary = find_server_binary().context("Failed to find aida-server binary")?;
 
         // Start the server process
         let process = Command::new(&server_binary)
@@ -46,7 +45,12 @@ impl EmbeddedServer {
             .arg("--log-level")
             .arg("warn") // Quieter logging for embedded mode
             .spawn()
-            .with_context(|| format!("Failed to start embedded server: {}", server_binary.display()))?;
+            .with_context(|| {
+                format!(
+                    "Failed to start embedded server: {}",
+                    server_binary.display()
+                )
+            })?;
 
         let embedded = EmbeddedServer {
             process,
@@ -126,9 +130,9 @@ impl Drop for EmbeddedServer {
 #[allow(dead_code)]
 fn find_available_port() -> Result<u16> {
     // Bind to port 0 to get a random available port
-    let listener = TcpListener::bind("127.0.0.1:0")
-        .context("Failed to bind to ephemeral port")?;
-    let port = listener.local_addr()
+    let listener = TcpListener::bind("127.0.0.1:0").context("Failed to bind to ephemeral port")?;
+    let port = listener
+        .local_addr()
         .context("Failed to get local address")?
         .port();
     // Listener is dropped here, freeing the port

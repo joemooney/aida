@@ -4,8 +4,8 @@
 //! This module defines the core trait that all storage backends must implement,
 //! providing a unified interface for both local and remote storage access.
 
-use anyhow::Result;
 use aida_core::{Comment, RelationshipType, Requirement, RequirementsStore};
+use anyhow::Result;
 
 /// Error type for storage operations
 #[derive(Debug)]

@@ -177,7 +177,11 @@ pub trait DatabaseBackend: Send + Sync {
     /// Updates an existing requirement
     fn update_requirement(&self, requirement: &Requirement) -> Result<()> {
         let mut store = self.load()?;
-        if let Some(pos) = store.requirements.iter().position(|r| r.id == requirement.id) {
+        if let Some(pos) = store
+            .requirements
+            .iter()
+            .position(|r| r.id == requirement.id)
+        {
             store.requirements[pos] = requirement.clone();
             self.save(&store)?;
             Ok(())

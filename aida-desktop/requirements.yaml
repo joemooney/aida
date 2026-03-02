@@ -1,0 +1,316 @@
+name: ''
+title: ''
+description: ''
+requirements:
+- id: b945fe0a-2336-419c-8aab-a25181a75993
+  spec_id: FR-001
+  title: ggg
+  description: ''
+  status: Rejected
+  priority: Medium
+  owner: ''
+  feature: Uncategorized
+  created_at: 2025-11-28T21:21:18.638439631Z
+  modified_at: 2025-11-28T21:21:18.638439631Z
+  req_type: Functional
+  dependencies: []
+  tags: []
+  relationships:
+  - rel_type: Child
+    target_id: c438e6fc-efcc-4ea3-a0b2-57b113fef220
+- id: c438e6fc-efcc-4ea3-a0b2-57b113fef220
+  spec_id: FR-002
+  title: adddd
+  description: ''
+  status: Completed
+  priority: Medium
+  owner: ''
+  feature: Uncategorized
+  created_at: 2025-11-28T21:21:30.908226261Z
+  modified_at: 2025-11-28T21:21:30.908226261Z
+  req_type: Functional
+  dependencies: []
+  tags: []
+  relationships:
+  - rel_type: Parent
+    target_id: b945fe0a-2336-419c-8aab-a25181a75993
+id_config:
+  format: SingleLevel
+  numbering: Global
+  digits: 3
+  requirement_types:
+  - name: Functional
+    prefix: FR
+    description: Functional requirements
+  - name: Non-Functional
+    prefix: NFR
+    description: Non-functional requirements (performance, security, etc.)
+  - name: System
+    prefix: SR
+    description: System-level requirements
+  - name: User
+    prefix: UR
+    description: User story requirements
+  - name: Change Request
+    prefix: CR
+    description: Change requests for modifications to existing functionality
+features: []
+next_feature_number: 1
+next_spec_number: 3
+prefix_counters: {}
+relationship_definitions:
+- name: parent
+  display_name: Parent
+  description: Hierarchical parent requirement
+  inverse: child
+  symmetric: false
+  cardinality: OneToMany
+  source_types: []
+  target_types: []
+  built_in: true
+  color: null
+  icon: null
+- name: child
+  display_name: Child
+  description: Hierarchical child requirement
+  inverse: parent
+  symmetric: false
+  cardinality: ManyToOne
+  source_types: []
+  target_types: []
+  built_in: true
+  color: null
+  icon: null
+- name: verifies
+  display_name: Verifies
+  description: Test or verification relationship
+  inverse: verified_by
+  symmetric: false
+  cardinality: ManyToMany
+  source_types: []
+  target_types: []
+  built_in: true
+  color: null
+  icon: null
+- name: verified_by
+  display_name: Verified By
+  description: Verified by a test requirement
+  inverse: verifies
+  symmetric: false
+  cardinality: ManyToMany
+  source_types: []
+  target_types: []
+  built_in: true
+  color: null
+  icon: null
+- name: duplicate
+  display_name: Duplicate
+  description: Marks requirements as duplicates
+  inverse: null
+  symmetric: true
+  cardinality: ManyToMany
+  source_types: []
+  target_types: []
+  built_in: true
+  color: null
+  icon: null
+- name: references
+  display_name: References
+  description: General reference link
+  inverse: null
+  symmetric: false
+  cardinality: ManyToMany
+  source_types: []
+  target_types: []
+  built_in: true
+  color: null
+  icon: null
+- name: depends_on
+  display_name: Depends On
+  description: Dependency relationship
+  inverse: dependency_of
+  symmetric: false
+  cardinality: ManyToMany
+  source_types: []
+  target_types: []
+  built_in: true
+  color: null
+  icon: null
+- name: dependency_of
+  display_name: Dependency Of
+  description: Inverse dependency relationship
+  inverse: depends_on
+  symmetric: false
+  cardinality: ManyToMany
+  source_types: []
+  target_types: []
+  built_in: true
+  color: null
+  icon: null
+- name: implements
+  display_name: Implements
+  description: Implementation relationship
+  inverse: implemented_by
+  symmetric: false
+  cardinality: ManyToMany
+  source_types: []
+  target_types: []
+  built_in: true
+  color: null
+  icon: null
+- name: implemented_by
+  display_name: Implemented By
+  description: Inverse implementation relationship
+  inverse: implements
+  symmetric: false
+  cardinality: ManyToMany
+  source_types: []
+  target_types: []
+  built_in: true
+  color: null
+  icon: null
+- name: created_by
+  display_name: Created By
+  description: User who created the requirement
+  inverse: null
+  symmetric: false
+  cardinality: ManyToOne
+  source_types: []
+  target_types: []
+  built_in: true
+  color: '#4a9eff'
+  icon: null
+- name: assigned_to
+  display_name: Assigned To
+  description: User assigned to work on this requirement
+  inverse: null
+  symmetric: false
+  cardinality: ManyToOne
+  source_types: []
+  target_types: []
+  built_in: true
+  color: '#22c55e'
+  icon: null
+- name: tested_by
+  display_name: Tested By
+  description: User who tested/verified the requirement
+  inverse: null
+  symmetric: false
+  cardinality: ManyToMany
+  source_types: []
+  target_types: []
+  built_in: true
+  color: '#f59e0b'
+  icon: null
+- name: closed_by
+  display_name: Closed By
+  description: User who closed/completed the requirement
+  inverse: null
+  symmetric: false
+  cardinality: ManyToOne
+  source_types: []
+  target_types: []
+  built_in: true
+  color: '#ef4444'
+  icon: null
+reaction_definitions:
+- name: resolved
+  emoji: ✅
+  label: Resolved
+  description: Mark comment as resolved/addressed
+  built_in: true
+- name: rejected
+  emoji: ❌
+  label: Rejected
+  description: Mark comment as rejected/declined
+  built_in: true
+- name: thumbs_up
+  emoji: 👍
+  label: Thumbs Up
+  description: Agree or approve
+  built_in: true
+- name: thumbs_down
+  emoji: 👎
+  label: Thumbs Down
+  description: Disagree or disapprove
+  built_in: true
+- name: question
+  emoji: ❓
+  label: Question
+  description: Needs clarification
+  built_in: true
+- name: important
+  emoji: ⚠️
+  label: Important
+  description: Mark as important/attention needed
+  built_in: true
+meta_counters: {}
+type_definitions:
+- name: Functional
+  display_name: Functional
+  description: Functional requirements describing system behavior
+  prefix: FR
+  built_in: true
+- name: NonFunctional
+  display_name: Non-Functional
+  description: Non-functional requirements (performance, security, etc.)
+  prefix: NFR
+  built_in: true
+- name: System
+  display_name: System
+  description: System-level requirements
+  prefix: SYS
+  built_in: true
+- name: User
+  display_name: User Story
+  description: User stories and user requirements
+  prefix: US
+  built_in: true
+- name: ChangeRequest
+  display_name: Change Request
+  description: Change requests for existing functionality
+  prefix: CR
+  statuses:
+  - Draft
+  - Submitted
+  - Under Review
+  - Approved
+  - Rejected
+  - In Progress
+  - Implemented
+  - Verified
+  - Closed
+  custom_fields:
+  - name: impact
+    label: Impact Level
+    field_type: select
+    required: false
+    options:
+    - Low
+    - Medium
+    - High
+    - Critical
+    description: Impact of this change on the system
+    order: 1
+  - name: requested_by
+    label: Requested By
+    field_type: user
+    required: false
+    description: User who requested this change
+    order: 2
+  - name: target_release
+    label: Target Release
+    field_type: text
+    required: false
+    description: Target release version for this change
+    order: 3
+  - name: justification
+    label: Justification
+    field_type: text
+    required: true
+    description: Business justification for the change
+    order: 4
+  built_in: true
+  color: '#9333ea'
+allowed_prefixes: []
+restrict_prefixes: false

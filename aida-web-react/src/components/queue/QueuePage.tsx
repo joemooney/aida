@@ -20,6 +20,8 @@ import { useQueue, useRemoveFromQueue, useReorderQueue } from '../../hooks/useQu
 import { useRequirements } from '../../hooks/useRequirements';
 import { useDetailPanel } from '../../hooks/useDetailPanel';
 import { useListSelection } from '../../hooks/useListSelection';
+import { useAuth } from '../../hooks/useAuth';
+import { usePermissions } from '../../hooks/usePermissions';
 import { Spinner } from '../ui/Spinner';
 import { EmptyState } from '../ui/EmptyState';
 import { QueueItem } from './QueueItem';
@@ -31,9 +33,13 @@ const selectClass =
   'rounded-lg border border-edge bg-surface px-2.5 py-1.5 text-xs text-content focus:border-accent focus:outline-none cursor-pointer';
 
 export function QueuePage() {
+  const { authEnabled, user } = useAuth();
+  const { canWrite } = usePermissions();
   const [searchParams, setSearchParams] = useSearchParams();
-  const userId = searchParams.get('user') || 'default';
-  const isOwnQueue = userId === 'default';
+  const requestedUser = searchParams.get('user') || 'default';
+  const ownUserId = authEnabled && user?.handle ? user.handle : 'default';
+  const userId = requestedUser === 'default' ? ownUserId : requestedUser;
+  const isOwnQueue = userId === ownUserId;
 
   const { data, isLoading, error } = useQueue(userId);
   const removeFromQueue = useRemoveFromQueue(userId);
@@ -133,7 +139,7 @@ export function QueuePage() {
                 ({filtered.length})
               </span>
             )}
-            {!isOwnQueue && (
+            {(!isOwnQueue || !canWrite) && (
               <span className="text-[10px] font-normal bg-amber-500/15 text-amber-600 rounded px-1.5 py-0.5">
                 Read-only
               </span>
@@ -144,6 +150,11 @@ export function QueuePage() {
               ? 'Your personal focus inbox — ordered by priority.'
               : `Viewing ${userId}'s queue.`}
           </p>
+          {(!isOwnQueue || !canWrite) && (
+            <p className="text-xs text-content-muted mt-1">
+              Queue updates are disabled here. Switch to your own queue with write access to reorder or remove items.
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <select
@@ -216,7 +227,7 @@ export function QueuePage() {
                       open(id);
                     }}
                     isSelected={isRowSelected}
-                    readOnly={!isOwnQueue}
+                    readOnly={!isOwnQueue || !canWrite}
                   />
                 );
               })}

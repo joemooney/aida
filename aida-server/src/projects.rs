@@ -180,13 +180,12 @@ impl ProjectManager {
             projects.get(project).cloned()
         };
 
-        let project_info = project_info
-            .ok_or_else(|| anyhow!("Project '{}' not found", project))?;
+        let project_info =
+            project_info.ok_or_else(|| anyhow!("Project '{}' not found", project))?;
 
         // Create backend
         let db_path = project_info.db_path.clone();
-        let backend = tokio::task::spawn_blocking(move || create_backend(&db_path, None))
-            .await??;
+        let backend = tokio::task::spawn_blocking(move || create_backend(&db_path, None)).await??;
 
         let state = Arc::new(ServerState::new(backend)?);
 
@@ -213,12 +212,18 @@ impl ProjectManager {
         }
 
         // Must start with a letter
-        if !name.chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false) {
+        if !name
+            .chars()
+            .next()
+            .map(|c| c.is_ascii_alphabetic())
+            .unwrap_or(false)
+        {
             return false;
         }
 
         // Only alphanumeric, hyphens, underscores
-        name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        name.chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
     }
 
     /// Save the project registry to disk
@@ -304,7 +309,10 @@ mod tests {
         assert!(projects.is_empty());
 
         // Create a project
-        let project = manager.create_project("test-project", "A test project").await.unwrap();
+        let project = manager
+            .create_project("test-project", "A test project")
+            .await
+            .unwrap();
         assert_eq!(project.name, "test-project");
         assert_eq!(project.description, "A test project");
 

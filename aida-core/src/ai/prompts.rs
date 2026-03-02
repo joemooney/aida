@@ -14,11 +14,7 @@ use crate::models::{Requirement, RequirementsStore};
 /// Build context about the project
 pub fn build_project_context(store: &RequirementsStore) -> String {
     let total_reqs = store.requirements.len();
-    let active_reqs = store
-        .requirements
-        .iter()
-        .filter(|r| !r.archived)
-        .count();
+    let active_reqs = store.requirements.iter().filter(|r| !r.archived).count();
 
     let features: Vec<String> = store
         .features
@@ -576,7 +572,10 @@ mod tests {
     use crate::models::{RequirementPriority, RequirementStatus, RequirementType};
 
     fn create_test_req() -> Requirement {
-        let mut req = Requirement::new("User Login".to_string(), "Users should be able to log in".to_string());
+        let mut req = Requirement::new(
+            "User Login".to_string(),
+            "Users should be able to log in".to_string(),
+        );
         req.spec_id = Some("FR-001".to_string());
         req.status = RequirementStatus::Draft;
         req.priority = RequirementPriority::High;

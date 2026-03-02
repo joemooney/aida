@@ -14,24 +14,24 @@
 //! This approach eliminates conditional compilation in business logic and
 //! ensures consistent behavior across platforms.
 
-mod traits;
-mod grpc_client;
 #[cfg(feature = "native")]
 mod embedded;
+mod grpc_client;
+mod traits;
 
-#[allow(unused_imports)]
-pub use traits::{StorageClient, ServerStatus, StorageError};
-pub use grpc_client::GrpcStorageClient;
 #[cfg(feature = "native")]
 pub use embedded::EmbeddedServer;
+pub use grpc_client::GrpcStorageClient;
+#[allow(unused_imports)]
+pub use traits::{ServerStatus, StorageClient, StorageError};
 
 // Re-export proto module for use by aida-web
 pub use grpc_client::proto;
 
 // Re-export conversion functions for external use
 pub use grpc_client::{
-    proto_to_store, proto_to_requirement, proto_to_comment,
-    requirement_to_create_request, requirement_to_update_request,
+    proto_to_comment, proto_to_requirement, proto_to_store, requirement_to_create_request,
+    requirement_to_update_request,
 };
 
 use anyhow::Result;
@@ -46,8 +46,7 @@ use anyhow::Result;
 /// A boxed StorageClient implementation
 pub fn create_storage_client(
     server_addr: Option<&str>,
-    #[allow(unused_variables)]
-    db_path: Option<std::path::PathBuf>,
+    #[allow(unused_variables)] db_path: Option<std::path::PathBuf>,
 ) -> Result<Box<dyn StorageClient>> {
     match server_addr {
         // Connect to specified remote server
@@ -74,7 +73,9 @@ pub fn create_storage_client(
             }
             #[cfg(not(feature = "native"))]
             {
-                anyhow::bail!("No server address specified. In web mode, a server address is required.")
+                anyhow::bail!(
+                    "No server address specified. In web mode, a server address is required."
+                )
             }
         }
     }
@@ -134,7 +135,8 @@ impl StorageClient for EmbeddedStorageClient {
         rel_type: &aida_core::RelationshipType,
         created_by: &str,
     ) -> Result<()> {
-        self.client.add_relationship(source_id, target_id, rel_type, created_by)
+        self.client
+            .add_relationship(source_id, target_id, rel_type, created_by)
     }
 
     fn get_server_status(&self) -> Result<ServerStatus> {

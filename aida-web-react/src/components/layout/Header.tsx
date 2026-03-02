@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Search, Sun, Moon, X, RefreshCw, Plus } from 'lucide-react';
+import { Search, Sun, Moon, X, RefreshCw, Plus, LogOut } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '../../lib/utils';
 import { useTheme } from '../../hooks/useTheme';
@@ -10,6 +10,8 @@ import { reloadServer } from '../../api/requirements';
 import { QuickCreateDropdown } from '../create/QuickCreateDropdown';
 import { CreateRequirementModal } from '../create/CreateRequirementModal';
 import type { Requirement } from '@shared/types';
+import { useAuth } from '../../hooks/useAuth';
+import { usePermissions } from '../../hooks/usePermissions';
 
 const FILTER_FIELDS = new Set<keyof Filters>(['status', 'priority', 'type', 'feature', 'owner', 'tag']);
 
@@ -46,6 +48,8 @@ function parseStructuredQuery(input: string): { filters: Partial<Filters>; remai
 
 export function Header() {
   const { theme, toggle } = useTheme();
+  const { authEnabled, user, logout } = useAuth();
+  const { canWrite, role } = usePermissions();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
@@ -158,31 +162,35 @@ export function Header() {
       <div className="flex-1" />
 
       {/* Create requirement */}
-      <div ref={createBtnRef} className="relative">
-        <button
-          onClick={() => setDropdownOpen((v) => !v)}
-          className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent/90 transition-colors cursor-pointer"
-        >
-          <Plus className="h-4 w-4" />
-          New
-        </button>
-        {dropdownOpen && (
-          <QuickCreateDropdown
-            onClose={() => setDropdownOpen(false)}
-            onMoreOptions={(type, title) => {
-              setDropdownOpen(false);
-              setModalPreFill({ type, title });
-              setModalOpen(true);
-            }}
-          />
-        )}
-      </div>
-      {modalOpen && (
-        <CreateRequirementModal
-          onClose={() => { setModalOpen(false); setModalPreFill({}); }}
-          initialType={modalPreFill.type}
-          initialTitle={modalPreFill.title}
-        />
+      {canWrite && (
+        <>
+          <div ref={createBtnRef} className="relative">
+            <button
+              onClick={() => setDropdownOpen((v) => !v)}
+              className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-accent/90 transition-colors cursor-pointer"
+            >
+              <Plus className="h-4 w-4" />
+              New
+            </button>
+            {dropdownOpen && (
+              <QuickCreateDropdown
+                onClose={() => setDropdownOpen(false)}
+                onMoreOptions={(type, title) => {
+                  setDropdownOpen(false);
+                  setModalPreFill({ type, title });
+                  setModalOpen(true);
+                }}
+              />
+            )}
+          </div>
+          {modalOpen && (
+            <CreateRequirementModal
+              onClose={() => { setModalOpen(false); setModalPreFill({}); }}
+              initialType={modalPreFill.type}
+              initialTitle={modalPreFill.title}
+            />
+          )}
+        </>
       )}
 
       {/* Refresh data */}
@@ -198,6 +206,39 @@ export function Header() {
       >
         <RefreshCw className="h-4 w-4" />
       </button>
+
+      {/* Theme toggle */}
+      {authEnabled && user && (
+        <>
+          <span
+            className={cn(
+              'rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide',
+              role === 'admin'
+                ? 'bg-red-500/15 text-red-300'
+                : role === 'editor'
+                  ? 'bg-blue-500/15 text-blue-300'
+                  : 'bg-amber-500/15 text-amber-300',
+            )}
+            title={canWrite ? 'You can edit data' : 'Read-only access'}
+          >
+            {role}
+          </span>
+          <div className="text-xs text-content-secondary">
+            <span className="font-medium text-content">{user.name}</span>
+            <span className="ml-1 text-content-muted">@{user.handle}</span>
+          </div>
+          <button
+            onClick={() => void logout()}
+            className={cn(
+              'flex h-8 w-8 items-center justify-center rounded-lg transition-colors cursor-pointer',
+              'text-content-muted hover:text-content hover:bg-surface-hover',
+            )}
+            title="Sign out"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+        </>
+      )}
 
       {/* Theme toggle */}
       <button

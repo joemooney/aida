@@ -9,9 +9,8 @@ use aida_core::{
 // Native-only imports (require filesystem access)
 #[cfg(not(target_arch = "wasm32"))]
 use aida_core::{
-    ai::AiClient,
-    check_migration_status, determine_requirements_path, ConflictInfo, ConflictResolution,
-    EditLock, LockFileInfo, MigrationCheck, SaveResult, SessionInfo, Storage,
+    ai::AiClient, check_migration_status, determine_requirements_path, ConflictInfo,
+    ConflictResolution, EditLock, LockFileInfo, MigrationCheck, SaveResult, SessionInfo, Storage,
 };
 
 // GitLab integration imports (native only, requires gitlab feature)
@@ -20,20 +19,20 @@ use aida_core::{GitLabClient, GitLabConfig, GitLabIssue, IssueFilter, IssueState
 
 // WASM-only imports for async state management
 #[cfg(target_arch = "wasm32")]
+use crate::storage::GrpcStorageClient;
+#[cfg(target_arch = "wasm32")]
 use std::cell::RefCell;
 #[cfg(target_arch = "wasm32")]
 use std::rc::Rc;
-#[cfg(target_arch = "wasm32")]
-use crate::storage::GrpcStorageClient;
 
-use crate::storage::StorageClient;
 #[cfg(feature = "remote")]
 use crate::storage::create_storage_client;
-use eframe::egui;
-use similar::{ChangeTag, TextDiff};
-use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
+use crate::storage::StorageClient;
 use chrono::{DateTime, Local, Utc};
+use eframe::egui;
+use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
 use serde::{Deserialize, Serialize};
+use similar::{ChangeTag, TextDiff};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 #[cfg(not(target_arch = "wasm32"))]
@@ -41,8 +40,8 @@ use std::sync::mpsc;
 #[cfg(not(target_arch = "wasm32"))]
 use std::thread;
 // Use web-time for cross-platform Instant (works on both native and WASM)
-use web_time::{Duration, Instant};
 use uuid::Uuid;
+use web_time::{Duration, Instant};
 
 /// Commands sent to the heartbeat thread (native only - WASM doesn't have threads)
 #[cfg(not(target_arch = "wasm32"))]
@@ -96,7 +95,7 @@ async fn poll_gitlab_for_changes(
     requirements: Vec<Requirement>,
     storage_path: &std::path::Path,
 ) -> GitLabPollResult {
-    use aida_core::{GitLabSyncState, SyncStatus, Storage};
+    use aida_core::{GitLabSyncState, Storage, SyncStatus};
 
     let client = match GitLabClient::new(config.clone()) {
         Ok(c) => c,
@@ -484,7 +483,10 @@ fn format_requirement_for_claude_code(req: &Requirement) -> String {
 
     // Header with requirement ID
     let req_id = req.spec_id.as_deref().unwrap_or("(no ID)");
-    prompt.push_str(&format!("# Implement Requirement: {} - {}\n\n", req_id, req.title));
+    prompt.push_str(&format!(
+        "# Implement Requirement: {} - {}\n\n",
+        req_id, req.title
+    ));
 
     // Requirement type and priority
     prompt.push_str(&format!("**Type:** {}  \n", req.req_type));
@@ -542,12 +544,13 @@ fn modal_max_size(ctx: &egui::Context) -> egui::Vec2 {
 }
 
 /// Calculate constrained modal size - returns (width, height) clamped to max
-fn constrained_modal_size(ctx: &egui::Context, desired_width: f32, desired_height: f32) -> egui::Vec2 {
+fn constrained_modal_size(
+    ctx: &egui::Context,
+    desired_width: f32,
+    desired_height: f32,
+) -> egui::Vec2 {
     let max = modal_max_size(ctx);
-    egui::vec2(
-        desired_width.min(max.x),
-        desired_height.min(max.y),
-    )
+    egui::vec2(desired_width.min(max.x), desired_height.min(max.y))
 }
 
 /// Truncate a string to a maximum length, adding "..." if truncated
@@ -805,25 +808,51 @@ pub struct CustomTheme {
 }
 
 // Default text colors (match egui dark defaults)
-fn default_text_color() -> ThemeColor { ThemeColor::new(190, 190, 190) }        // egui dark default
-fn default_weak_text_color() -> ThemeColor { ThemeColor::new(100, 100, 100) }   // dimmer for inactive
+fn default_text_color() -> ThemeColor {
+    ThemeColor::new(190, 190, 190)
+} // egui dark default
+fn default_weak_text_color() -> ThemeColor {
+    ThemeColor::new(100, 100, 100)
+} // dimmer for inactive
 
 // Default success color (for success messages)
-fn default_success_fg() -> ThemeColor { ThemeColor::new(34, 197, 94) }          // Green
+fn default_success_fg() -> ThemeColor {
+    ThemeColor::new(34, 197, 94)
+} // Green
 
 // Default status colors
-fn default_status_draft() -> ThemeColor { ThemeColor::new(156, 163, 175) }      // Gray
-fn default_status_approved() -> ThemeColor { ThemeColor::new(76, 175, 80) }     // Green
-fn default_status_in_progress() -> ThemeColor { ThemeColor::new(59, 130, 246) } // Blue
-fn default_status_implemented() -> ThemeColor { ThemeColor::new(16, 185, 129) } // Teal
-fn default_status_completed() -> ThemeColor { ThemeColor::new(34, 197, 94) }    // Green
-fn default_status_rejected() -> ThemeColor { ThemeColor::new(239, 68, 68) }     // Red
+fn default_status_draft() -> ThemeColor {
+    ThemeColor::new(156, 163, 175)
+} // Gray
+fn default_status_approved() -> ThemeColor {
+    ThemeColor::new(76, 175, 80)
+} // Green
+fn default_status_in_progress() -> ThemeColor {
+    ThemeColor::new(59, 130, 246)
+} // Blue
+fn default_status_implemented() -> ThemeColor {
+    ThemeColor::new(16, 185, 129)
+} // Teal
+fn default_status_completed() -> ThemeColor {
+    ThemeColor::new(34, 197, 94)
+} // Green
+fn default_status_rejected() -> ThemeColor {
+    ThemeColor::new(239, 68, 68)
+} // Red
 
 // Default priority colors
-fn default_priority_critical() -> ThemeColor { ThemeColor::new(220, 38, 38) }   // Dark red
-fn default_priority_high() -> ThemeColor { ThemeColor::new(244, 67, 54) }       // Red
-fn default_priority_medium() -> ThemeColor { ThemeColor::new(255, 152, 0) }     // Orange
-fn default_priority_low() -> ThemeColor { ThemeColor::new(76, 175, 80) }        // Green
+fn default_priority_critical() -> ThemeColor {
+    ThemeColor::new(220, 38, 38)
+} // Dark red
+fn default_priority_high() -> ThemeColor {
+    ThemeColor::new(244, 67, 54)
+} // Red
+fn default_priority_medium() -> ThemeColor {
+    ThemeColor::new(255, 152, 0)
+} // Orange
+fn default_priority_low() -> ThemeColor {
+    ThemeColor::new(76, 175, 80)
+} // Green
 
 impl Default for CustomTheme {
     fn default() -> Self {
@@ -850,7 +879,7 @@ impl CustomTheme {
             extreme_bg: ThemeColor::new(10, 10, 10),
             faint_bg: ThemeColor::new(5, 5, 5),
             // Text - match egui dark defaults
-            text_color: ThemeColor::new(190, 190, 190),      // egui dark default
+            text_color: ThemeColor::new(190, 190, 190), // egui dark default
             weak_text_color: ThemeColor::new(100, 100, 100), // dimmer for inactive
             hyperlink_color: ThemeColor::new(90, 170, 255),
             warn_fg: ThemeColor::new(255, 143, 0),
@@ -1042,28 +1071,28 @@ impl CustomTheme {
             name,
             base: BaseTheme::Light,
             // Background - Nord Snow Storm
-            window_fill: ThemeColor::new(236, 239, 244),       // nord6
-            panel_fill: ThemeColor::new(229, 233, 240),        // nord5
-            extreme_bg: ThemeColor::new(236, 239, 244),        // nord6
-            faint_bg: ThemeColor::new(229, 233, 240),          // nord5
+            window_fill: ThemeColor::new(236, 239, 244), // nord6
+            panel_fill: ThemeColor::new(229, 233, 240),  // nord5
+            extreme_bg: ThemeColor::new(236, 239, 244),  // nord6
+            faint_bg: ThemeColor::new(229, 233, 240),    // nord5
             // Text - Nord Polar Night
-            text_color: ThemeColor::new(46, 52, 64),           // nord0
-            weak_text_color: ThemeColor::new(76, 86, 106),     // nord3
-            hyperlink_color: ThemeColor::new(94, 129, 172),    // nord10
-            warn_fg: ThemeColor::new(208, 135, 112),           // nord12
-            error_fg: ThemeColor::new(191, 97, 106),           // nord11
-            success_fg: ThemeColor::new(163, 190, 140),        // nord14 (green)
+            text_color: ThemeColor::new(46, 52, 64), // nord0
+            weak_text_color: ThemeColor::new(76, 86, 106), // nord3
+            hyperlink_color: ThemeColor::new(94, 129, 172), // nord10
+            warn_fg: ThemeColor::new(208, 135, 112), // nord12
+            error_fg: ThemeColor::new(191, 97, 106), // nord11
+            success_fg: ThemeColor::new(163, 190, 140), // nord14 (green)
             // Widgets - noninteractive
-            widget_bg: ThemeColor::new(236, 239, 244),         // nord6
-            widget_fg: ThemeColor::new(76, 86, 106),           // nord3
+            widget_bg: ThemeColor::new(236, 239, 244), // nord6
+            widget_fg: ThemeColor::new(76, 86, 106),   // nord3
             // Widgets - interactive (Nord Frost accents)
             widget_inactive_bg: ThemeColor::new(229, 233, 240), // nord5
-            widget_hovered_bg: ThemeColor::new(216, 222, 233), // nord4
-            widget_active_bg: ThemeColor::new(129, 161, 193),  // nord9
-            widget_open_bg: ThemeColor::new(94, 129, 172),     // nord10
+            widget_hovered_bg: ThemeColor::new(216, 222, 233),  // nord4
+            widget_active_bg: ThemeColor::new(129, 161, 193),   // nord9
+            widget_open_bg: ThemeColor::new(94, 129, 172),      // nord10
             // Selection
             selection_bg: ThemeColor::new(180, 210, 230),
-            selection_fg: ThemeColor::new(94, 129, 172),       // nord10
+            selection_fg: ThemeColor::new(94, 129, 172), // nord10
             // Strokes
             widget_stroke_width: 1.0,
             widget_stroke_color: ThemeColor::new(216, 222, 233), // nord4
@@ -1088,17 +1117,17 @@ impl CustomTheme {
             title_bar_text: None,
             title_bar_font_size: 1.0,
             // Status colors - Nord Aurora palette
-            status_draft: ThemeColor::new(76, 86, 106),        // nord3
-            status_approved: ThemeColor::new(163, 190, 140),   // nord14 green
+            status_draft: ThemeColor::new(76, 86, 106), // nord3
+            status_approved: ThemeColor::new(163, 190, 140), // nord14 green
             status_in_progress: ThemeColor::new(129, 161, 193), // nord9 blue
             status_implemented: ThemeColor::new(143, 188, 187), // nord7 teal
-            status_completed: ThemeColor::new(163, 190, 140),  // nord14 green
-            status_rejected: ThemeColor::new(191, 97, 106),    // nord11 red
+            status_completed: ThemeColor::new(163, 190, 140), // nord14 green
+            status_rejected: ThemeColor::new(191, 97, 106), // nord11 red
             // Priority colors - Nord Aurora
-            priority_critical: ThemeColor::new(191, 97, 106),  // nord11
-            priority_high: ThemeColor::new(208, 135, 112),     // nord12
-            priority_medium: ThemeColor::new(235, 203, 139),   // nord13
-            priority_low: ThemeColor::new(163, 190, 140),      // nord14
+            priority_critical: ThemeColor::new(191, 97, 106), // nord11
+            priority_high: ThemeColor::new(208, 135, 112),    // nord12
+            priority_medium: ThemeColor::new(235, 203, 139),  // nord13
+            priority_low: ThemeColor::new(163, 190, 140),     // nord14
         }
     }
 
@@ -1243,7 +1272,7 @@ impl CustomTheme {
 
     fn nord_dark_defaults(name: String) -> Self {
         // Nord colors
-        let nord0 = ThemeColor::new(46, 52, 64);   // Polar Night
+        let nord0 = ThemeColor::new(46, 52, 64); // Polar Night
         let nord1 = ThemeColor::new(59, 66, 82);
         let nord2 = ThemeColor::new(67, 76, 94);
         let nord3 = ThemeColor::new(76, 86, 106);
@@ -1323,14 +1352,14 @@ impl CustomTheme {
 
     fn docs_dark_defaults(name: String) -> Self {
         // Docs Dark - dark blue theme inspired by documentation sites
-        let bg_main = ThemeColor::new(26, 26, 46);        // #1a1a2e
-        let bg_code = ThemeColor::new(15, 15, 35);        // #0f0f23
+        let bg_main = ThemeColor::new(26, 26, 46); // #1a1a2e
+        let bg_code = ThemeColor::new(15, 15, 35); // #0f0f23
         let bg_faint = ThemeColor::new(20, 20, 40);
         let text_primary = ThemeColor::new(228, 228, 231); // #e4e4e7
         let text_muted = ThemeColor::new(140, 140, 160);
-        let accent = ThemeColor::new(96, 165, 250);        // #60a5fa
+        let accent = ThemeColor::new(96, 165, 250); // #60a5fa
         let accent_hover = ThemeColor::new(120, 180, 255);
-        let accent_active = ThemeColor::new(37, 99, 235);  // #2563eb
+        let accent_active = ThemeColor::new(37, 99, 235); // #2563eb
 
         Self {
             name,
@@ -1344,9 +1373,9 @@ impl CustomTheme {
             text_color: text_primary,
             weak_text_color: text_muted,
             hyperlink_color: accent,
-            warn_fg: ThemeColor::new(250, 176, 5),         // Golden yellow
-            error_fg: ThemeColor::new(248, 113, 113),      // Soft red
-            success_fg: ThemeColor::new(74, 222, 128),     // Soft green
+            warn_fg: ThemeColor::new(250, 176, 5), // Golden yellow
+            error_fg: ThemeColor::new(248, 113, 113), // Soft red
+            success_fg: ThemeColor::new(74, 222, 128), // Soft green
             // Widgets
             widget_bg: bg_main,
             widget_fg: text_muted,
@@ -1383,7 +1412,7 @@ impl CustomTheme {
             status_draft: ThemeColor::new(140, 140, 160),
             status_approved: ThemeColor::new(74, 222, 128),
             status_in_progress: accent,
-            status_implemented: ThemeColor::new(45, 212, 191),  // Teal
+            status_implemented: ThemeColor::new(45, 212, 191), // Teal
             status_completed: ThemeColor::new(74, 222, 128),
             status_rejected: ThemeColor::new(248, 113, 113),
             // Priority colors
@@ -1397,15 +1426,15 @@ impl CustomTheme {
     fn purple_rain_defaults(name: String) -> Self {
         // Purple Rain - dark purple theme inspired by Obsidian
         // Purple accent colors similar to Obsidian's purple theme
-        let bg_main = ThemeColor::new(30, 24, 40);         // Deep purple-black
-        let bg_darker = ThemeColor::new(22, 17, 30);       // Even darker for contrast
-        let bg_faint = ThemeColor::new(38, 30, 50);        // Slightly lighter purple
+        let bg_main = ThemeColor::new(30, 24, 40); // Deep purple-black
+        let bg_darker = ThemeColor::new(22, 17, 30); // Even darker for contrast
+        let bg_faint = ThemeColor::new(38, 30, 50); // Slightly lighter purple
         let text_primary = ThemeColor::new(230, 225, 235); // Soft white with purple tint
-        let text_muted = ThemeColor::new(145, 130, 160);   // Muted purple-gray
-        let accent = ThemeColor::new(168, 130, 255);       // Bright purple (Obsidian-like)
+        let text_muted = ThemeColor::new(145, 130, 160); // Muted purple-gray
+        let accent = ThemeColor::new(168, 130, 255); // Bright purple (Obsidian-like)
         let accent_hover = ThemeColor::new(190, 160, 255); // Lighter purple on hover
         let accent_active = ThemeColor::new(130, 90, 200); // Darker purple when active
-        let purple_faint = ThemeColor::new(80, 60, 110);   // Subtle purple for widgets
+        let purple_faint = ThemeColor::new(80, 60, 110); // Subtle purple for widgets
 
         Self {
             name,
@@ -1419,9 +1448,9 @@ impl CustomTheme {
             text_color: text_primary,
             weak_text_color: text_muted,
             hyperlink_color: accent,
-            warn_fg: ThemeColor::new(255, 190, 100),       // Warm amber
-            error_fg: ThemeColor::new(255, 120, 140),      // Soft red-pink
-            success_fg: ThemeColor::new(130, 230, 150),    // Soft green
+            warn_fg: ThemeColor::new(255, 190, 100), // Warm amber
+            error_fg: ThemeColor::new(255, 120, 140), // Soft red-pink
+            success_fg: ThemeColor::new(130, 230, 150), // Soft green
             // Widgets
             widget_bg: bg_main,
             widget_fg: text_muted,
@@ -1458,7 +1487,7 @@ impl CustomTheme {
             status_draft: text_muted,
             status_approved: ThemeColor::new(130, 230, 150),
             status_in_progress: accent,
-            status_implemented: ThemeColor::new(100, 220, 200),  // Teal-cyan
+            status_implemented: ThemeColor::new(100, 220, 200), // Teal-cyan
             status_completed: ThemeColor::new(130, 230, 150),
             status_rejected: ThemeColor::new(255, 120, 140),
             // Priority colors
@@ -1515,8 +1544,7 @@ impl CustomTheme {
         visuals.widgets.inactive.bg_fill = self.widget_inactive_bg.to_egui();
         visuals.widgets.inactive.bg_stroke =
             egui::Stroke::new(self.widget_stroke_width, self.widget_stroke_color.to_egui());
-        visuals.widgets.inactive.fg_stroke =
-            egui::Stroke::new(1.0, self.text_color.to_egui());
+        visuals.widgets.inactive.fg_stroke = egui::Stroke::new(1.0, self.text_color.to_egui());
         visuals.widgets.inactive.rounding = egui::Rounding::same(self.widget_rounding);
 
         visuals.widgets.hovered.bg_fill = self.widget_hovered_bg.to_egui();
@@ -1524,8 +1552,7 @@ impl CustomTheme {
             self.widget_stroke_width,
             self.widget_hovered_stroke_color.to_egui(),
         );
-        visuals.widgets.hovered.fg_stroke =
-            egui::Stroke::new(1.0, self.text_color.to_egui());
+        visuals.widgets.hovered.fg_stroke = egui::Stroke::new(1.0, self.text_color.to_egui());
         visuals.widgets.hovered.rounding = egui::Rounding::same(self.widget_rounding);
 
         visuals.widgets.active.bg_fill = self.widget_active_bg.to_egui();
@@ -1533,13 +1560,11 @@ impl CustomTheme {
             self.widget_stroke_width,
             self.widget_active_stroke_color.to_egui(),
         );
-        visuals.widgets.active.fg_stroke =
-            egui::Stroke::new(1.0, self.text_color.to_egui());
+        visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0, self.text_color.to_egui());
         visuals.widgets.active.rounding = egui::Rounding::same(self.widget_rounding);
 
         visuals.widgets.open.bg_fill = self.widget_open_bg.to_egui();
-        visuals.widgets.open.fg_stroke =
-            egui::Stroke::new(1.0, self.text_color.to_egui());
+        visuals.widgets.open.fg_stroke = egui::Stroke::new(1.0, self.text_color.to_egui());
         visuals.widgets.open.rounding = egui::Rounding::same(self.widget_rounding);
 
         // Selection
@@ -1687,14 +1712,14 @@ impl Theme {
             // Light themes
             Theme::Light => egui::Color32::from_rgb(220, 220, 225),
             Theme::VibrantLight => egui::Color32::from_rgb(230, 230, 248), // Lavender tint
-            Theme::NordLight => egui::Color32::from_rgb(216, 222, 233), // nord4
+            Theme::NordLight => egui::Color32::from_rgb(216, 222, 233),    // nord4
             // Dark themes
             Theme::Dark => egui::Color32::from_rgb(45, 45, 50),
             Theme::HighContrastDark => egui::Color32::from_rgb(35, 35, 40),
             Theme::SolarizedDark => egui::Color32::from_rgb(7, 54, 66), // base02
-            Theme::Nord => egui::Color32::from_rgb(59, 66, 82), // nord1
-            Theme::DocsDark => egui::Color32::from_rgb(20, 20, 40), // Dark blue
-            Theme::PurpleRain => egui::Color32::from_rgb(25, 18, 35), // Deep purple
+            Theme::Nord => egui::Color32::from_rgb(59, 66, 82),         // nord1
+            Theme::DocsDark => egui::Color32::from_rgb(20, 20, 40),     // Dark blue
+            Theme::PurpleRain => egui::Color32::from_rgb(25, 18, 35),   // Deep purple
         }
     }
 
@@ -1725,7 +1750,7 @@ impl Theme {
             Theme::NordLight => egui::Color32::from_rgb(76, 86, 106),
             Theme::VibrantLight => egui::Color32::from_rgb(100, 100, 130),
             Theme::DocsDark => egui::Color32::from_rgb(140, 140, 160),
-            Theme::PurpleRain => egui::Color32::from_rgb(145, 130, 160),  // Muted purple-gray
+            Theme::PurpleRain => egui::Color32::from_rgb(145, 130, 160), // Muted purple-gray
         }
     }
 }
@@ -1808,8 +1833,8 @@ impl KeyContext {
 pub enum KeyAction {
     NavigateUp,
     NavigateDown,
-    NavigateUpVim,      // 'k' key - vim-style up
-    NavigateDownVim,    // 'j' key - vim-style down
+    NavigateUpVim,   // 'k' key - vim-style up
+    NavigateDownVim, // 'j' key - vim-style down
     Edit,
     ToggleExpand,
     Save,
@@ -1830,25 +1855,25 @@ pub enum KeyAction {
     AddComment,         // 'c' - add comment
     ToggleLinksPanel,   // 'L' - show/toggle links
     // Deletion/Archive menu
-    OpenDeleteMenu,     // 'd' - open delete/archive menu (two-key: d+d=delete, d+a=archive)
-    DeleteWithConfirm,  // 'Ctrl+d' - delete with confirmation
+    OpenDeleteMenu, // 'd' - open delete/archive menu (two-key: d+d=delete, d+a=archive)
+    DeleteWithConfirm, // 'Ctrl+d' - delete with confirmation
     // Add menu
-    OpenAddMenu,        // 'a' - open add menu (new sibling, new child)
+    OpenAddMenu, // 'a' - open add menu (new sibling, new child)
     // Action/AI menu
-    OpenActionMenu,     // 'A' (shift+a) - open AI/Action menu (evaluate, duplicates, etc.)
+    OpenActionMenu, // 'A' (shift+a) - open AI/Action menu (evaluate, duplicates, etc.)
     // Requirement detail tabs menu
-    OpenDetailTabMenu,  // 'r' - open detail tab picker (AI, Description, Comments, Links, History)
+    OpenDetailTabMenu, // 'r' - open detail tab picker (AI, Description, Comments, Links, History)
     // Search navigation
     NextSearchMatch,    // 'n' - next search match
     PrevSearchMatch,    // 'N' - previous search match
     ClearSearch,        // Esc - clear search
     SwitchToFilterMode, // '/' - switch search to filter mode
     // View navigation
-    OpenViewPicker,     // 'v' - open view picker (two-key sequence: v + k/t/b/o/r/s)
+    OpenViewPicker, // 'v' - open view picker (two-key sequence: v + k/t/b/o/r/s)
     // Project navigation (WASM only)
-    OpenProjectPicker,  // 'P' (shift+p) - open project picker to switch databases
+    OpenProjectPicker, // 'P' (shift+p) - open project picker to switch databases
     // Help
-    ShowKeyboardHelp,   // '?' - show keyboard shortcuts help
+    ShowKeyboardHelp, // '?' - show keyboard shortcuts help
 }
 
 impl KeyAction {
@@ -2020,7 +2045,15 @@ impl KeyBinding {
         }
         // Show lowercase letters unless Shift is pressed
         // Single letter keys (A-Z) should display as lowercase 'a'-'z' when no shift
-        let key_display = if !self.shift && self.key_name.len() == 1 && self.key_name.chars().next().map(|c| c.is_ascii_uppercase()).unwrap_or(false) {
+        let key_display = if !self.shift
+            && self.key_name.len() == 1
+            && self
+                .key_name
+                .chars()
+                .next()
+                .map(|c| c.is_ascii_uppercase())
+                .unwrap_or(false)
+        {
             self.key_name.to_lowercase()
         } else {
             self.key_name.clone()
@@ -2277,7 +2310,10 @@ impl Default for KeyBindings {
         );
         bindings.insert(
             KeyAction::OpenPriorityPicker,
-            KeyBinding::new(egui::Key::P, KeyAction::OpenPriorityPicker.default_context()),
+            KeyBinding::new(
+                egui::Key::P,
+                KeyAction::OpenPriorityPicker.default_context(),
+            ),
         );
         // 'S' (Shift+S) for sprint assignment picker
         bindings.insert(
@@ -2318,8 +2354,7 @@ impl Default for KeyBindings {
         // Action/AI menu: 'A' (shift+a) opens AI/Action menu
         bindings.insert(
             KeyAction::OpenActionMenu,
-            KeyBinding::new(egui::Key::A, KeyAction::OpenActionMenu.default_context())
-                .with_shift(),
+            KeyBinding::new(egui::Key::A, KeyAction::OpenActionMenu.default_context()).with_shift(),
         );
         // Detail tab menu: 'r' opens detail tab picker
         bindings.insert(
@@ -2344,7 +2379,10 @@ impl Default for KeyBindings {
         // '/' to switch to filter mode (vim-style search)
         bindings.insert(
             KeyAction::SwitchToFilterMode,
-            KeyBinding::new(egui::Key::Slash, KeyAction::SwitchToFilterMode.default_context()),
+            KeyBinding::new(
+                egui::Key::Slash,
+                KeyAction::SwitchToFilterMode.default_context(),
+            ),
         );
         // 'v' to open view picker
         bindings.insert(
@@ -2360,8 +2398,11 @@ impl Default for KeyBindings {
         // '?' (Shift+/) to show keyboard help
         bindings.insert(
             KeyAction::ShowKeyboardHelp,
-            KeyBinding::new(egui::Key::Slash, KeyAction::ShowKeyboardHelp.default_context())
-                .with_shift(),
+            KeyBinding::new(
+                egui::Key::Slash,
+                KeyAction::ShowKeyboardHelp.default_context(),
+            )
+            .with_shift(),
         );
         Self { bindings }
     }
@@ -2683,7 +2724,10 @@ impl UserSettings {
         if let Ok(entries) = std::fs::read_dir(&themes_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.extension().map_or(false, |ext| ext == "yaml" || ext == "yml") {
+                if path
+                    .extension()
+                    .map_or(false, |ext| ext == "yaml" || ext == "yml")
+                {
                     if let Ok(contents) = std::fs::read_to_string(&path) {
                         if let Ok(theme) = serde_yaml::from_str::<CustomTheme>(&contents) {
                             themes.push(theme);
@@ -2703,9 +2747,16 @@ impl UserSettings {
         let themes_dir = Self::themes_dir();
 
         // Create a filename from the theme name (sanitize for filesystem)
-        let filename = theme.name
+        let filename = theme
+            .name
             .chars()
-            .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+            .map(|c| {
+                if c.is_alphanumeric() || c == '-' || c == '_' {
+                    c
+                } else {
+                    '_'
+                }
+            })
             .collect::<String>()
             .to_lowercase();
 
@@ -2713,8 +2764,7 @@ impl UserSettings {
 
         let yaml = serde_yaml::to_string(theme)
             .map_err(|e| format!("Failed to serialize theme: {}", e))?;
-        std::fs::write(&path, yaml)
-            .map_err(|e| format!("Failed to write theme file: {}", e))?;
+        std::fs::write(&path, yaml).map_err(|e| format!("Failed to write theme file: {}", e))?;
 
         Ok(path)
     }
@@ -2727,7 +2777,10 @@ impl UserSettings {
         if let Ok(entries) = std::fs::read_dir(&themes_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                if path.extension().map_or(false, |ext| ext == "yaml" || ext == "yml") {
+                if path
+                    .extension()
+                    .map_or(false, |ext| ext == "yaml" || ext == "yml")
+                {
                     if let Ok(contents) = std::fs::read_to_string(&path) {
                         if let Ok(theme) = serde_yaml::from_str::<CustomTheme>(&contents) {
                             if theme.name == theme_name {
@@ -2767,7 +2820,10 @@ impl UserSettings {
             for action in KeyAction::all() {
                 if !settings.keybindings.bindings.contains_key(action) {
                     if let Some(binding) = default_bindings.bindings.get(action) {
-                        settings.keybindings.bindings.insert(*action, binding.clone());
+                        settings
+                            .keybindings
+                            .bindings
+                            .insert(*action, binding.clone());
                     }
                 }
             }
@@ -2795,7 +2851,10 @@ impl UserSettings {
             for action in KeyAction::all() {
                 if !settings.keybindings.bindings.contains_key(action) {
                     if let Some(binding) = default_bindings.bindings.get(action) {
-                        settings.keybindings.bindings.insert(*action, binding.clone());
+                        settings
+                            .keybindings
+                            .bindings
+                            .insert(*action, binding.clone());
                     }
                 }
             }
@@ -2809,7 +2868,11 @@ impl UserSettings {
             let file_themes = Self::load_file_themes();
             for file_theme in file_themes {
                 // Only add if not already present (embedded themes take precedence by name)
-                if !settings.custom_themes.iter().any(|t| t.name == file_theme.name) {
+                if !settings
+                    .custom_themes
+                    .iter()
+                    .any(|t| t.name == file_theme.name)
+                {
                     settings.custom_themes.push(file_theme);
                 }
             }
@@ -2835,14 +2898,16 @@ impl UserSettings {
                         } else if in_user_section {
                             if let Some(value) = trimmed.strip_prefix("name") {
                                 if settings.name.is_empty() {
-                                    let value = value.trim_start_matches(|c| c == ' ' || c == '=').trim();
+                                    let value =
+                                        value.trim_start_matches(|c| c == ' ' || c == '=').trim();
                                     if !value.is_empty() {
                                         settings.name = value.to_string();
                                     }
                                 }
                             } else if let Some(value) = trimmed.strip_prefix("email") {
                                 if settings.email.is_empty() {
-                                    let value = value.trim_start_matches(|c| c == ' ' || c == '=').trim();
+                                    let value =
+                                        value.trim_start_matches(|c| c == ' ' || c == '=').trim();
                                     if !value.is_empty() {
                                         settings.email = value.to_string();
                                     }
@@ -2882,7 +2947,8 @@ impl UserSettings {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let path = Self::settings_path();
-            std::fs::write(&path, yaml).map_err(|e| format!("Failed to write settings file: {}", e))?;
+            std::fs::write(&path, yaml)
+                .map_err(|e| format!("Failed to write settings file: {}", e))?;
             Ok(())
         }
     }
@@ -2988,8 +3054,13 @@ impl UserSettings {
 
     /// Get sorted queue entries (by rank, then by priority using requirement lookup)
     /// Returns Vec of (QueueEntry, Option<&Requirement>) for display
-    pub fn get_sorted_queue<'a>(&'a self, requirements: &'a [Requirement]) -> Vec<(&'a QueueEntry, Option<&'a Requirement>)> {
-        let mut entries: Vec<_> = self.queue.iter()
+    pub fn get_sorted_queue<'a>(
+        &'a self,
+        requirements: &'a [Requirement],
+    ) -> Vec<(&'a QueueEntry, Option<&'a Requirement>)> {
+        let mut entries: Vec<_> = self
+            .queue
+            .iter()
             .map(|e| {
                 let req = requirements.iter().find(|r| r.id == e.requirement_id);
                 (e, req)
@@ -3001,17 +3072,27 @@ impl UserSettings {
             match a.rank.cmp(&b.rank) {
                 std::cmp::Ordering::Equal => {
                     // When ranks are equal, sort by requirement priority
-                    let a_pri = a_req.map(|r| &r.priority).unwrap_or(&RequirementPriority::Low);
-                    let b_pri = b_req.map(|r| &r.priority).unwrap_or(&RequirementPriority::Low);
+                    let a_pri = a_req
+                        .map(|r| &r.priority)
+                        .unwrap_or(&RequirementPriority::Low);
+                    let b_pri = b_req
+                        .map(|r| &r.priority)
+                        .unwrap_or(&RequirementPriority::Low);
                     // High < Medium < Low (High should come first)
                     match (a_pri, b_pri) {
-                        (RequirementPriority::High, RequirementPriority::High) => std::cmp::Ordering::Equal,
+                        (RequirementPriority::High, RequirementPriority::High) => {
+                            std::cmp::Ordering::Equal
+                        }
                         (RequirementPriority::High, _) => std::cmp::Ordering::Less,
                         (_, RequirementPriority::High) => std::cmp::Ordering::Greater,
-                        (RequirementPriority::Medium, RequirementPriority::Medium) => std::cmp::Ordering::Equal,
+                        (RequirementPriority::Medium, RequirementPriority::Medium) => {
+                            std::cmp::Ordering::Equal
+                        }
                         (RequirementPriority::Medium, _) => std::cmp::Ordering::Less,
                         (_, RequirementPriority::Medium) => std::cmp::Ordering::Greater,
-                        (RequirementPriority::Low, RequirementPriority::Low) => std::cmp::Ordering::Equal,
+                        (RequirementPriority::Low, RequirementPriority::Low) => {
+                            std::cmp::Ordering::Equal
+                        }
                     }
                 }
                 other => other,
@@ -3296,15 +3377,15 @@ enum View {
     Detail,
     Add,
     Edit,
-    OrgChart,  // Organization chart view for teams
-    KanBan,    // KanBan board view
-    Baselines, // Baseline management view
-    Timeline,  // Timeline view showing requirement changes over time
-    Planning,  // Sprint planning view for assigning items to Sprints
-    Queue,     // Personal work queue view
+    OrgChart,          // Organization chart view for teams
+    KanBan,            // KanBan board view
+    Baselines,         // Baseline management view
+    Timeline,          // Timeline view showing requirement changes over time
+    Planning,          // Sprint planning view for assigning items to Sprints
+    Queue,             // Personal work queue view
     UserQueue(String), // View another user's items (by user handle)
-    GitLabIssues, // GitLab issues view (STORY-0322)
-    Templates, // Templates/Meta view for skills, commands, hooks, prompts
+    GitLabIssues,      // GitLab issues view (STORY-0322)
+    Templates,         // Templates/Meta view for skills, commands, hooks, prompts
 }
 
 /// Layout mode defines the panel arrangement (cycles through 5 predefined layouts)
@@ -3346,11 +3427,19 @@ impl LayoutMode {
     }
 
     fn has_details(&self) -> bool {
-        matches!(self, LayoutMode::ListDetailsSide | LayoutMode::ListDetailsStacked | LayoutMode::SplitListDetails)
+        matches!(
+            self,
+            LayoutMode::ListDetailsSide
+                | LayoutMode::ListDetailsStacked
+                | LayoutMode::SplitListDetails
+        )
     }
 
     fn has_split(&self) -> bool {
-        matches!(self, LayoutMode::SplitListDetails | LayoutMode::SplitListOnly)
+        matches!(
+            self,
+            LayoutMode::SplitListDetails | LayoutMode::SplitListOnly
+        )
     }
 
     /// Get the layout to transition to when closing the details panel
@@ -3359,7 +3448,7 @@ impl LayoutMode {
             LayoutMode::ListDetailsSide | LayoutMode::ListDetailsStacked => LayoutMode::ListOnly,
             LayoutMode::SplitListDetails => LayoutMode::SplitListOnly,
             LayoutMode::SplitListOnly => LayoutMode::SplitListOnly, // Already no details
-            LayoutMode::ListOnly => LayoutMode::ListOnly, // Already no details
+            LayoutMode::ListOnly => LayoutMode::ListOnly,           // Already no details
         }
     }
 
@@ -3386,7 +3475,10 @@ impl LayoutMode {
     /// Returns true if the details panel is displayed at the bottom (stacked),
     /// false if displayed on the side (right)
     fn is_details_stacked(&self) -> bool {
-        matches!(self, LayoutMode::ListDetailsStacked | LayoutMode::SplitListDetails)
+        matches!(
+            self,
+            LayoutMode::ListDetailsStacked | LayoutMode::SplitListDetails
+        )
     }
 }
 
@@ -3394,8 +3486,8 @@ impl LayoutMode {
 #[derive(Default, Debug, PartialEq, Clone, Copy)]
 enum FocusedList {
     #[default]
-    List1,  // Main requirements list
-    List2,  // Split list (second list)
+    List1, // Main requirements list
+    List2, // Split list (second list)
 }
 
 /// Perspective defines how requirements are organized in the list
@@ -3648,11 +3740,11 @@ pub struct RequirementsApp {
     selected_idx: Option<usize>,
     filter_text: String,
     search_scope: SearchScope,
-    search_match_indices: Vec<usize>,      // Indices of requirements matching current search
-    search_current_match: Option<usize>,   // Current position in search_match_indices
-    search_focus_requested: bool,          // Request focus on search textbox next frame
-    search_history: Vec<String>,           // History of previous searches
-    search_history_idx: Option<usize>,     // Current position when navigating history
+    search_match_indices: Vec<usize>, // Indices of requirements matching current search
+    search_current_match: Option<usize>, // Current position in search_match_indices
+    search_focus_requested: bool,     // Request focus on search textbox next frame
+    search_history: Vec<String>,      // History of previous searches
+    search_history_idx: Option<usize>, // Current position when navigating history
     active_tab: DetailTab,
 
     // Form state
@@ -3727,10 +3819,10 @@ pub struct RequirementsApp {
     settings_form_show_status_icons: bool,
     settings_form_status_icons: StatusIconConfig,
     settings_form_priority_icons: PriorityIconConfig,
-    show_icon_editor: bool, // Whether to show the icon editor dialog
+    show_icon_editor: bool,          // Whether to show the icon editor dialog
     icon_editor_new_keyword: String, // For adding new status/priority keywords
-    icon_editor_new_icon: String, // Icon for new keyword
-    show_symbol_picker: bool, // Whether to show the symbol picker popup
+    icon_editor_new_icon: String,    // Icon for new keyword
+    show_symbol_picker: bool,        // Whether to show the symbol picker popup
     symbol_picker_target: Option<String>, // Which field the symbol picker is targeting
 
     // Original appearance settings for Cancel reversion (live preview support)
@@ -3750,7 +3842,7 @@ pub struct RequirementsApp {
 
     // Theme editor
     show_theme_editor: bool,
-    theme_editor_theme: CustomTheme,   // Working copy being edited
+    theme_editor_theme: CustomTheme, // Working copy being edited
     theme_editor_category: ThemeEditorCategory, // Currently selected category
     theme_editor_original_theme: Theme, // Original theme before editing (for Cancel)
 
@@ -3785,15 +3877,15 @@ pub struct RequirementsApp {
     owner_view_mode: OwnerViewMode, // Sub-hierarchy mode for ByOwner perspective
 
     // KanBan view state
-    kanban_field: KanBanField,                      // What field to use for columns
-    kanban_filter_type: Option<RequirementType>,    // Filter to single type (None = all)
-    kanban_wip_limits: HashMap<String, usize>,      // WIP limits per column value
-    kanban_drag_card: Option<Uuid>,                 // Card being dragged
-    kanban_drop_column: Option<String>,             // Column being hovered for drop
-    kanban_detail_modal: Option<usize>,             // Index of requirement to show in detail modal
-    kanban_selected_column: usize,                   // Currently selected column index
-    kanban_selected_card: usize,                     // Currently selected card index within column
-    kanban_scroll_to_card: bool,                     // Auto-scroll to selected card on keyboard nav
+    kanban_field: KanBanField, // What field to use for columns
+    kanban_filter_type: Option<RequirementType>, // Filter to single type (None = all)
+    kanban_wip_limits: HashMap<String, usize>, // WIP limits per column value
+    kanban_drag_card: Option<Uuid>, // Card being dragged
+    kanban_drop_column: Option<String>, // Column being hovered for drop
+    kanban_detail_modal: Option<usize>, // Index of requirement to show in detail modal
+    kanban_selected_column: usize, // Currently selected column index
+    kanban_selected_card: usize, // Currently selected card index within column
+    kanban_scroll_to_card: bool, // Auto-scroll to selected card on keyboard nav
 
     filter_types: HashSet<RequirementType>, // Root filter: Empty = show all
     filter_features: HashSet<String>,       // Root filter: Empty = show all
@@ -3818,115 +3910,115 @@ pub struct RequirementsApp {
     drop_target: Option<usize>, // Index of requirement being hovered over
     pending_relationship: Option<(usize, usize)>, // (source_idx, target_idx) to create relationship
     pending_apply_ai_description: Option<(Uuid, String)>, // (req_id, new_description) to apply from AI suggestion
-    drag_scroll_delta: f32,     // Accumulated scroll delta during drag (for auto-scroll)
+    drag_scroll_delta: f32, // Accumulated scroll delta during drag (for auto-scroll)
 
     // Markdown rendering
     markdown_cache: CommonMarkCache,
     show_description_preview: bool, // Toggle preview mode in edit form
 
     // Layout state
-    left_panel_collapsed: bool,  // Whether left panel is manually collapsed (in form view)
-    layout_mode: LayoutMode,     // Current layout mode (cycles through 5 layouts)
-    list_panel_width: f32,       // Width of list panel in side-by-side layout (resizable)
-    timeline_panel_width: f32,   // Width of timeline panel (resizable)
-    queue_panel_width: f32,      // Width of queue panel (resizable)
-    templates_panel_width: f32,  // Width of templates panel (resizable)
-    layout_button_press_start: Option<Instant>,  // When layout button was pressed
-    show_layout_menu: bool,      // Whether to show the layout selection menu
-    layout_button_rect: Option<egui::Rect>,  // Position of layout button for popup menu
+    left_panel_collapsed: bool, // Whether left panel is manually collapsed (in form view)
+    layout_mode: LayoutMode,    // Current layout mode (cycles through 5 layouts)
+    list_panel_width: f32,      // Width of list panel in side-by-side layout (resizable)
+    timeline_panel_width: f32,  // Width of timeline panel (resizable)
+    queue_panel_width: f32,     // Width of queue panel (resizable)
+    templates_panel_width: f32, // Width of templates panel (resizable)
+    layout_button_press_start: Option<Instant>, // When layout button was pressed
+    show_layout_menu: bool,     // Whether to show the layout selection menu
+    layout_button_rect: Option<egui::Rect>, // Position of layout button for popup menu
 
     // Quick change popup (triggered by keyboard shortcuts in list view: 's' for status, 'p' for priority, 'o' for owner)
     quick_change_field: Option<QuickChangeField>, // Which field is being changed (None = popup closed)
     quick_change_selected: usize,                 // Currently highlighted option index in popup
     quick_change_target_id: Option<Uuid>,         // Requirement being modified
-    quick_change_consumed_action: bool,           // True if popup consumed a key this frame (prevents pass-through)
-    quick_change_owner_search: String,            // Search text for owner fuzzy finder
-    quick_change_feature_search: String,          // Search text for feature fuzzy finder
-    quick_change_last_letter: Option<char>,       // Last letter pressed for first-letter navigation cycling
+    quick_change_consumed_action: bool, // True if popup consumed a key this frame (prevents pass-through)
+    quick_change_owner_search: String,  // Search text for owner fuzzy finder
+    quick_change_feature_search: String, // Search text for feature fuzzy finder
+    quick_change_last_letter: Option<char>, // Last letter pressed for first-letter navigation cycling
 
     // Tag picker popup state (triggered by 't' key)
-    show_tag_picker: bool,                        // Whether tag picker popup is visible
-    tag_picker_search: String,                    // Current search/input text in tag picker
-    tag_picker_selected_tags: HashSet<String>,    // Tags selected so far (pending to be applied)
-    tag_picker_dropdown_idx: usize,               // Currently highlighted option in dropdown
+    show_tag_picker: bool,     // Whether tag picker popup is visible
+    tag_picker_search: String, // Current search/input text in tag picker
+    tag_picker_selected_tags: HashSet<String>, // Tags selected so far (pending to be applied)
+    tag_picker_dropdown_idx: usize, // Currently highlighted option in dropdown
 
     // Delete confirmation state
-    pending_delete_confirm: Option<usize>,        // Index of requirement awaiting delete confirmation
+    pending_delete_confirm: Option<usize>, // Index of requirement awaiting delete confirmation
 
     // View picker popup (triggered by 'v' key - shows list of views with keyboard shortcuts)
     show_view_picker: bool,
-    view_picker_selected: usize,  // Currently selected index in view picker (for arrow navigation)
+    view_picker_selected: usize, // Currently selected index in view picker (for arrow navigation)
 
     // Delete/Archive menu popup (triggered by 'd' key - shows delete and archive options)
     show_delete_menu: bool,
-    delete_menu_selected: usize,  // Currently selected index in delete menu (for arrow navigation)
+    delete_menu_selected: usize, // Currently selected index in delete menu (for arrow navigation)
 
     // Add menu popup (triggered by 'a' key - shows new sibling/child options)
     show_add_menu: bool,
-    add_menu_selected: usize,  // Currently selected index in add menu (for arrow navigation)
+    add_menu_selected: usize, // Currently selected index in add menu (for arrow navigation)
 
     // Action/AI menu popup (triggered by 'A'/shift+a or right-click - shows AI actions)
     show_action_menu: bool,
-    action_menu_selected: usize,  // Currently selected index in action menu (for arrow navigation)
-    context_menu_position: Option<egui::Pos2>,  // Position for right-click context menu (None = centered)
+    action_menu_selected: usize, // Currently selected index in action menu (for arrow navigation)
+    context_menu_position: Option<egui::Pos2>, // Position for right-click context menu (None = centered)
 
     // Detail tab menu popup (triggered by 'r' - shows detail tabs: AI, Description, Comments, Links, History)
     show_detail_tab_menu: bool,
-    detail_tab_menu_selected: usize,  // Currently selected index in detail tab menu (for arrow navigation)
+    detail_tab_menu_selected: usize, // Currently selected index in detail tab menu (for arrow navigation)
 
     // Queue action menu popup (triggered by 'q' key - shows queue actions: top/middle/bottom/delete/view)
     show_queue_menu: bool,
-    queue_menu_selected: usize,  // Currently selected index in queue menu (for arrow navigation)
+    queue_menu_selected: usize, // Currently selected index in queue menu (for arrow navigation)
     // Queue view state
-    queue_selected_idx: usize,   // Currently selected index in queue view
+    queue_selected_idx: usize, // Currently selected index in queue view
 
     // User queue picker popup (triggered by 'q u' - select a user to view their queue/items)
     show_user_queue_picker: bool,
-    user_queue_picker_search: String,     // Search text for fuzzy filtering
-    user_queue_picker_selected: usize,    // Currently selected index in user list
-    user_queue_selected_idx: usize,       // Currently selected index in user queue view
+    user_queue_picker_search: String, // Search text for fuzzy filtering
+    user_queue_picker_selected: usize, // Currently selected index in user list
+    user_queue_selected_idx: usize,   // Currently selected index in user queue view
 
     // Type picker popup (triggered by 'T' / shift+t - change requirement type with fuzzy search)
     show_type_picker: bool,
-    type_picker_search: String,       // Search text for fuzzy filtering
-    type_picker_selected: usize,      // Currently selected index in type list
+    type_picker_search: String,  // Search text for fuzzy filtering
+    type_picker_selected: usize, // Currently selected index in type list
 
     // Weight picker popup (triggered by 'w' - set effort/story points)
     show_weight_picker: bool,
-    weight_picker_input: String,      // Text input for weight value
+    weight_picker_input: String, // Text input for weight value
 
     // Goto picker popup (triggered by 'g' - go to requirement by ID)
     show_goto_picker: bool,
-    goto_picker_input: String,        // Text input for ID search (digits for fuzzy search)
-    goto_picker_matches: Vec<usize>,  // Indices of matching requirements
+    goto_picker_input: String, // Text input for ID search (digits for fuzzy search)
+    goto_picker_matches: Vec<usize>, // Indices of matching requirements
 
     // Keyboard shortcuts help popup (triggered by '?' key)
     show_keyboard_help: bool,
 
     // Leader key state (for '=' prefix combos like '= t' for theme)
-    leader_key_pending: Option<char>,    // The leader key that was pressed (e.g., '=')
-    leader_key_time: Option<Instant>,    // When leader key was pressed (for timeout)
+    leader_key_pending: Option<char>, // The leader key that was pressed (e.g., '=')
+    leader_key_time: Option<Instant>, // When leader key was pressed (for timeout)
 
     // Project picker popup (triggered by 'P' / Shift+P - switch between projects)
     #[cfg(target_arch = "wasm32")]
     show_project_picker: bool,
     #[cfg(target_arch = "wasm32")]
-    project_picker_selected: usize,      // Currently selected index in project list
+    project_picker_selected: usize, // Currently selected index in project list
 
     // Web Preview tab state
     web_preview_selected_url_idx: usize, // Selected URL index when multiple URLs exist
     #[cfg(target_arch = "wasm32")]
-    web_preview_iframe_loaded: bool,     // Whether the iframe has been created
+    web_preview_iframe_loaded: bool, // Whether the iframe has been created
     #[cfg(target_arch = "wasm32")]
     web_preview_current_url: Option<String>, // Currently loaded URL in iframe
 
     // Double-ESC navigation (FR-0318)
-    last_esc_press: Option<Instant>,  // Track last ESC press for double-ESC detection
+    last_esc_press: Option<Instant>, // Track last ESC press for double-ESC detection
 
     // Database change detection
-    last_db_check: Instant,           // When we last checked the file mtime
+    last_db_check: Instant, // When we last checked the file mtime
     known_db_mtime: Option<std::time::SystemTime>, // Last known modification time
-    pending_external_reload: bool,               // External changes detected while editing
+    pending_external_reload: bool, // External changes detected while editing
     external_change_detected_at: Option<Instant>, // When external change was detected
 
     // Split panel (second requirements list) - used in split layouts
@@ -3942,9 +4034,9 @@ pub struct RequirementsApp {
     split_tree_collapsed: HashMap<Uuid, bool>,
     split_selected_idx: Option<usize>,
     split_active_preset: Option<String>,
-    focused_list: FocusedList,  // Which list has focus for keyboard navigation
-    navigation_locked: bool,    // Lock navigation between both lists (sync selection)
-    scroll_to_center: bool,     // When true, scroll to center the selected item
+    focused_list: FocusedList, // Which list has focus for keyboard navigation
+    navigation_locked: bool,   // Lock navigation between both lists (sync selection)
+    scroll_to_center: bool,    // When true, scroll to center the selected item
 
     // Filter dialogs (modal)
     show_filter_dialog_list1: bool,
@@ -3994,7 +4086,7 @@ pub struct RequirementsApp {
     type_def_form_priorities: Vec<String>, // Editable list of priorities
     type_def_form_fields: Vec<CustomFieldDefinition>, // Editable list of custom fields
     show_type_def_form: bool,
-    new_status_input: String, // Input for adding new status
+    new_status_input: String,   // Input for adding new status
     new_priority_input: String, // Input for adding new priority
     // Custom field form (for adding/editing fields within type)
     editing_field_idx: Option<usize>, // Index of field being edited (None = adding new)
@@ -4033,7 +4125,7 @@ pub struct RequirementsApp {
     new_project_name: String,
     new_project_title: String,
     new_project_description: String,
-    new_project_template: String, // "current" or template name
+    new_project_template: String,     // "current" or template name
     new_project_storage_type: String, // "yaml", "sqlite", or "postgres"
     new_project_include_users: bool,
     show_switch_project_dialog: bool,
@@ -4049,99 +4141,99 @@ pub struct RequirementsApp {
     original_form_type: RequirementType,
     original_form_owner: String,
     original_form_feature: String,
-    form_feature_selected_idx: usize,  // Selected index in feature dropdown
+    form_feature_selected_idx: usize, // Selected index in feature dropdown
     original_form_tags: String,
     original_form_prefix: String,
     original_form_custom_fields: HashMap<String, String>,
 
     // AI integration state (native only - uses CLI and filesystem)
     #[cfg(not(target_arch = "wasm32"))]
-    ai_client: AiClient,                          // AI client for Claude CLI integration
-    ai_pending_action: Option<AiAction>,          // Currently running AI action
-    ai_last_result: Option<AiResult>,             // Result from last AI action
-    show_ai_results_panel: bool,                  // Whether to show AI results panel
-    ai_loading: bool,                             // True while AI request is in progress
-    deferred_ai_action: Option<AiAction>,         // Action from popup to process in main loop
+    ai_client: AiClient, // AI client for Claude CLI integration
+    ai_pending_action: Option<AiAction>, // Currently running AI action
+    ai_last_result: Option<AiResult>,    // Result from last AI action
+    show_ai_results_panel: bool,         // Whether to show AI results panel
+    ai_loading: bool,                    // True while AI request is in progress
+    deferred_ai_action: Option<AiAction>, // Action from popup to process in main loop
 
     // Background AI evaluation state (for non-blocking evaluation)
     // On WASM, AI evaluation is done synchronously (no threads available)
     #[cfg(not(target_arch = "wasm32"))]
     ai_eval_receiver: Option<mpsc::Receiver<BackgroundAiResult>>, // Channel to receive results
-    ai_eval_in_progress: Option<(Uuid, String)>,  // (req_id, spec_id) of req being evaluated
+    ai_eval_in_progress: Option<(Uuid, String)>, // (req_id, spec_id) of req being evaluated
 
     // Background Find Duplicates state (for non-blocking duplicate detection)
     // On WASM, duplicate detection is done synchronously (no threads available)
     #[cfg(not(target_arch = "wasm32"))]
     find_duplicates_receiver: Option<mpsc::Receiver<BackgroundFindDuplicatesResult>>,
-    find_duplicates_in_progress: Option<(Uuid, String)>,  // (req_id, spec_id) of req being checked
+    find_duplicates_in_progress: Option<(Uuid, String)>, // (req_id, spec_id) of req being checked
 
     // Toast notification state
-    toast_message: Option<ToastNotification>,     // Current toast message to display
+    toast_message: Option<ToastNotification>, // Current toast message to display
 
     // Theme change indicator
-    theme_change_display: Option<(String, Instant)>,  // (theme name, show until)
+    theme_change_display: Option<(String, Instant)>, // (theme name, show until)
 
     // Project scaffolding state (FR-0152) - native only (requires filesystem)
     #[cfg(not(target_arch = "wasm32"))]
-    show_scaffold_dialog: bool,                   // Whether to show the scaffolding dialog
+    show_scaffold_dialog: bool, // Whether to show the scaffolding dialog
     #[cfg(not(target_arch = "wasm32"))]
-    scaffold_config: aida_core::ScaffoldConfig,   // Scaffolding configuration
+    scaffold_config: aida_core::ScaffoldConfig, // Scaffolding configuration
     #[cfg(not(target_arch = "wasm32"))]
     scaffold_preview: Option<aida_core::ScaffoldPreview>, // Preview of artifacts to generate
     #[cfg(not(target_arch = "wasm32"))]
-    scaffold_tech_stack_input: String,            // Input for adding tech stack items
+    scaffold_tech_stack_input: String, // Input for adding tech stack items
     #[cfg(not(target_arch = "wasm32"))]
-    show_scaffold_status_dialog: bool,            // Whether to show the scaffold status dialog (FR-0261)
+    show_scaffold_status_dialog: bool, // Whether to show the scaffold status dialog (FR-0261)
     #[cfg(not(target_arch = "wasm32"))]
-    scaffold_status: Option<aida_core::ScaffoldStatus>,  // Current scaffold status result
+    scaffold_status: Option<aida_core::ScaffoldStatus>, // Current scaffold status result
 
     // AI Report Integration state - native only (requires filesystem)
     #[cfg(not(target_arch = "wasm32"))]
-    selected_ai_agent: AiAgent,                   // Currently selected AI agent for integration
+    selected_ai_agent: AiAgent, // Currently selected AI agent for integration
     #[cfg(not(target_arch = "wasm32"))]
-    ai_report_format: aida_core::ReportFormat,    // Report output format (Markdown/HTML)
+    ai_report_format: aida_core::ReportFormat, // Report output format (Markdown/HTML)
     #[cfg(not(target_arch = "wasm32"))]
-    ai_report_include_scaffold: bool,             // Include scaffold status in report
+    ai_report_include_scaffold: bool, // Include scaffold status in report
     #[cfg(not(target_arch = "wasm32"))]
-    ai_report_output_path: String,                // Output file path for report
+    ai_report_output_path: String, // Output file path for report
     #[cfg(not(target_arch = "wasm32"))]
-    ai_report_last_result: Option<String>,        // Last report generation result message
+    ai_report_last_result: Option<String>, // Last report generation result message
     #[cfg(not(target_arch = "wasm32"))]
     ai_report_generated_path: Option<std::path::PathBuf>, // Path of last generated report (for opening)
 
     // Conflict detection state (FR-0153) - native only (local file storage)
     #[cfg(not(target_arch = "wasm32"))]
-    original_timestamps: HashMap<Uuid, DateTime<Utc>>,  // Requirement timestamps when loaded
+    original_timestamps: HashMap<Uuid, DateTime<Utc>>, // Requirement timestamps when loaded
     #[cfg(not(target_arch = "wasm32"))]
-    modified_requirement_ids: HashSet<Uuid>,            // IDs of requirements modified since load
+    modified_requirement_ids: HashSet<Uuid>, // IDs of requirements modified since load
     #[cfg(not(target_arch = "wasm32"))]
-    show_conflict_dialog: bool,                         // Whether to show conflict resolution dialog
+    show_conflict_dialog: bool, // Whether to show conflict resolution dialog
     #[cfg(not(target_arch = "wasm32"))]
-    current_conflict: Option<ConflictInfo>,             // Current conflict being resolved
+    current_conflict: Option<ConflictInfo>, // Current conflict being resolved
 
     // Session tracking state (collaborative awareness) - native only
     #[cfg(not(target_arch = "wasm32"))]
-    session_id: String,                                 // Unique session ID for this instance
+    session_id: String, // Unique session ID for this instance
     // Heartbeat thread is native-only (WASM doesn't support threads)
     #[cfg(not(target_arch = "wasm32"))]
-    heartbeat_sender: Option<std::sync::mpsc::Sender<HeartbeatCommand>>,  // Channel to heartbeat thread
+    heartbeat_sender: Option<std::sync::mpsc::Sender<HeartbeatCommand>>, // Channel to heartbeat thread
     #[cfg(not(target_arch = "wasm32"))]
-    last_lock_info: Option<LockFileInfo>,               // Last known lock file state
+    last_lock_info: Option<LockFileInfo>, // Last known lock file state
     #[cfg(not(target_arch = "wasm32"))]
-    other_sessions_warning_shown: bool,                 // Whether we've shown the concurrent users warning
+    other_sessions_warning_shown: bool, // Whether we've shown the concurrent users warning
 
     // Baseline management state
     show_create_baseline_dialog: bool,
     baseline_form_name: String,
     baseline_form_description: String,
-    selected_baseline_id: Option<Uuid>,                 // Currently selected baseline for viewing
-    baseline_compare_source: Option<Uuid>,              // Source baseline for comparison
-    baseline_compare_target: Option<Uuid>,              // Target baseline (None = current state)
-    show_baseline_comparison: bool,                     // Whether to show comparison view
+    selected_baseline_id: Option<Uuid>, // Currently selected baseline for viewing
+    baseline_compare_source: Option<Uuid>, // Source baseline for comparison
+    baseline_compare_target: Option<Uuid>, // Target baseline (None = current state)
+    show_baseline_comparison: bool,     // Whether to show comparison view
 
     // Clone requirement state
     show_clone_dialog: bool,
-    clone_source_idx: Option<usize>,                    // Index of requirement being cloned
+    clone_source_idx: Option<usize>, // Index of requirement being cloned
     clone_include_tags: bool,
     clone_include_relationships: bool,
     clone_include_comments: bool,
@@ -4176,126 +4268,126 @@ pub struct RequirementsApp {
     filter_show_meta: bool,
 
     // Timeline view state
-    timeline_selected_date: Option<chrono::DateTime<chrono::Utc>>,  // Currently selected point in timeline
-    timeline_events: Vec<TimelineEvent>,                            // Cached timeline events
-    timeline_filter_author: String,                                  // Filter by author
-    timeline_filter_field: String,                                   // Filter by field name (e.g., "status")
-    timeline_selected_event_idx: Option<usize>,                     // Currently selected event
-    timeline_suppress_hover: bool,                                   // Suppress hover highlight after click/keyboard nav
-    timeline_suppress_hover_pos: Option<egui::Pos2>,                // Mouse position when hover was suppressed
-    timeline_scroll_to_event: bool,                                  // Auto-scroll to selected event (FR-0319)
+    timeline_selected_date: Option<chrono::DateTime<chrono::Utc>>, // Currently selected point in timeline
+    timeline_events: Vec<TimelineEvent>,                           // Cached timeline events
+    timeline_filter_author: String,                                // Filter by author
+    timeline_filter_field: String, // Filter by field name (e.g., "status")
+    timeline_selected_event_idx: Option<usize>, // Currently selected event
+    timeline_suppress_hover: bool, // Suppress hover highlight after click/keyboard nav
+    timeline_suppress_hover_pos: Option<egui::Pos2>, // Mouse position when hover was suppressed
+    timeline_scroll_to_event: bool, // Auto-scroll to selected event (FR-0319)
 
     // Planning view state
-    planning_collapsed_sprints: std::collections::HashSet<Uuid>,     // Collapsed sprint sections
-    planning_show_completed_sprints: bool,                           // Show archived/completed sprints
-    planning_selected_item: Option<Uuid>,                            // Currently selected item for details
-    planning_selected_sprint: Option<Uuid>,                          // Currently selected sprint for details/editing
-    planning_drag_source: Option<Uuid>,                              // Item being dragged
-    planning_drag_target_sprint: Option<Option<Uuid>>,               // Target sprint (None = Backlog)
-    planning_scroll_to_item: bool,                                   // Auto-scroll to selected item on keyboard nav
+    planning_collapsed_sprints: std::collections::HashSet<Uuid>, // Collapsed sprint sections
+    planning_show_completed_sprints: bool,                       // Show archived/completed sprints
+    planning_selected_item: Option<Uuid>, // Currently selected item for details
+    planning_selected_sprint: Option<Uuid>, // Currently selected sprint for details/editing
+    planning_drag_source: Option<Uuid>,   // Item being dragged
+    planning_drag_target_sprint: Option<Option<Uuid>>, // Target sprint (None = Backlog)
+    planning_scroll_to_item: bool,        // Auto-scroll to selected item on keyboard nav
 
     // Migration warning state (REQ-0231) - native only (local file storage)
     #[cfg(not(target_arch = "wasm32"))]
-    show_migration_warning: bool,                                    // Show migration warning dialog
+    show_migration_warning: bool, // Show migration warning dialog
     #[cfg(not(target_arch = "wasm32"))]
-    migration_warning_kind: MigrationWarningKind,                    // Type of migration warning
+    migration_warning_kind: MigrationWarningKind, // Type of migration warning
     #[cfg(not(target_arch = "wasm32"))]
-    migration_sqlite_path: Option<PathBuf>,                          // Path to SQLite database if relevant
+    migration_sqlite_path: Option<PathBuf>, // Path to SQLite database if relevant
     #[cfg(not(target_arch = "wasm32"))]
-    migration_yaml_path: Option<PathBuf>,                            // Path to YAML file for marking as export
+    migration_yaml_path: Option<PathBuf>, // Path to YAML file for marking as export
     #[cfg(not(target_arch = "wasm32"))]
-    migration_dont_show_again: bool,                                 // Checkbox state for "don't show again"
+    migration_dont_show_again: bool, // Checkbox state for "don't show again"
 
     // GitLab integration state (STORY-0322) - native only
     #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
-    gitlab_config: Option<GitLabConfig>,                             // GitLab connection configuration
+    gitlab_config: Option<GitLabConfig>, // GitLab connection configuration
     #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
-    gitlab_issues: Vec<GitLabIssue>,                                 // Cached GitLab issues
+    gitlab_issues: Vec<GitLabIssue>, // Cached GitLab issues
     #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
-    gitlab_last_fetch: Option<Instant>,                              // When issues were last fetched
+    gitlab_last_fetch: Option<Instant>, // When issues were last fetched
     #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
-    gitlab_selected_issue: Option<u64>,                              // Selected issue IID for detail view
+    gitlab_selected_issue: Option<u64>, // Selected issue IID for detail view
     #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
-    gitlab_loading: bool,                                            // True while fetching issues
+    gitlab_loading: bool, // True while fetching issues
     #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
-    gitlab_error: Option<String>,                                    // Last error message
+    gitlab_error: Option<String>, // Last error message
     #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
-    gitlab_filter_state: Option<IssueState>,                         // Filter by issue state
+    gitlab_filter_state: Option<IssueState>, // Filter by issue state
     #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
-    gitlab_filter_search: String,                                    // Search text for issues
+    gitlab_filter_search: String, // Search text for issues
     // GitLab link picker state (STORY-0323)
     #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
-    show_gitlab_link_picker: bool,                                   // Show GitLab issue link picker
+    show_gitlab_link_picker: bool, // Show GitLab issue link picker
     #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
-    gitlab_link_picker_search: String,                               // Search text in link picker
+    gitlab_link_picker_search: String, // Search text in link picker
     #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
-    gitlab_link_picker_req_id: Option<Uuid>,                         // Requirement to link the issue to
+    gitlab_link_picker_req_id: Option<Uuid>, // Requirement to link the issue to
     // GitLab create issue dialog state (STORY-0324)
     #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
-    show_create_gitlab_issue_dialog: bool,                           // Show create issue dialog
+    show_create_gitlab_issue_dialog: bool, // Show create issue dialog
     #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
-    create_gitlab_issue_req_id: Option<Uuid>,                        // Requirement to create issue from
+    create_gitlab_issue_req_id: Option<Uuid>, // Requirement to create issue from
     #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
-    create_gitlab_issue_title: String,                               // Editable title for new issue
+    create_gitlab_issue_title: String, // Editable title for new issue
     #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
-    create_gitlab_issue_description: String,                         // Editable description for new issue
+    create_gitlab_issue_description: String, // Editable description for new issue
     #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
-    create_gitlab_issue_labels: String,                              // Comma-separated labels
+    create_gitlab_issue_labels: String, // Comma-separated labels
     #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
-    create_gitlab_issue_creating: bool,                              // True while creating issue
+    create_gitlab_issue_creating: bool, // True while creating issue
     // GitLab polling state (STORY-0327)
     #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
-    gitlab_polling_enabled: bool,                                    // Whether background polling is active
+    gitlab_polling_enabled: bool, // Whether background polling is active
     #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
-    gitlab_last_poll: Option<std::time::Instant>,                    // When last poll happened
+    gitlab_last_poll: Option<std::time::Instant>, // When last poll happened
     #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
     gitlab_poll_receiver: Option<std::sync::mpsc::Receiver<GitLabPollResult>>, // Channel for poll results
     #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
-    gitlab_poll_status: Option<String>,                              // Last poll status message
+    gitlab_poll_status: Option<String>, // Last poll status message
     #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
-    gitlab_diverged_count: usize,                                    // Count of diverged sync states
+    gitlab_diverged_count: usize, // Count of diverged sync states
 
     // WASM async loading state (FR-0281) - for gRPC-Web client connection
     #[cfg(target_arch = "wasm32")]
-    wasm_grpc_client: Option<Rc<GrpcStorageClient>>,                 // gRPC-Web client for server communication
+    wasm_grpc_client: Option<Rc<GrpcStorageClient>>, // gRPC-Web client for server communication
     #[cfg(target_arch = "wasm32")]
-    wasm_pending_store: Rc<RefCell<Option<RequirementsStore>>>,      // Pending store from async load
+    wasm_pending_store: Rc<RefCell<Option<RequirementsStore>>>, // Pending store from async load
     #[cfg(target_arch = "wasm32")]
-    wasm_load_error: Rc<RefCell<Option<String>>>,                    // Error from async load
+    wasm_load_error: Rc<RefCell<Option<String>>>, // Error from async load
     #[cfg(target_arch = "wasm32")]
-    wasm_loading: bool,                                              // True while loading from server
+    wasm_loading: bool, // True while loading from server
     // WASM async save state - for create/update operations
     #[cfg(target_arch = "wasm32")]
-    wasm_pending_created_req: Rc<RefCell<Option<(uuid::Uuid, Requirement)>>>,  // (local_id, server_response)
+    wasm_pending_created_req: Rc<RefCell<Option<(uuid::Uuid, Requirement)>>>, // (local_id, server_response)
     #[cfg(target_arch = "wasm32")]
-    wasm_create_error: Rc<RefCell<Option<String>>>,                  // Error from async create
+    wasm_create_error: Rc<RefCell<Option<String>>>, // Error from async create
     #[cfg(target_arch = "wasm32")]
-    wasm_pending_updated_req: Rc<RefCell<Option<Requirement>>>,      // Pending update result from server
+    wasm_pending_updated_req: Rc<RefCell<Option<Requirement>>>, // Pending update result from server
     #[cfg(target_arch = "wasm32")]
-    wasm_update_error: Rc<RefCell<Option<String>>>,                  // Error from async update
+    wasm_update_error: Rc<RefCell<Option<String>>>, // Error from async update
     #[cfg(target_arch = "wasm32")]
-    wasm_saving: bool,                                               // True while saving to server
+    wasm_saving: bool, // True while saving to server
     #[cfg(target_arch = "wasm32")]
-    wasm_egui_ctx: egui::Context,                                    // egui context for async repaint requests
+    wasm_egui_ctx: egui::Context, // egui context for async repaint requests
     // Project selector state (WASM multi-project support)
     #[cfg(target_arch = "wasm32")]
-    wasm_projects: Rc<RefCell<Option<Vec<ProjectInfo>>>>,            // Available projects from server
+    wasm_projects: Rc<RefCell<Option<Vec<ProjectInfo>>>>, // Available projects from server
     #[cfg(target_arch = "wasm32")]
-    wasm_projects_error: Rc<RefCell<Option<String>>>,                // Error loading projects
+    wasm_projects_error: Rc<RefCell<Option<String>>>, // Error loading projects
     #[cfg(target_arch = "wasm32")]
-    wasm_projects_loading: Rc<RefCell<bool>>,                        // True while loading projects
+    wasm_projects_loading: Rc<RefCell<bool>>, // True while loading projects
     #[cfg(target_arch = "wasm32")]
-    wasm_new_project_name: String,                                   // New project name input
+    wasm_new_project_name: String, // New project name input
     #[cfg(target_arch = "wasm32")]
-    wasm_new_project_description: String,                            // New project description input
+    wasm_new_project_description: String, // New project description input
     #[cfg(target_arch = "wasm32")]
-    wasm_creating_project: Rc<RefCell<bool>>,                        // True while creating a project
+    wasm_creating_project: Rc<RefCell<bool>>, // True while creating a project
 
     // Templates view state
     #[cfg(not(target_arch = "wasm32"))]
-    templates_selected_category: String,                             // Currently selected template category
+    templates_selected_category: String, // Currently selected template category
     #[cfg(not(target_arch = "wasm32"))]
-    templates_selected_idx: Option<usize>,                           // Currently selected template index for preview
+    templates_selected_idx: Option<usize>, // Currently selected template index for preview
 }
 
 impl RequirementsApp {
@@ -4532,7 +4624,10 @@ impl RequirementsApp {
         let session_id = format!("{}-{}", std::process::id(), Uuid::new_v4());
 
         // Create unified storage client using the new storage module
-        let storage_client: Option<Box<dyn StorageClient>> = match create_storage_client(Some(server_addr), None) {
+        let storage_client: Option<Box<dyn StorageClient>> = match create_storage_client(
+            Some(server_addr),
+            None,
+        ) {
             Ok(client) => Some(client),
             Err(e) => {
                 eprintln!("WARNING: Failed to create unified storage client: {}. Using legacy remote_client.", e);
@@ -4692,10 +4787,10 @@ impl RequirementsApp {
             show_description_preview: false,
             left_panel_collapsed: false,
             layout_mode: LayoutMode::ListDetailsSide,
-            list_panel_width: 400.0,  // Default width for resizable list panel
-            timeline_panel_width: 500.0,  // Default width for timeline panel
-            queue_panel_width: 400.0,  // Default width for queue panel
-            templates_panel_width: 350.0,  // Default width for templates panel
+            list_panel_width: 400.0, // Default width for resizable list panel
+            timeline_panel_width: 500.0, // Default width for timeline panel
+            queue_panel_width: 400.0, // Default width for queue panel
+            templates_panel_width: 350.0, // Default width for templates panel
             layout_button_press_start: None,
             show_layout_menu: false,
             layout_button_rect: None,
@@ -5056,42 +5151,62 @@ impl RequirementsApp {
         // Check for migration status (REQ-0231)
         // Only check migration if no explicit file was provided
         // trace:REQ-0231 | ai:claude:high
-        let (requirements_path, migration_warning_kind, migration_sqlite_path, migration_yaml_path) = if explicit_file {
-            // User explicitly specified a file - use it directly
-            (initial_requirements_path.clone(), MigrationWarningKind::None, None, None)
-        } else {
-            match check_migration_status(&initial_requirements_path) {
-                MigrationCheck::NoMigration(path) => {
-                    (path, MigrationWarningKind::None, None, None)
-                }
-                MigrationCheck::MigratedToSqlite { yaml_path: _, sqlite_path } => {
-                    // YAML was migrated - use SQLite silently (user already acknowledged)
-                    eprintln!(
-                        "INFO: YAML file has been migrated to SQLite. Using: {}",
-                        sqlite_path.display()
-                    );
-                    // Use None for warning kind - user already said "don't show again"
-                    (sqlite_path.clone(), MigrationWarningKind::None, None, None)
-                }
-                MigrationCheck::PossibleStaleYaml { yaml_path, sqlite_path } => {
-                    // Both exist without marker - warn about potential stale data
-                    // Default to SQLite as it's likely more current
-                    eprintln!(
-                        "WARNING: Both {} and {} exist. Using SQLite. \
+        let (requirements_path, migration_warning_kind, migration_sqlite_path, migration_yaml_path) =
+            if explicit_file {
+                // User explicitly specified a file - use it directly
+                (
+                    initial_requirements_path.clone(),
+                    MigrationWarningKind::None,
+                    None,
+                    None,
+                )
+            } else {
+                match check_migration_status(&initial_requirements_path) {
+                    MigrationCheck::NoMigration(path) => {
+                        (path, MigrationWarningKind::None, None, None)
+                    }
+                    MigrationCheck::MigratedToSqlite {
+                        yaml_path: _,
+                        sqlite_path,
+                    } => {
+                        // YAML was migrated - use SQLite silently (user already acknowledged)
+                        eprintln!(
+                            "INFO: YAML file has been migrated to SQLite. Using: {}",
+                            sqlite_path.display()
+                        );
+                        // Use None for warning kind - user already said "don't show again"
+                        (sqlite_path.clone(), MigrationWarningKind::None, None, None)
+                    }
+                    MigrationCheck::PossibleStaleYaml {
+                        yaml_path,
+                        sqlite_path,
+                    } => {
+                        // Both exist without marker - warn about potential stale data
+                        // Default to SQLite as it's likely more current
+                        eprintln!(
+                            "WARNING: Both {} and {} exist. Using SQLite. \
                         If you need the YAML data, use --file explicitly.",
-                        yaml_path.display(),
-                        sqlite_path.display()
-                    );
-                    (sqlite_path.clone(), MigrationWarningKind::PossibleStaleYaml, Some(sqlite_path), Some(yaml_path))
+                            yaml_path.display(),
+                            sqlite_path.display()
+                        );
+                        (
+                            sqlite_path.clone(),
+                            MigrationWarningKind::PossibleStaleYaml,
+                            Some(sqlite_path),
+                            Some(yaml_path),
+                        )
+                    }
                 }
-            }
-        };
+            };
 
         let storage = Storage::new(&requirements_path);
         let store = match storage.load() {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("ERROR: Failed to load requirements from {:?}: {}", requirements_path, e);
+                eprintln!(
+                    "ERROR: Failed to load requirements from {:?}: {}",
+                    requirements_path, e
+                );
                 eprintln!("Creating empty store. Your data may still be in the file.");
                 RequirementsStore::new()
             }
@@ -5160,10 +5275,8 @@ impl RequirementsApp {
                     }
 
                     // Update heartbeat
-                    let _ = heartbeat_storage.update_heartbeat(
-                        &heartbeat_session_id,
-                        current_edit_lock.clone(),
-                    );
+                    let _ = heartbeat_storage
+                        .update_heartbeat(&heartbeat_session_id, current_edit_lock.clone());
                 }
             });
             heartbeat_sender
@@ -5320,10 +5433,10 @@ impl RequirementsApp {
             show_description_preview: false,
             left_panel_collapsed: false,
             layout_mode: LayoutMode::ListDetailsSide,
-            list_panel_width: 400.0,  // Default width for resizable list panel
-            timeline_panel_width: 500.0,  // Default width for timeline panel
-            queue_panel_width: 400.0,  // Default width for queue panel
-            templates_panel_width: 350.0,  // Default width for templates panel
+            list_panel_width: 400.0, // Default width for resizable list panel
+            timeline_panel_width: 500.0, // Default width for timeline panel
+            queue_panel_width: 400.0, // Default width for queue panel
+            templates_panel_width: 350.0, // Default width for templates panel
             layout_button_press_start: None,
             show_layout_menu: false,
             layout_button_rect: None,
@@ -5730,66 +5843,74 @@ impl RequirementsApp {
         let server_addr = crate::platform::web::get_query_param("server")
             .unwrap_or_else(|| "http://localhost:50051".to_string());
         let current_project = crate::platform::web::get_query_param("project");
-        log::info!("WASM: server_address = {:?}, project = {:?}", Some(&server_addr), current_project);
+        log::info!(
+            "WASM: server_address = {:?}, project = {:?}",
+            Some(&server_addr),
+            current_project
+        );
 
         // Create gRPC-Web client and shared state for async loading
         // Only connect and load if a project is selected
-        let (grpc_client, wasm_pending_store, wasm_load_error, wasm_loading) =
-            if current_project.is_some() {
-                // Project selected - connect to gRPC and load store
-                match GrpcStorageClient::connect_with_project(&server_addr, current_project.clone()) {
-                    Ok(client) => {
-                        let client = Rc::new(client);
-                        let pending_store = Rc::new(RefCell::new(None));
-                        let load_error = Rc::new(RefCell::new(None));
+        let (grpc_client, wasm_pending_store, wasm_load_error, wasm_loading) = if current_project
+            .is_some()
+        {
+            // Project selected - connect to gRPC and load store
+            match GrpcStorageClient::connect_with_project(&server_addr, current_project.clone()) {
+                Ok(client) => {
+                    let client = Rc::new(client);
+                    let pending_store = Rc::new(RefCell::new(None));
+                    let load_error = Rc::new(RefCell::new(None));
 
-                        // Spawn async task to load requirements from server
-                        {
-                            let client_clone = Rc::clone(&client);
-                            let pending_store_clone = Rc::clone(&pending_store);
-                            let load_error_clone = Rc::clone(&load_error);
-                            let ctx = cc.egui_ctx.clone();
+                    // Spawn async task to load requirements from server
+                    {
+                        let client_clone = Rc::clone(&client);
+                        let pending_store_clone = Rc::clone(&pending_store);
+                        let load_error_clone = Rc::clone(&load_error);
+                        let ctx = cc.egui_ctx.clone();
 
-                            wasm_bindgen_futures::spawn_local(async move {
-                                log::info!("WASM: Starting async load from server");
-                                match client_clone.load_async().await {
-                                    Ok(store) => {
-                                        log::info!("WASM: Successfully loaded {} requirements from server",
-                                                  store.requirements.len());
-                                        *pending_store_clone.borrow_mut() = Some(store);
-                                    }
-                                    Err(e) => {
-                                        log::error!("WASM: Failed to load from server: {}", e);
-                                        *load_error_clone.borrow_mut() = Some(format!("Failed to load: {}", e));
-                                    }
+                        wasm_bindgen_futures::spawn_local(async move {
+                            log::info!("WASM: Starting async load from server");
+                            match client_clone.load_async().await {
+                                Ok(store) => {
+                                    log::info!(
+                                        "WASM: Successfully loaded {} requirements from server",
+                                        store.requirements.len()
+                                    );
+                                    *pending_store_clone.borrow_mut() = Some(store);
                                 }
-                                // Request repaint to update UI with loaded data
-                                ctx.request_repaint();
-                            });
-                        }
+                                Err(e) => {
+                                    log::error!("WASM: Failed to load from server: {}", e);
+                                    *load_error_clone.borrow_mut() =
+                                        Some(format!("Failed to load: {}", e));
+                                }
+                            }
+                            // Request repaint to update UI with loaded data
+                            ctx.request_repaint();
+                        });
+                    }
 
-                        (Some(client), pending_store, load_error, true)
-                    }
-                    Err(e) => {
-                        log::error!("WASM: Failed to connect to server: {}", e);
-                        (
-                            None,
-                            Rc::new(RefCell::new(None)),
-                            Rc::new(RefCell::new(Some(format!("Connection failed: {}", e)))),
-                            false
-                        )
-                    }
+                    (Some(client), pending_store, load_error, true)
                 }
-            } else {
-                // No project selected - skip gRPC connection, show project selector
-                log::info!("WASM: No project selected, will show project selector");
-                (
-                    None,
-                    Rc::new(RefCell::new(None)),
-                    Rc::new(RefCell::new(None)),
-                    false
-                )
-            };
+                Err(e) => {
+                    log::error!("WASM: Failed to connect to server: {}", e);
+                    (
+                        None,
+                        Rc::new(RefCell::new(None)),
+                        Rc::new(RefCell::new(Some(format!("Connection failed: {}", e)))),
+                        false,
+                    )
+                }
+            }
+        } else {
+            // No project selected - skip gRPC connection, show project selector
+            log::info!("WASM: No project selected, will show project selector");
+            (
+                None,
+                Rc::new(RefCell::new(None)),
+                Rc::new(RefCell::new(None)),
+                false,
+            )
+        };
 
         // Create empty store (will be replaced when async load completes)
         let store = RequirementsStore::new();
@@ -5954,10 +6075,10 @@ impl RequirementsApp {
             show_description_preview: false,
             left_panel_collapsed: false,
             layout_mode: LayoutMode::ListDetailsSide,
-            list_panel_width: 400.0,  // Default width for resizable list panel
-            timeline_panel_width: 500.0,  // Default width for timeline panel
-            queue_panel_width: 400.0,  // Default width for queue panel
-            templates_panel_width: 350.0,  // Default width for templates panel
+            list_panel_width: 400.0, // Default width for resizable list panel
+            timeline_panel_width: 500.0, // Default width for timeline panel
+            queue_panel_width: 400.0, // Default width for queue panel
+            templates_panel_width: 350.0, // Default width for templates panel
             layout_button_press_start: None,
             show_layout_menu: false,
             layout_button_rect: None,
@@ -6645,27 +6766,16 @@ impl RequirementsApp {
         {
             // Serialize and save to the new path
             match serde_yaml::to_string(&self.store) {
-                Ok(yaml) => {
-                    match std::fs::write(&path, yaml) {
-                        Ok(()) => {
-                            self.message = Some((
-                                format!("Saved to: {}", path.display()),
-                                false,
-                            ));
-                        }
-                        Err(e) => {
-                            self.message = Some((
-                                format!("Failed to write file: {}", e),
-                                true,
-                            ));
-                        }
+                Ok(yaml) => match std::fs::write(&path, yaml) {
+                    Ok(()) => {
+                        self.message = Some((format!("Saved to: {}", path.display()), false));
                     }
-                }
+                    Err(e) => {
+                        self.message = Some((format!("Failed to write file: {}", e), true));
+                    }
+                },
                 Err(e) => {
-                    self.message = Some((
-                        format!("Failed to serialize: {}", e),
-                        true,
-                    ));
+                    self.message = Some((format!("Failed to serialize: {}", e), true));
                 }
             }
         }
@@ -6682,7 +6792,9 @@ impl RequirementsApp {
     #[cfg(not(target_arch = "wasm32"))]
     fn export_to_yaml(&mut self) {
         // Generate default filename based on current storage path
-        let default_name = self.storage.path()
+        let default_name = self
+            .storage
+            .path()
             .file_stem()
             .and_then(|s| s.to_str())
             .map(|s| format!("{}.yaml", s))
@@ -6697,16 +6809,10 @@ impl RequirementsApp {
             let yaml_backend = aida_core::YamlBackend::new(&path);
             match yaml_backend.save(&self.store) {
                 Ok(()) => {
-                    self.message = Some((
-                        format!("Exported to: {}", path.display()),
-                        false,
-                    ));
+                    self.message = Some((format!("Exported to: {}", path.display()), false));
                 }
                 Err(e) => {
-                    self.message = Some((
-                        format!("Failed to export: {}", e),
-                        true,
-                    ));
+                    self.message = Some((format!("Failed to export: {}", e), true));
                 }
             }
         }
@@ -6716,7 +6822,10 @@ impl RequirementsApp {
     /// Export current database to a YAML file (WASM stub)
     #[cfg(target_arch = "wasm32")]
     fn export_to_yaml(&mut self) {
-        self.message = Some(("Export to YAML is not supported in web mode".to_string(), true));
+        self.message = Some((
+            "Export to YAML is not supported in web mode".to_string(),
+            true,
+        ));
     }
 
     // trace:REQ-0231 | ai:claude:high
@@ -6726,7 +6835,11 @@ impl RequirementsApp {
         let current_path = self.storage.path().to_path_buf();
 
         // Check if already using SQLite
-        if current_path.extension().map(|e| e == "db" || e == "sqlite").unwrap_or(false) {
+        if current_path
+            .extension()
+            .map(|e| e == "db" || e == "sqlite")
+            .unwrap_or(false)
+        {
             self.message = Some((
                 "Already using SQLite database. No migration needed.".to_string(),
                 false,
@@ -6775,10 +6888,7 @@ impl RequirementsApp {
                 ));
             }
             Err(e) => {
-                self.message = Some((
-                    format!("Migration failed: {}", e),
-                    true,
-                ));
+                self.message = Some((format!("Migration failed: {}", e), true));
             }
         }
     }
@@ -6787,7 +6897,10 @@ impl RequirementsApp {
     /// Migrate current YAML database to SQLite (WASM stub)
     #[cfg(target_arch = "wasm32")]
     fn migrate_to_sqlite(&mut self) {
-        self.message = Some(("Migration to SQLite is not supported in web mode".to_string(), true));
+        self.message = Some((
+            "Migration to SQLite is not supported in web mode".to_string(),
+            true,
+        ));
     }
 
     // trace:FR-0153 | ai:claude:high
@@ -6913,7 +7026,8 @@ impl RequirementsApp {
                 screen_rect.height() - toast_height - margin,
             );
 
-            let toast_rect = egui::Rect::from_min_size(toast_pos, egui::vec2(toast_width, toast_height));
+            let toast_rect =
+                egui::Rect::from_min_size(toast_pos, egui::vec2(toast_width, toast_height));
 
             egui::Area::new(egui::Id::new("toast_notification"))
                 .fixed_pos(toast_pos)
@@ -7064,15 +7178,11 @@ impl RequirementsApp {
             .and_then(|idx| self.store.requirements.get(idx))?;
 
         // Check if selected requirement has children
-        let has_children = self
-            .store
-            .requirements
-            .iter()
-            .any(|r| {
-                r.relationships.iter().any(|rel| {
-                    rel.rel_type == RelationshipType::Parent && rel.target_id == selected_req.id
-                })
-            });
+        let has_children = self.store.requirements.iter().any(|r| {
+            r.relationships.iter().any(|rel| {
+                rel.rel_type == RelationshipType::Parent && rel.target_id == selected_req.id
+            })
+        });
 
         if has_children {
             // Selected has children: new req becomes child of selected
@@ -7157,14 +7267,16 @@ impl RequirementsApp {
         // Get the requirement and find its parent
         let (req_id, parent_id) = {
             if let Some(req) = self.store.requirements.get(req_idx) {
-                let parent_rel = req.relationships
+                let parent_rel = req
+                    .relationships
                     .iter()
                     .find(|r| r.rel_type == RelationshipType::Parent);
                 if let Some(rel) = parent_rel {
                     (req.id, rel.target_id)
                 } else {
                     // No parent - already at root level
-                    self.message = Some(("Requirement is already at root level".to_string(), false));
+                    self.message =
+                        Some(("Requirement is already at root level".to_string(), false));
                     return false;
                 }
             } else {
@@ -7173,26 +7285,39 @@ impl RequirementsApp {
         };
 
         // Find the grandparent (parent's parent), if any
-        let grandparent_id = self.store.requirements
+        let grandparent_id = self
+            .store
+            .requirements
             .iter()
             .find(|r| r.id == parent_id)
             .and_then(|parent| {
-                parent.relationships
+                parent
+                    .relationships
                     .iter()
                     .find(|r| r.rel_type == RelationshipType::Parent)
                     .map(|r| r.target_id)
             });
 
         // Get spec_id of parent for display purposes
-        let parent_spec_id = self.store.requirements
+        let parent_spec_id = self
+            .store
+            .requirements
             .iter()
             .find(|r| r.id == parent_id)
             .and_then(|r| r.spec_id.clone())
             .unwrap_or_default();
 
         // Remove the current parent relationship (bidirectional - also removes Child from parent)
-        let bidirectional = self.store.get_inverse_type(&RelationshipType::Parent).is_some();
-        if let Err(e) = self.store.remove_relationship(&req_id, &RelationshipType::Parent, &parent_id, bidirectional) {
+        let bidirectional = self
+            .store
+            .get_inverse_type(&RelationshipType::Parent)
+            .is_some();
+        if let Err(e) = self.store.remove_relationship(
+            &req_id,
+            &RelationshipType::Parent,
+            &parent_id,
+            bidirectional,
+        ) {
             self.message = Some((format!("Failed to remove parent relationship: {}", e), true));
             return false;
         }
@@ -7205,14 +7330,20 @@ impl RequirementsApp {
                 &gp_id,
                 bidirectional,
             ) {
-                self.message = Some((format!("Failed to create new parent relationship: {}", e), true));
+                self.message = Some((
+                    format!("Failed to create new parent relationship: {}", e),
+                    true,
+                ));
                 // Still partially succeeded (old parent removed), so save anyway
                 self.save();
                 return false;
             }
             self.message = Some((format!("Moved to sibling of {}", parent_spec_id), false));
         } else {
-            self.message = Some((format!("Moved to root level (was child of {})", parent_spec_id), false));
+            self.message = Some((
+                format!("Moved to root level (was child of {})", parent_spec_id),
+                false,
+            ));
         }
 
         self.save();
@@ -7236,9 +7367,7 @@ impl RequirementsApp {
             return false;
         }
 
-        let poll_interval = Duration::from_secs(
-            self.user_settings.db_poll_interval_secs as u64
-        );
+        let poll_interval = Duration::from_secs(self.user_settings.db_poll_interval_secs as u64);
 
         // Check if enough time has passed since last check
         if self.last_db_check.elapsed() < poll_interval {
@@ -7270,9 +7399,9 @@ impl RequirementsApp {
         // Remember current selection - get the requirement ID at selected index
         let selected_id = self.selected_idx.and_then(|selected| {
             let filtered = self.get_filtered_indices();
-            filtered.get(selected).and_then(|&store_idx| {
-                self.store.requirements.get(store_idx).map(|req| req.id)
-            })
+            filtered
+                .get(selected)
+                .and_then(|&store_idx| self.store.requirements.get(store_idx).map(|req| req.id))
         });
 
         // Reload from storage
@@ -7283,7 +7412,9 @@ impl RequirementsApp {
             if let Some(id) = selected_id {
                 let filtered = self.get_filtered_indices();
                 self.selected_idx = filtered.iter().position(|&store_idx| {
-                    self.store.requirements.get(store_idx)
+                    self.store
+                        .requirements
+                        .get(store_idx)
                         .map(|req| req.id == id)
                         .unwrap_or(false)
                 });
@@ -7318,7 +7449,8 @@ impl RequirementsApp {
                 self.external_change_detected_at = Some(Instant::now());
                 // Show toast notification
                 self.toast_message = Some(ToastNotification {
-                    message: "⚠️ Database changed externally. Changes will reload after editing.".to_string(),
+                    message: "⚠️ Database changed externally. Changes will reload after editing."
+                        .to_string(),
                     is_success: false,
                     show_until: Instant::now() + Duration::from_secs(5),
                 });
@@ -7336,7 +7468,8 @@ impl RequirementsApp {
                 self.pending_external_reload = true;
                 self.external_change_detected_at = Some(Instant::now());
                 self.toast_message = Some(ToastNotification {
-                    message: "⚠️ Database changed externally. Press F5 or use menu to reload.".to_string(),
+                    message: "⚠️ Database changed externally. Press F5 or use menu to reload."
+                        .to_string(),
                     is_success: false,
                     show_until: Instant::now() + Duration::from_secs(5),
                 });
@@ -7487,7 +7620,8 @@ impl RequirementsApp {
         let sanitized_tags: HashSet<String> = tags.iter().map(|t| sanitize_text(t)).collect();
         req.tags = sanitized_tags;
         // Copy custom field values (sanitized)
-        req.custom_fields = self.form_custom_fields
+        req.custom_fields = self
+            .form_custom_fields
             .iter()
             .map(|(k, v)| (sanitize_text(k), sanitize_text(v)))
             .collect();
@@ -7624,8 +7758,10 @@ impl RequirementsApp {
                     log::info!("WASM: Starting async create requirement");
                     match client_clone.create_requirement_async(&req).await {
                         Ok(created_req) => {
-                            log::info!("WASM: Successfully created requirement with spec_id: {:?}",
-                                      created_req.spec_id);
+                            log::info!(
+                                "WASM: Successfully created requirement with spec_id: {:?}",
+                                created_req.spec_id
+                            );
                             // Store the result: (local_id, server_response)
                             *pending_created.borrow_mut() = Some((local_req_id, created_req));
                         }
@@ -7646,14 +7782,22 @@ impl RequirementsApp {
                 // No gRPC client - fall back to local-only (won't sync)
                 log::warn!("WASM: No gRPC client available, requirement will not sync to server");
                 self.store.add_requirement(req);
-                let spec_id = self.store.requirements.last()
+                let spec_id = self
+                    .store
+                    .requirements
+                    .last()
                     .and_then(|r| r.spec_id.clone())
                     .unwrap_or_else(|| "N/A".to_string());
 
                 self.form_parent_id = None;
                 self.clear_form();
 
-                if let Some(idx) = self.store.requirements.iter().position(|r| r.id == new_req_id) {
+                if let Some(idx) = self
+                    .store
+                    .requirements
+                    .iter()
+                    .position(|r| r.id == new_req_id)
+                {
                     self.selected_idx = Some(idx);
                     self.scroll_to_requirement = Some(new_req_id);
                     self.current_view = View::Detail;
@@ -7661,7 +7805,10 @@ impl RequirementsApp {
                     self.current_view = View::List;
                 }
 
-                self.message = Some((format!("Requirement {} added (local only - not synced)", &spec_id), true));
+                self.message = Some((
+                    format!("Requirement {} added (local only - not synced)", &spec_id),
+                    true,
+                ));
             }
         }
     }
@@ -7674,7 +7821,8 @@ impl RequirementsApp {
         let sanitized_feature = sanitize_text(&self.form_feature);
         let sanitized_status = sanitize_text(&self.form_status_string);
         let sanitized_priority = sanitize_text(&self.form_priority_string);
-        let sanitized_custom_fields: std::collections::HashMap<String, String> = self.form_custom_fields
+        let sanitized_custom_fields: std::collections::HashMap<String, String> = self
+            .form_custom_fields
             .iter()
             .map(|(k, v)| (sanitize_text(k), sanitize_text(v)))
             .collect();
@@ -7883,15 +8031,22 @@ impl RequirementsApp {
                     self.message = Some(("Updating requirement on server...".to_string(), false));
 
                     wasm_bindgen_futures::spawn_local(async move {
-                        log::info!("WASM: Starting async update requirement {:?}", updated_req.spec_id);
+                        log::info!(
+                            "WASM: Starting async update requirement {:?}",
+                            updated_req.spec_id
+                        );
                         match client_clone.update_requirement_async(&updated_req).await {
                             Ok(server_req) => {
-                                log::info!("WASM: Successfully updated requirement {:?}", server_req.spec_id);
+                                log::info!(
+                                    "WASM: Successfully updated requirement {:?}",
+                                    server_req.spec_id
+                                );
                                 *pending_updated.borrow_mut() = Some(server_req);
                             }
                             Err(e) => {
                                 log::error!("WASM: Failed to update requirement: {}", e);
-                                *update_error.borrow_mut() = Some(format!("Failed to update: {}", e));
+                                *update_error.borrow_mut() =
+                                    Some(format!("Failed to update: {}", e));
                             }
                         }
                         ctx.request_repaint();
@@ -7904,7 +8059,8 @@ impl RequirementsApp {
                     log::warn!("WASM: No gRPC client available, update will not sync to server");
                     self.clear_form();
                     self.current_view = View::Detail;
-                    self.message = Some(("Updated locally (not synced to server)".to_string(), true));
+                    self.message =
+                        Some(("Updated locally (not synced to server)".to_string(), true));
                 }
                 return;
             }
@@ -8109,15 +8265,15 @@ impl RequirementsApp {
 
                 // Layout cycle button (only show in List/Detail view, not in Add/Edit forms)
                 // Quick click cycles, long press (hold) or double-click shows menu
-                let in_form_view = self.current_view == View::Add || self.current_view == View::Edit;
+                let in_form_view =
+                    self.current_view == View::Add || self.current_view == View::Edit;
                 if !in_form_view {
                     ui.separator();
                     let layout_tooltip = format!(
                         "Layout: {} (click to cycle, double-click or hold for menu)",
                         self.layout_mode.label()
                     );
-                    let layout_button = ui.button("⊞")
-                        .on_hover_text(&layout_tooltip);
+                    let layout_button = ui.button("⊞").on_hover_text(&layout_tooltip);
 
                     // Check for double-click to show menu (and skip cycling)
                     let double_clicked = layout_button.double_clicked();
@@ -8180,10 +8336,8 @@ impl RequirementsApp {
                             self.user_settings.preferred_perspective.clone();
                         self.settings_form_theme = self.user_settings.theme.clone();
                         self.settings_form_keybindings = self.user_settings.keybindings.clone();
-                        self.settings_form_show_status_icons =
-                            self.user_settings.show_status_icons;
-                        self.settings_form_status_icons =
-                            self.user_settings.status_icons.clone();
+                        self.settings_form_show_status_icons = self.user_settings.show_status_icons;
+                        self.settings_form_status_icons = self.user_settings.status_icons.clone();
                         self.settings_form_priority_icons =
                             self.user_settings.priority_icons.clone();
                         self.capturing_key_for = None;
@@ -8191,10 +8345,14 @@ impl RequirementsApp {
                         // Store original appearance settings for Cancel reversion
                         self.original_appearance_theme = self.user_settings.theme.clone();
                         self.original_appearance_font_size = self.user_settings.base_font_size;
-                        self.original_appearance_ui_heading_level = self.user_settings.ui_heading_level;
-                        self.original_appearance_show_status_icons = self.user_settings.show_status_icons;
-                        self.original_appearance_status_icons = self.user_settings.status_icons.clone();
-                        self.original_appearance_priority_icons = self.user_settings.priority_icons.clone();
+                        self.original_appearance_ui_heading_level =
+                            self.user_settings.ui_heading_level;
+                        self.original_appearance_show_status_icons =
+                            self.user_settings.show_status_icons;
+                        self.original_appearance_status_icons =
+                            self.user_settings.status_icons.clone();
+                        self.original_appearance_priority_icons =
+                            self.user_settings.priority_icons.clone();
 
                         // Load current project settings into form
                         self.settings_form_id_format = self.store.id_config.format.clone();
@@ -8227,7 +8385,11 @@ impl RequirementsApp {
                         // Show sync status with color coding
                         let (icon, color, tooltip) = if self.gitlab_poll_receiver.is_some() {
                             // Currently polling
-                            ("🔄", egui::Color32::YELLOW, "Checking GitLab for changes...".to_string())
+                            (
+                                "🔄",
+                                egui::Color32::YELLOW,
+                                "Checking GitLab for changes...".to_string(),
+                            )
                         } else if self.gitlab_diverged_count > 0 {
                             // Has diverged items
                             let tooltip = format!(
@@ -8235,13 +8397,18 @@ impl RequirementsApp {
                                 self.gitlab_diverged_count,
                                 self.gitlab_poll_status.as_deref().unwrap_or("")
                             );
-                            ("⚠", egui::Color32::from_rgb(255, 165, 0), tooltip) // Orange warning
+                            ("⚠", egui::Color32::from_rgb(255, 165, 0), tooltip)
+                        // Orange warning
                         } else if let Some(ref status) = self.gitlab_poll_status {
                             // In sync
                             ("✓", egui::Color32::from_rgb(100, 200, 100), status.clone())
                         } else {
                             // Not yet polled
-                            ("○", egui::Color32::GRAY, "GitLab sync not yet checked".to_string())
+                            (
+                                "○",
+                                egui::Color32::GRAY,
+                                "GitLab sync not yet checked".to_string(),
+                            )
                         };
 
                         // Add last poll time to tooltip
@@ -8258,7 +8425,8 @@ impl RequirementsApp {
                             tooltip
                         };
 
-                        let response = ui.label(egui::RichText::new(format!("GL:{}", icon)).color(color));
+                        let response =
+                            ui.label(egui::RichText::new(format!("GL:{}", icon)).color(color));
                         response.on_hover_text(tooltip);
                     }
 
@@ -8353,7 +8521,12 @@ impl RequirementsApp {
             "postgres" => {
                 return Err("PostgreSQL projects require a connection URL. Use 'aida --file postgres://...' from CLI.".to_string());
             }
-            _ => return Err(format!("Unknown storage type: {}", self.new_project_storage_type)),
+            _ => {
+                return Err(format!(
+                    "Unknown storage type: {}",
+                    self.new_project_storage_type
+                ))
+            }
         };
 
         // Use project name as the filename
@@ -8361,10 +8534,7 @@ impl RequirementsApp {
         let project_file = dir.join(&filename);
 
         if project_file.exists() {
-            return Err(format!(
-                "File already exists: {}",
-                project_file.display()
-            ));
+            return Err(format!("File already exists: {}", project_file.display()));
         }
 
         // Create new store from template
@@ -8425,7 +8595,8 @@ impl RequirementsApp {
                 use aida_core::db::{DatabaseBackend, SqliteBackend};
                 let backend = SqliteBackend::new(&project_file)
                     .map_err(|e| format!("Failed to create SQLite database: {}", e))?;
-                backend.save(&new_store)
+                backend
+                    .save(&new_store)
                     .map_err(|e| format!("Failed to save to SQLite: {}", e))?;
             }
             _ => unreachable!(),
@@ -8725,25 +8896,46 @@ impl RequirementsApp {
 
                 ui.checkbox(&mut self.scaffold_config.generate_claude_md, "CLAUDE.md")
                     .on_hover_text("Project instructions file for Claude Code");
-                ui.checkbox(&mut self.scaffold_config.generate_commands, ".claude/commands/")
-                    .on_hover_text("Slash commands directory for project-specific commands");
+                ui.checkbox(
+                    &mut self.scaffold_config.generate_commands,
+                    ".claude/commands/",
+                )
+                .on_hover_text("Slash commands directory for project-specific commands");
                 ui.checkbox(&mut self.scaffold_config.generate_skills, ".claude/skills/")
                     .on_hover_text("Skills directory for requirements-driven development");
 
                 if self.scaffold_config.generate_skills {
                     ui.indent("skills_indent", |ui| {
-                        ui.checkbox(&mut self.scaffold_config.include_aida_req_skill, "Include aida-req skill")
-                            .on_hover_text("Skill for adding requirements with AI evaluation");
-                        ui.checkbox(&mut self.scaffold_config.include_aida_plan_skill, "Include aida-plan skill")
-                            .on_hover_text("Skill for planning requirement implementation");
-                        ui.checkbox(&mut self.scaffold_config.include_aida_implement_skill, "Include aida-implement skill")
-                            .on_hover_text("Skill for implementing requirements with traceability");
-                        ui.checkbox(&mut self.scaffold_config.include_aida_capture_skill, "Include aida-capture skill")
-                            .on_hover_text("Skill for capturing requirements from session review");
-                        ui.checkbox(&mut self.scaffold_config.include_aida_docs_skill, "Include aida-docs skill")
-                            .on_hover_text("Skill for documentation management and generation");
-                        ui.checkbox(&mut self.scaffold_config.include_aida_release_skill, "Include aida-release skill")
-                            .on_hover_text("Skill for release management and version bumping");
+                        ui.checkbox(
+                            &mut self.scaffold_config.include_aida_req_skill,
+                            "Include aida-req skill",
+                        )
+                        .on_hover_text("Skill for adding requirements with AI evaluation");
+                        ui.checkbox(
+                            &mut self.scaffold_config.include_aida_plan_skill,
+                            "Include aida-plan skill",
+                        )
+                        .on_hover_text("Skill for planning requirement implementation");
+                        ui.checkbox(
+                            &mut self.scaffold_config.include_aida_implement_skill,
+                            "Include aida-implement skill",
+                        )
+                        .on_hover_text("Skill for implementing requirements with traceability");
+                        ui.checkbox(
+                            &mut self.scaffold_config.include_aida_capture_skill,
+                            "Include aida-capture skill",
+                        )
+                        .on_hover_text("Skill for capturing requirements from session review");
+                        ui.checkbox(
+                            &mut self.scaffold_config.include_aida_docs_skill,
+                            "Include aida-docs skill",
+                        )
+                        .on_hover_text("Skill for documentation management and generation");
+                        ui.checkbox(
+                            &mut self.scaffold_config.include_aida_release_skill,
+                            "Include aida-release skill",
+                        )
+                        .on_hover_text("Skill for release management and version bumping");
                     });
                 }
 
@@ -8781,7 +8973,9 @@ impl RequirementsApp {
                             .hint_text("e.g., Rust, egui, SQLite")
                             .desired_width(200.0),
                     );
-                    if ui.button("Add").clicked() || (response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))) {
+                    if ui.button("Add").clicked()
+                        || (response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
+                    {
                         let tech = self.scaffold_tech_stack_input.trim().to_string();
                         if !tech.is_empty() && !self.scaffold_config.tech_stack.contains(&tech) {
                             self.scaffold_config.tech_stack.push(tech);
@@ -8835,7 +9029,10 @@ impl RequirementsApp {
                     }
 
                     if !preview.overwrites.is_empty() {
-                        ui.colored_label(egui::Color32::from_rgb(180, 160, 100), "⚠ Files to overwrite:"); // Muted gold
+                        ui.colored_label(
+                            egui::Color32::from_rgb(180, 160, 100),
+                            "⚠ Files to overwrite:",
+                        ); // Muted gold
                         for file in &preview.overwrites {
                             ui.label(format!("   • {}", file.display()));
                         }
@@ -8850,9 +9047,15 @@ impl RequirementsApp {
                             for artifact in &preview.artifacts {
                                 ui.horizontal(|ui| {
                                     if artifact.exists {
-                                        ui.colored_label(egui::Color32::from_rgb(180, 160, 100), "⚠"); // Muted gold
+                                        ui.colored_label(
+                                            egui::Color32::from_rgb(180, 160, 100),
+                                            "⚠",
+                                        ); // Muted gold
                                     } else {
-                                        ui.colored_label(egui::Color32::from_rgb(100, 200, 100), "✓");
+                                        ui.colored_label(
+                                            egui::Color32::from_rgb(100, 200, 100),
+                                            "✓",
+                                        );
                                     }
                                     ui.label(artifact.path.display().to_string());
                                 });
@@ -8873,11 +9076,18 @@ impl RequirementsApp {
                 ui.horizontal(|ui| {
                     // Refresh preview button
                     if ui.button("🔄 Refresh Preview").clicked() {
-                        let project_dir = self.storage.path().parent()
+                        let project_dir = self
+                            .storage
+                            .path()
+                            .parent()
                             .map(|p| p.to_path_buf())
                             .unwrap_or_else(|| std::path::PathBuf::from("."));
                         let db_path = self.storage.path().to_path_buf();
-                        let mut scaffolder = aida_core::Scaffolder::with_database(project_dir, self.scaffold_config.clone(), db_path);
+                        let mut scaffolder = aida_core::Scaffolder::with_database(
+                            project_dir,
+                            self.scaffold_config.clone(),
+                            db_path,
+                        );
                         self.scaffold_preview = Some(scaffolder.preview(&self.store));
                     }
 
@@ -8894,15 +9104,25 @@ impl RequirementsApp {
 
         if apply_scaffolding {
             if let Some(ref preview) = self.scaffold_preview {
-                let project_dir = self.storage.path().parent()
+                let project_dir = self
+                    .storage
+                    .path()
+                    .parent()
                     .map(|p| p.to_path_buf())
                     .unwrap_or_else(|| std::path::PathBuf::from("."));
                 let db_path = self.storage.path().to_path_buf();
-                let mut scaffolder = aida_core::Scaffolder::with_database(project_dir, self.scaffold_config.clone(), db_path);
+                let mut scaffolder = aida_core::Scaffolder::with_database(
+                    project_dir,
+                    self.scaffold_config.clone(),
+                    db_path,
+                );
 
                 match scaffolder.apply(preview) {
                     Ok(files) => {
-                        self.message = Some((format!("Scaffolding complete! Created {} files", files.len()), false));
+                        self.message = Some((
+                            format!("Scaffolding complete! Created {} files", files.len()),
+                            false,
+                        ));
                         close_dialog = true;
                     }
                     Err(e) => {
@@ -8948,9 +9168,15 @@ impl RequirementsApp {
             .show(ctx, |ui| {
                 // Status summary
                 if status.is_current {
-                    ui.colored_label(egui::Color32::from_rgb(100, 200, 100), "✓ Scaffold is up to date");
+                    ui.colored_label(
+                        egui::Color32::from_rgb(100, 200, 100),
+                        "✓ Scaffold is up to date",
+                    );
                 } else {
-                    ui.colored_label(egui::Color32::from_rgb(200, 180, 100), "⚠ Scaffold drift detected");
+                    ui.colored_label(
+                        egui::Color32::from_rgb(200, 180, 100),
+                        "⚠ Scaffold drift detected",
+                    );
                 }
                 ui.add_space(10.0);
 
@@ -8970,50 +9196,62 @@ impl RequirementsApp {
 
                 // Matching files
                 if !status.matching.is_empty() {
-                    ui.collapsing(format!("✓ Matching Files ({})", status.matching.len()), |ui| {
-                        for path in &status.matching {
-                            ui.horizontal(|ui| {
-                                ui.colored_label(egui::Color32::from_rgb(100, 200, 100), "✓");
-                                ui.label(path.display().to_string());
-                            });
-                        }
-                    });
+                    ui.collapsing(
+                        format!("✓ Matching Files ({})", status.matching.len()),
+                        |ui| {
+                            for path in &status.matching {
+                                ui.horizontal(|ui| {
+                                    ui.colored_label(egui::Color32::from_rgb(100, 200, 100), "✓");
+                                    ui.label(path.display().to_string());
+                                });
+                            }
+                        },
+                    );
                 }
 
                 // Modified files
                 if !status.modified.is_empty() {
-                    ui.collapsing(format!("~ Modified Files ({})", status.modified.len()), |ui| {
-                        for (path, file_status) in &status.modified {
-                            ui.horizontal(|ui| {
-                                ui.colored_label(egui::Color32::from_rgb(200, 180, 100), "~");
-                                match file_status {
-                                    aida_core::FileStatus::Modified { expected_lines, actual_lines } => {
-                                        ui.label(format!(
-                                            "{} (expected {} lines, found {})",
-                                            path.display(),
+                    ui.collapsing(
+                        format!("~ Modified Files ({})", status.modified.len()),
+                        |ui| {
+                            for (path, file_status) in &status.modified {
+                                ui.horizontal(|ui| {
+                                    ui.colored_label(egui::Color32::from_rgb(200, 180, 100), "~");
+                                    match file_status {
+                                        aida_core::FileStatus::Modified {
                                             expected_lines,
-                                            actual_lines
-                                        ));
+                                            actual_lines,
+                                        } => {
+                                            ui.label(format!(
+                                                "{} (expected {} lines, found {})",
+                                                path.display(),
+                                                expected_lines,
+                                                actual_lines
+                                            ));
+                                        }
+                                        _ => {
+                                            ui.label(path.display().to_string());
+                                        }
                                     }
-                                    _ => {
-                                        ui.label(path.display().to_string());
-                                    }
-                                }
-                            });
-                        }
-                    });
+                                });
+                            }
+                        },
+                    );
                 }
 
                 // Missing files
                 if !status.missing.is_empty() {
-                    ui.collapsing(format!("✗ Missing Files ({})", status.missing.len()), |ui| {
-                        for path in &status.missing {
-                            ui.horizontal(|ui| {
-                                ui.colored_label(egui::Color32::from_rgb(200, 100, 100), "✗");
-                                ui.label(path.display().to_string());
-                            });
-                        }
-                    });
+                    ui.collapsing(
+                        format!("✗ Missing Files ({})", status.missing.len()),
+                        |ui| {
+                            for path in &status.missing {
+                                ui.horizontal(|ui| {
+                                    ui.colored_label(egui::Color32::from_rgb(200, 100, 100), "✗");
+                                    ui.label(path.display().to_string());
+                                });
+                            }
+                        },
+                    );
                 }
 
                 // Extra files
@@ -9124,10 +9362,12 @@ impl RequirementsApp {
                                             "External change:",
                                         );
                                         ui.add(
-                                            egui::TextEdit::multiline(&mut field.disk_value.clone())
-                                                .desired_rows(2)
-                                                .desired_width(250.0)
-                                                .interactive(false),
+                                            egui::TextEdit::multiline(
+                                                &mut field.disk_value.clone(),
+                                            )
+                                            .desired_rows(2)
+                                            .desired_width(250.0)
+                                            .interactive(false),
                                         );
                                         ui.end_row();
                                     });
@@ -9163,7 +9403,9 @@ impl RequirementsApp {
 
                     if ui
                         .button("🔀 Merge")
-                        .on_hover_text("Keep your field changes, merge comments/history/relationships")
+                        .on_hover_text(
+                            "Keep your field changes, merge comments/history/relationships",
+                        )
                         .clicked()
                     {
                         resolution = Some(ConflictResolution::Merge);
@@ -9184,10 +9426,8 @@ impl RequirementsApp {
                     self.store = new_store;
                     self.original_timestamps = Storage::get_requirement_timestamps(&self.store);
                     self.modified_requirement_ids.remove(&req_id);
-                    self.message = Some((
-                        format!("Conflict resolved for {}", conflict.spec_id),
-                        false,
-                    ));
+                    self.message =
+                        Some((format!("Conflict resolved for {}", conflict.spec_id), false));
                     close_dialog = true;
                 }
                 Err(e) => {
@@ -9246,13 +9486,21 @@ impl RequirementsApp {
                 if let Some(ref sqlite_path) = self.migration_sqlite_path {
                     ui.horizontal(|ui| {
                         ui.label("Using:");
-                        ui.monospace(sqlite_path.file_name().unwrap_or_default().to_string_lossy());
+                        ui.monospace(
+                            sqlite_path
+                                .file_name()
+                                .unwrap_or_default()
+                                .to_string_lossy(),
+                        );
                     });
                     ui.add_space(4.0);
                 }
 
                 // Checkbox for "don't show again"
-                ui.checkbox(&mut self.migration_dont_show_again, "Do not show this warning again");
+                ui.checkbox(
+                    &mut self.migration_dont_show_again,
+                    "Do not show this warning again",
+                );
                 ui.add_space(4.0);
 
                 ui.separator();
@@ -9280,7 +9528,8 @@ impl RequirementsApp {
                         if let Ok(content) = std::fs::read_to_string(yaml_path) {
                             // Check first few lines for the marker (not the whole file,
                             // as it might appear in nested content)
-                            let first_lines: String = content.lines().take(5).collect::<Vec<_>>().join("\n");
+                            let first_lines: String =
+                                content.lines().take(5).collect::<Vec<_>>().join("\n");
                             if !first_lines.contains("migrated_to:") {
                                 // Add the migrated_to marker at the beginning
                                 let marker = format!(
@@ -9358,24 +9607,22 @@ impl RequirementsApp {
             .max_height(max_size.y)
             .scroll([false, true])
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-            .show(ctx, |ui| {
-                match self.import_dialog_phase {
-                    ImportDialogPhase::SelectFile => {
-                        self.show_import_select_file(ui, &mut close_dialog);
-                    }
-                    ImportDialogPhase::Validation => {
-                        self.show_import_validation(ui, &mut close_dialog);
-                    }
-                    ImportDialogPhase::Configuration => {
-                        self.show_import_configuration(ui, &mut close_dialog);
-                    }
-                    ImportDialogPhase::Importing => {
-                        ui.heading("Import in progress...");
-                        ui.spinner();
-                    }
-                    ImportDialogPhase::Summary => {
-                        self.show_import_summary(ui, &mut close_dialog);
-                    }
+            .show(ctx, |ui| match self.import_dialog_phase {
+                ImportDialogPhase::SelectFile => {
+                    self.show_import_select_file(ui, &mut close_dialog);
+                }
+                ImportDialogPhase::Validation => {
+                    self.show_import_validation(ui, &mut close_dialog);
+                }
+                ImportDialogPhase::Configuration => {
+                    self.show_import_configuration(ui, &mut close_dialog);
+                }
+                ImportDialogPhase::Importing => {
+                    ui.heading("Import in progress...");
+                    ui.spinner();
+                }
+                ImportDialogPhase::Summary => {
+                    self.show_import_summary(ui, &mut close_dialog);
                 }
             });
 
@@ -9417,7 +9664,10 @@ impl RequirementsApp {
             }
             #[cfg(target_arch = "wasm32")]
             if ui.button("📂 Browse...").clicked() {
-                self.message = Some(("File browsing is not supported in web mode".to_string(), true));
+                self.message = Some((
+                    "File browsing is not supported in web mode".to_string(),
+                    true,
+                ));
             }
 
             if self.import_source_path.is_some() {
@@ -9469,16 +9719,25 @@ impl RequirementsApp {
         // Summary stats
         ui.horizontal(|ui| {
             ui.label("Total records:");
-            ui.strong(format!("{}", validation.valid_record_count + validation.problematic_record_count));
+            ui.strong(format!(
+                "{}",
+                validation.valid_record_count + validation.problematic_record_count
+            ));
         });
         ui.horizontal(|ui| {
             ui.label("Valid records:");
-            ui.colored_label(egui::Color32::from_rgb(100, 200, 100), format!("{}", validation.valid_record_count));
+            ui.colored_label(
+                egui::Color32::from_rgb(100, 200, 100),
+                format!("{}", validation.valid_record_count),
+            );
         });
         if validation.problematic_record_count > 0 {
             ui.horizontal(|ui| {
                 ui.label("Records with issues:");
-                ui.colored_label(egui::Color32::from_rgb(200, 150, 100), format!("{}", validation.problematic_record_count));
+                ui.colored_label(
+                    egui::Color32::from_rgb(200, 150, 100),
+                    format!("{}", validation.problematic_record_count),
+                );
             });
         }
 
@@ -9564,7 +9823,13 @@ impl RequirementsApp {
         ui.group(|ui| {
             ui.horizontal(|ui| {
                 ui.strong("Unknown Types:");
-                ui.label(format!("({} found)", self.import_validation.as_ref().map(|v| v.unknown_type_count()).unwrap_or(0)));
+                ui.label(format!(
+                    "({} found)",
+                    self.import_validation
+                        .as_ref()
+                        .map(|v| v.unknown_type_count())
+                        .unwrap_or(0)
+                ));
             });
             ui.horizontal(|ui| {
                 ui.label("Action:");
@@ -9596,7 +9861,13 @@ impl RequirementsApp {
         ui.group(|ui| {
             ui.horizontal(|ui| {
                 ui.strong("Unknown Statuses:");
-                ui.label(format!("({} found)", self.import_validation.as_ref().map(|v| v.unknown_status_count()).unwrap_or(0)));
+                ui.label(format!(
+                    "({} found)",
+                    self.import_validation
+                        .as_ref()
+                        .map(|v| v.unknown_status_count())
+                        .unwrap_or(0)
+                ));
             });
             ui.horizontal(|ui| {
                 ui.label("Action:");
@@ -9625,7 +9896,10 @@ impl RequirementsApp {
         ui.add_space(10.0);
 
         // Backup option
-        ui.checkbox(&mut self.import_config.create_backup, "Create backup before import");
+        ui.checkbox(
+            &mut self.import_config.create_backup,
+            "Create backup before import",
+        );
         if self.import_config.create_backup {
             ui.small("Backup will be saved to requirements.yaml.backup");
         }
@@ -9646,8 +9920,10 @@ impl RequirementsApp {
         }
         if ui.input(|i| i.key_pressed(egui::Key::C)) {
             // Toggle convert for all
-            self.import_config.unknown_type_resolution = aida_core::IssueResolution::ConvertToDefault;
-            self.import_config.unknown_status_resolution = aida_core::IssueResolution::ConvertToDefault;
+            self.import_config.unknown_type_resolution =
+                aida_core::IssueResolution::ConvertToDefault;
+            self.import_config.unknown_status_resolution =
+                aida_core::IssueResolution::ConvertToDefault;
         }
         if ui.input(|i| i.key_pressed(egui::Key::A)) {
             // Set abort
@@ -9871,13 +10147,19 @@ impl RequirementsApp {
 
                 // List requirements (folders first, then others)
                 let filter_lower = self.export_tree_filter.to_lowercase();
-                let mut candidates: Vec<_> = self.store.requirements.iter()
+                let mut candidates: Vec<_> = self
+                    .store
+                    .requirements
+                    .iter()
                     .filter(|r| {
                         if filter_lower.is_empty() {
                             true
                         } else {
                             r.title.to_lowercase().contains(&filter_lower)
-                                || r.spec_id.as_ref().map(|s| s.to_lowercase().contains(&filter_lower)).unwrap_or(false)
+                                || r.spec_id
+                                    .as_ref()
+                                    .map(|s| s.to_lowercase().contains(&filter_lower))
+                                    .unwrap_or(false)
                         }
                     })
                     .collect();
@@ -9894,32 +10176,34 @@ impl RequirementsApp {
                 });
 
                 // Scrollable list
-                egui::ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
-                    for req in candidates.iter().take(50) {
-                        let spec_id = req.spec_id.as_deref().unwrap_or("N/A");
-                        let is_selected = self.export_tree_selected_id == Some(req.id);
-                        let emoji = match req.req_type {
-                            RequirementType::Functional => "🔧",
-                            RequirementType::NonFunctional => "⚙️",
-                            RequirementType::System => "🖥️",
-                            RequirementType::User => "👤",
-                            RequirementType::ChangeRequest => "🔄",
-                            RequirementType::Bug => "🐛",
-                            RequirementType::Epic => "🎯",
-                            RequirementType::Story => "📖",
-                            RequirementType::Task => "✅",
-                            RequirementType::Spike => "🔬",
-                            RequirementType::Sprint => "🏃",
-                            RequirementType::Folder => "📁",
-                            RequirementType::Meta => "⚡",
-                        };
-                        let label = format!("{} {} - {}", emoji, spec_id, req.title);
+                egui::ScrollArea::vertical()
+                    .max_height(300.0)
+                    .show(ui, |ui| {
+                        for req in candidates.iter().take(50) {
+                            let spec_id = req.spec_id.as_deref().unwrap_or("N/A");
+                            let is_selected = self.export_tree_selected_id == Some(req.id);
+                            let emoji = match req.req_type {
+                                RequirementType::Functional => "🔧",
+                                RequirementType::NonFunctional => "⚙️",
+                                RequirementType::System => "🖥️",
+                                RequirementType::User => "👤",
+                                RequirementType::ChangeRequest => "🔄",
+                                RequirementType::Bug => "🐛",
+                                RequirementType::Epic => "🎯",
+                                RequirementType::Story => "📖",
+                                RequirementType::Task => "✅",
+                                RequirementType::Spike => "🔬",
+                                RequirementType::Sprint => "🏃",
+                                RequirementType::Folder => "📁",
+                                RequirementType::Meta => "⚡",
+                            };
+                            let label = format!("{} {} - {}", emoji, spec_id, req.title);
 
-                        if ui.selectable_label(is_selected, label).clicked() {
-                            self.export_tree_selected_id = Some(req.id);
+                            if ui.selectable_label(is_selected, label).clicked() {
+                                self.export_tree_selected_id = Some(req.id);
+                            }
                         }
-                    }
-                });
+                    });
 
                 ui.add_space(20.0);
                 ui.separator();
@@ -9931,7 +10215,10 @@ impl RequirementsApp {
                     }
 
                     let can_export = self.export_tree_selected_id.is_some();
-                    if ui.add_enabled(can_export, egui::Button::new("Export...")).clicked() {
+                    if ui
+                        .add_enabled(can_export, egui::Button::new("Export..."))
+                        .clicked()
+                    {
                         if let Some(selected_id) = self.export_tree_selected_id {
                             self.export_tree_to_file(selected_id);
                             close_dialog = true;
@@ -9951,7 +10238,9 @@ impl RequirementsApp {
     /// Actually perform the tree export
     fn export_tree_to_file(&mut self, root_id: Uuid) {
         // Find the requirement's spec_id for the filename
-        let spec_id = self.store.get_requirement_by_id(&root_id)
+        let spec_id = self
+            .store
+            .get_requirement_by_id(&root_id)
             .and_then(|r| r.spec_id.clone())
             .unwrap_or_else(|| root_id.to_string());
 
@@ -9967,7 +10256,8 @@ impl RequirementsApp {
             {
                 match aida_core::export::export_tree_to_file(&self.store, &spec_id, &path) {
                     Ok(()) => {
-                        self.message = Some((format!("Exported tree to {}", path.display()), false));
+                        self.message =
+                            Some((format!("Exported tree to {}", path.display()), false));
                     }
                     Err(e) => {
                         self.message = Some((format!("Export failed: {}", e), true));
@@ -9983,7 +10273,10 @@ impl RequirementsApp {
                 Ok(tree) => {
                     if let Ok(json) = serde_json::to_string_pretty(&tree) {
                         // For WASM, we'd need to use web APIs to download
-                        self.message = Some(("Tree export ready (WASM download not yet implemented)".to_string(), false));
+                        self.message = Some((
+                            "Tree export ready (WASM download not yet implemented)".to_string(),
+                            false,
+                        ));
                     }
                 }
                 Err(e) => {
@@ -10024,7 +10317,8 @@ impl RequirementsApp {
                     ui.label("Parent requirement (optional):");
                     ui.horizontal(|ui| {
                         let parent_label = if let Some(parent_id) = self.import_tree_parent_id {
-                            self.store.get_requirement_by_id(&parent_id)
+                            self.store
+                                .get_requirement_by_id(&parent_id)
                                 .and_then(|r| r.spec_id.clone())
                                 .unwrap_or_else(|| "Selected".to_string())
                         } else {
@@ -10044,9 +10338,21 @@ impl RequirementsApp {
                     // Conflict strategy
                     ui.label("On conflict:");
                     ui.horizontal(|ui| {
-                        ui.selectable_value(&mut self.import_tree_on_conflict, "skip".to_string(), "Skip");
-                        ui.selectable_value(&mut self.import_tree_on_conflict, "rename".to_string(), "Rename");
-                        ui.selectable_value(&mut self.import_tree_on_conflict, "replace".to_string(), "Replace");
+                        ui.selectable_value(
+                            &mut self.import_tree_on_conflict,
+                            "skip".to_string(),
+                            "Skip",
+                        );
+                        ui.selectable_value(
+                            &mut self.import_tree_on_conflict,
+                            "rename".to_string(),
+                            "Rename",
+                        );
+                        ui.selectable_value(
+                            &mut self.import_tree_on_conflict,
+                            "replace".to_string(),
+                            "Replace",
+                        );
                     });
                     ui.add_space(10.0);
 
@@ -10058,7 +10364,10 @@ impl RequirementsApp {
                         ui.label(format!("Imported: {} requirements", result.imported_count));
                         ui.label(format!("Skipped: {} requirements", result.skipped_count));
                         if !result.unresolved_refs.is_empty() {
-                            ui.label(format!("Unresolved references: {}", result.unresolved_refs.len()));
+                            ui.label(format!(
+                                "Unresolved references: {}",
+                                result.unresolved_refs.len()
+                            ));
                         }
                     }
 
@@ -10260,7 +10569,10 @@ impl RequirementsApp {
                         ui.set_max_width(sidebar_width);
 
                         // Style the sidebar tabs to be full-width buttons
-                        let sidebar_tab = |ui: &mut egui::Ui, current: &mut SettingsTab, target: SettingsTab, label: &str| {
+                        let sidebar_tab = |ui: &mut egui::Ui,
+                                           current: &mut SettingsTab,
+                                           target: SettingsTab,
+                                           label: &str| {
                             let is_selected = *current == target;
                             let text = egui::RichText::new(label);
                             let response = ui.selectable_label(is_selected, text);
@@ -10270,16 +10582,61 @@ impl RequirementsApp {
                         };
 
                         sidebar_tab(ui, &mut self.settings_tab, SettingsTab::User, "👤 User");
-                        sidebar_tab(ui, &mut self.settings_tab, SettingsTab::Appearance, "🎨 Appearance");
-                        sidebar_tab(ui, &mut self.settings_tab, SettingsTab::Keybindings, "⌨ Keys");
+                        sidebar_tab(
+                            ui,
+                            &mut self.settings_tab,
+                            SettingsTab::Appearance,
+                            "🎨 Appearance",
+                        );
+                        sidebar_tab(
+                            ui,
+                            &mut self.settings_tab,
+                            SettingsTab::Keybindings,
+                            "⌨ Keys",
+                        );
                         sidebar_tab(ui, &mut self.settings_tab, SettingsTab::IDs, "🔢 IDs");
-                        sidebar_tab(ui, &mut self.settings_tab, SettingsTab::Relationships, "🔗 Relations");
-                        sidebar_tab(ui, &mut self.settings_tab, SettingsTab::Reactions, "😊 Reactions");
-                        sidebar_tab(ui, &mut self.settings_tab, SettingsTab::TypeDefinitions, "📝 Types");
-                        sidebar_tab(ui, &mut self.settings_tab, SettingsTab::Members, "👥 Members");
-                        sidebar_tab(ui, &mut self.settings_tab, SettingsTab::AiPrompts, "✦ Prompts");
-                        sidebar_tab(ui, &mut self.settings_tab, SettingsTab::AiIntegration, "🤖 Agents");
-                        sidebar_tab(ui, &mut self.settings_tab, SettingsTab::Database, "🗄 Database");
+                        sidebar_tab(
+                            ui,
+                            &mut self.settings_tab,
+                            SettingsTab::Relationships,
+                            "🔗 Relations",
+                        );
+                        sidebar_tab(
+                            ui,
+                            &mut self.settings_tab,
+                            SettingsTab::Reactions,
+                            "😊 Reactions",
+                        );
+                        sidebar_tab(
+                            ui,
+                            &mut self.settings_tab,
+                            SettingsTab::TypeDefinitions,
+                            "📝 Types",
+                        );
+                        sidebar_tab(
+                            ui,
+                            &mut self.settings_tab,
+                            SettingsTab::Members,
+                            "👥 Members",
+                        );
+                        sidebar_tab(
+                            ui,
+                            &mut self.settings_tab,
+                            SettingsTab::AiPrompts,
+                            "✦ Prompts",
+                        );
+                        sidebar_tab(
+                            ui,
+                            &mut self.settings_tab,
+                            SettingsTab::AiIntegration,
+                            "🤖 Agents",
+                        );
+                        sidebar_tab(
+                            ui,
+                            &mut self.settings_tab,
+                            SettingsTab::Database,
+                            "🗄 Database",
+                        );
                     });
 
                     ui.separator();
@@ -10300,41 +10657,41 @@ impl RequirementsApp {
 
                                 // Tab content - aligned to top
                                 match self.settings_tab {
-                                SettingsTab::User => {
-                                    self.show_settings_user_tab(ui);
+                                    SettingsTab::User => {
+                                        self.show_settings_user_tab(ui);
+                                    }
+                                    SettingsTab::Appearance => {
+                                        self.show_settings_appearance_tab(ui);
+                                    }
+                                    SettingsTab::Keybindings => {
+                                        self.show_settings_keybindings_tab(ui, ctx);
+                                    }
+                                    SettingsTab::IDs => {
+                                        self.show_settings_ids_tab(ui);
+                                    }
+                                    SettingsTab::Relationships => {
+                                        self.show_settings_relationships_tab(ui);
+                                    }
+                                    SettingsTab::Reactions => {
+                                        self.show_settings_reactions_tab(ui);
+                                    }
+                                    SettingsTab::TypeDefinitions => {
+                                        self.show_settings_type_definitions_tab(ui);
+                                    }
+                                    SettingsTab::Members => {
+                                        self.show_settings_members_tab(ui);
+                                    }
+                                    SettingsTab::Database => {
+                                        self.show_settings_database_tab(ui);
+                                    }
+                                    SettingsTab::AiPrompts => {
+                                        self.show_settings_ai_prompts_tab(ui);
+                                    }
+                                    SettingsTab::AiIntegration => {
+                                        self.show_settings_ai_integration_tab(ui);
+                                    }
                                 }
-                                SettingsTab::Appearance => {
-                                    self.show_settings_appearance_tab(ui);
-                                }
-                                SettingsTab::Keybindings => {
-                                    self.show_settings_keybindings_tab(ui, ctx);
-                                }
-                                SettingsTab::IDs => {
-                                    self.show_settings_ids_tab(ui);
-                                }
-                                SettingsTab::Relationships => {
-                                    self.show_settings_relationships_tab(ui);
-                                }
-                                SettingsTab::Reactions => {
-                                    self.show_settings_reactions_tab(ui);
-                                }
-                                SettingsTab::TypeDefinitions => {
-                                    self.show_settings_type_definitions_tab(ui);
-                                }
-                                SettingsTab::Members => {
-                                    self.show_settings_members_tab(ui);
-                                }
-                                SettingsTab::Database => {
-                                    self.show_settings_database_tab(ui);
-                                }
-                                SettingsTab::AiPrompts => {
-                                    self.show_settings_ai_prompts_tab(ui);
-                                }
-                                SettingsTab::AiIntegration => {
-                                    self.show_settings_ai_integration_tab(ui);
-                                }
-                            }
-                        });
+                            });
                     });
                 });
             });
@@ -10404,15 +10761,15 @@ impl RequirementsApp {
                     self.message = Some(("Settings saved successfully".to_string(), false));
                 }
                 Err(e) => {
-                    self.message = Some((
-                        format!("Failed to save project settings: {}", e),
-                        true,
-                    ));
+                    self.message = Some((format!("Failed to save project settings: {}", e), true));
                 }
             }
             #[cfg(target_arch = "wasm32")]
             {
-                self.message = Some(("Settings saved successfully (in-memory only)".to_string(), false));
+                self.message = Some((
+                    "Settings saved successfully (in-memory only)".to_string(),
+                    false,
+                ));
             }
         }
     }
@@ -10585,7 +10942,7 @@ impl RequirementsApp {
                         // Initialize the theme editor with current theme's actual colors
                         self.theme_editor_theme = CustomTheme::from_theme(
                             &self.settings_form_theme,
-                            "My Theme".to_string()
+                            "My Theme".to_string(),
                         );
                         self.theme_editor_category = ThemeEditorCategory::default();
                         self.show_theme_editor = true;
@@ -10594,9 +10951,15 @@ impl RequirementsApp {
                     // Show delete button for custom themes
                     if let Theme::Custom(custom) = &self.settings_form_theme {
                         let theme_name = custom.name.clone();
-                        if ui.button("🗑 Delete").on_hover_text("Delete this custom theme").clicked() {
+                        if ui
+                            .button("🗑 Delete")
+                            .on_hover_text("Delete this custom theme")
+                            .clicked()
+                        {
                             // Remove from saved custom themes
-                            self.user_settings.custom_themes.retain(|t| t.name != theme_name);
+                            self.user_settings
+                                .custom_themes
+                                .retain(|t| t.name != theme_name);
                             // Switch to Dark theme
                             self.settings_form_theme = Theme::Dark;
                             self.user_settings.theme = Theme::Dark;
@@ -11492,17 +11855,23 @@ impl RequirementsApp {
                 );
 
                 // Count affected requirements
-                let affected_count = self.store.requirements.iter()
-                    .filter(|r| r.spec_id.as_ref()
-                        .map(|id| id.starts_with(&self.rename_prefix_from))
-                        .unwrap_or(false))
+                let affected_count = self
+                    .store
+                    .requirements
+                    .iter()
+                    .filter(|r| {
+                        r.spec_id
+                            .as_ref()
+                            .map(|id| id.starts_with(&self.rename_prefix_from))
+                            .unwrap_or(false)
+                    })
                     .count();
 
                 ui.add_space(10.0);
 
                 let new_prefix = self.rename_prefix_to.to_uppercase();
-                let is_valid = !new_prefix.is_empty()
-                    && new_prefix.chars().all(|c| c.is_ascii_uppercase());
+                let is_valid =
+                    !new_prefix.is_empty() && new_prefix.chars().all(|c| c.is_ascii_uppercase());
                 let is_same = new_prefix == self.rename_prefix_from;
                 let target_exists = self.store.get_used_prefixes().contains(&new_prefix)
                     && new_prefix != self.rename_prefix_from;
@@ -11510,8 +11879,10 @@ impl RequirementsApp {
                 if target_exists {
                     ui.colored_label(
                         egui::Color32::from_rgb(200, 180, 100),
-                        format!("⚠ Will merge {} requirement(s) into existing prefix '{}'",
-                            affected_count, new_prefix),
+                        format!(
+                            "⚠ Will merge {} requirement(s) into existing prefix '{}'",
+                            affected_count, new_prefix
+                        ),
                     );
                 } else if is_valid && !is_same {
                     ui.label(format!("Will rename {} requirement(s)", affected_count));
@@ -11520,7 +11891,10 @@ impl RequirementsApp {
                 ui.add_space(10.0);
                 ui.horizontal(|ui| {
                     let can_rename = is_valid && !is_same;
-                    if ui.add_enabled(can_rename, egui::Button::new("✓ Rename")).clicked() {
+                    if ui
+                        .add_enabled(can_rename, egui::Button::new("✓ Rename"))
+                        .clicked()
+                    {
                         // Perform the rename
                         self.rename_prefix(&self.rename_prefix_from.clone(), &new_prefix);
                         self.show_rename_prefix_dialog = false;
@@ -12199,11 +12573,8 @@ impl RequirementsApp {
                     "Completed".to_string(),
                     "Rejected".to_string(),
                 ];
-                self.type_def_form_priorities = vec![
-                    "High".to_string(),
-                    "Medium".to_string(),
-                    "Low".to_string(),
-                ];
+                self.type_def_form_priorities =
+                    vec!["High".to_string(), "Medium".to_string(), "Low".to_string()];
                 self.type_def_form_fields.clear();
                 self.show_type_def_form = true;
             }
@@ -12226,7 +12597,13 @@ impl RequirementsApp {
 
                 // Show stateful types
                 for type_def in &stateful_types {
-                    self.show_type_def_entry(ui, type_def, &mut type_to_edit, &mut type_to_reset, &mut type_to_delete);
+                    self.show_type_def_entry(
+                        ui,
+                        type_def,
+                        &mut type_to_edit,
+                        &mut type_to_reset,
+                        &mut type_to_delete,
+                    );
                 }
 
                 // Show stateless types section if any exist
@@ -12236,11 +12613,19 @@ impl RequirementsApp {
                     ui.add_space(10.0);
                     ui.heading("📁 Organizational Types (Stateless)");
                     ui.add_space(5.0);
-                    ui.label("Types without status/priority tracking, used for organizing requirements.");
+                    ui.label(
+                        "Types without status/priority tracking, used for organizing requirements.",
+                    );
                     ui.add_space(10.0);
 
                     for type_def in &stateless_types {
-                        self.show_type_def_entry(ui, type_def, &mut type_to_edit, &mut type_to_reset, &mut type_to_delete);
+                        self.show_type_def_entry(
+                            ui,
+                            type_def,
+                            &mut type_to_edit,
+                            &mut type_to_reset,
+                            &mut type_to_delete,
+                        );
                     }
                 }
 
@@ -12634,7 +13019,10 @@ impl RequirementsApp {
                     .desired_width(150.0),
             );
             if ui.button("Add Priority").clicked() && !self.new_priority_input.is_empty() {
-                if !self.type_def_form_priorities.contains(&self.new_priority_input) {
+                if !self
+                    .type_def_form_priorities
+                    .contains(&self.new_priority_input)
+                {
                     self.type_def_form_priorities
                         .push(self.new_priority_input.clone());
                     self.new_priority_input.clear();
@@ -13068,15 +13456,26 @@ impl RequirementsApp {
                             egui::ComboBox::from_id_salt("parent_team_select")
                                 .selected_text(&current_parent_name)
                                 .show_ui(ui, |ui| {
-                                    if ui.selectable_label(self.team_form_parent_id.is_none(), "(None)").clicked() {
+                                    if ui
+                                        .selectable_label(
+                                            self.team_form_parent_id.is_none(),
+                                            "(None)",
+                                        )
+                                        .clicked()
+                                    {
                                         self.team_form_parent_id = None;
                                     }
                                     // Clone teams to avoid borrow issues
-                                    let teams: Vec<_> = self.store.teams.iter()
+                                    let teams: Vec<_> = self
+                                        .store
+                                        .teams
+                                        .iter()
                                         .filter(|t| !t.archived)
                                         .filter(|t| {
                                             // Don't allow selecting self as parent when editing
-                                            self.editing_team_id.map(|eid| t.id != eid).unwrap_or(true)
+                                            self.editing_team_id
+                                                .map(|eid| t.id != eid)
+                                                .unwrap_or(true)
                                         })
                                         .map(|t| (t.id, t.name.clone()))
                                         .collect();
@@ -13122,7 +13521,10 @@ impl RequirementsApp {
         if let Some(parent_id) = self.team_form_parent_id {
             if let Some(editing_id) = self.editing_team_id {
                 if self.store.would_create_team_cycle(&editing_id, &parent_id) {
-                    self.message = Some(("Cannot set parent: would create circular reference".to_string(), true));
+                    self.message = Some((
+                        "Cannot set parent: would create circular reference".to_string(),
+                        true,
+                    ));
                     return;
                 }
             }
@@ -13157,7 +13559,10 @@ impl RequirementsApp {
         // Check for circular reference if parent is set
         if let Some(parent_id) = self.team_form_parent_id {
             if self.store.would_create_team_cycle(&team_id, &parent_id) {
-                self.message = Some(("Cannot set parent: would create circular reference".to_string(), true));
+                self.message = Some((
+                    "Cannot set parent: would create circular reference".to_string(),
+                    true,
+                ));
                 return;
             }
         }
@@ -13177,10 +13582,22 @@ impl RequirementsApp {
     }
 
     fn show_teams_table(&mut self, ui: &mut egui::Ui) {
-        let teams: Vec<_> = self.store.teams.iter()
+        let teams: Vec<_> = self
+            .store
+            .teams
+            .iter()
             .filter(|t| self.show_archived_teams || !t.archived)
-            .map(|t| (t.id, t.spec_id.clone(), t.name.clone(), t.description.clone(),
-                      t.parent_team_id, t.member_ids.len(), t.archived))
+            .map(|t| {
+                (
+                    t.id,
+                    t.spec_id.clone(),
+                    t.name.clone(),
+                    t.description.clone(),
+                    t.parent_team_id,
+                    t.member_ids.len(),
+                    t.archived,
+                )
+            })
             .collect();
 
         if teams.is_empty() {
@@ -13238,7 +13655,11 @@ impl RequirementsApp {
                             }
                         }
 
-                        if ui.small_button("👥").on_hover_text("Manage Members").clicked() {
+                        if ui
+                            .small_button("👥")
+                            .on_hover_text("Manage Members")
+                            .clicked()
+                        {
                             self.show_team_members_dialog = Some(*team_id);
                         }
 
@@ -13275,7 +13696,9 @@ impl RequirementsApp {
             None => return,
         };
 
-        let team_name = self.store.find_team_by_id(&team_id)
+        let team_name = self
+            .store
+            .find_team_by_id(&team_id)
             .map(|t| t.name.clone())
             .unwrap_or_default();
 
@@ -13288,7 +13711,9 @@ impl RequirementsApp {
                 // Current members
                 ui.heading("Current Members");
 
-                let member_ids: Vec<Uuid> = self.store.find_team_by_id(&team_id)
+                let member_ids: Vec<Uuid> = self
+                    .store
+                    .find_team_by_id(&team_id)
                     .map(|t| t.member_ids.clone())
                     .unwrap_or_default();
 
@@ -13297,11 +13722,17 @@ impl RequirementsApp {
                 } else {
                     for member_id in &member_ids {
                         ui.horizontal(|ui| {
-                            let user_name = self.store.find_user_by_id(member_id)
+                            let user_name = self
+                                .store
+                                .find_user_by_id(member_id)
                                 .map(|u| format!("{} (@{})", u.name, u.handle))
                                 .unwrap_or_else(|| format!("Unknown user: {}", member_id));
                             ui.label(&user_name);
-                            if ui.small_button("❌").on_hover_text("Remove from team").clicked() {
+                            if ui
+                                .small_button("❌")
+                                .on_hover_text("Remove from team")
+                                .clicked()
+                            {
                                 if let Some(team) = self.store.get_team_by_id_mut(&team_id) {
                                     team.remove_member(member_id);
                                 }
@@ -13319,7 +13750,10 @@ impl RequirementsApp {
                 ui.heading("Add Member");
 
                 // Show users not already in the team
-                let available_users: Vec<_> = self.store.users.iter()
+                let available_users: Vec<_> = self
+                    .store
+                    .users
+                    .iter()
                     .filter(|u| !u.archived)
                     .filter(|u| !member_ids.contains(&u.id))
                     .map(|u| (u.id, u.name.clone(), u.handle.clone()))
@@ -13384,7 +13818,10 @@ impl RequirementsApp {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 // Get root teams (teams without a parent)
-                let root_teams: Vec<_> = self.store.teams.iter()
+                let root_teams: Vec<_> = self
+                    .store
+                    .teams
+                    .iter()
                     .filter(|t| !t.archived && t.parent_team_id.is_none())
                     .map(|t| t.id)
                     .collect();
@@ -13393,7 +13830,10 @@ impl RequirementsApp {
                     // All teams have parents but there are teams - show all as orphans
                     ui.label("All teams have parent references. Showing all teams:");
                     ui.add_space(10.0);
-                    let all_teams: Vec<_> = self.store.teams.iter()
+                    let all_teams: Vec<_> = self
+                        .store
+                        .teams
+                        .iter()
                         .filter(|t| !t.archived)
                         .map(|t| t.id)
                         .collect();
@@ -13450,7 +13890,11 @@ impl RequirementsApp {
                     // Member count and expandable member list
                     let member_count = member_ids.len();
                     ui.horizontal(|ui| {
-                        ui.label(format!("👤 {} member{}", member_count, if member_count == 1 { "" } else { "s" }));
+                        ui.label(format!(
+                            "👤 {} member{}",
+                            member_count,
+                            if member_count == 1 { "" } else { "s" }
+                        ));
                     });
 
                     // Show members
@@ -13459,7 +13903,9 @@ impl RequirementsApp {
                         ui.separator();
                         ui.label("Members:");
                         for member_id in &member_ids {
-                            let member_name = self.store.find_user_by_id(member_id)
+                            let member_name = self
+                                .store
+                                .find_user_by_id(member_id)
                                 .map(|u| format!("• {} (@{})", u.name, u.handle))
                                 .unwrap_or_else(|| format!("• Unknown user"));
                             ui.small(&member_name);
@@ -13472,7 +13918,10 @@ impl RequirementsApp {
         ui.add_space(5.0);
 
         // Render child teams
-        let child_team_ids: Vec<_> = self.store.teams.iter()
+        let child_team_ids: Vec<_> = self
+            .store
+            .teams
+            .iter()
             .filter(|t| !t.archived && t.parent_team_id == Some(*team_id))
             .map(|t| t.id)
             .collect();
@@ -13495,10 +13944,16 @@ impl RequirementsApp {
             egui::ComboBox::from_id_salt("kanban_field_selector")
                 .selected_text(self.kanban_field.label())
                 .show_ui(ui, |ui| {
-                    if ui.selectable_label(self.kanban_field == KanBanField::Status, "Status").clicked() {
+                    if ui
+                        .selectable_label(self.kanban_field == KanBanField::Status, "Status")
+                        .clicked()
+                    {
                         self.kanban_field = KanBanField::Status;
                     }
-                    if ui.selectable_label(self.kanban_field == KanBanField::Priority, "Priority").clicked() {
+                    if ui
+                        .selectable_label(self.kanban_field == KanBanField::Priority, "Priority")
+                        .clicked()
+                    {
                         self.kanban_field = KanBanField::Priority;
                     }
                 });
@@ -13507,14 +13962,18 @@ impl RequirementsApp {
 
             // Type filter
             ui.label("Type:");
-            let type_label = self.kanban_filter_type
+            let type_label = self
+                .kanban_filter_type
                 .as_ref()
                 .map(|t| format!("{:?}", t))
                 .unwrap_or_else(|| "All".to_string());
             egui::ComboBox::from_id_salt("kanban_type_filter")
                 .selected_text(&type_label)
                 .show_ui(ui, |ui| {
-                    if ui.selectable_label(self.kanban_filter_type.is_none(), "All").clicked() {
+                    if ui
+                        .selectable_label(self.kanban_filter_type.is_none(), "All")
+                        .clicked()
+                    {
                         self.kanban_filter_type = None;
                     }
                     for req_type in [
@@ -13529,10 +13988,13 @@ impl RequirementsApp {
                         RequirementType::Task,
                         RequirementType::Spike,
                     ] {
-                        if ui.selectable_label(
-                            self.kanban_filter_type.as_ref() == Some(&req_type),
-                            format!("{:?}", req_type)
-                        ).clicked() {
+                        if ui
+                            .selectable_label(
+                                self.kanban_filter_type.as_ref() == Some(&req_type),
+                                format!("{:?}", req_type),
+                            )
+                            .clicked()
+                        {
                             self.kanban_filter_type = Some(req_type);
                         }
                     }
@@ -13594,7 +14056,10 @@ impl RequirementsApp {
             if let Some(drag_id) = self.kanban_drag_card {
                 if let Some(pos) = ui.input(|i| i.pointer.hover_pos()) {
                     // Find the spec_id of the dragged card
-                    let spec_id = self.store.requirements.iter()
+                    let spec_id = self
+                        .store
+                        .requirements
+                        .iter()
                         .find(|r| r.id == drag_id)
                         .and_then(|r| r.spec_id.clone())
                         .unwrap_or_else(|| "Card".to_string());
@@ -13633,17 +14098,45 @@ impl RequirementsApp {
             KanBanField::Status => {
                 // Use status values from the store's definitions or defaults
                 vec![
-                    KanBanColumn { value: "Draft".to_string(), label: "📝 Draft".to_string(), wip_limit: 0 },
-                    KanBanColumn { value: "Approved".to_string(), label: "✅ Approved".to_string(), wip_limit: 0 },
-                    KanBanColumn { value: "Completed".to_string(), label: "🏁 Completed".to_string(), wip_limit: 0 },
-                    KanBanColumn { value: "Rejected".to_string(), label: "❌ Rejected".to_string(), wip_limit: 0 },
+                    KanBanColumn {
+                        value: "Draft".to_string(),
+                        label: "📝 Draft".to_string(),
+                        wip_limit: 0,
+                    },
+                    KanBanColumn {
+                        value: "Approved".to_string(),
+                        label: "✅ Approved".to_string(),
+                        wip_limit: 0,
+                    },
+                    KanBanColumn {
+                        value: "Completed".to_string(),
+                        label: "🏁 Completed".to_string(),
+                        wip_limit: 0,
+                    },
+                    KanBanColumn {
+                        value: "Rejected".to_string(),
+                        label: "❌ Rejected".to_string(),
+                        wip_limit: 0,
+                    },
                 ]
             }
             KanBanField::Priority => {
                 vec![
-                    KanBanColumn { value: "High".to_string(), label: "🔴 High".to_string(), wip_limit: 0 },
-                    KanBanColumn { value: "Medium".to_string(), label: "🟡 Medium".to_string(), wip_limit: 0 },
-                    KanBanColumn { value: "Low".to_string(), label: "🟢 Low".to_string(), wip_limit: 0 },
+                    KanBanColumn {
+                        value: "High".to_string(),
+                        label: "🔴 High".to_string(),
+                        wip_limit: 0,
+                    },
+                    KanBanColumn {
+                        value: "Medium".to_string(),
+                        label: "🟡 Medium".to_string(),
+                        wip_limit: 0,
+                    },
+                    KanBanColumn {
+                        value: "Low".to_string(),
+                        label: "🟢 Low".to_string(),
+                        wip_limit: 0,
+                    },
                 ]
             }
         }
@@ -13658,9 +14151,17 @@ impl RequirementsApp {
     }
 
     /// Render a single KanBan column, returns the column rect for drop detection
-    fn render_kanban_column(&mut self, ui: &mut egui::Ui, column: &KanBanColumn, width: f32, col_idx: usize) -> egui::Rect {
+    fn render_kanban_column(
+        &mut self,
+        ui: &mut egui::Ui,
+        column: &KanBanColumn,
+        width: f32,
+        col_idx: usize,
+    ) -> egui::Rect {
         // Get requirements for this column
-        let reqs_in_column: Vec<(usize, Uuid, String, String, String)> = self.store.requirements
+        let reqs_in_column: Vec<(usize, Uuid, String, String, String)> = self
+            .store
+            .requirements
             .iter()
             .enumerate()
             .filter(|(_, r)| {
@@ -13682,17 +14183,23 @@ impl RequirementsApp {
                 let value = self.get_kanban_field_value(r);
                 value == column.value
             })
-            .map(|(idx, r)| (
-                idx,
-                r.id,
-                r.spec_id.clone().unwrap_or_default(),
-                r.title.clone(),
-                r.owner.clone(),
-            ))
+            .map(|(idx, r)| {
+                (
+                    idx,
+                    r.id,
+                    r.spec_id.clone().unwrap_or_default(),
+                    r.title.clone(),
+                    r.owner.clone(),
+                )
+            })
             .collect();
 
         let card_count = reqs_in_column.len();
-        let wip_limit = self.kanban_wip_limits.get(&column.value).copied().unwrap_or(column.wip_limit);
+        let wip_limit = self
+            .kanban_wip_limits
+            .get(&column.value)
+            .copied()
+            .unwrap_or(column.wip_limit);
         let over_wip = wip_limit > 0 && card_count > wip_limit;
         let is_dragging = self.kanban_drag_card.is_some();
         let is_drop_target = self.kanban_drop_column.as_ref() == Some(&column.value);
@@ -13746,8 +14253,20 @@ impl RequirementsApp {
                         .max_height(ui.available_height() - 30.0)
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
-                            for (card_idx, (idx, req_id, spec_id, title, owner)) in reqs_in_column.iter().enumerate() {
-                                self.render_kanban_card(ui, *idx, req_id, spec_id, title, owner, &column_value, col_idx, card_idx);
+                            for (card_idx, (idx, req_id, spec_id, title, owner)) in
+                                reqs_in_column.iter().enumerate()
+                            {
+                                self.render_kanban_card(
+                                    ui,
+                                    *idx,
+                                    req_id,
+                                    spec_id,
+                                    title,
+                                    owner,
+                                    &column_value,
+                                    col_idx,
+                                    card_idx,
+                                );
                             }
 
                             // Drop zone hint when empty
@@ -13755,7 +14274,7 @@ impl RequirementsApp {
                                 let drop_zone_height = 100.0;
                                 let (rect, _response) = ui.allocate_exact_size(
                                     egui::vec2(ui.available_width(), drop_zone_height),
-                                    egui::Sense::hover()
+                                    egui::Sense::hover(),
                                 );
 
                                 ui.painter().text(
@@ -13791,7 +14310,8 @@ impl RequirementsApp {
     ) {
         let is_this_card_dragging = self.kanban_drag_card == Some(*req_id);
         let is_selected = self.selected_idx == Some(idx);
-        let is_keyboard_selected = self.kanban_selected_column == col_idx && self.kanban_selected_card == card_idx;
+        let is_keyboard_selected =
+            self.kanban_selected_column == col_idx && self.kanban_selected_card == card_idx;
 
         // Card appearance based on state
         let card_color = if is_this_card_dragging {
@@ -13823,9 +14343,12 @@ impl RequirementsApp {
                     ui.horizontal(|ui| {
                         ui.strong(spec_id);
                         if !owner.is_empty() {
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                ui.weak(owner);
-                            });
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    ui.weak(owner);
+                                },
+                            );
                         }
                     });
 
@@ -13837,7 +14360,8 @@ impl RequirementsApp {
                     };
                     ui.label(&display_title);
                 });
-            }).response;
+            })
+            .response;
 
         // Handle interactions
         let response = response.interact(egui::Sense::click_and_drag());
@@ -13916,33 +14440,38 @@ impl RequirementsApp {
     /// Returns a Vec of (column_value, Vec of (req_index, req_id))
     fn get_kanban_cards_by_column(&self) -> Vec<(String, Vec<(usize, Uuid)>)> {
         let columns = self.get_kanban_columns();
-        columns.iter().map(|column| {
-            let cards: Vec<(usize, Uuid)> = self.store.requirements
-                .iter()
-                .enumerate()
-                .filter(|(_, r)| {
-                    // Filter by archived
-                    if r.archived && !self.show_archived {
-                        return false;
-                    }
-                    // Exclude Folder types
-                    if r.req_type == RequirementType::Folder {
-                        return false;
-                    }
-                    // Filter by type if set
-                    if let Some(ref filter_type) = self.kanban_filter_type {
-                        if &r.req_type != filter_type {
+        columns
+            .iter()
+            .map(|column| {
+                let cards: Vec<(usize, Uuid)> = self
+                    .store
+                    .requirements
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, r)| {
+                        // Filter by archived
+                        if r.archived && !self.show_archived {
                             return false;
                         }
-                    }
-                    // Filter by column value
-                    let value = self.get_kanban_field_value(r);
-                    value == column.value
-                })
-                .map(|(idx, r)| (idx, r.id))
-                .collect();
-            (column.value.clone(), cards)
-        }).collect()
+                        // Exclude Folder types
+                        if r.req_type == RequirementType::Folder {
+                            return false;
+                        }
+                        // Filter by type if set
+                        if let Some(ref filter_type) = self.kanban_filter_type {
+                            if &r.req_type != filter_type {
+                                return false;
+                            }
+                        }
+                        // Filter by column value
+                        let value = self.get_kanban_field_value(r);
+                        value == column.value
+                    })
+                    .map(|(idx, r)| (idx, r.id))
+                    .collect();
+                (column.value.clone(), cards)
+            })
+            .collect()
     }
 
     /// Handle keyboard navigation in Kanban view
@@ -13964,22 +14493,26 @@ impl RequirementsApp {
         // Check for arrow key presses (or vim keys h/j/k/l)
         // Also check for Ctrl+H/L or Ctrl+Left/Right to move card to adjacent column
         // Home/End/G/g for jumping to start/end and goto picker
-        let (left, right, up, down, space, ctrl_left, ctrl_right, home, end, shift_g, g_no_mod) = ctx.input(|i| {
-            let ctrl = i.modifiers.ctrl || i.modifiers.mac_cmd;
-            (
-                !ctrl && (i.key_pressed(egui::Key::ArrowLeft) || i.key_pressed(egui::Key::H)),
-                !ctrl && (i.key_pressed(egui::Key::ArrowRight) || i.key_pressed(egui::Key::L)),
-                i.key_pressed(egui::Key::ArrowUp) || i.key_pressed(egui::Key::K),
-                i.key_pressed(egui::Key::ArrowDown) || i.key_pressed(egui::Key::J),
-                i.key_pressed(egui::Key::Space),
-                ctrl && (i.key_pressed(egui::Key::H) || i.key_pressed(egui::Key::ArrowLeft)),
-                ctrl && (i.key_pressed(egui::Key::L) || i.key_pressed(egui::Key::ArrowRight)),
-                i.key_pressed(egui::Key::Home),
-                i.key_pressed(egui::Key::End),
-                i.key_pressed(egui::Key::G) && i.modifiers.shift,
-                i.key_pressed(egui::Key::G) && !i.modifiers.shift && !i.modifiers.ctrl && !i.modifiers.alt,
-            )
-        });
+        let (left, right, up, down, space, ctrl_left, ctrl_right, home, end, shift_g, g_no_mod) =
+            ctx.input(|i| {
+                let ctrl = i.modifiers.ctrl || i.modifiers.mac_cmd;
+                (
+                    !ctrl && (i.key_pressed(egui::Key::ArrowLeft) || i.key_pressed(egui::Key::H)),
+                    !ctrl && (i.key_pressed(egui::Key::ArrowRight) || i.key_pressed(egui::Key::L)),
+                    i.key_pressed(egui::Key::ArrowUp) || i.key_pressed(egui::Key::K),
+                    i.key_pressed(egui::Key::ArrowDown) || i.key_pressed(egui::Key::J),
+                    i.key_pressed(egui::Key::Space),
+                    ctrl && (i.key_pressed(egui::Key::H) || i.key_pressed(egui::Key::ArrowLeft)),
+                    ctrl && (i.key_pressed(egui::Key::L) || i.key_pressed(egui::Key::ArrowRight)),
+                    i.key_pressed(egui::Key::Home),
+                    i.key_pressed(egui::Key::End),
+                    i.key_pressed(egui::Key::G) && i.modifiers.shift,
+                    i.key_pressed(egui::Key::G)
+                        && !i.modifiers.shift
+                        && !i.modifiers.ctrl
+                        && !i.modifiers.alt,
+                )
+            });
 
         // 'g' opens goto picker (same as in list view)
         if g_no_mod {
@@ -14022,7 +14555,8 @@ impl RequirementsApp {
                             let new_columns = self.get_kanban_cards_by_column();
                             if let Some((_, new_cards)) = new_columns.get(new_col_idx) {
                                 // Find the card in the new column
-                                if let Some(pos) = new_cards.iter().position(|(_, id)| id == req_id) {
+                                if let Some(pos) = new_cards.iter().position(|(_, id)| id == req_id)
+                                {
                                     self.kanban_selected_card = pos;
                                 }
                             }
@@ -14055,7 +14589,8 @@ impl RequirementsApp {
                 self.kanban_selected_column = columns_data.len().saturating_sub(1);
             }
             // Clamp card index to new column
-            let cards_in_new_col = columns_data.get(self.kanban_selected_column)
+            let cards_in_new_col = columns_data
+                .get(self.kanban_selected_column)
                 .map(|(_, cards)| cards.len())
                 .unwrap_or(0);
             if cards_in_new_col > 0 {
@@ -14072,7 +14607,8 @@ impl RequirementsApp {
                 self.kanban_selected_column = 0;
             }
             // Clamp card index to new column
-            let cards_in_new_col = columns_data.get(self.kanban_selected_column)
+            let cards_in_new_col = columns_data
+                .get(self.kanban_selected_column)
                 .map(|(_, cards)| cards.len())
                 .unwrap_or(0);
             if cards_in_new_col > 0 {
@@ -14149,9 +14685,14 @@ impl RequirementsApp {
         let modal_width = (screen_rect.width() * 0.7).min(900.0).max(400.0);
         let modal_height = (screen_rect.height() * 0.8).min(700.0).max(300.0);
 
-        let title = format!("{} - {}",
+        let title = format!(
+            "{} - {}",
             req.spec_id.as_deref().unwrap_or("N/A"),
-            if req.title.len() > 50 { format!("{}...", &req.title[..47]) } else { req.title.clone() }
+            if req.title.len() > 50 {
+                format!("{}...", &req.title[..47])
+            } else {
+                req.title.clone()
+            }
         );
 
         egui::Window::new(title)
@@ -14254,7 +14795,12 @@ impl RequirementsApp {
                             ui.heading("Relationships");
                             for rel in &req.relationships {
                                 // Find the related requirement
-                                if let Some(related) = self.store.requirements.iter().find(|r| r.id == rel.target_id) {
+                                if let Some(related) = self
+                                    .store
+                                    .requirements
+                                    .iter()
+                                    .find(|r| r.id == rel.target_id)
+                                {
                                     ui.horizontal(|ui| {
                                         ui.label(format!("{:?} →", rel.rel_type));
                                         ui.strong(related.spec_id.as_deref().unwrap_or("N/A"));
@@ -14269,9 +14815,15 @@ impl RequirementsApp {
                         ui.add_space(10.0);
                         ui.separator();
                         ui.horizontal(|ui| {
-                            ui.weak(format!("Created: {}", format_local_datetime(req.created_at, "%Y-%m-%d %H:%M")));
+                            ui.weak(format!(
+                                "Created: {}",
+                                format_local_datetime(req.created_at, "%Y-%m-%d %H:%M")
+                            ));
                             ui.separator();
-                            ui.weak(format!("Modified: {}", format_local_datetime(req.modified_at, "%Y-%m-%d %H:%M")));
+                            ui.weak(format!(
+                                "Modified: {}",
+                                format_local_datetime(req.modified_at, "%Y-%m-%d %H:%M")
+                            ));
                         });
                     });
             });
@@ -14324,9 +14876,15 @@ impl RequirementsApp {
             ui.centered_and_justified(|ui| {
                 ui.vertical_centered(|ui| {
                     ui.add_space(50.0);
-                    ui.label(egui::RichText::new("No baselines created yet").size(16.0).color(egui::Color32::GRAY));
+                    ui.label(
+                        egui::RichText::new("No baselines created yet")
+                            .size(16.0)
+                            .color(egui::Color32::GRAY),
+                    );
                     ui.add_space(10.0);
-                    ui.label("Baselines are named snapshots of your requirements at a point in time.");
+                    ui.label(
+                        "Baselines are named snapshots of your requirements at a point in time.",
+                    );
                     ui.label("Use them to track releases, milestones, or approved states.");
                     ui.add_space(20.0);
                     if ui.button("➕ Create First Baseline").clicked() {
@@ -14384,21 +14942,33 @@ impl RequirementsApp {
 
                             // Git tag
                             if let Some(ref tag) = baseline.git_tag {
-                                ui.label(egui::RichText::new(tag).monospace().color(egui::Color32::from_rgb(100, 150, 200)));
+                                ui.label(
+                                    egui::RichText::new(tag)
+                                        .monospace()
+                                        .color(egui::Color32::from_rgb(100, 150, 200)),
+                                );
                             } else {
                                 ui.label(egui::RichText::new("-").color(egui::Color32::GRAY));
                             }
 
                             // Actions
                             ui.horizontal(|ui| {
-                                if ui.small_button("📊 Compare").on_hover_text("Compare with current state").clicked() {
+                                if ui
+                                    .small_button("📊 Compare")
+                                    .on_hover_text("Compare with current state")
+                                    .clicked()
+                                {
                                     self.baseline_compare_source = Some(baseline.id);
                                     self.baseline_compare_target = None; // Compare with current
                                     self.show_baseline_comparison = true;
                                 }
 
                                 if !baseline.locked {
-                                    if ui.small_button("🗑").on_hover_text("Delete baseline").clicked() {
+                                    if ui
+                                        .small_button("🗑")
+                                        .on_hover_text("Delete baseline")
+                                        .clicked()
+                                    {
                                         delete_baseline_id = Some(baseline.id);
                                     }
                                 } else {
@@ -14412,7 +14982,14 @@ impl RequirementsApp {
                             if let Some(ref desc) = baseline.description {
                                 if !desc.is_empty() {
                                     ui.label(""); // Empty first column
-                                    ui.add(egui::Label::new(egui::RichText::new(desc).italics().color(egui::Color32::GRAY)).wrap());
+                                    ui.add(
+                                        egui::Label::new(
+                                            egui::RichText::new(desc)
+                                                .italics()
+                                                .color(egui::Color32::GRAY),
+                                        )
+                                        .wrap(),
+                                    );
                                     ui.end_row();
                                 }
                             }
@@ -14441,7 +15018,10 @@ impl RequirementsApp {
                             self.show_baseline_comparison_inline(ui, baseline);
                         } else {
                             // Show requirements in this baseline
-                            ui.label(format!("{} requirements in this baseline:", baseline.requirements.len()));
+                            ui.label(format!(
+                                "{} requirements in this baseline:",
+                                baseline.requirements.len()
+                            ));
                             ui.add_space(5.0);
 
                             // Use remaining height for requirements list
@@ -14457,7 +15037,11 @@ impl RequirementsApp {
                                     for snapshot in &baseline.requirements {
                                         ui.horizontal(|ui| {
                                             if let Some(ref spec_id) = snapshot.spec_id {
-                                                ui.label(egui::RichText::new(spec_id).monospace().strong());
+                                                ui.label(
+                                                    egui::RichText::new(spec_id)
+                                                        .monospace()
+                                                        .strong(),
+                                                );
                                             }
                                             ui.label(&snapshot.title);
                                             ui.label(format!("[{:?}]", snapshot.status));
@@ -14471,7 +15055,11 @@ impl RequirementsApp {
     }
 
     /// Show comparison between baseline and current state
-    fn show_baseline_comparison_inline(&mut self, ui: &mut egui::Ui, baseline: &aida_core::Baseline) {
+    fn show_baseline_comparison_inline(
+        &mut self,
+        ui: &mut egui::Ui,
+        baseline: &aida_core::Baseline,
+    ) {
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new("Comparing with current state").strong());
             if ui.small_button("✕ Close Comparison").clicked() {
@@ -14485,16 +15073,22 @@ impl RequirementsApp {
             // Summary
             ui.horizontal(|ui| {
                 if !comparison.added.is_empty() {
-                    ui.label(egui::RichText::new(format!("➕ {} added", comparison.added.len()))
-                        .color(egui::Color32::from_rgb(100, 200, 100)));
+                    ui.label(
+                        egui::RichText::new(format!("➕ {} added", comparison.added.len()))
+                            .color(egui::Color32::from_rgb(100, 200, 100)),
+                    );
                 }
                 if !comparison.removed.is_empty() {
-                    ui.label(egui::RichText::new(format!("➖ {} removed", comparison.removed.len()))
-                        .color(egui::Color32::from_rgb(200, 100, 100)));
+                    ui.label(
+                        egui::RichText::new(format!("➖ {} removed", comparison.removed.len()))
+                            .color(egui::Color32::from_rgb(200, 100, 100)),
+                    );
                 }
                 if !comparison.modified.is_empty() {
-                    ui.label(egui::RichText::new(format!("✏ {} modified", comparison.modified.len()))
-                        .color(egui::Color32::from_rgb(200, 200, 100)));
+                    ui.label(
+                        egui::RichText::new(format!("✏ {} modified", comparison.modified.len()))
+                            .color(egui::Color32::from_rgb(200, 200, 100)),
+                    );
                 }
                 ui.label(format!("({} unchanged)", comparison.unchanged.len()));
             });
@@ -14508,7 +15102,11 @@ impl RequirementsApp {
                         if let Some(req) = self.store.requirements.iter().find(|r| &r.id == id) {
                             ui.horizontal(|ui| {
                                 if let Some(ref spec_id) = req.spec_id {
-                                    ui.label(egui::RichText::new(spec_id).monospace().color(egui::Color32::from_rgb(100, 200, 100)));
+                                    ui.label(
+                                        egui::RichText::new(spec_id)
+                                            .monospace()
+                                            .color(egui::Color32::from_rgb(100, 200, 100)),
+                                    );
                                 }
                                 ui.label(&req.title);
                             });
@@ -14519,42 +15117,61 @@ impl RequirementsApp {
 
             // Removed requirements
             if !comparison.removed.is_empty() {
-                ui.collapsing(format!("➖ Removed ({}):", comparison.removed.len()), |ui| {
-                    for id in &comparison.removed {
-                        if let Some(snapshot) = baseline.requirements.iter().find(|s| &s.original_id == id) {
-                            ui.horizontal(|ui| {
-                                if let Some(ref spec_id) = snapshot.spec_id {
-                                    ui.label(egui::RichText::new(spec_id).monospace().color(egui::Color32::from_rgb(200, 100, 100)));
-                                }
-                                ui.label(&snapshot.title);
-                            });
+                ui.collapsing(
+                    format!("➖ Removed ({}):", comparison.removed.len()),
+                    |ui| {
+                        for id in &comparison.removed {
+                            if let Some(snapshot) =
+                                baseline.requirements.iter().find(|s| &s.original_id == id)
+                            {
+                                ui.horizontal(|ui| {
+                                    if let Some(ref spec_id) = snapshot.spec_id {
+                                        ui.label(
+                                            egui::RichText::new(spec_id)
+                                                .monospace()
+                                                .color(egui::Color32::from_rgb(200, 100, 100)),
+                                        );
+                                    }
+                                    ui.label(&snapshot.title);
+                                });
+                            }
                         }
-                    }
-                });
+                    },
+                );
             }
 
             // Modified requirements
             if !comparison.modified.is_empty() {
-                ui.collapsing(format!("✏ Modified ({}):", comparison.modified.len()), |ui| {
-                    for diff in &comparison.modified {
-                        ui.group(|ui| {
-                            ui.horizontal(|ui| {
-                                if let Some(ref spec_id) = diff.spec_id {
-                                    ui.label(egui::RichText::new(spec_id).monospace().strong());
+                ui.collapsing(
+                    format!("✏ Modified ({}):", comparison.modified.len()),
+                    |ui| {
+                        for diff in &comparison.modified {
+                            ui.group(|ui| {
+                                ui.horizontal(|ui| {
+                                    if let Some(ref spec_id) = diff.spec_id {
+                                        ui.label(egui::RichText::new(spec_id).monospace().strong());
+                                    }
+                                });
+
+                                for change in &diff.changes {
+                                    ui.horizontal(|ui| {
+                                        ui.label(format!("  {}:", change.field_name));
+                                        ui.label(
+                                            egui::RichText::new(&change.old_value)
+                                                .strikethrough()
+                                                .color(egui::Color32::from_rgb(200, 100, 100)),
+                                        );
+                                        ui.label("→");
+                                        ui.label(
+                                            egui::RichText::new(&change.new_value)
+                                                .color(egui::Color32::from_rgb(100, 200, 100)),
+                                        );
+                                    });
                                 }
                             });
-
-                            for change in &diff.changes {
-                                ui.horizontal(|ui| {
-                                    ui.label(format!("  {}:", change.field_name));
-                                    ui.label(egui::RichText::new(&change.old_value).strikethrough().color(egui::Color32::from_rgb(200, 100, 100)));
-                                    ui.label("→");
-                                    ui.label(egui::RichText::new(&change.new_value).color(egui::Color32::from_rgb(100, 200, 100)));
-                                });
-                            }
-                        });
-                    }
-                });
+                        }
+                    },
+                );
             }
         } else {
             ui.label("Unable to compute comparison");
@@ -14584,24 +15201,36 @@ impl RequirementsApp {
                     .spacing([10.0, 8.0])
                     .show(ui, |ui| {
                         ui.label("Name:");
-                        ui.add(egui::TextEdit::singleline(&mut self.baseline_form_name)
-                            .hint_text("e.g., Release 1.0, Sprint 5 End")
-                            .desired_width(250.0));
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.baseline_form_name)
+                                .hint_text("e.g., Release 1.0, Sprint 5 End")
+                                .desired_width(250.0),
+                        );
                         ui.end_row();
 
                         ui.label("Description:");
-                        ui.add(egui::TextEdit::multiline(&mut self.baseline_form_description)
-                            .hint_text("Optional description...")
-                            .desired_width(250.0)
-                            .desired_rows(3));
+                        ui.add(
+                            egui::TextEdit::multiline(&mut self.baseline_form_description)
+                                .hint_text("Optional description...")
+                                .desired_width(250.0)
+                                .desired_rows(3),
+                        );
                         ui.end_row();
                     });
 
                 ui.add_space(10.0);
 
                 // Summary of what will be captured
-                let active_count = self.store.requirements.iter().filter(|r| !r.archived).count();
-                ui.label(format!("This will snapshot {} active requirements.", active_count));
+                let active_count = self
+                    .store
+                    .requirements
+                    .iter()
+                    .filter(|r| !r.archived)
+                    .count();
+                ui.label(format!(
+                    "This will snapshot {} active requirements.",
+                    active_count
+                ));
 
                 ui.add_space(15.0);
 
@@ -14612,7 +15241,10 @@ impl RequirementsApp {
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let can_create = !self.baseline_form_name.trim().is_empty();
-                        if ui.add_enabled(can_create, egui::Button::new("✓ Create Baseline")).clicked() {
+                        if ui
+                            .add_enabled(can_create, egui::Button::new("✓ Create Baseline"))
+                            .clicked()
+                        {
                             create_baseline = true;
                         }
                     });
@@ -14639,7 +15271,10 @@ impl RequirementsApp {
             };
 
             // Create the baseline
-            let baseline = self.store.create_baseline(name.clone(), description, created_by).clone();
+            let baseline = self
+                .store
+                .create_baseline(name.clone(), description, created_by)
+                .clone();
 
             // Save
             #[cfg(not(target_arch = "wasm32"))]
@@ -14700,7 +15335,10 @@ impl RequirementsApp {
                 req_id: req.id,
                 spec_id: spec_id.clone(),
                 req_title: req_title.clone(),
-                author: req.created_by.clone().unwrap_or_else(|| "Unknown".to_string()),
+                author: req
+                    .created_by
+                    .clone()
+                    .unwrap_or_else(|| "Unknown".to_string()),
                 description: format!("Created requirement: {}", req_title),
                 changes: Vec::new(),
             });
@@ -14731,13 +15369,7 @@ impl RequirementsApp {
             }
 
             // Add comment events (recursively)
-            Self::collect_comment_events(
-                &req.comments,
-                req.id,
-                &spec_id,
-                &req_title,
-                &mut events,
-            );
+            Self::collect_comment_events(&req.comments, req.id, &spec_id, &req_title, &mut events);
         }
 
         // Add baseline creation events
@@ -14801,7 +15433,11 @@ impl RequirementsApp {
             .filter(|e| {
                 // Filter by author
                 if !self.timeline_filter_author.is_empty() {
-                    if !e.author.to_lowercase().contains(&self.timeline_filter_author.to_lowercase()) {
+                    if !e
+                        .author
+                        .to_lowercase()
+                        .contains(&self.timeline_filter_author.to_lowercase())
+                    {
                         return false;
                     }
                 }
@@ -14811,7 +15447,11 @@ impl RequirementsApp {
                         return false;
                     }
                     let filter_lower = self.timeline_filter_field.to_lowercase();
-                    if !e.changes.iter().any(|c| c.field_name.to_lowercase().contains(&filter_lower)) {
+                    if !e
+                        .changes
+                        .iter()
+                        .any(|c| c.field_name.to_lowercase().contains(&filter_lower))
+                    {
                         return false;
                     }
                 }
@@ -14852,7 +15492,8 @@ impl RequirementsApp {
                 } else {
                     egui::RichText::new(*name)
                 };
-                if ui.selectable_label(is_selected, text)
+                if ui
+                    .selectable_label(is_selected, text)
                     .on_hover_text(*description)
                     .clicked()
                 {
@@ -14866,7 +15507,11 @@ impl RequirementsApp {
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new("Templates").strong());
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(egui::RichText::new("↑↓/jk").small().color(egui::Color32::GRAY));
+                ui.label(
+                    egui::RichText::new("↑↓/jk")
+                        .small()
+                        .color(egui::Color32::GRAY),
+                );
             });
         });
         ui.add_space(4.0);
@@ -14880,7 +15525,11 @@ impl RequirementsApp {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 if templates.is_empty() {
-                    ui.label(egui::RichText::new("No templates in this category").italics().color(egui::Color32::GRAY));
+                    ui.label(
+                        egui::RichText::new("No templates in this category")
+                            .italics()
+                            .color(egui::Color32::GRAY),
+                    );
                 } else {
                     for (idx, template) in templates.iter().enumerate() {
                         let is_selected = self.templates_selected_idx == Some(idx);
@@ -14905,9 +15554,21 @@ impl RequirementsApp {
         // Legend at bottom
         ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("📦 Embedded").small().color(egui::Color32::GRAY));
-                ui.label(egui::RichText::new("📁 Project").small().color(egui::Color32::GRAY));
-                ui.label(egui::RichText::new("👤 User").small().color(egui::Color32::GRAY));
+                ui.label(
+                    egui::RichText::new("📦 Embedded")
+                        .small()
+                        .color(egui::Color32::GRAY),
+                );
+                ui.label(
+                    egui::RichText::new("📁 Project")
+                        .small()
+                        .color(egui::Color32::GRAY),
+                );
+                ui.label(
+                    egui::RichText::new("👤 User")
+                        .small()
+                        .color(egui::Color32::GRAY),
+                );
             });
         });
     }
@@ -14926,18 +15587,32 @@ impl RequirementsApp {
                 ui.horizontal(|ui| {
                     ui.heading(&template.name);
                     ui.separator();
-                    ui.label(egui::RichText::new(&template.key).monospace().color(egui::Color32::GRAY));
+                    ui.label(
+                        egui::RichText::new(&template.key)
+                            .monospace()
+                            .color(egui::Color32::GRAY),
+                    );
                 });
 
                 // Source info
                 let source_text = match &template.source {
-                    aida_core::TemplateSource::ProjectLocal(path) => format!("📁 Project: {}", path.display()),
-                    aida_core::TemplateSource::Organization(path) => format!("🏢 Organization: {}", path.display()),
-                    aida_core::TemplateSource::UserConfig(path) => format!("👤 User: {}", path.display()),
+                    aida_core::TemplateSource::ProjectLocal(path) => {
+                        format!("📁 Project: {}", path.display())
+                    }
+                    aida_core::TemplateSource::Organization(path) => {
+                        format!("🏢 Organization: {}", path.display())
+                    }
+                    aida_core::TemplateSource::UserConfig(path) => {
+                        format!("👤 User: {}", path.display())
+                    }
                     aida_core::TemplateSource::Embedded => "📦 Embedded in binary".to_string(),
                     aida_core::TemplateSource::NotFound => "❓ Not found".to_string(),
                 };
-                ui.label(egui::RichText::new(&source_text).small().color(egui::Color32::GRAY));
+                ui.label(
+                    egui::RichText::new(&source_text)
+                        .small()
+                        .color(egui::Color32::GRAY),
+                );
 
                 ui.separator();
 
@@ -14953,7 +15628,7 @@ impl RequirementsApp {
                             egui::TextEdit::multiline(&mut content)
                                 .font(egui::TextStyle::Monospace)
                                 .desired_width(f32::INFINITY)
-                                .interactive(false)
+                                .interactive(false),
                         );
                     });
             } else {
@@ -15056,7 +15731,8 @@ impl RequirementsApp {
         ui.separator();
 
         // Get filtered events - clone to avoid borrow issues with closures
-        let filtered_events: Vec<TimelineEvent> = self.get_filtered_timeline_events()
+        let filtered_events: Vec<TimelineEvent> = self
+            .get_filtered_timeline_events()
             .into_iter()
             .cloned()
             .collect();
@@ -15089,8 +15765,8 @@ impl RequirementsApp {
 
         // Pre-compute the selected event before entering closures
         let selected_event_idx = self.timeline_selected_event_idx;
-        let selected_event: Option<TimelineEvent> = selected_event_idx
-            .and_then(|idx| filtered_events.get(idx).cloned());
+        let selected_event: Option<TimelineEvent> =
+            selected_event_idx.and_then(|idx| filtered_events.get(idx).cloned());
 
         // Pre-compute requirement index lookup for navigation
         let req_positions: std::collections::HashMap<Uuid, usize> = self
@@ -15147,7 +15823,11 @@ impl RequirementsApp {
                             if event.spec_id.is_empty() {
                                 event.req_title.clone()
                             } else {
-                                format!("{} ({})", event.spec_id, truncate_string(&event.req_title, 30))
+                                format!(
+                                    "{} ({})",
+                                    event.spec_id,
+                                    truncate_string(&event.req_title, 30)
+                                )
                             },
                             event.author
                         );
@@ -15158,24 +15838,38 @@ impl RequirementsApp {
                             // Match the sizing of selectable_label exactly
                             let button_padding = ui.spacing().button_padding;
                             let text = egui::WidgetText::from(&label_text);
-                            let galley = text.into_galley(ui, Some(egui::TextWrapMode::Extend), f32::INFINITY, egui::TextStyle::Button);
+                            let galley = text.into_galley(
+                                ui,
+                                Some(egui::TextWrapMode::Extend),
+                                f32::INFINITY,
+                                egui::TextStyle::Button,
+                            );
                             let desired_size = egui::vec2(
                                 ui.available_width(),
-                                (galley.size().y + button_padding.y * 2.0).max(ui.spacing().interact_size.y)
+                                (galley.size().y + button_padding.y * 2.0)
+                                    .max(ui.spacing().interact_size.y),
                             );
-                            let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
+                            let (rect, response) =
+                                ui.allocate_exact_size(desired_size, egui::Sense::click());
 
                             if ui.is_rect_visible(rect) {
                                 // Only show selection highlight, no hover
                                 if selected {
                                     let visuals = ui.visuals().selection;
-                                    ui.painter().rect_filled(rect, ui.visuals().widgets.hovered.rounding, visuals.bg_fill);
+                                    ui.painter().rect_filled(
+                                        rect,
+                                        ui.visuals().widgets.hovered.rounding,
+                                        visuals.bg_fill,
+                                    );
                                 }
-                                let text_pos = egui::Align2::LEFT_CENTER.anchor_size(
-                                    rect.left_center() + egui::vec2(button_padding.x, 0.0),
-                                    galley.size()
-                                ).min;
-                                ui.painter().galley(text_pos, galley, ui.visuals().text_color());
+                                let text_pos = egui::Align2::LEFT_CENTER
+                                    .anchor_size(
+                                        rect.left_center() + egui::vec2(button_padding.x, 0.0),
+                                        galley.size(),
+                                    )
+                                    .min;
+                                ui.painter()
+                                    .galley(text_pos, galley, ui.visuals().text_color());
                             }
                             response
                         } else {
@@ -15208,86 +15902,95 @@ impl RequirementsApp {
                 .id_salt("timeline_detail")
                 .auto_shrink([false, false])
                 .show(&mut columns[1], |ui| {
-                if let Some(event) = &selected_event {
-                    ui.heading(format!("{} {}", event.event_type.icon(), event.event_type.label()));
-                    ui.add_space(10.0);
+                    if let Some(event) = &selected_event {
+                        ui.heading(format!(
+                            "{} {}",
+                            event.event_type.icon(),
+                            event.event_type.label()
+                        ));
+                        ui.add_space(10.0);
 
-                    // Track if we need to navigate via link click
-                    let mut link_navigate_req: Option<Uuid> = None;
+                        // Track if we need to navigate via link click
+                        let mut link_navigate_req: Option<Uuid> = None;
 
-                    egui::Grid::new("event_detail_grid")
-                        .num_columns(2)
-                        .spacing([20.0, 8.0])
-                        .show(ui, |ui| {
-                            ui.label("Time:");
-                            ui.label(format_local_datetime(event.timestamp, "%Y-%m-%d %H:%M:%S"));
-                            ui.end_row();
+                        egui::Grid::new("event_detail_grid")
+                            .num_columns(2)
+                            .spacing([20.0, 8.0])
+                            .show(ui, |ui| {
+                                ui.label("Time:");
+                                ui.label(format_local_datetime(
+                                    event.timestamp,
+                                    "%Y-%m-%d %H:%M:%S",
+                                ));
+                                ui.end_row();
 
-                            ui.label("Author:");
-                            ui.label(&event.author);
-                            ui.end_row();
+                                ui.label("Author:");
+                                ui.label(&event.author);
+                                ui.end_row();
 
-                            if !event.spec_id.is_empty() {
-                                ui.label("Requirement:");
-                                if ui.link(&event.spec_id).clicked() {
-                                    link_navigate_req = Some(event.req_id);
+                                if !event.spec_id.is_empty() {
+                                    ui.label("Requirement:");
+                                    if ui.link(&event.spec_id).clicked() {
+                                        link_navigate_req = Some(event.req_id);
+                                    }
+                                    ui.end_row();
+
+                                    ui.label("Title:");
+                                    ui.label(&event.req_title);
+                                    ui.end_row();
                                 }
-                                ui.end_row();
+                            });
 
-                                ui.label("Title:");
-                                ui.label(&event.req_title);
-                                ui.end_row();
+                        // Handle link navigation
+                        if let Some(req_id) = link_navigate_req {
+                            if let Some(&req_idx) = req_positions.get(&req_id) {
+                                navigate_to_req = Some((req_idx, View::List));
                             }
-                        });
-
-                    // Handle link navigation
-                    if let Some(req_id) = link_navigate_req {
-                        if let Some(&req_idx) = req_positions.get(&req_id) {
-                            navigate_to_req = Some((req_idx, View::List));
                         }
-                    }
 
-                    ui.add_space(15.0);
-                    ui.separator();
-                    ui.add_space(10.0);
+                        ui.add_space(15.0);
+                        ui.separator();
+                        ui.add_space(10.0);
 
-                    // Show changes for modification events
-                    if event.event_type == TimelineEventType::Modified && !event.changes.is_empty() {
-                        ui.label(egui::RichText::new("Changes:").strong());
-                        ui.add_space(5.0);
-
-                        for change in &event.changes {
-                            ui.horizontal(|ui| {
-                                ui.label(
-                                    egui::RichText::new(&change.field_name)
-                                        .monospace()
-                                        .color(egui::Color32::from_rgb(150, 150, 200)),
-                                );
-                            });
-
-                            ui.horizontal_wrapped(|ui| {
-                                ui.add_space(20.0);
-                                // Use inline word diff for better readability
-                                render_inline_diff(ui, &change.old_value, &change.new_value);
-                            });
-
+                        // Show changes for modification events
+                        if event.event_type == TimelineEventType::Modified
+                            && !event.changes.is_empty()
+                        {
+                            ui.label(egui::RichText::new("Changes:").strong());
                             ui.add_space(5.0);
+
+                            for change in &event.changes {
+                                ui.horizontal(|ui| {
+                                    ui.label(
+                                        egui::RichText::new(&change.field_name)
+                                            .monospace()
+                                            .color(egui::Color32::from_rgb(150, 150, 200)),
+                                    );
+                                });
+
+                                ui.horizontal_wrapped(|ui| {
+                                    ui.add_space(20.0);
+                                    // Use inline word diff for better readability
+                                    render_inline_diff(ui, &change.old_value, &change.new_value);
+                                });
+
+                                ui.add_space(5.0);
+                            }
+                        } else {
+                            // Show description for other event types
+                            ui.label(egui::RichText::new("Description:").strong());
+                            ui.add_space(5.0);
+                            ui.label(&event.description);
                         }
                     } else {
-                        // Show description for other event types
-                        ui.label(egui::RichText::new("Description:").strong());
-                        ui.add_space(5.0);
-                        ui.label(&event.description);
+                        ui.centered_and_justified(|ui| {
+                            ui.label(
+                                egui::RichText::new("Select an event to see details")
+                                    .color(egui::Color32::GRAY),
+                            );
+                        });
                     }
-                } else {
-                    ui.centered_and_justified(|ui| {
-                        ui.label(
-                            egui::RichText::new("Select an event to see details")
-                                .color(egui::Color32::GRAY),
-                        );
-                    });
-                }
-            });
+                });
         });
 
         // Apply state changes after UI render
@@ -15319,7 +16022,8 @@ impl RequirementsApp {
         let mut items = Vec::new();
 
         // Get sprints (filtered by show_completed setting)
-        let sprints: Vec<Uuid> = self.store
+        let sprints: Vec<Uuid> = self
+            .store
             .get_sprints()
             .into_iter()
             .filter(|s| {
@@ -15360,7 +16064,11 @@ impl RequirementsApp {
             ui.separator();
 
             let queue_len = self.user_settings.queue.len();
-            ui.label(format!("{} item{}", queue_len, if queue_len == 1 { "" } else { "s" }));
+            ui.label(format!(
+                "{} item{}",
+                queue_len,
+                if queue_len == 1 { "" } else { "s" }
+            ));
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui.button("📋 Back to List").clicked() {
@@ -15380,33 +16088,51 @@ impl RequirementsApp {
                 ctrl && (i.key_pressed(egui::Key::ArrowUp) || i.key_pressed(egui::Key::K)),
                 ctrl && (i.key_pressed(egui::Key::ArrowDown) || i.key_pressed(egui::Key::J)),
                 i.key_pressed(egui::Key::Enter),
-                i.key_pressed(egui::Key::D) || i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace),
+                i.key_pressed(egui::Key::D)
+                    || i.key_pressed(egui::Key::Delete)
+                    || i.key_pressed(egui::Key::Backspace),
             )
         });
 
         // Pre-collect queue display data into owned types to avoid borrow issues
         // Format: (req_id, spec_id, title, status, priority, store_idx)
         let queue_display_data: Vec<(Uuid, String, String, String, String, Option<usize>)> = {
-            let queue_entries = self.user_settings.get_sorted_queue(&self.store.requirements);
-            queue_entries.iter().map(|(entry, maybe_req)| {
-                let (spec_id, title, status, priority) = if let Some(req) = maybe_req {
+            let queue_entries = self
+                .user_settings
+                .get_sorted_queue(&self.store.requirements);
+            queue_entries
+                .iter()
+                .map(|(entry, maybe_req)| {
+                    let (spec_id, title, status, priority) = if let Some(req) = maybe_req {
+                        (
+                            req.spec_id.clone().unwrap_or_default(),
+                            req.title.clone(),
+                            req.effective_status(),
+                            format!("{:?}", req.priority),
+                        )
+                    } else {
+                        (
+                            String::new(),
+                            format!("(Missing requirement: {:?})", entry.requirement_id),
+                            "Unknown".to_string(),
+                            "Unknown".to_string(),
+                        )
+                    };
+                    let store_idx = self
+                        .store
+                        .requirements
+                        .iter()
+                        .position(|r| r.id == entry.requirement_id);
                     (
-                        req.spec_id.clone().unwrap_or_default(),
-                        req.title.clone(),
-                        req.effective_status(),
-                        format!("{:?}", req.priority),
+                        entry.requirement_id,
+                        spec_id,
+                        title,
+                        status,
+                        priority,
+                        store_idx,
                     )
-                } else {
-                    (
-                        String::new(),
-                        format!("(Missing requirement: {:?})", entry.requirement_id),
-                        "Unknown".to_string(),
-                        "Unknown".to_string(),
-                    )
-                };
-                let store_idx = self.store.requirements.iter().position(|r| r.id == entry.requirement_id);
-                (entry.requirement_id, spec_id, title, status, priority, store_idx)
-            }).collect()
+                })
+                .collect()
         };
         let queue_len = queue_display_data.len();
 
@@ -15505,7 +16231,9 @@ impl RequirementsApp {
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])
             .show(ui, |ui| {
-                for (idx, (req_id, spec_id, title, status, priority, store_idx)) in queue_display_data.iter().enumerate() {
+                for (idx, (req_id, spec_id, title, status, priority, store_idx)) in
+                    queue_display_data.iter().enumerate()
+                {
                     let is_selected = idx == self.queue_selected_idx;
 
                     // Create a frame for the queue item
@@ -15514,14 +16242,17 @@ impl RequirementsApp {
                             .fill(ui.visuals().selection.bg_fill)
                             .inner_margin(4.0)
                     } else {
-                        egui::Frame::none()
-                            .inner_margin(4.0)
+                        egui::Frame::none().inner_margin(4.0)
                     };
 
                     let frame_response = frame.show(ui, |ui| {
                         ui.horizontal(|ui| {
                             // Queue position indicator
-                            ui.label(egui::RichText::new(format!("#{}", idx + 1)).weak().monospace());
+                            ui.label(
+                                egui::RichText::new(format!("#{}", idx + 1))
+                                    .weak()
+                                    .monospace(),
+                            );
 
                             ui.separator();
 
@@ -15541,15 +16272,22 @@ impl RequirementsApp {
                             // Title
                             ui.label(title);
 
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                // Remove button (first in right-to-left = rightmost)
-                                if ui.small_button("✕").on_hover_text("Remove from queue").clicked() {
-                                    remove_req_id = Some(*req_id);
-                                }
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    // Remove button (first in right-to-left = rightmost)
+                                    if ui
+                                        .small_button("✕")
+                                        .on_hover_text("Remove from queue")
+                                        .clicked()
+                                    {
+                                        remove_req_id = Some(*req_id);
+                                    }
 
-                                // Status badge (to the left of remove button)
-                                ui.label(egui::RichText::new(status).weak().italics());
-                            });
+                                    // Status badge (to the left of remove button)
+                                    ui.label(egui::RichText::new(status).weak().italics());
+                                },
+                            );
                         });
                     });
 
@@ -15557,7 +16295,7 @@ impl RequirementsApp {
                     let row_response = ui.interact(
                         frame_response.response.rect,
                         ui.id().with(("queue_row", idx)),
-                        egui::Sense::click()
+                        egui::Sense::click(),
                     );
                     if row_response.clicked() {
                         self.queue_selected_idx = idx;
@@ -15571,7 +16309,9 @@ impl RequirementsApp {
                 ui.add_space(10.0);
                 ui.separator();
                 ui.horizontal(|ui| {
-                    ui.small("↑↓/jk nav • Ctrl+↑/↓ reorder • Enter select • d/Del remove • q add more");
+                    ui.small(
+                        "↑↓/jk nav • Ctrl+↑/↓ reorder • Enter select • d/Del remove • q add more",
+                    );
                 });
             });
 
@@ -15594,7 +16334,10 @@ impl RequirementsApp {
     /// Show another user's owned items view
     fn show_user_queue_view(&mut self, ui: &mut egui::Ui, user_handle: &str) {
         // Find user info for display
-        let user_display = self.store.users.iter()
+        let user_display = self
+            .store
+            .users
+            .iter()
             .find(|u| u.handle == user_handle)
             .map(|u| {
                 if !u.name.is_empty() {
@@ -15612,10 +16355,17 @@ impl RequirementsApp {
             ui.separator();
 
             // Get count of owned items (match owner field against handle)
-            let owned_count = self.store.requirements.iter()
+            let owned_count = self
+                .store
+                .requirements
+                .iter()
                 .filter(|r| !r.archived && r.owner == user_handle)
                 .count();
-            ui.label(format!("{} item{}", owned_count, if owned_count == 1 { "" } else { "s" }));
+            ui.label(format!(
+                "{} item{}",
+                owned_count,
+                if owned_count == 1 { "" } else { "s" }
+            ));
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui.button("📋 Back to List").clicked() {
@@ -15644,7 +16394,10 @@ impl RequirementsApp {
         });
 
         // Collect requirements owned by this user
-        let owned_items: Vec<(usize, String, String, String, String)> = self.store.requirements.iter()
+        let owned_items: Vec<(usize, String, String, String, String)> = self
+            .store
+            .requirements
+            .iter()
             .enumerate()
             .filter(|(_, r)| !r.archived && r.owner == user_handle)
             .map(|(idx, r)| {
@@ -15661,7 +16414,11 @@ impl RequirementsApp {
         if items_len == 0 {
             ui.vertical_centered(|ui| {
                 ui.add_space(50.0);
-                ui.label(egui::RichText::new(format!("No items owned by {}", user_display)).size(18.0).weak());
+                ui.label(
+                    egui::RichText::new(format!("No items owned by {}", user_display))
+                        .size(18.0)
+                        .weak(),
+                );
                 ui.add_space(10.0);
                 if ui.button("📋 Go to Requirements List").clicked() {
                     self.pending_view_change = Some(View::List);
@@ -15701,7 +16458,9 @@ impl RequirementsApp {
         egui::ScrollArea::vertical()
             .auto_shrink([false; 2])
             .show(ui, |ui| {
-                for (list_idx, (store_idx, spec_id, title, status, priority)) in owned_items.iter().enumerate() {
+                for (list_idx, (store_idx, spec_id, title, status, priority)) in
+                    owned_items.iter().enumerate()
+                {
                     let is_selected = list_idx == self.user_queue_selected_idx;
 
                     // Create a frame for the item
@@ -15710,33 +16469,37 @@ impl RequirementsApp {
                             .fill(ui.visuals().selection.bg_fill)
                             .inner_margin(4.0)
                     } else {
-                        egui::Frame::none()
-                            .inner_margin(4.0)
+                        egui::Frame::none().inner_margin(4.0)
                     };
 
                     frame.show(ui, |ui| {
-                        let response = ui.horizontal(|ui| {
-                            // Priority indicator
-                            let priority_color = match priority.as_str() {
-                                "High" => egui::Color32::from_rgb(255, 100, 100),
-                                "Medium" => egui::Color32::from_rgb(255, 200, 100),
-                                _ => egui::Color32::from_rgb(100, 200, 100),
-                            };
-                            ui.label(egui::RichText::new("●").color(priority_color));
+                        let response = ui
+                            .horizontal(|ui| {
+                                // Priority indicator
+                                let priority_color = match priority.as_str() {
+                                    "High" => egui::Color32::from_rgb(255, 100, 100),
+                                    "Medium" => egui::Color32::from_rgb(255, 200, 100),
+                                    _ => egui::Color32::from_rgb(100, 200, 100),
+                                };
+                                ui.label(egui::RichText::new("●").color(priority_color));
 
-                            // Spec ID
-                            if !spec_id.is_empty() {
-                                ui.label(egui::RichText::new(spec_id).monospace().strong());
-                            }
+                                // Spec ID
+                                if !spec_id.is_empty() {
+                                    ui.label(egui::RichText::new(spec_id).monospace().strong());
+                                }
 
-                            // Title
-                            ui.label(title);
+                                // Title
+                                ui.label(title);
 
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                // Status badge
-                                ui.label(egui::RichText::new(status).weak().italics());
-                            });
-                        }).response;
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        // Status badge
+                                        ui.label(egui::RichText::new(status).weak().italics());
+                                    },
+                                );
+                            })
+                            .response;
 
                         // Handle click to select
                         if response.clicked() {
@@ -15788,14 +16551,16 @@ impl RequirementsApp {
         ui.separator();
 
         // Get sprints and backlog
-        let sprints: Vec<(Uuid, String, String, String, String)> = self.store
+        let sprints: Vec<(Uuid, String, String, String, String)> = self
+            .store
             .get_sprints()
             .into_iter()
             .filter_map(|s| {
                 let status = s.effective_status();
                 // Filter out completed/archived unless show_completed is enabled
                 if !self.planning_show_completed_sprints
-                    && (status == "Completed" || status == "Archived") {
+                    && (status == "Completed" || status == "Archived")
+                {
                     return None;
                 }
                 Some((
@@ -15803,15 +16568,27 @@ impl RequirementsApp {
                     s.spec_id.clone().unwrap_or_default(),
                     s.title.clone(),
                     status,
-                    s.custom_fields.get("sprint_goal").cloned().unwrap_or_default(),
+                    s.custom_fields
+                        .get("sprint_goal")
+                        .cloned()
+                        .unwrap_or_default(),
                 ))
             })
             .collect();
 
-        let backlog_items: Vec<(Uuid, String, String, String, RequirementType)> = self.store
+        let backlog_items: Vec<(Uuid, String, String, String, RequirementType)> = self
+            .store
             .get_backlog()
             .into_iter()
-            .map(|r| (r.id, r.spec_id.clone().unwrap_or_default(), r.title.clone(), r.effective_status(), r.req_type.clone()))
+            .map(|r| {
+                (
+                    r.id,
+                    r.spec_id.clone().unwrap_or_default(),
+                    r.title.clone(),
+                    r.effective_status(),
+                    r.req_type.clone(),
+                )
+            })
             .collect();
 
         // Check if we have any content
@@ -15886,18 +16663,26 @@ impl RequirementsApp {
                             // Make the header text a clickable label
                             let header_text = format!("{} - {}", spec_id, title);
                             let header_label = if is_sprint_selected {
-                                egui::RichText::new(&header_text).strong().color(ui.visuals().selection.stroke.color)
+                                egui::RichText::new(&header_text)
+                                    .strong()
+                                    .color(ui.visuals().selection.stroke.color)
                             } else {
                                 egui::RichText::new(&header_text).strong()
                             };
-                            let header_click = ui.add(egui::Label::new(header_label).sense(egui::Sense::click()));
+                            let header_click =
+                                ui.add(egui::Label::new(header_label).sense(egui::Sense::click()));
 
                             if header_click.clicked() {
                                 // Select this sprint, clear item selection
                                 self.planning_selected_sprint = Some(*sprint_id);
                                 self.planning_selected_item = None;
                                 // Set selected_idx to the sprint's index for detail panel
-                                if let Some(idx) = self.store.requirements.iter().position(|r| r.id == *sprint_id) {
+                                if let Some(idx) = self
+                                    .store
+                                    .requirements
+                                    .iter()
+                                    .position(|r| r.id == *sprint_id)
+                                {
                                     self.selected_idx = Some(idx);
                                 }
                             }
@@ -15907,16 +16692,28 @@ impl RequirementsApp {
                             }
 
                             // Sprint item count
-                            let sprint_items: Vec<_> = self.store
+                            let sprint_items: Vec<_> = self
+                                .store
                                 .get_sprint_items(sprint_id)
                                 .into_iter()
-                                .map(|r| (r.id, r.spec_id.clone().unwrap_or_default(), r.title.clone(), r.effective_status(), r.req_type.clone()))
+                                .map(|r| {
+                                    (
+                                        r.id,
+                                        r.spec_id.clone().unwrap_or_default(),
+                                        r.title.clone(),
+                                        r.effective_status(),
+                                        r.req_type.clone(),
+                                    )
+                                })
                                 .collect();
                             ui.label(format!("[{} items]", sprint_items.len()));
 
                             // Show drop indicator when dragging
                             if is_dragging && is_drop_target {
-                                ui.label(egui::RichText::new("⬅ Drop here").color(egui::Color32::from_rgb(59, 130, 246)));
+                                ui.label(
+                                    egui::RichText::new("⬅ Drop here")
+                                        .color(egui::Color32::from_rgb(59, 130, 246)),
+                                );
                             }
                         })
                     });
@@ -15932,10 +16729,19 @@ impl RequirementsApp {
 
                     if !is_collapsed {
                         // Get items for this sprint
-                        let sprint_items: Vec<_> = self.store
+                        let sprint_items: Vec<_> = self
+                            .store
                             .get_sprint_items(sprint_id)
                             .into_iter()
-                            .map(|r| (r.id, r.spec_id.clone().unwrap_or_default(), r.title.clone(), r.effective_status(), r.req_type.clone()))
+                            .map(|r| {
+                                (
+                                    r.id,
+                                    r.spec_id.clone().unwrap_or_default(),
+                                    r.title.clone(),
+                                    r.effective_status(),
+                                    r.req_type.clone(),
+                                )
+                            })
                             .collect();
 
                         ui.indent(format!("sprint_{}", sprint_id), |ui| {
@@ -15954,7 +16760,8 @@ impl RequirementsApp {
                                     // Use pointer position for reliable drop detection
                                     if let Some(pointer_pos) = ui.input(|i| i.pointer.hover_pos()) {
                                         if empty_response.rect.contains(pointer_pos) {
-                                            self.planning_drag_target_sprint = Some(Some(*sprint_id));
+                                            self.planning_drag_target_sprint =
+                                                Some(Some(*sprint_id));
                                         }
                                     }
                                 } else {
@@ -15965,8 +16772,18 @@ impl RequirementsApp {
                                     );
                                 }
                             } else {
-                                for (item_id, item_spec_id, item_title, item_status, item_type) in &sprint_items {
-                                    self.render_planning_item(ui, *item_id, item_spec_id, item_title, item_status, item_type, Some(*sprint_id));
+                                for (item_id, item_spec_id, item_title, item_status, item_type) in
+                                    &sprint_items
+                                {
+                                    self.render_planning_item(
+                                        ui,
+                                        *item_id,
+                                        item_spec_id,
+                                        item_title,
+                                        item_status,
+                                        item_type,
+                                        Some(*sprint_id),
+                                    );
                                 }
                             }
                         });
@@ -16006,7 +16823,10 @@ impl RequirementsApp {
 
                         // Show drop indicator when dragging
                         if is_dragging && is_backlog_drop_target {
-                            ui.label(egui::RichText::new("⬅ Drop here").color(egui::Color32::from_rgb(245, 158, 11)));
+                            ui.label(
+                                egui::RichText::new("⬅ Drop here")
+                                    .color(egui::Color32::from_rgb(245, 158, 11)),
+                            );
                         }
                     })
                 });
@@ -16048,8 +16868,18 @@ impl RequirementsApp {
                                 );
                             }
                         } else {
-                            for (item_id, item_spec_id, item_title, item_status, item_type) in &backlog_items {
-                                self.render_planning_item(ui, *item_id, item_spec_id, item_title, item_status, item_type, None);
+                            for (item_id, item_spec_id, item_title, item_status, item_type) in
+                                &backlog_items
+                            {
+                                self.render_planning_item(
+                                    ui,
+                                    *item_id,
+                                    item_spec_id,
+                                    item_title,
+                                    item_status,
+                                    item_type,
+                                    None,
+                                );
                             }
                         }
                     });
@@ -16126,7 +16956,8 @@ impl RequirementsApp {
             available_width.max(50.0),
             egui::TextStyle::Body,
         );
-        let desired_size = egui::vec2(available_width.max(50.0), galley.size().y) + egui::vec2(8.0, 4.0);
+        let desired_size =
+            egui::vec2(available_width.max(50.0), galley.size().y) + egui::vec2(8.0, 4.0);
 
         let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click_and_drag());
 
@@ -16178,7 +17009,7 @@ impl RequirementsApp {
         // Handle click for selection
         if response.clicked() {
             self.planning_selected_item = Some(item_id);
-            self.planning_selected_sprint = None;  // Clear sprint selection when item selected
+            self.planning_selected_sprint = None; // Clear sprint selection when item selected
             if let Some(idx) = self.store.requirements.iter().position(|r| r.id == item_id) {
                 self.selected_idx = Some(idx);
             }
@@ -16223,7 +17054,9 @@ impl RequirementsApp {
         response.context_menu(|ui| {
             ui.menu_button("🏃 Assign to Sprint...", |ui| {
                 // Get available sprints
-                let sprints: Vec<_> = self.store.get_sprints()
+                let sprints: Vec<_> = self
+                    .store
+                    .get_sprints()
                     .into_iter()
                     .filter(|s| {
                         let status = s.effective_status();
@@ -16236,7 +17069,10 @@ impl RequirementsApp {
                     ui.label("No active sprints available");
                 } else {
                     for (sprint_id, sprint_spec_id, sprint_title) in sprints {
-                        if ui.button(format!("{}: {}", sprint_spec_id, sprint_title)).clicked() {
+                        if ui
+                            .button(format!("{}: {}", sprint_spec_id, sprint_title))
+                            .clicked()
+                        {
                             let username = self.user_settings.display_name();
                             self.store.assign_to_sprint(item_id, sprint_id, &username);
                             self.save();
@@ -16342,13 +17178,28 @@ impl RequirementsApp {
                             _ => "All",
                         })
                         .show_ui(ui, |ui| {
-                            if ui.selectable_label(matches!(self.gitlab_filter_state, Some(IssueState::Opened)), "Open").clicked() {
+                            if ui
+                                .selectable_label(
+                                    matches!(self.gitlab_filter_state, Some(IssueState::Opened)),
+                                    "Open",
+                                )
+                                .clicked()
+                            {
                                 self.gitlab_filter_state = Some(IssueState::Opened);
                             }
-                            if ui.selectable_label(matches!(self.gitlab_filter_state, Some(IssueState::Closed)), "Closed").clicked() {
+                            if ui
+                                .selectable_label(
+                                    matches!(self.gitlab_filter_state, Some(IssueState::Closed)),
+                                    "Closed",
+                                )
+                                .clicked()
+                            {
                                 self.gitlab_filter_state = Some(IssueState::Closed);
                             }
-                            if ui.selectable_label(self.gitlab_filter_state.is_none(), "All").clicked() {
+                            if ui
+                                .selectable_label(self.gitlab_filter_state.is_none(), "All")
+                                .clicked()
+                            {
                                 self.gitlab_filter_state = None;
                             }
                         });
@@ -16420,7 +17271,11 @@ impl RequirementsApp {
             if let Some(issue) = self.gitlab_issues.iter().find(|i| i.iid == selected_iid) {
                 // Issue header
                 ui.horizontal(|ui| {
-                    let state_icon = if issue.is_open() { "🟢 Open" } else { "🔴 Closed" };
+                    let state_icon = if issue.is_open() {
+                        "🟢 Open"
+                    } else {
+                        "🔴 Closed"
+                    };
                     ui.heading(format!("#{} {}", issue.iid, issue.title));
                     ui.label(state_icon);
                 });
@@ -16468,8 +17323,7 @@ impl RequirementsApp {
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
                             // Render markdown description
-                            CommonMarkViewer::new()
-                                .show(ui, &mut self.markdown_cache, desc);
+                            CommonMarkViewer::new().show(ui, &mut self.markdown_cache, desc);
                         });
                 } else {
                     ui.label("No description");
@@ -16524,9 +17378,7 @@ impl RequirementsApp {
                     };
                     self.create_gitlab_issue_description = format!(
                         "## AIDA Requirement: {}\n\n{}\n\n---\n*Created from AIDA requirement {}*",
-                        req.title,
-                        desc_text,
-                        spec_id_str
+                        req.title, desc_text, spec_id_str
                     );
                     // trace:STORY-0326 | ai:claude
                     // Map type and priority to labels using config
@@ -16538,9 +17390,13 @@ impl RequirementsApp {
                         )
                     } else {
                         // Fallback to simple labels if no config
-                        let mut labels = vec![format!("aida:{}", req.req_type.to_string().to_lowercase())];
+                        let mut labels =
+                            vec![format!("aida:{}", req.req_type.to_string().to_lowercase())];
                         if req.priority != aida_core::RequirementPriority::Medium {
-                            labels.push(format!("priority:{}", req.priority.to_string().to_lowercase()));
+                            labels.push(format!(
+                                "priority:{}",
+                                req.priority.to_string().to_lowercase()
+                            ));
                         }
                         labels.join(",")
                     };
@@ -16602,10 +17458,7 @@ impl RequirementsApp {
 
                     // Show sync time if available
                     if let Some(synced) = link.last_synced {
-                        ui.small(format!(
-                            "(synced {})",
-                            synced.format("%Y-%m-%d")
-                        ));
+                        ui.small(format!("(synced {})", synced.format("%Y-%m-%d")));
                     }
                 });
             }
@@ -16768,7 +17621,7 @@ impl RequirementsApp {
     /// trace:STORY-0324 | ai:claude
     #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
     fn show_create_gitlab_issue_modal(&mut self, ctx: &egui::Context) {
-        use aida_core::{GitLabIssueLink, GitLabLinkType, CreateIssueRequest};
+        use aida_core::{CreateIssueRequest, GitLabIssueLink, GitLabLinkType};
 
         if !self.show_create_gitlab_issue_dialog {
             return;
@@ -16780,7 +17633,10 @@ impl RequirementsApp {
         };
 
         // Get requirement spec_id for display
-        let req_spec_id = self.store.requirements.iter()
+        let req_spec_id = self
+            .store
+            .requirements
+            .iter()
             .find(|r| r.id == req_id)
             .and_then(|r| r.spec_id.clone())
             .unwrap_or_else(|| "REQ".to_string());
@@ -16799,7 +17655,7 @@ impl RequirementsApp {
                     ui.label("Title:");
                     ui.add_sized(
                         [ui.available_width(), 24.0],
-                        egui::TextEdit::singleline(&mut self.create_gitlab_issue_title)
+                        egui::TextEdit::singleline(&mut self.create_gitlab_issue_title),
                     );
                 });
 
@@ -16812,7 +17668,7 @@ impl RequirementsApp {
                     .show(ui, |ui| {
                         ui.add_sized(
                             [ui.available_width(), 180.0],
-                            egui::TextEdit::multiline(&mut self.create_gitlab_issue_description)
+                            egui::TextEdit::multiline(&mut self.create_gitlab_issue_description),
                         );
                     });
 
@@ -16823,7 +17679,7 @@ impl RequirementsApp {
                     ui.label("Labels:");
                     ui.add_sized(
                         [ui.available_width(), 24.0],
-                        egui::TextEdit::singleline(&mut self.create_gitlab_issue_labels)
+                        egui::TextEdit::singleline(&mut self.create_gitlab_issue_labels),
                     );
                 });
                 ui.small("Comma-separated (e.g., aida:story,priority:high)");
@@ -16838,17 +17694,21 @@ impl RequirementsApp {
                         ui.label("Creating issue...");
                     } else {
                         let create_enabled = !self.create_gitlab_issue_title.trim().is_empty();
-                        if ui.add_enabled(create_enabled, egui::Button::new("✓ Create Issue")).clicked() {
+                        if ui
+                            .add_enabled(create_enabled, egui::Button::new("✓ Create Issue"))
+                            .clicked()
+                        {
                             // Start async creation
                             self.create_gitlab_issue_creating = true;
 
                             // Clone data for async call
                             let title = self.create_gitlab_issue_title.clone();
-                            let description = if self.create_gitlab_issue_description.trim().is_empty() {
-                                None
-                            } else {
-                                Some(self.create_gitlab_issue_description.clone())
-                            };
+                            let description =
+                                if self.create_gitlab_issue_description.trim().is_empty() {
+                                    None
+                                } else {
+                                    Some(self.create_gitlab_issue_description.clone())
+                                };
                             let labels = if self.create_gitlab_issue_labels.trim().is_empty() {
                                 None
                             } else {
@@ -16880,8 +17740,14 @@ impl RequirementsApp {
                                         // trace:STORY-0325 | ai:claude
                                         // Auto-link the issue to the requirement
                                         // Collect data for sync state before releasing borrow
-                                        let sync_data = if let Some(req) = self.store.requirements.iter_mut().find(|r| r.id == req_id) {
-                                            let mut link = GitLabIssueLink::new(issue.iid, &issue.title);
+                                        let sync_data = if let Some(req) = self
+                                            .store
+                                            .requirements
+                                            .iter_mut()
+                                            .find(|r| r.id == req_id)
+                                        {
+                                            let mut link =
+                                                GitLabIssueLink::new(issue.iid, &issue.title);
                                             // Convert IssueState enum to string
                                             let state_str = match issue.state {
                                                 aida_core::IssueState::Opened => "opened",
@@ -16896,7 +17762,8 @@ impl RequirementsApp {
                                             // Collect data for sync state
                                             use aida_core::GitLabSyncState;
                                             let spec_id = req.spec_id.clone().unwrap_or_default();
-                                            let content_hash = GitLabSyncState::hash_requirement(req);
+                                            let content_hash =
+                                                GitLabSyncState::hash_requirement(req);
                                             Some((spec_id, content_hash))
                                         } else {
                                             None
@@ -16908,9 +17775,12 @@ impl RequirementsApp {
 
                                             // Create sync state for created issue (in sync at creation)
                                             if let Some(ref config) = self.gitlab_config {
-                                                use aida_core::{GitLabSyncState, LinkOrigin, SyncStatus};
+                                                use aida_core::{
+                                                    GitLabSyncState, LinkOrigin, SyncStatus,
+                                                };
                                                 let now = chrono::Utc::now();
-                                                let gitlab_hash = GitLabSyncState::hash_gitlab_issue(&issue);
+                                                let gitlab_hash =
+                                                    GitLabSyncState::hash_gitlab_issue(&issue);
                                                 let sync_state = GitLabSyncState {
                                                     requirement_id: req_id,
                                                     spec_id,
@@ -16925,19 +17795,25 @@ impl RequirementsApp {
                                                     sync_status: SyncStatus::InSync,
                                                     last_error: None,
                                                 };
-                                                if let Err(e) = self.storage.save_sync_state(&sync_state) {
+                                                if let Err(e) =
+                                                    self.storage.save_sync_state(&sync_state)
+                                                {
                                                     eprintln!("Failed to save sync state: {}", e);
                                                 }
                                             }
                                         }
 
-                                        self.message = Some((format!("Created GL-{}: {}", issue.iid, issue.title), false));
+                                        self.message = Some((
+                                            format!("Created GL-{}: {}", issue.iid, issue.title),
+                                            false,
+                                        ));
                                         self.show_create_gitlab_issue_dialog = false;
                                         self.create_gitlab_issue_req_id = None;
                                         self.create_gitlab_issue_creating = false;
                                     }
                                     Err(e) => {
-                                        self.message = Some((format!("Failed to create issue: {}", e), true));
+                                        self.message =
+                                            Some((format!("Failed to create issue: {}", e), true));
                                         self.create_gitlab_issue_creating = false;
                                     }
                                 }
@@ -16994,9 +17870,12 @@ impl RequirementsApp {
         }
 
         // Clone requirements for the thread
-        let requirements: Vec<_> = sync_states.iter()
+        let requirements: Vec<_> = sync_states
+            .iter()
             .filter_map(|state| {
-                self.store.requirements.iter()
+                self.store
+                    .requirements
+                    .iter()
                     .find(|r| r.id == state.requirement_id)
                     .cloned()
             })
@@ -17025,17 +17904,15 @@ impl RequirementsApp {
     fn show_planning_detail_panel(&mut self, ui: &mut egui::Ui) {
         // Check if a sprint is selected (takes precedence for display)
         let sprint_id = self.planning_selected_sprint;
-        let sprint_req_idx = sprint_id.and_then(|id| {
-            self.store.requirements.iter().position(|r| r.id == id)
-        });
+        let sprint_req_idx =
+            sprint_id.and_then(|id| self.store.requirements.iter().position(|r| r.id == id));
 
         // Get the selected item from planning_selected_item
         let selected_id = self.planning_selected_item;
 
         // Find the requirement index for the selected item
-        let selected_req_idx = selected_id.and_then(|id| {
-            self.store.requirements.iter().position(|r| r.id == id)
-        });
+        let selected_req_idx =
+            selected_id.and_then(|id| self.store.requirements.iter().position(|r| r.id == id));
 
         // Determine which to show - sprint selection takes precedence
         let display_idx = sprint_req_idx.or(selected_req_idx);
@@ -17090,7 +17967,10 @@ impl RequirementsApp {
             .default_width(400.0)
             .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
             .show(ctx, |ui| {
-                ui.label(format!("Clone: {}", source_req.spec_id.as_deref().unwrap_or("(no ID)")));
+                ui.label(format!(
+                    "Clone: {}",
+                    source_req.spec_id.as_deref().unwrap_or("(no ID)")
+                ));
                 ui.label(egui::RichText::new(&source_req.title).strong());
                 ui.add_space(10.0);
 
@@ -17104,11 +17984,22 @@ impl RequirementsApp {
                 // Core fields are always cloned
                 ui.horizontal(|ui| {
                     ui.add_enabled(false, egui::Checkbox::new(&mut true, "Title & Description"));
-                    ui.label(egui::RichText::new("(always)").small().color(egui::Color32::GRAY));
+                    ui.label(
+                        egui::RichText::new("(always)")
+                            .small()
+                            .color(egui::Color32::GRAY),
+                    );
                 });
                 ui.horizontal(|ui| {
-                    ui.add_enabled(false, egui::Checkbox::new(&mut true, "Type, Priority, Owner, Feature"));
-                    ui.label(egui::RichText::new("(always)").small().color(egui::Color32::GRAY));
+                    ui.add_enabled(
+                        false,
+                        egui::Checkbox::new(&mut true, "Type, Priority, Owner, Feature"),
+                    );
+                    ui.label(
+                        egui::RichText::new("(always)")
+                            .small()
+                            .color(egui::Color32::GRAY),
+                    );
                 });
 
                 ui.add_space(5.0);
@@ -17122,7 +18013,10 @@ impl RequirementsApp {
                 } else {
                     "URL Links (none)".to_string()
                 };
-                ui.add_enabled(has_urls, egui::Checkbox::new(&mut self.clone_include_urls, url_label));
+                ui.add_enabled(
+                    has_urls,
+                    egui::Checkbox::new(&mut self.clone_include_urls, url_label),
+                );
 
                 let has_custom = !source_req.custom_fields.is_empty();
                 let custom_label = if has_custom {
@@ -17130,7 +18024,10 @@ impl RequirementsApp {
                 } else {
                     "Custom Fields (none)".to_string()
                 };
-                ui.add_enabled(has_custom, egui::Checkbox::new(&mut self.clone_include_custom_fields, custom_label));
+                ui.add_enabled(
+                    has_custom,
+                    egui::Checkbox::new(&mut self.clone_include_custom_fields, custom_label),
+                );
 
                 ui.add_space(5.0);
                 ui.separator();
@@ -17142,9 +18039,18 @@ impl RequirementsApp {
                 } else {
                     "Relationships (none)".to_string()
                 };
-                ui.add_enabled(has_relationships, egui::Checkbox::new(&mut self.clone_include_relationships, rel_label));
+                ui.add_enabled(
+                    has_relationships,
+                    egui::Checkbox::new(&mut self.clone_include_relationships, rel_label),
+                );
                 if has_relationships && self.clone_include_relationships {
-                    ui.label(egui::RichText::new("  Note: Clone will have same relationships as original").small().italics());
+                    ui.label(
+                        egui::RichText::new(
+                            "  Note: Clone will have same relationships as original",
+                        )
+                        .small()
+                        .italics(),
+                    );
                 }
 
                 let has_comments = !source_req.comments.is_empty();
@@ -17153,7 +18059,10 @@ impl RequirementsApp {
                 } else {
                     "Comments (none)".to_string()
                 };
-                ui.add_enabled(has_comments, egui::Checkbox::new(&mut self.clone_include_comments, comment_label));
+                ui.add_enabled(
+                    has_comments,
+                    egui::Checkbox::new(&mut self.clone_include_comments, comment_label),
+                );
 
                 let has_history = !source_req.history.is_empty();
                 let history_label = if has_history {
@@ -17161,7 +18070,10 @@ impl RequirementsApp {
                 } else {
                     "History (none)".to_string()
                 };
-                ui.add_enabled(has_history, egui::Checkbox::new(&mut self.clone_include_history, history_label));
+                ui.add_enabled(
+                    has_history,
+                    egui::Checkbox::new(&mut self.clone_include_history, history_label),
+                );
 
                 ui.add_space(15.0);
 
@@ -17255,7 +18167,10 @@ impl RequirementsApp {
             vec![aida_core::FieldChange {
                 field_name: "cloned_from".to_string(),
                 old_value: String::new(),
-                new_value: source.spec_id.clone().unwrap_or_else(|| source.id.to_string()),
+                new_value: source
+                    .spec_id
+                    .clone()
+                    .unwrap_or_else(|| source.id.to_string()),
             }],
         );
 
@@ -17272,7 +18187,10 @@ impl RequirementsApp {
                 let new_idx = self.store.requirements.len() - 1;
                 self.selected_idx = Some(new_idx);
 
-                let new_spec_id = self.store.requirements.get(new_idx)
+                let new_spec_id = self
+                    .store
+                    .requirements
+                    .get(new_idx)
                     .and_then(|r| r.spec_id.clone())
                     .unwrap_or_else(|| "new".to_string());
 
@@ -17289,7 +18207,10 @@ impl RequirementsApp {
             let new_idx = self.store.requirements.len() - 1;
             self.selected_idx = Some(new_idx);
 
-            let new_spec_id = self.store.requirements.get(new_idx)
+            let new_spec_id = self
+                .store
+                .requirements
+                .get(new_idx)
                 .and_then(|r| r.spec_id.clone())
                 .unwrap_or_else(|| "new".to_string());
 
@@ -17447,7 +18368,8 @@ impl RequirementsApp {
             let current_path = self.storage.path();
             #[cfg(target_arch = "wasm32")]
             let current_path = std::path::Path::new("wasm-storage");
-            let is_sqlite = current_path.extension()
+            let is_sqlite = current_path
+                .extension()
                 .map(|e| e == "db" || e == "sqlite" || e == "sqlite3")
                 .unwrap_or(false);
             let backend_type = if is_sqlite { "SQLite" } else { "YAML" };
@@ -17564,7 +18486,10 @@ impl RequirementsApp {
         // Load skills from .claude/skills/ directory if not already loaded
         #[cfg(not(target_arch = "wasm32"))]
         if self.loaded_skills.is_empty() {
-            let project_dir = self.storage.path().parent()
+            let project_dir = self
+                .storage
+                .path()
+                .parent()
                 .map(|p| p.to_path_buf())
                 .unwrap_or_else(|| std::path::PathBuf::from("."));
             let skills_dir = project_dir.join(".claude").join("skills");
@@ -17575,7 +18500,8 @@ impl RequirementsApp {
                         let path = entry.path();
                         if path.extension().map_or(false, |ext| ext == "md") {
                             if let Ok(content) = std::fs::read_to_string(&path) {
-                                let filename = path.file_name()
+                                let filename = path
+                                    .file_name()
                                     .and_then(|n| n.to_str())
                                     .unwrap_or("unknown")
                                     .to_string();
@@ -17595,7 +18521,10 @@ impl RequirementsApp {
 
             #[cfg(not(target_arch = "wasm32"))]
             {
-                let project_dir = self.storage.path().parent()
+                let project_dir = self
+                    .storage
+                    .path()
+                    .parent()
                     .map(|p| p.to_path_buf())
                     .unwrap_or_else(|| std::path::PathBuf::from("."));
                 let skills_dir = project_dir.join(".claude").join("skills");
@@ -17689,7 +18618,8 @@ impl RequirementsApp {
                             should_close = true;
                         }
 
-                        let has_changes = self.skill_editor_content != self.skill_editor_original_content;
+                        let has_changes =
+                            self.skill_editor_content != self.skill_editor_original_content;
                         ui.add_enabled_ui(has_changes, |ui| {
                             if ui.button("💾 Save").clicked() {
                                 should_save = true;
@@ -17719,8 +18649,11 @@ impl RequirementsApp {
                         } else {
                             // Preview mode - render markdown
                             let mut cache = egui_commonmark::CommonMarkCache::default();
-                            egui_commonmark::CommonMarkViewer::new()
-                                .show(ui, &mut cache, &self.skill_editor_content);
+                            egui_commonmark::CommonMarkViewer::new().show(
+                                ui,
+                                &mut cache,
+                                &self.skill_editor_content,
+                            );
                         }
                     });
             });
@@ -17729,7 +18662,10 @@ impl RequirementsApp {
         #[cfg(not(target_arch = "wasm32"))]
         if should_save {
             // Get skills directory path
-            let project_dir = self.storage.path().parent()
+            let project_dir = self
+                .storage
+                .path()
+                .parent()
                 .map(|p| p.to_path_buf())
                 .unwrap_or_else(|| std::path::PathBuf::from("."));
             let skills_dir = project_dir.join(".claude").join("skills");
@@ -17739,7 +18675,11 @@ impl RequirementsApp {
             match std::fs::write(&skill_path, &self.skill_editor_content) {
                 Ok(_) => {
                     // Update the loaded skills cache
-                    if let Some(skill) = self.loaded_skills.iter_mut().find(|(f, _)| f == &self.skill_editor_filename) {
+                    if let Some(skill) = self
+                        .loaded_skills
+                        .iter_mut()
+                        .find(|(f, _)| f == &self.skill_editor_filename)
+                    {
                         skill.1 = self.skill_editor_content.clone();
                     }
                     self.skill_editor_original_content = self.skill_editor_content.clone();
@@ -17802,10 +18742,12 @@ impl RequirementsApp {
 
         ui.label("Additional Instructions:");
         let response = ui.add(
-            egui::TextEdit::multiline(&mut self.store.ai_prompts.evaluation.additional_instructions)
-                .desired_width(content_width)
-                .desired_rows(3)
-                .hint_text("Extra instructions for evaluation..."),
+            egui::TextEdit::multiline(
+                &mut self.store.ai_prompts.evaluation.additional_instructions,
+            )
+            .desired_width(content_width)
+            .desired_rows(3)
+            .hint_text("Extra instructions for evaluation..."),
         );
         if response.changed() {
             self.save();
@@ -17844,10 +18786,16 @@ impl RequirementsApp {
 
         ui.label("Additional Instructions:");
         let response = ui.add(
-            egui::TextEdit::multiline(&mut self.store.ai_prompts.generate_children.additional_instructions)
-                .desired_width(content_width)
-                .desired_rows(3)
-                .hint_text("Extra instructions for children generation..."),
+            egui::TextEdit::multiline(
+                &mut self
+                    .store
+                    .ai_prompts
+                    .generate_children
+                    .additional_instructions,
+            )
+            .desired_width(content_width)
+            .desired_rows(3)
+            .hint_text("Extra instructions for children generation..."),
         );
         if response.changed() {
             self.save();
@@ -17864,8 +18812,19 @@ impl RequirementsApp {
         ui.add_space(10.0);
 
         // Show existing type prompts
-        let type_names: Vec<String> = self.store.type_definitions.iter().map(|t| t.name.clone()).collect();
-        let existing_types: Vec<String> = self.store.ai_prompts.type_prompts.iter().map(|t| t.type_name.clone()).collect();
+        let type_names: Vec<String> = self
+            .store
+            .type_definitions
+            .iter()
+            .map(|t| t.name.clone())
+            .collect();
+        let existing_types: Vec<String> = self
+            .store
+            .ai_prompts
+            .type_prompts
+            .iter()
+            .map(|t| t.type_name.clone())
+            .collect();
 
         // Add button for new type prompt (use horizontal_wrapped to prevent expansion)
         ui.horizontal_wrapped(|ui| {
@@ -17873,12 +18832,15 @@ impl RequirementsApp {
             for type_name in &type_names {
                 if !existing_types.contains(type_name) {
                     if ui.button(type_name).clicked() {
-                        self.store.ai_prompts.type_prompts.push(aida_core::AiTypePromptConfig {
-                            type_name: type_name.clone(),
-                            evaluation_extra: String::new(),
-                            improve_extra: String::new(),
-                            generate_children_extra: String::new(),
-                        });
+                        self.store
+                            .ai_prompts
+                            .type_prompts
+                            .push(aida_core::AiTypePromptConfig {
+                                type_name: type_name.clone(),
+                                evaluation_extra: String::new(),
+                                improve_extra: String::new(),
+                                generate_children_extra: String::new(),
+                            });
                         self.save();
                     }
                 }
@@ -17902,23 +18864,29 @@ impl RequirementsApp {
 
                 ui.add_space(5.0);
                 ui.label("Evaluation extra:");
-                if ui.add(
-                    egui::TextEdit::multiline(&mut type_prompt.evaluation_extra)
-                        .desired_width(content_width)
-                        .desired_rows(2)
-                        .hint_text("Extra evaluation instructions..."),
-                ).changed() {
+                if ui
+                    .add(
+                        egui::TextEdit::multiline(&mut type_prompt.evaluation_extra)
+                            .desired_width(content_width)
+                            .desired_rows(2)
+                            .hint_text("Extra evaluation instructions..."),
+                    )
+                    .changed()
+                {
                     // Mark for save - handled below
                 }
 
                 ui.add_space(5.0);
                 ui.label("Improve extra:");
-                if ui.add(
-                    egui::TextEdit::multiline(&mut type_prompt.improve_extra)
-                        .desired_width(content_width)
-                        .desired_rows(2)
-                        .hint_text("Extra improvement instructions..."),
-                ).changed() {
+                if ui
+                    .add(
+                        egui::TextEdit::multiline(&mut type_prompt.improve_extra)
+                            .desired_width(content_width)
+                            .desired_rows(2)
+                            .hint_text("Extra improvement instructions..."),
+                    )
+                    .changed()
+                {
                     // Mark for save - handled below
                 }
             });
@@ -17981,7 +18949,11 @@ impl RequirementsApp {
                             AiAgent::ClaudeCode => "Claude Code",
                         })
                         .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut self.selected_ai_agent, AiAgent::ClaudeCode, "Claude Code");
+                            ui.selectable_value(
+                                &mut self.selected_ai_agent,
+                                AiAgent::ClaudeCode,
+                                "Claude Code",
+                            );
                             // Future agents can be added here
                         });
                 });
@@ -18013,17 +18985,26 @@ impl RequirementsApp {
         {
             ui.heading("Project Scaffolding");
             ui.add_space(5.0);
-            ui.label("Generate Claude Code artifacts (CLAUDE.md, skills, commands) for this project.");
+            ui.label(
+                "Generate Claude Code artifacts (CLAUDE.md, skills, commands) for this project.",
+            );
             ui.add_space(10.0);
 
             ui.horizontal(|ui| {
                 if ui.button("🔧 Scaffold Project").clicked() {
                     // Generate preview when opening dialog
-                    let project_dir = self.storage.path().parent()
+                    let project_dir = self
+                        .storage
+                        .path()
+                        .parent()
                         .map(|p| p.to_path_buf())
                         .unwrap_or_else(|| std::path::PathBuf::from("."));
                     let db_path = self.storage.path().to_path_buf();
-                    let mut scaffolder = aida_core::Scaffolder::with_database(project_dir, self.scaffold_config.clone(), db_path);
+                    let mut scaffolder = aida_core::Scaffolder::with_database(
+                        project_dir,
+                        self.scaffold_config.clone(),
+                        db_path,
+                    );
                     self.scaffold_preview = Some(scaffolder.preview(&self.store));
                     self.show_scaffold_dialog = true;
                 }
@@ -18031,7 +19012,10 @@ impl RequirementsApp {
                 // trace:FR-0261 | ai:claude:high
                 if ui.button("📋 Check Status").clicked() {
                     // Check scaffold status against current project
-                    let project_dir = self.storage.path().parent()
+                    let project_dir = self
+                        .storage
+                        .path()
+                        .parent()
                         .map(|p| p.to_path_buf())
                         .unwrap_or_else(|| std::path::PathBuf::from("."));
                     let db_path = self.storage.path();
@@ -18062,15 +19046,26 @@ impl RequirementsApp {
             // Report format selection
             ui.horizontal(|ui| {
                 ui.label("Format:");
-                ui.selectable_value(&mut self.ai_report_format, aida_core::ReportFormat::Html, "HTML");
-                ui.selectable_value(&mut self.ai_report_format, aida_core::ReportFormat::Markdown, "Markdown");
+                ui.selectable_value(
+                    &mut self.ai_report_format,
+                    aida_core::ReportFormat::Html,
+                    "HTML",
+                );
+                ui.selectable_value(
+                    &mut self.ai_report_format,
+                    aida_core::ReportFormat::Markdown,
+                    "Markdown",
+                );
             });
 
             ui.add_space(5.0);
 
             // Include scaffold status option
-            ui.checkbox(&mut self.ai_report_include_scaffold, "Include scaffold status")
-                .on_hover_text("Include scaffold drift detection in the report");
+            ui.checkbox(
+                &mut self.ai_report_include_scaffold,
+                "Include scaffold status",
+            )
+            .on_hover_text("Include scaffold drift detection in the report");
 
             ui.add_space(5.0);
 
@@ -18099,10 +19094,15 @@ impl RequirementsApp {
 
                 // Show Open button if a report was generated successfully
                 if let Some(ref path) = self.ai_report_generated_path {
-                    if ui.button("🔗 Open Report").on_hover_text(format!("Open {}", path.display())).clicked() {
+                    if ui
+                        .button("🔗 Open Report")
+                        .on_hover_text(format!("Open {}", path.display()))
+                        .clicked()
+                    {
                         use crate::platform::PlatformServices;
                         if let Err(e) = crate::platform::platform().open_file_external(path) {
-                            self.ai_report_last_result = Some(format!("Error opening report: {}", e));
+                            self.ai_report_last_result =
+                                Some(format!("Error opening report: {}", e));
                         }
                     }
                 }
@@ -18157,7 +19157,10 @@ impl RequirementsApp {
     /// Generate the AI Integration Report
     #[cfg(not(target_arch = "wasm32"))]
     fn generate_ai_integration_report(&mut self) {
-        let project_dir = self.storage.path().parent()
+        let project_dir = self
+            .storage
+            .path()
+            .parent()
             .map(|p| p.to_path_buf())
             .unwrap_or_else(|| std::path::PathBuf::from("."));
 
@@ -18189,10 +19192,8 @@ impl RequirementsApp {
         // Write the report
         match std::fs::write(&output_path, content) {
             Ok(()) => {
-                self.ai_report_last_result = Some(format!(
-                    "Report generated: {}",
-                    output_path.display()
-                ));
+                self.ai_report_last_result =
+                    Some(format!("Report generated: {}", output_path.display()));
                 self.ai_report_generated_path = Some(output_path);
             }
             Err(e) => {
@@ -18303,47 +19304,36 @@ impl RequirementsApp {
                             egui::ScrollArea::vertical()
                                 .id_salt("theme_editor_properties_scroll")
                                 .max_height(content_height - 50.0)
-                                .show(ui, |ui| {
-                                    match self.theme_editor_category {
-                                        ThemeEditorCategory::Backgrounds => {
-                                            Self::show_theme_backgrounds(
-                                                &mut self.theme_editor_theme,
-                                                ui,
-                                            );
-                                        }
-                                        ThemeEditorCategory::Text => {
-                                            Self::show_theme_text(&mut self.theme_editor_theme, ui);
-                                        }
-                                        ThemeEditorCategory::Widgets => {
-                                            Self::show_theme_widgets(
-                                                &mut self.theme_editor_theme,
-                                                ui,
-                                            );
-                                        }
-                                        ThemeEditorCategory::Selection => {
-                                            Self::show_theme_selection(
-                                                &mut self.theme_editor_theme,
-                                                ui,
-                                            );
-                                        }
-                                        ThemeEditorCategory::Borders => {
-                                            Self::show_theme_borders(
-                                                &mut self.theme_editor_theme,
-                                                ui,
-                                            );
-                                        }
-                                        ThemeEditorCategory::Spacing => {
-                                            Self::show_theme_spacing(
-                                                &mut self.theme_editor_theme,
-                                                ui,
-                                            );
-                                        }
-                                        ThemeEditorCategory::StatusPriority => {
-                                            Self::show_theme_status_priority(
-                                                &mut self.theme_editor_theme,
-                                                ui,
-                                            );
-                                        }
+                                .show(ui, |ui| match self.theme_editor_category {
+                                    ThemeEditorCategory::Backgrounds => {
+                                        Self::show_theme_backgrounds(
+                                            &mut self.theme_editor_theme,
+                                            ui,
+                                        );
+                                    }
+                                    ThemeEditorCategory::Text => {
+                                        Self::show_theme_text(&mut self.theme_editor_theme, ui);
+                                    }
+                                    ThemeEditorCategory::Widgets => {
+                                        Self::show_theme_widgets(&mut self.theme_editor_theme, ui);
+                                    }
+                                    ThemeEditorCategory::Selection => {
+                                        Self::show_theme_selection(
+                                            &mut self.theme_editor_theme,
+                                            ui,
+                                        );
+                                    }
+                                    ThemeEditorCategory::Borders => {
+                                        Self::show_theme_borders(&mut self.theme_editor_theme, ui);
+                                    }
+                                    ThemeEditorCategory::Spacing => {
+                                        Self::show_theme_spacing(&mut self.theme_editor_theme, ui);
+                                    }
+                                    ThemeEditorCategory::StatusPriority => {
+                                        Self::show_theme_status_priority(
+                                            &mut self.theme_editor_theme,
+                                            ui,
+                                        );
                                     }
                                 });
                         },
@@ -18404,18 +19394,22 @@ impl RequirementsApp {
                         self.show_theme_editor = false;
                     }
 
-                    if ui.button("Export to File").on_hover_text(
-                        format!("Save theme to {}", UserSettings::themes_dir().display())
-                    ).clicked() {
+                    if ui
+                        .button("Export to File")
+                        .on_hover_text(format!(
+                            "Save theme to {}",
+                            UserSettings::themes_dir().display()
+                        ))
+                        .clicked()
+                    {
                         match UserSettings::save_theme_to_file(&self.theme_editor_theme) {
                             Ok(path) => {
-                                self.message = Some((
-                                    format!("Theme exported to {}", path.display()),
-                                    false
-                                ));
+                                self.message =
+                                    Some((format!("Theme exported to {}", path.display()), false));
                             }
                             Err(e) => {
-                                self.message = Some((format!("Failed to export theme: {}", e), true));
+                                self.message =
+                                    Some((format!("Failed to export theme: {}", e), true));
                             }
                         }
                     }
@@ -18598,24 +19592,15 @@ impl RequirementsApp {
             .spacing([20.0, 8.0])
             .show(ui, |ui| {
                 ui.label("Stroke Width:");
-                ui.add(
-                    egui::Slider::new(&mut theme.widget_stroke_width, 0.0..=5.0)
-                        .suffix("px"),
-                );
+                ui.add(egui::Slider::new(&mut theme.widget_stroke_width, 0.0..=5.0).suffix("px"));
                 ui.end_row();
 
                 ui.label("Widget Rounding:");
-                ui.add(
-                    egui::Slider::new(&mut theme.widget_rounding, 0.0..=20.0)
-                        .suffix("px"),
-                );
+                ui.add(egui::Slider::new(&mut theme.widget_rounding, 0.0..=20.0).suffix("px"));
                 ui.end_row();
 
                 ui.label("Window Rounding:");
-                ui.add(
-                    egui::Slider::new(&mut theme.window_rounding, 0.0..=20.0)
-                        .suffix("px"),
-                );
+                ui.add(egui::Slider::new(&mut theme.window_rounding, 0.0..=20.0).suffix("px"));
                 ui.end_row();
             });
 
@@ -18657,17 +19642,11 @@ impl RequirementsApp {
                 ui.end_row();
 
                 ui.label("Scroll Bar Width:");
-                ui.add(
-                    egui::Slider::new(&mut theme.scroll_bar_width, 4.0..=20.0)
-                        .suffix("px"),
-                );
+                ui.add(egui::Slider::new(&mut theme.scroll_bar_width, 4.0..=20.0).suffix("px"));
                 ui.end_row();
 
                 ui.label("Indent:");
-                ui.add(
-                    egui::Slider::new(&mut theme.indent, 8.0..=40.0)
-                        .suffix("px"),
-                );
+                ui.add(egui::Slider::new(&mut theme.indent, 8.0..=40.0).suffix("px"));
                 ui.end_row();
             });
     }
@@ -18730,7 +19709,6 @@ impl RequirementsApp {
                 ui.end_row();
             });
     }
-
 
     /// Show a live preview of the theme with AIDA-specific UI examples
     fn show_theme_preview(theme: &CustomTheme, ui: &mut egui::Ui) {
@@ -18856,7 +19834,7 @@ impl RequirementsApp {
         ui.add_space(3.0);
         ui.add(egui::Hyperlink::from_label_and_url(
             egui::RichText::new("Example hyperlink").color(theme.hyperlink_color.to_egui()),
-            "https://example.com"
+            "https://example.com",
         ));
 
         ui.add_space(8.0);
@@ -19021,7 +19999,6 @@ impl RequirementsApp {
 
     #[cfg(not(target_arch = "wasm32"))]
     fn backup_database(&mut self) {
-
         let db_path = self.storage.path();
         let timestamp = Local::now().format("%Y%m%d_%H%M%S");
 
@@ -19083,21 +20060,13 @@ impl RequirementsApp {
                 PerspectiveDirection::TopDown => {
                     let leaves = self.find_tree_leaves(&outgoing_type);
                     for leaf_idx in leaves {
-                        self.collect_tree_indices_bottom_up(
-                            leaf_idx,
-                            &outgoing_type,
-                            &mut result,
-                        );
+                        self.collect_tree_indices_bottom_up(leaf_idx, &outgoing_type, &mut result);
                     }
                 }
                 PerspectiveDirection::BottomUp => {
                     let roots = self.find_tree_roots(&outgoing_type);
                     for root_idx in roots {
-                        self.collect_tree_indices_top_down(
-                            root_idx,
-                            &outgoing_type,
-                            &mut result,
-                        );
+                        self.collect_tree_indices_top_down(root_idx, &outgoing_type, &mut result);
                     }
                 }
             }
@@ -19124,7 +20093,10 @@ impl RequirementsApp {
                 if has_search_text {
                     let matches = req.title.to_lowercase().contains(&filter_text)
                         || req.description.to_lowercase().contains(&filter_text)
-                        || req.spec_id.as_ref().map_or(false, |id| id.to_lowercase().contains(&filter_text));
+                        || req
+                            .spec_id
+                            .as_ref()
+                            .map_or(false, |id| id.to_lowercase().contains(&filter_text));
                     return matches;
                 }
 
@@ -19316,7 +20288,8 @@ impl RequirementsApp {
         if !self.search_match_indices.is_empty() {
             self.search_current_match = Some(0);
             self.selected_idx = Some(self.search_match_indices[0]);
-            self.scroll_to_requirement = Some(self.store.requirements[self.search_match_indices[0]].id);
+            self.scroll_to_requirement =
+                Some(self.store.requirements[self.search_match_indices[0]].id);
         }
     }
 
@@ -19884,7 +20857,12 @@ impl RequirementsApp {
         }
     }
 
-    fn show_list_panel(&mut self, ctx: &egui::Context, in_form_view: bool, forced_width: Option<f32>) {
+    fn show_list_panel(
+        &mut self,
+        ctx: &egui::Context,
+        in_form_view: bool,
+        forced_width: Option<f32>,
+    ) {
         let mut panel = egui::SidePanel::left("list_panel")
             .min_width(200.0)
             .default_width(400.0);
@@ -19894,287 +20872,280 @@ impl RequirementsApp {
         }
 
         panel.show(ctx, |ui| {
-                // Header with optional hide button (only in form view)
-                ui.horizontal(|ui| {
-                    ui.heading("Requirements");
-                    if in_form_view {
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui
-                                .button("▶ Hide")
-                                .on_hover_text("Hide requirements list")
-                                .clicked()
-                            {
-                                self.left_panel_collapsed = true;
-                            }
-                        });
-                    }
-                });
-                ui.separator();
-
-                // Search bar
-                ui.horizontal(|ui| {
-                    self.show_search_bar(ui, 150.0, false);
-
-                    // Filter toggle button
-                    let filter_active =
-                        !self.filter_types.is_empty() || !self.filter_features.is_empty()
-                        || !self.filter_prefixes.is_empty() || !self.filter_statuses.is_empty()
-                        || !self.filter_priorities.is_empty();
-                    let filter_btn_text = if filter_active {
-                        "🔽 Filters ●"
-                    } else {
-                        "🔽 Filters"
-                    };
-                    if ui.button(filter_btn_text).clicked() {
-                        self.show_filter_dialog_list1 = !self.show_filter_dialog_list1;
-                    }
-                });
-
-                // Perspective and preset selector
-                ui.horizontal(|ui| {
-                    ui.label("View:");
-
-                    // Determine what to show as selected text
-                    let selected_text = if let Some(ref preset_name) = self.active_preset {
-                        if self.current_view_matches_active_preset() {
-                            preset_name.clone()
-                        } else {
-                            format!("{}*", preset_name) // Modified indicator
+            // Header with optional hide button (only in form view)
+            ui.horizontal(|ui| {
+                ui.heading("Requirements");
+                if in_form_view {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui
+                            .button("▶ Hide")
+                            .on_hover_text("Hide requirements list")
+                            .clicked()
+                        {
+                            self.left_panel_collapsed = true;
                         }
+                    });
+                }
+            });
+            ui.separator();
+
+            // Search bar
+            ui.horizontal(|ui| {
+                self.show_search_bar(ui, 150.0, false);
+
+                // Filter toggle button
+                let filter_active = !self.filter_types.is_empty()
+                    || !self.filter_features.is_empty()
+                    || !self.filter_prefixes.is_empty()
+                    || !self.filter_statuses.is_empty()
+                    || !self.filter_priorities.is_empty();
+                let filter_btn_text = if filter_active {
+                    "🔽 Filters ●"
+                } else {
+                    "🔽 Filters"
+                };
+                if ui.button(filter_btn_text).clicked() {
+                    self.show_filter_dialog_list1 = !self.show_filter_dialog_list1;
+                }
+            });
+
+            // Perspective and preset selector
+            ui.horizontal(|ui| {
+                ui.label("View:");
+
+                // Determine what to show as selected text
+                let selected_text = if let Some(ref preset_name) = self.active_preset {
+                    if self.current_view_matches_active_preset() {
+                        preset_name.clone()
                     } else {
-                        self.perspective.label().to_string()
-                    };
+                        format!("{}*", preset_name) // Modified indicator
+                    }
+                } else {
+                    self.perspective.label().to_string()
+                };
 
-                    // Clone presets for iteration
-                    let presets: Vec<ViewPreset> = self.user_settings.view_presets.clone();
-                    let mut preset_to_apply: Option<ViewPreset> = None;
-                    let mut clear_active_preset = false;
+                // Clone presets for iteration
+                let presets: Vec<ViewPreset> = self.user_settings.view_presets.clone();
+                let mut preset_to_apply: Option<ViewPreset> = None;
+                let mut clear_active_preset = false;
 
-                    egui::ComboBox::from_id_salt("perspective_combo")
-                        .selected_text(&selected_text)
-                        .show_ui(ui, |ui| {
-                            // Built-in perspectives section
-                            ui.label("Built-in Views");
+                egui::ComboBox::from_id_salt("perspective_combo")
+                    .selected_text(&selected_text)
+                    .show_ui(ui, |ui| {
+                        // Built-in perspectives section
+                        ui.label("Built-in Views");
+                        ui.separator();
+
+                        // Check if current view matches a built-in (for highlighting)
+                        let is_flat =
+                            self.perspective == Perspective::Flat && self.active_preset.is_none();
+                        let is_parent_child = self.perspective == Perspective::ParentChild
+                            && self.active_preset.is_none();
+                        let is_verification = self.perspective == Perspective::Verification
+                            && self.active_preset.is_none();
+                        let is_references = self.perspective == Perspective::References
+                            && self.active_preset.is_none();
+                        let is_by_owner = self.perspective == Perspective::ByOwner
+                            && self.active_preset.is_none();
+
+                        if ui
+                            .selectable_label(is_flat, Perspective::Flat.label())
+                            .clicked()
+                        {
+                            self.perspective = Perspective::Flat;
+                            clear_active_preset = true;
+                        }
+                        if ui
+                            .selectable_label(is_parent_child, Perspective::ParentChild.label())
+                            .clicked()
+                        {
+                            self.perspective = Perspective::ParentChild;
+                            clear_active_preset = true;
+                        }
+                        if ui
+                            .selectable_label(is_verification, Perspective::Verification.label())
+                            .clicked()
+                        {
+                            self.perspective = Perspective::Verification;
+                            clear_active_preset = true;
+                        }
+                        if ui
+                            .selectable_label(is_references, Perspective::References.label())
+                            .clicked()
+                        {
+                            self.perspective = Perspective::References;
+                            clear_active_preset = true;
+                        }
+                        if ui
+                            .selectable_label(is_by_owner, Perspective::ByOwner.label())
+                            .clicked()
+                        {
+                            self.perspective = Perspective::ByOwner;
+                            clear_active_preset = true;
+                        }
+
+                        // User presets section (if any exist)
+                        if !presets.is_empty() {
+                            ui.add_space(5.0);
+                            ui.label("Saved Presets");
                             ui.separator();
 
-                            // Check if current view matches a built-in (for highlighting)
-                            let is_flat = self.perspective == Perspective::Flat
-                                && self.active_preset.is_none();
-                            let is_parent_child = self.perspective == Perspective::ParentChild
-                                && self.active_preset.is_none();
-                            let is_verification = self.perspective == Perspective::Verification
-                                && self.active_preset.is_none();
-                            let is_references = self.perspective == Perspective::References
-                                && self.active_preset.is_none();
-                            let is_by_owner = self.perspective == Perspective::ByOwner
-                                && self.active_preset.is_none();
+                            for preset in &presets {
+                                let is_selected = self.active_preset.as_ref() == Some(&preset.name)
+                                    && self.current_view_matches_active_preset();
 
-                            if ui
-                                .selectable_label(is_flat, Perspective::Flat.label())
-                                .clicked()
-                            {
-                                self.perspective = Perspective::Flat;
-                                clear_active_preset = true;
+                                ui.horizontal(|ui| {
+                                    if ui.selectable_label(is_selected, &preset.name).clicked() {
+                                        preset_to_apply = Some(preset.clone());
+                                    }
+                                    // Delete button (small X)
+                                    if ui
+                                        .small_button("✕")
+                                        .on_hover_text("Delete preset")
+                                        .clicked()
+                                    {
+                                        self.show_delete_preset_confirm = Some(preset.name.clone());
+                                    }
+                                });
                             }
-                            if ui
-                                .selectable_label(is_parent_child, Perspective::ParentChild.label())
-                                .clicked()
-                            {
-                                self.perspective = Perspective::ParentChild;
-                                clear_active_preset = true;
-                            }
-                            if ui
-                                .selectable_label(
-                                    is_verification,
-                                    Perspective::Verification.label(),
-                                )
-                                .clicked()
-                            {
-                                self.perspective = Perspective::Verification;
-                                clear_active_preset = true;
-                            }
-                            if ui
-                                .selectable_label(is_references, Perspective::References.label())
-                                .clicked()
-                            {
-                                self.perspective = Perspective::References;
-                                clear_active_preset = true;
-                            }
-                            if ui
-                                .selectable_label(is_by_owner, Perspective::ByOwner.label())
-                                .clicked()
-                            {
-                                self.perspective = Perspective::ByOwner;
-                                clear_active_preset = true;
-                            }
-
-                            // User presets section (if any exist)
-                            if !presets.is_empty() {
-                                ui.add_space(5.0);
-                                ui.label("Saved Presets");
-                                ui.separator();
-
-                                for preset in &presets {
-                                    let is_selected = self.active_preset.as_ref()
-                                        == Some(&preset.name)
-                                        && self.current_view_matches_active_preset();
-
-                                    ui.horizontal(|ui| {
-                                        if ui.selectable_label(is_selected, &preset.name).clicked()
-                                        {
-                                            preset_to_apply = Some(preset.clone());
-                                        }
-                                        // Delete button (small X)
-                                        if ui
-                                            .small_button("✕")
-                                            .on_hover_text("Delete preset")
-                                            .clicked()
-                                        {
-                                            self.show_delete_preset_confirm =
-                                                Some(preset.name.clone());
-                                        }
-                                    });
-                                }
-                            }
-                        });
-
-                    // Apply preset if one was selected
-                    if let Some(preset) = preset_to_apply {
-                        self.apply_preset(&preset);
-                    }
-
-                    // Clear active preset if built-in was selected
-                    if clear_active_preset {
-                        self.active_preset = None;
-                    }
-
-                    // Direction selector (only shown for non-flat perspectives)
-                    if self.perspective != Perspective::Flat {
-                        egui::ComboBox::from_id_salt("direction_combo")
-                            .selected_text(self.perspective_direction.label())
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(
-                                    &mut self.perspective_direction,
-                                    PerspectiveDirection::TopDown,
-                                    "Top-down ↓",
-                                );
-                                ui.selectable_value(
-                                    &mut self.perspective_direction,
-                                    PerspectiveDirection::BottomUp,
-                                    "Bottom-up ↑",
-                                );
-                            });
-                    }
-
-                    // Save As button (shown when view has unsaved changes)
-                    if self.has_unsaved_view() {
-                        if ui
-                            .button("💾 Save As...")
-                            .on_hover_text("Save current view as a preset")
-                            .clicked()
-                        {
-                            // Pre-fill with active preset name if modifying, otherwise empty
-                            self.preset_name_input = self.active_preset.clone().unwrap_or_default();
-                            self.show_save_preset_dialog = true;
                         }
-                    }
+                    });
 
-                    // Reset button (shown when not at default)
-                    if self.perspective != Perspective::Flat
-                        || self.perspective_direction != PerspectiveDirection::TopDown
-                        || !self.filter_types.is_empty()
-                        || !self.filter_features.is_empty()
+                // Apply preset if one was selected
+                if let Some(preset) = preset_to_apply {
+                    self.apply_preset(&preset);
+                }
+
+                // Clear active preset if built-in was selected
+                if clear_active_preset {
+                    self.active_preset = None;
+                }
+
+                // Direction selector (only shown for non-flat perspectives)
+                if self.perspective != Perspective::Flat {
+                    egui::ComboBox::from_id_salt("direction_combo")
+                        .selected_text(self.perspective_direction.label())
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(
+                                &mut self.perspective_direction,
+                                PerspectiveDirection::TopDown,
+                                "Top-down ↓",
+                            );
+                            ui.selectable_value(
+                                &mut self.perspective_direction,
+                                PerspectiveDirection::BottomUp,
+                                "Bottom-up ↑",
+                            );
+                        });
+                }
+
+                // Save As button (shown when view has unsaved changes)
+                if self.has_unsaved_view() {
+                    if ui
+                        .button("💾 Save As...")
+                        .on_hover_text("Save current view as a preset")
+                        .clicked()
                     {
-                        if ui
-                            .small_button("↺")
-                            .on_hover_text("Reset to default view")
-                            .clicked()
-                        {
-                            self.reset_to_default_view();
-                        }
-                    }
-                });
-
-                // Collapsible filter panel
-                if self.show_filter_panel {
-                    ui.separator();
-                    self.show_filter_controls(ui);
-                }
-
-                ui.separator();
-
-                // Check for drag auto-scroll before showing ScrollArea
-                // Compute scroll delta based on pointer position during drag
-                let mut scroll_delta_to_apply = 0.0;
-                if self.drag_source.is_some() {
-                    if let Some(pointer_pos) = ui.input(|i| i.pointer.hover_pos()) {
-                        // We need to check against the available rect for the scroll area
-                        let available_rect = ui.available_rect_before_wrap();
-                        let edge_zone = 50.0; // Pixels from edge to start scrolling
-                        let scroll_speed = 10.0; // Pixels per frame
-
-                        if pointer_pos.y < available_rect.top() + edge_zone
-                            && pointer_pos.y >= available_rect.top()
-                        {
-                            // Near top - scroll up
-                            let intensity =
-                                1.0 - (pointer_pos.y - available_rect.top()) / edge_zone;
-                            scroll_delta_to_apply = -scroll_speed * intensity;
-                        } else if pointer_pos.y > available_rect.bottom() - edge_zone
-                            && pointer_pos.y <= available_rect.bottom()
-                        {
-                            // Near bottom - scroll down
-                            let intensity =
-                                1.0 - (available_rect.bottom() - pointer_pos.y) / edge_zone;
-                            scroll_delta_to_apply = scroll_speed * intensity;
-                        }
+                        // Pre-fill with active preset name if modifying, otherwise empty
+                        self.preset_name_input = self.active_preset.clone().unwrap_or_default();
+                        self.show_save_preset_dialog = true;
                     }
                 }
 
-                // Requirement list (flat or tree) with drag auto-scroll support
-                // Use horizontal() for manual horizontal scrolling (no auto-scroll on selection)
-                // wrapped with vertical() for vertical scrolling with auto-scroll on selection
-                let mut scroll_area = egui::ScrollArea::vertical()
-                    .id_salt("requirements_list_scroll")
-                    .auto_shrink([false, false]); // Don't shrink to content
-
-                // If we need to scroll due to drag, set the scroll offset
-                if scroll_delta_to_apply != 0.0 {
-                    let new_offset = (self.drag_scroll_delta + scroll_delta_to_apply).max(0.0);
-                    self.drag_scroll_delta = new_offset;
-                    scroll_area = scroll_area.vertical_scroll_offset(new_offset);
-                    ui.ctx().request_repaint();
+                // Reset button (shown when not at default)
+                if self.perspective != Perspective::Flat
+                    || self.perspective_direction != PerspectiveDirection::TopDown
+                    || !self.filter_types.is_empty()
+                    || !self.filter_features.is_empty()
+                {
+                    if ui
+                        .small_button("↺")
+                        .on_hover_text("Reset to default view")
+                        .clicked()
+                    {
+                        self.reset_to_default_view();
+                    }
                 }
-
-                let scroll_output = scroll_area.show(ui, |ui| {
-                    // Wrap content in horizontal scroll for wide titles
-                    // This is separate from vertical scroll so scroll_to_me only scrolls vertically
-                    egui::ScrollArea::horizontal()
-                        .id_salt("requirements_list_horizontal_scroll")
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| {
-                            // Set minimum width for content to prevent text wrapping
-                            ui.set_min_width(300.0);
-                            match &self.perspective {
-                                Perspective::Flat => {
-                                    self.show_flat_list(ui);
-                                }
-                                _ => {
-                                    self.show_tree_list(ui);
-                                }
-                            }
-                        });
-                });
-
-                // Update stored offset from actual scroll state (for when user scrolls manually)
-                if self.drag_source.is_some() {
-                    self.drag_scroll_delta = scroll_output.state.offset.y;
-                } else {
-                    self.drag_scroll_delta = scroll_output.state.offset.y;
-                }
-
-                // Selection remains fixed when scrolling - user must click to change selection
             });
+
+            // Collapsible filter panel
+            if self.show_filter_panel {
+                ui.separator();
+                self.show_filter_controls(ui);
+            }
+
+            ui.separator();
+
+            // Check for drag auto-scroll before showing ScrollArea
+            // Compute scroll delta based on pointer position during drag
+            let mut scroll_delta_to_apply = 0.0;
+            if self.drag_source.is_some() {
+                if let Some(pointer_pos) = ui.input(|i| i.pointer.hover_pos()) {
+                    // We need to check against the available rect for the scroll area
+                    let available_rect = ui.available_rect_before_wrap();
+                    let edge_zone = 50.0; // Pixels from edge to start scrolling
+                    let scroll_speed = 10.0; // Pixels per frame
+
+                    if pointer_pos.y < available_rect.top() + edge_zone
+                        && pointer_pos.y >= available_rect.top()
+                    {
+                        // Near top - scroll up
+                        let intensity = 1.0 - (pointer_pos.y - available_rect.top()) / edge_zone;
+                        scroll_delta_to_apply = -scroll_speed * intensity;
+                    } else if pointer_pos.y > available_rect.bottom() - edge_zone
+                        && pointer_pos.y <= available_rect.bottom()
+                    {
+                        // Near bottom - scroll down
+                        let intensity = 1.0 - (available_rect.bottom() - pointer_pos.y) / edge_zone;
+                        scroll_delta_to_apply = scroll_speed * intensity;
+                    }
+                }
+            }
+
+            // Requirement list (flat or tree) with drag auto-scroll support
+            // Use horizontal() for manual horizontal scrolling (no auto-scroll on selection)
+            // wrapped with vertical() for vertical scrolling with auto-scroll on selection
+            let mut scroll_area = egui::ScrollArea::vertical()
+                .id_salt("requirements_list_scroll")
+                .auto_shrink([false, false]); // Don't shrink to content
+
+            // If we need to scroll due to drag, set the scroll offset
+            if scroll_delta_to_apply != 0.0 {
+                let new_offset = (self.drag_scroll_delta + scroll_delta_to_apply).max(0.0);
+                self.drag_scroll_delta = new_offset;
+                scroll_area = scroll_area.vertical_scroll_offset(new_offset);
+                ui.ctx().request_repaint();
+            }
+
+            let scroll_output = scroll_area.show(ui, |ui| {
+                // Wrap content in horizontal scroll for wide titles
+                // This is separate from vertical scroll so scroll_to_me only scrolls vertically
+                egui::ScrollArea::horizontal()
+                    .id_salt("requirements_list_horizontal_scroll")
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| {
+                        // Set minimum width for content to prevent text wrapping
+                        ui.set_min_width(300.0);
+                        match &self.perspective {
+                            Perspective::Flat => {
+                                self.show_flat_list(ui);
+                            }
+                            _ => {
+                                self.show_tree_list(ui);
+                            }
+                        }
+                    });
+            });
+
+            // Update stored offset from actual scroll state (for when user scrolls manually)
+            if self.drag_source.is_some() {
+                self.drag_scroll_delta = scroll_output.state.offset.y;
+            } else {
+                self.drag_scroll_delta = scroll_output.state.offset.y;
+            }
+
+            // Selection remains fixed when scrolling - user must click to change selection
+        });
     }
 
     /// Show split panel (second requirements list) on the left side (next to main list)
@@ -20189,146 +21160,142 @@ impl RequirementsApp {
         }
 
         panel.show(ctx, |ui| {
-                // Header with close button
-                ui.horizontal(|ui| {
-                    ui.heading("Requirements");
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            // Header with close button
+            ui.horizontal(|ui| {
+                ui.heading("Requirements");
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.button("⊟").on_hover_text("Close split view").clicked() {
+                        // Return to ListDetailsSide mode
+                        self.layout_mode = LayoutMode::ListDetailsSide;
+                    }
+                });
+            });
+            ui.separator();
+
+            // Search bar
+            ui.horizontal(|ui| {
+                ui.label("🔍");
+                ui.add(
+                    egui::TextEdit::singleline(&mut self.split_filter_text)
+                        .hint_text("Search...")
+                        .desired_width(120.0),
+                );
+                // Clear button
+                if !self.split_filter_text.is_empty() {
+                    if ui.small_button("✕").on_hover_text("Clear search").clicked() {
+                        self.split_filter_text.clear();
+                    }
+                }
+
+                // Filter toggle
+                let filter_active = !self.split_filter_types.is_empty()
+                    || !self.split_filter_features.is_empty()
+                    || !self.split_filter_prefixes.is_empty()
+                    || !self.split_filter_statuses.is_empty()
+                    || !self.split_filter_priorities.is_empty();
+                let filter_btn_text = if filter_active { "🔽 ●" } else { "🔽" };
+                if ui
+                    .button(filter_btn_text)
+                    .on_hover_text("Filters")
+                    .clicked()
+                {
+                    self.show_filter_dialog_list2 = !self.show_filter_dialog_list2;
+                }
+            });
+
+            // Perspective selector
+            ui.horizontal(|ui| {
+                ui.label("View:");
+                let selected_text = self.split_perspective.label().to_string();
+
+                egui::ComboBox::from_id_salt("split_perspective_combo")
+                    .selected_text(&selected_text)
+                    .show_ui(ui, |ui| {
                         if ui
-                            .button("⊟")
-                            .on_hover_text("Close split view")
+                            .selectable_label(
+                                self.split_perspective == Perspective::Flat,
+                                Perspective::Flat.label(),
+                            )
                             .clicked()
                         {
-                            // Return to ListDetailsSide mode
-                            self.layout_mode = LayoutMode::ListDetailsSide;
+                            self.split_perspective = Perspective::Flat;
+                        }
+                        if ui
+                            .selectable_label(
+                                self.split_perspective == Perspective::ParentChild,
+                                Perspective::ParentChild.label(),
+                            )
+                            .clicked()
+                        {
+                            self.split_perspective = Perspective::ParentChild;
+                        }
+                        if ui
+                            .selectable_label(
+                                self.split_perspective == Perspective::Verification,
+                                Perspective::Verification.label(),
+                            )
+                            .clicked()
+                        {
+                            self.split_perspective = Perspective::Verification;
+                        }
+                        if ui
+                            .selectable_label(
+                                self.split_perspective == Perspective::References,
+                                Perspective::References.label(),
+                            )
+                            .clicked()
+                        {
+                            self.split_perspective = Perspective::References;
+                        }
+                        if ui
+                            .selectable_label(
+                                self.split_perspective == Perspective::ByOwner,
+                                Perspective::ByOwner.label(),
+                            )
+                            .clicked()
+                        {
+                            self.split_perspective = Perspective::ByOwner;
                         }
                     });
-                });
-                ui.separator();
 
-                // Search bar
-                ui.horizontal(|ui| {
-                    ui.label("🔍");
-                    ui.add(
-                        egui::TextEdit::singleline(&mut self.split_filter_text)
-                            .hint_text("Search...")
-                            .desired_width(120.0),
-                    );
-                    // Clear button
-                    if !self.split_filter_text.is_empty() {
-                        if ui.small_button("✕").on_hover_text("Clear search").clicked() {
-                            self.split_filter_text.clear();
-                        }
-                    }
-
-                    // Filter toggle
-                    let filter_active = !self.split_filter_types.is_empty()
-                        || !self.split_filter_features.is_empty()
-                        || !self.split_filter_prefixes.is_empty()
-                        || !self.split_filter_statuses.is_empty()
-                        || !self.split_filter_priorities.is_empty();
-                    let filter_btn_text = if filter_active {
-                        "🔽 ●"
-                    } else {
-                        "🔽"
-                    };
-                    if ui.button(filter_btn_text).on_hover_text("Filters").clicked() {
-                        self.show_filter_dialog_list2 = !self.show_filter_dialog_list2;
-                    }
-                });
-
-                // Perspective selector
-                ui.horizontal(|ui| {
-                    ui.label("View:");
-                    let selected_text = self.split_perspective.label().to_string();
-
-                    egui::ComboBox::from_id_salt("split_perspective_combo")
-                        .selected_text(&selected_text)
+                // Direction for hierarchical views
+                if matches!(
+                    self.split_perspective,
+                    Perspective::ParentChild | Perspective::Verification | Perspective::References
+                ) {
+                    egui::ComboBox::from_id_salt("split_direction_combo")
+                        .selected_text(self.split_perspective_direction.label())
                         .show_ui(ui, |ui| {
-                            if ui
-                                .selectable_label(
-                                    self.split_perspective == Perspective::Flat,
-                                    Perspective::Flat.label(),
-                                )
-                                .clicked()
-                            {
-                                self.split_perspective = Perspective::Flat;
-                            }
-                            if ui
-                                .selectable_label(
-                                    self.split_perspective == Perspective::ParentChild,
-                                    Perspective::ParentChild.label(),
-                                )
-                                .clicked()
-                            {
-                                self.split_perspective = Perspective::ParentChild;
-                            }
-                            if ui
-                                .selectable_label(
-                                    self.split_perspective == Perspective::Verification,
-                                    Perspective::Verification.label(),
-                                )
-                                .clicked()
-                            {
-                                self.split_perspective = Perspective::Verification;
-                            }
-                            if ui
-                                .selectable_label(
-                                    self.split_perspective == Perspective::References,
-                                    Perspective::References.label(),
-                                )
-                                .clicked()
-                            {
-                                self.split_perspective = Perspective::References;
-                            }
-                            if ui
-                                .selectable_label(
-                                    self.split_perspective == Perspective::ByOwner,
-                                    Perspective::ByOwner.label(),
-                                )
-                                .clicked()
-                            {
-                                self.split_perspective = Perspective::ByOwner;
-                            }
+                            ui.selectable_value(
+                                &mut self.split_perspective_direction,
+                                PerspectiveDirection::TopDown,
+                                "↓",
+                            );
+                            ui.selectable_value(
+                                &mut self.split_perspective_direction,
+                                PerspectiveDirection::BottomUp,
+                                "↑",
+                            );
                         });
-
-                    // Direction for hierarchical views
-                    if matches!(
-                        self.split_perspective,
-                        Perspective::ParentChild | Perspective::Verification | Perspective::References
-                    ) {
-                        egui::ComboBox::from_id_salt("split_direction_combo")
-                            .selected_text(self.split_perspective_direction.label())
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(
-                                    &mut self.split_perspective_direction,
-                                    PerspectiveDirection::TopDown,
-                                    "↓",
-                                );
-                                ui.selectable_value(
-                                    &mut self.split_perspective_direction,
-                                    PerspectiveDirection::BottomUp,
-                                    "↑",
-                                );
-                            });
-                    }
-                });
-
-                ui.separator();
-
-                // Requirements list
-                egui::ScrollArea::vertical()
-                    .id_salt("split_panel_scroll")
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        egui::ScrollArea::horizontal()
-                            .id_salt("split_panel_horizontal_scroll")
-                            .auto_shrink([false, false])
-                            .show(ui, |ui| {
-                                ui.set_min_width(250.0);
-                                self.show_split_list(ui);
-                            });
-                    });
+                }
             });
+
+            ui.separator();
+
+            // Requirements list
+            egui::ScrollArea::vertical()
+                .id_salt("split_panel_scroll")
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    egui::ScrollArea::horizontal()
+                        .id_salt("split_panel_horizontal_scroll")
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            ui.set_min_width(250.0);
+                            self.show_split_list(ui);
+                        });
+                });
+        });
     }
 
     /// Show the requirements list in the split panel
@@ -20362,8 +21329,10 @@ impl RequirementsApp {
                         available_width.max(50.0),
                         egui::TextStyle::Body,
                     );
-                    let desired_size = egui::vec2(available_width.max(50.0), galley.size().y) + egui::vec2(8.0, 4.0);
-                    let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
+                    let desired_size = egui::vec2(available_width.max(50.0), galley.size().y)
+                        + egui::vec2(8.0, 4.0);
+                    let (rect, response) =
+                        ui.allocate_exact_size(desired_size, egui::Sense::click());
 
                     // Scroll to center if requested
                     if should_scroll {
@@ -20373,7 +21342,8 @@ impl RequirementsApp {
 
                     // Paint background only when selected
                     if is_selected {
-                        ui.painter().rect_filled(rect, 2.0, ui.visuals().selection.bg_fill);
+                        ui.painter()
+                            .rect_filled(rect, 2.0, ui.visuals().selection.bg_fill);
                     }
 
                     // Paint text
@@ -20397,7 +21367,8 @@ impl RequirementsApp {
                                 self.pending_view_change = Some(View::Detail);
                             }
                             // Clear focus from any text fields to enable hotkeys
-                            ui.ctx().memory_mut(|mem| mem.surrender_focus(egui::Id::NULL));
+                            ui.ctx()
+                                .memory_mut(|mem| mem.surrender_focus(egui::Id::NULL));
                         }
                         if response.double_clicked() {
                             // Switch to edit mode on double-click
@@ -20407,7 +21378,8 @@ impl RequirementsApp {
                             self.load_form_from_requirement(idx);
                             self.pending_view_change = Some(View::Edit);
                             // Clear focus from any text fields to enable hotkeys
-                            ui.ctx().memory_mut(|mem| mem.surrender_focus(egui::Id::NULL));
+                            ui.ctx()
+                                .memory_mut(|mem| mem.surrender_focus(egui::Id::NULL));
                         }
                     }
                 }
@@ -20447,8 +21419,10 @@ impl RequirementsApp {
                         available_width.max(50.0),
                         egui::TextStyle::Body,
                     );
-                    let desired_size = egui::vec2(available_width.max(50.0), galley.size().y) + egui::vec2(8.0, 4.0);
-                    let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
+                    let desired_size = egui::vec2(available_width.max(50.0), galley.size().y)
+                        + egui::vec2(8.0, 4.0);
+                    let (rect, response) =
+                        ui.allocate_exact_size(desired_size, egui::Sense::click());
 
                     // Scroll to center if requested
                     if should_scroll {
@@ -20458,7 +21432,8 @@ impl RequirementsApp {
 
                     // Paint background only when selected
                     if is_selected {
-                        ui.painter().rect_filled(rect, 2.0, ui.visuals().selection.bg_fill);
+                        ui.painter()
+                            .rect_filled(rect, 2.0, ui.visuals().selection.bg_fill);
                     }
 
                     // Paint text
@@ -20482,7 +21457,8 @@ impl RequirementsApp {
                                 self.pending_view_change = Some(View::Detail);
                             }
                             // Clear focus from any text fields to enable hotkeys
-                            ui.ctx().memory_mut(|mem| mem.surrender_focus(egui::Id::NULL));
+                            ui.ctx()
+                                .memory_mut(|mem| mem.surrender_focus(egui::Id::NULL));
                         }
                         if response.double_clicked() {
                             self.split_selected_idx = Some(idx);
@@ -20491,7 +21467,8 @@ impl RequirementsApp {
                             self.load_form_from_requirement(idx);
                             self.pending_view_change = Some(View::Edit);
                             // Clear focus from any text fields to enable hotkeys
-                            ui.ctx().memory_mut(|mem| mem.surrender_focus(egui::Id::NULL));
+                            ui.ctx()
+                                .memory_mut(|mem| mem.surrender_focus(egui::Id::NULL));
                         }
                     }
                 }
@@ -20516,8 +21493,10 @@ impl RequirementsApp {
             self.show_search_bar(ui, 250.0, false);
 
             // Filter toggle button
-            let filter_active = !self.filter_types.is_empty() || !self.filter_features.is_empty()
-                || !self.filter_prefixes.is_empty() || !self.filter_statuses.is_empty()
+            let filter_active = !self.filter_types.is_empty()
+                || !self.filter_features.is_empty()
+                || !self.filter_prefixes.is_empty()
+                || !self.filter_statuses.is_empty()
                 || !self.filter_priorities.is_empty();
             let filter_btn_text = if filter_active {
                 "🔽 Filters ●"
@@ -20745,7 +21724,11 @@ impl RequirementsApp {
         ui.label("🔍");
         let mut response = ui.add(
             egui::TextEdit::singleline(&mut self.filter_text)
-                .hint_text(if compact { "Search... (↑↓ history)" } else { "Search (↑↓ history, case-insensitive)..." })
+                .hint_text(if compact {
+                    "Search... (↑↓ history)"
+                } else {
+                    "Search (↑↓ history, case-insensitive)..."
+                })
                 .desired_width(desired_width),
         );
 
@@ -20797,7 +21780,11 @@ impl RequirementsApp {
 
         // Clear button (only when there's text)
         if !self.filter_text.is_empty() {
-            if ui.small_button("✕").on_hover_text("Clear search (Esc)").clicked() {
+            if ui
+                .small_button("✕")
+                .on_hover_text("Clear search (Esc)")
+                .clicked()
+            {
                 self.clear_search();
             }
         }
@@ -20825,10 +21812,18 @@ impl RequirementsApp {
             ui.label(format!("{}/{}", current, match_count));
 
             // Previous/Next buttons
-            if ui.small_button("▲").on_hover_text("Previous match (N)").clicked() {
+            if ui
+                .small_button("▲")
+                .on_hover_text("Previous match (N)")
+                .clicked()
+            {
                 self.prev_search_match();
             }
-            if ui.small_button("▼").on_hover_text("Next match (n)").clicked() {
+            if ui
+                .small_button("▼")
+                .on_hover_text("Next match (n)")
+                .clicked()
+            {
                 self.next_search_match();
             }
         }
@@ -21249,7 +22244,10 @@ impl RequirementsApp {
 
     /// Get the status icon for a requirement status string (uses user settings)
     fn get_status_icon(&self, status_string: &str) -> String {
-        self.user_settings.status_icons.get_icon(status_string).to_string()
+        self.user_settings
+            .status_icons
+            .get_icon(status_string)
+            .to_string()
     }
 
     /// Get the icon for a requirement, considering both type and status
@@ -21309,7 +22307,8 @@ impl RequirementsApp {
         };
 
         // Only show current match highlighting in Highlight mode
-        let is_current_match = has_search_text && is_highlight_mode && self.is_current_search_match(idx);
+        let is_current_match =
+            has_search_text && is_highlight_mode && self.is_current_search_match(idx);
 
         let indent_space = indent as f32 * 20.0;
 
@@ -21318,7 +22317,12 @@ impl RequirementsApp {
 
             // Build the label with optional status icon
             let label = if show_status_icons {
-                format!("{} {} - {}", icon, spec_id.as_deref().unwrap_or("N/A"), title)
+                format!(
+                    "{} {} - {}",
+                    icon,
+                    spec_id.as_deref().unwrap_or("N/A"),
+                    title
+                )
             } else {
                 format!("{} - {}", spec_id.as_deref().unwrap_or("N/A"), title)
             };
@@ -21377,7 +22381,8 @@ impl RequirementsApp {
                 egui::TextStyle::Body,
             );
 
-            let desired_size = egui::vec2(available_width.max(50.0), galley.size().y) + egui::vec2(8.0, 4.0); // padding
+            let desired_size =
+                egui::vec2(available_width.max(50.0), galley.size().y) + egui::vec2(8.0, 4.0); // padding
 
             let (rect, response) = ui.allocate_exact_size(desired_size, sense);
 
@@ -21434,23 +22439,43 @@ impl RequirementsApp {
                 ui.label(egui::RichText::new("AI Actions").strong());
                 ui.separator();
 
-                if ui.button("e  Evaluate").on_hover_text("AI evaluates requirement quality").clicked() {
+                if ui
+                    .button("e  Evaluate")
+                    .on_hover_text("AI evaluates requirement quality")
+                    .clicked()
+                {
                     self.deferred_ai_action = Some(AiAction::Evaluate(req_id));
                     ui.close_menu();
                 }
-                if ui.button("d  Find Duplicates").on_hover_text("AI finds potential duplicates").clicked() {
+                if ui
+                    .button("d  Find Duplicates")
+                    .on_hover_text("AI finds potential duplicates")
+                    .clicked()
+                {
                     self.deferred_ai_action = Some(AiAction::FindDuplicates(req_id));
                     ui.close_menu();
                 }
-                if ui.button("r  Suggest Relationships").on_hover_text("AI suggests related requirements").clicked() {
+                if ui
+                    .button("r  Suggest Relationships")
+                    .on_hover_text("AI suggests related requirements")
+                    .clicked()
+                {
                     self.deferred_ai_action = Some(AiAction::SuggestRelationships(req_id));
                     ui.close_menu();
                 }
-                if ui.button("i  Improve Description").on_hover_text("AI improves the description").clicked() {
+                if ui
+                    .button("i  Improve Description")
+                    .on_hover_text("AI improves the description")
+                    .clicked()
+                {
                     self.deferred_ai_action = Some(AiAction::ImproveDescription(req_id));
                     ui.close_menu();
                 }
-                if ui.button("g  Generate Children").on_hover_text("AI generates child requirements").clicked() {
+                if ui
+                    .button("g  Generate Children")
+                    .on_hover_text("AI generates child requirements")
+                    .clicked()
+                {
                     self.deferred_ai_action = Some(AiAction::GenerateChildren(req_id));
                     ui.close_menu();
                 }
@@ -21570,7 +22595,10 @@ impl RequirementsApp {
     /// Show the By Owner list - Users as roots with their owned requirements as children
     fn show_by_owner_list(&mut self, ui: &mut egui::Ui) {
         // Get all non-archived users
-        let users: Vec<_> = self.store.users.iter()
+        let users: Vec<_> = self
+            .store
+            .users
+            .iter()
             .filter(|u| !u.archived)
             .map(|u| (u.id, u.name.clone(), u.handle.clone(), u.spec_id.clone()))
             .collect();
@@ -21583,10 +22611,16 @@ impl RequirementsApp {
         // Show mode toggle
         ui.horizontal(|ui| {
             ui.label("Mode:");
-            if ui.selectable_label(self.owner_view_mode == OwnerViewMode::Flat, "Flat").clicked() {
+            if ui
+                .selectable_label(self.owner_view_mode == OwnerViewMode::Flat, "Flat")
+                .clicked()
+            {
                 self.owner_view_mode = OwnerViewMode::Flat;
             }
-            if ui.selectable_label(self.owner_view_mode == OwnerViewMode::Nested, "Nested").clicked() {
+            if ui
+                .selectable_label(self.owner_view_mode == OwnerViewMode::Nested, "Nested")
+                .clicked()
+            {
                 self.owner_view_mode = OwnerViewMode::Nested;
             }
         });
@@ -21595,7 +22629,10 @@ impl RequirementsApp {
         // For each user, show them as a root node
         for (user_id, name, handle, spec_id) in users {
             // Count owned requirements for this user
-            let owned_count = self.store.requirements.iter()
+            let owned_count = self
+                .store
+                .requirements
+                .iter()
                 .filter(|r| !r.archived || self.show_archived)
                 .filter(|r| self.matches_user_owner(r, &handle))
                 .count();
@@ -21638,7 +22675,10 @@ impl RequirementsApp {
         }
 
         // Show unassigned requirements (owner is empty or doesn't match any user)
-        let unassigned_count = self.store.requirements.iter()
+        let unassigned_count = self
+            .store
+            .requirements
+            .iter()
             .filter(|r| !r.archived || self.show_archived)
             .filter(|r| r.owner.is_empty() || !self.owner_is_known_user(&r.owner))
             .count();
@@ -21646,7 +22686,11 @@ impl RequirementsApp {
         if unassigned_count > 0 {
             ui.add_space(10.0);
             let unassigned_id = Uuid::nil(); // Use nil UUID for unassigned section
-            let is_collapsed = self.tree_collapsed.get(&unassigned_id).copied().unwrap_or(false);
+            let is_collapsed = self
+                .tree_collapsed
+                .get(&unassigned_id)
+                .copied()
+                .unwrap_or(false);
 
             ui.horizontal(|ui| {
                 let toggle_text = if is_collapsed { "▶" } else { "▼" };
@@ -21668,23 +22712,32 @@ impl RequirementsApp {
     fn matches_user_owner(&self, req: &Requirement, handle: &str) -> bool {
         let owner = req.owner.trim();
         // Match @handle or just handle
-        owner.eq_ignore_ascii_case(handle) ||
-        owner.strip_prefix('@').map(|s| s.eq_ignore_ascii_case(handle)).unwrap_or(false)
+        owner.eq_ignore_ascii_case(handle)
+            || owner
+                .strip_prefix('@')
+                .map(|s| s.eq_ignore_ascii_case(handle))
+                .unwrap_or(false)
     }
 
     /// Check if an owner string matches any known user
     fn owner_is_known_user(&self, owner: &str) -> bool {
         let owner = owner.trim();
         self.store.users.iter().any(|u| {
-            owner.eq_ignore_ascii_case(&u.handle) ||
-            owner.strip_prefix('@').map(|s| s.eq_ignore_ascii_case(&u.handle)).unwrap_or(false)
+            owner.eq_ignore_ascii_case(&u.handle)
+                || owner
+                    .strip_prefix('@')
+                    .map(|s| s.eq_ignore_ascii_case(&u.handle))
+                    .unwrap_or(false)
         })
     }
 
     /// Show owned requirements in flat mode (direct children of user)
     fn show_owned_requirements_flat(&mut self, ui: &mut egui::Ui, owner_handle: &str) {
         // Collect matching requirements
-        let matching: Vec<usize> = self.store.requirements.iter()
+        let matching: Vec<usize> = self
+            .store
+            .requirements
+            .iter()
             .enumerate()
             .filter(|(_, r)| !r.archived || self.show_archived)
             .filter(|(_, r)| self.matches_user_owner(r, owner_handle))
@@ -21703,14 +22756,20 @@ impl RequirementsApp {
     /// Show owned requirements in nested mode (preserving parent/child hierarchy)
     fn show_owned_requirements_nested(&mut self, ui: &mut egui::Ui, owner_handle: &str) {
         // Find all requirements owned by this user
-        let owned_ids: HashSet<Uuid> = self.store.requirements.iter()
+        let owned_ids: HashSet<Uuid> = self
+            .store
+            .requirements
+            .iter()
             .filter(|r| !r.archived || self.show_archived)
             .filter(|r| self.matches_user_owner(r, owner_handle))
             .map(|r| r.id)
             .collect();
 
         // Find root requirements for this owner (owned reqs that have no owned parent)
-        let root_reqs: Vec<usize> = self.store.requirements.iter()
+        let root_reqs: Vec<usize> = self
+            .store
+            .requirements
+            .iter()
             .enumerate()
             .filter(|(_, r)| !r.archived || self.show_archived)
             .filter(|(_, r)| self.matches_user_owner(r, owner_handle))
@@ -21718,8 +22777,7 @@ impl RequirementsApp {
             .filter(|(_, r)| {
                 // Check if any parent is also owned - if so, this is not a root
                 !r.relationships.iter().any(|rel| {
-                    rel.rel_type == RelationshipType::Parent &&
-                    owned_ids.contains(&rel.target_id)
+                    rel.rel_type == RelationshipType::Parent && owned_ids.contains(&rel.target_id)
                 })
             })
             .map(|(idx, _)| idx)
@@ -21731,7 +22789,13 @@ impl RequirementsApp {
     }
 
     /// Show a tree node within the owner's owned requirements
-    fn show_owned_tree_node(&mut self, ui: &mut egui::Ui, idx: usize, owned_ids: &HashSet<Uuid>, depth: usize) {
+    fn show_owned_tree_node(
+        &mut self,
+        ui: &mut egui::Ui,
+        idx: usize,
+        owned_ids: &HashSet<Uuid>,
+        depth: usize,
+    ) {
         let Some(req) = self.store.requirements.get(idx) else {
             return;
         };
@@ -21739,14 +22803,17 @@ impl RequirementsApp {
         let req_id = req.id;
 
         // Find children that are also owned
-        let children: Vec<usize> = self.store.requirements.iter()
+        let children: Vec<usize> = self
+            .store
+            .requirements
+            .iter()
             .enumerate()
             .filter(|(_, r)| !r.archived || self.show_archived)
             .filter(|(_, r)| owned_ids.contains(&r.id))
             .filter(|(_, r)| {
-                r.relationships.iter().any(|rel| {
-                    rel.rel_type == RelationshipType::Parent && rel.target_id == req_id
-                })
+                r.relationships
+                    .iter()
+                    .any(|rel| rel.rel_type == RelationshipType::Parent && rel.target_id == req_id)
             })
             .map(|(idx, _)| idx)
             .collect();
@@ -21780,7 +22847,10 @@ impl RequirementsApp {
 
     /// Show unassigned requirements (no owner or unknown owner)
     fn show_unassigned_requirements(&mut self, ui: &mut egui::Ui) {
-        let matching: Vec<usize> = self.store.requirements.iter()
+        let matching: Vec<usize> = self
+            .store
+            .requirements
+            .iter()
             .enumerate()
             .filter(|(_, r)| !r.archived || self.show_archived)
             .filter(|(_, r)| r.owner.is_empty() || !self.owner_is_known_user(&r.owner))
@@ -21896,11 +22966,17 @@ impl RequirementsApp {
             false
         };
         // Only show current match highlighting in Highlight mode
-        let is_current_match = has_search_text && is_highlight_mode && self.is_current_search_match(idx);
+        let is_current_match =
+            has_search_text && is_highlight_mode && self.is_current_search_match(idx);
 
         // Build the label with optional status icon
         let label = if show_status_icons {
-            format!("{} {} - {}", icon, spec_id.as_deref().unwrap_or("N/A"), title)
+            format!(
+                "{} {} - {}",
+                icon,
+                spec_id.as_deref().unwrap_or("N/A"),
+                title
+            )
         } else {
             format!("{} - {}", spec_id.as_deref().unwrap_or("N/A"), title)
         };
@@ -21997,13 +23073,15 @@ impl RequirementsApp {
                 self.load_form_from_requirement(idx);
                 self.pending_view_change = Some(View::Edit);
                 // Clear focus from any text fields to enable hotkeys
-                ui.ctx().memory_mut(|mem| mem.surrender_focus(egui::Id::NULL));
+                ui.ctx()
+                    .memory_mut(|mem| mem.surrender_focus(egui::Id::NULL));
             } else if response.clicked() {
                 self.selected_idx = Some(idx);
                 self.focused_list = FocusedList::List1;
                 self.pending_view_change = Some(View::Detail);
                 // Clear focus from any text fields to enable hotkeys
-                ui.ctx().memory_mut(|mem| mem.surrender_focus(egui::Id::NULL));
+                ui.ctx()
+                    .memory_mut(|mem| mem.surrender_focus(egui::Id::NULL));
             }
         }
 
@@ -22015,23 +23093,43 @@ impl RequirementsApp {
             ui.label(egui::RichText::new("AI Actions").strong());
             ui.separator();
 
-            if ui.button("e  Evaluate").on_hover_text("AI evaluates requirement quality").clicked() {
+            if ui
+                .button("e  Evaluate")
+                .on_hover_text("AI evaluates requirement quality")
+                .clicked()
+            {
                 self.deferred_ai_action = Some(AiAction::Evaluate(req_id));
                 ui.close_menu();
             }
-            if ui.button("d  Find Duplicates").on_hover_text("AI finds potential duplicates").clicked() {
+            if ui
+                .button("d  Find Duplicates")
+                .on_hover_text("AI finds potential duplicates")
+                .clicked()
+            {
                 self.deferred_ai_action = Some(AiAction::FindDuplicates(req_id));
                 ui.close_menu();
             }
-            if ui.button("r  Suggest Relationships").on_hover_text("AI suggests related requirements").clicked() {
+            if ui
+                .button("r  Suggest Relationships")
+                .on_hover_text("AI suggests related requirements")
+                .clicked()
+            {
                 self.deferred_ai_action = Some(AiAction::SuggestRelationships(req_id));
                 ui.close_menu();
             }
-            if ui.button("i  Improve Description").on_hover_text("AI improves the description").clicked() {
+            if ui
+                .button("i  Improve Description")
+                .on_hover_text("AI improves the description")
+                .clicked()
+            {
                 self.deferred_ai_action = Some(AiAction::ImproveDescription(req_id));
                 ui.close_menu();
             }
-            if ui.button("g  Generate Children").on_hover_text("AI generates child requirements").clicked() {
+            if ui
+                .button("g  Generate Children")
+                .on_hover_text("AI generates child requirements")
+                .clicked()
+            {
                 self.deferred_ai_action = Some(AiAction::GenerateChildren(req_id));
                 ui.close_menu();
             }
@@ -22139,8 +23237,8 @@ impl RequirementsApp {
             }
 
             // Filter toggle
-            let filter_active = !self.split_filter_types.is_empty()
-                || !self.split_filter_features.is_empty();
+            let filter_active =
+                !self.split_filter_types.is_empty() || !self.split_filter_features.is_empty();
             let filter_btn_text = if filter_active {
                 "🔽 Filters ●"
             } else {
@@ -22157,11 +23255,31 @@ impl RequirementsApp {
             egui::ComboBox::from_id_salt("split_perspective_combo_content")
                 .selected_text(self.split_perspective.label())
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.split_perspective, Perspective::Flat, Perspective::Flat.label());
-                    ui.selectable_value(&mut self.split_perspective, Perspective::ParentChild, Perspective::ParentChild.label());
-                    ui.selectable_value(&mut self.split_perspective, Perspective::Verification, Perspective::Verification.label());
-                    ui.selectable_value(&mut self.split_perspective, Perspective::References, Perspective::References.label());
-                    ui.selectable_value(&mut self.split_perspective, Perspective::ByOwner, Perspective::ByOwner.label());
+                    ui.selectable_value(
+                        &mut self.split_perspective,
+                        Perspective::Flat,
+                        Perspective::Flat.label(),
+                    );
+                    ui.selectable_value(
+                        &mut self.split_perspective,
+                        Perspective::ParentChild,
+                        Perspective::ParentChild.label(),
+                    );
+                    ui.selectable_value(
+                        &mut self.split_perspective,
+                        Perspective::Verification,
+                        Perspective::Verification.label(),
+                    );
+                    ui.selectable_value(
+                        &mut self.split_perspective,
+                        Perspective::References,
+                        Perspective::References.label(),
+                    );
+                    ui.selectable_value(
+                        &mut self.split_perspective,
+                        Perspective::ByOwner,
+                        Perspective::ByOwner.label(),
+                    );
                 });
         });
         ui.separator();
@@ -22202,7 +23320,11 @@ impl RequirementsApp {
                         });
                     } else if in_form_view {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.button("▶ Hide").on_hover_text("Hide requirements list").clicked() {
+                            if ui
+                                .button("▶ Hide")
+                                .on_hover_text("Hide requirements list")
+                                .clicked()
+                            {
                                 self.left_panel_collapsed = true;
                             }
                         });
@@ -22259,7 +23381,11 @@ impl RequirementsApp {
                         || !self.filter_statuses.is_empty()
                         || !self.filter_priorities.is_empty();
                     let filter_btn_text = if filter_active { "🔽 ●" } else { "🔽" };
-                    if ui.button(filter_btn_text).on_hover_text("Filters").clicked() {
+                    if ui
+                        .button(filter_btn_text)
+                        .on_hover_text("Filters")
+                        .clicked()
+                    {
                         self.show_filter_dialog_list1 = !self.show_filter_dialog_list1;
                     }
                 });
@@ -22347,7 +23473,11 @@ impl RequirementsApp {
                 || !self.filter_statuses.is_empty()
                 || !self.filter_priorities.is_empty();
             let filter_btn_text = if filter_active { "🔽 ●" } else { "🔽" };
-            if ui.button(filter_btn_text).on_hover_text("Filters").clicked() {
+            if ui
+                .button(filter_btn_text)
+                .on_hover_text("Filters")
+                .clicked()
+            {
                 self.show_filter_dialog_list1 = !self.show_filter_dialog_list1;
             }
         });
@@ -22371,7 +23501,11 @@ impl RequirementsApp {
                     self.layout_mode = self.layout_mode.without_split();
                 }
                 // Navigation lock toggle
-                let lock_icon = if self.navigation_locked { "🔒" } else { "🔓" };
+                let lock_icon = if self.navigation_locked {
+                    "🔒"
+                } else {
+                    "🔓"
+                };
                 let lock_tooltip = if self.navigation_locked {
                     "Navigation locked: lists scroll together. Click to unlock."
                 } else {
@@ -22410,7 +23544,11 @@ impl RequirementsApp {
                 || !self.split_filter_statuses.is_empty()
                 || !self.split_filter_priorities.is_empty();
             let filter_btn_text = if filter_active { "🔽 ●" } else { "🔽" };
-            if ui.button(filter_btn_text).on_hover_text("Filters").clicked() {
+            if ui
+                .button(filter_btn_text)
+                .on_hover_text("Filters")
+                .clicked()
+            {
                 self.show_filter_dialog_list2 = !self.show_filter_dialog_list2;
             }
         });
@@ -22438,11 +23576,17 @@ impl RequirementsApp {
             self.show_search_bar(ui, 150.0, true);
 
             // Filter toggle button
-            let filter_active = !self.filter_types.is_empty() || !self.filter_features.is_empty()
-                || !self.filter_prefixes.is_empty() || !self.filter_statuses.is_empty()
+            let filter_active = !self.filter_types.is_empty()
+                || !self.filter_features.is_empty()
+                || !self.filter_prefixes.is_empty()
+                || !self.filter_statuses.is_empty()
                 || !self.filter_priorities.is_empty();
             let filter_btn_text = if filter_active { "🔽 ●" } else { "🔽" };
-            if ui.button(filter_btn_text).on_hover_text("Filters").clicked() {
+            if ui
+                .button(filter_btn_text)
+                .on_hover_text("Filters")
+                .clicked()
+            {
                 self.show_filter_dialog_list1 = !self.show_filter_dialog_list1;
             }
         });
@@ -22477,11 +23621,17 @@ impl RequirementsApp {
             }
 
             // Filter toggle
-            let filter_active = !self.split_filter_types.is_empty() || !self.split_filter_features.is_empty()
-                || !self.split_filter_prefixes.is_empty() || !self.split_filter_statuses.is_empty()
+            let filter_active = !self.split_filter_types.is_empty()
+                || !self.split_filter_features.is_empty()
+                || !self.split_filter_prefixes.is_empty()
+                || !self.split_filter_statuses.is_empty()
                 || !self.split_filter_priorities.is_empty();
             let filter_btn_text = if filter_active { "🔽 ●" } else { "🔽" };
-            if ui.button(filter_btn_text).on_hover_text("Filters").clicked() {
+            if ui
+                .button(filter_btn_text)
+                .on_hover_text("Filters")
+                .clicked()
+            {
                 self.show_filter_dialog_list2 = !self.show_filter_dialog_list2;
             }
         });
@@ -22514,22 +23664,21 @@ impl RequirementsApp {
             .order(egui::Order::Foreground)
             .fixed_pos(popup_pos)
             .show(ctx, |ui| {
-                egui::Frame::popup(ui.style())
-                    .show(ui, |ui| {
-                        ui.set_min_width(200.0);
-                        for mode in LayoutMode::all_modes() {
-                            let is_current = *mode == self.layout_mode;
-                            let label = if is_current {
-                                format!("✓ {}", mode.label())
-                            } else {
-                                format!("   {}", mode.label())
-                            };
-                            if ui.selectable_label(is_current, label).clicked() {
-                                self.layout_mode = *mode;
-                                self.show_layout_menu = false;
-                            }
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    ui.set_min_width(200.0);
+                    for mode in LayoutMode::all_modes() {
+                        let is_current = *mode == self.layout_mode;
+                        let label = if is_current {
+                            format!("✓ {}", mode.label())
+                        } else {
+                            format!("   {}", mode.label())
+                        };
+                        if ui.selectable_label(is_current, label).clicked() {
+                            self.layout_mode = *mode;
+                            self.show_layout_menu = false;
                         }
-                    });
+                    }
+                });
             });
 
         // Close menu on click outside
@@ -22573,36 +23722,36 @@ impl RequirementsApp {
         }
 
         // Get the target requirement to determine its type
-        let target_req = self.quick_change_target_id
+        let target_req = self
+            .quick_change_target_id
             .and_then(|id| self.store.requirements.iter().find(|r| r.id == id));
 
         // Find the type definition for this requirement
         let type_def = target_req.and_then(|req| {
             let type_name = req.req_type.to_string();
-            self.store.type_definitions.iter().find(|t| t.name == type_name)
+            self.store
+                .type_definitions
+                .iter()
+                .find(|t| t.name == type_name)
         });
 
         // Get the options based on field type and type definition
         let (title, options): (&str, Vec<String>) = match field {
             QuickChangeField::Status => {
-                let statuses = type_def
-                    .map(|t| t.get_statuses())
-                    .unwrap_or_else(|| vec![
+                let statuses = type_def.map(|t| t.get_statuses()).unwrap_or_else(|| {
+                    vec![
                         "Draft".to_string(),
                         "Approved".to_string(),
                         "Completed".to_string(),
                         "Rejected".to_string(),
-                    ]);
+                    ]
+                });
                 ("Change Status", statuses)
             }
             QuickChangeField::Priority => {
-                let priorities = type_def
-                    .map(|t| t.get_priorities())
-                    .unwrap_or_else(|| vec![
-                        "High".to_string(),
-                        "Medium".to_string(),
-                        "Low".to_string(),
-                    ]);
+                let priorities = type_def.map(|t| t.get_priorities()).unwrap_or_else(|| {
+                    vec!["High".to_string(), "Medium".to_string(), "Low".to_string()]
+                });
                 ("Change Priority", priorities)
             }
             QuickChangeField::Owner => unreachable!(),
@@ -22646,15 +23795,31 @@ impl RequirementsApp {
             // Detect letter key presses (excluding j/k used for navigation)
             if field == QuickChangeField::Status {
                 let letter_keys = [
-                    (egui::Key::A, 'a'), (egui::Key::B, 'b'), (egui::Key::C, 'c'),
-                    (egui::Key::D, 'd'), (egui::Key::E, 'e'), (egui::Key::F, 'f'),
-                    (egui::Key::G, 'g'), (egui::Key::H, 'h'), (egui::Key::I, 'i'),
+                    (egui::Key::A, 'a'),
+                    (egui::Key::B, 'b'),
+                    (egui::Key::C, 'c'),
+                    (egui::Key::D, 'd'),
+                    (egui::Key::E, 'e'),
+                    (egui::Key::F, 'f'),
+                    (egui::Key::G, 'g'),
+                    (egui::Key::H, 'h'),
+                    (egui::Key::I, 'i'),
                     // j/k excluded - used for navigation
-                    (egui::Key::L, 'l'), (egui::Key::M, 'm'), (egui::Key::N, 'n'),
-                    (egui::Key::O, 'o'), (egui::Key::P, 'p'), (egui::Key::Q, 'q'),
-                    (egui::Key::R, 'r'), (egui::Key::S, 's'), (egui::Key::T, 't'),
-                    (egui::Key::U, 'u'), (egui::Key::V, 'v'), (egui::Key::W, 'w'),
-                    (egui::Key::X, 'x'), (egui::Key::Y, 'y'), (egui::Key::Z, 'z'),
+                    (egui::Key::L, 'l'),
+                    (egui::Key::M, 'm'),
+                    (egui::Key::N, 'n'),
+                    (egui::Key::O, 'o'),
+                    (egui::Key::P, 'p'),
+                    (egui::Key::Q, 'q'),
+                    (egui::Key::R, 'r'),
+                    (egui::Key::S, 's'),
+                    (egui::Key::T, 't'),
+                    (egui::Key::U, 'u'),
+                    (egui::Key::V, 'v'),
+                    (egui::Key::W, 'w'),
+                    (egui::Key::X, 'x'),
+                    (egui::Key::Y, 'y'),
+                    (egui::Key::Z, 'z'),
                 ];
                 for (key, ch) in letter_keys {
                     if i.key_pressed(key) {
@@ -22668,7 +23833,8 @@ impl RequirementsApp {
         // Handle first-letter navigation for Status picker
         if let Some(letter) = letter_pressed {
             // Find all options starting with this letter (case-insensitive)
-            let matching_indices: Vec<usize> = options.iter()
+            let matching_indices: Vec<usize> = options
+                .iter()
                 .enumerate()
                 .filter(|(_, opt)| opt.to_lowercase().starts_with(letter))
                 .map(|(idx, _)| idx)
@@ -22688,7 +23854,8 @@ impl RequirementsApp {
 
                 if same_letter {
                     // Find the next match after the current selection
-                    let current_pos = matching_indices.iter()
+                    let current_pos = matching_indices
+                        .iter()
                         .position(|&idx| idx == self.quick_change_selected);
                     let next_idx = match current_pos {
                         Some(pos) => (pos + 1) % matching_indices.len(),
@@ -23065,7 +24232,8 @@ impl RequirementsApp {
                         } else {
                             for (idx, project) in projects.iter().enumerate() {
                                 let is_selected = idx == self.project_picker_selected;
-                                let is_current = self.current_project.as_ref() == Some(&project.name);
+                                let is_current =
+                                    self.current_project.as_ref() == Some(&project.name);
 
                                 let marker = if is_current { "●" } else { " " };
                                 let text = format!("{} {}", marker, project.name);
@@ -23437,7 +24605,11 @@ impl RequirementsApp {
         let action_options: Vec<(char, &str, &str)> = vec![
             ('e', "Evaluate", "AI evaluates requirement quality"),
             ('d', "Find Duplicates", "AI finds potential duplicates"),
-            ('r', "Suggest Relationships", "AI suggests related requirements"),
+            (
+                'r',
+                "Suggest Relationships",
+                "AI suggests related requirements",
+            ),
             ('i', "Improve Description", "AI improves the description"),
             ('g', "Generate Children", "AI generates child requirements"),
         ];
@@ -23611,13 +24783,43 @@ impl RequirementsApp {
         // Define tab options with their shortcut keys
         // Format: (key, label, description, DetailTab)
         let tab_options: Vec<(char, &str, &str, DetailTab)> = vec![
-            ('a', "AI", "View AI evaluations and suggestions", DetailTab::Ai),
-            ('d', "Description", "View/edit description and notes", DetailTab::Description),
-            ('c', "Comments", "View comments and history notes", DetailTab::Comments),
-            ('l', "Links", "View relationships and URL links", DetailTab::Links),
-            ('t', "Attachments", "View file attachments", DetailTab::Attachments),
+            (
+                'a',
+                "AI",
+                "View AI evaluations and suggestions",
+                DetailTab::Ai,
+            ),
+            (
+                'd',
+                "Description",
+                "View/edit description and notes",
+                DetailTab::Description,
+            ),
+            (
+                'c',
+                "Comments",
+                "View comments and history notes",
+                DetailTab::Comments,
+            ),
+            (
+                'l',
+                "Links",
+                "View relationships and URL links",
+                DetailTab::Links,
+            ),
+            (
+                't',
+                "Attachments",
+                "View file attachments",
+                DetailTab::Attachments,
+            ),
             ('h', "History", "View change history", DetailTab::History),
-            ('w', "Web Preview", "Preview URL in embedded frame", DetailTab::WebPreview),
+            (
+                'w',
+                "Web Preview",
+                "Preview URL in embedded frame",
+                DetailTab::WebPreview,
+            ),
         ];
         let num_options = tab_options.len();
 
@@ -23725,7 +24927,8 @@ impl RequirementsApp {
                         ui.label(egui::RichText::new("Detail Tabs").strong());
                         ui.separator();
 
-                        for (idx, (key, label, description, tab)) in tab_options.iter().enumerate() {
+                        for (idx, (key, label, description, tab)) in tab_options.iter().enumerate()
+                        {
                             let is_selected = idx == self.detail_tab_menu_selected;
 
                             // Show selection highlight
@@ -23789,10 +24992,25 @@ impl RequirementsApp {
         // Define queue action options
         // Format: (key, label, description, requires_in_queue)
         let queue_options: Vec<(char, &str, &str, bool)> = vec![
-            ('t', "Add to Top", "Add to top of your queue (highest priority)", false),
+            (
+                't',
+                "Add to Top",
+                "Add to top of your queue (highest priority)",
+                false,
+            ),
             ('m', "Add to Middle", "Add to middle of your queue", false),
-            ('b', "Add to Bottom", "Add to bottom of your queue (lowest priority)", false),
-            ('d', "Remove from Queue", "Remove this item from your queue", true),
+            (
+                'b',
+                "Add to Bottom",
+                "Add to bottom of your queue (lowest priority)",
+                false,
+            ),
+            (
+                'd',
+                "Remove from Queue",
+                "Remove this item from your queue",
+                true,
+            ),
             ('v', "View Queue", "Switch to queue view", false),
             ('u', "User Queue", "View another user's items", false),
         ];
@@ -23971,14 +25189,24 @@ impl RequirementsApp {
 
                         // Show queue status
                         if is_in_queue {
-                            let pos_text = queue_position.map(|p| format!(" #{}", p + 1)).unwrap_or_default();
-                            ui.label(egui::RichText::new(format!("Queue Actions (in queue{})", pos_text)).strong());
+                            let pos_text = queue_position
+                                .map(|p| format!(" #{}", p + 1))
+                                .unwrap_or_default();
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "Queue Actions (in queue{})",
+                                    pos_text
+                                ))
+                                .strong(),
+                            );
                         } else {
                             ui.label(egui::RichText::new("Queue Actions").strong());
                         }
                         ui.separator();
 
-                        for (idx, (key, label, description, requires_in_queue)) in queue_options.iter().enumerate() {
+                        for (idx, (key, label, description, requires_in_queue)) in
+                            queue_options.iter().enumerate()
+                        {
                             let is_selected = idx == self.queue_menu_selected;
                             let is_disabled = *requires_in_queue && !is_in_queue;
 
@@ -23986,7 +25214,10 @@ impl RequirementsApp {
                             let text = format!("{}  {}", key, label);
 
                             if is_disabled {
-                                ui.add_enabled(false, egui::SelectableLabel::new(is_selected, &text));
+                                ui.add_enabled(
+                                    false,
+                                    egui::SelectableLabel::new(is_selected, &text),
+                                );
                             } else {
                                 let response = ui.selectable_label(is_selected, &text);
                                 let was_clicked = response.clicked();
@@ -24001,44 +25232,58 @@ impl RequirementsApp {
                                             self.user_settings.queue_add_top(req_id);
                                             settings_changed = true;
                                             new_queue_idx = Some(0); // Top = position 0
-                                            let pos_msg = if let Some(pos) = self.user_settings.queue_position(&req_id) {
+                                            let pos_msg = if let Some(pos) =
+                                                self.user_settings.queue_position(&req_id)
+                                            {
                                                 format!(" (position {})", pos + 1)
                                             } else {
                                                 String::new()
                                             };
-                                            notification_msg = Some(format!("Added to top of queue{}", pos_msg));
+                                            notification_msg =
+                                                Some(format!("Added to top of queue{}", pos_msg));
                                         }
                                         'm' => {
                                             self.user_settings.queue_add_middle(req_id);
                                             settings_changed = true;
-                                            new_queue_idx = self.user_settings.queue_position(&req_id);
+                                            new_queue_idx =
+                                                self.user_settings.queue_position(&req_id);
                                             let pos_msg = if let Some(pos) = new_queue_idx {
                                                 format!(" (position {})", pos + 1)
                                             } else {
                                                 String::new()
                                             };
-                                            notification_msg = Some(format!("Added to middle of queue{}", pos_msg));
+                                            notification_msg = Some(format!(
+                                                "Added to middle of queue{}",
+                                                pos_msg
+                                            ));
                                         }
                                         'b' => {
                                             self.user_settings.queue_add_bottom(req_id);
                                             settings_changed = true;
-                                            new_queue_idx = self.user_settings.queue_position(&req_id);
+                                            new_queue_idx =
+                                                self.user_settings.queue_position(&req_id);
                                             let pos_msg = if let Some(pos) = new_queue_idx {
                                                 format!(" (position {})", pos + 1)
                                             } else {
                                                 String::new()
                                             };
-                                            notification_msg = Some(format!("Added to bottom of queue{}", pos_msg));
+                                            notification_msg = Some(format!(
+                                                "Added to bottom of queue{}",
+                                                pos_msg
+                                            ));
                                         }
                                         'd' => {
                                             if is_in_queue {
                                                 self.user_settings.queue_remove(&req_id);
                                                 settings_changed = true;
-                                                notification_msg = Some("Removed from queue".to_string());
+                                                notification_msg =
+                                                    Some("Removed from queue".to_string());
                                                 // Adjust selection if in queue view
                                                 if self.current_view == View::Queue {
                                                     let new_len = self.user_settings.queue.len();
-                                                    if self.queue_selected_idx >= new_len && new_len > 0 {
+                                                    if self.queue_selected_idx >= new_len
+                                                        && new_len > 0
+                                                    {
                                                         new_queue_idx = Some(new_len - 1);
                                                     }
                                                 }
@@ -24057,7 +25302,10 @@ impl RequirementsApp {
                                     }
                                     if settings_changed {
                                         if let Err(e) = self.user_settings.save() {
-                                            self.show_queue_notification(format!("Failed to save queue: {}", e), true);
+                                            self.show_queue_notification(
+                                                format!("Failed to save queue: {}", e),
+                                                true,
+                                            );
                                         } else if let Some(msg) = notification_msg {
                                             self.show_queue_notification(msg, false);
                                         }
@@ -24125,7 +25373,8 @@ impl RequirementsApp {
         let filtered_types: Vec<&(RequirementType, &str, &str)> = if search_lower.is_empty() {
             all_types.iter().collect()
         } else {
-            all_types.iter()
+            all_types
+                .iter()
                 .filter(|(_, _, name)| name.to_lowercase().contains(&search_lower))
                 .collect()
         };
@@ -24210,7 +25459,7 @@ impl RequirementsApp {
                         let response = ui.add(
                             egui::TextEdit::singleline(&mut self.type_picker_search)
                                 .hint_text("Type to search...")
-                                .desired_width(ui.available_width())
+                                .desired_width(ui.available_width()),
                         );
                         // Auto-focus the search field
                         response.request_focus();
@@ -24224,7 +25473,9 @@ impl RequirementsApp {
                                 if filtered_types.is_empty() {
                                     ui.weak("No matching types");
                                 } else {
-                                    for (idx, (req_type, icon, name)) in filtered_types.iter().enumerate() {
+                                    for (idx, (req_type, icon, name)) in
+                                        filtered_types.iter().enumerate()
+                                    {
                                         let is_selected = idx == self.type_picker_selected;
                                         let text = format!("{} {}", icon, name);
                                         let response = ui.selectable_label(is_selected, &text);
@@ -24262,7 +25513,8 @@ impl RequirementsApp {
     fn apply_type_change(&mut self, idx: usize, new_type: RequirementType) {
         // First, compute the new spec_id if the requirement has one
         let new_spec_id = if let Some(req) = self.store.requirements.get(idx) {
-            self.store.update_spec_id_for_type_change(req.spec_id.as_deref(), &new_type)
+            self.store
+                .update_spec_id_for_type_change(req.spec_id.as_deref(), &new_type)
         } else {
             None
         };
@@ -24288,7 +25540,10 @@ impl RequirementsApp {
         }
 
         // Get all active users with their owned requirements count
-        let users_with_counts: Vec<(String, String, usize)> = self.store.users.iter()
+        let users_with_counts: Vec<(String, String, usize)> = self
+            .store
+            .users
+            .iter()
             .filter(|u| !u.archived)
             .map(|u| {
                 let handle = u.handle.clone();
@@ -24297,7 +25552,10 @@ impl RequirementsApp {
                 } else {
                     format!("@{}", handle)
                 };
-                let owned_count = self.store.requirements.iter()
+                let owned_count = self
+                    .store
+                    .requirements
+                    .iter()
                     .filter(|r| !r.archived || self.show_archived)
                     .filter(|r| r.owner == handle)
                     .count();
@@ -24310,10 +25568,11 @@ impl RequirementsApp {
         let filtered_users: Vec<&(String, String, usize)> = if search_lower.is_empty() {
             users_with_counts.iter().collect()
         } else {
-            users_with_counts.iter()
+            users_with_counts
+                .iter()
                 .filter(|(handle, display, _)| {
-                    handle.to_lowercase().contains(&search_lower) ||
-                    display.to_lowercase().contains(&search_lower)
+                    handle.to_lowercase().contains(&search_lower)
+                        || display.to_lowercase().contains(&search_lower)
                 })
                 .collect()
         };
@@ -24400,7 +25659,7 @@ impl RequirementsApp {
                         let response = ui.add(
                             egui::TextEdit::singleline(&mut self.user_queue_picker_search)
                                 .hint_text("Search users...")
-                                .desired_width(ui.available_width())
+                                .desired_width(ui.available_width()),
                         );
                         // Auto-focus the search field
                         response.request_focus();
@@ -24414,12 +25673,15 @@ impl RequirementsApp {
                                 if filtered_users.is_empty() {
                                     ui.weak("No users found");
                                 } else {
-                                    for (idx, (handle, display_name, count)) in filtered_users.iter().enumerate() {
+                                    for (idx, (handle, display_name, count)) in
+                                        filtered_users.iter().enumerate()
+                                    {
                                         let is_selected = idx == self.user_queue_picker_selected;
                                         let text = format!("👤 {} ({} items)", display_name, count);
                                         let response = ui.selectable_label(is_selected, &text);
                                         if response.clicked() {
-                                            self.pending_view_change = Some(View::UserQueue(handle.clone()));
+                                            self.pending_view_change =
+                                                Some(View::UserQueue(handle.clone()));
                                             self.user_queue_selected_idx = 0;
                                             self.show_user_queue_picker = false;
                                             self.show_queue_menu = false;
@@ -24466,8 +25728,7 @@ impl RequirementsApp {
         };
 
         // Get current weight for display
-        let current_weight = self.store.requirements.get(req_idx)
-            .and_then(|r| r.weight);
+        let current_weight = self.store.requirements.get(req_idx).and_then(|r| r.weight);
 
         // Handle keyboard input
         let mut close_popup = false;
@@ -24540,7 +25801,7 @@ impl RequirementsApp {
                             let response = ui.add(
                                 egui::TextEdit::singleline(&mut self.weight_picker_input)
                                     .hint_text("e.g., 3, 5, 8...")
-                                    .desired_width(80.0)
+                                    .desired_width(80.0),
                             );
                             // Auto-focus the input field
                             response.request_focus();
@@ -24559,14 +25820,17 @@ impl RequirementsApp {
                             if ui.button("Clear").clicked() {
                                 clear_weight = true;
                             }
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if ui.button("Apply").clicked() {
-                                    apply_change = true;
-                                }
-                                if ui.button("Cancel").clicked() {
-                                    close_popup = true;
-                                }
-                            });
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if ui.button("Apply").clicked() {
+                                        apply_change = true;
+                                    }
+                                    if ui.button("Cancel").clicked() {
+                                        close_popup = true;
+                                    }
+                                },
+                            );
                         });
 
                         ui.separator();
@@ -24704,14 +25968,18 @@ impl RequirementsApp {
                             let response = ui.add(
                                 egui::TextEdit::singleline(&mut self.goto_picker_input)
                                     .hint_text("Enter digits to search...")
-                                    .desired_width(150.0)
+                                    .desired_width(150.0),
                             );
                             // Auto-focus the input field
                             response.request_focus();
                         });
 
                         // Update matches when input changes (only accept digits)
-                        let input_digits: String = self.goto_picker_input.chars().filter(|c| c.is_ascii_digit()).collect();
+                        let input_digits: String = self
+                            .goto_picker_input
+                            .chars()
+                            .filter(|c| c.is_ascii_digit())
+                            .collect();
                         if input_digits != self.goto_picker_input {
                             self.goto_picker_input = input_digits.clone();
                         }
@@ -24724,7 +25992,10 @@ impl RequirementsApp {
                                     if let Some(req) = self.store.requirements.get(idx) {
                                         // Extract digits from spec_id and check if input is a substring
                                         if let Some(ref spec_id) = req.spec_id {
-                                            let spec_digits: String = spec_id.chars().filter(|c| c.is_ascii_digit()).collect();
+                                            let spec_digits: String = spec_id
+                                                .chars()
+                                                .filter(|c| c.is_ascii_digit())
+                                                .collect();
                                             spec_digits.contains(&self.goto_picker_input)
                                         } else {
                                             false
@@ -24742,10 +26013,15 @@ impl RequirementsApp {
                                 ui.colored_label(egui::Color32::GRAY, "No matches");
                             } else {
                                 ui.label(format!("{} match(es):", self.goto_picker_matches.len()));
-                                for (i, &idx) in self.goto_picker_matches.iter().take(5).enumerate() {
+                                for (i, &idx) in self.goto_picker_matches.iter().take(5).enumerate()
+                                {
                                     if let Some(req) = self.store.requirements.get(idx) {
                                         let spec_id = req.spec_id.as_deref().unwrap_or("???");
-                                        let label = format!("{}: {}", spec_id, truncate_string(&req.title, 30));
+                                        let label = format!(
+                                            "{}: {}",
+                                            spec_id,
+                                            truncate_string(&req.title, 30)
+                                        );
                                         if ui.selectable_label(i == 0, label).clicked() {
                                             self.selected_idx = Some(idx);
                                             self.pending_view_change = Some(View::Detail);
@@ -24758,7 +26034,10 @@ impl RequirementsApp {
                                     }
                                 }
                                 if self.goto_picker_matches.len() > 5 {
-                                    ui.small(format!("...and {} more", self.goto_picker_matches.len() - 5));
+                                    ui.small(format!(
+                                        "...and {} more",
+                                        self.goto_picker_matches.len() - 5
+                                    ));
                                 }
                             }
                         } else {
@@ -24812,26 +26091,38 @@ impl RequirementsApp {
                 // Helper to show a shortcut row
                 let show_shortcut = |ui: &mut egui::Ui, key: &str, desc: &str| {
                     ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new(format!("{:>14}", key)).monospace().strong());
+                        ui.label(
+                            egui::RichText::new(format!("{:>14}", key))
+                                .monospace()
+                                .strong(),
+                        );
                         ui.label(desc);
                     });
                 };
 
                 // Helper to render a section
-                let render_section = |ui: &mut egui::Ui, title: &str, subtitle: Option<&str>, shortcuts: &[(&str, &str)]| {
-                    ui.label(egui::RichText::new(title).strong());
-                    if let Some(sub) = subtitle {
-                        ui.small(sub);
-                    }
-                    ui.add_space(4.0);
-                    for (key, desc) in shortcuts {
-                        ui.horizontal(|ui| {
-                            ui.label(egui::RichText::new(format!("{:>14}", key)).monospace().strong());
-                            ui.label(*desc);
-                        });
-                    }
-                    ui.add_space(8.0);
-                };
+                let render_section =
+                    |ui: &mut egui::Ui,
+                     title: &str,
+                     subtitle: Option<&str>,
+                     shortcuts: &[(&str, &str)]| {
+                        ui.label(egui::RichText::new(title).strong());
+                        if let Some(sub) = subtitle {
+                            ui.small(sub);
+                        }
+                        ui.add_space(4.0);
+                        for (key, desc) in shortcuts {
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    egui::RichText::new(format!("{:>14}", key))
+                                        .monospace()
+                                        .strong(),
+                                );
+                                ui.label(*desc);
+                            });
+                        }
+                        ui.add_space(8.0);
+                    };
 
                 // Define all sections with their shortcuts
                 let navigation = [
@@ -24903,14 +26194,9 @@ impl RequirementsApp {
                 ];
 
                 #[cfg(target_arch = "wasm32")]
-                let help = [
-                    ("?", "Show this help"),
-                    ("P", "Switch project"),
-                ];
+                let help = [("?", "Show this help"), ("P", "Switch project")];
                 #[cfg(not(target_arch = "wasm32"))]
-                let help = [
-                    ("?", "Show this help"),
-                ];
+                let help = [("?", "Show this help")];
 
                 // Determine number of columns based on available width
                 let available_width = ui.available_width();
@@ -24925,11 +26211,21 @@ impl RequirementsApp {
                             ui.columns(3, |columns| {
                                 // Column 1: Navigation, Views, Kanban
                                 render_section(&mut columns[0], "Navigation", None, &navigation);
-                                render_section(&mut columns[0], "Views", Some("Press v then:"), &views);
+                                render_section(
+                                    &mut columns[0],
+                                    "Views",
+                                    Some("Press v then:"),
+                                    &views,
+                                );
                                 render_section(&mut columns[0], "Kanban Board", None, &kanban);
 
                                 // Column 2: Quick Actions, Create, Actions
-                                render_section(&mut columns[1], "Quick Actions", Some("Opens picker:"), &quick_actions);
+                                render_section(
+                                    &mut columns[1],
+                                    "Quick Actions",
+                                    Some("Opens picker:"),
+                                    &quick_actions,
+                                );
                                 render_section(&mut columns[1], "Create", None, &create);
                                 render_section(&mut columns[1], "Actions", None, &actions);
 
@@ -24943,12 +26239,22 @@ impl RequirementsApp {
                             ui.columns(2, |columns| {
                                 // Column 1: Navigation, Views, Kanban, Search
                                 render_section(&mut columns[0], "Navigation", None, &navigation);
-                                render_section(&mut columns[0], "Views", Some("Press v then:"), &views);
+                                render_section(
+                                    &mut columns[0],
+                                    "Views",
+                                    Some("Press v then:"),
+                                    &views,
+                                );
                                 render_section(&mut columns[0], "Kanban Board", None, &kanban);
                                 render_section(&mut columns[0], "Search", None, &search);
 
                                 // Column 2: Quick Actions, Create, Actions, Zoom, Help
-                                render_section(&mut columns[1], "Quick Actions", Some("Opens picker:"), &quick_actions);
+                                render_section(
+                                    &mut columns[1],
+                                    "Quick Actions",
+                                    Some("Opens picker:"),
+                                    &quick_actions,
+                                );
                                 render_section(&mut columns[1], "Create", None, &create);
                                 render_section(&mut columns[1], "Actions", None, &actions);
                                 render_section(&mut columns[1], "Zoom & Display", None, &zoom);
@@ -24959,7 +26265,12 @@ impl RequirementsApp {
                             render_section(ui, "Navigation", None, &navigation);
                             render_section(ui, "Views", Some("Press v then:"), &views);
                             render_section(ui, "Kanban Board", None, &kanban);
-                            render_section(ui, "Quick Actions", Some("Opens picker:"), &quick_actions);
+                            render_section(
+                                ui,
+                                "Quick Actions",
+                                Some("Opens picker:"),
+                                &quick_actions,
+                            );
                             render_section(ui, "Create", None, &create);
                             render_section(ui, "Actions", None, &actions);
                             render_section(ui, "Search", None, &search);
@@ -24983,7 +26294,10 @@ impl RequirementsApp {
     /// Show owner picker popup with fuzzy search (triggered by 'o' key in list view)
     fn show_owner_picker_popup(&mut self, ctx: &egui::Context) {
         // Collect all unique owners from requirements + users
-        let mut all_owners: Vec<String> = self.store.users.iter()
+        let mut all_owners: Vec<String> = self
+            .store
+            .users
+            .iter()
             .filter(|u| !u.archived)
             .map(|u| u.handle.clone())
             .collect();
@@ -25001,7 +26315,8 @@ impl RequirementsApp {
         let filtered_owners: Vec<&String> = if search_lower.is_empty() {
             all_owners.iter().collect()
         } else {
-            all_owners.iter()
+            all_owners
+                .iter()
                 .filter(|o| o.to_lowercase().contains(&search_lower))
                 .collect()
         };
@@ -25088,7 +26403,7 @@ impl RequirementsApp {
                         let response = ui.add(
                             egui::TextEdit::singleline(&mut self.quick_change_owner_search)
                                 .hint_text("Type to search...")
-                                .desired_width(ui.available_width())
+                                .desired_width(ui.available_width()),
                         );
                         // Auto-focus the search field
                         response.request_focus();
@@ -25144,7 +26459,10 @@ impl RequirementsApp {
         }
 
         // Collect all unique tags from all requirements
-        let mut all_tags: Vec<String> = self.store.requirements.iter()
+        let mut all_tags: Vec<String> = self
+            .store
+            .requirements
+            .iter()
             .flat_map(|r| r.tags.iter().cloned())
             .collect::<std::collections::HashSet<_>>()
             .into_iter()
@@ -25156,7 +26474,8 @@ impl RequirementsApp {
         let filtered_tags: Vec<&String> = if search_lower.is_empty() {
             all_tags.iter().collect()
         } else {
-            all_tags.iter()
+            all_tags
+                .iter()
                 .filter(|t| t.to_lowercase().contains(&search_lower))
                 .collect()
         };
@@ -25232,7 +26551,12 @@ impl RequirementsApp {
         if apply_tags {
             if let Some(target_id) = self.quick_change_target_id {
                 // Find the requirement index
-                if let Some(idx) = self.store.requirements.iter().position(|r| r.id == target_id) {
+                if let Some(idx) = self
+                    .store
+                    .requirements
+                    .iter()
+                    .position(|r| r.id == target_id)
+                {
                     // Update tags
                     self.store.requirements[idx].tags = self.tag_picker_selected_tags.clone();
                     self.store.requirements[idx].modified_at = chrono::Utc::now();
@@ -25279,7 +26603,8 @@ impl RequirementsApp {
                         // Show currently selected tags
                         if !self.tag_picker_selected_tags.is_empty() {
                             ui.horizontal_wrapped(|ui| {
-                                let tags: Vec<_> = self.tag_picker_selected_tags.iter().cloned().collect();
+                                let tags: Vec<_> =
+                                    self.tag_picker_selected_tags.iter().cloned().collect();
                                 for tag in tags {
                                     let tag_clone = tag.clone();
                                     if ui.selectable_label(true, format!("✓ {}", tag)).clicked() {
@@ -25295,7 +26620,7 @@ impl RequirementsApp {
                         let response = ui.add(
                             egui::TextEdit::singleline(&mut self.tag_picker_search)
                                 .hint_text("Type to search or add tags...")
-                                .desired_width(ui.available_width())
+                                .desired_width(ui.available_width()),
                         );
                         // Auto-focus the search field
                         response.request_focus();
@@ -25304,11 +26629,16 @@ impl RequirementsApp {
 
                         // Show "Add new tag" option if search text doesn't match existing
                         let search_trimmed = self.tag_picker_search.trim();
-                        let search_exists = all_tags.iter().any(|t| t.eq_ignore_ascii_case(search_trimmed));
+                        let search_exists = all_tags
+                            .iter()
+                            .any(|t| t.eq_ignore_ascii_case(search_trimmed));
                         if !search_trimmed.is_empty() && !search_exists {
                             ui.horizontal(|ui| {
                                 ui.weak("Press Space to add:");
-                                ui.label(egui::RichText::new(format!("\"{}\"", search_trimmed)).italics());
+                                ui.label(
+                                    egui::RichText::new(format!("\"{}\"", search_trimmed))
+                                        .italics(),
+                                );
                             });
                             ui.separator();
                         }
@@ -25326,7 +26656,8 @@ impl RequirementsApp {
                                 } else {
                                     for (idx, tag) in filtered_tags.iter().enumerate() {
                                         let is_highlighted = idx == self.tag_picker_dropdown_idx;
-                                        let is_selected = self.tag_picker_selected_tags.contains(*tag);
+                                        let is_selected =
+                                            self.tag_picker_selected_tags.contains(*tag);
 
                                         let display = if is_selected {
                                             format!("✓ {}", tag)
@@ -25340,7 +26671,8 @@ impl RequirementsApp {
                                             if is_selected {
                                                 self.tag_picker_selected_tags.remove(*tag);
                                             } else {
-                                                self.tag_picker_selected_tags.insert((*tag).clone());
+                                                self.tag_picker_selected_tags
+                                                    .insert((*tag).clone());
                                             }
                                         }
                                     }
@@ -25371,7 +26703,9 @@ impl RequirementsApp {
     /// Show sprint picker popup for assigning requirement to sprint
     fn show_sprint_picker_popup(&mut self, ctx: &egui::Context) {
         // Get available sprints (active only)
-        let sprints: Vec<(Uuid, String, String)> = self.store.get_sprints()
+        let sprints: Vec<(Uuid, String, String)> = self
+            .store
+            .get_sprints()
             .into_iter()
             .filter(|s| {
                 let status = s.effective_status();
@@ -25435,7 +26769,8 @@ impl RequirementsApp {
                 // Assign to selected sprint
                 if let Some(target_id) = self.quick_change_target_id {
                     let username = self.user_settings.display_name();
-                    self.store.assign_to_sprint(target_id, *sprint_id, &username);
+                    self.store
+                        .assign_to_sprint(target_id, *sprint_id, &username);
                     self.save();
                 }
             }
@@ -25476,7 +26811,8 @@ impl RequirementsApp {
                             .show(ui, |ui| {
                                 // Backlog option first
                                 let is_selected = self.quick_change_selected == 0;
-                                let response = ui.selectable_label(is_selected, "📦 Backlog (no sprint)");
+                                let response =
+                                    ui.selectable_label(is_selected, "📦 Backlog (no sprint)");
                                 if response.clicked() {
                                     if let Some(target_id) = self.quick_change_target_id {
                                         let username = self.user_settings.display_name();
@@ -25492,14 +26828,18 @@ impl RequirementsApp {
                                 if sprints.is_empty() {
                                     ui.weak("No active sprints available");
                                 } else {
-                                    for (idx, (sprint_id, spec_id, title)) in sprints.iter().enumerate() {
+                                    for (idx, (sprint_id, spec_id, title)) in
+                                        sprints.iter().enumerate()
+                                    {
                                         let is_selected = idx + 1 == self.quick_change_selected;
                                         let label = format!("{}: {}", spec_id, title);
                                         let response = ui.selectable_label(is_selected, label);
                                         if response.clicked() {
                                             if let Some(target_id) = self.quick_change_target_id {
                                                 let username = self.user_settings.display_name();
-                                                self.store.assign_to_sprint(target_id, *sprint_id, &username);
+                                                self.store.assign_to_sprint(
+                                                    target_id, *sprint_id, &username,
+                                                );
                                                 self.save();
                                             }
                                             self.quick_change_field = None;
@@ -25532,8 +26872,17 @@ impl RequirementsApp {
 
     /// Apply owner change to the selected requirement
     fn apply_owner_change(&mut self, new_owner: String) {
-        let Some(target_id) = self.quick_change_target_id else { return };
-        let Some(req) = self.store.requirements.iter_mut().find(|r| r.id == target_id) else { return };
+        let Some(target_id) = self.quick_change_target_id else {
+            return;
+        };
+        let Some(req) = self
+            .store
+            .requirements
+            .iter_mut()
+            .find(|r| r.id == target_id)
+        else {
+            return;
+        };
 
         let old_owner = req.owner.clone();
         if old_owner != new_owner {
@@ -25566,7 +26915,8 @@ impl RequirementsApp {
         let filtered_features: Vec<&String> = if search_lower.is_empty() {
             all_features.iter().collect()
         } else {
-            all_features.iter()
+            all_features
+                .iter()
                 .filter(|f| f.to_lowercase().contains(&search_lower))
                 .collect()
         };
@@ -25653,7 +27003,7 @@ impl RequirementsApp {
                         let response = ui.add(
                             egui::TextEdit::singleline(&mut self.quick_change_feature_search)
                                 .hint_text("Type to search...")
-                                .desired_width(ui.available_width())
+                                .desired_width(ui.available_width()),
                         );
                         // Auto-focus the search field
                         response.request_focus();
@@ -25712,8 +27062,17 @@ impl RequirementsApp {
 
     /// Apply feature change to the selected requirement
     fn apply_feature_change(&mut self, new_feature: String) {
-        let Some(target_id) = self.quick_change_target_id else { return };
-        let Some(req) = self.store.requirements.iter_mut().find(|r| r.id == target_id) else { return };
+        let Some(target_id) = self.quick_change_target_id else {
+            return;
+        };
+        let Some(req) = self
+            .store
+            .requirements
+            .iter_mut()
+            .find(|r| r.id == target_id)
+        else {
+            return;
+        };
 
         let old_feature = req.feature.clone();
         if old_feature != new_feature {
@@ -25738,33 +27097,49 @@ impl RequirementsApp {
 
     /// Apply a quick change to the selected requirement
     fn apply_quick_change(&mut self, field: QuickChangeField, selected_idx: usize) {
-        let Some(target_id) = self.quick_change_target_id else { return };
+        let Some(target_id) = self.quick_change_target_id else {
+            return;
+        };
 
         // Get the requirement's type to look up type-specific options
-        let req_type_name = self.store.requirements.iter()
+        let req_type_name = self
+            .store
+            .requirements
+            .iter()
             .find(|r| r.id == target_id)
             .map(|r| r.req_type.to_string());
 
         // Find the type definition for this requirement's type
         let type_def = req_type_name.as_ref().and_then(|type_name| {
-            self.store.type_definitions.iter().find(|t| t.name == *type_name)
+            self.store
+                .type_definitions
+                .iter()
+                .find(|t| t.name == *type_name)
         });
 
-        let Some(req) = self.store.requirements.iter_mut().find(|r| r.id == target_id) else { return };
+        let Some(req) = self
+            .store
+            .requirements
+            .iter_mut()
+            .find(|r| r.id == target_id)
+        else {
+            return;
+        };
 
         match field {
             QuickChangeField::Status => {
                 // Get type-specific statuses or default
-                let statuses = type_def
-                    .map(|t| t.get_statuses())
-                    .unwrap_or_else(|| vec![
+                let statuses = type_def.map(|t| t.get_statuses()).unwrap_or_else(|| {
+                    vec![
                         "Draft".to_string(),
                         "Approved".to_string(),
                         "Completed".to_string(),
                         "Rejected".to_string(),
-                    ]);
+                    ]
+                });
 
-                let new_status_str = statuses.get(selected_idx)
+                let new_status_str = statuses
+                    .get(selected_idx)
                     .cloned()
                     .unwrap_or_else(|| "Draft".to_string());
                 let old_status_str = req.effective_status();
@@ -25790,15 +27165,12 @@ impl RequirementsApp {
             }
             QuickChangeField::Priority => {
                 // Get type-specific priorities or default
-                let priorities = type_def
-                    .map(|t| t.get_priorities())
-                    .unwrap_or_else(|| vec![
-                        "High".to_string(),
-                        "Medium".to_string(),
-                        "Low".to_string(),
-                    ]);
+                let priorities = type_def.map(|t| t.get_priorities()).unwrap_or_else(|| {
+                    vec!["High".to_string(), "Medium".to_string(), "Low".to_string()]
+                });
 
-                let new_priority_str = priorities.get(selected_idx)
+                let new_priority_str = priorities
+                    .get(selected_idx)
                     .cloned()
                     .unwrap_or_else(|| "Medium".to_string());
                 let old_priority_str = req.effective_priority();
@@ -25905,148 +27277,166 @@ impl RequirementsApp {
                                 },
                             );
 
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                // Close button (rightmost)
-                                if show_close {
-                                    if ui.button("✕").on_hover_text("Close details").clicked() {
-                                        close_details = true;
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    // Close button (rightmost)
+                                    if show_close {
+                                        if ui.button("✕").on_hover_text("Close details").clicked()
+                                        {
+                                            close_details = true;
+                                        }
                                     }
-                                }
 
-                                if ui.button("✏ Edit").clicked() {
-                                    load_edit = true;
-                                }
+                                    if ui.button("✏ Edit").clicked() {
+                                        load_edit = true;
+                                    }
 
-                                // Quick Actions dropdown menu
-                                // Calculate zoom scale for menu widths
-                                let zoom_scale = self.current_font_size / DEFAULT_FONT_SIZE;
-                                let actions_menu_width = 280.0 * zoom_scale;
-                                let submenu_width = 120.0 * zoom_scale;
-                                let ai_submenu_width = 240.0 * zoom_scale;
-                                ui.menu_button("⚡ Actions", |ui| {
-                                    // Make menu wide enough so AI submenu doesn't occlude Clone/Archive/Delete
-                                    // Width scales with zoom level
-                                    ui.set_min_width(actions_menu_width);
+                                    // Quick Actions dropdown menu
+                                    // Calculate zoom scale for menu widths
+                                    let zoom_scale = self.current_font_size / DEFAULT_FONT_SIZE;
+                                    let actions_menu_width = 280.0 * zoom_scale;
+                                    let submenu_width = 120.0 * zoom_scale;
+                                    let ai_submenu_width = 240.0 * zoom_scale;
+                                    ui.menu_button("⚡ Actions", |ui| {
+                                        // Make menu wide enough so AI submenu doesn't occlude Clone/Archive/Delete
+                                        // Width scales with zoom level
+                                        ui.set_min_width(actions_menu_width);
 
-                                    // Priority submenu
-                                    ui.menu_button("Priority", |ui| {
-                                        ui.set_min_width(submenu_width);
-                                        let priorities = [
-                                            RequirementPriority::High,
-                                            RequirementPriority::Medium,
-                                            RequirementPriority::Low,
-                                        ];
-                                        for priority in priorities {
-                                            let label = if priority == current_priority {
-                                                format!("✓ {}", priority)
-                                            } else {
-                                                format!("  {}", priority)
-                                            };
-                                            if ui.button(label).clicked() {
-                                                new_priority = Some(priority);
-                                                ui.close_menu();
+                                        // Priority submenu
+                                        ui.menu_button("Priority", |ui| {
+                                            ui.set_min_width(submenu_width);
+                                            let priorities = [
+                                                RequirementPriority::High,
+                                                RequirementPriority::Medium,
+                                                RequirementPriority::Low,
+                                            ];
+                                            for priority in priorities {
+                                                let label = if priority == current_priority {
+                                                    format!("✓ {}", priority)
+                                                } else {
+                                                    format!("  {}", priority)
+                                                };
+                                                if ui.button(label).clicked() {
+                                                    new_priority = Some(priority);
+                                                    ui.close_menu();
+                                                }
                                             }
-                                        }
-                                    });
+                                        });
 
-                                    // Status submenu
-                                    ui.menu_button("Status", |ui| {
-                                        ui.set_min_width(submenu_width);
-                                        let statuses = [
-                                            RequirementStatus::Draft,
-                                            RequirementStatus::Approved,
-                                            RequirementStatus::Completed,
-                                            RequirementStatus::Rejected,
-                                        ];
-                                        for status in statuses {
-                                            let label = if status == current_status {
-                                                format!("✓ {}", status)
-                                            } else {
-                                                format!("  {}", status)
-                                            };
-                                            if ui.button(label).clicked() {
-                                                new_status = Some(status);
-                                                ui.close_menu();
+                                        // Status submenu
+                                        ui.menu_button("Status", |ui| {
+                                            ui.set_min_width(submenu_width);
+                                            let statuses = [
+                                                RequirementStatus::Draft,
+                                                RequirementStatus::Approved,
+                                                RequirementStatus::Completed,
+                                                RequirementStatus::Rejected,
+                                            ];
+                                            for status in statuses {
+                                                let label = if status == current_status {
+                                                    format!("✓ {}", status)
+                                                } else {
+                                                    format!("  {}", status)
+                                                };
+                                                if ui.button(label).clicked() {
+                                                    new_status = Some(status);
+                                                    ui.close_menu();
+                                                }
                                             }
-                                        }
-                                    });
-
-                                    ui.separator();
-
-                                    // AI Actions submenu
-                                    let req_uuid = req.id;
-                                    ui.menu_button("🤖 AI", |ui| {
-                                        ui.set_min_width(ai_submenu_width);
-                                        if ui.button("📊 Evaluate Requirement  (ae)").clicked() {
-                                            trigger_ai_action = Some(AiAction::Evaluate(req_uuid));
-                                            ui.close_menu();
-                                        }
-
-                                        if ui.button("🔍 Find Duplicates       (ad)").clicked() {
-                                            trigger_ai_action = Some(AiAction::FindDuplicates(req_uuid));
-                                            ui.close_menu();
-                                        }
-
-                                        if ui.button("🔗 Suggest Relationships (ar)").clicked() {
-                                            trigger_ai_action = Some(AiAction::SuggestRelationships(req_uuid));
-                                            ui.close_menu();
-                                        }
+                                        });
 
                                         ui.separator();
 
-                                        if ui.button("✨ Improve Description   (ai)").clicked() {
-                                            trigger_ai_action = Some(AiAction::ImproveDescription(req_uuid));
-                                            ui.close_menu();
-                                        }
+                                        // AI Actions submenu
+                                        let req_uuid = req.id;
+                                        ui.menu_button("🤖 AI", |ui| {
+                                            ui.set_min_width(ai_submenu_width);
+                                            if ui.button("📊 Evaluate Requirement  (ae)").clicked()
+                                            {
+                                                trigger_ai_action =
+                                                    Some(AiAction::Evaluate(req_uuid));
+                                                ui.close_menu();
+                                            }
 
-                                        if ui.button("📝 Generate Children     (ag)").clicked() {
-                                            trigger_ai_action = Some(AiAction::GenerateChildren(req_uuid));
-                                            ui.close_menu();
-                                        }
+                                            if ui.button("🔍 Find Duplicates       (ad)").clicked()
+                                            {
+                                                trigger_ai_action =
+                                                    Some(AiAction::FindDuplicates(req_uuid));
+                                                ui.close_menu();
+                                            }
+
+                                            if ui.button("🔗 Suggest Relationships (ar)").clicked()
+                                            {
+                                                trigger_ai_action =
+                                                    Some(AiAction::SuggestRelationships(req_uuid));
+                                                ui.close_menu();
+                                            }
+
+                                            ui.separator();
+
+                                            if ui.button("✨ Improve Description   (ai)").clicked()
+                                            {
+                                                trigger_ai_action =
+                                                    Some(AiAction::ImproveDescription(req_uuid));
+                                                ui.close_menu();
+                                            }
+
+                                            if ui.button("📝 Generate Children     (ag)").clicked()
+                                            {
+                                                trigger_ai_action =
+                                                    Some(AiAction::GenerateChildren(req_uuid));
+                                                ui.close_menu();
+                                            }
+
+                                            ui.separator();
+
+                                            // Copy for Claude Code - only enable if status is Approved
+                                            let is_approved =
+                                                req.status == RequirementStatus::Approved;
+                                            let copy_button =
+                                                egui::Button::new("📋 Copy for Claude Code");
+                                            let response = ui.add_enabled(is_approved, copy_button);
+                                            let response = if !is_approved {
+                                                response.on_disabled_hover_text(
+                                                    "Requirement must be Approved to implement",
+                                                )
+                                            } else {
+                                                response
+                                            };
+                                            if response.clicked() {
+                                                copy_for_claude_code_idx = Some(idx);
+                                                ui.close_menu();
+                                            }
+                                        });
 
                                         ui.separator();
 
-                                        // Copy for Claude Code - only enable if status is Approved
-                                        let is_approved = req.status == RequirementStatus::Approved;
-                                        let copy_button = egui::Button::new("📋 Copy for Claude Code");
-                                        let response = ui.add_enabled(is_approved, copy_button);
-                                        let response = if !is_approved {
-                                            response.on_disabled_hover_text("Requirement must be Approved to implement")
+                                        // Clone action
+                                        if ui.button("📋 Clone").clicked() {
+                                            clone_req = true;
+                                            ui.close_menu();
+                                        }
+
+                                        // Archive/Unarchive action
+                                        let archive_label = if is_archived {
+                                            "↩ Unarchive"
                                         } else {
-                                            response
+                                            "📁 Archive"
                                         };
-                                        if response.clicked() {
-                                            copy_for_claude_code_idx = Some(idx);
+                                        if ui.button(archive_label).clicked() {
+                                            toggle_archive = true;
+                                            ui.close_menu();
+                                        }
+
+                                        // Delete action
+                                        if ui.button("🗑 Delete").clicked() {
+                                            delete_req = true;
                                             ui.close_menu();
                                         }
                                     });
-
-                                    ui.separator();
-
-                                    // Clone action
-                                    if ui.button("📋 Clone").clicked() {
-                                        clone_req = true;
-                                        ui.close_menu();
-                                    }
-
-                                    // Archive/Unarchive action
-                                    let archive_label = if is_archived {
-                                        "↩ Unarchive"
-                                    } else {
-                                        "📁 Archive"
-                                    };
-                                    if ui.button(archive_label).clicked() {
-                                        toggle_archive = true;
-                                        ui.close_menu();
-                                    }
-
-                                    // Delete action
-                                    if ui.button("🗑 Delete").clicked() {
-                                        delete_req = true;
-                                        ui.close_menu();
-                                    }
-                                });
-                            });
+                                },
+                            );
                         });
                     });
 
@@ -26111,7 +27501,10 @@ impl RequirementsApp {
                         copy_to_primary_selection(&prompt_text);
                         let req_id = req.spec_id.as_deref().unwrap_or("requirement");
                         self.toast_message = Some(ToastNotification {
-                            message: format!("Copied {} to clipboard - paste into Claude Code", req_id),
+                            message: format!(
+                                "Copied {} to clipboard - paste into Claude Code",
+                                req_id
+                            ),
                             is_success: true,
                             show_until: Instant::now() + Duration::from_secs(4),
                         });
@@ -26121,13 +27514,14 @@ impl RequirementsApp {
                 // Handle AI action trigger (from menu or deferred from popup)
                 #[cfg(not(target_arch = "wasm32"))]
                 {
-                    let effective_ai_action = trigger_ai_action.or_else(|| self.deferred_ai_action.take());
+                    let effective_ai_action =
+                        trigger_ai_action.or_else(|| self.deferred_ai_action.take());
                     if let Some(action) = effective_ai_action {
                         eprintln!("AI action triggered: {:?}", action);
 
                         // Check if AI is available
                         if !self.ai_client.is_available() {
-                        self.ai_last_result = Some(AiResult {
+                            self.ai_last_result = Some(AiResult {
                             action_name: action.name().to_string(),
                             success: false,
                             message: format!(
@@ -26136,15 +27530,17 @@ impl RequirementsApp {
                             ),
                             details: None,
                         });
-                        self.show_ai_results_panel = true;
-                    } else {
-                        // Get the requirement UUID from the action
-                        let req_uuid = action.requirement_id();
+                            self.show_ai_results_panel = true;
+                        } else {
+                            // Get the requirement UUID from the action
+                            let req_uuid = action.requirement_id();
 
-                        // Look up the requirement
-                        if let Some(req) = self.store.requirements.iter().find(|r| r.id == req_uuid) {
-                            let req = req.clone(); // Clone to avoid borrow issues
-                            let result = match &action {
+                            // Look up the requirement
+                            if let Some(req) =
+                                self.store.requirements.iter().find(|r| r.id == req_uuid)
+                            {
+                                let req = req.clone(); // Clone to avoid borrow issues
+                                let result = match &action {
                                 AiAction::Evaluate(_) => {
                                     // Check if already evaluating
                                     if self.ai_eval_in_progress.is_some() {
@@ -26363,22 +27759,22 @@ impl RequirementsApp {
                                     })
                                 },
                             };
-                            // Only set result and show panel if we got an immediate result
-                            if let Some(result) = result {
-                                self.ai_last_result = Some(result);
+                                // Only set result and show panel if we got an immediate result
+                                if let Some(result) = result {
+                                    self.ai_last_result = Some(result);
+                                    self.show_ai_results_panel = true;
+                                }
+                            } else {
+                                self.ai_last_result = Some(AiResult {
+                                    action_name: action.name().to_string(),
+                                    success: false,
+                                    message: format!("Requirement not found: {}", req_uuid),
+                                    details: None,
+                                });
                                 self.show_ai_results_panel = true;
                             }
-                        } else {
-                            self.ai_last_result = Some(AiResult {
-                                action_name: action.name().to_string(),
-                                success: false,
-                                message: format!("Requirement not found: {}", req_uuid),
-                                details: None,
-                            });
-                            self.show_ai_results_panel = true;
                         }
                     }
-                }
                 }
 
                 ui.separator();
@@ -26434,7 +27830,8 @@ impl RequirementsApp {
 
                                             if !req.tags.is_empty() {
                                                 ui.label("Tags:");
-                                                let tags_vec: Vec<String> = req.tags.iter().cloned().collect();
+                                                let tags_vec: Vec<String> =
+                                                    req.tags.iter().cloned().collect();
                                                 ui.label(tags_vec.join(", "));
                                                 ui.end_row();
                                             }
@@ -26452,11 +27849,17 @@ impl RequirementsApp {
                                             }
 
                                             ui.label("Created:");
-                                            ui.label(format_local_datetime(req.created_at, "%Y-%m-%d %H:%M"));
+                                            ui.label(format_local_datetime(
+                                                req.created_at,
+                                                "%Y-%m-%d %H:%M",
+                                            ));
                                             ui.end_row();
 
                                             ui.label("Modified:");
-                                            ui.label(format_local_datetime(req.modified_at, "%Y-%m-%d %H:%M"));
+                                            ui.label(format_local_datetime(
+                                                req.modified_at,
+                                                "%Y-%m-%d %H:%M",
+                                            ));
                                             ui.end_row();
                                         });
                                 });
@@ -26470,57 +27873,60 @@ impl RequirementsApp {
                             egui::ScrollArea::horizontal()
                                 .id_salt("detail_tabs_scroll")
                                 .show(ui, |ui| {
-                            ui.horizontal(|ui| {
-                                // AI tab with indicator showing evaluation status
-                                let ai_label = if req.ai_evaluation.is_some() {
-                                    if req.needs_ai_evaluation() {
-                                        "🤖 AI ⚠"  // Stale evaluation
-                                    } else {
-                                        "🤖 AI ✓"  // Fresh evaluation
-                                    }
-                                } else {
-                                    "🤖 AI"  // No evaluation yet
-                                };
-                                ui.selectable_value(
-                                    &mut self.active_tab,
-                                    DetailTab::Ai,
-                                    ai_label,
-                                );
-                                ui.selectable_value(
-                                    &mut self.active_tab,
-                                    DetailTab::Description,
-                                    "📄 Description",
-                                );
-                                ui.selectable_value(
-                                    &mut self.active_tab,
-                                    DetailTab::Comments,
-                                    format!("💬 Comments ({})", req.comments.len()),
-                                );
-                                ui.selectable_value(
-                                    &mut self.active_tab,
-                                    DetailTab::Links,
-                                    format!("🔗 Links ({})", req.relationships.len() + req.urls.len()),
-                                );
-                                ui.selectable_value(
-                                    &mut self.active_tab,
-                                    DetailTab::Attachments,
-                                    format!("📎 Attachments ({})", req.attachments.len()),
-                                );
-                                ui.selectable_value(
-                                    &mut self.active_tab,
-                                    DetailTab::History,
-                                    format!("📜 History ({})", req.history.len()),
-                                );
-                                // Only show Web Preview tab if there are URLs
-                                if !req.urls.is_empty() {
-                                    ui.selectable_value(
-                                        &mut self.active_tab,
-                                        DetailTab::WebPreview,
-                                        "🌐 Web Preview",
-                                    );
-                                }
-                            });
-                            }); // End horizontal scroll for tabs
+                                    ui.horizontal(|ui| {
+                                        // AI tab with indicator showing evaluation status
+                                        let ai_label = if req.ai_evaluation.is_some() {
+                                            if req.needs_ai_evaluation() {
+                                                "🤖 AI ⚠" // Stale evaluation
+                                            } else {
+                                                "🤖 AI ✓" // Fresh evaluation
+                                            }
+                                        } else {
+                                            "🤖 AI" // No evaluation yet
+                                        };
+                                        ui.selectable_value(
+                                            &mut self.active_tab,
+                                            DetailTab::Ai,
+                                            ai_label,
+                                        );
+                                        ui.selectable_value(
+                                            &mut self.active_tab,
+                                            DetailTab::Description,
+                                            "📄 Description",
+                                        );
+                                        ui.selectable_value(
+                                            &mut self.active_tab,
+                                            DetailTab::Comments,
+                                            format!("💬 Comments ({})", req.comments.len()),
+                                        );
+                                        ui.selectable_value(
+                                            &mut self.active_tab,
+                                            DetailTab::Links,
+                                            format!(
+                                                "🔗 Links ({})",
+                                                req.relationships.len() + req.urls.len()
+                                            ),
+                                        );
+                                        ui.selectable_value(
+                                            &mut self.active_tab,
+                                            DetailTab::Attachments,
+                                            format!("📎 Attachments ({})", req.attachments.len()),
+                                        );
+                                        ui.selectable_value(
+                                            &mut self.active_tab,
+                                            DetailTab::History,
+                                            format!("📜 History ({})", req.history.len()),
+                                        );
+                                        // Only show Web Preview tab if there are URLs
+                                        if !req.urls.is_empty() {
+                                            ui.selectable_value(
+                                                &mut self.active_tab,
+                                                DetailTab::WebPreview,
+                                                "🌐 Web Preview",
+                                            );
+                                        }
+                                    });
+                                }); // End horizontal scroll for tabs
 
                             ui.separator();
 
@@ -26622,53 +28028,56 @@ impl RequirementsApp {
                     egui::ScrollArea::horizontal()
                         .id_salt("detail_tabs_scroll_side")
                         .show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        // AI tab with indicator for evaluation status
-                        let ai_label = if req.ai_evaluation.is_some() {
-                            if req.needs_ai_evaluation() {
-                                "🤖 AI ⚠️" // Has evaluation but stale
-                            } else {
-                                "🤖 AI ✓" // Has current evaluation
-                            }
-                        } else {
-                            "🤖 AI" // No evaluation yet
-                        };
-                        ui.selectable_value(&mut self.active_tab, DetailTab::Ai, ai_label);
-                        ui.selectable_value(
-                            &mut self.active_tab,
-                            DetailTab::Description,
-                            "📄 Description",
-                        );
-                        ui.selectable_value(
-                            &mut self.active_tab,
-                            DetailTab::Comments,
-                            format!("💬 Comments ({})", req.comments.len()),
-                        );
-                        ui.selectable_value(
-                            &mut self.active_tab,
-                            DetailTab::Links,
-                            format!("🔗 Links ({})", req.relationships.len() + req.urls.len()),
-                        );
-                        ui.selectable_value(
-                            &mut self.active_tab,
-                            DetailTab::Attachments,
-                            format!("📎 Attachments ({})", req.attachments.len()),
-                        );
-                        ui.selectable_value(
-                            &mut self.active_tab,
-                            DetailTab::History,
-                            format!("📜 History ({})", req.history.len()),
-                        );
-                        // Only show Web Preview tab if there are URLs
-                        if !req.urls.is_empty() {
-                            ui.selectable_value(
-                                &mut self.active_tab,
-                                DetailTab::WebPreview,
-                                "🌐 Web Preview",
-                            );
-                        }
-                    });
-                    }); // End horizontal scroll for tabs
+                            ui.horizontal(|ui| {
+                                // AI tab with indicator for evaluation status
+                                let ai_label = if req.ai_evaluation.is_some() {
+                                    if req.needs_ai_evaluation() {
+                                        "🤖 AI ⚠️" // Has evaluation but stale
+                                    } else {
+                                        "🤖 AI ✓" // Has current evaluation
+                                    }
+                                } else {
+                                    "🤖 AI" // No evaluation yet
+                                };
+                                ui.selectable_value(&mut self.active_tab, DetailTab::Ai, ai_label);
+                                ui.selectable_value(
+                                    &mut self.active_tab,
+                                    DetailTab::Description,
+                                    "📄 Description",
+                                );
+                                ui.selectable_value(
+                                    &mut self.active_tab,
+                                    DetailTab::Comments,
+                                    format!("💬 Comments ({})", req.comments.len()),
+                                );
+                                ui.selectable_value(
+                                    &mut self.active_tab,
+                                    DetailTab::Links,
+                                    format!(
+                                        "🔗 Links ({})",
+                                        req.relationships.len() + req.urls.len()
+                                    ),
+                                );
+                                ui.selectable_value(
+                                    &mut self.active_tab,
+                                    DetailTab::Attachments,
+                                    format!("📎 Attachments ({})", req.attachments.len()),
+                                );
+                                ui.selectable_value(
+                                    &mut self.active_tab,
+                                    DetailTab::History,
+                                    format!("📜 History ({})", req.history.len()),
+                                );
+                                // Only show Web Preview tab if there are URLs
+                                if !req.urls.is_empty() {
+                                    ui.selectable_value(
+                                        &mut self.active_tab,
+                                        DetailTab::WebPreview,
+                                        "🌐 Web Preview",
+                                    );
+                                }
+                            });
+                        }); // End horizontal scroll for tabs
 
                     ui.separator();
 
@@ -26700,10 +28109,7 @@ impl RequirementsApp {
                 }
 
                 // Double-click on background area to edit (when no modal is open)
-                if !self.show_url_form
-                    && !self.show_reference_picker
-                    && !self.show_add_comment
-                {
+                if !self.show_url_form && !self.show_reference_picker && !self.show_add_comment {
                     #[allow(deprecated)]
                     let bg_response = ui.interact_bg(egui::Sense::click());
                     if bg_response.double_clicked() {
@@ -26749,7 +28155,10 @@ impl RequirementsApp {
             // Evaluation timestamp
             ui.horizontal(|ui| {
                 ui.label("Evaluated:");
-                ui.label(format_local_datetime(stored_eval.evaluated_at, "%Y-%m-%d %H:%M"));
+                ui.label(format_local_datetime(
+                    stored_eval.evaluated_at,
+                    "%Y-%m-%d %H:%M",
+                ));
             });
             ui.add_space(10.0);
 
@@ -26811,12 +28220,14 @@ impl RequirementsApp {
                             ui.group(|ui| {
                                 ui.horizontal(|ui| {
                                     // Severity indicator
-                                    let severity_color = match issue.severity.to_lowercase().as_str()
-                                    {
-                                        "high" | "critical" => egui::Color32::from_rgb(220, 80, 80), // Muted red
-                                        "medium" => egui::Color32::from_rgb(180, 160, 100), // Muted gold
-                                        _ => egui::Color32::from_rgb(140, 180, 140), // Muted green for low
-                                    };
+                                    let severity_color =
+                                        match issue.severity.to_lowercase().as_str() {
+                                            "high" | "critical" => {
+                                                egui::Color32::from_rgb(220, 80, 80)
+                                            } // Muted red
+                                            "medium" => egui::Color32::from_rgb(180, 160, 100), // Muted gold
+                                            _ => egui::Color32::from_rgb(140, 180, 140), // Muted green for low
+                                        };
                                     ui.label(
                                         egui::RichText::new(&issue.severity)
                                             .color(severity_color)
@@ -27156,8 +28567,17 @@ impl RequirementsApp {
 
         let mut relationship_to_remove: Option<(RelationshipType, Uuid)> = None;
 
-        for (rel_type, target_id, target_idx, target_label, target_title, display_name, color, rel_created_by, rel_created_at) in
-            rel_info
+        for (
+            rel_type,
+            target_id,
+            target_idx,
+            target_label,
+            target_title,
+            display_name,
+            color,
+            rel_created_by,
+            rel_created_at,
+        ) in rel_info
         {
             ui.horizontal(|ui| {
                 // Break link button
@@ -27189,7 +28609,10 @@ impl RequirementsApp {
                     tooltip.push_str(&format!("\nCreated by: {}", created_by));
                 }
                 if let Some(created_at) = rel_created_at {
-                    tooltip.push_str(&format!("\nCreated: {}", format_local_datetime(created_at, "%Y-%m-%d %H:%M")));
+                    tooltip.push_str(&format!(
+                        "\nCreated: {}",
+                        format_local_datetime(created_at, "%Y-%m-%d %H:%M")
+                    ));
                 }
 
                 // Show hover cursor and tooltip
@@ -27564,12 +28987,14 @@ impl RequirementsApp {
                         &mut self.url_form_open_mode,
                         UrlOpenMode::Preview,
                         "🌐 Web Preview",
-                    ).on_hover_text("Show URL in embedded iframe (may be blocked by some sites)");
+                    )
+                    .on_hover_text("Show URL in embedded iframe (may be blocked by some sites)");
                     ui.selectable_value(
                         &mut self.url_form_open_mode,
                         UrlOpenMode::NewTab,
                         "🔗 New Tab",
-                    ).on_hover_text("Always open in a new browser tab");
+                    )
+                    .on_hover_text("Always open in a new browser tab");
                 });
                 ui.end_row();
             });
@@ -27877,8 +29302,11 @@ impl RequirementsApp {
 
         // Draw a dark overlay behind the modal
         let screen_rect = ctx.screen_rect();
-        ctx.layer_painter(egui::LayerId::new(egui::Order::PanelResizeLine, egui::Id::new("modal_overlay")))
-            .rect_filled(screen_rect, 0.0, egui::Color32::from_black_alpha(128));
+        ctx.layer_painter(egui::LayerId::new(
+            egui::Order::PanelResizeLine,
+            egui::Id::new("modal_overlay"),
+        ))
+        .rect_filled(screen_rect, 0.0, egui::Color32::from_black_alpha(128));
 
         // Use egui::Area for direct control over positioning and sizing
         // This avoids the auto-sizing animation behavior of Window
@@ -28034,85 +29462,89 @@ fn main() {
 
         // Draw a dark overlay behind the modal
         let screen_rect = ctx.screen_rect();
-        ctx.layer_painter(egui::LayerId::new(egui::Order::PanelResizeLine, egui::Id::new("ai_modal_overlay")))
-            .rect_filled(screen_rect, 0.0, egui::Color32::from_black_alpha(128));
+        ctx.layer_painter(egui::LayerId::new(
+            egui::Order::PanelResizeLine,
+            egui::Id::new("ai_modal_overlay"),
+        ))
+        .rect_filled(screen_rect, 0.0, egui::Color32::from_black_alpha(128));
 
         egui::Area::new(egui::Id::new("ai_results_area"))
             .order(egui::Order::Foreground)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
-                egui::Frame::window(ui.style())
-                    .show(ui, |ui| {
-                        ui.set_min_size(egui::vec2(modal_width, modal_height));
-                        ui.set_max_size(egui::vec2(modal_width, modal_height));
+                egui::Frame::window(ui.style()).show(ui, |ui| {
+                    ui.set_min_size(egui::vec2(modal_width, modal_height));
+                    ui.set_max_size(egui::vec2(modal_width, modal_height));
 
-                        // Title bar
-                        ui.horizontal(|ui| {
-                            ui.heading("🤖 AI Analysis");
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if ui.button("✕").clicked() {
-                                    self.show_ai_results_panel = false;
-                                    self.ai_last_result = None;
-                                }
-                            });
-                        });
-                        ui.separator();
-
-                        // Content
-                        if let Some(result) = &self.ai_last_result {
-                            ui.add_space(10.0);
-
-                            // Status indicator
-                            let status_text = if result.success {
-                                egui::RichText::new("✅ Action: ").color(egui::Color32::from_rgb(100, 200, 100))
-                            } else {
-                                egui::RichText::new("❌ Action: ").color(egui::Color32::from_rgb(200, 100, 100))
-                            };
-                            ui.horizontal(|ui| {
-                                ui.label(status_text);
-                                ui.label(&result.action_name);
-                            });
-
-                            ui.add_space(10.0);
-                            ui.separator();
-                            ui.add_space(10.0);
-
-                            // Message
-                            egui::ScrollArea::vertical()
-                                .max_height(modal_height - 150.0)
-                                .show(ui, |ui| {
-                                    ui.label(&result.message);
-
-                                    if let Some(details) = &result.details {
-                                        ui.add_space(10.0);
-                                        ui.separator();
-                                        ui.add_space(5.0);
-                                        ui.label(egui::RichText::new("Details:").strong());
-                                        ui.label(details);
-                                    }
-                                });
-                        } else if self.ai_loading {
-                            ui.add_space(20.0);
-                            ui.centered_and_justified(|ui| {
-                                ui.spinner();
-                            });
-                            ui.add_space(10.0);
-                            ui.centered_and_justified(|ui| {
-                                ui.label("Processing...");
-                            });
-                        } else {
-                            ui.label("No AI results available.");
-                        }
-
-                        ui.add_space(8.0);
-                        ui.separator();
-                        ui.horizontal(|ui| {
-                            if ui.button("Close").clicked() {
+                    // Title bar
+                    ui.horizontal(|ui| {
+                        ui.heading("🤖 AI Analysis");
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.button("✕").clicked() {
                                 self.show_ai_results_panel = false;
                                 self.ai_last_result = None;
                             }
                         });
                     });
+                    ui.separator();
+
+                    // Content
+                    if let Some(result) = &self.ai_last_result {
+                        ui.add_space(10.0);
+
+                        // Status indicator
+                        let status_text = if result.success {
+                            egui::RichText::new("✅ Action: ")
+                                .color(egui::Color32::from_rgb(100, 200, 100))
+                        } else {
+                            egui::RichText::new("❌ Action: ")
+                                .color(egui::Color32::from_rgb(200, 100, 100))
+                        };
+                        ui.horizontal(|ui| {
+                            ui.label(status_text);
+                            ui.label(&result.action_name);
+                        });
+
+                        ui.add_space(10.0);
+                        ui.separator();
+                        ui.add_space(10.0);
+
+                        // Message
+                        egui::ScrollArea::vertical()
+                            .max_height(modal_height - 150.0)
+                            .show(ui, |ui| {
+                                ui.label(&result.message);
+
+                                if let Some(details) = &result.details {
+                                    ui.add_space(10.0);
+                                    ui.separator();
+                                    ui.add_space(5.0);
+                                    ui.label(egui::RichText::new("Details:").strong());
+                                    ui.label(details);
+                                }
+                            });
+                    } else if self.ai_loading {
+                        ui.add_space(20.0);
+                        ui.centered_and_justified(|ui| {
+                            ui.spinner();
+                        });
+                        ui.add_space(10.0);
+                        ui.centered_and_justified(|ui| {
+                            ui.label("Processing...");
+                        });
+                    } else {
+                        ui.label("No AI results available.");
+                    }
+
+                    ui.add_space(8.0);
+                    ui.separator();
+                    ui.horizontal(|ui| {
+                        if ui.button("Close").clicked() {
+                            self.show_ai_results_panel = false;
+                            self.ai_last_result = None;
+                        }
+                    });
+                });
             });
     }
 
@@ -28147,7 +29579,9 @@ fn main() {
                             );
 
                             // Add attachment to requirement
-                            if let Some(r) = self.store.requirements.iter_mut().find(|r| r.id == req_id) {
+                            if let Some(r) =
+                                self.store.requirements.iter_mut().find(|r| r.id == req_id)
+                            {
                                 r.attachments.push(attachment);
                                 r.modified_at = chrono::Utc::now();
                                 self.pending_save = true;
@@ -28162,7 +29596,10 @@ fn main() {
             }
             #[cfg(target_arch = "wasm32")]
             if ui.button("➕ Add File").clicked() {
-                self.message = Some(("File attachments are not supported in web mode".to_string(), true));
+                self.message = Some((
+                    "File attachments are not supported in web mode".to_string(),
+                    true,
+                ));
             }
         });
         ui.add_space(5.0);
@@ -28182,7 +29619,11 @@ fn main() {
             for attachment in &attachments {
                 ui.horizontal(|ui| {
                     // Remove button
-                    if ui.small_button("x").on_hover_text("Remove attachment").clicked() {
+                    if ui
+                        .small_button("x")
+                        .on_hover_text("Remove attachment")
+                        .clicked()
+                    {
                         attachment_to_remove = Some(attachment.id);
                     }
 
@@ -28206,7 +29647,9 @@ fn main() {
                     // Clickable filename to open
                     #[cfg(not(target_arch = "wasm32"))]
                     {
-                        let full_path = self.storage.get_attachment_full_path(&attachment.stored_path);
+                        let full_path = self
+                            .storage
+                            .get_attachment_full_path(&attachment.stored_path);
                         if ui
                             .link(format!("{} {}", icon, attachment.filename))
                             .on_hover_text(format!("Click to open: {}", full_path.display()))
@@ -28214,8 +29657,11 @@ fn main() {
                         {
                             if full_path.exists() {
                                 use crate::platform::PlatformServices;
-                                if let Err(e) = crate::platform::platform().open_file_external(&full_path) {
-                                    self.message = Some((format!("Failed to open file: {}", e), true));
+                                if let Err(e) =
+                                    crate::platform::platform().open_file_external(&full_path)
+                                {
+                                    self.message =
+                                        Some((format!("Failed to open file: {}", e), true));
                                 }
                             } else {
                                 self.message = Some(("File not found on disk".to_string(), true));
@@ -28243,8 +29689,12 @@ fn main() {
                 if let Some(attachment) = attachments.iter().find(|a| a.id == id) {
                     // Remove file from disk
                     #[cfg(not(target_arch = "wasm32"))]
-                    if let Err(e) = self.storage.remove_attachment_file(&spec_id, &attachment.stored_path) {
-                        self.message = Some((format!("Warning: Could not remove file: {}", e), true));
+                    if let Err(e) = self
+                        .storage
+                        .remove_attachment_file(&spec_id, &attachment.stored_path)
+                    {
+                        self.message =
+                            Some((format!("Warning: Could not remove file: {}", e), true));
                     }
 
                     // Remove from requirement
@@ -28420,11 +29870,16 @@ fn main() {
                 ui.painter().rect_stroke(
                     rect,
                     0.0,
-                    egui::Stroke::new(1.0, ui.style().visuals.widgets.noninteractive.bg_stroke.color),
+                    egui::Stroke::new(
+                        1.0,
+                        ui.style().visuals.widgets.noninteractive.bg_stroke.color,
+                    ),
                 );
 
                 // Use JavaScript to create/update the iframe
-                if !self.web_preview_iframe_loaded || self.web_preview_current_url.as_ref() != Some(url) {
+                if !self.web_preview_iframe_loaded
+                    || self.web_preview_current_url.as_ref() != Some(url)
+                {
                     self.create_web_preview_iframe(url, rect);
                     self.web_preview_iframe_loaded = true;
                     self.web_preview_current_url = Some(url.clone());
@@ -28470,7 +29925,8 @@ fn main() {
                     let _ = iframe.set_attribute("id", "aida-web-preview-iframe");
                     let _ = iframe.set_attribute("src", url);
                     let _ = iframe.set_attribute("frameborder", "0");
-                    let _ = iframe.set_attribute("sandbox", "allow-scripts allow-same-origin allow-forms");
+                    let _ = iframe
+                        .set_attribute("sandbox", "allow-scripts allow-same-origin allow-forms");
 
                     // Position the iframe over the egui rect
                     // Note: This is approximate - egui uses logical pixels
@@ -28535,7 +29991,9 @@ fn main() {
         // (In Add mode, we sync description's first line to title automatically)
         if !is_edit && self.form_title_auto_synced && title_output.response.has_focus() {
             // If title changed and it wasn't from our sync (description didn't change)
-            if self.form_title != title_before && self.form_description == self.form_last_description {
+            if self.form_title != title_before
+                && self.form_description == self.form_last_description
+            {
                 self.form_title_auto_synced = false;
             }
         }
@@ -28657,7 +30115,8 @@ fn main() {
                 let filtered: Vec<String> = if search_lower.is_empty() {
                     all_features.clone()
                 } else {
-                    all_features.iter()
+                    all_features
+                        .iter()
                         .filter(|f| f.to_lowercase().contains(&search_lower))
                         .cloned()
                         .collect()
@@ -28679,7 +30138,8 @@ fn main() {
                             if self.form_feature_selected_idx > 0 {
                                 self.form_feature_selected_idx -= 1;
                             } else if num_options > 0 {
-                                self.form_feature_selected_idx = num_options - 1; // Wrap to bottom
+                                self.form_feature_selected_idx = num_options - 1;
+                                // Wrap to bottom
                             }
                         }
                         if i.consume_key(egui::Modifiers::NONE, egui::Key::Enter) {
@@ -28703,11 +30163,13 @@ fn main() {
                 let feature_edit = ui.add(
                     egui::TextEdit::singleline(&mut self.form_feature)
                         .desired_width(150.0)
-                        .hint_text("Type to search...")
+                        .hint_text("Type to search..."),
                 );
 
                 // Open popup when text field gains focus or user is typing
-                if feature_edit.gained_focus() || (feature_edit.has_focus() && feature_edit.changed()) {
+                if feature_edit.gained_focus()
+                    || (feature_edit.has_focus() && feature_edit.changed())
+                {
                     ui.memory_mut(|mem| mem.open_popup(popup_id));
                     self.form_feature_selected_idx = 0;
                 }
@@ -28741,7 +30203,7 @@ fn main() {
                                     }
                                 }
                             });
-                    }
+                    },
                 );
             }
 
@@ -29112,10 +30574,14 @@ fn main() {
                     if self.focus_description {
                         output.response.request_focus();
                         // Set cursor to end of text
-                        if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), output.response.id) {
+                        if let Some(mut state) =
+                            egui::TextEdit::load_state(ui.ctx(), output.response.id)
+                        {
                             let text_len = self.form_description.chars().count();
                             let ccursor = egui::text::CCursor::new(text_len);
-                            state.cursor.set_char_range(Some(egui::text::CCursorRange::one(ccursor)));
+                            state
+                                .cursor
+                                .set_char_range(Some(egui::text::CCursorRange::one(ccursor)));
                             state.store(ui.ctx(), output.response.id);
                         }
                         self.focus_description = false;
@@ -29272,7 +30738,8 @@ fn main() {
         // === TAB BAR (Edit mode only - matching Detail view) ===
         // Get requirement data for non-Description tabs
         let req_for_tabs = if is_edit {
-            self.selected_idx.and_then(|idx| self.store.requirements.get(idx).cloned())
+            self.selected_idx
+                .and_then(|idx| self.store.requirements.get(idx).cloned())
         } else {
             None
         };
@@ -29294,11 +30761,7 @@ fn main() {
                     "🤖 AI" // No evaluation yet
                 };
                 ui.selectable_value(&mut self.active_tab, DetailTab::Ai, ai_label);
-                ui.selectable_value(
-                    &mut self.active_tab,
-                    DetailTab::Description,
-                    "📝 Fields",
-                );
+                ui.selectable_value(&mut self.active_tab, DetailTab::Description, "📝 Fields");
                 ui.selectable_value(
                     &mut self.active_tab,
                     DetailTab::Comments,
@@ -29335,350 +30798,513 @@ fn main() {
         // === MAIN CONTENT ===
         // In Edit mode with tabs: show content based on active tab
         // In Add mode or when Description tab selected: show editable fields
-        let show_fields = !is_edit || req_for_tabs.is_none() || self.active_tab == DetailTab::Description;
+        let show_fields =
+            !is_edit || req_for_tabs.is_none() || self.active_tab == DetailTab::Description;
 
         if show_fields {
             // === EDITABLE FIELDS: Left panel (metadata) + Right panel (description) ===
             let default_left_width = available_width * 0.25;
 
-        // Track if type changed for status validation
-        let old_type = self.form_type.clone();
+            // Track if type changed for status validation
+            let old_type = self.form_type.clone();
 
-        // LEFT SIDE: Metadata fields in a resizable panel
-        egui::SidePanel::left("form_metadata_panel")
-            .resizable(true)
-            .default_width(default_left_width)
-            .min_width(180.0)
-            .max_width(available_width * 0.5)
-            .show_inside(ui, |ui| {
-                egui::ScrollArea::vertical()
-                    .id_salt("form_metadata_scroll")
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        egui::Grid::new("form_metadata_grid")
-                            .num_columns(2)
-                            .spacing([10.0, 8.0])
-                            .striped(true)
-                            .show(ui, |ui| {
-                                // ID (for edit mode) - dynamically update based on form_prefix/form_type
-                                if is_edit {
-                                    if let Some(idx) = self.selected_idx {
-                                        if let Some(req) = self.store.requirements.get(idx) {
-                                            ui.label("ID:");
-                                            // Compute what the ID will be based on current form state
-                                            let displayed_id = if let Some(current_spec_id) = &req.spec_id {
-                                                // Extract the number part from current spec_id (e.g., "FR-0001" -> "0001")
-                                                if let Some(dash_pos) = current_spec_id.rfind('-') {
-                                                    let number_part = &current_spec_id[dash_pos..]; // includes the dash
-                                                    // Determine the prefix to use
-                                                    let effective_prefix = if !self.form_prefix.trim().is_empty() {
-                                                        // User has explicitly set a prefix
-                                                        self.form_prefix.trim().to_uppercase()
+            // LEFT SIDE: Metadata fields in a resizable panel
+            egui::SidePanel::left("form_metadata_panel")
+                .resizable(true)
+                .default_width(default_left_width)
+                .min_width(180.0)
+                .max_width(available_width * 0.5)
+                .show_inside(ui, |ui| {
+                    egui::ScrollArea::vertical()
+                        .id_salt("form_metadata_scroll")
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            egui::Grid::new("form_metadata_grid")
+                                .num_columns(2)
+                                .spacing([10.0, 8.0])
+                                .striped(true)
+                                .show(ui, |ui| {
+                                    // ID (for edit mode) - dynamically update based on form_prefix/form_type
+                                    if is_edit {
+                                        if let Some(idx) = self.selected_idx {
+                                            if let Some(req) = self.store.requirements.get(idx) {
+                                                ui.label("ID:");
+                                                // Compute what the ID will be based on current form state
+                                                let displayed_id = if let Some(current_spec_id) =
+                                                    &req.spec_id
+                                                {
+                                                    // Extract the number part from current spec_id (e.g., "FR-0001" -> "0001")
+                                                    if let Some(dash_pos) =
+                                                        current_spec_id.rfind('-')
+                                                    {
+                                                        let number_part =
+                                                            &current_spec_id[dash_pos..]; // includes the dash
+                                                                                          // Determine the prefix to use
+                                                        let effective_prefix = if !self
+                                                            .form_prefix
+                                                            .trim()
+                                                            .is_empty()
+                                                        {
+                                                            // User has explicitly set a prefix
+                                                            self.form_prefix.trim().to_uppercase()
+                                                        } else {
+                                                            // Use the type's default prefix
+                                                            let type_name =
+                                                                format!("{:?}", self.form_type);
+                                                            self.store
+                                                                .type_definitions
+                                                                .iter()
+                                                                .find(|td| td.name == type_name)
+                                                                .and_then(|td| td.prefix.clone())
+                                                                .unwrap_or_else(|| {
+                                                                    "REQ".to_string()
+                                                                })
+                                                        };
+                                                        format!(
+                                                            "{}{}",
+                                                            effective_prefix, number_part
+                                                        )
                                                     } else {
-                                                        // Use the type's default prefix
-                                                        let type_name = format!("{:?}", self.form_type);
-                                                        self.store.type_definitions
-                                                            .iter()
-                                                            .find(|td| td.name == type_name)
-                                                            .and_then(|td| td.prefix.clone())
-                                                            .unwrap_or_else(|| "REQ".to_string())
-                                                    };
-                                                    format!("{}{}", effective_prefix, number_part)
+                                                        current_spec_id.clone()
+                                                    }
                                                 } else {
-                                                    current_spec_id.clone()
-                                                }
-                                            } else {
-                                                "N/A".to_string()
-                                            };
-                                            ui.label(&displayed_id);
-                                            ui.end_row();
+                                                    "N/A".to_string()
+                                                };
+                                                ui.label(&displayed_id);
+                                                ui.end_row();
+                                            }
                                         }
                                     }
-                                }
 
-                                // ID Prefix
-                                ui.label("Prefix:");
-                                self.show_prefix_field(ui);
-                                ui.end_row();
+                                    // ID Prefix
+                                    ui.label("Prefix:");
+                                    self.show_prefix_field(ui);
+                                    ui.end_row();
 
-                                // Type dropdown
-                                ui.label("Type:");
-                                egui::ComboBox::new("form_type_combo", "")
-                                    .selected_text(format!("{:?}", self.form_type))
-                                    .show_ui(ui, |ui| {
-                                        ui.selectable_value(&mut self.form_type, RequirementType::Functional, "Functional");
-                                        ui.selectable_value(&mut self.form_type, RequirementType::NonFunctional, "NonFunctional");
-                                        ui.selectable_value(&mut self.form_type, RequirementType::System, "System");
-                                        ui.selectable_value(&mut self.form_type, RequirementType::User, "User");
-                                        ui.selectable_value(&mut self.form_type, RequirementType::ChangeRequest, "Change Request");
-                                        ui.selectable_value(&mut self.form_type, RequirementType::Bug, "Bug");
-                                        ui.separator();
-                                        ui.selectable_value(&mut self.form_type, RequirementType::Epic, "Epic");
-                                        ui.selectable_value(&mut self.form_type, RequirementType::Story, "Story");
-                                        ui.selectable_value(&mut self.form_type, RequirementType::Task, "Task");
-                                        ui.selectable_value(&mut self.form_type, RequirementType::Spike, "Spike");
-                                        ui.selectable_value(&mut self.form_type, RequirementType::Sprint, "🏃 Sprint");
-                                        ui.separator();
-                                        ui.selectable_value(&mut self.form_type, RequirementType::Folder, "📁 Folder");
-                                        ui.selectable_value(&mut self.form_type, RequirementType::Meta, "⚡ Meta");
-                                    });
-                                ui.end_row();
-
-                                // Status and Priority only for stateful types
-                                if !self.store.is_type_stateless(&self.form_type) {
-                                    // Status dropdown
-                                    ui.label("Status:");
-                                    let statuses = self.store.get_statuses_for_type(&self.form_type);
-                                    egui::ComboBox::new("form_status_combo", "")
-                                        .selected_text(&self.form_status_string)
+                                    // Type dropdown
+                                    ui.label("Type:");
+                                    egui::ComboBox::new("form_type_combo", "")
+                                        .selected_text(format!("{:?}", self.form_type))
                                         .show_ui(ui, |ui| {
-                                            for status in &statuses {
-                                                if ui.selectable_label(self.form_status_string == *status, status).clicked() {
-                                                    self.form_status_string = status.clone();
-                                                }
-                                            }
+                                            ui.selectable_value(
+                                                &mut self.form_type,
+                                                RequirementType::Functional,
+                                                "Functional",
+                                            );
+                                            ui.selectable_value(
+                                                &mut self.form_type,
+                                                RequirementType::NonFunctional,
+                                                "NonFunctional",
+                                            );
+                                            ui.selectable_value(
+                                                &mut self.form_type,
+                                                RequirementType::System,
+                                                "System",
+                                            );
+                                            ui.selectable_value(
+                                                &mut self.form_type,
+                                                RequirementType::User,
+                                                "User",
+                                            );
+                                            ui.selectable_value(
+                                                &mut self.form_type,
+                                                RequirementType::ChangeRequest,
+                                                "Change Request",
+                                            );
+                                            ui.selectable_value(
+                                                &mut self.form_type,
+                                                RequirementType::Bug,
+                                                "Bug",
+                                            );
+                                            ui.separator();
+                                            ui.selectable_value(
+                                                &mut self.form_type,
+                                                RequirementType::Epic,
+                                                "Epic",
+                                            );
+                                            ui.selectable_value(
+                                                &mut self.form_type,
+                                                RequirementType::Story,
+                                                "Story",
+                                            );
+                                            ui.selectable_value(
+                                                &mut self.form_type,
+                                                RequirementType::Task,
+                                                "Task",
+                                            );
+                                            ui.selectable_value(
+                                                &mut self.form_type,
+                                                RequirementType::Spike,
+                                                "Spike",
+                                            );
+                                            ui.selectable_value(
+                                                &mut self.form_type,
+                                                RequirementType::Sprint,
+                                                "🏃 Sprint",
+                                            );
+                                            ui.separator();
+                                            ui.selectable_value(
+                                                &mut self.form_type,
+                                                RequirementType::Folder,
+                                                "📁 Folder",
+                                            );
+                                            ui.selectable_value(
+                                                &mut self.form_type,
+                                                RequirementType::Meta,
+                                                "⚡ Meta",
+                                            );
                                         });
                                     ui.end_row();
 
-                                    // Priority dropdown
-                                    ui.label("Priority:");
-                                    egui::ComboBox::new("form_priority_combo", "")
-                                        .selected_text(format!("{:?}", self.form_priority))
-                                        .show_ui(ui, |ui| {
-                                            ui.selectable_value(&mut self.form_priority, RequirementPriority::High, "High");
-                                            ui.selectable_value(&mut self.form_priority, RequirementPriority::Medium, "Medium");
-                                            ui.selectable_value(&mut self.form_priority, RequirementPriority::Low, "Low");
-                                        });
-                                    ui.end_row();
-                                }
-
-                                // Feature with dropdown
-                                ui.label("Feature:");
-                                {
-                                    let popup_id = ui.make_persistent_id("feature_combo_popup_2");
-                                    let is_popup_open = ui.memory(|mem| mem.is_popup_open(popup_id));
-
-                                    let all_features = self.get_all_features();
-                                    let search_lower = self.form_feature.to_lowercase();
-                                    let filtered: Vec<String> = if search_lower.is_empty() {
-                                        all_features.clone()
-                                    } else {
-                                        all_features.iter()
-                                            .filter(|f| f.to_lowercase().contains(&search_lower))
-                                            .cloned()
-                                            .collect()
-                                    };
-                                    let num_options = filtered.len();
-
-                                    // Handle keyboard BEFORE the TextEdit
-                                    let mut close_and_select = false;
-                                    if is_popup_open {
-                                        ui.ctx().input_mut(|i| {
-                                            if i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown) {
-                                                if num_options > 0 && self.form_feature_selected_idx < num_options - 1 {
-                                                    self.form_feature_selected_idx += 1;
-                                                } else if num_options > 0 {
-                                                    self.form_feature_selected_idx = 0;
-                                                }
-                                            }
-                                            if i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp) {
-                                                if self.form_feature_selected_idx > 0 {
-                                                    self.form_feature_selected_idx -= 1;
-                                                } else if num_options > 0 {
-                                                    self.form_feature_selected_idx = num_options - 1;
-                                                }
-                                            }
-                                            if i.consume_key(egui::Modifiers::NONE, egui::Key::Enter) {
-                                                close_and_select = true;
-                                            }
-                                            if i.consume_key(egui::Modifiers::NONE, egui::Key::Escape) {
-                                                ui.memory_mut(|mem| mem.close_popup());
-                                            }
-                                        });
-                                    }
-
-                                    if close_and_select && !filtered.is_empty() {
-                                        if let Some(feature) = filtered.get(self.form_feature_selected_idx) {
-                                            self.form_feature = feature.clone();
-                                        }
-                                        ui.memory_mut(|mem| mem.close_popup());
-                                    }
-
-                                    let feature_edit = ui.add(
-                                        egui::TextEdit::singleline(&mut self.form_feature)
-                                            .desired_width(120.0)
-                                            .hint_text("Type to search...")
-                                    );
-
-                                    if feature_edit.gained_focus() || (feature_edit.has_focus() && feature_edit.changed()) {
-                                        ui.memory_mut(|mem| mem.open_popup(popup_id));
-                                        self.form_feature_selected_idx = 0;
-                                    }
-
-                                    if self.form_feature_selected_idx >= num_options && num_options > 0 {
-                                        self.form_feature_selected_idx = num_options - 1;
-                                    }
-
-                                    egui::popup_below_widget(ui, popup_id, &feature_edit, egui::PopupCloseBehavior::CloseOnClickOutside, |ui| {
-                                        ui.set_min_width(120.0);
-                                        egui::ScrollArea::vertical().max_height(150.0).show(ui, |ui| {
-                                            if filtered.is_empty() {
-                                                ui.weak("No matching features");
-                                            } else {
-                                                for (idx, feature) in filtered.iter().enumerate() {
-                                                    let is_selected = idx == self.form_feature_selected_idx;
-                                                    if ui.selectable_label(is_selected, feature).clicked() {
-                                                        self.form_feature = feature.clone();
-                                                        ui.memory_mut(|mem| mem.close_popup());
+                                    // Status and Priority only for stateful types
+                                    if !self.store.is_type_stateless(&self.form_type) {
+                                        // Status dropdown
+                                        ui.label("Status:");
+                                        let statuses =
+                                            self.store.get_statuses_for_type(&self.form_type);
+                                        egui::ComboBox::new("form_status_combo", "")
+                                            .selected_text(&self.form_status_string)
+                                            .show_ui(ui, |ui| {
+                                                for status in &statuses {
+                                                    if ui
+                                                        .selectable_label(
+                                                            self.form_status_string == *status,
+                                                            status,
+                                                        )
+                                                        .clicked()
+                                                    {
+                                                        self.form_status_string = status.clone();
                                                     }
                                                 }
-                                            }
-                                        });
-                                    });
-                                }
-                                ui.end_row();
-
-                                // Owner
-                                ui.label("Owner:");
-                                ui.add(egui::TextEdit::singleline(&mut self.form_owner).desired_width(120.0));
-                                ui.end_row();
-
-                                // Tags
-                                ui.label("Tags:");
-                                ui.add(
-                                    egui::TextEdit::singleline(&mut self.form_tags)
-                                        .desired_width(120.0)
-                                        .hint_text("comma-separated"),
-                                );
-                                ui.end_row();
-
-                                // Parent relationship (for new requirements)
-                                if !is_edit {
-                                    if let Some(parent_id) = self.form_parent_id {
-                                        let parent_info = self.store.requirements.iter()
-                                            .find(|r| r.id == parent_id)
-                                            .map(|r| {
-                                                let spec = r.spec_id.as_deref().unwrap_or("N/A");
-                                                format!("{}", spec)
                                             });
-                                        if let Some(parent_label) = parent_info {
-                                            ui.label("Parent:");
-                                            ui.horizontal(|ui| {
-                                                ui.label(&parent_label);
-                                                if ui.small_button("x").on_hover_text("Remove parent").clicked() {
-                                                    self.form_parent_id = None;
-                                                }
+                                        ui.end_row();
+
+                                        // Priority dropdown
+                                        ui.label("Priority:");
+                                        egui::ComboBox::new("form_priority_combo", "")
+                                            .selected_text(format!("{:?}", self.form_priority))
+                                            .show_ui(ui, |ui| {
+                                                ui.selectable_value(
+                                                    &mut self.form_priority,
+                                                    RequirementPriority::High,
+                                                    "High",
+                                                );
+                                                ui.selectable_value(
+                                                    &mut self.form_priority,
+                                                    RequirementPriority::Medium,
+                                                    "Medium",
+                                                );
+                                                ui.selectable_value(
+                                                    &mut self.form_priority,
+                                                    RequirementPriority::Low,
+                                                    "Low",
+                                                );
                                             });
-                                            ui.end_row();
-                                        }
-                                    }
-                                }
-                            });
-
-                        // Custom fields section
-                        let custom_fields = self.store.get_custom_fields_for_type(&self.form_type);
-                        if !custom_fields.is_empty() {
-                            ui.add_space(12.0);
-                            ui.separator();
-                            ui.label(egui::RichText::new("Custom Fields").strong());
-                            ui.add_space(4.0);
-
-                            let mut sorted_fields = custom_fields;
-                            sorted_fields.sort_by_key(|f| f.order);
-
-                            egui::Grid::new("form_custom_fields_grid")
-                                .num_columns(2)
-                                .spacing([10.0, 6.0])
-                                .show(ui, |ui| {
-                                    for field in sorted_fields {
-                                        let label = if field.required {
-                                            format!("{}*:", field.label)
-                                        } else {
-                                            format!("{}:", field.label)
-                                        };
-                                        ui.label(&label);
-
-                                        let current_value = self.form_custom_fields
-                                            .get(&field.name)
-                                            .cloned()
-                                            .or_else(|| field.default_value.clone())
-                                            .unwrap_or_default();
-
-                                        self.show_custom_field_editor(ui, &field, current_value);
                                         ui.end_row();
                                     }
-                                });
-                        }
-                    });
-            });
 
-        // RIGHT SIDE: Description editor (takes remaining space)
-        egui::CentralPanel::default()
-            .frame(egui::Frame::none())
-            .show_inside(ui, |ui| {
-                // Description header with preview toggle
-                ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("Description").strong());
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let preview_label = if self.show_description_preview {
-                            "✏ Edit"
-                        } else {
-                            "👁 Preview"
-                        };
-                        if ui.button(preview_label).clicked() {
-                            self.show_description_preview = !self.show_description_preview;
-                        }
-                        if ui.link("Markdown").on_hover_text("Click for Markdown help").clicked() {
-                            self.show_markdown_help = true;
-                        }
-                    });
+                                    // Feature with dropdown
+                                    ui.label("Feature:");
+                                    {
+                                        let popup_id =
+                                            ui.make_persistent_id("feature_combo_popup_2");
+                                        let is_popup_open =
+                                            ui.memory(|mem| mem.is_popup_open(popup_id));
+
+                                        let all_features = self.get_all_features();
+                                        let search_lower = self.form_feature.to_lowercase();
+                                        let filtered: Vec<String> = if search_lower.is_empty() {
+                                            all_features.clone()
+                                        } else {
+                                            all_features
+                                                .iter()
+                                                .filter(|f| {
+                                                    f.to_lowercase().contains(&search_lower)
+                                                })
+                                                .cloned()
+                                                .collect()
+                                        };
+                                        let num_options = filtered.len();
+
+                                        // Handle keyboard BEFORE the TextEdit
+                                        let mut close_and_select = false;
+                                        if is_popup_open {
+                                            ui.ctx().input_mut(|i| {
+                                                if i.consume_key(
+                                                    egui::Modifiers::NONE,
+                                                    egui::Key::ArrowDown,
+                                                ) {
+                                                    if num_options > 0
+                                                        && self.form_feature_selected_idx
+                                                            < num_options - 1
+                                                    {
+                                                        self.form_feature_selected_idx += 1;
+                                                    } else if num_options > 0 {
+                                                        self.form_feature_selected_idx = 0;
+                                                    }
+                                                }
+                                                if i.consume_key(
+                                                    egui::Modifiers::NONE,
+                                                    egui::Key::ArrowUp,
+                                                ) {
+                                                    if self.form_feature_selected_idx > 0 {
+                                                        self.form_feature_selected_idx -= 1;
+                                                    } else if num_options > 0 {
+                                                        self.form_feature_selected_idx =
+                                                            num_options - 1;
+                                                    }
+                                                }
+                                                if i.consume_key(
+                                                    egui::Modifiers::NONE,
+                                                    egui::Key::Enter,
+                                                ) {
+                                                    close_and_select = true;
+                                                }
+                                                if i.consume_key(
+                                                    egui::Modifiers::NONE,
+                                                    egui::Key::Escape,
+                                                ) {
+                                                    ui.memory_mut(|mem| mem.close_popup());
+                                                }
+                                            });
+                                        }
+
+                                        if close_and_select && !filtered.is_empty() {
+                                            if let Some(feature) =
+                                                filtered.get(self.form_feature_selected_idx)
+                                            {
+                                                self.form_feature = feature.clone();
+                                            }
+                                            ui.memory_mut(|mem| mem.close_popup());
+                                        }
+
+                                        let feature_edit = ui.add(
+                                            egui::TextEdit::singleline(&mut self.form_feature)
+                                                .desired_width(120.0)
+                                                .hint_text("Type to search..."),
+                                        );
+
+                                        if feature_edit.gained_focus()
+                                            || (feature_edit.has_focus() && feature_edit.changed())
+                                        {
+                                            ui.memory_mut(|mem| mem.open_popup(popup_id));
+                                            self.form_feature_selected_idx = 0;
+                                        }
+
+                                        if self.form_feature_selected_idx >= num_options
+                                            && num_options > 0
+                                        {
+                                            self.form_feature_selected_idx = num_options - 1;
+                                        }
+
+                                        egui::popup_below_widget(
+                                            ui,
+                                            popup_id,
+                                            &feature_edit,
+                                            egui::PopupCloseBehavior::CloseOnClickOutside,
+                                            |ui| {
+                                                ui.set_min_width(120.0);
+                                                egui::ScrollArea::vertical()
+                                                    .max_height(150.0)
+                                                    .show(ui, |ui| {
+                                                        if filtered.is_empty() {
+                                                            ui.weak("No matching features");
+                                                        } else {
+                                                            for (idx, feature) in
+                                                                filtered.iter().enumerate()
+                                                            {
+                                                                let is_selected = idx
+                                                                    == self
+                                                                        .form_feature_selected_idx;
+                                                                if ui
+                                                                    .selectable_label(
+                                                                        is_selected,
+                                                                        feature,
+                                                                    )
+                                                                    .clicked()
+                                                                {
+                                                                    self.form_feature =
+                                                                        feature.clone();
+                                                                    ui.memory_mut(|mem| {
+                                                                        mem.close_popup()
+                                                                    });
+                                                                }
+                                                            }
+                                                        }
+                                                    });
+                                            },
+                                        );
+                                    }
+                                    ui.end_row();
+
+                                    // Owner
+                                    ui.label("Owner:");
+                                    ui.add(
+                                        egui::TextEdit::singleline(&mut self.form_owner)
+                                            .desired_width(120.0),
+                                    );
+                                    ui.end_row();
+
+                                    // Tags
+                                    ui.label("Tags:");
+                                    ui.add(
+                                        egui::TextEdit::singleline(&mut self.form_tags)
+                                            .desired_width(120.0)
+                                            .hint_text("comma-separated"),
+                                    );
+                                    ui.end_row();
+
+                                    // Parent relationship (for new requirements)
+                                    if !is_edit {
+                                        if let Some(parent_id) = self.form_parent_id {
+                                            let parent_info = self
+                                                .store
+                                                .requirements
+                                                .iter()
+                                                .find(|r| r.id == parent_id)
+                                                .map(|r| {
+                                                    let spec =
+                                                        r.spec_id.as_deref().unwrap_or("N/A");
+                                                    format!("{}", spec)
+                                                });
+                                            if let Some(parent_label) = parent_info {
+                                                ui.label("Parent:");
+                                                ui.horizontal(|ui| {
+                                                    ui.label(&parent_label);
+                                                    if ui
+                                                        .small_button("x")
+                                                        .on_hover_text("Remove parent")
+                                                        .clicked()
+                                                    {
+                                                        self.form_parent_id = None;
+                                                    }
+                                                });
+                                                ui.end_row();
+                                            }
+                                        }
+                                    }
+                                });
+
+                            // Custom fields section
+                            let custom_fields =
+                                self.store.get_custom_fields_for_type(&self.form_type);
+                            if !custom_fields.is_empty() {
+                                ui.add_space(12.0);
+                                ui.separator();
+                                ui.label(egui::RichText::new("Custom Fields").strong());
+                                ui.add_space(4.0);
+
+                                let mut sorted_fields = custom_fields;
+                                sorted_fields.sort_by_key(|f| f.order);
+
+                                egui::Grid::new("form_custom_fields_grid")
+                                    .num_columns(2)
+                                    .spacing([10.0, 6.0])
+                                    .show(ui, |ui| {
+                                        for field in sorted_fields {
+                                            let label = if field.required {
+                                                format!("{}*:", field.label)
+                                            } else {
+                                                format!("{}:", field.label)
+                                            };
+                                            ui.label(&label);
+
+                                            let current_value = self
+                                                .form_custom_fields
+                                                .get(&field.name)
+                                                .cloned()
+                                                .or_else(|| field.default_value.clone())
+                                                .unwrap_or_default();
+
+                                            self.show_custom_field_editor(
+                                                ui,
+                                                &field,
+                                                current_value,
+                                            );
+                                            ui.end_row();
+                                        }
+                                    });
+                            }
+                        });
                 });
 
-                ui.separator();
-
-                // Description content area
-                egui::ScrollArea::vertical()
-                    .id_salt("form_description_scroll")
-                    .auto_shrink([false, false])
-                    .show(ui, |ui| {
-                        if self.show_description_preview {
-                            // Preview mode - render as markdown
-                            CommonMarkViewer::new().show(
-                                ui,
-                                &mut self.markdown_cache,
-                                &self.form_description,
-                            );
-                        } else {
-                            // Edit mode - text editor
-                            let output = egui::TextEdit::multiline(&mut self.form_description)
-                                .desired_width(ui.available_width())
-                                .desired_rows(20)
-                                .hint_text("Enter requirement description (Markdown supported)...")
-                                .show(ui);
-
-                            // Request focus and position cursor at end when entering Add/Edit view
-                            if self.focus_description {
-                                output.response.request_focus();
-                                // Set cursor to end of text
-                                if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), output.response.id) {
-                                    let text_len = self.form_description.chars().count();
-                                    let ccursor = egui::text::CCursor::new(text_len);
-                                    state.cursor.set_char_range(Some(egui::text::CCursorRange::one(ccursor)));
-                                    state.store(ui.ctx(), output.response.id);
-                                }
-                                self.focus_description = false;
+            // RIGHT SIDE: Description editor (takes remaining space)
+            egui::CentralPanel::default()
+                .frame(egui::Frame::none())
+                .show_inside(ui, |ui| {
+                    // Description header with preview toggle
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new("Description").strong());
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let preview_label = if self.show_description_preview {
+                                "✏ Edit"
+                            } else {
+                                "👁 Preview"
+                            };
+                            if ui.button(preview_label).clicked() {
+                                self.show_description_preview = !self.show_description_preview;
                             }
-
-                            show_text_context_menu(
-                                ui,
-                                &output.response,
-                                &mut self.form_description,
-                                output.response.id,
-                                &mut self.last_text_selection,
-                            );
-                        }
+                            if ui
+                                .link("Markdown")
+                                .on_hover_text("Click for Markdown help")
+                                .clicked()
+                            {
+                                self.show_markdown_help = true;
+                            }
+                        });
                     });
-            });
+
+                    ui.separator();
+
+                    // Description content area
+                    egui::ScrollArea::vertical()
+                        .id_salt("form_description_scroll")
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            if self.show_description_preview {
+                                // Preview mode - render as markdown
+                                CommonMarkViewer::new().show(
+                                    ui,
+                                    &mut self.markdown_cache,
+                                    &self.form_description,
+                                );
+                            } else {
+                                // Edit mode - text editor
+                                let output = egui::TextEdit::multiline(&mut self.form_description)
+                                    .desired_width(ui.available_width())
+                                    .desired_rows(20)
+                                    .hint_text(
+                                        "Enter requirement description (Markdown supported)...",
+                                    )
+                                    .show(ui);
+
+                                // Request focus and position cursor at end when entering Add/Edit view
+                                if self.focus_description {
+                                    output.response.request_focus();
+                                    // Set cursor to end of text
+                                    if let Some(mut state) =
+                                        egui::TextEdit::load_state(ui.ctx(), output.response.id)
+                                    {
+                                        let text_len = self.form_description.chars().count();
+                                        let ccursor = egui::text::CCursor::new(text_len);
+                                        state.cursor.set_char_range(Some(
+                                            egui::text::CCursorRange::one(ccursor),
+                                        ));
+                                        state.store(ui.ctx(), output.response.id);
+                                    }
+                                    self.focus_description = false;
+                                }
+
+                                show_text_context_menu(
+                                    ui,
+                                    &output.response,
+                                    &mut self.form_description,
+                                    output.response.id,
+                                    &mut self.last_text_selection,
+                                );
+                            }
+                        });
+                });
 
             // Auto-sync description's first line to title in Add mode
             self.sync_title_from_description(is_edit);
@@ -29687,7 +31313,10 @@ fn main() {
             if old_type != self.form_type {
                 let statuses = self.store.get_statuses_for_type(&self.form_type);
                 if !statuses.contains(&self.form_status_string) {
-                    self.form_status_string = statuses.first().cloned().unwrap_or_else(|| "Draft".to_string());
+                    self.form_status_string = statuses
+                        .first()
+                        .cloned()
+                        .unwrap_or_else(|| "Draft".to_string());
                 }
                 self.form_custom_fields.clear();
             }
@@ -29840,14 +31469,15 @@ fn main() {
                                 // Extract the number part from current spec_id (e.g., "FR-0001" -> "0001")
                                 if let Some(dash_pos) = current_spec_id.rfind('-') {
                                     let number_part = &current_spec_id[dash_pos..]; // includes the dash
-                                    // Determine the prefix to use
+                                                                                    // Determine the prefix to use
                                     let effective_prefix = if !self.form_prefix.trim().is_empty() {
                                         // User has explicitly set a prefix
                                         self.form_prefix.trim().to_uppercase()
                                     } else {
                                         // Use the type's default prefix
                                         let type_name = format!("{:?}", self.form_type);
-                                        self.store.type_definitions
+                                        self.store
+                                            .type_definitions
                                             .iter()
                                             .find(|td| td.name == type_name)
                                             .and_then(|td| td.prefix.clone())
@@ -29876,20 +31506,40 @@ fn main() {
                 egui::ComboBox::new("form_type_combo_vert", "")
                     .selected_text(format!("{:?}", self.form_type))
                     .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.form_type, RequirementType::Functional, "Functional");
-                        ui.selectable_value(&mut self.form_type, RequirementType::NonFunctional, "NonFunctional");
+                        ui.selectable_value(
+                            &mut self.form_type,
+                            RequirementType::Functional,
+                            "Functional",
+                        );
+                        ui.selectable_value(
+                            &mut self.form_type,
+                            RequirementType::NonFunctional,
+                            "NonFunctional",
+                        );
                         ui.selectable_value(&mut self.form_type, RequirementType::System, "System");
                         ui.selectable_value(&mut self.form_type, RequirementType::User, "User");
-                        ui.selectable_value(&mut self.form_type, RequirementType::ChangeRequest, "Change Request");
+                        ui.selectable_value(
+                            &mut self.form_type,
+                            RequirementType::ChangeRequest,
+                            "Change Request",
+                        );
                         ui.selectable_value(&mut self.form_type, RequirementType::Bug, "Bug");
                         ui.separator();
                         ui.selectable_value(&mut self.form_type, RequirementType::Epic, "Epic");
                         ui.selectable_value(&mut self.form_type, RequirementType::Story, "Story");
                         ui.selectable_value(&mut self.form_type, RequirementType::Task, "Task");
                         ui.selectable_value(&mut self.form_type, RequirementType::Spike, "Spike");
-                        ui.selectable_value(&mut self.form_type, RequirementType::Sprint, "🏃 Sprint");
+                        ui.selectable_value(
+                            &mut self.form_type,
+                            RequirementType::Sprint,
+                            "🏃 Sprint",
+                        );
                         ui.separator();
-                        ui.selectable_value(&mut self.form_type, RequirementType::Folder, "📁 Folder");
+                        ui.selectable_value(
+                            &mut self.form_type,
+                            RequirementType::Folder,
+                            "📁 Folder",
+                        );
                         ui.selectable_value(&mut self.form_type, RequirementType::Meta, "⚡ Meta");
                     });
                 ui.end_row();
@@ -29903,7 +31553,10 @@ fn main() {
                         .selected_text(&self.form_status_string)
                         .show_ui(ui, |ui| {
                             for status in &statuses {
-                                if ui.selectable_label(self.form_status_string == *status, status).clicked() {
+                                if ui
+                                    .selectable_label(self.form_status_string == *status, status)
+                                    .clicked()
+                                {
                                     self.form_status_string = status.clone();
                                 }
                             }
@@ -29915,9 +31568,21 @@ fn main() {
                     egui::ComboBox::new("form_priority_combo_vert", "")
                         .selected_text(format!("{:?}", self.form_priority))
                         .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut self.form_priority, RequirementPriority::High, "High");
-                            ui.selectable_value(&mut self.form_priority, RequirementPriority::Medium, "Medium");
-                            ui.selectable_value(&mut self.form_priority, RequirementPriority::Low, "Low");
+                            ui.selectable_value(
+                                &mut self.form_priority,
+                                RequirementPriority::High,
+                                "High",
+                            );
+                            ui.selectable_value(
+                                &mut self.form_priority,
+                                RequirementPriority::Medium,
+                                "Medium",
+                            );
+                            ui.selectable_value(
+                                &mut self.form_priority,
+                                RequirementPriority::Low,
+                                "Low",
+                            );
                         });
                     ui.end_row();
                 }
@@ -29933,7 +31598,8 @@ fn main() {
                     let filtered: Vec<String> = if search_lower.is_empty() {
                         all_features.clone()
                     } else {
-                        all_features.iter()
+                        all_features
+                            .iter()
                             .filter(|f| f.to_lowercase().contains(&search_lower))
                             .cloned()
                             .collect()
@@ -29945,7 +31611,9 @@ fn main() {
                     if is_popup_open {
                         ui.ctx().input_mut(|i| {
                             if i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown) {
-                                if num_options > 0 && self.form_feature_selected_idx < num_options - 1 {
+                                if num_options > 0
+                                    && self.form_feature_selected_idx < num_options - 1
+                                {
                                     self.form_feature_selected_idx += 1;
                                 } else if num_options > 0 {
                                     self.form_feature_selected_idx = 0;
@@ -29977,10 +31645,12 @@ fn main() {
                     let feature_edit = ui.add(
                         egui::TextEdit::singleline(&mut self.form_feature)
                             .desired_width(200.0)
-                            .hint_text("Type to search...")
+                            .hint_text("Type to search..."),
                     );
 
-                    if feature_edit.gained_focus() || (feature_edit.has_focus() && feature_edit.changed()) {
+                    if feature_edit.gained_focus()
+                        || (feature_edit.has_focus() && feature_edit.changed())
+                    {
                         ui.memory_mut(|mem| mem.open_popup(popup_id));
                         self.form_feature_selected_idx = 0;
                     }
@@ -29989,22 +31659,30 @@ fn main() {
                         self.form_feature_selected_idx = num_options - 1;
                     }
 
-                    egui::popup_below_widget(ui, popup_id, &feature_edit, egui::PopupCloseBehavior::CloseOnClickOutside, |ui| {
-                        ui.set_min_width(200.0);
-                        egui::ScrollArea::vertical().max_height(150.0).show(ui, |ui| {
-                            if filtered.is_empty() {
-                                ui.weak("No matching features");
-                            } else {
-                                for (idx, feature) in filtered.iter().enumerate() {
-                                    let is_selected = idx == self.form_feature_selected_idx;
-                                    if ui.selectable_label(is_selected, feature).clicked() {
-                                        self.form_feature = feature.clone();
-                                        ui.memory_mut(|mem| mem.close_popup());
+                    egui::popup_below_widget(
+                        ui,
+                        popup_id,
+                        &feature_edit,
+                        egui::PopupCloseBehavior::CloseOnClickOutside,
+                        |ui| {
+                            ui.set_min_width(200.0);
+                            egui::ScrollArea::vertical()
+                                .max_height(150.0)
+                                .show(ui, |ui| {
+                                    if filtered.is_empty() {
+                                        ui.weak("No matching features");
+                                    } else {
+                                        for (idx, feature) in filtered.iter().enumerate() {
+                                            let is_selected = idx == self.form_feature_selected_idx;
+                                            if ui.selectable_label(is_selected, feature).clicked() {
+                                                self.form_feature = feature.clone();
+                                                ui.memory_mut(|mem| mem.close_popup());
+                                            }
+                                        }
                                     }
-                                }
-                            }
-                        });
-                    });
+                                });
+                        },
+                    );
                 }
                 ui.end_row();
 
@@ -30025,7 +31703,10 @@ fn main() {
                 // Parent relationship (for new requirements)
                 if !is_edit {
                     if let Some(parent_id) = self.form_parent_id {
-                        let parent_info = self.store.requirements.iter()
+                        let parent_info = self
+                            .store
+                            .requirements
+                            .iter()
                             .find(|r| r.id == parent_id)
                             .map(|r| {
                                 let spec = r.spec_id.as_deref().unwrap_or("N/A");
@@ -30035,7 +31716,11 @@ fn main() {
                             ui.label("Parent:");
                             ui.horizontal(|ui| {
                                 ui.label(&parent_label);
-                                if ui.small_button("x").on_hover_text("Remove parent").clicked() {
+                                if ui
+                                    .small_button("x")
+                                    .on_hover_text("Remove parent")
+                                    .clicked()
+                                {
                                     self.form_parent_id = None;
                                 }
                             });
@@ -30068,7 +31753,8 @@ fn main() {
                         };
                         ui.label(&label);
 
-                        let current_value = self.form_custom_fields
+                        let current_value = self
+                            .form_custom_fields
                             .get(&field.name)
                             .cloned()
                             .or_else(|| field.default_value.clone())
@@ -30086,7 +31772,10 @@ fn main() {
         if old_type != self.form_type {
             let statuses = self.store.get_statuses_for_type(&self.form_type);
             if !statuses.contains(&self.form_status_string) {
-                self.form_status_string = statuses.first().cloned().unwrap_or_else(|| "Draft".to_string());
+                self.form_status_string = statuses
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| "Draft".to_string());
             }
             self.form_custom_fields.clear();
         }
@@ -30103,7 +31792,11 @@ fn main() {
                 if ui.button(preview_label).clicked() {
                     self.show_description_preview = !self.show_description_preview;
                 }
-                if ui.link("Markdown").on_hover_text("Click for Markdown help").clicked() {
+                if ui
+                    .link("Markdown")
+                    .on_hover_text("Click for Markdown help")
+                    .clicked()
+                {
                     self.show_markdown_help = true;
                 }
             });
@@ -30135,10 +31828,14 @@ fn main() {
                     if self.focus_description {
                         output.response.request_focus();
                         // Set cursor to end of text
-                        if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), output.response.id) {
+                        if let Some(mut state) =
+                            egui::TextEdit::load_state(ui.ctx(), output.response.id)
+                        {
                             let text_len = self.form_description.chars().count();
                             let ccursor = egui::text::CCursor::new(text_len);
-                            state.cursor.set_char_range(Some(egui::text::CCursorRange::one(ccursor)));
+                            state
+                                .cursor
+                                .set_char_range(Some(egui::text::CCursorRange::one(ccursor)));
                             state.store(ui.ctx(), output.response.id);
                         }
                         self.focus_description = false;
@@ -30218,22 +31915,33 @@ fn main() {
     fn show_prefix_field(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             // Always show dropdown with existing prefixes
-            let all_prefixes = if self.store.restrict_prefixes && !self.store.allowed_prefixes.is_empty() {
-                self.store.allowed_prefixes.clone()
-            } else {
-                self.store.get_all_prefixes()
-            };
+            let all_prefixes =
+                if self.store.restrict_prefixes && !self.store.allowed_prefixes.is_empty() {
+                    self.store.allowed_prefixes.clone()
+                } else {
+                    self.store.get_all_prefixes()
+                };
 
             if !all_prefixes.is_empty() {
                 egui::ComboBox::new("form_prefix_combo", "")
-                    .selected_text(if self.form_prefix.is_empty() { "(default)" } else { &self.form_prefix })
+                    .selected_text(if self.form_prefix.is_empty() {
+                        "(default)"
+                    } else {
+                        &self.form_prefix
+                    })
                     .width(80.0)
                     .show_ui(ui, |ui| {
-                        if ui.selectable_label(self.form_prefix.is_empty(), "(default)").clicked() {
+                        if ui
+                            .selectable_label(self.form_prefix.is_empty(), "(default)")
+                            .clicked()
+                        {
                             self.form_prefix.clear();
                         }
                         for prefix in &all_prefixes {
-                            if ui.selectable_label(self.form_prefix == *prefix, prefix).clicked() {
+                            if ui
+                                .selectable_label(self.form_prefix == *prefix, prefix)
+                                .clicked()
+                            {
                                 self.form_prefix = prefix.clone();
                             }
                         }
@@ -30242,9 +31950,11 @@ fn main() {
             }
 
             // Always show text input for manual entry
-            ui.add(egui::TextEdit::singleline(&mut self.form_prefix)
-                .desired_width(60.0)
-                .hint_text("e.g., SEC"));
+            ui.add(
+                egui::TextEdit::singleline(&mut self.form_prefix)
+                    .desired_width(60.0)
+                    .hint_text("e.g., SEC"),
+            );
 
             // Show validation status
             let prefix_trimmed = self.form_prefix.trim();
@@ -30260,17 +31970,32 @@ fn main() {
     }
 
     /// Helper to show custom field editor (used in both form layouts)
-    fn show_custom_field_editor(&mut self, ui: &mut egui::Ui, field: &CustomFieldDefinition, current_value: String) {
+    fn show_custom_field_editor(
+        &mut self,
+        ui: &mut egui::Ui,
+        field: &CustomFieldDefinition,
+        current_value: String,
+    ) {
         match field.field_type {
             CustomFieldType::Text => {
                 let mut value = current_value;
-                if ui.add(egui::TextEdit::singleline(&mut value).desired_width(120.0)).changed() {
+                if ui
+                    .add(egui::TextEdit::singleline(&mut value).desired_width(120.0))
+                    .changed()
+                {
                     self.form_custom_fields.insert(field.name.clone(), value);
                 }
             }
             CustomFieldType::TextArea => {
                 let mut value = current_value;
-                if ui.add(egui::TextEdit::multiline(&mut value).desired_width(120.0).desired_rows(2)).changed() {
+                if ui
+                    .add(
+                        egui::TextEdit::multiline(&mut value)
+                            .desired_width(120.0)
+                            .desired_rows(2),
+                    )
+                    .changed()
+                {
                     self.form_custom_fields.insert(field.name.clone(), value);
                 }
             }
@@ -30280,8 +32005,12 @@ fn main() {
                     .width(100.0)
                     .show_ui(ui, |ui| {
                         for option in &field.options {
-                            if ui.selectable_label(current_value == *option, option).clicked() {
-                                self.form_custom_fields.insert(field.name.clone(), option.clone());
+                            if ui
+                                .selectable_label(current_value == *option, option)
+                                .clicked()
+                            {
+                                self.form_custom_fields
+                                    .insert(field.name.clone(), option.clone());
                             }
                         }
                     });
@@ -30289,12 +32018,16 @@ fn main() {
             CustomFieldType::Boolean => {
                 let mut checked = current_value == "true";
                 if ui.checkbox(&mut checked, "").changed() {
-                    self.form_custom_fields.insert(field.name.clone(), checked.to_string());
+                    self.form_custom_fields
+                        .insert(field.name.clone(), checked.to_string());
                 }
             }
             CustomFieldType::Number => {
                 let mut value = current_value;
-                if ui.add(egui::TextEdit::singleline(&mut value).desired_width(60.0)).changed() {
+                if ui
+                    .add(egui::TextEdit::singleline(&mut value).desired_width(60.0))
+                    .changed()
+                {
                     if value.is_empty() || value.parse::<f64>().is_ok() {
                         self.form_custom_fields.insert(field.name.clone(), value);
                     }
@@ -30302,17 +32035,29 @@ fn main() {
             }
             CustomFieldType::Date => {
                 let mut value = current_value;
-                if ui.add(egui::TextEdit::singleline(&mut value).desired_width(100.0).hint_text("YYYY-MM-DD")).changed() {
+                if ui
+                    .add(
+                        egui::TextEdit::singleline(&mut value)
+                            .desired_width(100.0)
+                            .hint_text("YYYY-MM-DD"),
+                    )
+                    .changed()
+                {
                     self.form_custom_fields.insert(field.name.clone(), value);
                 }
             }
             CustomFieldType::User => {
-                let active_users: Vec<_> = self.store.users.iter().filter(|u| !u.archived).collect();
+                let active_users: Vec<_> =
+                    self.store.users.iter().filter(|u| !u.archived).collect();
                 let display_text = if current_value.is_empty() {
                     "(none)".to_string()
                 } else {
-                    active_users.iter()
-                        .find(|u| u.id.to_string() == current_value || u.spec_id.as_deref() == Some(&current_value))
+                    active_users
+                        .iter()
+                        .find(|u| {
+                            u.id.to_string() == current_value
+                                || u.spec_id.as_deref() == Some(&current_value)
+                        })
                         .map(|u| u.name.clone())
                         .unwrap_or_else(|| current_value.clone())
                 };
@@ -30320,12 +32065,20 @@ fn main() {
                     .selected_text(&display_text)
                     .width(100.0)
                     .show_ui(ui, |ui| {
-                        if ui.selectable_label(current_value.is_empty(), "(none)").clicked() {
-                            self.form_custom_fields.insert(field.name.clone(), String::new());
+                        if ui
+                            .selectable_label(current_value.is_empty(), "(none)")
+                            .clicked()
+                        {
+                            self.form_custom_fields
+                                .insert(field.name.clone(), String::new());
                         }
                         for user in &active_users {
-                            let user_id = user.spec_id.clone().unwrap_or_else(|| user.id.to_string());
-                            if ui.selectable_label(current_value == user_id, &user.name).clicked() {
+                            let user_id =
+                                user.spec_id.clone().unwrap_or_else(|| user.id.to_string());
+                            if ui
+                                .selectable_label(current_value == user_id, &user.name)
+                                .clicked()
+                            {
                                 self.form_custom_fields.insert(field.name.clone(), user_id);
                             }
                         }
@@ -30335,8 +32088,13 @@ fn main() {
                 let display_name = if current_value.is_empty() {
                     "(none)".to_string()
                 } else {
-                    self.store.requirements.iter()
-                        .find(|r| r.id.to_string() == current_value || r.spec_id.as_deref() == Some(&current_value))
+                    self.store
+                        .requirements
+                        .iter()
+                        .find(|r| {
+                            r.id.to_string() == current_value
+                                || r.spec_id.as_deref() == Some(&current_value)
+                        })
                         .map(|r| r.spec_id.as_deref().unwrap_or("N/A").to_string())
                         .unwrap_or_else(|| current_value.clone())
                 };
@@ -30344,13 +32102,20 @@ fn main() {
                     .selected_text(&display_name)
                     .width(100.0)
                     .show_ui(ui, |ui| {
-                        if ui.selectable_label(current_value.is_empty(), "(none)").clicked() {
-                            self.form_custom_fields.insert(field.name.clone(), String::new());
+                        if ui
+                            .selectable_label(current_value.is_empty(), "(none)")
+                            .clicked()
+                        {
+                            self.form_custom_fields
+                                .insert(field.name.clone(), String::new());
                         }
                         for req in self.store.requirements.iter().take(50) {
                             let req_id = req.spec_id.clone().unwrap_or_else(|| req.id.to_string());
                             let label = req.spec_id.as_deref().unwrap_or("N/A");
-                            if ui.selectable_label(current_value == req_id, label).clicked() {
+                            if ui
+                                .selectable_label(current_value == req_id, label)
+                                .clicked()
+                            {
                                 self.form_custom_fields.insert(field.name.clone(), req_id);
                             }
                         }
@@ -30949,7 +32714,10 @@ fn main() {
 
         // Get the requirement info for display
         let req_info = self.store.requirements.get(idx).map(|r| {
-            let spec_id = r.spec_id.clone().unwrap_or_else(|| format!("#{}", r.id.to_string().get(..8).unwrap_or("?")));
+            let spec_id = r
+                .spec_id
+                .clone()
+                .unwrap_or_else(|| format!("#{}", r.id.to_string().get(..8).unwrap_or("?")));
             let title = if r.title.len() > 40 {
                 format!("{}...", &r.title.chars().take(40).collect::<String>())
             } else {
@@ -31980,7 +33748,9 @@ fn main() {
         // Build API URL from server address
         // In production, REST API is at same domain as gRPC (Traefik routes /api/* to port 8080)
         // Locally, replace :50051 with :8080
-        let server_addr = self.server_addr.as_ref()
+        let server_addr = self
+            .server_addr
+            .as_ref()
             .map(|s| {
                 if s.contains("localhost") || s.contains("127.0.0.1") {
                     s.replace(":50051", ":8080")
@@ -32008,14 +33778,15 @@ fn main() {
 
                 let request = Request::new_with_str_and_init(&url, &opts)
                     .map_err(|_| "Failed to create request")?;
-                request.headers().set("Accept", "application/json")
+                request
+                    .headers()
+                    .set("Accept", "application/json")
                     .map_err(|_| "Failed to set header")?;
 
                 let resp_value = JsFuture::from(window.fetch_with_request(&request))
                     .await
                     .map_err(|_| "Fetch failed")?;
-                let resp: Response = resp_value.dyn_into()
-                    .map_err(|_| "Response cast failed")?;
+                let resp: Response = resp_value.dyn_into().map_err(|_| "Response cast failed")?;
 
                 if !resp.ok() {
                     return Err(format!("HTTP {}", resp.status()).into());
@@ -32029,7 +33800,8 @@ fn main() {
                     .map_err(|e| format!("Deserialize failed: {:?}", e))?;
 
                 Ok::<_, Box<dyn std::error::Error>>(response.projects)
-            }.await;
+            }
+            .await;
 
             match result {
                 Ok(list) => {
@@ -32061,7 +33833,9 @@ fn main() {
         *self.wasm_creating_project.borrow_mut() = true;
 
         // Build API URL - same logic as fetch_projects
-        let server_addr = self.server_addr.as_ref()
+        let server_addr = self
+            .server_addr
+            .as_ref()
             .map(|s| {
                 if s.contains("localhost") || s.contains("127.0.0.1") {
                     s.replace(":50051", ":8080")
@@ -32099,14 +33873,15 @@ fn main() {
 
                 let request = Request::new_with_str_and_init(&url, &opts)
                     .map_err(|_| "Failed to create request")?;
-                request.headers().set("Content-Type", "application/json")
+                request
+                    .headers()
+                    .set("Content-Type", "application/json")
                     .map_err(|_| "Failed to set header")?;
 
                 let resp_value = JsFuture::from(window.fetch_with_request(&request))
                     .await
                     .map_err(|_| "Fetch failed")?;
-                let resp: Response = resp_value.dyn_into()
-                    .map_err(|_| "Response cast failed")?;
+                let resp: Response = resp_value.dyn_into().map_err(|_| "Response cast failed")?;
 
                 if !resp.ok() {
                     let status = resp.status();
@@ -32126,7 +33901,8 @@ fn main() {
                     .map_err(|e| format!("Deserialize failed: {:?}", e))?;
 
                 Ok::<_, Box<dyn std::error::Error>>(created)
-            }.await;
+            }
+            .await;
 
             match result {
                 Ok(created) => {
@@ -32148,8 +33924,12 @@ fn main() {
     #[cfg(target_arch = "wasm32")]
     fn navigate_to_project(&self, project: &str) {
         if let Some(window) = web_sys::window() {
-            let server = self.server_addr.as_deref().unwrap_or("http://localhost:50051");
-            let new_url = format!("{}?project={}&server={}",
+            let server = self
+                .server_addr
+                .as_deref()
+                .unwrap_or("http://localhost:50051");
+            let new_url = format!(
+                "{}?project={}&server={}",
                 window.location().origin().unwrap_or_default(),
                 project,
                 server
@@ -32185,9 +33965,13 @@ impl eframe::App for RequirementsApp {
             && !self.show_cancel_confirm_dialog
             && {
                 #[cfg(not(target_arch = "wasm32"))]
-                { !self.show_conflict_dialog }
+                {
+                    !self.show_conflict_dialog
+                }
                 #[cfg(target_arch = "wasm32")]
-                { true }
+                {
+                    true
+                }
             }
             && !self.show_clone_dialog
             && !self.show_import_dialog
@@ -32219,13 +34003,19 @@ impl eframe::App for RequirementsApp {
         {
             // Check if async load has completed with data
             if let Some(loaded_store) = self.wasm_pending_store.borrow_mut().take() {
-                log::info!("WASM: Applying loaded store with {} requirements", loaded_store.requirements.len());
+                log::info!(
+                    "WASM: Applying loaded store with {} requirements",
+                    loaded_store.requirements.len()
+                );
                 self.store = loaded_store;
                 self.wasm_loading = false;
                 // Show success message
                 self.message = Some((
-                    format!("Loaded {} requirements from server", self.store.requirements.len()),
-                    false
+                    format!(
+                        "Loaded {} requirements from server",
+                        self.store.requirements.len()
+                    ),
+                    false,
                 ));
             }
             // Check if async load failed with error
@@ -32236,8 +34026,13 @@ impl eframe::App for RequirementsApp {
             }
 
             // Check if async create requirement has completed (FR-0281)
-            if let Some((_local_id, created_req)) = self.wasm_pending_created_req.borrow_mut().take() {
-                log::info!("WASM: Applying created requirement with spec_id: {:?}", created_req.spec_id);
+            if let Some((_local_id, created_req)) =
+                self.wasm_pending_created_req.borrow_mut().take()
+            {
+                log::info!(
+                    "WASM: Applying created requirement with spec_id: {:?}",
+                    created_req.spec_id
+                );
                 // Add the server-created requirement to our local store
                 self.store.requirements.push(created_req.clone());
                 self.wasm_saving = false;
@@ -32249,10 +34044,13 @@ impl eframe::App for RequirementsApp {
                 self.current_view = View::Detail;
 
                 // Show success message with server-assigned spec_id
-                let spec_id = created_req.spec_id.clone().unwrap_or_else(|| "N/A".to_string());
+                let spec_id = created_req
+                    .spec_id
+                    .clone()
+                    .unwrap_or_else(|| "N/A".to_string());
                 self.message = Some((
                     format!("Requirement {} created successfully", spec_id),
-                    false
+                    false,
                 ));
             }
             // Check if async create failed with error
@@ -32264,19 +34062,30 @@ impl eframe::App for RequirementsApp {
 
             // Check if async update requirement has completed (FR-0281)
             if let Some(updated_req) = self.wasm_pending_updated_req.borrow_mut().take() {
-                log::info!("WASM: Applying updated requirement with spec_id: {:?}", updated_req.spec_id);
+                log::info!(
+                    "WASM: Applying updated requirement with spec_id: {:?}",
+                    updated_req.spec_id
+                );
                 // Find and replace the requirement in our local store
-                if let Some(idx) = self.store.requirements.iter().position(|r| r.id == updated_req.id) {
+                if let Some(idx) = self
+                    .store
+                    .requirements
+                    .iter()
+                    .position(|r| r.id == updated_req.id)
+                {
                     self.store.requirements[idx] = updated_req.clone();
                     self.selected_idx = Some(idx);
                 }
                 self.wasm_saving = false;
 
                 // Show success message
-                let spec_id = updated_req.spec_id.clone().unwrap_or_else(|| "N/A".to_string());
+                let spec_id = updated_req
+                    .spec_id
+                    .clone()
+                    .unwrap_or_else(|| "N/A".to_string());
                 self.message = Some((
                     format!("Requirement {} updated successfully", spec_id),
-                    false
+                    false,
                 ));
             }
             // Check if async update failed with error
@@ -32290,23 +34099,29 @@ impl eframe::App for RequirementsApp {
         // Periodically check for other concurrent users (every ~60 frames = ~1 second)
         #[cfg(not(target_arch = "wasm32"))]
         {
-            static CONCURRENT_CHECK_COUNTER: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-            let counter = CONCURRENT_CHECK_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            static CONCURRENT_CHECK_COUNTER: std::sync::atomic::AtomicU32 =
+                std::sync::atomic::AtomicU32::new(0);
+            let counter =
+                CONCURRENT_CHECK_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             if counter % 60 == 0 {
                 if let Ok(lock_info) = self.storage.get_active_sessions() {
-                let other_sessions = lock_info.get_other_sessions(&self.session_id);
-                if !other_sessions.is_empty() && !self.other_sessions_warning_shown {
-                    // Show warning about other users
-                    let user_names: Vec<&str> = other_sessions.iter()
-                        .map(|s| s.user_name.as_str())
-                        .collect();
-                    self.toast_message = Some(ToastNotification {
-                        message: format!("⚠️ {} also has this file open", user_names.join(", ")),
-                        is_success: false,
-                        show_until: Instant::now() + Duration::from_secs(10),
-                    });
-                    self.other_sessions_warning_shown = true;
-                }
+                    let other_sessions = lock_info.get_other_sessions(&self.session_id);
+                    if !other_sessions.is_empty() && !self.other_sessions_warning_shown {
+                        // Show warning about other users
+                        let user_names: Vec<&str> = other_sessions
+                            .iter()
+                            .map(|s| s.user_name.as_str())
+                            .collect();
+                        self.toast_message = Some(ToastNotification {
+                            message: format!(
+                                "⚠️ {} also has this file open",
+                                user_names.join(", ")
+                            ),
+                            is_success: false,
+                            show_until: Instant::now() + Duration::from_secs(10),
+                        });
+                        self.other_sessions_warning_shown = true;
+                    }
                     self.last_lock_info = Some(lock_info);
                 }
             }
@@ -32319,7 +34134,10 @@ impl eframe::App for RequirementsApp {
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(receiver) = &self.ai_eval_receiver {
             if let Ok(result) = receiver.try_recv() {
-                eprintln!("DEBUG: Background AI evaluation completed for {}", result.spec_id);
+                eprintln!(
+                    "DEBUG: Background AI evaluation completed for {}",
+                    result.spec_id
+                );
 
                 // Clear the in-progress state
                 self.ai_eval_in_progress = None;
@@ -32328,10 +34146,16 @@ impl eframe::App for RequirementsApp {
                 match result.result {
                     Ok(response) => {
                         // Create the stored evaluation
-                        let stored_eval = StoredAiEvaluation::new(response.clone(), result.content_hash);
+                        let stored_eval =
+                            StoredAiEvaluation::new(response.clone(), result.content_hash);
 
                         // Find and update the requirement
-                        if let Some(req) = self.store.requirements.iter_mut().find(|r| r.id == result.req_id) {
+                        if let Some(req) = self
+                            .store
+                            .requirements
+                            .iter_mut()
+                            .find(|r| r.id == result.req_id)
+                        {
                             req.ai_evaluation = Some(stored_eval);
                             eprintln!("DEBUG: Updated AI evaluation for {}", result.spec_id);
                         }
@@ -32341,8 +34165,10 @@ impl eframe::App for RequirementsApp {
 
                         // Show success toast
                         self.toast_message = Some(ToastNotification {
-                            message: format!("AI evaluation complete for {} (Score: {}/10)",
-                                result.spec_id, response.quality_score),
+                            message: format!(
+                                "AI evaluation complete for {} (Score: {}/10)",
+                                result.spec_id, response.quality_score
+                            ),
                             is_success: true,
                             show_until: Instant::now() + Duration::from_secs(5),
                         });
@@ -32354,19 +34180,28 @@ impl eframe::App for RequirementsApp {
                             message: format!(
                                 "Quality Score: {}/10\n\nStrengths:\n{}\n\nIssues:\n{}",
                                 response.quality_score,
-                                response.strengths.iter()
+                                response
+                                    .strengths
+                                    .iter()
                                     .map(|s| format!("• {}", s))
                                     .collect::<Vec<_>>()
                                     .join("\n"),
-                                response.issues.iter()
-                                    .map(|i| format!("• [{}] {}: {}", i.severity, i.issue_type, i.text))
+                                response
+                                    .issues
+                                    .iter()
+                                    .map(|i| format!(
+                                        "• [{}] {}: {}",
+                                        i.severity, i.issue_type, i.text
+                                    ))
                                     .collect::<Vec<_>>()
                                     .join("\n")
                             ),
                             details: response.suggested_improvements.as_ref().map(|imp| {
-                                format!("Suggested improvement:\n{}\n\nRationale: {}",
+                                format!(
+                                    "Suggested improvement:\n{}\n\nRationale: {}",
                                     imp.description.as_deref().unwrap_or("(none)"),
-                                    imp.rationale)
+                                    imp.rationale
+                                )
                             }),
                         });
                     }
@@ -32386,7 +34221,10 @@ impl eframe::App for RequirementsApp {
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(receiver) = &self.find_duplicates_receiver {
             if let Ok(result) = receiver.try_recv() {
-                eprintln!("DEBUG: Background Find Duplicates completed for {}", result.spec_id);
+                eprintln!(
+                    "DEBUG: Background Find Duplicates completed for {}",
+                    result.spec_id
+                );
 
                 // Clear the in-progress state
                 self.find_duplicates_in_progress = None;
@@ -32397,14 +34235,17 @@ impl eframe::App for RequirementsApp {
                         let msg = if duplicates.is_empty() {
                             "No potential duplicates found.".to_string()
                         } else {
-                            duplicates.iter()
-                                .map(|d| format!(
-                                    "• {} ({}% similar): {}\n  Recommendation: {}",
-                                    d.spec_id,
-                                    (d.similarity * 100.0) as i32,
-                                    d.reason,
-                                    d.recommendation
-                                ))
+                            duplicates
+                                .iter()
+                                .map(|d| {
+                                    format!(
+                                        "• {} ({}% similar): {}\n  Recommendation: {}",
+                                        d.spec_id,
+                                        (d.similarity * 100.0) as i32,
+                                        d.reason,
+                                        d.recommendation
+                                    )
+                                })
                                 .collect::<Vec<_>>()
                                 .join("\n\n")
                         };
@@ -32415,7 +34256,10 @@ impl eframe::App for RequirementsApp {
                             message: if count == 0 {
                                 format!("No duplicates found for {}", result.spec_id)
                             } else {
-                                format!("Found {} potential duplicate(s) for {}", count, result.spec_id)
+                                format!(
+                                    "Found {} potential duplicate(s) for {}",
+                                    count, result.spec_id
+                                )
                             },
                             is_success: true,
                             show_until: Instant::now() + Duration::from_secs(5),
@@ -32433,7 +34277,10 @@ impl eframe::App for RequirementsApp {
                     Err(e) => {
                         // Show error toast
                         self.toast_message = Some(ToastNotification {
-                            message: format!("Find duplicates failed for {}: {}", result.spec_id, e),
+                            message: format!(
+                                "Find duplicates failed for {}: {}",
+                                result.spec_id, e
+                            ),
                             is_success: false,
                             show_until: Instant::now() + Duration::from_secs(5),
                         });
@@ -32470,7 +34317,10 @@ impl eframe::App for RequirementsApp {
                     if diverged > 0 {
                         self.gitlab_poll_status = Some(format!(
                             "Found {} diverged ({} AIDA, {} GitLab, {} conflicts)",
-                            diverged, result.aida_modified, result.gitlab_modified, result.conflicts
+                            diverged,
+                            result.aida_modified,
+                            result.gitlab_modified,
+                            result.conflicts
                         ));
                         // Show toast for changes detected
                         self.toast_message = Some(ToastNotification {
@@ -32479,10 +34329,8 @@ impl eframe::App for RequirementsApp {
                             show_until: Instant::now() + Duration::from_secs(5),
                         });
                     } else {
-                        self.gitlab_poll_status = Some(format!(
-                            "All {} synced items in sync",
-                            result.in_sync
-                        ));
+                        self.gitlab_poll_status =
+                            Some(format!("All {} synced items in sync", result.in_sync));
                     }
                 }
 
@@ -32496,13 +34344,15 @@ impl eframe::App for RequirementsApp {
         #[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
         if self.gitlab_polling_enabled
             && self.gitlab_config.is_some()
-            && self.gitlab_poll_receiver.is_none()  // Not already polling
+            && self.gitlab_poll_receiver.is_none()
+        // Not already polling
         {
             let should_poll = match self.gitlab_last_poll {
-                None => true,  // Never polled before
+                None => true, // Never polled before
                 Some(last) => {
                     // Get interval from config (default 5 minutes)
-                    let interval_secs = self.gitlab_config
+                    let interval_secs = self
+                        .gitlab_config
                         .as_ref()
                         .map(|c| c.polling.interval_seconds)
                         .unwrap_or(300);
@@ -32593,11 +34443,11 @@ impl eframe::App for RequirementsApp {
                 View::Detail => KeyContext::DetailView,
                 View::Add | View::Edit => KeyContext::Form, // This branch won't be reached due to in_form_view check
                 View::OrgChart => KeyContext::RequirementsList, // Use same context for org chart
-                View::KanBan => KeyContext::RequirementsList,   // Use same context for kanban
+                View::KanBan => KeyContext::RequirementsList, // Use same context for kanban
                 View::Baselines => KeyContext::RequirementsList, // Use same context for baselines
                 View::Timeline => KeyContext::RequirementsList, // Use same context for timeline
                 View::Planning => KeyContext::RequirementsList, // Use same context for planning
-                View::Queue => KeyContext::RequirementsList,    // Use same context for queue
+                View::Queue => KeyContext::RequirementsList, // Use same context for queue
                 View::UserQueue(_) => KeyContext::RequirementsList, // Use same context for user queue view
                 View::GitLabIssues => KeyContext::RequirementsList, // Use same context for GitLab issues view
                 View::Templates => KeyContext::RequirementsList, // Use same context for templates view
@@ -32653,9 +34503,10 @@ impl eframe::App for RequirementsApp {
                 // Any other key cancels leader mode
                 else if i.keys_down.iter().any(|k| *k != egui::Key::Equals) {
                     // Only cancel if a non-modifier key is pressed
-                    let any_key_pressed = i.events.iter().any(|e| {
-                        matches!(e, egui::Event::Key { pressed: true, .. })
-                    });
+                    let any_key_pressed = i
+                        .events
+                        .iter()
+                        .any(|e| matches!(e, egui::Event::Key { pressed: true, .. }));
                     if any_key_pressed {
                         self.leader_key_pending = None;
                         self.leader_key_time = None;
@@ -32696,11 +34547,13 @@ impl eframe::App for RequirementsApp {
         }
 
         // Check for theme cycling keybinding (global context) or leader key combo
-        if theme_cycle || self.user_settings.keybindings.is_pressed(
-            KeyAction::CycleTheme,
-            ctx,
-            self.current_key_context,
-        ) {
+        if theme_cycle
+            || self.user_settings.keybindings.is_pressed(
+                KeyAction::CycleTheme,
+                ctx,
+                self.current_key_context,
+            )
+        {
             self.cycle_theme();
             self.user_settings.theme.apply(ctx);
             let _ = self.user_settings.save();
@@ -32719,8 +34572,8 @@ impl eframe::App for RequirementsApp {
         }
 
         // Search navigation keys - only active when there's an active search in highlight mode
-        let has_active_search = !self.filter_text.is_empty()
-            && self.user_settings.search_mode == SearchMode::Highlight;
+        let has_active_search =
+            !self.filter_text.is_empty() && self.user_settings.search_mode == SearchMode::Highlight;
 
         if has_active_search {
             // 'n' for next search match (takes priority over new sibling when search is active)
@@ -32777,11 +34630,7 @@ impl eframe::App for RequirementsApp {
         // '/' to focus search box and clear it (vim-style)
         // Only block in form views (Add/Edit), settings dialog, or when any text input is focused
         let slash_pressed = ctx.input(|i| i.key_pressed(egui::Key::Slash) && !i.modifiers.shift);
-        if !in_form_view
-            && !self.show_settings_dialog
-            && !text_input_focused
-            && slash_pressed
-        {
+        if !in_form_view && !self.show_settings_dialog && !text_input_focused && slash_pressed {
             // Save current search to history before clearing (if not empty and not duplicate)
             if !self.filter_text.is_empty() {
                 let search = self.filter_text.clone();
@@ -32800,7 +34649,12 @@ impl eframe::App for RequirementsApp {
 
         // 'v' to open view picker (two-key sequence)
         // Only block in form views (Add/Edit) or settings dialog where text input is expected
-        let v_pressed = ctx.input(|i| i.key_pressed(egui::Key::V) && !i.modifiers.ctrl && !i.modifiers.alt && !i.modifiers.shift);
+        let v_pressed = ctx.input(|i| {
+            i.key_pressed(egui::Key::V)
+                && !i.modifiers.ctrl
+                && !i.modifiers.alt
+                && !i.modifiers.shift
+        });
         if !in_form_view
             && !in_settings
             && !text_input_focused
@@ -32819,7 +34673,8 @@ impl eframe::App for RequirementsApp {
         // 'P' (Shift+P) to open project picker (WASM only - switch databases)
         #[cfg(target_arch = "wasm32")]
         {
-            let p_shift_pressed = ctx.input(|i| i.key_pressed(egui::Key::P) && i.modifiers.shift && !i.modifiers.ctrl);
+            let p_shift_pressed = ctx
+                .input(|i| i.key_pressed(egui::Key::P) && i.modifiers.shift && !i.modifiers.ctrl);
             if !in_form_view
                 && !in_settings
                 && !text_input_focused
@@ -32840,7 +34695,9 @@ impl eframe::App for RequirementsApp {
         // Check both Shift+/ and for '?' character in text input (different keyboard layouts)
         let question_pressed = ctx.input(|i| {
             (i.key_pressed(egui::Key::Slash) && i.modifiers.shift)
-                || i.events.iter().any(|e| matches!(e, egui::Event::Text(t) if t == "?"))
+                || i.events
+                    .iter()
+                    .any(|e| matches!(e, egui::Event::Text(t) if t == "?"))
         });
         if !in_form_view
             && !in_settings
@@ -32858,7 +34715,12 @@ impl eframe::App for RequirementsApp {
 
         // 'd' to open delete/archive menu (two-key sequence)
         // Only show when a requirement is selected
-        let d_pressed = ctx.input(|i| i.key_pressed(egui::Key::D) && !i.modifiers.ctrl && !i.modifiers.alt && !i.modifiers.shift);
+        let d_pressed = ctx.input(|i| {
+            i.key_pressed(egui::Key::D)
+                && !i.modifiers.ctrl
+                && !i.modifiers.alt
+                && !i.modifiers.shift
+        });
         if !in_form_view
             && !in_settings
             && !text_input_focused
@@ -32897,7 +34759,12 @@ impl eframe::App for RequirementsApp {
         }
 
         // 'a' to open add menu (new sibling / new child)
-        let a_pressed = ctx.input(|i| i.key_pressed(egui::Key::A) && !i.modifiers.ctrl && !i.modifiers.alt && !i.modifiers.shift);
+        let a_pressed = ctx.input(|i| {
+            i.key_pressed(egui::Key::A)
+                && !i.modifiers.ctrl
+                && !i.modifiers.alt
+                && !i.modifiers.shift
+        });
         if !in_form_view
             && !in_settings
             && !text_input_focused
@@ -32914,7 +34781,12 @@ impl eframe::App for RequirementsApp {
         }
 
         // 'A' (shift+a) to open action/AI menu
-        let shift_a_pressed = ctx.input(|i| i.key_pressed(egui::Key::A) && !i.modifiers.ctrl && !i.modifiers.alt && i.modifiers.shift);
+        let shift_a_pressed = ctx.input(|i| {
+            i.key_pressed(egui::Key::A)
+                && !i.modifiers.ctrl
+                && !i.modifiers.alt
+                && i.modifiers.shift
+        });
         if !in_form_view
             && !in_settings
             && !text_input_focused
@@ -32930,11 +34802,16 @@ impl eframe::App for RequirementsApp {
             && shift_a_pressed
         {
             self.show_action_menu = true;
-            self.context_menu_position = None;  // Center the popup when opened via keyboard
+            self.context_menu_position = None; // Center the popup when opened via keyboard
         }
 
         // 'r' to open detail tab menu (AI, Description, Comments, Links, History)
-        let r_pressed = ctx.input(|i| i.key_pressed(egui::Key::R) && !i.modifiers.ctrl && !i.modifiers.alt && !i.modifiers.shift);
+        let r_pressed = ctx.input(|i| {
+            i.key_pressed(egui::Key::R)
+                && !i.modifiers.ctrl
+                && !i.modifiers.alt
+                && !i.modifiers.shift
+        });
         if !in_form_view
             && !in_settings
             && !text_input_focused
@@ -32955,7 +34832,12 @@ impl eframe::App for RequirementsApp {
         }
 
         // 'q' to open queue menu (add to top/middle/bottom, remove, view queue)
-        let q_pressed = ctx.input(|i| i.key_pressed(egui::Key::Q) && !i.modifiers.ctrl && !i.modifiers.alt && !i.modifiers.shift);
+        let q_pressed = ctx.input(|i| {
+            i.key_pressed(egui::Key::Q)
+                && !i.modifiers.ctrl
+                && !i.modifiers.alt
+                && !i.modifiers.shift
+        });
         if !in_form_view
             && !in_settings
             && !text_input_focused
@@ -32976,7 +34858,12 @@ impl eframe::App for RequirementsApp {
         }
 
         // 'T' (Shift+T) to open type picker (change requirement type with fuzzy search)
-        let shift_t_pressed = ctx.input(|i| i.key_pressed(egui::Key::T) && !i.modifiers.ctrl && !i.modifiers.alt && i.modifiers.shift);
+        let shift_t_pressed = ctx.input(|i| {
+            i.key_pressed(egui::Key::T)
+                && !i.modifiers.ctrl
+                && !i.modifiers.alt
+                && i.modifiers.shift
+        });
         if !in_form_view
             && !in_settings
             && !text_input_focused
@@ -32999,7 +34886,12 @@ impl eframe::App for RequirementsApp {
         }
 
         // 'w' to open weight picker (set effort/story points)
-        let w_pressed = ctx.input(|i| i.key_pressed(egui::Key::W) && !i.modifiers.ctrl && !i.modifiers.alt && !i.modifiers.shift);
+        let w_pressed = ctx.input(|i| {
+            i.key_pressed(egui::Key::W)
+                && !i.modifiers.ctrl
+                && !i.modifiers.alt
+                && !i.modifiers.shift
+        });
         if !in_form_view
             && !in_settings
             && !text_input_focused
@@ -33020,7 +34912,8 @@ impl eframe::App for RequirementsApp {
             // Pre-fill with current weight if set
             if let Some(idx) = self.selected_idx {
                 if let Some(req) = self.store.requirements.get(idx) {
-                    self.weight_picker_input = req.weight.map(|w| w.to_string()).unwrap_or_default();
+                    self.weight_picker_input =
+                        req.weight.map(|w| w.to_string()).unwrap_or_default();
                 }
             }
             self.show_weight_picker = true;
@@ -33098,7 +34991,12 @@ impl eframe::App for RequirementsApp {
             let in_templates = self.current_view == View::Templates;
             #[cfg(target_arch = "wasm32")]
             let in_templates = false;
-            if !in_timeline && !in_planning && !in_kanban && !in_queue && !in_templates && can_navigate
+            if !in_timeline
+                && !in_planning
+                && !in_kanban
+                && !in_queue
+                && !in_templates
+                && can_navigate
                 && (self.user_settings.keybindings.is_pressed(
                     KeyAction::NavigateDown,
                     ctx,
@@ -33110,7 +35008,12 @@ impl eframe::App for RequirementsApp {
                 ))
             {
                 nav_delta = 1;
-            } else if !in_timeline && !in_planning && !in_kanban && !in_queue && !in_templates && can_navigate
+            } else if !in_timeline
+                && !in_planning
+                && !in_kanban
+                && !in_queue
+                && !in_templates
+                && can_navigate
                 && (self.user_settings.keybindings.is_pressed(
                     KeyAction::NavigateUp,
                     ctx,
@@ -33126,7 +35029,13 @@ impl eframe::App for RequirementsApp {
 
             // Page Up/Down, Home/End, and Mouse Wheel (only when not in text input)
             // Skip for Timeline, Planning, KanBan, Queue, and Templates views - they have their own handling
-            if nav_context_active && !in_timeline && !in_planning && !in_kanban && !in_queue && !in_templates {
+            if nav_context_active
+                && !in_timeline
+                && !in_planning
+                && !in_kanban
+                && !in_queue
+                && !in_templates
+            {
                 ctx.input(|i| {
                     // Page Up/Down
                     if i.key_pressed(egui::Key::PageDown) {
@@ -33147,7 +35056,11 @@ impl eframe::App for RequirementsApp {
                         jump_to_end = true;
                     }
                     // 'g' opens goto picker (without shift)
-                    if i.key_pressed(egui::Key::G) && !i.modifiers.shift && !i.modifiers.ctrl && !i.modifiers.alt {
+                    if i.key_pressed(egui::Key::G)
+                        && !i.modifiers.shift
+                        && !i.modifiers.ctrl
+                        && !i.modifiers.alt
+                    {
                         open_goto_picker = true;
                     }
 
@@ -33253,7 +35166,15 @@ impl eframe::App for RequirementsApp {
             let no_queue_menu = !self.show_queue_menu;
             let no_goto_picker = !self.show_goto_picker;
 
-            if nav_context_active && no_popup_open && not_in_form && no_delete_confirm && no_view_picker && no_add_menu && no_queue_menu && no_goto_picker {
+            if nav_context_active
+                && no_popup_open
+                && not_in_form
+                && no_delete_confirm
+                && no_view_picker
+                && no_add_menu
+                && no_queue_menu
+                && no_goto_picker
+            {
                 // 's' key to open status popup
                 if self.user_settings.keybindings.is_pressed(
                     KeyAction::OpenStatusPicker,
@@ -33268,7 +35189,8 @@ impl eframe::App for RequirementsApp {
                                 RequirementStatus::Completed,
                                 RequirementStatus::Rejected,
                             ];
-                            let current_status_idx = statuses.iter().position(|s| *s == req.status).unwrap_or(0);
+                            let current_status_idx =
+                                statuses.iter().position(|s| *s == req.status).unwrap_or(0);
                             self.quick_change_selected = current_status_idx;
                             self.quick_change_target_id = Some(req.id);
                             self.quick_change_field = Some(QuickChangeField::Status);
@@ -33288,7 +35210,10 @@ impl eframe::App for RequirementsApp {
                                 RequirementPriority::Medium,
                                 RequirementPriority::Low,
                             ];
-                            let current_priority_idx = priorities.iter().position(|p| *p == req.priority).unwrap_or(1);
+                            let current_priority_idx = priorities
+                                .iter()
+                                .position(|p| *p == req.priority)
+                                .unwrap_or(1);
                             self.quick_change_selected = current_priority_idx;
                             self.quick_change_target_id = Some(req.id);
                             self.quick_change_field = Some(QuickChangeField::Priority);
@@ -33350,7 +35275,10 @@ impl eframe::App for RequirementsApp {
                     ctx,
                     self.current_key_context,
                 ) {
-                    eprintln!("DEBUG: 'f' handler triggered! selected_idx={:?}", self.selected_idx);
+                    eprintln!(
+                        "DEBUG: 'f' handler triggered! selected_idx={:?}",
+                        self.selected_idx
+                    );
                     if let Some(idx) = self.selected_idx {
                         if let Some(req) = self.store.requirements.get(idx) {
                             eprintln!("DEBUG: Opening feature picker for req: {:?}", req.spec_id);
@@ -33555,7 +35483,8 @@ impl eframe::App for RequirementsApp {
                         let current = self.timeline_selected_event_idx.unwrap_or(0) as i32;
                         let new_pos = (current + timeline_nav_delta)
                             .max(0)
-                            .min(event_count as i32 - 1) as usize;
+                            .min(event_count as i32 - 1)
+                            as usize;
                         Some(new_pos)
                     } else {
                         None
@@ -33576,7 +35505,12 @@ impl eframe::App for RequirementsApp {
                             let filtered = self.get_filtered_timeline_events();
                             if let Some(event) = filtered.get(event_idx) {
                                 if !event.req_id.is_nil() {
-                                    if let Some(req_idx) = self.store.requirements.iter().position(|r| r.id == event.req_id) {
+                                    if let Some(req_idx) = self
+                                        .store
+                                        .requirements
+                                        .iter()
+                                        .position(|r| r.id == event.req_id)
+                                    {
                                         self.selected_idx = Some(req_idx);
                                         self.pending_view_change = Some(View::List);
                                         self.scroll_to_center = true;
@@ -33648,7 +35582,8 @@ impl eframe::App for RequirementsApp {
                     });
 
                     // Find current position based on planning_selected_item
-                    let current_pos = self.planning_selected_item
+                    let current_pos = self
+                        .planning_selected_item
                         .and_then(|id| planning_items.iter().position(|&item_id| item_id == id));
 
                     // Apply navigation
@@ -33660,7 +35595,8 @@ impl eframe::App for RequirementsApp {
                         let current = current_pos.unwrap_or(0) as i32;
                         let new_pos = (current + planning_nav_delta)
                             .max(0)
-                            .min(item_count as i32 - 1) as usize;
+                            .min(item_count as i32 - 1)
+                            as usize;
                         Some(new_pos)
                     } else {
                         None
@@ -33672,7 +35608,9 @@ impl eframe::App for RequirementsApp {
                             // Auto-scroll to keep selected item visible
                             self.planning_scroll_to_item = true;
                             // Also update selected_idx for consistency
-                            if let Some(req_idx) = self.store.requirements.iter().position(|r| r.id == item_id) {
+                            if let Some(req_idx) =
+                                self.store.requirements.iter().position(|r| r.id == item_id)
+                            {
                                 self.selected_idx = Some(req_idx);
                             }
                         }
@@ -33681,7 +35619,9 @@ impl eframe::App for RequirementsApp {
                     // Handle Enter key to navigate to detail view
                     if planning_navigate_to_detail {
                         if let Some(item_id) = self.planning_selected_item {
-                            if let Some(req_idx) = self.store.requirements.iter().position(|r| r.id == item_id) {
+                            if let Some(req_idx) =
+                                self.store.requirements.iter().position(|r| r.id == item_id)
+                            {
                                 self.selected_idx = Some(req_idx);
                                 self.pending_view_change = Some(View::Detail);
                             }
@@ -33715,7 +35655,8 @@ impl eframe::App for RequirementsApp {
                             templates_jump_end = true;
                         }
                         // Enter to select first template if none selected
-                        if i.key_pressed(egui::Key::Enter) && self.templates_selected_idx.is_none() {
+                        if i.key_pressed(egui::Key::Enter) && self.templates_selected_idx.is_none()
+                        {
                             self.templates_selected_idx = Some(0);
                         }
                     });
@@ -33729,7 +35670,8 @@ impl eframe::App for RequirementsApp {
                         let current = self.templates_selected_idx.unwrap_or(0) as i32;
                         let new_pos = (current + templates_nav_delta)
                             .max(0)
-                            .min(template_count as i32 - 1) as usize;
+                            .min(template_count as i32 - 1)
+                            as usize;
                         Some(new_pos)
                     } else {
                         None
@@ -33760,14 +35702,17 @@ impl eframe::App for RequirementsApp {
                         if let Some(lock_info) = &self.last_lock_info {
                             let editors = lock_info.get_editors(req.id);
                             if !editors.is_empty() {
-                                let editor_names: Vec<&str> = editors.iter()
+                                let editor_names: Vec<&str> = editors
+                                    .iter()
                                     .filter(|s| s.session_id != self.session_id)
                                     .map(|s| s.user_name.as_str())
                                     .collect();
                                 if !editor_names.is_empty() {
                                     self.toast_message = Some(ToastNotification {
-                                        message: format!("⚠️ {} is currently editing this requirement!",
-                                            editor_names.join(", ")),
+                                        message: format!(
+                                            "⚠️ {} is currently editing this requirement!",
+                                            editor_names.join(", ")
+                                        ),
                                         is_success: false,
                                         show_until: Instant::now() + Duration::from_secs(8),
                                     });
@@ -33842,8 +35787,8 @@ impl eframe::App for RequirementsApp {
                 if let Some(target) = self.planning_drag_target_sprint.take() {
                     let username = self.user_settings.display_name();
                     // Get current sprint of the item
-                    let current_sprint = self.store.get_requirement_sprint(&source_id)
-                        .map(|r| r.id);
+                    let current_sprint =
+                        self.store.get_requirement_sprint(&source_id).map(|r| r.id);
 
                     match target {
                         None => {
@@ -33890,7 +35835,8 @@ impl eframe::App for RequirementsApp {
 
         if in_form_view {
             // In Add/Edit form view - layout depends on mode
-            let show_left_panel = screen_width >= min_width_for_side_panel && !self.left_panel_collapsed;
+            let show_left_panel =
+                screen_width >= min_width_for_side_panel && !self.left_panel_collapsed;
             let is_edit = self.current_view == View::Edit;
 
             match self.layout_mode {
@@ -33910,12 +35856,20 @@ impl eframe::App for RequirementsApp {
                                     ui.horizontal(|ui| {
                                         self.show_search_bar(ui, 120.0, true);
                                         // Filter toggle button
-                                        let filter_active = !self.filter_types.is_empty() || !self.filter_features.is_empty()
-                                            || !self.filter_prefixes.is_empty() || !self.filter_statuses.is_empty()
+                                        let filter_active = !self.filter_types.is_empty()
+                                            || !self.filter_features.is_empty()
+                                            || !self.filter_prefixes.is_empty()
+                                            || !self.filter_statuses.is_empty()
                                             || !self.filter_priorities.is_empty();
-                                        let filter_btn_text = if filter_active { "🔽 ●" } else { "🔽" };
-                                        if ui.button(filter_btn_text).on_hover_text("Filters").clicked() {
-                                            self.show_filter_dialog_list1 = !self.show_filter_dialog_list1;
+                                        let filter_btn_text =
+                                            if filter_active { "🔽 ●" } else { "🔽" };
+                                        if ui
+                                            .button(filter_btn_text)
+                                            .on_hover_text("Filters")
+                                            .clicked()
+                                        {
+                                            self.show_filter_dialog_list1 =
+                                                !self.show_filter_dialog_list1;
                                         }
                                     });
                                     ui.separator();
@@ -33967,12 +35921,20 @@ impl eframe::App for RequirementsApp {
                                 ui.horizontal(|ui| {
                                     self.show_search_bar(ui, 120.0, true);
                                     // Filter toggle button
-                                    let filter_active = !self.filter_types.is_empty() || !self.filter_features.is_empty()
-                                        || !self.filter_prefixes.is_empty() || !self.filter_statuses.is_empty()
+                                    let filter_active = !self.filter_types.is_empty()
+                                        || !self.filter_features.is_empty()
+                                        || !self.filter_prefixes.is_empty()
+                                        || !self.filter_statuses.is_empty()
                                         || !self.filter_priorities.is_empty();
-                                    let filter_btn_text = if filter_active { "🔽 ●" } else { "🔽" };
-                                    if ui.button(filter_btn_text).on_hover_text("Filters").clicked() {
-                                        self.show_filter_dialog_list1 = !self.show_filter_dialog_list1;
+                                    let filter_btn_text =
+                                        if filter_active { "🔽 ●" } else { "🔽" };
+                                    if ui
+                                        .button(filter_btn_text)
+                                        .on_hover_text("Filters")
+                                        .clicked()
+                                    {
+                                        self.show_filter_dialog_list1 =
+                                            !self.show_filter_dialog_list1;
                                     }
                                 });
                                 ui.separator();
@@ -34153,11 +36115,18 @@ impl eframe::App for RequirementsApp {
                             ui.horizontal(|ui| {
                                 self.show_search_bar(ui, 120.0, true);
                                 // Filter toggle button
-                                let filter_active = !self.filter_types.is_empty() || !self.filter_features.is_empty()
-                                    || !self.filter_prefixes.is_empty() || !self.filter_statuses.is_empty()
+                                let filter_active = !self.filter_types.is_empty()
+                                    || !self.filter_features.is_empty()
+                                    || !self.filter_prefixes.is_empty()
+                                    || !self.filter_statuses.is_empty()
                                     || !self.filter_priorities.is_empty();
-                                let filter_btn_text = if filter_active { "🔽 ●" } else { "🔽" };
-                                if ui.button(filter_btn_text).on_hover_text("Filters").clicked() {
+                                let filter_btn_text =
+                                    if filter_active { "🔽 ●" } else { "🔽" };
+                                if ui
+                                    .button(filter_btn_text)
+                                    .on_hover_text("Filters")
+                                    .clicked()
+                                {
                                     self.show_filter_dialog_list1 = !self.show_filter_dialog_list1;
                                 }
                             });
@@ -34232,22 +36201,37 @@ impl eframe::App for RequirementsApp {
                             columns[0].vertical(|ui| {
                                 ui.horizontal(|ui| {
                                     ui.heading("Requirements");
-                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                        if ui.button("✕").on_hover_text("Close this list").clicked() {
-                                            self.layout_mode = self.layout_mode.without_split();
-                                        }
-                                    });
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            if ui
+                                                .button("✕")
+                                                .on_hover_text("Close this list")
+                                                .clicked()
+                                            {
+                                                self.layout_mode = self.layout_mode.without_split();
+                                            }
+                                        },
+                                    );
                                 });
                                 // Search bar for List 1
                                 ui.horizontal(|ui| {
                                     self.show_search_bar(ui, 120.0, true);
                                     // Filter toggle button
-                                    let filter_active = !self.filter_types.is_empty() || !self.filter_features.is_empty()
-                                        || !self.filter_prefixes.is_empty() || !self.filter_statuses.is_empty()
+                                    let filter_active = !self.filter_types.is_empty()
+                                        || !self.filter_features.is_empty()
+                                        || !self.filter_prefixes.is_empty()
+                                        || !self.filter_statuses.is_empty()
                                         || !self.filter_priorities.is_empty();
-                                    let filter_btn_text = if filter_active { "🔽 ●" } else { "🔽" };
-                                    if ui.button(filter_btn_text).on_hover_text("Filters").clicked() {
-                                        self.show_filter_dialog_list1 = !self.show_filter_dialog_list1;
+                                    let filter_btn_text =
+                                        if filter_active { "🔽 ●" } else { "🔽" };
+                                    if ui
+                                        .button(filter_btn_text)
+                                        .on_hover_text("Filters")
+                                        .clicked()
+                                    {
+                                        self.show_filter_dialog_list1 =
+                                            !self.show_filter_dialog_list1;
                                     }
                                 });
                                 ui.separator();
@@ -34266,11 +36250,18 @@ impl eframe::App for RequirementsApp {
                             columns[1].vertical(|ui| {
                                 ui.horizontal(|ui| {
                                     ui.heading("Requirements");
-                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                        if ui.button("✕").on_hover_text("Close this list").clicked() {
-                                            self.layout_mode = self.layout_mode.without_split();
-                                        }
-                                    });
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            if ui
+                                                .button("✕")
+                                                .on_hover_text("Close this list")
+                                                .clicked()
+                                            {
+                                                self.layout_mode = self.layout_mode.without_split();
+                                            }
+                                        },
+                                    );
                                 });
                                 // Search bar for List 2
                                 ui.horizontal(|ui| {
@@ -34282,17 +36273,29 @@ impl eframe::App for RequirementsApp {
                                     );
                                     // Clear button
                                     if !self.split_filter_text.is_empty() {
-                                        if ui.small_button("✕").on_hover_text("Clear search").clicked() {
+                                        if ui
+                                            .small_button("✕")
+                                            .on_hover_text("Clear search")
+                                            .clicked()
+                                        {
                                             self.split_filter_text.clear();
                                         }
                                     }
                                     // Filter toggle button
-                                    let filter_active = !self.split_filter_types.is_empty() || !self.split_filter_features.is_empty()
-                                        || !self.split_filter_prefixes.is_empty() || !self.split_filter_statuses.is_empty()
+                                    let filter_active = !self.split_filter_types.is_empty()
+                                        || !self.split_filter_features.is_empty()
+                                        || !self.split_filter_prefixes.is_empty()
+                                        || !self.split_filter_statuses.is_empty()
                                         || !self.split_filter_priorities.is_empty();
-                                    let filter_btn_text = if filter_active { "🔽 ●" } else { "🔽" };
-                                    if ui.button(filter_btn_text).on_hover_text("Filters").clicked() {
-                                        self.show_filter_dialog_list2 = !self.show_filter_dialog_list2;
+                                    let filter_btn_text =
+                                        if filter_active { "🔽 ●" } else { "🔽" };
+                                    if ui
+                                        .button(filter_btn_text)
+                                        .on_hover_text("Filters")
+                                        .clicked()
+                                    {
+                                        self.show_filter_dialog_list2 =
+                                            !self.show_filter_dialog_list2;
                                     }
                                 });
                                 ui.separator();

@@ -3,9 +3,9 @@
 //!
 //! Components for displaying comments on requirements.
 
-use egui::{Color32, RichText, TextEdit, Ui};
-use crate::storage::proto::Comment;
 use super::formatters::format_relative_time;
+use crate::storage::proto::Comment;
+use egui::{Color32, RichText, TextEdit, Ui};
 
 /// Render a single comment
 pub fn comment_item(ui: &mut Ui, comment: &Comment) {
@@ -112,7 +112,7 @@ pub fn comment_indicator(ui: &mut Ui, count: usize) {
         ui.label(
             RichText::new(format!("💬 {}", count))
                 .small()
-                .color(Color32::from_rgb(150, 150, 200))
+                .color(Color32::from_rgb(150, 150, 200)),
         );
     }
 }
