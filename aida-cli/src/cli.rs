@@ -957,9 +957,13 @@ pub enum Command {
 
     /// Initialize AIDA in the current project
     Init {
-        /// Skip generating Claude Code skills and commands
+        /// Skip generating agent skills and commands (.claude/* and .codex/skills/*)
         #[clap(long)]
         no_skills: bool,
+
+        /// Agent profile to scaffold
+        #[clap(long, default_value = "both", value_parser = ["claude", "codex", "both"])]
+        agent: String,
 
         /// Skip generating commit validation hooks
         #[clap(long)]

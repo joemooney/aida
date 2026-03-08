@@ -76,11 +76,12 @@ fn main() -> Result<()> {
     // Handle init before path resolution (no DB exists yet)
     if let Command::Init {
         no_skills,
+        agent,
         no_hooks,
         force,
     } = &cli.command
     {
-        handle_init_command(*no_skills, *no_hooks, *force)?;
+        handle_init_command(*no_skills, agent, *no_hooks, *force)?;
         return Ok(());
     }
 
@@ -354,7 +355,7 @@ fn main() -> Result<()> {
 }
 
 // trace:TASK-0001 | ai:claude:high
-fn handle_init_command(no_skills: bool, no_hooks: bool, force: bool) -> Result<()> {
+fn handle_init_command(no_skills: bool, agent: &str, no_hooks: bool, force: bool) -> Result<()> {
     let db_path = std::path::PathBuf::from("requirements.db");
 
     // Check existing state
@@ -384,9 +385,30 @@ fn handle_init_command(no_skills: bool, no_hooks: bool, force: bool) -> Result<(
 
     // Build ScaffoldConfig with escape hatches
     let mut config = ScaffoldConfig::default();
+    match agent {
+        "claude" => {
+            config.generate_agents_md = false;
+            config.generate_codex_skills = false;
+        }
+        "codex" => {
+            config.generate_claude_md = false;
+            config.generate_commands = false;
+            config.generate_skills = false;
+            config.generate_claude_code_hooks = false;
+        }
+        "both" => {}
+        _ => {
+            anyhow::bail!(
+                "Invalid --agent value '{}'. Use claude, codex, or both.",
+                agent
+            );
+        }
+    }
+
     if no_skills {
         config.generate_skills = false;
         config.generate_commands = false;
+        config.generate_codex_skills = false;
         config.include_aida_req_skill = false;
         config.include_aida_plan_skill = false;
         config.include_aida_implement_skill = false;
@@ -414,6 +436,7 @@ fn handle_init_command(no_skills: bool, no_hooks: bool, force: bool) -> Result<(
 
     // Run scaffold
     let root = std::env::current_dir().unwrap_or_default();
+    let config_for_output = config.clone();
     let mut scaffolder = Scaffolder::with_database(root.clone(), config, db_path);
     let preview = scaffolder.preview(&store);
 
@@ -453,33 +476,63 @@ fn handle_init_command(no_skills: bool, no_hooks: bool, force: bool) -> Result<(
         "requirements.db".white().bold(),
         " ".repeat(24)
     );
-    println!(
-        "    {}{}Claude Code MCP integration",
-        ".mcp.json".white().bold(),
-        " ".repeat(29)
-    );
-    println!(
-        "    {}{}Project context for AI sessions",
-        "CLAUDE.md".white().bold(),
-        " ".repeat(29)
-    );
-    if !no_skills {
+    if config_for_output.generate_claude_md {
         println!(
-            "    {}{}Workflow skills",
-            ".claude/skills/".white().bold(),
-            " ".repeat(23)
+            "    {}{}Claude Code MCP integration",
+            ".mcp.json".white().bold(),
+            " ".repeat(29)
         );
         println!(
-            "    {}{}Slash commands",
-            ".claude/commands/".white().bold(),
-            " ".repeat(21)
+            "    {}{}Project context for AI sessions",
+            "CLAUDE.md".white().bold(),
+            " ".repeat(29)
         );
     }
-    if !no_hooks {
+    if config_for_output.generate_agents_md {
+        println!(
+            "    {}{}Project context for Codex-compatible agents",
+            "AGENTS.md".white().bold(),
+            " ".repeat(29)
+        );
+    }
+    if config_for_output.generate_skills
+        || config_for_output.generate_commands
+        || config_for_output.generate_codex_skills
+    {
+        if config_for_output.generate_skills {
+            println!(
+                "    {}{}Workflow skills",
+                ".claude/skills/".white().bold(),
+                " ".repeat(23)
+            );
+        }
+        if config_for_output.generate_commands {
+            println!(
+                "    {}{}Slash commands",
+                ".claude/commands/".white().bold(),
+                " ".repeat(21)
+            );
+        }
+        if config_for_output.generate_codex_skills {
+            println!(
+                "    {}{}Workflow skills (Codex-compatible)",
+                ".codex/skills/".white().bold(),
+                " ".repeat(24)
+            );
+        }
+    }
+    if !no_hooks && config_for_output.generate_claude_code_hooks {
         println!(
             "    {}{}Commit validation hooks",
             ".claude/hooks/".white().bold(),
             " ".repeat(24)
+        );
+    }
+    if !no_hooks && config_for_output.generate_git_hooks {
+        println!(
+            "    {}{}Git commit-msg hook",
+            ".git/hooks/commit-msg".white().bold(),
+            " ".repeat(18)
         );
     }
     println!(
@@ -507,18 +560,34 @@ fn handle_init_command(no_skills: bool, no_hooks: bool, force: bool) -> Result<(
     );
     println!("    {}", "aida list".cyan());
 
-    println!();
-    println!("  {}:", "In Claude Code".bold());
-    println!(
-        "    {}{}Interactive project walkthrough",
-        "/aida-onboard".cyan(),
-        " ".repeat(15)
-    );
-    println!(
-        "    {}{}Add a requirement",
-        "/aida-req".cyan(),
-        " ".repeat(19)
-    );
+    if config_for_output.generate_claude_md {
+        println!();
+        println!("  {}:", "In Claude Code".bold());
+        println!(
+            "    {}{}Interactive project walkthrough",
+            "/aida-onboard".cyan(),
+            " ".repeat(15)
+        );
+        println!(
+            "    {}{}Add a requirement",
+            "/aida-req".cyan(),
+            " ".repeat(19)
+        );
+    }
+    if config_for_output.generate_agents_md {
+        println!();
+        println!("  {}:", "In Codex CLI".bold());
+        println!(
+            "    {}{}Read project guidance",
+            "AGENTS.md".cyan(),
+            " ".repeat(23)
+        );
+        println!(
+            "    {}{}Run AIDA commands from terminal",
+            "aida show FR-0001".cyan(),
+            " ".repeat(15)
+        );
+    }
     println!(
         "    {}{}See all available skills",
         "/aida-".cyan(),

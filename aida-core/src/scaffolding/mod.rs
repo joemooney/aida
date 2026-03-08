@@ -1,14 +1,17 @@
 // trace:FR-0152,FR-0226 | ai:claude:high
 //! AI Project Scaffolding Module
 //!
-//! Provides functionality to generate Claude Code integration artifacts:
+//! Provides functionality to generate AI coding agent integration artifacts:
 //! - CLAUDE.md project instructions
+//! - AGENTS.md project instructions
 //! - .claude/commands/ directory with project-specific slash commands
 //! - .claude/skills/ directory with requirements-driven development skills
+//! - .codex/skills/ directory with requirements-driven development skills
 //! - .git/hooks/ directory with traceability validation hooks
 //! - Code traceability configuration
 
 mod claude_md;
+mod codex_md;
 mod hooks;
 mod settings;
 
@@ -38,7 +41,7 @@ fn generate_aida_header(content: &str) -> String {
     let checksum = compute_checksum(content);
     format!(
         "<!-- AIDA Generated: v{} | checksum:{} | DO NOT EDIT DIRECTLY -->\n\
-         <!-- To customize: copy to .claude/skills/custom/ and modify there -->\n\n",
+         <!-- To customize: copy this file and modify the copy -->\n\n",
         SCAFFOLD_VERSION, checksum
     )
 }
@@ -172,10 +175,14 @@ pub enum FileStatus {
 pub struct ScaffoldConfig {
     /// Generate CLAUDE.md project instructions
     pub generate_claude_md: bool,
+    /// Generate AGENTS.md project instructions for Codex-compatible agents
+    pub generate_agents_md: bool,
     /// Generate .claude/commands/ directory with slash commands
     pub generate_commands: bool,
     /// Generate .claude/skills/ directory with skills
     pub generate_skills: bool,
+    /// Generate .codex/skills/ directory with Codex-compatible skills
+    pub generate_codex_skills: bool,
     /// Include aida-req skill for requirement creation
     pub include_aida_req_skill: bool,
     /// Include aida-plan skill for implementation planning
@@ -228,8 +235,10 @@ impl Default for ScaffoldConfig {
     fn default() -> Self {
         Self {
             generate_claude_md: true,
+            generate_agents_md: true,
             generate_commands: true,
             generate_skills: true,
+            generate_codex_skills: true,
             include_aida_req_skill: true,
             include_aida_plan_skill: true,
             include_aida_implement_skill: true,
@@ -475,6 +484,32 @@ impl Scaffolder {
                 path,
                 content,
                 description: "Project instructions for Claude Code".to_string(),
+                exists,
+                file_status: if exists {
+                    FileStatus::NoHeader
+                } else {
+                    FileStatus::New
+                },
+            });
+        }
+
+        // AGENTS.md - Note: AGENTS.md is user-edited, so no AIDA header
+        if self.config.generate_agents_md {
+            let path = PathBuf::from("AGENTS.md");
+            let full_path = self.project_root.join(&path);
+            let exists = full_path.exists();
+            let content = self.generate_agents_md(store);
+
+            if exists {
+                overwrites.push(path.clone());
+            } else {
+                new_files.push(path.clone());
+            }
+
+            artifacts.push(ScaffoldArtifact {
+                path,
+                content,
+                description: "Project instructions for Codex-compatible agents".to_string(),
                 exists,
                 file_status: if exists {
                     FileStatus::NoHeader
@@ -856,6 +891,55 @@ impl Scaffolder {
                     path.clone(),
                     self.generate_aida_standup_skill(),
                     "Skill for daily standup generation".to_string(),
+                    false,
+                );
+
+                match &artifact.file_status {
+                    FileStatus::New => new_files.push(path),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
+                    FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+                }
+
+                artifacts.push(artifact);
+            }
+        }
+
+        // .codex/skills/ directory
+        if self.config.generate_codex_skills {
+            new_dirs.insert(PathBuf::from(".codex/skills"));
+
+            let codex_skill_defs = [
+                ("aida-req", self.config.include_aida_req_skill),
+                ("aida-plan", self.config.include_aida_plan_skill),
+                ("aida-implement", self.config.include_aida_implement_skill),
+                ("aida-capture", self.config.include_aida_capture_skill),
+                ("aida-docs", self.config.include_aida_docs_skill),
+                ("aida-release", self.config.include_aida_release_skill),
+                ("aida-evaluate", self.config.include_aida_evaluate_skill),
+                ("aida-commit", self.config.include_aida_commit_skill),
+                ("aida-sync", self.config.include_aida_sync_skill),
+                ("aida-test", self.config.include_aida_test_skill),
+                ("aida-review", self.config.include_aida_review_skill),
+                ("aida-onboard", self.config.include_aida_onboard_skill),
+                ("aida-sprint", self.config.include_aida_sprint_skill),
+                ("aida-search", self.config.include_aida_search_skill),
+                ("aida-standup", self.config.include_aida_standup_skill),
+            ];
+
+            for (name, enabled) in codex_skill_defs {
+                if !enabled {
+                    continue;
+                }
+                let path = PathBuf::from(format!(".codex/skills/{}/SKILL.md", name));
+                let artifact = self.create_artifact(
+                    path.clone(),
+                    self.generate_codex_skill(name),
+                    format!("Codex-compatible skill {}", name),
                     false,
                 );
 
@@ -1429,6 +1513,39 @@ Use this skill when:
             .map(|s| s.to_string())
             .unwrap_or_else(|| "# AIDA Standup Skill\n\n(template not found)".to_string())
     }
+
+    /// Generate Codex skill content from an embedded Claude skill template.
+    /// Converts frontmatter-style skill files into plain SKILL.md content.
+    fn generate_codex_skill(&self, skill_name: &str) -> String {
+        use crate::templates::EMBEDDED_TEMPLATES;
+
+        let key = format!("skills/{}.md", skill_name);
+        let raw = EMBEDDED_TEMPLATES
+            .get(key.as_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| format!("# {}\n\n(template not found)", skill_name));
+
+        strip_yaml_frontmatter(&raw)
+    }
+}
+
+fn strip_yaml_frontmatter(content: &str) -> String {
+    if !content.starts_with("---\n") && !content.starts_with("---\r\n") {
+        return content.to_string();
+    }
+
+    let after_open = if content.starts_with("---\r\n") { 5 } else { 4 };
+    let rest = &content[after_open..];
+    if let Some(close_pos) = rest.find("\n---\n") {
+        let body_start = after_open + close_pos + 5;
+        return content[body_start..].to_string();
+    }
+    if let Some(close_pos) = rest.find("\n---\r\n") {
+        let body_start = after_open + close_pos + 6;
+        return content[body_start..].to_string();
+    }
+
+    content.to_string()
 }
 
 /// Errors that can occur during scaffolding
@@ -1468,8 +1585,10 @@ mod tests {
     fn test_default_config() {
         let config = ScaffoldConfig::default();
         assert!(config.generate_claude_md);
+        assert!(config.generate_agents_md);
         assert!(config.generate_commands);
         assert!(config.generate_skills);
+        assert!(config.generate_codex_skills);
         assert!(config.include_aida_req_skill);
         assert!(config.include_aida_implement_skill);
         assert!(config.include_aida_capture_skill);
@@ -1511,10 +1630,12 @@ mod tests {
 
         // Check that CLAUDE.md was created
         assert!(temp_dir.path().join("CLAUDE.md").exists());
+        assert!(temp_dir.path().join("AGENTS.md").exists());
 
         // Check that .claude directories were created
         assert!(temp_dir.path().join(".claude/commands").exists());
         assert!(temp_dir.path().join(".claude/skills").exists());
+        assert!(temp_dir.path().join(".codex/skills").exists());
     }
 
     #[test]
