@@ -1,0 +1,18 @@
+# Development: PostgreSQL only — Rust server and Vite run natively for hot-reload
+# Usage: make dev (or: docker compose -f .aida/docker-compose.dev.yml up -d)
+services:
+  db:
+    image: postgres:15-alpine
+    ports:
+      - "${AIDA_PG_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${AIDA_PG_USER:-aida}
+      POSTGRES_PASSWORD: ${AIDA_PG_PASSWORD:-aida}
+      POSTGRES_DB: aida_default
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AIDA_PG_USER:-aida}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5

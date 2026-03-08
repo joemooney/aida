@@ -404,13 +404,12 @@ async fn main() -> Result<()> {
         info!("Single-project mode: database={}", db_path);
 
         let db_path_clone = db_path.clone();
-        let backend = tokio::task::spawn_blocking(move || {
-            create_backend(std::path::Path::new(&db_path_clone), None)
+        let state = tokio::task::spawn_blocking(move || {
+            let backend = create_backend(std::path::Path::new(&db_path_clone), None)?;
+            info!("Backend type: {}", backend.backend_type());
+            Ok::<_, anyhow::Error>(Arc::new(ServerState::new(backend)?))
         })
         .await??;
-        info!("Backend type: {}", backend.backend_type());
-
-        let state = Arc::new(ServerState::new(backend)?);
 
         // Start REST server if enabled (legacy mode)
         let rest_handle = if args.rest_port > 0 {

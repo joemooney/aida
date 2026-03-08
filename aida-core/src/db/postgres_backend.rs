@@ -343,7 +343,7 @@ impl PostgresBackend {
         let custom_fields_json: serde_json::Value = row.get("custom_fields");
         let urls_json: serde_json::Value = row.get("urls");
         let trace_links_json: serde_json::Value = row.get("trace_links");
-        let weight: Option<f64> = row.get("weight");
+        let weight: Option<f64> = row.get::<_, Option<f32>>("weight").map(|v| v as f64);
         let attachments_json: serde_json::Value = row.get("attachments");
         let gitlab_issues_json: serde_json::Value = row.get("gitlab_issues");
         let implementation_info_json: Option<serde_json::Value> = row.get("implementation_info");

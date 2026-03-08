@@ -59,3 +59,10 @@ GEMINI.md
 docker/secrets/*.txt
 docker/*.new
 docker/.env
+
+# PostgreSQL data (dev)
+.aida/pgdata/
+.aida/web-sessions.sqlite3
+.aida/server.toml
+.aida/.dev-pids/
+.aida/.dev-*.log

@@ -39,12 +39,17 @@ impl ServerState {
         })
     }
 
-    /// Save the current store to disk and update mtime to prevent unnecessary reloads
+    /// Save the current store to disk and update mtime to prevent unnecessary reloads.
+    /// Uses block_in_place for PostgreSQL compatibility (sync postgres crate can't run
+    /// inside a Tokio async context without this).
     async fn save(&self) -> Result<(), Status> {
         let store = self.store.read().await;
-        self.backend
-            .save(&store)
-            .map_err(|e| Status::internal(format!("Failed to save: {}", e)))?;
+        let backend = &self.backend;
+        tokio::task::block_in_place(|| {
+            backend
+                .save(&store)
+                .map_err(|e| Status::internal(format!("Failed to save: {}", e)))
+        })?;
         self.mark_saved().await;
         Ok(())
     }
@@ -69,7 +74,8 @@ impl ServerState {
 
     /// Reload the store from the database backend
     pub async fn reload(&self) -> anyhow::Result<usize> {
-        let new_store = self.backend.load()?;
+        let backend = &self.backend;
+        let new_store = tokio::task::block_in_place(|| backend.load())?;
         let count = new_store.requirements.len();
         let mtime = Self::compute_db_mtime(self.backend.path());
         *self.store.write().await = new_store;

@@ -111,14 +111,14 @@ impl ProjectManager {
         let db_path = self.data_dir.join(format!("{}.db", name));
 
         // Create the database file by initializing a backend
-        let backend = tokio::task::spawn_blocking({
+        let _state = tokio::task::spawn_blocking({
             let db_path = db_path.clone();
-            move || create_backend(&db_path, None)
+            move || {
+                let backend = create_backend(&db_path, None)?;
+                Ok::<_, anyhow::Error>(ServerState::new(backend)?)
+            }
         })
         .await??;
-
-        // Initialize with empty store
-        let _state = ServerState::new(backend)?;
 
         let project = ProjectInfo {
             name: name.to_string(),
@@ -183,11 +183,13 @@ impl ProjectManager {
         let project_info =
             project_info.ok_or_else(|| anyhow!("Project '{}' not found", project))?;
 
-        // Create backend
+        // Create backend (in blocking context for PostgreSQL compatibility)
         let db_path = project_info.db_path.clone();
-        let backend = tokio::task::spawn_blocking(move || create_backend(&db_path, None)).await??;
-
-        let state = Arc::new(ServerState::new(backend)?);
+        let state = tokio::task::spawn_blocking(move || {
+            let backend = create_backend(&db_path, None)?;
+            Ok::<_, anyhow::Error>(Arc::new(ServerState::new(backend)?))
+        })
+        .await??;
 
         // Cache the backend
         {

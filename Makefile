@@ -8,7 +8,8 @@
         docs proto fmt lint check \
         web-build web-build-release web-serve web-serve-force web-clean web-deps \
         sync-templates check-templates \
-        docker-build docker-up docker-up-d docker-down docker-shell
+        docker-build docker-up docker-up-d docker-down docker-shell \
+        dev dev-server dev-web dev-pg dev-stop
 
 # Default database path
 DB ?= requirements.db
@@ -56,6 +57,10 @@ help: ## Show this help message
 	@echo "$(CYAN)Web/WASM:$(RESET)"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; /^web/ {printf "  $(GREEN)%-20s$(RESET) %s\n", $$1, $$2}'
+	@echo ""
+	@echo "$(CYAN)Development:$(RESET)"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+		awk 'BEGIN {FS = ":.*?## "}; /^dev/ {printf "  $(GREEN)%-20s$(RESET) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(CYAN)Docker:$(RESET)"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -268,8 +273,6 @@ watch: ## Watch for changes and rebuild (requires cargo-watch)
 watch-test: ## Watch for changes and run tests (requires cargo-watch)
 	cargo watch -x test
 
-dev: run-gui ## Alias for run-gui (development mode)
-
 # Quick REST API tests
 test-rest-ping: ## Test REST API ping endpoint
 	@curl -s http://127.0.0.1:$(REST_PORT)/api/ping | jq .
@@ -414,3 +417,88 @@ docker-down: ## Stop AIDA Docker containers
 
 docker-shell: ## Open a shell in the running AIDA container
 	docker compose -f $(COMPOSE_FILE) exec aida bash
+
+#==============================================================================
+# DEVELOPMENT TARGETS (hot-reload)
+#==============================================================================
+
+DEV_COMPOSE := .aida/docker-compose.dev.yml
+DEV_PG_URL ?= postgres://aida:aida@localhost:5432/aida_default
+DEV_PID_DIR := .aida/.dev-pids
+
+dev: dev-pg dev-server dev-web ## Start full dev environment (PostgreSQL + cargo-watch + Vite)
+	@echo ""
+	@echo "$(GREEN)AIDA dev environment running:$(RESET)"
+	@echo "  $(CYAN)Web dashboard$(RESET):  http://localhost:5173"
+	@echo "  $(CYAN)REST API$(RESET):       http://localhost:$(REST_PORT)"
+	@echo "  $(CYAN)PostgreSQL$(RESET):     $(DEV_PG_URL)"
+	@echo ""
+	@echo "  Stop with: $(YELLOW)make dev-stop$(RESET)"
+
+dev-pg: ## Start PostgreSQL in Docker (dev)
+	@if docker compose -f $(DEV_COMPOSE) ps --status running 2>/dev/null | grep -q db; then \
+		echo "$(GREEN)PostgreSQL already running$(RESET)"; \
+	else \
+		echo "Starting PostgreSQL..."; \
+		docker compose -f $(DEV_COMPOSE) up -d; \
+		echo "Waiting for PostgreSQL..."; \
+		for i in 1 2 3 4 5 6 7 8 9 10; do \
+			docker compose -f $(DEV_COMPOSE) exec -T db pg_isready -U aida >/dev/null 2>&1 && break; \
+			sleep 1; \
+		done; \
+		echo "$(GREEN)PostgreSQL ready$(RESET)"; \
+	fi
+
+dev-server: ## Start Rust server with cargo-watch (hot-reload)
+	@if ! command -v cargo-watch >/dev/null 2>&1; then \
+		echo "$(YELLOW)cargo-watch not installed. Install with:$(RESET)"; \
+		echo "  cargo install cargo-watch"; \
+		echo ""; \
+		echo "Starting server without hot-reload..."; \
+	fi
+	@mkdir -p $(DEV_PID_DIR)
+	@if [ -f $(DEV_PID_DIR)/server.pid ] && kill -0 $$(cat $(DEV_PID_DIR)/server.pid) 2>/dev/null; then \
+		echo "$(GREEN)Server already running (PID $$(cat $(DEV_PID_DIR)/server.pid))$(RESET)"; \
+	else \
+		if command -v cargo-watch >/dev/null 2>&1; then \
+			echo "Starting cargo-watch (server)..."; \
+			cargo watch -w aida-core -w aida-server -x \
+				'run -p aida-server --features postgres -- --rest-port $(REST_PORT) --database $(DEV_PG_URL)' \
+				> .aida/.dev-server.log 2>&1 & \
+			echo $$! > $(DEV_PID_DIR)/server.pid; \
+		else \
+			cargo run -p aida-server --features postgres -- --rest-port $(REST_PORT) --database $(DEV_PG_URL) \
+				> .aida/.dev-server.log 2>&1 & \
+			echo $$! > $(DEV_PID_DIR)/server.pid; \
+		fi; \
+		echo "$(GREEN)Server starting (PID $$(cat $(DEV_PID_DIR)/server.pid)) — log: .aida/.dev-server.log$(RESET)"; \
+	fi
+
+dev-web: ## Start Vite dev server (hot-reload)
+	@mkdir -p $(DEV_PID_DIR)
+	@if [ -f $(DEV_PID_DIR)/web.pid ] && kill -0 $$(cat $(DEV_PID_DIR)/web.pid) 2>/dev/null; then \
+		echo "$(GREEN)Vite already running (PID $$(cat $(DEV_PID_DIR)/web.pid))$(RESET)"; \
+	else \
+		echo "Starting Vite dev server..."; \
+		cd aida-web-react && npm run dev > ../.aida/.dev-web.log 2>&1 & \
+		echo $$! > $(DEV_PID_DIR)/web.pid; \
+		echo "$(GREEN)Vite starting (PID $$(cat $(DEV_PID_DIR)/web.pid)) — log: .aida/.dev-web.log$(RESET)"; \
+	fi
+
+dev-stop: ## Stop all dev services
+	@echo "Stopping dev services..."
+	@if [ -f $(DEV_PID_DIR)/server.pid ]; then \
+		kill $$(cat $(DEV_PID_DIR)/server.pid) 2>/dev/null || true; \
+		rm -f $(DEV_PID_DIR)/server.pid; \
+		echo "  Server stopped"; \
+	fi
+	@if [ -f $(DEV_PID_DIR)/web.pid ]; then \
+		kill $$(cat $(DEV_PID_DIR)/web.pid) 2>/dev/null || true; \
+		rm -f $(DEV_PID_DIR)/web.pid; \
+		echo "  Vite stopped"; \
+	fi
+	@docker compose -f $(DEV_COMPOSE) down 2>/dev/null || true
+	@echo "$(GREEN)Dev environment stopped$(RESET)"
+
+dev-logs: ## Tail dev server logs
+	@tail -f .aida/.dev-server.log
