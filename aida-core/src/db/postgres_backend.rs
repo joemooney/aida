@@ -1075,6 +1075,7 @@ impl DatabaseBackend for PostgresBackend {
             baselines,
             store_version,
             migrated_to: None,
+            dispenser: None,
         })
     }
 
@@ -1164,6 +1165,7 @@ impl DatabaseBackend for PostgresBackend {
             baselines,
             store_version,
             migrated_to: None,
+            dispenser: None,
         };
 
         // Apply changes

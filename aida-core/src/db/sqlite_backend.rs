@@ -1203,6 +1203,7 @@ impl DatabaseBackend for SqliteBackend {
             baselines,
             store_version,
             migrated_to: None, // SQLite is never a migrated-from source
+            dispenser: None,
         })
     }
 
