@@ -40,7 +40,7 @@ pub use db::PostgresBackend;
 #[cfg(feature = "native")]
 pub use db::{
     create_backend, export_to_json, import_from_json, migrate_sqlite_to_yaml,
-    migrate_yaml_to_sqlite, open_or_create, SqliteBackend, YamlBackend,
+    migrate_yaml_to_sqlite, open_or_create, GitBackend, SqliteBackend, YamlBackend,
 };
 #[cfg(all(feature = "native", feature = "postgres"))]
 pub use db::{migrate_from_postgres, migrate_to_postgres};
