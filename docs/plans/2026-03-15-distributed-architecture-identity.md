@@ -19,7 +19,8 @@ In Progress — Branch: `distributed-architecture`
 This spec was evaluated against the current AIDA architecture on 2026-03-15. Key decisions:
 
 - **Dual-mode operation**: Support both centralized (PostgreSQL, simple IDs) and distributed (git-as-event-log, node-namespaced IDs) modes, configurable per deployment.
-- **Git scaling assessment needed**: Early spike required to test git performance with 10K-100K TOML object files. If problematic, alternative: git tracks operations/deltas, objects reconstructed into local SQLite/PostgreSQL.
+- **Git scaling assessment needed**: Early spike required to test git performance with 10K-100K object files. If problematic, alternative: git tracks operations/deltas, objects reconstructed into local SQLite/PostgreSQL.
+- **Object file format is flexible**: The spec references TOML, but YAML is equally valid (and AIDA already uses it for export). The actual constraints are: git-diffable, merge-friendly, and scalable. File layout is also flexible — one-file-per-object, sharded directories (`objects/FR/001-100.yaml`), or multiple requirements per file are all viable strategies. The deployment should choose based on scale. Do not treat TOML or one-file-per-object as hard requirements.
 - **ID scheme**: Node-namespaced IDs (`FR-7-048`) only needed in distributed mode. Centralized mode retains simple IDs (`FR-423`). Both modes share UUID v7 as canonical machine identity.
 - **Migration timing**: Intentionally done now while codebase is young (~166K lines, 396 requirements, single user) to minimize migration cost.
 
