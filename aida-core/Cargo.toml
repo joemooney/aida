@@ -47,7 +47,7 @@ tokio = { workspace = true, optional = true }
 
 # WASM-specific dependencies (uuid needs js feature for randomness)
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-uuid = { version = "1.4", features = ["v4", "serde", "js"] }
+uuid = { version = "1.4", features = ["v4", "v7", "serde", "js"] }
 getrandom = { version = "0.2", features = ["js"] }
 
 [dev-dependencies]

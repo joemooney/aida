@@ -1,6 +1,8 @@
 pub mod ai;
 pub mod db;
+pub mod dispenser;
 pub mod export;
+pub mod hlc;
 pub mod import;
 pub mod integrations;
 pub mod meta;
@@ -19,6 +21,10 @@ pub mod storage;
 pub mod templates;
 
 // Re-export commonly used types
+pub use dispenser::{Dispenser, DispenserState, IdMode, MemoryDispenser};
+#[cfg(feature = "native")]
+pub use dispenser::FileDispenser;
+pub use hlc::{Hlc, HlcTimestamp};
 pub use ai::{
     AiClient, AiMode, BackgroundEvaluator, EvaluationResponse, EvaluationResult, EvaluatorConfig,
     EvaluatorStatus, IssueReport, StoredAiEvaluation, SuggestedImprovement,

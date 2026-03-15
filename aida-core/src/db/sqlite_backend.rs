@@ -492,7 +492,7 @@ impl SqliteBackend {
                 version,
             ) = row_result?;
 
-            let id = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4());
+            let id = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::now_v7());
             let status = Self::str_to_status(&status_str);
             let priority = Self::str_to_priority(&priority_str);
             let req_type = Self::str_to_type(&req_type_str);
@@ -592,7 +592,7 @@ impl SqliteBackend {
         let mut users = Vec::new();
         for row_result in rows {
             let (id_str, spec_id, name, email, handle, pin_hash, created_at_str, archived, version): (String, Option<String>, String, String, String, Option<String>, String, bool, i64) = row_result?;
-            let id = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4());
+            let id = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::now_v7());
             let created_at = chrono::DateTime::parse_from_rfc3339(&created_at_str)
                 .map(|dt| dt.with_timezone(&chrono::Utc))
                 .unwrap_or_else(|_| chrono::Utc::now());
@@ -1404,7 +1404,7 @@ impl DatabaseBackend for SqliteBackend {
                 gitlab_issues_json,
                 version,
             )) => {
-                let id = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4());
+                let id = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::now_v7());
                 let status = Self::str_to_status(&status_str);
                 let priority = Self::str_to_priority(&priority_str);
                 let req_type = Self::str_to_type(&req_type_str);
@@ -1555,7 +1555,7 @@ impl DatabaseBackend for SqliteBackend {
                 let archived: bool = row.get(7)?;
                 let version: i64 = row.get(8)?;
 
-                let id = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::new_v4());
+                let id = Uuid::parse_str(&id_str).unwrap_or_else(|_| Uuid::now_v7());
                 let created_at = chrono::DateTime::parse_from_rfc3339(&created_at_str)
                     .map(|dt| dt.with_timezone(&chrono::Utc))
                     .unwrap_or_else(|_| chrono::Utc::now());
@@ -1620,7 +1620,7 @@ impl DatabaseBackend for SqliteBackend {
                 let added_at_str: String = row.get(5)?;
 
                 let requirement_id =
-                    Uuid::parse_str(&req_id_str).unwrap_or_else(|_| Uuid::new_v4());
+                    Uuid::parse_str(&req_id_str).unwrap_or_else(|_| Uuid::now_v7());
                 let added_at = chrono::DateTime::parse_from_rfc3339(&added_at_str)
                     .map(|dt| dt.with_timezone(&chrono::Utc))
                     .unwrap_or_else(|_| chrono::Utc::now());

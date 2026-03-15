@@ -276,7 +276,7 @@ impl WebAuthState {
         project: String,
         role: UserRole,
     ) -> String {
-        let token = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
+        let token = format!("{}{}", Uuid::now_v7().simple(), Uuid::now_v7().simple());
         let session = Session {
             user: AuthenticatedUser {
                 user_id,
@@ -422,7 +422,7 @@ impl WebAuthState {
     }
 
     pub async fn create_oidc_state(&self, project: &str) -> String {
-        let state = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
+        let state = format!("{}{}", Uuid::now_v7().simple(), Uuid::now_v7().simple());
         let expires_at = Utc::now() + self.oidc_state_ttl;
 
         match &self.store {

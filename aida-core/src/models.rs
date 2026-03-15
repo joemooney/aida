@@ -1357,7 +1357,7 @@ impl HistoryEntry {
     /// Creates a new history entry
     pub fn new(author: String, changes: Vec<FieldChange>) -> Self {
         Self {
-            id: Uuid::new_v4(),
+            id: Uuid::now_v7(),
             author,
             timestamp: Utc::now(),
             changes,
@@ -1487,7 +1487,7 @@ impl Baseline {
             .collect();
 
         Self {
-            id: Uuid::new_v4(),
+            id: Uuid::now_v7(),
             name,
             description,
             created_at: Utc::now(),
@@ -1705,7 +1705,7 @@ impl UrlLink {
         added_by: impl Into<String>,
     ) -> Self {
         Self {
-            id: Uuid::new_v4(),
+            id: Uuid::now_v7(),
             url: url.into(),
             title: title.into(),
             description: None,
@@ -1770,7 +1770,7 @@ impl Attachment {
         added_by: Option<String>,
     ) -> Self {
         Self {
-            id: Uuid::new_v4(),
+            id: Uuid::now_v7(),
             filename: filename.into(),
             stored_path: stored_path.into(),
             mime_type: None,
@@ -1891,7 +1891,7 @@ impl TraceLink {
     /// Creates a new trace link
     pub fn new(artifact_type: ArtifactType, file_path: impl Into<String>) -> Self {
         Self {
-            id: Uuid::new_v4(),
+            id: Uuid::now_v7(),
             artifact_type,
             file_path: file_path.into(),
             symbol: None,
@@ -1990,7 +1990,7 @@ impl GitLabIssueLink {
     /// Creates a new GitLab issue link
     pub fn new(issue_iid: u64, issue_title: impl Into<String>) -> Self {
         Self {
-            id: Uuid::new_v4(),
+            id: Uuid::now_v7(),
             issue_iid,
             project_id: None,
             issue_title: issue_title.into(),
@@ -2546,7 +2546,7 @@ impl Comment {
     pub fn new(author: String, content: String) -> Self {
         let now = Utc::now();
         Self {
-            id: Uuid::new_v4(),
+            id: Uuid::now_v7(),
             author,
             content,
             created_at: now,
@@ -2561,7 +2561,7 @@ impl Comment {
     pub fn new_reply(author: String, content: String, parent_id: Uuid) -> Self {
         let now = Utc::now();
         Self {
-            id: Uuid::new_v4(),
+            id: Uuid::now_v7(),
             author,
             content,
             created_at: now,
@@ -2702,7 +2702,7 @@ impl User {
     /// Creates a new user (without spec_id - use RequirementsStore::add_user for auto-generated ID)
     pub fn new(name: String, email: String, handle: String) -> Self {
         Self {
-            id: Uuid::new_v4(),
+            id: Uuid::now_v7(),
             spec_id: None,
             name,
             email,
@@ -2717,7 +2717,7 @@ impl User {
     /// Creates a new user with a spec_id
     pub fn new_with_spec_id(name: String, email: String, handle: String, spec_id: String) -> Self {
         Self {
-            id: Uuid::new_v4(),
+            id: Uuid::now_v7(),
             spec_id: Some(spec_id),
             name,
             email,
@@ -2812,7 +2812,7 @@ impl Team {
     /// Creates a new team (without spec_id - use RequirementsStore::add_team_with_id for auto-generated ID)
     pub fn new(name: String, description: String, parent_team_id: Option<Uuid>) -> Self {
         Self {
-            id: Uuid::new_v4(),
+            id: Uuid::now_v7(),
             spec_id: None,
             name,
             description,
@@ -2832,7 +2832,7 @@ impl Team {
         spec_id: String,
     ) -> Self {
         Self {
-            id: Uuid::new_v4(),
+            id: Uuid::now_v7(),
             spec_id: Some(spec_id),
             name,
             description,
@@ -3017,7 +3017,7 @@ impl Requirement {
             env::var("REQ_FEATURE").unwrap_or_else(|_| String::from("Uncategorized"));
 
         Self {
-            id: Uuid::new_v4(),
+            id: Uuid::now_v7(),
             spec_id: None, // Will be assigned when added to store
             prefix_override: None,
             title,
