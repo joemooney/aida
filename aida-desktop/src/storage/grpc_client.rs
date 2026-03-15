@@ -944,6 +944,7 @@ pub fn proto_to_store(store: &proto::RequirementsStore) -> Result<RequirementsSt
         baselines: Vec::new(),
         store_version: 0,
         migrated_to: None,
+        dispenser: None,
     })
 }
 

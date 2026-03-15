@@ -3453,6 +3453,32 @@ pub struct RequirementsStore {
     /// When this is set, opening the YAML should warn/redirect to the migrated database
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub migrated_to: Option<String>,
+
+    /// Optional external dispenser for ID generation (distributed mode).
+    /// When set, ID generation delegates to this dispenser instead of using
+    /// the internal next_spec_number / prefix_counters fields.
+    /// Skipped in serialization — the dispenser has its own persistence.
+    #[serde(skip)]
+    #[ts(skip)]
+    pub dispenser: Option<DispenserHandle>,
+}
+
+/// Wrapper for Arc<dyn Dispenser> that implements Debug and Clone.
+/// This avoids requiring Debug on the Dispenser trait itself.
+#[derive(Clone)]
+pub struct DispenserHandle(pub std::sync::Arc<dyn crate::dispenser::Dispenser>);
+
+impl std::fmt::Debug for DispenserHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DispenserHandle(<active>)")
+    }
+}
+
+impl std::ops::Deref for DispenserHandle {
+    type Target = dyn crate::dispenser::Dispenser;
+    fn deref(&self) -> &Self::Target {
+        &*self.0
+    }
 }
 
 /// Helper function for skip_serializing_if on AiPromptConfig
@@ -3507,6 +3533,7 @@ impl RequirementsStore {
             baselines: Vec::new(),
             store_version: 1,
             migrated_to: None,
+            dispenser: None,
         }
     }
 
@@ -3811,6 +3838,11 @@ impl RequirementsStore {
 
     /// Generates the next meta-type ID for a given prefix (e.g., "$USER" -> "$USER-001")
     pub fn next_meta_id(&mut self, prefix: &str) -> String {
+        if let Some(ref dispenser) = self.dispenser {
+            if let Ok(id) = dispenser.next_id(prefix) {
+                return id;
+            }
+        }
         let counter = self.meta_counters.entry(prefix.to_string()).or_insert(1);
         let num = *counter;
         *counter += 1;
@@ -4311,13 +4343,40 @@ impl RequirementsStore {
         self.features.iter().find(|f| f.prefix == upper)
     }
 
-    /// Get the next counter value for a given prefix
+    /// Get the next counter value for a given prefix.
+    /// If a dispenser is set, delegates to it. Otherwise uses internal counters.
     fn get_next_counter_for_prefix(&mut self, prefix: &str) -> u32 {
+        if let Some(ref dispenser) = self.dispenser {
+            return dispenser.next(prefix).unwrap_or_else(|_| {
+                // Fallback to internal counter if dispenser fails
+                let upper = prefix.to_uppercase();
+                let counter = self.prefix_counters.entry(upper).or_insert(1);
+                let current = *counter;
+                *counter += 1;
+                current
+            });
+        }
         let upper = prefix.to_uppercase();
         let counter = self.prefix_counters.entry(upper).or_insert(1);
         let current = *counter;
         *counter += 1;
         current
+    }
+
+    /// Get the next global sequence number.
+    /// If a dispenser is set, delegates to it (using "GLOBAL" as the type key).
+    /// Otherwise uses internal next_spec_number counter.
+    fn get_next_global_number(&mut self) -> u32 {
+        if let Some(ref dispenser) = self.dispenser {
+            return dispenser.next("GLOBAL").unwrap_or_else(|_| {
+                let n = self.next_spec_number;
+                self.next_spec_number += 1;
+                n
+            });
+        }
+        let n = self.next_spec_number;
+        self.next_spec_number += 1;
+        n
     }
 
     /// Generate a new requirement ID based on configuration
@@ -4339,15 +4398,18 @@ impl RequirementsStore {
                     .unwrap_or_else(|| "REQ".to_string());
 
                 let number = match self.id_config.numbering {
-                    NumberingStrategy::Global => {
-                        let n = self.next_spec_number;
-                        self.next_spec_number += 1;
-                        n
-                    }
+                    NumberingStrategy::Global => self.get_next_global_number(),
                     NumberingStrategy::PerPrefix | NumberingStrategy::PerFeatureType => {
                         self.get_next_counter_for_prefix(&prefix)
                     }
                 };
+
+                // If we have a dispenser in distributed mode, use its formatting
+                if let Some(ref dispenser) = self.dispenser {
+                    if let Ok(id) = dispenser.format_id(&prefix, number) {
+                        return id;
+                    }
+                }
 
                 format!("{}-{:0>width$}", prefix, number, width = digits as usize)
             }
@@ -4360,11 +4422,7 @@ impl RequirementsStore {
                     .unwrap_or_else(|| "REQ".to_string());
 
                 let number = match self.id_config.numbering {
-                    NumberingStrategy::Global => {
-                        let n = self.next_spec_number;
-                        self.next_spec_number += 1;
-                        n
-                    }
+                    NumberingStrategy::Global => self.get_next_global_number(),
                     NumberingStrategy::PerPrefix => {
                         // Per feature prefix only
                         self.get_next_counter_for_prefix(&feat)
@@ -4414,16 +4472,19 @@ impl RequirementsStore {
         let digits = self.id_config.digits;
 
         let number = match self.id_config.numbering {
-            NumberingStrategy::Global => {
-                let n = self.next_spec_number;
-                self.next_spec_number += 1;
-                n
-            }
+            NumberingStrategy::Global => self.get_next_global_number(),
             NumberingStrategy::PerPrefix | NumberingStrategy::PerFeatureType => {
                 // Treat the override prefix as its own counter
                 self.get_next_counter_for_prefix(&prefix_upper)
             }
         };
+
+        // If we have a dispenser in distributed mode, use its formatting
+        if let Some(ref dispenser) = self.dispenser {
+            if let Ok(id) = dispenser.format_id(&prefix_upper, number) {
+                return id;
+            }
+        }
 
         format!(
             "{}-{:0>width$}",
