@@ -3957,3 +3957,46 @@ In Docker, the server's CWD is `/app` but the project is mounted at `/repo`. The
 - `d78fd2a` — fix(server): resolve .claude/ and docs/ relative to database path
 - `ec52103` — fix(docker): load .env file for ANTHROPIC_API_KEY in container
 - Pushed to main
+
+---
+
+### Prompt: Evaluate Distributed Architecture & Identity Specification v0.5
+- **Date**: 2026-03-15
+
+#### Context
+Evaluated a comprehensive distributed architecture specification for AIDA that proposes: git-as-event-log, node-namespaced IDs (`FR-7-048`), two-tier ID scheme (node ID + agreed ID), CRDT-based conflict resolution, multi-repo workspace architecture, and phased implementation from file-based counters through full CRDT support.
+
+#### Evaluation (Initial)
+Scored the spec 92/100 overall. Key findings:
+- **Clarity 95/100**: Exceptionally well-written, decisive prose
+- **Completeness 88/100**: Missing security model, migration path, performance bounds
+- **Feasibility 80/100**: Massive gap from current implementation; git scaling concerns
+- **Architectural Soundness 93/100**: Elegant separation of concerns; two-tier ID scheme solves the distributed-yet-human-readable tension
+
+#### Strategic Decision
+After thorough analysis of AIDA's current state (166K LOC, 396 requirements, single user, centralized architecture), recommended against immediate adoption. However, the user decided to proceed based on:
+1. **Better to tackle now** while codebase is young and disposable
+2. **Dual-mode operation** — support both centralized (PostgreSQL, simple IDs) and distributed (git-based, node-namespaced IDs) as configurable modes
+3. **Git analogy** — model the way git itself supports both connected (GitHub) and disconnected (patches) workflows
+4. **Format flexibility** — not locked to TOML or one-file-per-object; YAML equally valid, sharded directories and multi-req files are options
+
+#### Actions Taken
+1. Saved distributed spec to `docs/plans/2026-03-15-distributed-architecture-identity.md` with evaluation notes
+2. Created branch `distributed-architecture` for the rewrite work
+3. Created `docs/plans/2026-03-15-main-branch-improvements.md` for parallel main branch work covering:
+   - Phase 1: UUID v7, HLC timestamps, immutable ID enforcement, field-level conflict detection
+   - Phase 2: PostgreSQL-first completion (`aida server start/stop`)
+   - Phase 3: GitHub integration, API key auth, OIDC
+   - Phase 4: Onboarding polish, SSE real-time presence, non-Claude AI support
+   - Phase 5: Analytics and reporting
+   - Cherry-picked ideas from distributed spec (UUID v7, HLC, SSE presence, tombstone relations)
+
+#### Files Changed
+- `docs/plans/2026-03-15-distributed-architecture-identity.md` — Created: full spec with evaluation notes
+- `docs/plans/2026-03-15-main-branch-improvements.md` — Created: parallel main branch plan
+
+#### Git
+- `ab45252` — docs: add distributed architecture & identity specification v0.5
+- `398af09` — docs: add main branch improvements plan and update distributed spec flexibility notes
+- Branch `distributed-architecture` created and pushed
+- Pushed to main

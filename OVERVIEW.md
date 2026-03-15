@@ -9,6 +9,16 @@ Create a lightweight, AI-native requirements management tool that is:
 - Flexible enough for different project needs (SQLite default, YAML and PostgreSQL also supported)
 - Deeply integrated with AI development workflows (Claude Code skills, MCP server)
 - Capable of tracking requirement relationships, history, and code traceability
+- Supports both centralized (PostgreSQL) and distributed (git-based, offline-capable) deployment modes
+
+## Development Tracks
+
+AIDA is being developed on two parallel tracks:
+
+- **Main branch**: Centralized PostgreSQL-first architecture, focusing on UUID v7, HLC timestamps, `aida server start/stop`, GitHub integration, and UX improvements. See `docs/plans/2026-03-15-main-branch-improvements.md`.
+- **`distributed-architecture` branch**: Exploring git-as-event-log, node-namespaced IDs, CRDT conflict resolution, and multi-repo workspace support for disconnected/air-gapped scenarios. See `docs/plans/2026-03-15-distributed-architecture-identity.md`.
+
+The goal is dual-mode operation: centralized mode for teams with connectivity, distributed mode for offline-first workflows — configurable per deployment, sharing UUID v7 and HLC timestamps as common foundations.
 
 ## Project Structure
 
