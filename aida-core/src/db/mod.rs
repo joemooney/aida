@@ -5,6 +5,8 @@
 //! while maintaining a consistent interface.
 
 #[cfg(feature = "native")]
+mod git_backend;
+#[cfg(feature = "native")]
 mod migration;
 #[cfg(feature = "postgres")]
 mod postgres_backend;
@@ -22,6 +24,8 @@ pub use migration::{
 pub use migration::{migrate_from_postgres, migrate_to_postgres};
 #[cfg(feature = "postgres")]
 pub use postgres_backend::PostgresBackend;
+#[cfg(feature = "native")]
+pub use git_backend::GitBackend;
 #[cfg(feature = "native")]
 pub use sqlite_backend::SqliteBackend;
 pub use traits::{BackendType, DatabaseBackend, DatabaseConfig, UpdateResult, VersionConflict};
