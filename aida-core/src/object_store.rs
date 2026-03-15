@@ -1,0 +1,415 @@
+// trace:ARCH-distributed-objectstore | ai:claude
+//! Git-friendly object store for distributed AIDA.
+//!
+//! Stores requirements as individual YAML files in a sharded directory layout:
+//! ```text
+//! objects/
+//!   FR/
+//!     000/FR-001.yaml ... FR-1000.yaml
+//!     001/FR-1001.yaml ... FR-2000.yaml
+//!   BUG/
+//!     000/BUG-001.yaml ...
+//! ```
+//!
+//! Each file contains a single requirement serialized as YAML. The sharded
+//! layout keeps directories under 1000 entries for filesystem performance
+//! and git efficiency (58% faster incremental push vs flat layout — see
+//! `docs/plans/2026-03-15-git-scaling-spike-results.md`).
+//!
+//! This module handles path computation and file I/O only. It does not
+//! manage git operations (commit, push, pull) — those are the caller's
+//! responsibility.
+
+use anyhow::{Context, Result};
+use std::path::{Path, PathBuf};
+use uuid::Uuid;
+
+use crate::models::Requirement;
+
+/// Maximum files per shard directory.
+const SHARD_SIZE: u32 = 1000;
+
+/// Compute the shard directory number for a given sequence number.
+/// Shard 000 holds sequences 1-1000, shard 001 holds 1001-2000, etc.
+fn shard_number(seq: u32) -> u32 {
+    if seq == 0 {
+        0
+    } else {
+        (seq - 1) / SHARD_SIZE
+    }
+}
+
+/// Compute the file path for a requirement in the sharded layout.
+///
+/// Given spec_id "FR-042" and objects_root "/repo/objects":
+///   → /repo/objects/FR/000/FR-042.yaml
+///
+/// Given spec_id "FR-7-1500" (distributed mode) and objects_root "/repo/objects":
+///   → /repo/objects/FR/001/FR-7-1500.yaml
+///
+/// The shard is computed from the sequence number (last numeric component).
+pub fn object_path(objects_root: &Path, spec_id: &str) -> Result<PathBuf> {
+    let (type_prefix, seq) = parse_spec_id(spec_id)?;
+    let shard = format!("{:03}", shard_number(seq));
+    let filename = format!("{}.yaml", spec_id);
+    Ok(objects_root.join(&type_prefix).join(&shard).join(&filename))
+}
+
+/// Parse a spec_id into (type_prefix, sequence_number).
+///
+/// Handles both centralized and distributed formats:
+/// - "FR-042" → ("FR", 42)
+/// - "FR-7-042" → ("FR", 42)
+/// - "FEAT-3-1500" → ("FEAT", 1500)
+fn parse_spec_id(spec_id: &str) -> Result<(String, u32)> {
+    let parts: Vec<&str> = spec_id.split('-').collect();
+    match parts.len() {
+        // Centralized: TYPE-SEQ (e.g., "FR-042")
+        2 => {
+            let type_prefix = parts[0].to_uppercase();
+            let seq: u32 = parts[1]
+                .parse()
+                .with_context(|| format!("Invalid sequence in spec_id: {}", spec_id))?;
+            Ok((type_prefix, seq))
+        }
+        // Distributed: TYPE-NODEID-SEQ (e.g., "FR-7-042")
+        3 => {
+            let type_prefix = parts[0].to_uppercase();
+            let seq: u32 = parts[2]
+                .parse()
+                .with_context(|| format!("Invalid sequence in spec_id: {}", spec_id))?;
+            Ok((type_prefix, seq))
+        }
+        _ => anyhow::bail!("Invalid spec_id format: {} (expected TYPE-SEQ or TYPE-NODE-SEQ)", spec_id),
+    }
+}
+
+/// Write a single requirement to the object store.
+///
+/// Creates parent directories as needed. Overwrites if the file already exists.
+#[cfg(feature = "native")]
+pub fn write_object(objects_root: &Path, req: &Requirement) -> Result<PathBuf> {
+    let spec_id = req
+        .spec_id
+        .as_ref()
+        .context("Requirement has no spec_id — cannot write to object store")?;
+
+    let path = object_path(objects_root, spec_id)?;
+
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
+    }
+
+    let yaml = serde_yaml::to_string(req)
+        .with_context(|| format!("Failed to serialize requirement {}", spec_id))?;
+
+    std::fs::write(&path, &yaml)
+        .with_context(|| format!("Failed to write {}", path.display()))?;
+
+    Ok(path)
+}
+
+/// Read a single requirement from the object store by spec_id.
+#[cfg(feature = "native")]
+pub fn read_object(objects_root: &Path, spec_id: &str) -> Result<Requirement> {
+    let path = object_path(objects_root, spec_id)?;
+    let yaml = std::fs::read_to_string(&path)
+        .with_context(|| format!("Failed to read {}", path.display()))?;
+    let req: Requirement = serde_yaml::from_str(&yaml)
+        .with_context(|| format!("Failed to parse {}", path.display()))?;
+    Ok(req)
+}
+
+/// Read a single requirement from a specific file path.
+#[cfg(feature = "native")]
+pub fn read_object_from_path(path: &Path) -> Result<Requirement> {
+    let yaml = std::fs::read_to_string(path)
+        .with_context(|| format!("Failed to read {}", path.display()))?;
+    let req: Requirement = serde_yaml::from_str(&yaml)
+        .with_context(|| format!("Failed to parse {}", path.display()))?;
+    Ok(req)
+}
+
+/// Delete a requirement file from the object store.
+/// Returns true if the file existed and was removed.
+#[cfg(feature = "native")]
+pub fn delete_object(objects_root: &Path, spec_id: &str) -> Result<bool> {
+    let path = object_path(objects_root, spec_id)?;
+    if path.exists() {
+        std::fs::remove_file(&path)
+            .with_context(|| format!("Failed to delete {}", path.display()))?;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+/// Check if a requirement file exists in the object store.
+#[cfg(feature = "native")]
+pub fn object_exists(objects_root: &Path, spec_id: &str) -> Result<bool> {
+    let path = object_path(objects_root, spec_id)?;
+    Ok(path.exists())
+}
+
+/// List all requirement files in the object store.
+/// Returns (spec_id, path) pairs.
+#[cfg(feature = "native")]
+pub fn list_objects(objects_root: &Path) -> Result<Vec<(String, PathBuf)>> {
+    let mut results = Vec::new();
+
+    if !objects_root.exists() {
+        return Ok(results);
+    }
+
+    // Walk: objects_root / TYPE / SHARD / FILE.yaml
+    for type_entry in std::fs::read_dir(objects_root)? {
+        let type_entry = type_entry?;
+        if !type_entry.file_type()?.is_dir() {
+            continue;
+        }
+        for shard_entry in std::fs::read_dir(type_entry.path())? {
+            let shard_entry = shard_entry?;
+            if !shard_entry.file_type()?.is_dir() {
+                continue;
+            }
+            for file_entry in std::fs::read_dir(shard_entry.path())? {
+                let file_entry = file_entry?;
+                let path = file_entry.path();
+                if path.extension().and_then(|e| e.to_str()) == Some("yaml") {
+                    if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                        results.push((stem.to_string(), path));
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(results)
+}
+
+/// Load all requirements from the object store into a Vec.
+#[cfg(feature = "native")]
+pub fn load_all_objects(objects_root: &Path) -> Result<Vec<Requirement>> {
+    let files = list_objects(objects_root)?;
+    let mut requirements = Vec::with_capacity(files.len());
+
+    for (spec_id, path) in &files {
+        match read_object_from_path(path) {
+            Ok(req) => requirements.push(req),
+            Err(e) => {
+                eprintln!("Warning: failed to load {}: {}", spec_id, e);
+            }
+        }
+    }
+
+    Ok(requirements)
+}
+
+/// Look up a requirement by UUID across all object files.
+/// This is O(n) — for frequent lookups, use the SQLite read model instead.
+#[cfg(feature = "native")]
+pub fn find_by_uuid(objects_root: &Path, uuid: &Uuid) -> Result<Option<Requirement>> {
+    let files = list_objects(objects_root)?;
+    for (_spec_id, path) in &files {
+        if let Ok(req) = read_object_from_path(path) {
+            if req.id == *uuid {
+                return Ok(Some(req));
+            }
+        }
+    }
+    Ok(None)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_shard_number() {
+        assert_eq!(shard_number(1), 0);
+        assert_eq!(shard_number(999), 0);
+        assert_eq!(shard_number(1000), 0);
+        assert_eq!(shard_number(1001), 1);
+        assert_eq!(shard_number(2000), 1);
+        assert_eq!(shard_number(2001), 2);
+        assert_eq!(shard_number(100_000), 99);
+    }
+
+    #[test]
+    fn test_parse_spec_id_centralized() {
+        let (prefix, seq) = parse_spec_id("FR-042").unwrap();
+        assert_eq!(prefix, "FR");
+        assert_eq!(seq, 42);
+
+        let (prefix, seq) = parse_spec_id("FEAT-1500").unwrap();
+        assert_eq!(prefix, "FEAT");
+        assert_eq!(seq, 1500);
+    }
+
+    #[test]
+    fn test_parse_spec_id_distributed() {
+        let (prefix, seq) = parse_spec_id("FR-7-042").unwrap();
+        assert_eq!(prefix, "FR");
+        assert_eq!(seq, 42);
+
+        let (prefix, seq) = parse_spec_id("FEAT-3-1500").unwrap();
+        assert_eq!(prefix, "FEAT");
+        assert_eq!(seq, 1500);
+    }
+
+    #[test]
+    fn test_parse_spec_id_invalid() {
+        assert!(parse_spec_id("FR").is_err());
+        assert!(parse_spec_id("FR-abc").is_err());
+        assert!(parse_spec_id("FR-7-abc").is_err());
+        assert!(parse_spec_id("A-B-C-D").is_err());
+    }
+
+    #[test]
+    fn test_object_path_centralized() {
+        let root = Path::new("/repo/objects");
+        let path = object_path(root, "FR-042").unwrap();
+        assert_eq!(path, PathBuf::from("/repo/objects/FR/000/FR-042.yaml"));
+
+        let path = object_path(root, "FR-1500").unwrap();
+        assert_eq!(path, PathBuf::from("/repo/objects/FR/001/FR-1500.yaml"));
+
+        let path = object_path(root, "BUG-001").unwrap();
+        assert_eq!(path, PathBuf::from("/repo/objects/BUG/000/BUG-001.yaml"));
+    }
+
+    #[test]
+    fn test_object_path_distributed() {
+        let root = Path::new("/repo/objects");
+        let path = object_path(root, "FR-7-042").unwrap();
+        assert_eq!(path, PathBuf::from("/repo/objects/FR/000/FR-7-042.yaml"));
+
+        let path = object_path(root, "FEAT-3-1500").unwrap();
+        assert_eq!(
+            path,
+            PathBuf::from("/repo/objects/FEAT/001/FEAT-3-1500.yaml")
+        );
+    }
+
+    #[cfg(feature = "native")]
+    #[test]
+    fn test_write_read_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let objects_root = dir.path().join("objects");
+
+        let mut req = Requirement::new("Test Requirement".into(), "A test description".into());
+        req.spec_id = Some("FR-042".into());
+        req.owner = "joe".into();
+        req.tags.insert("test".into());
+
+        // Write
+        let path = write_object(&objects_root, &req).unwrap();
+        assert!(path.exists());
+        assert_eq!(
+            path,
+            objects_root.join("FR").join("000").join("FR-042.yaml")
+        );
+
+        // Read back
+        let loaded = read_object(&objects_root, "FR-042").unwrap();
+        assert_eq!(loaded.id, req.id);
+        assert_eq!(loaded.title, "Test Requirement");
+        assert_eq!(loaded.spec_id, Some("FR-042".into()));
+        assert_eq!(loaded.owner, "joe");
+        assert!(loaded.tags.contains("test"));
+    }
+
+    #[cfg(feature = "native")]
+    #[test]
+    fn test_write_read_distributed_id() {
+        let dir = tempfile::tempdir().unwrap();
+        let objects_root = dir.path().join("objects");
+
+        let mut req = Requirement::new("Distributed Req".into(), "Node 7 created this".into());
+        req.spec_id = Some("FR-7-048".into());
+
+        write_object(&objects_root, &req).unwrap();
+        let loaded = read_object(&objects_root, "FR-7-048").unwrap();
+        assert_eq!(loaded.spec_id, Some("FR-7-048".into()));
+    }
+
+    #[cfg(feature = "native")]
+    #[test]
+    fn test_list_objects() {
+        let dir = tempfile::tempdir().unwrap();
+        let objects_root = dir.path().join("objects");
+
+        let specs = ["FR-001", "FR-002", "BUG-001", "FEAT-001"];
+        for spec in &specs {
+            let mut req = Requirement::new(format!("Req {}", spec), "desc".into());
+            req.spec_id = Some(spec.to_string());
+            write_object(&objects_root, &req).unwrap();
+        }
+
+        let listed = list_objects(&objects_root).unwrap();
+        assert_eq!(listed.len(), 4);
+
+        let spec_ids: Vec<&str> = listed.iter().map(|(s, _)| s.as_str()).collect();
+        for spec in &specs {
+            assert!(spec_ids.contains(spec), "Missing {}", spec);
+        }
+    }
+
+    #[cfg(feature = "native")]
+    #[test]
+    fn test_delete_object() {
+        let dir = tempfile::tempdir().unwrap();
+        let objects_root = dir.path().join("objects");
+
+        let mut req = Requirement::new("To Delete".into(), "desc".into());
+        req.spec_id = Some("FR-099".into());
+        write_object(&objects_root, &req).unwrap();
+
+        assert!(object_exists(&objects_root, "FR-099").unwrap());
+        assert!(delete_object(&objects_root, "FR-099").unwrap());
+        assert!(!object_exists(&objects_root, "FR-099").unwrap());
+        assert!(!delete_object(&objects_root, "FR-099").unwrap()); // already gone
+    }
+
+    #[cfg(feature = "native")]
+    #[test]
+    fn test_find_by_uuid() {
+        let dir = tempfile::tempdir().unwrap();
+        let objects_root = dir.path().join("objects");
+
+        let mut req = Requirement::new("Findable".into(), "desc".into());
+        req.spec_id = Some("FR-001".into());
+        let target_uuid = req.id;
+        write_object(&objects_root, &req).unwrap();
+
+        let mut req2 = Requirement::new("Other".into(), "desc".into());
+        req2.spec_id = Some("FR-002".into());
+        write_object(&objects_root, &req2).unwrap();
+
+        let found = find_by_uuid(&objects_root, &target_uuid).unwrap();
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().title, "Findable");
+
+        let not_found = find_by_uuid(&objects_root, &Uuid::now_v7()).unwrap();
+        assert!(not_found.is_none());
+    }
+
+    #[cfg(feature = "native")]
+    #[test]
+    fn test_shard_boundary() {
+        let dir = tempfile::tempdir().unwrap();
+        let objects_root = dir.path().join("objects");
+
+        // Seq 1000 → shard 000, seq 1001 → shard 001
+        let mut req_a = Requirement::new("Shard boundary A".into(), "desc".into());
+        req_a.spec_id = Some("FR-1000".into());
+        let path_a = write_object(&objects_root, &req_a).unwrap();
+        assert!(path_a.to_str().unwrap().contains("/000/"));
+
+        let mut req_b = Requirement::new("Shard boundary B".into(), "desc".into());
+        req_b.spec_id = Some("FR-1001".into());
+        let path_b = write_object(&objects_root, &req_b).unwrap();
+        assert!(path_b.to_str().unwrap().contains("/001/"));
+    }
+}

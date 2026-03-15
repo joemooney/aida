@@ -8,6 +8,7 @@ pub mod integrations;
 pub mod meta;
 pub mod models;
 pub mod node;
+pub mod object_store;
 #[cfg(feature = "native")]
 pub mod project;
 #[cfg(feature = "native")]
