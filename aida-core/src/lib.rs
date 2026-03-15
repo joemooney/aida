@@ -7,6 +7,7 @@ pub mod import;
 pub mod integrations;
 pub mod meta;
 pub mod models;
+pub mod node;
 #[cfg(feature = "native")]
 pub mod project;
 #[cfg(feature = "native")]
@@ -25,6 +26,10 @@ pub use dispenser::{Dispenser, DispenserState, IdMode, MemoryDispenser};
 #[cfg(feature = "native")]
 pub use dispenser::FileDispenser;
 pub use hlc::{Hlc, HlcTimestamp};
+pub use node::{
+    AgreedCounters, DeploymentMode, NodeConfig, NodeRegistry, NodeRegistryEntry, UserRegistry,
+    UserRegistryEntry, WorkspaceConfig,
+};
 pub use ai::{
     AiClient, AiMode, BackgroundEvaluator, EvaluationResponse, EvaluationResult, EvaluatorConfig,
     EvaluatorStatus, IssueReport, StoredAiEvaluation, SuggestedImprovement,
