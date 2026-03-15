@@ -301,7 +301,7 @@ pub fn proto_to_url_open_mode(mode: i32) -> aida_core::UrlOpenMode {
 
 pub fn proto_to_url_link(link: &proto::UrlLink) -> UrlLink {
     UrlLink {
-        id: Uuid::parse_str(&link.id).unwrap_or_else(|_| Uuid::new_v4()),
+        id: Uuid::parse_str(&link.id).unwrap_or_else(|_| Uuid::now_v7()),
         url: link.url.clone(),
         title: link.title.clone(),
         description: if link.description.is_empty() {

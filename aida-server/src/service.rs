@@ -624,7 +624,7 @@ impl RequirementsService for AidaService {
         };
 
         let comment = aida_core::Comment {
-            id: Uuid::new_v4(),
+            id: Uuid::now_v7(),
             content: req.content,
             author: req.author,
             created_at: chrono::Utc::now(),
@@ -1560,7 +1560,7 @@ impl RequirementsService for AidaServiceMultiProject {
         };
 
         let comment = aida_core::Comment {
-            id: Uuid::new_v4(),
+            id: Uuid::now_v7(),
             content: req.content,
             author: req.author,
             created_at: chrono::Utc::now(),

@@ -671,7 +671,7 @@ pub fn proto_to_store(store: &proto::RequirementsStore) -> Result<RequirementsSt
         .users
         .iter()
         .map(|u| User {
-            id: uuid::Uuid::parse_str(&u.id).unwrap_or_else(|_| uuid::Uuid::new_v4()),
+            id: uuid::Uuid::parse_str(&u.id).unwrap_or_else(|_| uuid::Uuid::now_v7()),
             spec_id: if u.spec_id.is_empty() {
                 None
             } else {
@@ -729,7 +729,7 @@ pub fn proto_to_store(store: &proto::RequirementsStore) -> Result<RequirementsSt
         .teams
         .iter()
         .map(|t| Team {
-            id: uuid::Uuid::parse_str(&t.id).unwrap_or_else(|_| uuid::Uuid::new_v4()),
+            id: uuid::Uuid::parse_str(&t.id).unwrap_or_else(|_| uuid::Uuid::now_v7()),
             spec_id: if t.spec_id.is_empty() {
                 None
             } else {
@@ -1142,7 +1142,7 @@ fn proto_to_url_link(link: &proto::UrlLink) -> aida_core::UrlLink {
     use uuid::Uuid;
 
     aida_core::UrlLink {
-        id: Uuid::parse_str(&link.id).unwrap_or_else(|_| Uuid::new_v4()),
+        id: Uuid::parse_str(&link.id).unwrap_or_else(|_| Uuid::now_v7()),
         url: link.url.clone(),
         title: link.title.clone(),
         description: if link.description.is_empty() {

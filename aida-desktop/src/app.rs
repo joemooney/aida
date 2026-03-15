@@ -4621,7 +4621,7 @@ impl RequirementsApp {
         let initial_perspective = user_settings.preferred_perspective.clone();
 
         // Generate unique session ID (no heartbeat for remote)
-        let session_id = format!("{}-{}", std::process::id(), Uuid::new_v4());
+        let session_id = format!("{}-{}", std::process::id(), Uuid::now_v7());
 
         // Create unified storage client using the new storage module
         let storage_client: Option<Box<dyn StorageClient>> = match create_storage_client(
@@ -5227,7 +5227,7 @@ impl RequirementsApp {
 
         // Generate unique session ID and register session (collaborative awareness)
         use crate::platform::PlatformServices;
-        let session_id = format!("{}-{}", std::process::id(), Uuid::new_v4());
+        let session_id = format!("{}-{}", std::process::id(), Uuid::now_v7());
         let hostname = crate::platform::platform().get_hostname();
 
         let session_info = SessionInfo {
@@ -20828,7 +20828,7 @@ impl RequirementsApp {
 
             // Track history
             req.history.push(aida_core::models::HistoryEntry {
-                id: uuid::Uuid::new_v4(),
+                id: uuid::Uuid::now_v7(),
                 author: self.user_settings.name.clone(),
                 timestamp: chrono::Utc::now(),
                 changes: vec![aida_core::models::FieldChange {
@@ -26889,7 +26889,7 @@ impl RequirementsApp {
             req.owner = new_owner.clone();
             req.modified_at = chrono::Utc::now();
             req.history.push(aida_core::models::HistoryEntry {
-                id: uuid::Uuid::new_v4(),
+                id: uuid::Uuid::now_v7(),
                 author: self.user_settings.name.clone(),
                 timestamp: chrono::Utc::now(),
                 changes: vec![aida_core::models::FieldChange {
@@ -27079,7 +27079,7 @@ impl RequirementsApp {
             req.feature = new_feature.clone();
             req.modified_at = chrono::Utc::now();
             req.history.push(aida_core::models::HistoryEntry {
-                id: uuid::Uuid::new_v4(),
+                id: uuid::Uuid::now_v7(),
                 author: self.user_settings.name.clone(),
                 timestamp: chrono::Utc::now(),
                 changes: vec![aida_core::models::FieldChange {
@@ -27148,7 +27148,7 @@ impl RequirementsApp {
                     req.set_status_from_str(&new_status_str);
                     req.modified_at = chrono::Utc::now();
                     req.history.push(aida_core::models::HistoryEntry {
-                        id: uuid::Uuid::new_v4(),
+                        id: uuid::Uuid::now_v7(),
                         author: self.user_settings.name.clone(),
                         timestamp: chrono::Utc::now(),
                         changes: vec![aida_core::models::FieldChange {
@@ -27179,7 +27179,7 @@ impl RequirementsApp {
                     req.set_priority_from_str(&new_priority_str);
                     req.modified_at = chrono::Utc::now();
                     req.history.push(aida_core::models::HistoryEntry {
-                        id: uuid::Uuid::new_v4(),
+                        id: uuid::Uuid::now_v7(),
                         author: self.user_settings.name.clone(),
                         timestamp: chrono::Utc::now(),
                         changes: vec![aida_core::models::FieldChange {
