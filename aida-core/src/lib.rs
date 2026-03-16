@@ -27,7 +27,7 @@ pub mod templates;
 // Re-export commonly used types
 pub use dispenser::{Dispenser, DispenserState, IdMode, MemoryDispenser};
 #[cfg(feature = "native")]
-pub use dispenser::FileDispenser;
+pub use dispenser::{FileDispenser, SqliteDispenser};
 pub use hlc::{Hlc, HlcTimestamp};
 pub use node::{
     AgreedCounters, DeploymentMode, NodeConfig, NodeRegistry, NodeRegistryEntry, UserRegistry,
