@@ -1,5 +1,6 @@
 id: 43af56ec-fecd-4ca0-bf74-b4d46417386f
 spec_id: AUTH-0289
+agreed_id: FR-10
 prefix_override: AUTH
 title: PIN-based Web Client Authentication
 description: Basic authentication for WASM web client using handle/username and PIN. PIN stored as SHA-256 hash. Session persisted in browser local storage. Includes login UI, logout functionality, and session restoration on page load.

@@ -1,5 +1,6 @@
 id: 893da355-e72c-4b75-9d76-ee4fb19d91b0
 spec_id: FR-0240
+agreed_id: FR-31
 title: Multi-column keyboard shortcuts help
 description: "Keyboard shortcuts help popup ('?' key) now uses responsive multi-column layout:\n- 3 columns when window >= 840px wide\n- 2 columns when window >= 560px wide  \n- 1 column with scrolling for narrower windows\n- Default window size 900x500 to show all shortcuts without scrolling"
 status: Completed

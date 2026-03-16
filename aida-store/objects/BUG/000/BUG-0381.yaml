@@ -1,5 +1,6 @@
 id: e3421e3b-155b-4fca-8429-a8e0653d0f9d
 spec_id: BUG-0381
+agreed_id: BUG-4
 title: 'Web UI shows stale data: v2 API path does not call check_reload()'
 description: 'The REST v2 API handlers (list_requirements_v2, etc.) do not call check_reload() to detect when the SQLite database has been modified externally by the CLI. Only the legacy v1 handlers have this auto-reload logic. This means CLI writes (aida add, aida edit) do not appear in the web UI until the server is restarted. Workaround: restart the server. Proper fix: add check_reload() or mtime-based staleness detection to the v2/multi-project code path.'
 status: Completed

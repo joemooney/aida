@@ -1,5 +1,6 @@
 id: 177c476f-2748-4c88-acf8-5c45ff4a4d24
 spec_id: FR-0319
+agreed_id: FR-238
 title: Timeline view does not scroll with down/up arrow
 description: |-
   Timeline view should auto-scroll to keep selected requirement visible during keyboard navigation.

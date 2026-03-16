@@ -1,5 +1,6 @@
 id: 8864175f-ce6b-44a7-9348-34aba0d4a96b
 spec_id: REQ-0241
+agreed_id: BUG-12
 title: Fix hotkey conflicts in detail tab menu
 description: |-
   Fixed keyboard conflicts when using 'r' detail tab menu:

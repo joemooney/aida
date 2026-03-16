@@ -1,5 +1,6 @@
 id: 37be9566-a051-430b-b47b-1890a395a524
 spec_id: FR-0001
+agreed_id: FR-227
 title: Default owner depending on state
 description: "When we transition a feature we want the owner to be assigned based on state\n\n*this is bold*\n\n_italic_\n\n# Head 1\n\nasdfasdf\n\n## Head2 \n\nasdfasdf"
 status: Completed

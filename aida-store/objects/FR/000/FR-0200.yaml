@@ -1,5 +1,6 @@
 id: 365d927b-09e5-45e3-8f4e-881ad3c47143
 spec_id: FR-0200
+agreed_id: FR-221
 title: Sprint Planning Support
 description: Enable Sprint-based Agile planning in AIDA. Add Sprint as a requirement type with time-boxing capabilities. Implement SprintAssignment relationship to assign work items to Sprints. Include Planning View for Sprint-organized display with Backlog section for unassigned items.
 status: Draft

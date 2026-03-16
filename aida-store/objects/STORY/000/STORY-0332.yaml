@@ -1,5 +1,6 @@
 id: 0deab621-05e2-4a9b-9e84-49346f1963ae
 spec_id: STORY-0332
+agreed_id: STORY-2
 title: Conflict Resolution for GitLab Sync
 description: |-
   As a user, I want to resolve conflicts when both AIDA and GitLab have changes so that I can merge changes appropriately.

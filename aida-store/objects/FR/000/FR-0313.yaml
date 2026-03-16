@@ -1,5 +1,6 @@
 id: 105bbb5a-0310-41dc-8720-d9a5f538d0bd
 spec_id: FR-0313
+agreed_id: FR-75
 title: My Queue should filter out complete by default
 description: |+
   My Queue should filter out complete by default

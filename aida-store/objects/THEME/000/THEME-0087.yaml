@@ -1,5 +1,6 @@
 id: f1469587-593e-4e85-b7e7-354fceade5d2
 spec_id: THEME-0087
+agreed_id: FR-15
 prefix_override: THEME
 title: Theme Configuration
 description: "Theme related requirements. \nAppearance that can be controlled by the theme."

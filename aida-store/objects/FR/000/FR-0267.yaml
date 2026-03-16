@@ -1,5 +1,6 @@
 id: 2a5e9947-12f6-41d9-9492-92662208ccc3
 spec_id: FR-0267
+agreed_id: FR-33
 title: 'Release workflow: export SQLite to YAML for version control'
 description: |-
   ## Problem

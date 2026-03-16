@@ -1,5 +1,6 @@
 id: c2ac61cd-36a3-4dce-acaa-7b057b1be97d
 spec_id: FR-0126
+agreed_id: FR-193
 title: Allow multiple key bindings to the same action
 description: |-
   Allow multiple key bindings to the same action

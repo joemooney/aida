@@ -1,5 +1,6 @@
 id: bd927d94-3b57-488a-9ad7-59b3f933b05d
 spec_id: STORY-0321
+agreed_id: STORY-22
 title: GitLab Connection Configuration
 description: |-
   As a user, I want to configure GitLab connection settings so that AIDA can communicate with my GitLab instance.

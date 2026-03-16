@@ -1,5 +1,6 @@
 id: ca86240c-1723-4d10-bb55-527e92211bd0
 spec_id: STORY-0384
+agreed_id: STORY-15
 title: Enhanced description editor with expand, preview, and markdown help
 description: 'The description editor in the detail panel provides a toolbar with three toggle buttons above the textarea: (1) Expand/Collapse - toggles between compact rows=8 and expanded min-h-50vh mode with resize-y in both modes, (2) Preview - shows live-rendered markdown preview below the textarea using LinkedMarkdown with the same prose classes as view mode, capped at max-h-40vh in compact mode, (3) Help - toggles a compact markdown cheat sheet card with syntax reference for headings, bold, italic, code, lists, links, and spec-ID auto-linking. All three toggles work independently with accent highlighting for active state. Save/Cancel buttons and keyboard shortcuts (Ctrl+Enter, Escape) remain unchanged.'
 status: Completed
@@ -10,7 +11,7 @@ created_at: 2026-02-22T21:30:34.418112889Z
 modified_at: 2026-02-22T21:30:34.418112889Z
 req_type: Story
 tags:
-- web
 - markdown
-- editor
 - ui
+- editor
+- web

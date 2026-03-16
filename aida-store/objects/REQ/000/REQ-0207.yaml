@@ -1,5 +1,6 @@
 id: 75cd3a04-28e1-466b-aec8-a5ee9a855473
 spec_id: REQ-0207
+agreed_id: SPRINT-1
 title: Initial Sprint support and misc features
 description: Initial Sprint support and misc features
 status: Draft
@@ -30,5 +31,5 @@ relationships:
 custom_fields:
   sprint_goal: Clean up baseline
   sprint_number: '1'
-  start_date: 2026-02-20
   end_date: 2026-02-27
+  start_date: 2026-02-20

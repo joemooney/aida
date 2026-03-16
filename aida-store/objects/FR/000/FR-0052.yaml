@@ -1,5 +1,6 @@
 id: c818f849-7ccc-4710-890a-7b2d87df16da
 spec_id: FR-0052
+agreed_id: FR-113
 title: ability to filter based on status, priority
 description: |2
    1. requirements-core/src/models.rs - Added Hash derive to RequirementStatus and RequirementPriority enums to allow them to be used in

@@ -1,5 +1,6 @@
 id: 7b5170c6-97aa-429c-851e-086f89768ccf
 spec_id: REQ-0154
+agreed_id: TASK-10
 title: Stale Data Protection / Conflict Detection
 description: |2-
 

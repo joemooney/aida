@@ -1,5 +1,6 @@
 id: 8811c562-102b-4bc4-9100-bec3d954ca45
 spec_id: FR-0239
+agreed_id: FR-133
 title: Weight/effort field for requirements
 description: |-
   Added optional weight field (f32) to requirements for tracking effort/story points:

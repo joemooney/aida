@@ -1,5 +1,6 @@
 id: ea7462df-21db-4ce3-bcd7-f45f7f7bb3f2
 spec_id: FR-0260
+agreed_id: FR-92
 title: Scaffolding status check command
 description: 'Add CLI command ''aida scaffold status'' (or --check flag) to compare scaffolded artifacts with actual project files. Show: matching files, modified files (with diff), missing files, and extra files not in scaffold.'
 status: Completed

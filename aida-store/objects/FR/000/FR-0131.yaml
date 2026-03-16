@@ -1,5 +1,6 @@
 id: c48b3743-1660-4ba3-bda7-16f98a3c5ab8
 spec_id: FR-0131
+agreed_id: FR-111
 title: Settings/Types configurating custom priorities per type
 description: |2
    Committed and pushed: 5eeb56c - feat: implement type-specific priorities in Add/Edit form

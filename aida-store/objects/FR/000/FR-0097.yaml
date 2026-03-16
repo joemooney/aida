@@ -1,5 +1,6 @@
 id: 3783fc1b-db52-4f46-a2cd-4bd16528957d
 spec_id: FR-0097
+agreed_id: FR-146
 title: Split panel Requirements List view button
 description: |
   In Requirements List to the left of "◀ " and "▶" buttons have a split panel button. This will open a second Requirements List view. This is

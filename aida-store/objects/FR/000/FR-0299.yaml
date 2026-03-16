@@ -1,5 +1,6 @@
 id: d83cc220-7b67-4a6b-b415-288ab914744d
 spec_id: FR-0299
+agreed_id: FR-135
 title: Simple search command for requirements
 description: |-
   Add `aida search` as a simplified, user-friendly search command that wraps `aida grep` with sensible defaults:

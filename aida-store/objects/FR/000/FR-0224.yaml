@@ -1,5 +1,6 @@
 id: 5a4d7c64-5fa3-46d9-be91-4fb656fc2fd3
 spec_id: FR-0224
+agreed_id: FR-149
 title: When you Menu/Open Project and that project is ...
 description: 'When you Menu/Open Project and that project is not registered, go ahead and register it in list of known projects in ~/.config/aida somewhere. '
 status: Draft

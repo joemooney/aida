@@ -1,5 +1,6 @@
 id: 17098630-b92b-4194-ae1f-e7e901e73a35
 spec_id: REQ-0210
+agreed_id: SPRINT-2
 title: 'Web Frontent '
 description: |-
   Sprint 123
@@ -42,7 +43,7 @@ history:
 
       ID should now be sprint?
 custom_fields:
-  sprint_goal: get front end web up to speed
-  sprint_number: '2'
-  start_date: 2026-02-27
   end_date: 2026-03-06
+  sprint_goal: get front end web up to speed
+  start_date: 2026-02-27
+  sprint_number: '2'

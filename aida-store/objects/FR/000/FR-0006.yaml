@@ -1,5 +1,6 @@
 id: eed922f2-03d7-49c6-9c13-31dda6880c27
 spec_id: FR-0006
+agreed_id: FR-63
 title: maintain list of users
 description: For simplicity maintain a list of users. We could have a role associated with features. That would limit whether a user can perform certain actions based on feature and/or requirement type.
 status: Approved

@@ -1,5 +1,6 @@
 id: 295e829b-9bb5-4d84-900d-472fd27e0b4b
 spec_id: FR-0053
+agreed_id: FR-112
 title: ability to filter based on user relationship + name
 description: Ability to filter by a user relationship e.g. (owned-by) and provide a user identifer (name, handler or id)
 status: Draft

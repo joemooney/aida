@@ -1,5 +1,6 @@
 id: 14169326-69bb-441d-8efd-001056ae0708
 spec_id: FR-0350
+agreed_id: FR-123
 title: Change req type to Bug is not changing prefix t...
 description: Change req type to Bug is not changing prefix to BUG
 status: Draft
