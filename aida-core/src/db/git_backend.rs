@@ -217,8 +217,7 @@ impl GitBackend {
 
 impl DatabaseBackend for GitBackend {
     fn backend_type(&self) -> BackendType {
-        // Reuse Yaml variant since we're YAML-based; could add a Git variant later
-        BackendType::Yaml
+        BackendType::Git
     }
 
     fn path(&self) -> &Path {

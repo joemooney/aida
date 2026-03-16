@@ -52,6 +52,8 @@ pub enum BackendType {
     Sqlite,
     /// PostgreSQL database storage
     Postgres,
+    /// Git-backed storage (sharded YAML files in a directory)
+    Git,
 }
 
 impl std::fmt::Display for BackendType {
@@ -60,6 +62,7 @@ impl std::fmt::Display for BackendType {
             BackendType::Yaml => write!(f, "YAML"),
             BackendType::Sqlite => write!(f, "SQLite"),
             BackendType::Postgres => write!(f, "PostgreSQL"),
+            BackendType::Git => write!(f, "Git"),
         }
     }
 }

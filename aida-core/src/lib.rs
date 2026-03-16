@@ -2,6 +2,8 @@ pub mod ai;
 pub mod db;
 pub mod dispenser;
 pub mod export;
+#[cfg(feature = "native")]
+pub mod git_ops;
 pub mod hlc;
 pub mod import;
 pub mod integrations;
