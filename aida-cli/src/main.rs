@@ -106,6 +106,11 @@ fn main() -> Result<()> {
         // User explicitly specified a file path - use it directly
         explicit_path
     } else {
+        // Check for distributed mode config (.aida/config.toml with store_path)
+        if let Some(store_path) = detect_distributed_store() {
+            return handle_git_backend_command(&store_path, &cli.command);
+        }
+
         // Auto-detect: first find the base path, then check migration status
         let initial_path = determine_requirements_path(cli.project.as_deref())?;
 
@@ -611,6 +616,36 @@ fn handle_init_command(no_skills: bool, agent: &str, no_hooks: bool, force: bool
     println!();
 
     Ok(())
+}
+
+/// Detect if the current directory has a distributed store configured.
+/// Walks up from CWD looking for `.aida/config.toml` with a store_path.
+fn detect_distributed_store() -> Option<std::path::PathBuf> {
+    let cwd = std::env::current_dir().ok()?;
+    let config_path = cwd.join(".aida").join("config.toml");
+
+    if !config_path.exists() {
+        return None;
+    }
+
+    let content = std::fs::read_to_string(&config_path).ok()?;
+
+    // Parse store_path from config
+    // Format: store_path = "aida-store"
+    for line in content.lines() {
+        let line = line.trim();
+        if line.starts_with("store_path") {
+            if let Some(val) = line.split('=').nth(1) {
+                let val = val.trim().trim_matches('"').trim_matches('\'');
+                let store_path = cwd.join(val);
+                if store_path.exists() && store_path.is_dir() {
+                    return Some(store_path);
+                }
+            }
+        }
+    }
+
+    None
 }
 
 /// Load or create the distributed dispenser for a git-backed store.
