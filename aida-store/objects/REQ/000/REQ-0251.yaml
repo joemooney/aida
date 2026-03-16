@@ -1,0 +1,11 @@
+id: 6894f779-5de6-4c26-b9f8-a67ae4db55ef
+spec_id: REQ-0251
+title: 'CLI: aida trace list'
+description: 'Add a CLI command to list trace links for a requirement: aida trace list REQ-ID. Shows all code artifacts linked to the requirement with file paths, symbols, line ranges, and artifact types. Also support aida trace list --file PATH to show all requirements traced to a specific file.'
+status: Draft
+priority: Medium
+owner: ''
+feature: 141-traceability
+created_at: 2025-12-11T00:38:10.030743795Z
+modified_at: 2025-12-11T00:38:10.030743795Z
+req_type: Story

@@ -1,0 +1,39 @@
+id: afe27507-684f-4ad3-b80b-39c58d9875e8
+spec_id: FR-0115
+title: When I edit a theme the changes to be reflected globally and reverted if I click cancel
+description: When I edit a theme the changes to be reflected globally and reverted if I click cancel
+status: Draft
+priority: High
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-30T00:13:28.940830659Z
+created_by: Unknown User
+modified_at: 2026-02-22T20:02:48.089533749Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
+  created_at: 2025-11-30T00:13:28.940847342Z
+  created_by: Unknown User
+history:
+- id: 6f300f6c-90c5-4871-bc97-35a9fdeddb5f
+  author: Unknown User
+  timestamp: 2025-11-30T00:13:36.506815796Z
+  changes:
+  - field_name: title
+    old_value: ''
+    new_value: When I edit a theme the changes to be reflected globally and reverted if I click cancel
+- id: 4ce2e92d-157b-4927-9932-d49e08f26da9
+  author: ''
+  timestamp: 2025-11-30T02:14:08.718897374Z
+  changes:
+  - field_name: priority
+    old_value: Medium
+    new_value: High
+- id: a35e0e22-68c7-4a26-8469-60ddb295da9c
+  author: Joe Mooney
+  timestamp: 2025-12-21T00:18:51.747159549Z
+  changes:
+  - field_name: title
+    old_value: When I edit a theme the changes to be reflected globally and reverted if I click cancel
+    new_value: When I edit a theme the changes to be reflected globally and reverted if I click cancel ddddddddddddddddddddddddddddddddddddd

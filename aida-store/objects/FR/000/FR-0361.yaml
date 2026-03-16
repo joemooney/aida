@@ -1,0 +1,17 @@
+id: 919b82ef-04e2-4cec-a52f-7a206e28b033
+spec_id: FR-0361
+title: Active filter chips with individual removal
+description: Active filters display as accent-colored chips below the filter dropdowns showing label:value pairs. Each chip has an X button to remove that specific filter. A 'Clear all' text button appears when 2+ filters are active. Replaces the previous 'Clear (N)' button.
+status: Completed
+priority: Low
+owner: joe
+feature: 209-Uncategorized
+created_at: 2026-02-21T06:14:50.650574701Z
+modified_at: 2026-02-21T06:15:06.429259159Z
+req_type: Functional
+comments:
+- id: 97dbc441-ea22-4805-b699-276c503a44ee
+  author: joe
+  content: 'Implemented in commit a3e87ad. File: KanbanFilterBar.tsx. Plan: docs/plans/2026-02-20-tag-filtering-structured-search-markdown.md'
+  created_at: 2026-02-21T06:15:06.429248110Z
+  modified_at: 2026-02-21T06:15:06.429248110Z

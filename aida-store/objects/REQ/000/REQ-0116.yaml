@@ -1,0 +1,38 @@
+id: 5e4ad9bb-99fc-41ab-9fc6-eb5692964b44
+spec_id: REQ-0116
+title: Bug prefix not being used
+description: 'Bug prefix not being used, it is using REQ. Same for Epic/Story/Task/Spike use those as prefixes for those types. '
+status: Completed
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-29T19:28:54.366446721Z
+created_by: Unknown User
+modified_at: 2025-12-07T17:08:41.963041864Z
+req_type: Spike
+relationships:
+- rel_type: Parent
+  target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
+  created_at: 2025-11-29T19:29:03.733401253Z
+  created_by: Unknown User
+history:
+- id: 94657d51-c990-498a-9be9-92b8c29160bc
+  author: Unknown User
+  timestamp: 2025-11-30T00:34:02.932496272Z
+  changes:
+  - field_name: description
+    old_value: Bug prefix not being used, it is using REQ
+    new_value: 'Bug prefix not being used, it is using REQ. Same for Epic/Story/Task/Spike use those as prefixes for those types. '
+  - field_name: type
+    old_value: Bug
+    new_value: Spike
+  - field_name: spec_id
+    old_value: REQ-0105
+    new_value: REQ-0116
+- id: b9fdec36-4472-4c77-b238-999679bd3cc9
+  author: Joe Mooney
+  timestamp: 2025-12-07T17:08:41.963044181Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed

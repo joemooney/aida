@@ -1,0 +1,41 @@
+id: be94a2c7-6ab1-42d9-822b-d7d841b4c6f0
+spec_id: FR-0077
+title: Agile Development support
+description: |+
+  flexible system with Agile support via templates:
+
+    New Requirement Types Added:
+    - Epic (EPIC) - Large body of work spanning multiple sprints
+    - Story (STORY) - User story completable in a single sprint
+    - Task (TASK) - Technical unit of work for a story
+    - Spike (SPIKE) - Time-boxed research/exploration
+
+    Templates Created in ~/.config/aida/templates/:
+
+    1. agile.yaml - Full Agile workflow:
+      - Epic: Backlog → In Progress → Done
+      - Story: Backlog → Ready → In Progress → Review → Done (+ Story Points, Acceptance Criteria fields)
+      - Task: To Do → In Progress → Done (+ Hours Estimate field)
+      - Spike: Backlog → In Progress → Completed (+ Time Box, Findings fields)
+      - Bug: Open → Confirmed → In Progress → Fixed → Closed (+ Severity, Steps to Reproduce)
+      - Pre-configured features: Product Backlog, Sprint 1, Sprint 2
+    2. traditional.yaml - Classic requirements engineering:
+      - FR, NFR, SR, UR with Draft → Under Review → Approved → Implemented → Verified → Rejected
+      - Change Request with reason/impact fields
+
+    GUI Updates:
+    - Type dropdown now has a separator between traditional and Agile types
+    - All filter controls include the new types
+
+    To create an Agile project: Menu → New Project → select "agile" template.
+
+status: Draft
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-28T05:52:20.673612400Z
+modified_at: 2025-11-28T05:52:20.673612400Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: bb81e51e-dd32-48ef-9806-cf26a09643f5

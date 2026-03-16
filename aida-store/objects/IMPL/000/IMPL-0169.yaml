@@ -1,0 +1,55 @@
+id: 58f1be6d-b5c8-4304-b453-e495a13cadd5
+spec_id: IMPL-0169
+prefix_override: IMPL
+title: Scaffolding generates AIDA-aware CLAUDE.md with /aida-capture skill
+description: |2
+    Implemented (FR-0168)
+
+    1. Updated Scaffolding CLAUDE.md
+
+    The generated CLAUDE.md now includes:
+
+    Requirements Management Section:
+    - Explicit instruction: "Do NOT maintain a separate REQUIREMENTS.md file"
+    - CLI commands reference (list, show, add, edit, comment)
+    - During Development guidelines (update status, add comments, create child reqs)
+    - Session workflow guidance pointing to /aida-capture
+
+    Updated Skills Section:
+    - /aida-req - Add new requirements
+    - /aida-implement - Implement with traceability
+    - /aida-capture - Session-end review (new)
+
+    2. Created /aida-capture Skill
+
+    Located at .claude/skills/aida-capture.md:
+
+    - Purpose: Safety net for conversational workflows
+    - When: End of session, or when working without explicit /aida-req calls
+    - What it does:
+      a. Scans conversation for implemented features/fixes
+      b. Checks against requirements database
+      c. Presents summary: Missing, Outdated, Already Captured
+      d. Prompts user to add/update requirements
+      e. Executes captures with aida CLI
+status: Completed
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-02T04:26:05.217309050Z
+created_by: Joe Mooney
+modified_at: 2025-12-02T04:26:33.915926180Z
+req_type: Task
+relationships:
+- rel_type: Parent
+  target_id: 6e872298-1951-4290-a1e4-3d3303151a45
+  created_at: 2025-12-02T04:26:09.167768664Z
+  created_by: Joe Mooney
+history:
+- id: 0bb5626f-1c40-4a7a-9ea8-64cc0f626ede
+  author: Joe Mooney
+  timestamp: 2025-12-02T04:26:33.915922719Z
+  changes:
+  - field_name: title
+    old_value: ''
+    new_value: Scaffolding generates AIDA-aware CLAUDE.md with /aida-capture skill

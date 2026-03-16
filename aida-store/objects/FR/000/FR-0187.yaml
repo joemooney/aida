@@ -1,0 +1,39 @@
+id: 9f45cb71-a6f7-40bb-b951-c3f5b90fca9b
+spec_id: FR-0187
+title: Settings Members Tab with Users and Teams Sub-tabs
+description: |-
+  Add a Members tab to the Settings panel with sub-tabs for Users and Teams:
+
+  **Members Tab Structure:**
+  - Parent tab called 'Members' in Settings
+  - Sub-tab: 'Users' - manage individual users (existing user management)
+  - Sub-tab: 'Teams' - manage teams
+
+  **Teams Sub-tab Features:**
+  - List all teams with name, member count, parent team
+  - Create new team (name, description, parent team selector)
+  - Edit existing team
+  - Delete team (with confirmation, handle nested teams)
+  - Assign/remove members from team
+  - Set parent team for hierarchy
+
+  This reorganizes user management under a Members umbrella alongside team management.
+status: Completed
+priority: Medium
+owner: ''
+feature: 102-Teams
+created_at: 2025-12-03T02:51:46.995533652Z
+modified_at: 2025-12-03T03:12:31.434229310Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: b6911b4c-a0d4-46ee-b87d-c94de49fcd57
+  created_at: 2025-12-03T02:51:46.995551063Z
+history:
+- id: 2ac032da-6e40-4e70-b2ea-8400db19d142
+  author: Joe Mooney
+  timestamp: 2025-12-03T03:12:31.434235838Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved

@@ -1,0 +1,104 @@
+id: dda2b1f7-70b5-485c-8caa-36b31e2aaa6e
+spec_id: FR-0285
+title: '''s'' quick pick, if you type the first letter (n...'
+description: |-
+  Status quick-pick keyboard shortcut: When the user presses 's' to open the status picker, typing the first letter of a status name (case-insensitive) should:
+
+  1. **Single match**: If only one status starts with that letter, immediately set the status and close the picker
+  2. **Multiple matches**: If multiple statuses share the first letter, highlight the first matching option. Pressing the same letter cycles to the next match. Pressing Enter confirms the highlighted selection
+  3. **No match**: Ignore the keypress (no error feedback needed)
+  4. **Cancel**: Escape closes the picker without changes
+
+  Available statuses: draft, approved, in-progress, completed, rejected (currently no first-letter conflicts exist).
+
+  This is a keyboard-only shortcut - no textbox or filter input field is displayed.
+status: Completed
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-13T18:08:20.811808894Z
+created_by: Unknown User
+modified_at: 2025-12-14T06:43:39.786535688Z
+req_type: Functional
+comments:
+- id: e6365d61-08f0-4e49-a1a9-97adee8453f8
+  author: joe
+  content: Implemented first-letter keyboard navigation for status picker in show_quick_change_popup() at aida-gui/src/app.rs:20516-20576. Added quick_change_last_letter field to track cycling between multiple matches.
+  created_at: 2025-12-14T06:43:39.786525677Z
+  modified_at: 2025-12-14T06:43:39.786525677Z
+history:
+- id: ba64f801-a46b-4b39-8bf3-34aa26bece45
+  author: Joe Mooney
+  timestamp: 2025-12-14T06:38:34.814165852Z
+  changes:
+  - field_name: description
+    old_value: '''s'' quick pick, if you type the first letter (not j or k) of a Status then automatically set the status to that, so ''s d'' will set to draft (no need for a textbox, just a shortcut if the user types the first letter of a Status then accept that status if there is only one, if there is more than one starting with that letter then highlight that one and if the user then presses ENTER that one is chose, if they enter the same letter again then move on to the second occurence.'
+    new_value: |-
+      Status quick-pick keyboard shortcut: When the user presses 's' to open the status picker, typing the first letter of a status name (case-insensitive) should:
+
+      1. **Single match**: If only one status starts with that letter, immediately set the status and close the picker
+      2. **Multiple matches**: If multiple statuses share the first letter, highlight the first matching option. Pressing the same letter cycles to the next match. Pressing Enter confirms the highlighted selection
+      3. **No match**: Ignore the keypress (no error feedback needed)
+      4. **Cancel**: Escape closes the picker without changes
+
+      Available statuses: draft, approved, in-progress, completed, rejected (currently no first-letter conflicts exist).
+
+      This is a keyboard-only shortcut - no textbox or filter input field is displayed.
+- id: f4292aff-667a-42d1-bbc1-02a6f9a90f34
+  author: Joe Mooney
+  timestamp: 2025-12-14T06:39:16.030975024Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: d6c6f231-518c-428e-8ade-ee4bab0f59e3
+  author: CLI
+  timestamp: 2025-12-14T06:43:31.511021015Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+ai_evaluation:
+  evaluation:
+    quality_score: 5
+    issues:
+    - type: vague_language
+      severity: medium
+      text: The title is truncated and doesn't clearly convey the feature being described
+      suggestion: 'Use a complete, descriptive title such as ''Status quick-pick: single-letter keyboard shortcut selection'''
+    - type: incomplete
+      severity: medium
+      text: Does not specify which statuses exist in the system or their first letters, making it unclear if there are conflicts
+      suggestion: List the available statuses (draft, approved, in-progress, completed, rejected) and identify any first-letter conflicts (none currently)
+    - type: ambiguous
+      severity: medium
+      text: Behavior when multiple statuses share the same first letter is described but not clearly specified - what visual feedback shows the highlighted option?
+      suggestion: 'Define the UI feedback mechanism: e.g., ''highlight the matching status option in the picker list'' or ''show a filtered list'''
+    - type: incomplete
+      severity: low
+      text: No mention of how to cancel the operation or what happens if an invalid letter is pressed
+      suggestion: Add behavior for Escape key to cancel, and specify that non-matching letters are ignored or show an error
+    - type: incomplete
+      severity: low
+      text: Case sensitivity is not specified - should 'D' work the same as 'd'?
+      suggestion: Specify that letter matching should be case-insensitive
+    strengths:
+    - Describes the interaction pattern clearly with concrete examples ('s d' for draft)
+    - Addresses the edge case of multiple statuses starting with the same letter
+    - Follows the existing vim-style keyboard navigation pattern in the project
+    - Explicitly states no textbox is needed, clarifying the minimal UI approach
+    suggested_improvements:
+      description: |-
+        Status quick-pick keyboard shortcut: When the user presses 's' to open the status picker, typing the first letter of a status name (case-insensitive) should:
+
+        1. **Single match**: If only one status starts with that letter, immediately set the status and close the picker
+        2. **Multiple matches**: If multiple statuses share the first letter, highlight the first matching option. Pressing the same letter cycles to the next match. Pressing Enter confirms the highlighted selection
+        3. **No match**: Ignore the keypress (no error feedback needed)
+        4. **Cancel**: Escape closes the picker without changes
+
+        Available statuses: draft, approved, in-progress, completed, rejected (currently no first-letter conflicts exist).
+
+        This is a keyboard-only shortcut - no textbox or filter input field is displayed.
+      rationale: The improved description structures the behavior into clear, testable scenarios, handles edge cases explicitly, specifies case-insensitivity, and documents the current status list for implementation context
+  evaluated_at: 2025-12-14T06:36:33.075604844Z
+  content_hash: 8dc3392ca2d99f5c

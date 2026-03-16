@@ -9169,10 +9169,10 @@ requirements:
     created_at: 2025-12-07T17:00:49.761868107Z
     created_by: Joe Mooney
   custom_fields:
-    start_date: 2026-02-20
-    sprint_goal: Clean up baseline
-    sprint_number: '1'
     end_date: 2026-02-27
+    sprint_goal: Clean up baseline
+    start_date: 2026-02-20
+    sprint_number: '1'
 - id: 49b91b7d-77d3-4717-af8a-921ab4e05685
   spec_id: EPIC-0208
   title: Epic123
@@ -9277,9 +9277,9 @@ requirements:
         ID should now be sprint?
   custom_fields:
     end_date: 2026-03-06
-    sprint_goal: get front end web up to speed
     start_date: 2026-02-27
     sprint_number: '2'
+    sprint_goal: get front end web up to speed
 - id: d1e58dd4-fd26-437a-8856-2cf0d4f2adda
   spec_id: REQ-0211
   title: Bug 123
@@ -14647,8 +14647,8 @@ requirements:
   modified_at: 2026-02-22T18:19:54.564209314Z
   req_type: Bug
   tags:
-  - bugfix
   - frontend
+  - bugfix
   relationships:
   - rel_type: Parent
     target_id: e88eb8dd-1ed5-4076-9c9e-eeaac44dd994
@@ -14665,8 +14665,8 @@ requirements:
   modified_at: 2026-02-22T18:23:02.151416315Z
   req_type: Story
   tags:
-  - frontend
   - react
+  - frontend
   relationships:
   - rel_type: Parent
     target_id: e88eb8dd-1ed5-4076-9c9e-eeaac44dd994
@@ -14683,8 +14683,8 @@ requirements:
   modified_at: 2026-02-22T18:23:12.714451542Z
   req_type: Bug
   tags:
-  - tooling
   - docs
+  - tooling
 - id: e3421e3b-155b-4fca-8429-a8e0653d0f9d
   spec_id: BUG-0381
   title: 'Web UI shows stale data: v2 API path does not call check_reload()'
@@ -14697,8 +14697,8 @@ requirements:
   modified_at: 2026-02-22T18:27:52.675485513Z
   req_type: Bug
   tags:
-  - server
   - backend
+  - server
   comments:
   - id: e583f777-10c9-4442-b9d9-49345b479392
     author: joe
@@ -14740,10 +14740,10 @@ requirements:
   modified_at: 2026-02-22T20:35:56.318350326Z
   req_type: Bug
   tags:
-  - api
   - bugfix
-  - web
   - cache
+  - web
+  - api
 - id: ca86240c-1723-4d10-bb55-527e92211bd0
   spec_id: STORY-0384
   title: Enhanced description editor with expand, preview, and markdown help
@@ -14756,10 +14756,10 @@ requirements:
   modified_at: 2026-02-22T21:30:34.418112889Z
   req_type: Story
   tags:
-  - web
+  - editor
   - ui
   - markdown
-  - editor
+  - web
 - id: 3a4d90f3-7b60-4eb7-a32d-15b20fbbb679
   spec_id: FR-0385
   title: 'Web UI Skill Invocation with SSE streaming (pilot: compiler-warnings)'
@@ -14784,8 +14784,8 @@ requirements:
   req_type: Functional
   tags:
   - sse
-  - web
   - skills
+  - web
   relationships:
   - rel_type: Parent
     target_id: c9697f28-3a0f-4133-b2e3-9c0dd6220e89
@@ -14808,9 +14808,9 @@ requirements:
   modified_at: 2026-02-23T02:49:30.683744854Z
   req_type: Bug
   tags:
+  - skills
   - web
   - ux
-  - skills
 - id: 433f2b0d-0f82-4e32-9b4a-5efd3738d1cf
   spec_id: BUG-0387
   title: 'Fix: Advanced filter blank screen from duplicate React in Vite bundle'
@@ -14828,8 +14828,8 @@ requirements:
   modified_at: 2026-02-23T02:49:37.994722750Z
   req_type: Bug
   tags:
-  - react
   - vite
+  - react
   - web
 - id: 36d3908b-cfc6-490e-83e2-76ed28927ff3
   spec_id: TASK-0388
@@ -14844,8 +14844,8 @@ requirements:
   req_type: Task
   tags:
   - git
-  - docker
   - infrastructure
+  - docker
   comments:
   - id: f2fcc2f8-6c33-443e-bc80-8b6293fdfdbc
     author: joe
@@ -14865,8 +14865,8 @@ requirements:
   req_type: Bug
   tags:
   - docker
-  - server
   - bug-fix
+  - server
   comments:
   - id: c951820f-912f-4a61-8b43-ffd3117a3055
     author: joe
@@ -15300,8 +15300,8 @@ reaction_definitions:
   description: Please Note
   built_in: false
 meta_counters:
-  $USER: 7
   $TEAM: 4
+  $USER: 7
 type_definitions:
 - name: Functional
   display_name: Functional

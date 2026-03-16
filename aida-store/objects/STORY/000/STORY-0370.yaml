@@ -1,0 +1,39 @@
+id: d3c0e160-3431-4de7-b1c6-946ac183555a
+spec_id: STORY-0370
+title: 'Queue: Dashboard focus widget'
+description: |-
+  Queue: Dashboard Focus Widget
+
+  Show a compact "My Queue" widget on the Dashboard page, giving at-a-glance visibility into what the user is focused on.
+
+  **Widget Layout:**
+  - Card titled "My Focus" or "My Queue"
+  - Shows top 3-5 items from the user's queue with spec-id, title, and status pill
+  - Item count badge showing total queue depth
+  - "View All" link navigates to /queue
+  - If queue is empty: subtle "No items in queue" message
+
+  **Placement:**
+  - Between the Sprint Summary section and the charts grid
+  - Full-width card, same visual style as SprintSummary
+
+  **Data Source:**
+  - Uses /api/v2/queue/:user_id/summary endpoint
+  - User determined by configured AIDA_USER or default
+
+  **Acceptance Criteria:**
+  1. Widget appears on Dashboard when queue has items
+  2. Shows top items in queue order
+  3. "View All" navigates to full queue view
+  4. Clicking an item opens its detail
+status: Approved
+priority: Medium
+owner: joe
+feature: 218-Uncategorized
+created_at: 2026-02-21T06:50:11.891434773Z
+modified_at: 2026-02-21T06:50:11.891434773Z
+req_type: Story
+relationships:
+- rel_type: Parent
+  target_id: 7622e213-28e8-4401-970e-a55111e7fc2f
+  created_at: 2026-02-21T06:50:27.990402260Z

@@ -1,0 +1,102 @@
+id: 177c476f-2748-4c88-acf8-5c45ff4a4d24
+spec_id: FR-0319
+title: Timeline view does not scroll with down/up arrow
+description: |-
+  Timeline view should auto-scroll to keep selected requirement visible during keyboard navigation.
+
+  Current behavior: When navigating through requirements using up/down arrow keys (or j/k vim-style), the selected requirement can move outside the visible viewport while the scrollbar position remains unchanged.
+
+  Expected behavior: When keyboard navigation moves the selection outside the currently visible area, the Timeline view should automatically scroll to ensure the selected requirement remains visible. This applies to both upward and downward navigation.
+
+  Acceptance criteria:
+  - Pressing down arrow or 'j' when selection is at bottom of visible area scrolls view down
+  - Pressing up arrow or 'k' when selection is at top of visible area scrolls view up
+  - Selected requirement should always be fully visible after navigation
+  - Scroll behavior should be smooth and not jarring
+status: Completed
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-14T06:52:28.542948239Z
+created_by: Joe Mooney
+modified_at: 2025-12-14T07:08:46.537768666Z
+req_type: Functional
+comments:
+- id: 2e9c6540-9f4c-4a43-baed-12a68e7bcf67
+  author: joe
+  content: Implemented auto-scroll in Timeline view at aida-gui/src/app.rs. Added timeline_scroll_to_event field. When keyboard navigation changes selection, scroll_to_me() centers the selected event in the list.
+  created_at: 2025-12-14T07:08:46.537758664Z
+  modified_at: 2025-12-14T07:08:46.537758664Z
+history:
+- id: 465a8024-7ce2-4a3c-8c4b-5f5ec4502d8d
+  author: Joe Mooney
+  timestamp: 2025-12-14T07:00:39.973722356Z
+  changes:
+  - field_name: description
+    old_value: "Timeline view does not scroll with down/up arrow\n\nwe can navigate down but the scrollbar does not follow us down so that the selected req is not shown on the screen. "
+    new_value: |-
+      Timeline view should auto-scroll to keep selected requirement visible during keyboard navigation.
+
+      Current behavior: When navigating through requirements using up/down arrow keys (or j/k vim-style), the selected requirement can move outside the visible viewport while the scrollbar position remains unchanged.
+
+      Expected behavior: When keyboard navigation moves the selection outside the currently visible area, the Timeline view should automatically scroll to ensure the selected requirement remains visible. This applies to both upward and downward navigation.
+
+      Acceptance criteria:
+      - Pressing down arrow or 'j' when selection is at bottom of visible area scrolls view down
+      - Pressing up arrow or 'k' when selection is at top of visible area scrolls view up
+      - Selected requirement should always be fully visible after navigation
+      - Scroll behavior should be smooth and not jarring
+- id: 8cf194ad-7522-4611-9eeb-84601e64274c
+  author: Joe Mooney
+  timestamp: 2025-12-14T07:00:48.844362509Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: cdc2efcf-7415-40c6-974c-ec92381d61b7
+  author: CLI
+  timestamp: 2025-12-14T07:08:38.429220578Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+ai_evaluation:
+  evaluation:
+    quality_score: 5
+    issues:
+    - type: incomplete
+      severity: medium
+      text: Does not specify which keys should control scrolling behavior (j/k vim-style or arrow keys or both)
+      suggestion: Clarify whether this applies to arrow keys, vim-style j/k navigation, or both
+    - type: missing_criteria
+      severity: medium
+      text: No acceptance criteria defined for when scrolling should occur (e.g., when selection moves outside visible area)
+      suggestion: 'Add acceptance criteria: ''When the selected requirement moves outside the visible scroll area, the view should automatically scroll to keep the selection visible'''
+    - type: vague_language
+      severity: low
+      text: Phrase 'does not follow us down' is informal and could be more precise
+      suggestion: Use precise terminology like 'the viewport does not scroll to keep the selected item visible'
+    - type: incomplete
+      severity: low
+      text: Does not mention behavior for scrolling up when navigating upward
+      suggestion: Explicitly state that both upward and downward navigation should trigger scroll-to-visible behavior
+    strengths:
+    - Clearly identifies the specific view affected (Timeline view)
+    - Describes the observable problem behavior
+    - Explains the user impact (selected req not visible)
+    suggested_improvements:
+      description: |-
+        Timeline view should auto-scroll to keep selected requirement visible during keyboard navigation.
+
+        Current behavior: When navigating through requirements using up/down arrow keys (or j/k vim-style), the selected requirement can move outside the visible viewport while the scrollbar position remains unchanged.
+
+        Expected behavior: When keyboard navigation moves the selection outside the currently visible area, the Timeline view should automatically scroll to ensure the selected requirement remains visible. This applies to both upward and downward navigation.
+
+        Acceptance criteria:
+        - Pressing down arrow or 'j' when selection is at bottom of visible area scrolls view down
+        - Pressing up arrow or 'k' when selection is at top of visible area scrolls view up
+        - Selected requirement should always be fully visible after navigation
+        - Scroll behavior should be smooth and not jarring
+      rationale: The improved description clarifies the exact navigation keys involved, distinguishes current vs expected behavior, and provides testable acceptance criteria that align with the project's vim-style keyboard navigation patterns
+  evaluated_at: 2025-12-14T07:00:07.504973678Z
+  content_hash: ac3ce63ce513f155

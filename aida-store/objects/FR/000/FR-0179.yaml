@@ -1,0 +1,41 @@
+id: 4fe62030-5afa-4115-bf45-691f4d122e1f
+spec_id: FR-0179
+prefix_override: FR
+title: CHANGELOG.md maintenance
+description: |-
+  The skill shall maintain a CHANGELOG.md file following Keep a Changelog format.
+
+  ## Format
+  Follow https://keepachangelog.com/en/1.0.0/ format:
+  - [Unreleased] section for pending changes
+  - Version sections with date: ## [1.2.3] - 2025-12-02
+  - Categories: Added, Changed, Deprecated, Removed, Fixed, Security
+
+  ## Operations
+  1. Read existing CHANGELOG.md (or create if missing)
+  2. Move [Unreleased] content to new version section
+  3. Add new [Unreleased] header
+  4. Map requirement types to changelog categories
+
+  ## Mapping
+  - Functional -> Added
+  - Bug -> Fixed
+  - ChangeRequest -> Changed
+  - Epic/Story/Task -> Added (features)
+
+  ## Acceptance Criteria
+  - Create CHANGELOG.md if not exists
+  - Preserve existing content
+  - Add new version section with date
+  - Map requirements to appropriate categories
+status: Draft
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-02T06:10:08.633649817Z
+modified_at: 2025-12-02T06:10:08.633649817Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 5cd0934b-a782-40f3-bd96-0a26403db404
+  created_at: 2025-12-02T06:10:08.633692028Z

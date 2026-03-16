@@ -1,0 +1,35 @@
+id: 9aec2046-225d-40e4-aadf-609045e8ab45
+spec_id: FR-0093
+title: Open Additional Requirements List view (split panel)
+description: Abilty to have more than one Requirements List views open and drag requirements between, creating a relationship determined by the view to which you drag the relationship to.
+status: Draft
+priority: High
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-29T00:32:45.333241402Z
+modified_at: 2025-11-30T06:46:39.167748172Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 5a09caba-1c81-4c8c-bc18-48f677c205b4
+  created_at: 2025-11-29T01:23:19.372658881Z
+  created_by: '@joe'
+- rel_type: Child
+  target_id: 2fa72f4a-8d65-4197-89ea-cc462ca32023
+  created_at: 2025-11-29T01:51:21.249120875Z
+  created_by: '@joe'
+history:
+- id: 180ec1e9-b2b1-4ac1-bda1-c269236ea9e7
+  author: '@joe'
+  timestamp: 2025-11-29T01:51:54.049977092Z
+  changes:
+  - field_name: title
+    old_value: Open Additions Requirements List view
+    new_value: Open Additional Requirements List view (split panel)
+- id: 9da6d8d1-3a44-4ed5-9061-fee08a610c52
+  author: ''
+  timestamp: 2025-11-30T06:46:39.167750741Z
+  changes:
+  - field_name: priority
+    old_value: Medium
+    new_value: High

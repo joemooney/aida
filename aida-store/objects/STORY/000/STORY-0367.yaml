@@ -1,0 +1,46 @@
+id: c5a68e3e-80f7-4c4b-94b8-f2c02331bb6a
+spec_id: STORY-0367
+title: 'Queue: REST API endpoints'
+description: |-
+  Queue: REST API Endpoints
+
+  Expose queue operations through the REST API so the web dashboard and external tools can manage queues.
+
+  **Endpoints:**
+
+  GET    /api/v2/queue/:user_id          — List queue entries for a user (sorted by position)
+  POST   /api/v2/queue/:user_id          — Add item to queue { requirement_id, position?, note? }
+  DELETE /api/v2/queue/:user_id/:req_id  — Remove item from queue
+  PATCH  /api/v2/queue/:user_id/:req_id  — Update position or note
+  POST   /api/v2/queue/:user_id/reorder  — Bulk reorder { items: [{ requirement_id, position }] }
+  GET    /api/v2/queue/:user_id/summary  — Queue summary (count, top 3 items) for dashboard widget
+
+  **Query Parameters:**
+  - ?include_completed=true — include completed items (default: false, auto-filtered)
+  - ?limit=N — pagination
+
+  **Authorization Notes (future):**
+  - Any authenticated user can read any queue (team visibility)
+  - Only queue owner can reorder/remove
+  - Any team member can add items to any queue (inbox semantics)
+  - added_by field tracks who pushed the item
+
+  **Response Format:**
+  Returns queue entries enriched with requirement summary (title, status, priority, spec_id) to avoid N+1 lookups.
+
+  **Acceptance Criteria:**
+  1. All CRUD endpoints functional
+  2. Auto-filters completed items unless explicitly requested
+  3. Reorder endpoint handles bulk position updates atomically
+  4. Returns enriched requirement data with each entry
+status: Approved
+priority: High
+owner: joe
+feature: 215-Uncategorized
+created_at: 2026-02-21T06:49:39.758002534Z
+modified_at: 2026-02-21T06:49:39.758002534Z
+req_type: Story
+relationships:
+- rel_type: Parent
+  target_id: 7622e213-28e8-4401-970e-a55111e7fc2f
+  created_at: 2026-02-21T06:50:27.601584830Z

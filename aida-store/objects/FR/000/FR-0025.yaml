@@ -1,0 +1,16 @@
+id: 7897d5c8-0159-4920-8ce4-0bc29c6df517
+spec_id: FR-0025
+title: user guide should have requirements best practices
+description: |-
+  Put a good primer into the User Guide as to what constitutes a good requirements and what are industry best practices.
+  We may want to identify some conventions that was can opt-in/opt-out and see if we can enforce.
+status: Approved
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-26T22:15:57.031832023Z
+modified_at: 2026-03-01T18:40:16.354031127Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 5a8cda55-badf-48c6-82c9-b9ea53f3f69f

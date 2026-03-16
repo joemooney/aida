@@ -1,0 +1,17 @@
+id: 5a4d7c64-5fa3-46d9-be91-4fb656fc2fd3
+spec_id: FR-0224
+title: When you Menu/Open Project and that project is ...
+description: 'When you Menu/Open Project and that project is not registered, go ahead and register it in list of known projects in ~/.config/aida somewhere. '
+status: Draft
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-07T19:45:45.384143221Z
+created_by: joe
+modified_at: 2025-12-07T19:45:45.384143221Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 8e4988b4-b850-4f46-ac4d-ed3f1bb93003
+  created_at: 2025-12-07T19:45:45.419077759Z
+  created_by: joe

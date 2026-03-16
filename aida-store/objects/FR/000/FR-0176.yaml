@@ -1,0 +1,36 @@
+id: ba535047-8a69-437a-93ff-c46c961b4623
+spec_id: FR-0176
+prefix_override: FR
+title: Version number detection and bumping
+description: |-
+  The skill shall detect the current version from project files and support semantic version bumping.
+
+  ## Version Sources (in priority order)
+  1. Cargo.toml (Rust projects)
+  2. package.json (Node.js projects)
+  3. pyproject.toml (Python projects)
+  4. VERSION file
+  5. Git tags (v*.*.* pattern)
+
+  ## Bump Types
+  - **major**: Breaking changes (1.0.0 -> 2.0.0)
+  - **minor**: New features (1.0.0 -> 1.1.0)
+  - **patch**: Bug fixes (1.0.0 -> 1.0.1)
+  - **custom**: User-specified version
+
+  ## Acceptance Criteria
+  - Detect version from at least Cargo.toml and package.json
+  - Support major/minor/patch bump selection
+  - Preview version change before applying
+  - Update all relevant version files atomically
+status: Draft
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-02T06:09:39.427662965Z
+modified_at: 2025-12-02T06:09:39.427662965Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 5cd0934b-a782-40f3-bd96-0a26403db404
+  created_at: 2025-12-02T06:09:39.427701668Z

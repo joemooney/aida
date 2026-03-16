@@ -1,0 +1,33 @@
+id: 2a8e60a3-1508-4f47-8ef3-42032ca5332e
+spec_id: STORY-0376
+title: 'Queue: Drag from List/Board view to My Queue sidebar drop target'
+description: |-
+  Allow users to drag a requirement row from List View (or card from Kanban Board) and drop it onto the "My Queue" nav item in the sidebar to add it to their queue.
+
+  **UX Flow:**
+  1. User starts dragging a requirement row/card
+  2. The "My Queue" sidebar item highlights as a valid drop target
+  3. On drop, the requirement is added to the bottom of the queue
+  4. A toast notification confirms: "Added FR-0042 to My Queue"
+  5. The queue item count badge in the sidebar updates immediately
+
+  **Technical Approach:**
+  - Use @dnd-kit with droppable zone on the sidebar "My Queue" nav item
+  - The drag source (List View rows) needs to emit requirement ID on drag
+  - On drop, call POST /api/v2/queue/:user_id with the requirement_id
+  - Invalidate queue queries to update counts and views
+
+  **Edge Cases:**
+  - If the requirement is already in the queue, show toast: "Already in your queue"
+  - Drag visual: ghost row follows cursor, sidebar item shows hover highlight
+status: Draft
+priority: Medium
+owner: joe
+feature: 224-My Queue
+created_at: 2026-02-21T19:18:18.353423552Z
+modified_at: 2026-02-21T19:18:18.353423552Z
+req_type: Story
+relationships:
+- rel_type: Parent
+  target_id: 7622e213-28e8-4401-970e-a55111e7fc2f
+  created_at: 2026-02-21T19:18:25.435049408Z

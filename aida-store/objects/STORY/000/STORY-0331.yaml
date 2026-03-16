@@ -1,0 +1,83 @@
+id: 99e2627a-a24b-427b-84bf-d6fe3f10b608
+spec_id: STORY-0331
+title: Pull GitLab Changes to AIDA
+description: |-
+  As a user, I want to pull GitLab issue changes into AIDA requirements so that AIDA reflects implementation updates.
+
+  ## Acceptance Criteria
+  - [ ] Pull single issue changes into AIDA requirement
+  - [ ] Batch pull multiple issues
+  - [ ] Map GitLab fields to AIDA fields
+  - [ ] Add history entry documenting the sync
+  - [ ] Handle conflicts (AIDA modified since last sync)
+  - [ ] Preview changes before applying
+  - [ ] Update sync state after successful pull
+
+  ## Pull Behavior
+  ```
+  1. Check sync state (detect if AIDA modified)
+  2. If conflict, require resolution first
+  3. Fetch current GitLab issue data
+  4. Apply field mappings (GitLab → AIDA)
+  5. Update AIDA requirement
+  6. Add history entry
+  7. Update sync state with new hashes
+  ```
+
+  ## Field Sync Rules
+  | GitLab Change | AIDA Action |
+  |---------------|-------------|
+  | Title changed | Update title |
+  | Description changed | Update description (strip AIDA header) |
+  | State → closed | Status → Completed (or Rejected based on label) |
+  | State → opened | Status → InProgress |
+  | Labels changed | Update priority/type if mapped labels changed |
+  | Assignee changed | Update owner (if user matched) |
+  | Milestone changed | Update feature (if milestone matched) |
+
+  ## CLI Support
+  ```bash
+  # Pull specific requirement
+  aida gitlab pull FR-0042
+
+  # Pull all GitLab-modified
+  aida gitlab pull --all
+
+  # Force pull (overwrite AIDA changes)
+  aida gitlab pull FR-0042 --force
+
+  # Dry run (show what would change)
+  aida gitlab pull FR-0042 --dry-run
+  ```
+
+  ## GUI Support
+  - "Pull from GitLab" button in detail view (when GitLab modified)
+  - Dialog showing incoming changes with diff
+  - "Accept" / "Reject" per field (optional)
+  - "Pull All" action in GitLab menu
+
+  ## History Entry
+  ```
+  {timestamp}:
+    By: GitLab Sync
+    Synced from GitLab issue GL-123
+    Fields updated: title, description, status
+    GitLab user: @developer
+  ```
+
+  ## Considerations
+  - Description sync: Handle AIDA header/footer carefully
+  - Status mapping: GitLab has open/closed, AIDA has richer statuses
+  - Labels: May need "best guess" for status from label combinations
+  - Custom fields: Cannot pull (GitLab doesn't have them)
+status: Draft
+priority: High
+owner: joe
+feature: 200-GitLab
+created_at: 2025-12-14T16:34:08.806087789Z
+modified_at: 2025-12-14T16:34:08.806087789Z
+req_type: Story
+relationships:
+- rel_type: Parent
+  target_id: 8f9fd810-24f7-4e52-9077-8ee3d33b1596
+  created_at: 2025-12-14T16:34:59.692163563Z

@@ -1,0 +1,18 @@
+id: de5f6082-92b3-40a8-b344-2603da093438
+spec_id: BUG-0378
+title: 'Fix: Activity page shows no events when userId is default'
+description: 'The Activity page filtered timeline events by author === ''default'', but no requirement has an author literally named ''default''. The queue API treats ''default'' as a special key for the current user''s queue, but timeline events have real author names. Fix: skip the author filter when userId is ''default'' to show all activity in the default view.'
+status: Completed
+priority: Medium
+owner: joe
+feature: 226-Uncategorized
+created_at: 2026-02-22T18:19:54.564209314Z
+modified_at: 2026-02-22T18:19:54.564209314Z
+req_type: Bug
+tags:
+- frontend
+- bugfix
+relationships:
+- rel_type: Parent
+  target_id: e88eb8dd-1ed5-4076-9c9e-eeaac44dd994
+  created_at: 2026-02-22T18:19:58.126352723Z

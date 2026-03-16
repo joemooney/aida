@@ -1,0 +1,15 @@
+id: 9bd414d9-f9b5-4595-8efc-86b8a80f7694
+spec_id: FR-0287
+title: F5 to refresh the view
+description: |-
+  F5 to refresh the view
+
+  I notice that reload does not refresh the req list. F5 should do that and Menu/Reload should imply a refresh. As the size of a database grows we need to be careful about performance, we we need to make sure that we have configurable options in the Settings to help tune performance.
+status: Draft
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-13T18:20:24.641488583Z
+created_by: Joe Mooney
+modified_at: 2025-12-13T18:20:24.641488583Z
+req_type: Functional

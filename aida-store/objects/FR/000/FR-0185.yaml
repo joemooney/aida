@@ -1,0 +1,36 @@
+id: 4dba3fb5-cd72-402c-886a-caf0f8f133d4
+spec_id: FR-0185
+title: Team Data Model
+description: |-
+  Define the Team entity with the following properties:
+  - Team ID (unique identifier)
+  - Team name
+  - Team description (optional)
+  - Parent team reference (for nested teams, nullable)
+  - List of member user IDs
+  - Created/modified timestamps
+
+  Constraints:
+  - A team can have zero or more child teams
+  - A team can have zero or more members
+  - Users can belong to multiple teams
+  - Circular nesting must be prevented
+status: Completed
+priority: Medium
+owner: ''
+feature: 100-Teams
+created_at: 2025-12-03T02:50:36.494058788Z
+modified_at: 2025-12-03T03:12:10.137507342Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: b6911b4c-a0d4-46ee-b87d-c94de49fcd57
+  created_at: 2025-12-03T02:50:36.494072232Z
+history:
+- id: 0baabec6-9f52-4509-9737-a476f7ff9452
+  author: Joe Mooney
+  timestamp: 2025-12-03T03:12:10.137514786Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved

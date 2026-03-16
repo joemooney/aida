@@ -1,0 +1,19 @@
+id: 98f3f5da-697e-48c5-8aac-dcc1c44adcf3
+spec_id: TASK-0364
+title: Auto-reload WAL test - delete me
+description: ''
+status: Rejected
+priority: Medium
+owner: joe
+feature: 212-Uncategorized
+created_at: 2026-02-21T06:31:00.546543961Z
+modified_at: 2026-02-21T06:31:05.986215233Z
+req_type: Task
+history:
+- id: d98233b9-55ac-4706-b95c-a7767975637f
+  author: CLI
+  timestamp: 2026-02-21T06:31:05.986214771Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected

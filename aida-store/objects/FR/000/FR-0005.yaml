@@ -1,0 +1,32 @@
+id: b8621169-8a34-4001-a2e8-936229497c62
+spec_id: FR-0005
+title: Ability to edit existing comment
+description: Even after submitting a comment, we should allow the original comment to text to be updated.
+status: Approved
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-25T21:06:58.790215612Z
+modified_at: 2026-03-01T21:21:19.290960573Z
+req_type: Spike
+relationships:
+- rel_type: Parent
+  target_id: 848840ae-7005-4fab-b478-163f9139359e
+- rel_type: !Custom sprint_assignment
+  target_id: 75cd3a04-28e1-466b-aec8-a5ee9a855473
+  created_at: 2025-12-07T04:03:40.616576177Z
+  created_by: Joe Mooney
+comments:
+- id: 356349e8-c3a9-4238-b13a-4b475b0e3477
+  author: '@joe'
+  content: comment box should be full width
+  created_at: 2025-11-26T06:01:59.059006625Z
+  modified_at: 2025-11-26T06:01:59.059006625Z
+history:
+- id: 24346a24-c17d-47b2-89e0-8c1e7636024f
+  author: Joe Mooney
+  timestamp: 2025-12-07T04:03:40.616586877Z
+  changes:
+  - field_name: sprint_assignment
+    old_value: ''
+    new_value: REQ-0207
