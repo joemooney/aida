@@ -1,5 +1,6 @@
 id: 019cf527-6290-7fc2-9ebe-2075be11a81b
 spec_id: FR-1-001
+agreed_id: FR-256
 title: Distributed architecture support
 description: AIDA supports centralized and distributed deployment modes
 status: Completed
