@@ -18,8 +18,10 @@ use aida_core::{
     get_registry_path,
     seed_meta_requirements,
     ArtifactType,
+    BackendType,
     Cardinality,
     Comment,
+    DatabaseBackend,
     FieldChange,
     FileStatus,
     // GitLab integration
@@ -79,17 +81,30 @@ fn main() -> Result<()> {
         agent,
         no_hooks,
         force,
+        distributed,
+        registry_remote,
     } = &cli.command
     {
-        handle_init_command(*no_skills, agent, *no_hooks, *force)?;
+        if *distributed {
+            handle_init_distributed(registry_remote.as_deref(), *force)?;
+        } else {
+            handle_init_command(*no_skills, agent, *no_hooks, *force)?;
+        }
         return Ok(());
     }
 
     // Determine which requirements file to use
     // trace:REQ-0231 | ai:claude:high
     let requirements_path = if let Some(ref explicit_file) = cli.file {
+        let explicit_path = std::path::PathBuf::from(explicit_file);
+        // If path is a directory, use GitBackend and route through the backend API
+        if explicit_path.is_dir()
+            || (!explicit_path.exists() && explicit_path.extension().is_none())
+        {
+            return handle_git_backend_command(&explicit_path, &cli.command);
+        }
         // User explicitly specified a file path - use it directly
-        std::path::PathBuf::from(explicit_file)
+        explicit_path
     } else {
         // Auto-detect: first find the base path, then check migration status
         let initial_path = determine_requirements_path(cli.project.as_deref())?;
@@ -596,6 +611,396 @@ fn handle_init_command(no_skills: bool, agent: &str, no_hooks: bool, force: bool
     println!();
 
     Ok(())
+}
+
+/// Handle commands routed to the GitBackend (when --file points to a directory).
+fn handle_git_backend_command(
+    store_path: &std::path::Path,
+    command: &Command,
+) -> Result<()> {
+    let backend = aida_core::GitBackend::new(store_path)?;
+
+    match command {
+        Command::List { status, r#type, .. } => {
+            let store = backend.load()?;
+            let reqs: Vec<&Requirement> = store
+                .requirements
+                .iter()
+                .filter(|r| !r.archived)
+                .filter(|r| {
+                    status
+                        .as_ref()
+                        .map(|s| r.effective_status().eq_ignore_ascii_case(s))
+                        .unwrap_or(true)
+                })
+                .filter(|r| {
+                    r#type
+                        .as_ref()
+                        .map(|t| format!("{:?}", r.req_type).eq_ignore_ascii_case(t))
+                        .unwrap_or(true)
+                })
+                .collect();
+
+            if reqs.is_empty() {
+                println!("No requirements found.");
+            } else {
+                println!(
+                    "{:<12} {:<12} {:<10} {:<10} {}",
+                    "ID", "Type", "Status", "Priority", "Title"
+                );
+                println!("{}", "─".repeat(70));
+                for req in &reqs {
+                    println!(
+                        "{:<12} {:<12} {:<10} {:<10} {}",
+                        req.spec_id.as_deref().unwrap_or("-"),
+                        format!("{:?}", req.req_type),
+                        req.effective_status(),
+                        req.effective_priority(),
+                        req.title,
+                    );
+                }
+                println!("\n{} requirements", reqs.len());
+            }
+        }
+        Command::Add {
+            title,
+            description,
+            status,
+            priority,
+            r#type,
+            owner,
+            tags,
+            prefix,
+            ..
+        } => {
+            let mut req = Requirement::new(
+                title
+                    .clone()
+                    .unwrap_or_else(|| "Untitled".to_string()),
+                description
+                    .clone()
+                    .unwrap_or_default(),
+            );
+            if let Some(s) = status {
+                req.set_status_from_str(&capitalize(s));
+            }
+            if let Some(p) = priority {
+                req.set_priority_from_str(&capitalize(p));
+            }
+            if let Some(t) = r#type {
+                if let Ok(rt) = parse_requirement_type(t) {
+                    req.req_type = rt;
+                }
+            }
+            if let Some(o) = owner {
+                req.owner = o.clone();
+            }
+            if let Some(t) = tags {
+                for tag in t.split(',') {
+                    req.tags.insert(tag.trim().to_string());
+                }
+            }
+            if let Some(p) = prefix {
+                req.prefix_override = Some(p.to_uppercase());
+            }
+
+            // Use update_atomically to generate the ID with store's config
+            let store = backend.update_atomically(|store| {
+                let type_prefix = store.get_type_prefix(&req.req_type);
+                store.add_requirement_with_id(
+                    req.clone(),
+                    None,
+                    type_prefix.as_deref(),
+                );
+            })?;
+
+            if let Some(last) = store.requirements.last() {
+                // Write the individual object file
+                aida_core::object_store::write_object(
+                    &store_path.join("objects"),
+                    last,
+                )?;
+                println!(
+                    "Added: {} - {}",
+                    last.spec_id.as_deref().unwrap_or("?"),
+                    last.title
+                );
+            }
+        }
+        Command::Show { id } => {
+            match backend.get_requirement_by_spec_id(id)? {
+                Some(req) => {
+                    println!("{}: {}", "ID".bold(), req.spec_id.as_deref().unwrap_or("-"));
+                    println!("{}: {}", "UUID".bold(), req.id);
+                    println!("{}: {}", "Title".bold(), req.title);
+                    println!("{}: {:?}", "Type".bold(), req.req_type);
+                    println!("{}: {}", "Status".bold(), req.effective_status());
+                    println!("{}: {}", "Priority".bold(), req.effective_priority());
+                    if !req.owner.is_empty() {
+                        println!("{}: {}", "Owner".bold(), req.owner);
+                    }
+                    if !req.tags.is_empty() {
+                        println!("{}: {}", "Tags".bold(), req.tags.iter().cloned().collect::<Vec<_>>().join(", "));
+                    }
+                    if !req.description.is_empty() {
+                        println!("\n{}", req.description);
+                    }
+                }
+                None => {
+                    eprintln!("Requirement not found: {}", id);
+                }
+            }
+        }
+        Command::Db(DbCommand::Info) => {
+            let store = backend.load()?;
+            println!("{}: {}", "Backend".bold(), "Git (sharded YAML)");
+            println!("{}: {}", "Path".bold(), store_path.display());
+            println!("{}: {}", "Requirements".bold(), store.requirements.len());
+            println!("{}: {}", "Users".bold(), store.users.len());
+
+            let file_count = aida_core::object_store::list_objects(&store_path.join("objects"))
+                .map(|l| l.len())
+                .unwrap_or(0);
+            println!("{}: {}", "Object files".bold(), file_count);
+        }
+        _ => {
+            eprintln!(
+                "Command not yet supported for git backend. Supported: list, add, show, db info"
+            );
+            std::process::exit(1);
+        }
+    }
+
+    Ok(())
+}
+
+fn capitalize(s: &str) -> String {
+    let mut c = s.chars();
+    match c.next() {
+        None => String::new(),
+        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+    }
+}
+
+fn parse_requirement_type(s: &str) -> Result<RequirementType> {
+    match s.to_lowercase().as_str() {
+        "functional" | "fr" => Ok(RequirementType::Functional),
+        "non-functional" | "nonfunctional" | "nfr" => Ok(RequirementType::NonFunctional),
+        "system" | "sr" => Ok(RequirementType::System),
+        "user" | "ur" => Ok(RequirementType::User),
+        "bug" => Ok(RequirementType::Bug),
+        "epic" => Ok(RequirementType::Epic),
+        "story" => Ok(RequirementType::Story),
+        "task" => Ok(RequirementType::Task),
+        "spike" => Ok(RequirementType::Spike),
+        "sprint" => Ok(RequirementType::Sprint),
+        "folder" => Ok(RequirementType::Folder),
+        "meta" => Ok(RequirementType::Meta),
+        _ => anyhow::bail!("Unknown requirement type: {}", s),
+    }
+}
+
+fn handle_init_distributed(registry_remote: Option<&str>, force: bool) -> Result<()> {
+    use aida_core::git_ops;
+
+    let cwd = std::env::current_dir()?;
+    let aida_dir = cwd.join(".aida");
+    let store_dir = cwd.join("aida-store");
+
+    // Check if already initialized
+    if aida_dir.join("node.toml").exists() && !force {
+        eprintln!(
+            "{} AIDA distributed mode is already initialized (.aida/node.toml exists).",
+            "!".yellow()
+        );
+        eprintln!("  Use {} to reinitialize.", "--force".bold());
+        return Ok(());
+    }
+
+    println!("{}", "Initializing AIDA in distributed mode...".bold());
+    println!();
+
+    // Create the local git-backed store directory
+    if !store_dir.exists() {
+        std::fs::create_dir_all(&store_dir)?;
+    }
+
+    // Initialize git repo if not already
+    if !git_ops::is_git_repo(&store_dir) {
+        git_ops::init(&store_dir)?;
+        println!(
+            "  {} git repository in {}",
+            "Created".green(),
+            "aida-store/".white().bold()
+        );
+    }
+
+    // Configure git user from global git config or defaults
+    let git_name = git_ops::git_config_get("user.name")
+        .unwrap_or_else(|_| "AIDA User".to_string());
+    let git_email = git_ops::git_config_get("user.email")
+        .unwrap_or_else(|_| "aida@localhost".to_string());
+    git_ops::configure_user(&store_dir, &git_name, &git_email)?;
+
+    // Add remote if specified
+    if let Some(remote) = registry_remote {
+        // Check if remote already exists
+        let has_remote = std::process::Command::new("git")
+            .current_dir(&store_dir)
+            .args(["remote", "get-url", "origin"])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+
+        if !has_remote {
+            std::process::Command::new("git")
+                .current_dir(&store_dir)
+                .args(["remote", "add", "origin", remote])
+                .output()?;
+            println!(
+                "  {} remote: {}",
+                "Added".green(),
+                remote.white().bold()
+            );
+        }
+    }
+
+    // Initialize the git backend (creates objects/ and metadata.yaml)
+    let backend = aida_core::GitBackend::new(&store_dir)?;
+    let store = aida_core::models::RequirementsStore::new();
+    backend.save(&store)?;
+    println!(
+        "  {} {}",
+        "Created".green(),
+        "aida-store/metadata.yaml".white().bold()
+    );
+    println!(
+        "  {} {}",
+        "Created".green(),
+        "aida-store/objects/".white().bold()
+    );
+
+    // Create initial commit
+    git_ops::add(&store_dir, &["metadata.yaml"])?;
+    std::fs::create_dir_all(store_dir.join("objects"))?;
+    // Create a .gitkeep so objects/ is tracked
+    std::fs::write(store_dir.join("objects/.gitkeep"), "")?;
+    git_ops::add(&store_dir, &["objects/.gitkeep"])?;
+
+    // Create .gitignore for node-local files
+    let gitignore_content = "# Node-local state (not shared)\n.aida/\n*.lock\n";
+    std::fs::write(store_dir.join(".gitignore"), gitignore_content)?;
+    git_ops::add(&store_dir, &[".gitignore"])?;
+
+    git_ops::commit(&store_dir, "chore: initialize AIDA distributed store")?;
+
+    // If we have a remote, push the initial commit and register the node
+    if registry_remote.is_some() {
+        let branch = git_ops::current_branch(&store_dir)
+            .unwrap_or_else(|_| "main".to_string());
+
+        // Push initial commit
+        match git_ops::push(&store_dir, "origin", &branch) {
+            Ok(true) => {
+                println!(
+                    "  {} initial commit to remote",
+                    "Pushed".green(),
+                );
+            }
+            Ok(false) => {
+                // Remote has content — pull first then push
+                git_ops::pull_rebase(&store_dir, "origin", &branch)?;
+                git_ops::push(&store_dir, "origin", &branch)?;
+                println!(
+                    "  {} with remote and pushed",
+                    "Synced".green(),
+                );
+            }
+            Err(e) => {
+                eprintln!(
+                    "  {} Failed to push to remote: {}",
+                    "Warning:".yellow(),
+                    e
+                );
+                eprintln!("  You can push later with: cd aida-store && git push -u origin {}", branch);
+            }
+        }
+
+        // Register this node
+        let hostname = hostname::get()
+            .map(|h| h.to_string_lossy().to_string())
+            .unwrap_or_else(|_| "unknown".to_string());
+
+        match git_ops::register_node(&store_dir, 1, &hostname) {
+            Ok(node_id) => {
+                println!(
+                    "  {} node {} ({})",
+                    "Registered".green(),
+                    node_id.to_string().white().bold(),
+                    hostname
+                );
+            }
+            Err(e) => {
+                eprintln!(
+                    "  {} Node registration failed: {}",
+                    "Warning:".yellow(),
+                    e
+                );
+                eprintln!("  You can register later when the remote is available.");
+            }
+        }
+    } else {
+        println!();
+        println!(
+            "  {} No --registry-remote specified.",
+            "Note:".yellow()
+        );
+        println!("  The store is local-only until you add a remote:");
+        println!("    cd aida-store && git remote add origin <url>");
+        println!("    aida init --distributed --registry-remote <url>");
+    }
+
+    // Create .aida/ config in the project root (not the store)
+    std::fs::create_dir_all(&aida_dir)?;
+    let config_content = format!(
+        "# AIDA distributed mode configuration\n\
+         [deployment]\n\
+         mode = \"distributed\"\n\
+         store_path = \"aida-store\"\n"
+    );
+    std::fs::write(aida_dir.join("config.toml"), &config_content)?;
+
+    println!();
+    println!("{}", "AIDA distributed mode initialized".green().bold());
+    println!();
+    println!("  {}:", "Directory layout".bold());
+    println!("    {:<30} Project config", ".aida/config.toml".white().bold());
+    println!("    {:<30} Git-backed object store", "aida-store/".white().bold());
+    println!("    {:<30} Sharded requirement files", "aida-store/objects/".white().bold());
+    println!("    {:<30} Store metadata & counters", "aida-store/metadata.yaml".white().bold());
+    println!();
+    println!("  {}:", "Quick start".bold());
+    println!(
+        "    {}",
+        "aida --file aida-store add --title \"First req\" --type functional".cyan()
+    );
+    println!("    {}", "aida --file aida-store list".cyan());
+    println!("    {}", "ls aida-store/objects/".cyan());
+    println!();
+
+    Ok(())
+}
+
+/// Get a git config value from the global config.
+fn _git_config_get_global(key: &str) -> Result<String> {
+    let output = std::process::Command::new("git")
+        .args(["config", "--global", key])
+        .output()?;
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    } else {
+        anyhow::bail!("git config {} not set", key)
+    }
 }
 
 fn handle_server_command(cmd: &ServerCommand, server_addr: Option<&str>) -> Result<()> {

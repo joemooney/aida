@@ -24,6 +24,7 @@ chrono = { workspace = true }
 regex = { workspace = true }
 dirs = { workspace = true }
 tokio = { workspace = true }
+hostname = "0.4"
 
 # gRPC client dependencies (optional)
 tonic = { workspace = true, optional = true }

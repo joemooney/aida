@@ -53,11 +53,10 @@ pub fn create_backend(
         if path_str.starts_with("postgres://") || path_str.starts_with("postgresql://") {
             return BackendType::Postgres;
         }
-        // Check if path is a directory (git backend) or contains metadata.yaml
-        if path.is_dir() {
-            if path.join("metadata.yaml").exists() || path.join("objects").exists() {
-                return BackendType::Git;
-            }
+        // Check if path is a directory — use git backend
+        // This covers both existing stores (with metadata.yaml) and fresh directories
+        if path.is_dir() || (path.extension().is_none() && !path.exists()) {
+            return BackendType::Git;
         }
         // Infer from file extension
         match path.extension().and_then(|e| e.to_str()) {
