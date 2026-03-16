@@ -4000,3 +4000,48 @@ After thorough analysis of AIDA's current state (166K LOC, 396 requirements, sin
 - `398af09` — docs: add main branch improvements plan and update distributed spec flexibility notes
 - Branch `distributed-architecture` created and pushed
 - Pushed to main
+
+---
+
+### Prompt: Implement Distributed Architecture (Full Stack)
+- **Date**: 2026-03-15
+
+#### Summary
+Full implementation of the distributed architecture on `distributed-architecture` branch, then merged to main. 15 commits, 4300+ lines of new code across 7 new modules.
+
+#### New Modules (aida-core/src/)
+| Module | Lines | Purpose |
+|---|---|---|
+| `hlc.rs` | 228 | Hybrid Logical Clock timestamps |
+| `dispenser.rs` | 590 | Sequence generation: Memory, File (Phase 1), SQLite (Phase 2) |
+| `node.rs` | 455 | Node/User registries, AgreedCounters, Workspace, DeploymentMode |
+| `object_store.rs` | 415 | Sharded YAML file I/O (objects/TYPE/NNN/SPEC-ID.yaml) |
+| `db/git_backend.rs` | 511 | DatabaseBackend trait implementation using object_store |
+| `git_ops.rs` | 501 | Git commands, CAS node registration, merge gate, sync |
+
+#### Key Features Implemented
+1. **UUID v7** — replaced all v4 UUIDs with time-ordered v7 across entire codebase
+2. **HLC timestamps** — Hybrid Logical Clock for causal ordering across nodes
+3. **Sequence Dispenser** — trait with 3 implementations (Memory, File+lockfile, SQLite+UPSERT)
+4. **Node identity** — node/user registries, workspace config, deployment mode (centralized vs distributed)
+5. **Sharded YAML object store** — one file per requirement in objects/TYPE/NNN/SPEC-ID.yaml
+6. **Git-backed DatabaseBackend** — full trait impl with auto-commit on all writes
+7. **Git CAS node registration** — push/pull/retry loop for distributed node ID assignment
+8. **Two-tier IDs** — FR-1-001 (node-namespaced) → FR-1 (agreed, at merge gate)
+9. **Merge gate** — `aida db merge-gate` assigns short agreed IDs to all unmerged objects
+10. **CLI commands** — init --distributed, list, add, show, edit, del, search, comment, rel, sync, export-git, merge-gate, db info
+11. **REST API** — works automatically via create_backend() directory detection
+
+#### Git Scaling Spike
+Tested at 1K/10K/50K/100K YAML files. Results: all daily ops under 0.2s at 100K. Sharded layout 58% faster on incremental push. See `docs/plans/2026-03-15-git-scaling-spike-results.md`.
+
+#### Design Documents
+- `docs/plans/2026-03-15-distributed-architecture-identity.md` — full spec
+- `docs/plans/2026-03-15-git-scaling-spike-results.md` — scaling test results
+- `docs/plans/2026-03-15-two-tier-id-scheme.md` — two-tier ID design & rationale
+- `docs/plans/2026-03-15-main-branch-improvements.md` — parallel main branch plan
+
+#### Git
+- 15 commits on `distributed-architecture` branch
+- Merged to main via fast-forward
+- 121 unit tests + 10 integration tests all passing
