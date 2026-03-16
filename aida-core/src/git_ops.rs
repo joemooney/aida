@@ -305,13 +305,28 @@ pub fn merge_gate(store_path: &Path) -> Result<Vec<(String, String)>> {
             continue; // already has an agreed ID
         }
 
-        // Extract type prefix from spec_id
         let spec_id = match &req.spec_id {
             Some(s) => s.clone(),
             None => continue,
         };
 
-        let type_prefix = spec_id.split('-').next().unwrap_or("REQ").to_uppercase();
+        // Use the requirement's type for the agreed ID prefix (FR, BUG, TASK, etc.)
+        // This gives short, standard prefixes regardless of the original feature-based prefix
+        let type_prefix = match req.req_type {
+            crate::models::RequirementType::Functional => "FR",
+            crate::models::RequirementType::NonFunctional => "NFR",
+            crate::models::RequirementType::System => "SR",
+            crate::models::RequirementType::User => "UR",
+            crate::models::RequirementType::ChangeRequest => "CR",
+            crate::models::RequirementType::Bug => "BUG",
+            crate::models::RequirementType::Epic => "EPIC",
+            crate::models::RequirementType::Story => "STORY",
+            crate::models::RequirementType::Task => "TASK",
+            crate::models::RequirementType::Spike => "SPIKE",
+            crate::models::RequirementType::Sprint => "SPRINT",
+            crate::models::RequirementType::Folder => "FOLDER",
+            crate::models::RequirementType::Meta => "META",
+        };
         let seq = counters.next(&type_prefix);
         let agreed = AgreedCounters::format_agreed_id(&type_prefix, seq);
 
