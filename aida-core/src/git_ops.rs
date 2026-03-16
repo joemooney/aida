@@ -267,6 +267,77 @@ pub fn register_node(
 
 /// Commit and push all pending object changes in the aida repo.
 /// This is the "sync" operation — called when the user wants to share changes.
+/// Run the merge gate: assign agreed IDs to all objects that don't have one.
+///
+/// This is the two-tier ID mechanism: node-namespaced IDs (FR-7-048) get
+/// short agreed IDs (FR-423) assigned at merge time via CAS counter.
+///
+/// Returns the number of agreed IDs assigned.
+pub fn merge_gate(store_path: &Path) -> Result<Vec<(String, String)>> {
+    use crate::node::AgreedCounters;
+    use crate::object_store;
+
+    let objects_root = store_path.join("objects");
+    let registry_dir = store_path.join("registry");
+    std::fs::create_dir_all(&registry_dir)?;
+
+    let counters_path = registry_dir.join("agreed_counters.toml");
+
+    // Load counters
+    let mut counters = if counters_path.exists() {
+        let content = std::fs::read_to_string(&counters_path)?;
+        toml::from_str::<AgreedCounters>(&content).unwrap_or_default()
+    } else {
+        AgreedCounters::default()
+    };
+
+    // Find all objects without an agreed_id
+    let files = object_store::list_objects(&objects_root)?;
+    let mut assignments = Vec::new();
+
+    for (_spec_id, path) in &files {
+        let mut req = match object_store::read_object_from_path(path) {
+            Ok(r) => r,
+            Err(_) => continue,
+        };
+
+        if req.agreed_id.is_some() {
+            continue; // already has an agreed ID
+        }
+
+        // Extract type prefix from spec_id
+        let spec_id = match &req.spec_id {
+            Some(s) => s.clone(),
+            None => continue,
+        };
+
+        let type_prefix = spec_id.split('-').next().unwrap_or("REQ").to_uppercase();
+        let seq = counters.next(&type_prefix);
+        let agreed = AgreedCounters::format_agreed_id(&type_prefix, seq);
+
+        req.agreed_id = Some(agreed.clone());
+        object_store::write_object(&objects_root, &req)?;
+        assignments.push((spec_id, agreed));
+    }
+
+    // Save updated counters
+    let content = toml::to_string_pretty(&counters)?;
+    std::fs::write(&counters_path, content)?;
+
+    // Stage and commit
+    if !assignments.is_empty() {
+        add_all(store_path, "objects")?;
+        add(store_path, &["registry/agreed_counters.toml"])?;
+        let msg = format!(
+            "chore(merge-gate): assign {} agreed ID(s)",
+            assignments.len()
+        );
+        commit(store_path, &msg)?;
+    }
+
+    Ok(assignments)
+}
+
 pub fn sync_objects(aida_repo: &Path, message: &str) -> Result<bool> {
     let branch = current_branch(aida_repo)
         .unwrap_or_else(|_| "main".to_string());

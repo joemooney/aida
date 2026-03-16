@@ -674,20 +674,41 @@ fn handle_git_backend_command(
             if reqs.is_empty() {
                 println!("No requirements found.");
             } else {
-                println!(
-                    "{:<12} {:<12} {:<10} {:<10} {}",
-                    "ID", "Type", "Status", "Priority", "Title"
-                );
-                println!("{}", "─".repeat(70));
-                for req in &reqs {
+                // Check if any have agreed IDs
+                let has_agreed = reqs.iter().any(|r| r.agreed_id.is_some());
+
+                if has_agreed {
                     println!(
-                        "{:<12} {:<12} {:<10} {:<10} {}",
-                        req.spec_id.as_deref().unwrap_or("-"),
-                        format!("{:?}", req.req_type),
-                        req.effective_status(),
-                        req.effective_priority(),
-                        req.title,
+                        "{:<12} {:<14} {:<12} {:<10} {}",
+                        "ID", "Node ID", "Type", "Status", "Title"
                     );
+                    println!("{}", "─".repeat(78));
+                    for req in &reqs {
+                        println!(
+                            "{:<12} {:<14} {:<12} {:<10} {}",
+                            req.display_id(),
+                            req.spec_id.as_deref().unwrap_or("-"),
+                            format!("{:?}", req.req_type),
+                            req.effective_status(),
+                            req.title,
+                        );
+                    }
+                } else {
+                    println!(
+                        "{:<14} {:<12} {:<10} {:<10} {}",
+                        "ID", "Type", "Status", "Priority", "Title"
+                    );
+                    println!("{}", "─".repeat(74));
+                    for req in &reqs {
+                        println!(
+                            "{:<14} {:<12} {:<10} {:<10} {}",
+                            req.display_id(),
+                            format!("{:?}", req.req_type),
+                            req.effective_status(),
+                            req.effective_priority(),
+                            req.title,
+                        );
+                    }
                 }
                 println!("\n{} requirements", reqs.len());
             }
@@ -1087,6 +1108,24 @@ fn handle_git_backend_command(
             if !pull && !push {
                 println!("Use --pull and/or --push to sync with remote.");
                 println!("  aida --file {} db sync --pull --push", store_path.display());
+            }
+        }
+
+        // Merge gate: assign agreed IDs
+        Command::Db(DbCommand::MergeGate) => {
+            if !aida_core::git_ops::is_git_repo(store_path) {
+                anyhow::bail!("Not a git repository: {}", store_path.display());
+            }
+
+            let assignments = aida_core::git_ops::merge_gate(store_path)?;
+
+            if assignments.is_empty() {
+                println!("All objects already have agreed IDs.");
+            } else {
+                println!("Assigned {} agreed ID(s):", assignments.len());
+                for (node_id, agreed_id) in &assignments {
+                    println!("  {} → {}", node_id, agreed_id.green().bold());
+                }
             }
         }
 
@@ -2892,6 +2931,12 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
         DbCommand::Sync { .. } => {
             println!(
                 "{} Sync is only available for git-backed stores. Use: aida --file <dir> db sync --pull --push",
+                "!".yellow()
+            );
+        }
+        DbCommand::MergeGate => {
+            println!(
+                "{} Merge gate is only available for git-backed stores. Use: aida --file <dir> db merge-gate",
                 "!".yellow()
             );
         }

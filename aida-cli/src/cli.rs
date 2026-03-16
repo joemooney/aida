@@ -303,6 +303,11 @@ pub enum DbCommand {
         #[clap(long, short = 'o')]
         output: String,
     },
+
+    /// Assign agreed IDs (short IDs) to all objects that don't have one.
+    /// Run this at merge-to-trunk to give distributed IDs (FR-7-048) their
+    /// short form (FR-423).
+    MergeGate,
 }
 
 #[derive(Subcommand, Debug)]

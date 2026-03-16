@@ -364,6 +364,7 @@ pub fn proto_to_requirement(req: &proto::Requirement) -> Option<Requirement> {
 
     Some(Requirement {
         id,
+        agreed_id: None,
         spec_id: if req.spec_id.is_empty() {
             None
         } else {

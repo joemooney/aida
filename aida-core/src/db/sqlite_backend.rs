@@ -525,6 +525,7 @@ impl SqliteBackend {
             requirements.push(Requirement {
                 id,
                 spec_id,
+                agreed_id: None,
                 prefix_override,
                 title,
                 description,
@@ -1439,6 +1440,7 @@ impl DatabaseBackend for SqliteBackend {
                 Ok(Some(Requirement {
                     id,
                     spec_id,
+                    agreed_id: None,
                     prefix_override,
                     title,
                     description,
