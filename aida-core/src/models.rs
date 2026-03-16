@@ -2889,6 +2889,13 @@ pub struct Requirement {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spec_id: Option<String>,
 
+    /// Short agreed ID assigned at merge-to-trunk (e.g., "FR-423").
+    /// Only populated in distributed mode after the merge gate runs.
+    /// In centralized mode, spec_id is already the short form so this is unused.
+    /// Both spec_id and agreed_id permanently resolve to the same UUID.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agreed_id: Option<String>,
+
     /// Optional prefix override for the spec_id (e.g., "SEC" for security requirements)
     /// If set, uses this prefix instead of deriving from feature/type
     /// Must be uppercase letters only (A-Z)
@@ -3019,6 +3026,7 @@ impl Requirement {
         Self {
             id: Uuid::now_v7(),
             spec_id: None, // Will be assigned when added to store
+            agreed_id: None,
             prefix_override: None,
             title,
             description,
@@ -3049,6 +3057,23 @@ impl Requirement {
             version: 1,
             ai_evaluation: None,
         }
+    }
+
+    /// Gets the best display ID: agreed_id if available, then spec_id, then UUID.
+    pub fn display_id(&self) -> String {
+        self.agreed_id
+            .as_deref()
+            .or(self.spec_id.as_deref())
+            .unwrap_or_else(|| "?")
+            .to_string()
+    }
+
+    /// Check if this requirement matches a given ID string.
+    /// Matches against spec_id, agreed_id, or UUID.
+    pub fn matches_id(&self, id: &str) -> bool {
+        self.spec_id.as_deref() == Some(id)
+            || self.agreed_id.as_deref() == Some(id)
+            || self.id.to_string() == id
     }
 
     /// Gets the effective status string, preferring custom_status if set

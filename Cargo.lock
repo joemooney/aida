@@ -146,6 +146,7 @@ dependencies = [
  "clap",
  "colored",
  "dirs",
+ "hostname",
  "inquire",
  "prost",
  "regex",

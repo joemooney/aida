@@ -373,6 +373,7 @@ impl PostgresBackend {
         Ok(Requirement {
             id,
             spec_id,
+            agreed_id: None,
             prefix_override,
             title,
             description,
