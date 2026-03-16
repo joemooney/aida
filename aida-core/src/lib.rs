@@ -53,6 +53,15 @@ pub use import::{
     ImportIssue, ImportIssueType, ImportMergeMode, ImportSummary, ImportValidation,
     IssueResolution, RawImportStore,
 };
+#[cfg(feature = "github")]
+pub use integrations::github::{
+    ClientError as GitHubClientError, ConfigError as GitHubConfigError, GitHubClient, GitHubConfig,
+    GitHubIssue, GitHubLabel, GitHubRepo, GitHubUser,
+    CreateIssueRequest as GitHubCreateIssueRequest,
+    UpdateIssueRequest as GitHubUpdateIssueRequest,
+    IssueFilter as GitHubIssueFilter,
+    LabelConfig as GitHubLabelConfig,
+};
 #[cfg(feature = "gitlab")]
 pub use integrations::gitlab::{
     ClientError as GitLabClientError, ConfigError as GitLabConfigError, ConflictStrategy,
