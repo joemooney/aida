@@ -781,7 +781,15 @@ fn handle_git_backend_command(
         Command::Show { id } => {
             match backend.get_requirement_by_spec_id(id)? {
                 Some(req) => {
-                    println!("{}: {}", "ID".bold(), req.spec_id.as_deref().unwrap_or("-"));
+                    println!("{}: {}", "ID".bold(), req.display_id());
+                    if let Some(ref agreed) = req.agreed_id {
+                        if req.spec_id.as_deref() != Some(agreed.as_str()) {
+                            println!("{}: {}", "Agreed ID".bold(), agreed);
+                        }
+                    }
+                    if req.agreed_id.is_some() {
+                        println!("{}: {}", "Node ID".bold(), req.spec_id.as_deref().unwrap_or("-"));
+                    }
                     println!("{}: {}", "UUID".bold(), req.id);
                     println!("{}: {}", "Title".bold(), req.title);
                     println!("{}: {:?}", "Type".bold(), req.req_type);
@@ -792,6 +800,12 @@ fn handle_git_backend_command(
                     }
                     if !req.tags.is_empty() {
                         println!("{}: {}", "Tags".bold(), req.tags.iter().cloned().collect::<Vec<_>>().join(", "));
+                    }
+                    if !req.relationships.is_empty() {
+                        println!("{}: {} relationship(s)", "Relations".bold(), req.relationships.len());
+                    }
+                    if !req.comments.is_empty() {
+                        println!("{}: {} comment(s)", "Comments".bold(), req.comments.len());
                     }
                     if !req.description.is_empty() {
                         println!("\n{}", req.description);
@@ -918,7 +932,7 @@ fn handle_git_backend_command(
                 for req in &results {
                     println!(
                         "{:<14} {:<12} {:<10} {}",
-                        req.spec_id.as_deref().unwrap_or("-"),
+                        req.display_id(),
                         format!("{:?}", req.req_type),
                         req.effective_status(),
                         req.title,
