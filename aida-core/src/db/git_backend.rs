@@ -41,6 +41,8 @@ pub struct GitBackend {
     metadata_path: PathBuf,
     /// Optional dispenser for ID generation
     dispenser: Option<DispenserHandle>,
+    /// Whether to auto-commit changes to git after writes
+    auto_commit: bool,
 }
 
 /// Metadata stored separately from requirements (the "store" fields).
@@ -129,6 +131,7 @@ impl GitBackend {
             objects_root,
             metadata_path,
             dispenser: None,
+            auto_commit: true,
         })
     }
 
@@ -136,6 +139,27 @@ impl GitBackend {
     pub fn with_dispenser(mut self, dispenser: DispenserHandle) -> Self {
         self.dispenser = Some(dispenser);
         self
+    }
+
+    /// Disable auto-commit (useful for batch operations or testing).
+    pub fn with_auto_commit(mut self, enabled: bool) -> Self {
+        self.auto_commit = enabled;
+        self
+    }
+
+    /// Stage all changes and commit to git if auto_commit is enabled.
+    /// The commit message describes what changed.
+    fn auto_commit(&self, message: &str) {
+        if !self.auto_commit || !crate::git_ops::is_git_repo(&self.root) {
+            return;
+        }
+        // Stage objects and metadata
+        let _ = crate::git_ops::add_all(&self.root, "objects");
+        if self.metadata_path.exists() {
+            let _ = crate::git_ops::add(&self.root, &["metadata.yaml"]);
+        }
+        // Commit (silently ignore errors — git ops are best-effort)
+        let _ = crate::git_ops::commit(&self.root, message);
     }
 
     /// Load metadata from the metadata.yaml file.
@@ -258,6 +282,7 @@ impl DatabaseBackend for GitBackend {
             }
         }
 
+        self.auto_commit("chore: update requirements store");
         Ok(())
     }
 
@@ -275,10 +300,10 @@ impl DatabaseBackend for GitBackend {
     }
 
     fn update_requirement(&self, requirement: &Requirement) -> Result<()> {
-        if requirement.spec_id.is_none() {
-            anyhow::bail!("Cannot update requirement without spec_id in git backend");
-        }
+        let spec_id = requirement.spec_id.as_deref()
+            .ok_or_else(|| anyhow::anyhow!("Cannot update requirement without spec_id in git backend"))?;
         object_store::write_object(&self.objects_root, requirement)?;
+        self.auto_commit(&format!("update {}", spec_id));
         Ok(())
     }
 
@@ -287,6 +312,7 @@ impl DatabaseBackend for GitBackend {
         if let Some(req) = object_store::find_by_uuid(&self.objects_root, id)? {
             if let Some(ref spec_id) = req.spec_id {
                 object_store::delete_object(&self.objects_root, spec_id)?;
+                self.auto_commit(&format!("delete {}", spec_id));
                 return Ok(());
             }
         }
@@ -313,6 +339,8 @@ impl DatabaseBackend for GitBackend {
         }
 
         object_store::write_object(&self.objects_root, &req)?;
+        let spec_id = req.spec_id.as_deref().unwrap_or("unknown");
+        self.auto_commit(&format!("add {} — {}", spec_id, req.title));
         Ok(req)
     }
 
