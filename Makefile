@@ -502,3 +502,13 @@ dev-stop: ## Stop all dev services
 
 dev-logs: ## Tail dev server logs
 	@tail -f .aida/.dev-server.log
+
+serve: ## Start aida-server for multi-user access (PostgreSQL backend)
+	@echo "Starting AIDA server with PostgreSQL backend..."
+	@echo "  Database: $(DEV_PG_URL)"
+	@echo "  REST API: http://0.0.0.0:$(REST_PORT)"
+	@echo ""
+	@echo "Other machines can connect with:"
+	@echo "  aida --file '$(DEV_PG_URL)' list"
+	@echo ""
+	./target/debug/aida-server --host 0.0.0.0 --port 50051 --rest-port $(REST_PORT) --database "$(DEV_PG_URL)"
