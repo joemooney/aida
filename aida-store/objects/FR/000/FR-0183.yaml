@@ -1,0 +1,46 @@
+id: 75215088-ffef-4e83-9f90-3ab2cc766422
+spec_id: FR-0183
+prefix_override: FR
+title: Optimistic reload on save for new requirements
+description: |-
+  When saving a new requirement, reload the requirements file first to ensure we have the latest SPEC-IDs and don't create duplicates or overwrite concurrent changes.
+
+  ## Problem
+  If another user/process adds a requirement while we're filling out the add form, we might:
+  1. Generate a duplicate SPEC-ID (using stale next-ID counter)
+  2. Overwrite their changes when saving
+
+  ## Solution
+  Before adding a new requirement:
+  1. Reload the requirements file to get latest state
+  2. Merge any external changes into our in-memory store
+  3. Generate SPEC-ID using the fresh state
+  4. Add the new requirement
+  5. Save with conflict detection
+
+  ## Acceptance Criteria
+  - [ ] New requirements get unique SPEC-IDs even with concurrent modifications
+  - [ ] External changes are not lost when saving new requirements
+  - [ ] User sees a message if external changes were detected and merged
+status: Draft
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-02T06:20:45.623601337Z
+modified_at: 2025-12-02T06:20:45.623601337Z
+req_type: Functional
+trace_links:
+- id: 6c125981-de1d-472b-8dd1-1a31fba08902
+  artifact_type: SourceCode
+  file_path: ./aida-core/src/storage.rs
+  line_start: 968
+  notes: 'AI tool: claude'
+  created_at: 2025-12-11T00:58:30.967395031Z
+  created_by: scan
+- id: 939ec64d-7b7f-4c8a-a074-39b85647ad36
+  artifact_type: SourceCode
+  file_path: ./aida-gui/src/app.rs
+  line_start: 5749
+  notes: 'AI tool: claude'
+  created_at: 2025-12-11T00:58:30.967800994Z
+  created_by: scan

@@ -1,0 +1,53 @@
+id: bae7da90-3781-4a92-927f-69e31a008422
+spec_id: FR-0106
+title: Add - select parent heuristically
+description: "When you click '+ Add' heuristic: create a new requirement and the parent should be the parent of the currently selected requirement (i.e. a sibling), unless the selected requirement has children, in which case make it a child, or if the selected requirement has no children and has no parent then make it a root (no parent) requirement. \n\nUpdate the default key bindings such that Ctrl+n is new sibling requirement. Ctrl+Shift+N is a new child requirement,\n\nIn the reqlist 'n' to add a new sibling requirement; 'N' to add a new child requriement"
+status: Approved
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-29T19:34:27.501813315Z
+created_by: Unknown User
+modified_at: 2025-12-02T03:34:27.605246586Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
+  created_at: 2025-11-29T19:34:32.266350849Z
+  created_by: Unknown User
+history:
+- id: cda74470-6981-479e-8c81-01de2aa99367
+  author: ''
+  timestamp: 2025-11-30T01:50:13.923440532Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: c3490815-3b7a-4cc7-b9f5-911b81d1be1e
+  author: Unknown User
+  timestamp: 2025-11-30T01:50:29.189515393Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Draft
+- id: debf5262-f79f-4b57-9472-844520326374
+  author: ''
+  timestamp: 2025-11-30T01:58:31.221774037Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: 813ce9fe-3c42-4527-93fc-93bf03659b8d
+  author: Unknown User
+  timestamp: 2025-11-30T02:33:22.610335906Z
+  changes:
+  - field_name: description
+    old_value: When you click '+ Add' the parent should be the parent of the currently selected requirement, unless the selected requirement has children, in which case make it a child or if the selected requirement has no children and has no parent then make it a root (no parent) requirement.
+    new_value: "When you click '+ Add' heuristic: create a new requirement and the parent should be the parent of the currently selected requirement (i.e. a sibling), unless the selected requirement has children, in which case make it a child, or if the selected requirement has no children and has no parent then make it a root (no parent) requirement. \n\nUpdate the default key bindings such that Ctrl+n is new sibling requirement. Ctrl+Shift+N is a new child requirement,"
+- id: bf203eab-ab05-40c0-a925-4cc808d9f3cd
+  author: Unknown User
+  timestamp: 2025-12-02T03:34:27.605240962Z
+  changes:
+  - field_name: description
+    old_value: "When you click '+ Add' heuristic: create a new requirement and the parent should be the parent of the currently selected requirement (i.e. a sibling), unless the selected requirement has children, in which case make it a child, or if the selected requirement has no children and has no parent then make it a root (no parent) requirement. \n\nUpdate the default key bindings such that Ctrl+n is new sibling requirement. Ctrl+Shift+N is a new child requirement,"
+    new_value: "When you click '+ Add' heuristic: create a new requirement and the parent should be the parent of the currently selected requirement (i.e. a sibling), unless the selected requirement has children, in which case make it a child, or if the selected requirement has no children and has no parent then make it a root (no parent) requirement. \n\nUpdate the default key bindings such that Ctrl+n is new sibling requirement. Ctrl+Shift+N is a new child requirement,\n\nIn the reqlist 'n' to add a new sibling requirement; 'N' to add a new child requriement"

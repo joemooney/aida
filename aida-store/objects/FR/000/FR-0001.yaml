@@ -1,0 +1,53 @@
+id: 37be9566-a051-430b-b47b-1890a395a524
+spec_id: FR-0001
+title: Default owner depending on state
+description: "When we transition a feature we want the owner to be assigned based on state\n\n*this is bold*\n\n_italic_\n\n# Head 1\n\nasdfasdf\n\n## Head2 \n\nasdfasdf"
+status: Completed
+priority: Medium
+owner: ''
+feature: 1-REQ
+created_at: 2025-11-25T19:45:25.234562378Z
+modified_at: 2026-02-23T05:27:36.784560695Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 2fd609e9-d194-47a3-adbd-417f6306190c
+- rel_type: !Custom sprint_assignment
+  target_id: 404b7457-67a2-4376-a0d3-9c5ea1547951
+  created_at: 2025-12-07T17:02:44.462006633Z
+  created_by: Joe Mooney
+comments:
+- id: 7a443387-ba19-4a8f-8705-8483889125be
+  author: joe
+  content: Testing pre-commit hook
+  created_at: 2026-02-23T05:27:36.784551188Z
+  modified_at: 2026-02-23T05:27:36.784551188Z
+history:
+- id: eb0f853e-6465-4a10-b0b2-72090bde5303
+  author: '@joe'
+  timestamp: 2025-11-26T22:38:19.239035307Z
+  changes:
+  - field_name: description
+    old_value: When we transition a feature we want the owner to be assigned based on state
+    new_value: "When we transition a feature we want the owner to be assigned based on state\n\n*this is bold*\n\n_italic_\n\n# Head 1\n\nasdfasdf\n\n## Head2 \n\nasdfasdf"
+- id: f5cd8788-c08e-4084-a045-ffbda78a4a61
+  author: Joe Mooney
+  timestamp: 2025-12-07T17:02:44.462009384Z
+  changes:
+  - field_name: sprint_assignment
+    old_value: ''
+    new_value: REQ-0219
+- id: 1baec5d5-69a7-4248-9593-d0adff400c5f
+  author: CLI
+  timestamp: 2025-12-11T03:58:44.837016020Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Planned
+- id: fff2ff6e-da4d-4237-81ed-c9438b160c2c
+  author: CLI
+  timestamp: 2025-12-11T03:58:55.745738454Z
+  changes:
+  - field_name: status
+    old_value: Planned
+    new_value: Completed

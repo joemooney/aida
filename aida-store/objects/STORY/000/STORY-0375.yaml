@@ -1,0 +1,11 @@
+id: 1cf6deb0-0fb0-4398-b7c8-076b89f98d67
+spec_id: STORY-0375
+title: Requirements-aware AI chat for PMs and stakeholders
+description: Chat page with streaming Claude API responses, full requirements context, auto-linked spec IDs via LinkedMarkdown. Allows PMs/stakeholders to ask about project status, priorities, blockers, and progress. Starter questions, SSE streaming, markdown rendering.
+status: Completed
+priority: Medium
+owner: joe
+feature: 223-Admin
+created_at: 2026-02-21T19:09:12.875615653Z
+modified_at: 2026-02-21T19:09:12.875615653Z
+req_type: Story

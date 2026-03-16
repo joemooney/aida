@@ -1,0 +1,62 @@
+id: cc1a24d2-2756-4afb-a71a-1f0bd166d9c3
+spec_id: FR-0149
+title: I would like to review ~/ai/ai-provenance. Spec...
+description: "I would you like to review ~/ai/ai-provenance. Specfically, I want consider adding one or more skills to the aida project and consider what we\n  did in that other project that I think has been somewhat superceded by aida. I would like to have a /aida-req skill that accepts input for a\n  new requirement, and then performs the evaluation the same way we perform currently request evaluation from the aida action dropdown. The\n  skill can add the requirement to the database and update the AI tab once the requirement evaluation is complete. the skill could start a\n  claude code sub-agent and run in the background. It could add the requirement upon completion of the prompts and spawn the evaluation in the\n  background. basically I want to see if we can import some of the ideas of ai-provenance into this projects. You could add a set of new\n  requirements as you see fit. \n\nstart with just /aida-req and maybe also an /aida-implement; add the requirement immediately and show \"evaluation\n    pending\"; different \"modes\" for aida if you think that a good idea - i defer to you (it can wait); in terms of prompt history, I think when\n  we elect to implement a requirement, (AI/Copy for Claude Code), which should put use into /aida-implement mode, as we iterate in claude code\n  we should be evolving the requirement in the database and perhaps creating child requirements, basically our goal in claude code during\n  /aida-implement is to ensure that we capture the requirement and relevant implementation details so that the requirements database accurately\n  reflects our conversation, this in essence supercedes and deprecates the PROMPT_HISTORY.md and REQUIREMENTS.md and we should support\n  scaffolding the project from aida with appropriate skills and CLAUDE.md directives. ai-provenance will be displaced by aida. Traceability: we\n  want to adopt the ai-provenance idea of inline comment format for marking AI-generated code using the requirement id from aida."
+status: Completed
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-01T06:03:23.443993566Z
+created_by: Unknown User
+modified_at: 2025-12-13T19:59:48.766254971Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 4de3b4f0-b157-4d50-8549-e98153d2324d
+  created_at: 2025-12-01T06:03:23.444036238Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: 072854b9-a4cc-4f05-8ebd-2c655de26a7c
+  created_at: 2025-12-09T04:34:02.423916328Z
+- rel_type: Child
+  target_id: 611bd5c5-0d47-4ea0-93aa-b6676e6830de
+  created_at: 2025-12-09T04:34:03.704802947Z
+- rel_type: Child
+  target_id: ae784602-a0cf-4d07-94b7-bd0ccd783b7c
+  created_at: 2025-12-09T04:34:05.040106916Z
+history:
+- id: c7d3c62c-879f-4702-8d43-d3c4a07f3f96
+  author: Unknown User
+  timestamp: 2025-12-01T06:07:07.938229592Z
+  changes:
+  - field_name: description
+    old_value: I would like to review ~/ai/ai-provenance. Specfically, I want consider adding one or more skills to this project. I would like to have a /aida-req skill that acceptsing input for a new requirement, and then performs the evaluation that we perform in this aida project and the add the requirement and the requirement evaluation to the database. the skill could start a claude code sub-agent and run in the background. it could add the requirement upon completion of the prompts and spawn the evaluation in the background. basically I want to see if we can import some of the ideas of ai-provenance into this projects. You could add a net of new requirements as you see fit. Tell me your thoughts
+    new_value: |-
+      I would you like to review ~/ai/ai-provenance. Specfically, I want consider adding one or more skills to the aida project and consider what we
+        did in that other project that I think has been somewhat superceded by aida. I would like to have a /aida-req skill that accepts input for a
+        new requirement, and then performs the evaluation the same way we perform currently request evaluation from the aida action dropdown. The
+        skill can add the requirement to the database and update the AI tab once the requirement evaluation is complete. the skill could start a
+        claude code sub-agent and run in the background. It could add the requirement upon completion of the prompts and spawn the evaluation in the
+        background. basically I want to see if we can import some of the ideas of ai-provenance into this projects. You could add a set of new
+        requirements as you see fit. Tell me your thoughts
+- id: ceb3cb1f-b9d7-4e34-9e03-8e67799f3196
+  author: Unknown User
+  timestamp: 2025-12-01T06:22:03.494465761Z
+  changes:
+  - field_name: description
+    old_value: |-
+      I would you like to review ~/ai/ai-provenance. Specfically, I want consider adding one or more skills to the aida project and consider what we
+        did in that other project that I think has been somewhat superceded by aida. I would like to have a /aida-req skill that accepts input for a
+        new requirement, and then performs the evaluation the same way we perform currently request evaluation from the aida action dropdown. The
+        skill can add the requirement to the database and update the AI tab once the requirement evaluation is complete. the skill could start a
+        claude code sub-agent and run in the background. It could add the requirement upon completion of the prompts and spawn the evaluation in the
+        background. basically I want to see if we can import some of the ideas of ai-provenance into this projects. You could add a set of new
+        requirements as you see fit. Tell me your thoughts
+    new_value: "I would you like to review ~/ai/ai-provenance. Specfically, I want consider adding one or more skills to the aida project and consider what we\n  did in that other project that I think has been somewhat superceded by aida. I would like to have a /aida-req skill that accepts input for a\n  new requirement, and then performs the evaluation the same way we perform currently request evaluation from the aida action dropdown. The\n  skill can add the requirement to the database and update the AI tab once the requirement evaluation is complete. the skill could start a\n  claude code sub-agent and run in the background. It could add the requirement upon completion of the prompts and spawn the evaluation in the\n  background. basically I want to see if we can import some of the ideas of ai-provenance into this projects. You could add a set of new\n  requirements as you see fit. \n\nstart with just /aida-req and maybe also an /aida-implement; add the requirement immediately and show \"evaluation\n    pending\"; different \"modes\" for aida if you think that a good idea - i defer to you (it can wait); in terms of prompt history, I think when\n  we elect to implement a requirement, (AI/Copy for Claude Code), which should put use into /aida-implement mode, as we iterate in claude code\n  we should be evolving the requirement in the database and perhaps creating child requirements, basically our goal in claude code during\n  /aida-implement is to ensure that we capture the requirement and relevant implementation details so that the requirements database accurately\n  reflects our conversation, this in essence supercedes and deprecates the PROMPT_HISTORY.md and REQUIREMENTS.md and we should support\n  scaffolding the project from aida with appropriate skills and CLAUDE.md directives. ai-provenance will be displaced by aida. Traceability: we\n  want to adopt the ai-provenance idea of inline comment format for marking AI-generated code using the requirement id from aida."
+- id: f9b45a8f-1cb7-4827-bc50-c6e7b9373308
+  author: Joe Mooney
+  timestamp: 2025-12-13T19:59:48.766264385Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed

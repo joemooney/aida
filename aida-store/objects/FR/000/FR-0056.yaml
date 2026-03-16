@@ -1,0 +1,46 @@
+id: d51487eb-36a5-4266-9c79-29a7c5399849
+spec_id: FR-0056
+title: Double cllick Description to enter Edit
+description: |
+  Double click Description to enter Edit, and switch focus to the Description textbox.
+
+    What was implemented:
+    - Double-clicking on the background area of the Detail view (any empty space not covered by buttons, text, etc.) will now open the Edit form
+     for the currently selected requirement
+    - The feature is disabled when modals are open (URL form, Reference picker, Add comment form) to prevent unintended edits
+    - This works alongside the existing double-click on the Description tab content (which focuses the description field)
+
+    How it works:
+    - Uses egui's interact_bg() method to detect clicks on background/empty areas
+    - Only triggers when no modal dialogs are open
+    - Complements the "✏ Edit" button - just a faster way to start editing
+status: Draft
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-27T17:21:11.683638399Z
+modified_at: 2025-11-29T00:33:16.299815072Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
+history:
+- id: e60b6eb4-d260-40e8-bcbc-bc5a68cdf088
+  author: '@joe'
+  timestamp: 2025-11-29T00:33:16.299808900Z
+  changes:
+  - field_name: description
+    old_value: Double click Description to enter Edit, and switch focus to the Description textbox.
+    new_value: |
+      Double click Description to enter Edit, and switch focus to the Description textbox.
+
+        What was implemented:
+        - Double-clicking on the background area of the Detail view (any empty space not covered by buttons, text, etc.) will now open the Edit form
+         for the currently selected requirement
+        - The feature is disabled when modals are open (URL form, Reference picker, Add comment form) to prevent unintended edits
+        - This works alongside the existing double-click on the Description tab content (which focuses the description field)
+
+        How it works:
+        - Uses egui's interact_bg() method to detect clicks on background/empty areas
+        - Only triggers when no modal dialogs are open
+        - Complements the "✏ Edit" button - just a faster way to start editing

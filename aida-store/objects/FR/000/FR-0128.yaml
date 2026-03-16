@@ -1,0 +1,76 @@
+id: 9ace4d56-9a8d-47cd-8779-4e6963d303f3
+spec_id: FR-0128
+title: Support "Folder" status.
+description: |-
+  ## Overview
+  The system shall support a "Folder" status value for requirements that serve as organizational containers in a hierarchical structure.
+
+  ## Behavior
+  - The system shall display a folder icon for requirements with "Folder" status in the Requirements List view
+  - The system shall allow filtering requirements by "Folder" status
+  - The system shall exclude "Folder" status requirements from completion metrics and status reports by default
+
+  ## Acceptance Criteria
+  - [ ] "Folder" is available as a selectable status value when creating or editing requirements
+  - [ ] Requirements with "Folder" status display a distinct folder icon in list views
+  - [ ] Status filters include "Folder" as a filter option
+  - [ ] Metrics dashboards exclude "Folder" requirements from status counts unless explicitly included
+  - [ ] Child requirements under a "Folder" parent are not affected by the parent's status
+status: Approved
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-30T02:10:08.382814924Z
+created_by: Unknown User
+modified_at: 2025-11-30T20:30:28.364209774Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
+  created_at: 2025-11-30T02:10:08.382830563Z
+  created_by: Unknown User
+history:
+- id: f9bb2536-84d6-42a1-8241-f1ce9bc81dfa
+  author: Unknown User
+  timestamp: 2025-11-30T19:48:09.406691794Z
+  changes:
+  - field_name: description
+    old_value: |-
+      Support "Folder" status.
+      Rationale: although counterintuitive, status is a highly informative field. But in a hierarchy of requirements, there are some container requirements that do not need to be considered in terms of status and an icon indicating that they are only organizational is useful.
+    new_value: "Support \"Folder\" status.\nRationale: although counterintuitive, status is a highly informative field and I use it as an icon in the Requirements List view. But in a hierarchy of requirements, there are some container requirements that do not need to be considered in terms of status and a folder icon indicating that they are only organizational would useful. Such a status is easily filtered for reports and metrics etc. but makes tool use much easier. "
+- id: 7408728f-7ec4-40f4-9adf-2d3fb6e555f1
+  author: ''
+  timestamp: 2025-11-30T19:52:41.704060388Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: 22058bbd-6ae2-48bd-9a34-727cbe4d8ad0
+  author: Unknown User
+  timestamp: 2025-11-30T20:28:49.078971328Z
+  changes:
+  - field_name: description
+    old_value: "Support \"Folder\" status.\nRationale: although counterintuitive, status is a highly informative field and I use it as an icon in the Requirements List view. But in a hierarchy of requirements, there are some container requirements that do not need to be considered in terms of status and a folder icon indicating that they are only organizational would useful. Such a status is easily filtered for reports and metrics etc. but makes tool use much easier. "
+    new_value: "Support \"Folder\" requirement Status value.\nRationale: although counterintuitive, status is a highly informative field and I use it as an icon in the Requirements List view. But in a hierarchy of requirements, there are some container requirements that do not need to be considered in terms of status and a folder icon indicating that they are only organizational would useful. Such a status is easily filtered for reports and metrics etc. but makes tool use much easier. "
+- id: 548401de-db70-4c81-b94d-0fa37083ed2b
+  author: ''
+  timestamp: 2025-11-30T20:30:28.364220188Z
+  changes:
+  - field_name: description
+    old_value: "Support \"Folder\" requirement Status value.\nRationale: although counterintuitive, status is a highly informative field and I use it as an icon in the Requirements List view. But in a hierarchy of requirements, there are some container requirements that do not need to be considered in terms of status and a folder icon indicating that they are only organizational would useful. Such a status is easily filtered for reports and metrics etc. but makes tool use much easier. "
+    new_value: |-
+      ## Overview
+      The system shall support a "Folder" status value for requirements that serve as organizational containers in a hierarchical structure.
+
+      ## Behavior
+      - The system shall display a folder icon for requirements with "Folder" status in the Requirements List view
+      - The system shall allow filtering requirements by "Folder" status
+      - The system shall exclude "Folder" status requirements from completion metrics and status reports by default
+
+      ## Acceptance Criteria
+      - [ ] "Folder" is available as a selectable status value when creating or editing requirements
+      - [ ] Requirements with "Folder" status display a distinct folder icon in list views
+      - [ ] Status filters include "Folder" as a filter option
+      - [ ] Metrics dashboards exclude "Folder" requirements from status counts unless explicitly included
+      - [ ] Child requirements under a "Folder" parent are not affected by the parent's status

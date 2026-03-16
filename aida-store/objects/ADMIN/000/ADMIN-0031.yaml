@@ -1,0 +1,25 @@
+id: 617353d0-7006-4a3c-92ba-49e5218386e2
+spec_id: ADMIN-0031
+prefix_override: ADMIN
+title: Settings & Admin
+description: ''
+status: Approved
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-26T23:04:21.820329556Z
+modified_at: 2026-03-01T18:41:33.916747126Z
+req_type: Folder
+relationships:
+- rel_type: Child
+  target_id: 2fd609e9-d194-47a3-adbd-417f6306190c
+- rel_type: Child
+  target_id: ce9fdd12-0860-4334-90b7-399952ca523a
+history:
+- id: cd728855-0349-48fe-b402-c7d280490106
+  author: Joe Mooney
+  timestamp: 2025-12-03T05:51:25.286504227Z
+  changes:
+  - field_name: type
+    old_value: Functional
+    new_value: Folder

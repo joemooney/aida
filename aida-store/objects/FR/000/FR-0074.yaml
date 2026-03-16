@@ -1,0 +1,29 @@
+id: 25b4e80b-ae19-401f-bd69-dd5636a08944
+spec_id: FR-0074
+title: Switch Project
+description: |2+
+    Switch Project Feature
+
+    - Shows all registered projects from the registry
+    - Only displays projects whose files exist on disk
+    - One-click to switch to any project
+
+
+status: Approved
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-28T03:47:02.328158796Z
+modified_at: 2025-11-29T19:45:19.932360701Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: bb81e51e-dd32-48ef-9806-cf26a09643f5
+history:
+- id: a941595f-d2c7-4b0f-8280-e759a8288bb8
+  author: Unknown User
+  timestamp: 2025-11-29T19:45:19.932359958Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved

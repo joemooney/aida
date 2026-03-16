@@ -1,0 +1,20 @@
+id: 5fe84b57-05db-415b-90a5-604f1bf3f9eb
+spec_id: FR-0139
+title: Report Generation
+description: |-
+  Report Generation
+
+  requirements related to generating reports
+status: Draft
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-30T18:58:47.347645927Z
+created_by: Unknown User
+modified_at: 2025-11-30T18:58:47.347645927Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
+  created_at: 2025-11-30T18:58:47.347672969Z
+  created_by: Unknown User

@@ -1,0 +1,35 @@
+id: 04cff76c-978d-4e3a-845a-1d6f6b885cea
+spec_id: CHANGEREQUESTS-0029
+prefix_override: CHANGEREQUESTS
+title: Change Request support
+description: 'Change Request should be one of the default requirement types. '
+status: Approved
+priority: High
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-25T21:30:08.455035192Z
+modified_at: 2026-02-22T20:00:52.831323761Z
+req_type: Functional
+relationships:
+- rel_type: !Custom sprint_assignment
+  target_id: 404b7457-67a2-4376-a0d3-9c5ea1547951
+  created_at: 2025-12-20T20:28:18.520129345Z
+  created_by: Joe Mooney
+history:
+- id: 8d90fa4e-b6e9-44e9-86ff-151b6c6e859f
+  author: '@joe'
+  timestamp: 2025-11-26T22:58:17.270715939Z
+  changes:
+  - field_name: prefix_override
+    old_value: ''
+    new_value: CHANGEREQUESTS
+  - field_name: spec_id
+    old_value: FR-0010
+    new_value: CHANGEREQUESTS-0029
+- id: 4d6c1bf6-5231-48d2-a9da-99194af4f156
+  author: Joe Mooney
+  timestamp: 2025-12-20T20:28:18.520138157Z
+  changes:
+  - field_name: sprint_assignment
+    old_value: ''
+    new_value: SPRINT-0336

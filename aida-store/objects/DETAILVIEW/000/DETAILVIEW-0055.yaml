@@ -1,0 +1,31 @@
+id: ae4d77e5-55a4-4a56-97d1-a030d922a04d
+spec_id: DETAILVIEW-0055
+prefix_override: DETAILVIEW
+title: Requirement Detail View
+description: requirements related to the detail view panel of requirements (i.e. before we clict Edit)
+status: Approved
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-27T17:07:50.165704716Z
+modified_at: 2025-11-27T21:25:49.821925065Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
+- rel_type: Child
+  target_id: f54c4d83-8073-49d1-9229-c712480a83e4
+- rel_type: Child
+  target_id: 3fe85c39-0da4-477a-9ac5-04ecb9696ec9
+- rel_type: Child
+  target_id: d0650db4-0021-4496-8620-f7f6bf8dbc87
+  created_at: 2025-11-29T16:54:13.987670996Z
+  created_by: '@joe'
+history:
+- id: a2587809-925c-4e2e-9333-f041b1d67116
+  author: '@joe'
+  timestamp: 2025-11-27T21:25:49.821921635Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved

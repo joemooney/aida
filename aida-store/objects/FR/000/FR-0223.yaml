@@ -1,0 +1,86 @@
+id: 8e4988b4-b850-4f46-ac4d-ed3f1bb93003
+spec_id: FR-0223
+title: ranking number as an ordering preference for di...
+description: |-
+  ranking number as an ordering preference for display
+
+  a ranking number or ordinal is a way to order reqs in a way other than priority or status
+  where priority may be set by a manager or team, an ordinal or ranking is a personal ordering that is not such much meta data of the req but of the user. It is a helpful tool to keep an inbox ordered in terms of how you want to sequence activities
+status: Draft
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-07T19:21:58.984960265Z
+created_by: joe
+modified_at: 2025-12-07T19:22:36.817790111Z
+req_type: Functional
+relationships:
+- rel_type: !Custom sprint_assignment
+  target_id: 404b7457-67a2-4376-a0d3-9c5ea1547951
+  created_at: 2025-12-07T19:22:36.817789836Z
+  created_by: joe
+- rel_type: Child
+  target_id: 5a4d7c64-5fa3-46d9-be91-4fb656fc2fd3
+  created_at: 2025-12-07T19:45:45.419077759Z
+  created_by: joe
+- rel_type: Child
+  target_id: 2b1793fb-87e1-4c19-8e9b-419c4ab020c8
+  created_at: 2025-12-08T00:33:39.062074685Z
+  created_by: joe
+history:
+- id: 3175b782-1486-43c9-af60-8f240abb49ed
+  author: joe
+  timestamp: 2025-12-07T19:22:36.817792508Z
+  changes:
+  - field_name: sprint_assignment
+    old_value: ''
+    new_value: REQ-0219
+ai_evaluation:
+  evaluation:
+    quality_score: 5
+    issues:
+    - type: vague_language
+      severity: medium
+      text: The term 'ranking number' and 'ordinal' are used interchangeably without defining the exact data type or range
+      suggestion: Specify whether this is an integer, float, or relative ordering system, and define any constraints (e.g., 1-999, unique per user, etc.)
+    - type: incomplete
+      severity: high
+      text: No specification of how the ranking interacts with the UI - where is it displayed, how is it edited, what views use it
+      suggestion: 'Add details about: (1) which views display ranking-ordered requirements, (2) how users set/modify rankings, (3) whether rankings are visible to others'
+    - type: missing_criteria
+      severity: medium
+      text: No acceptance criteria defined for what constitutes successful implementation
+      suggestion: 'Add acceptance criteria such as: ''User can assign a numeric rank to any requirement'', ''Requirements can be sorted by rank in list views'', ''Rank persists per user across sessions'''
+    - type: ambiguous
+      severity: low
+      text: Unclear whether ranking is per-user (personal) or can be shared across team members
+      suggestion: 'Clarify scope: ''This ranking is personal and only visible to the user who set it'' or define sharing behavior'
+    - type: incomplete
+      severity: medium
+      text: No specification of default behavior for unranked requirements
+      suggestion: Define what happens to requirements without a rank when sorted by ranking (appear at end? use fallback sort?)
+    strengths:
+    - Good conceptual distinction between organizational priority (team-assigned) and personal ordering (user preference)
+    - Clear use case motivation - ordering an inbox for personal workflow
+    - Appropriately scoped as a user-centric feature rather than system metadata
+    suggested_improvements:
+      description: |-
+        Add a personal ranking number to requirements for user-defined ordering.
+
+        **Purpose:** Allow users to order requirements by personal preference, independent of team-assigned priority or status. This supports personal workflow management (e.g., ordering an inbox by intended work sequence).
+
+        **Behavior:**
+        - Each user can assign an optional numeric rank (integer, 1-9999) to any requirement
+        - Rankings are personal and not visible to other users
+        - Requirements can be sorted by rank in list/Kanban views via a 'Sort by: My Ranking' option
+        - Unranked requirements appear after ranked ones when sorting by rank
+        - Ranking can be set via inline edit or drag-to-reorder in ranked view
+
+        **Acceptance Criteria:**
+        1. User can assign a rank number to a requirement
+        2. User can view requirements sorted by their personal ranking
+        3. Rankings persist across sessions
+        4. Unranked items sort to the bottom of ranked lists
+      rationale: The improved description adds specific behavior details, acceptance criteria, and clarifies the personal/user-scoped nature of the feature, making it implementable and testable
+  evaluated_at: 2025-12-08T01:02:48.786595854Z
+  content_hash: 96a20d49192e13f5

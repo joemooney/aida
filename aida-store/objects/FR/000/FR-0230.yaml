@@ -1,0 +1,38 @@
+id: ae784602-a0cf-4d07-94b7-bd0ccd783b7c
+spec_id: FR-0230
+title: CI/CD Template Generation for Traceability
+description: |-
+  Generate CI/CD pipeline templates that enforce code traceability:
+
+  **GitHub Actions Templates:**
+  - Traceability check workflow
+  - Validates all PRs include trace comments for changed code
+  - Generates coverage report as PR comment
+  - Fails build if traceability threshold not met
+
+  **GitLab CI Templates:**
+  - Similar functionality for GitLab pipelines
+  - Integration with merge request comments
+
+  **Configuration:**
+  - Minimum coverage threshold (percentage)
+  - Required trace format validation
+  - Exemption patterns (test files, generated code)
+
+  **Template Features:**
+  - Caches aida binary for faster runs
+  - Outputs traceability matrix artifact
+  - Posts summary to PR/MR comments
+
+  **Acceptance Criteria:**
+  - [ ] GitHub Actions workflow template generated
+  - [ ] GitLab CI template generated
+  - [ ] Configurable coverage thresholds
+  - [ ] Exemption patterns supported
+status: Draft
+priority: Medium
+owner: ''
+feature: 120-Uncategorized
+created_at: 2025-12-09T04:33:50.660092185Z
+modified_at: 2025-12-09T04:33:50.660092185Z
+req_type: Functional

@@ -1,0 +1,17 @@
+id: 7fab205a-9f74-48fc-9a20-18581388a22f
+spec_id: FR-0104
+title: Sorting capabilities
+description: "Ability to sort the list of requirements shown e.g. alphabetically. \n"
+status: Draft
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-29T19:27:58.262496482Z
+created_by: Unknown User
+modified_at: 2025-11-29T19:27:58.262496482Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
+  created_at: 2025-11-29T19:27:58.262503497Z
+  created_by: Unknown User

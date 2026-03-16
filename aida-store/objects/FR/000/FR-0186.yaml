@@ -1,0 +1,32 @@
+id: a0b83c6a-3411-406a-8944-05147985b8a0
+spec_id: FR-0186
+title: Organization Chart View
+description: |-
+  Add a new view that displays teams and their members in an organization chart format:
+  - Visual hierarchy showing team nesting structure
+  - Display team names and member counts
+  - Expandable/collapsible team nodes
+  - Show member avatars/names within team nodes
+  - Click on team to navigate to team details
+  - Click on member to navigate to user details
+
+  Should integrate with existing view system and be accessible from navigation.
+status: Completed
+priority: Medium
+owner: ''
+feature: 101-Teams
+created_at: 2025-12-03T02:51:11.475316094Z
+modified_at: 2025-12-03T03:12:15.303315533Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: b6911b4c-a0d4-46ee-b87d-c94de49fcd57
+  created_at: 2025-12-03T02:51:11.475326379Z
+history:
+- id: d57e15eb-dd46-47f0-95e9-690baccef3da
+  author: Joe Mooney
+  timestamp: 2025-12-03T03:12:15.303323311Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved

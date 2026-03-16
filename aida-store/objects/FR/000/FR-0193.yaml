@@ -1,0 +1,24 @@
+id: d58f045f-b729-4a7f-b2f0-04d6353a7af7
+spec_id: FR-0193
+title: Baselines - Requirements Versioning and Snapshots
+description: |-
+  Create named snapshots of requirements at specific points in time for release milestones, contract deliverables, or change control. Features:
+  - Create baselines with name and description
+  - Store full snapshots of all active requirements
+  - Compare baseline with current state (added/removed/modified)
+  - Compare two baselines against each other
+  - Git tag integration for YAML backend
+  - Lock baselines to prevent deletion
+  - View requirements in a baseline
+status: Completed
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-06T17:53:07.426320148Z
+modified_at: 2025-12-06T17:53:07.426320148Z
+req_type: Functional
+relationships:
+- rel_type: Child
+  target_id: d1055784-d8db-4f21-83a8-4121a7e3f25e
+  created_at: 2025-12-06T18:18:47.825260501Z
+  created_by: Joe Mooney

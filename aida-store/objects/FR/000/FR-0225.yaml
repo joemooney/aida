@@ -1,0 +1,20 @@
+id: 2b1793fb-87e1-4c19-8e9b-419c4ab020c8
+spec_id: FR-0225
+title: When search mode is active and reqs are found a...
+description: |-
+  When search mode is active and reqs are found arrow keys misbehave
+
+  there is a clash between normal arrow keys up/down and the selected reqs when we are in search mode. maybe the up/down should only be allowed to navigate to matching reqs?
+status: Draft
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-08T00:33:39.000717746Z
+created_by: joe
+modified_at: 2025-12-08T00:33:39.000717746Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 8e4988b4-b850-4f46-ac4d-ed3f1bb93003
+  created_at: 2025-12-08T00:33:39.062074685Z
+  created_by: joe

@@ -1,0 +1,21 @@
+id: 36d3908b-cfc6-490e-83e2-76ed28927ff3
+spec_id: TASK-0388
+title: 'Pre-commit hook: auto-export requirements.yaml from SQLite'
+description: A git pre-commit hook (.git/hooks/pre-commit) that auto-exports requirements.db to requirements.yaml before each commit. The SQLite binary is not tracked in git; only the diffable YAML is committed. Hook handles SQLite WAL mode (checks both .db and .db-wal timestamps), skips gracefully if aida is not installed. Gives full text-based diff history while keeping SQLite as the runtime backend.
+status: Completed
+priority: Medium
+owner: joe
+feature: 236-Uncategorized
+created_at: 2026-02-23T05:49:01.227228469Z
+modified_at: 2026-02-23T05:49:18.702404260Z
+req_type: Task
+tags:
+- infrastructure
+- git
+- docker
+comments:
+- id: f2fcc2f8-6c33-443e-bc80-8b6293fdfdbc
+  author: joe
+  content: 'Committed in 04c79b1, hook fix in be5d467. Plan: docs/plans/2026-02-22-auto-export-yaml-hook.md'
+  created_at: 2026-02-23T05:49:18.702398977Z
+  modified_at: 2026-02-23T05:49:18.702398977Z
