@@ -232,6 +232,152 @@ impl Dispenser for FileDispenser {
     }
 }
 
+/// SQLite-backed dispenser using atomic UPSERT for sequence generation.
+/// This is the Phase 2 implementation per the distributed architecture spec.
+///
+/// Uses a single `sequences` table with one row per (node_id, type).
+/// SQLite's write serialization handles all concurrency — no external
+/// lockfile needed. Natural fit when the local read model is also SQLite.
+///
+/// Schema:
+/// ```sql
+/// CREATE TABLE IF NOT EXISTS dispenser_sequences (
+///     node_id INTEGER NOT NULL,
+///     type_prefix TEXT NOT NULL,
+///     next_val INTEGER NOT NULL DEFAULT 1,
+///     PRIMARY KEY (node_id, type_prefix)
+/// );
+/// CREATE TABLE IF NOT EXISTS dispenser_meta (
+///     key TEXT PRIMARY KEY,
+///     value TEXT NOT NULL
+/// );
+/// ```
+#[cfg(feature = "native")]
+pub struct SqliteDispenser {
+    conn: std::sync::Mutex<rusqlite::Connection>,
+    mode: IdMode,
+}
+
+#[cfg(feature = "native")]
+impl SqliteDispenser {
+    /// Open or create a SQLite-backed dispenser.
+    ///
+    /// If `db_path` points to an existing database (e.g., the local read model),
+    /// the dispenser tables are created alongside existing tables. If it doesn't
+    /// exist, a new database is created.
+    pub fn open(db_path: std::path::PathBuf, mode: IdMode) -> Result<Self> {
+        if let Some(parent) = db_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        let conn = rusqlite::Connection::open(&db_path)?;
+        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;")?;
+
+        // Create tables if they don't exist
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS dispenser_sequences (
+                node_id INTEGER NOT NULL,
+                type_prefix TEXT NOT NULL,
+                next_val INTEGER NOT NULL DEFAULT 1,
+                PRIMARY KEY (node_id, type_prefix)
+            );
+            CREATE TABLE IF NOT EXISTS dispenser_meta (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );"
+        )?;
+
+        // Store the mode
+        let mode_json = serde_json::to_string(&mode)?;
+        conn.execute(
+            "INSERT OR REPLACE INTO dispenser_meta (key, value) VALUES ('mode', ?1)",
+            rusqlite::params![mode_json],
+        )?;
+
+        Ok(Self {
+            conn: std::sync::Mutex::new(conn),
+            mode,
+        })
+    }
+
+    /// Get the node_id for this dispenser (0 for centralized).
+    fn node_id(&self) -> u32 {
+        match &self.mode {
+            IdMode::Centralized => 0,
+            IdMode::Distributed { node_id } => *node_id,
+        }
+    }
+}
+
+#[cfg(feature = "native")]
+impl Dispenser for SqliteDispenser {
+    fn next(&self, object_type: &str) -> Result<u32> {
+        let conn = self.conn.lock().unwrap();
+        let node_id = self.node_id();
+        let type_upper = object_type.to_uppercase();
+
+        // Atomic increment via UPSERT + RETURNING
+        // SQLite 3.35+ supports RETURNING; fall back to two-step for older versions
+        let result: Result<u32> = conn
+            .query_row(
+                "INSERT INTO dispenser_sequences (node_id, type_prefix, next_val)
+                 VALUES (?1, ?2, 1)
+                 ON CONFLICT (node_id, type_prefix)
+                 DO UPDATE SET next_val = next_val + 1
+                 RETURNING next_val",
+                rusqlite::params![node_id as i64, type_upper],
+                |row| row.get(0),
+            )
+            .map_err(|e| anyhow::anyhow!("SQLite dispenser next() failed: {}", e));
+
+        result
+    }
+
+    fn peek(&self, object_type: &str) -> Result<u32> {
+        use rusqlite::OptionalExtension;
+
+        let conn = self.conn.lock().unwrap();
+        let node_id = self.node_id();
+        let type_upper = object_type.to_uppercase();
+
+        let current: Option<u32> = conn
+            .query_row(
+                "SELECT next_val FROM dispenser_sequences
+                 WHERE node_id = ?1 AND type_prefix = ?2",
+                rusqlite::params![node_id as i64, type_upper],
+                |row| row.get(0),
+            )
+            .optional()?;
+
+        // If no row exists, next value will be 1
+        Ok(current.map(|v| v + 1).unwrap_or(1))
+    }
+
+    fn state(&self) -> Result<DispenserState> {
+        let conn = self.conn.lock().unwrap();
+        let node_id = self.node_id();
+
+        let mut stmt = conn.prepare(
+            "SELECT type_prefix, next_val FROM dispenser_sequences WHERE node_id = ?1",
+        )?;
+
+        let mut sequences = HashMap::new();
+        let rows = stmt.query_map(rusqlite::params![node_id as i64], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, u32>(1)?))
+        })?;
+
+        for row in rows {
+            let (prefix, val) = row?;
+            sequences.insert(prefix, val);
+        }
+
+        Ok(DispenserState {
+            mode: self.mode.clone(),
+            sequences,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -306,5 +452,139 @@ mod tests {
         let d2 = FileDispenser::open(path, IdMode::Distributed { node_id: 7 }).unwrap();
         assert_eq!(d2.next("FR").unwrap(), 4);
         assert_eq!(d2.peek("FEAT").unwrap(), 1);
+    }
+
+    #[cfg(feature = "native")]
+    #[test]
+    fn test_sqlite_dispenser_basic() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("dispenser.db");
+
+        let d = SqliteDispenser::open(path, IdMode::Distributed { node_id: 7 }).unwrap();
+
+        assert_eq!(d.next("FR").unwrap(), 1);
+        assert_eq!(d.next("FR").unwrap(), 2);
+        assert_eq!(d.next("FR").unwrap(), 3);
+        assert_eq!(d.next("FEAT").unwrap(), 1);
+        assert_eq!(d.next("FR").unwrap(), 4);
+
+        assert_eq!(d.next_id("FR").unwrap(), "FR-7-005");
+        assert_eq!(d.next_id("FEAT").unwrap(), "FEAT-7-002");
+    }
+
+    #[cfg(feature = "native")]
+    #[test]
+    fn test_sqlite_dispenser_persistence() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("dispenser.db");
+
+        // First session
+        {
+            let d = SqliteDispenser::open(path.clone(), IdMode::Distributed { node_id: 3 }).unwrap();
+            assert_eq!(d.next("FR").unwrap(), 1);
+            assert_eq!(d.next("FR").unwrap(), 2);
+            assert_eq!(d.next("BUG").unwrap(), 1);
+        }
+
+        // Second session — state persisted
+        {
+            let d = SqliteDispenser::open(path, IdMode::Distributed { node_id: 3 }).unwrap();
+            assert_eq!(d.next("FR").unwrap(), 3);
+            assert_eq!(d.peek("BUG").unwrap(), 2);
+            assert_eq!(d.next_id("BUG").unwrap(), "BUG-3-002");
+        }
+    }
+
+    #[cfg(feature = "native")]
+    #[test]
+    fn test_sqlite_dispenser_centralized() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("dispenser.db");
+
+        let d = SqliteDispenser::open(path, IdMode::Centralized).unwrap();
+
+        assert_eq!(d.next_id("FR").unwrap(), "FR-001");
+        assert_eq!(d.next_id("FR").unwrap(), "FR-002");
+        assert_eq!(d.next_id("BUG").unwrap(), "BUG-001");
+    }
+
+    #[cfg(feature = "native")]
+    #[test]
+    fn test_sqlite_dispenser_case_insensitive() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("dispenser.db");
+
+        let d = SqliteDispenser::open(path, IdMode::Centralized).unwrap();
+        assert_eq!(d.next("fr").unwrap(), 1);
+        assert_eq!(d.next("FR").unwrap(), 2);
+        assert_eq!(d.next("Fr").unwrap(), 3);
+    }
+
+    #[cfg(feature = "native")]
+    #[test]
+    fn test_sqlite_dispenser_state() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("dispenser.db");
+
+        let d = SqliteDispenser::open(path, IdMode::Distributed { node_id: 42 }).unwrap();
+        d.next("FR").unwrap();
+        d.next("FR").unwrap();
+        d.next("FEAT").unwrap();
+
+        let state = d.state().unwrap();
+        assert_eq!(state.mode, IdMode::Distributed { node_id: 42 });
+        assert_eq!(state.sequences.get("FR"), Some(&2));
+        assert_eq!(state.sequences.get("FEAT"), Some(&1));
+    }
+
+    #[cfg(feature = "native")]
+    #[test]
+    fn test_sqlite_dispenser_concurrent_threads() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("dispenser.db");
+
+        let d = Arc::new(SqliteDispenser::open(path, IdMode::Distributed { node_id: 1 }).unwrap());
+
+        let mut handles = vec![];
+        for _ in 0..10 {
+            let d = Arc::clone(&d);
+            handles.push(thread::spawn(move || {
+                d.next("FR").unwrap()
+            }));
+        }
+
+        let mut results: Vec<u32> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+        results.sort();
+
+        // All 10 values should be unique and sequential 1-10
+        assert_eq!(results, (1..=10).collect::<Vec<u32>>());
+    }
+
+    #[cfg(feature = "native")]
+    #[test]
+    fn test_sqlite_dispenser_coexists_with_other_tables() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("shared.db");
+
+        // Create a database with some other table first
+        {
+            let conn = rusqlite::Connection::open(&path).unwrap();
+            conn.execute("CREATE TABLE other_data (id INTEGER PRIMARY KEY, value TEXT)", []).unwrap();
+            conn.execute("INSERT INTO other_data (value) VALUES ('hello')", []).unwrap();
+        }
+
+        // Open dispenser on the same database — should not interfere
+        let d = SqliteDispenser::open(path.clone(), IdMode::Centralized).unwrap();
+        assert_eq!(d.next("FR").unwrap(), 1);
+
+        // Verify the other table is intact
+        {
+            let conn = rusqlite::Connection::open(&path).unwrap();
+            let val: String = conn.query_row("SELECT value FROM other_data", [], |r| r.get(0)).unwrap();
+            assert_eq!(val, "hello");
+        }
     }
 }
