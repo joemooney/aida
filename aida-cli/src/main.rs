@@ -613,12 +613,42 @@ fn handle_init_command(no_skills: bool, agent: &str, no_hooks: bool, force: bool
     Ok(())
 }
 
+/// Load or create the distributed dispenser for a git-backed store.
+/// Reads node config from {store}/.aida/node.toml; defaults to node_id=1
+/// if no node registration has happened yet.
+fn load_dispenser(
+    store_path: &std::path::Path,
+) -> Result<aida_core::models::DispenserHandle> {
+    use aida_core::dispenser::{FileDispenser, IdMode};
+    use aida_core::node::NodeConfig;
+
+    let aida_dir = store_path.join(".aida");
+    std::fs::create_dir_all(&aida_dir)?;
+
+    let node_config_path = aida_dir.join("node.toml");
+    let dispenser_path = aida_dir.join("dispenser.toml");
+
+    // Load node_id from config, or default to 1 for local-only
+    let node_id = if node_config_path.exists() {
+        NodeConfig::load(&node_config_path)?.node_id
+    } else {
+        1 // default for unregistered local node
+    };
+
+    let mode = IdMode::Distributed { node_id };
+    let dispenser = FileDispenser::open(dispenser_path, mode)?;
+
+    Ok(aida_core::models::DispenserHandle(std::sync::Arc::new(dispenser)))
+}
+
 /// Handle commands routed to the GitBackend (when --file points to a directory).
 fn handle_git_backend_command(
     store_path: &std::path::Path,
     command: &Command,
 ) -> Result<()> {
-    let backend = aida_core::GitBackend::new(store_path)?;
+    let dispenser = load_dispenser(store_path)?;
+    let backend = aida_core::GitBackend::new(store_path)?
+        .with_dispenser(dispenser);
 
     match command {
         Command::List { status, r#type, .. } => {

@@ -69,7 +69,7 @@ info "Test 2: Add multiple requirements and list them"
 $AIDA --file "$STORE" add --title "Second requirement" --description "Another one" --type bug --status draft 2>/dev/null
 $AIDA --file "$STORE" add --title "Third requirement" --description "And another" --type story --status approved 2>/dev/null
 
-COUNT=$($AIDA --file "$STORE" list 2>/dev/null | grep -cE "^(FR|BUG|STORY|NFR|TASK|EPIC|SPIKE|REQ)" || true)
+COUNT=$($AIDA --file "$STORE" list 2>/dev/null | grep -cE "^(FR-|BUG-|STORY-|NFR-|TASK-|EPIC-|SPIKE-|REQ-)" || true)
 [ "$COUNT" -ge 3 ] || fail "Expected at least 3 requirements, got $COUNT"
 pass "Multiple requirements stored and listed ($COUNT rows)"
 
