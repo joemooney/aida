@@ -350,6 +350,7 @@ pub fn requirement_to_proto(req: &Requirement) -> proto::Requirement {
         custom_priority: req.custom_priority.clone().unwrap_or_default(),
         custom_fields: req.custom_fields.clone(),
         urls: req.urls.iter().map(url_link_to_proto).collect(),
+        agreed_id: req.agreed_id.clone().unwrap_or_default(),
     }
 }
 
@@ -364,7 +365,11 @@ pub fn proto_to_requirement(req: &proto::Requirement) -> Option<Requirement> {
 
     Some(Requirement {
         id,
-        agreed_id: None,
+        agreed_id: if req.agreed_id.is_empty() {
+            None
+        } else {
+            Some(req.agreed_id.clone())
+        },
         spec_id: if req.spec_id.is_empty() {
             None
         } else {

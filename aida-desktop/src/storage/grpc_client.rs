@@ -961,7 +961,7 @@ pub fn proto_to_requirement(req: &proto::Requirement) -> Option<Requirement> {
 
     Some(Requirement {
         id,
-        agreed_id: None,
+        agreed_id: None, // TODO: read from proto once generated proto is updated
         spec_id: if req.spec_id.is_empty() {
             None
         } else {
