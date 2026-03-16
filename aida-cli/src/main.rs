@@ -955,9 +955,175 @@ fn handle_git_backend_command(
                 }
             }
         }
+        // Phase 2: Relationship commands
+        Command::Rel(RelationshipCommand::Add {
+            from,
+            to,
+            r#type,
+            bidirectional,
+        }) => {
+            let mut from_req = backend
+                .get_requirement_by_spec_id(from)?
+                .ok_or_else(|| anyhow::anyhow!("Source not found: {}", from))?;
+
+            let to_req = backend
+                .get_requirement_by_spec_id(to)?
+                .ok_or_else(|| anyhow::anyhow!("Target not found: {}", to))?;
+
+            let rel_type = match r#type.to_lowercase().as_str() {
+                "parent" => RelationshipType::Parent,
+                "child" => RelationshipType::Child,
+                "duplicate" => RelationshipType::Duplicate,
+                "verifies" => RelationshipType::Verifies,
+                "verified-by" | "verifiedby" => RelationshipType::VerifiedBy,
+                "references" => RelationshipType::References,
+                other => RelationshipType::Custom(other.to_string()),
+            };
+
+            let rel = aida_core::models::Relationship {
+                rel_type: rel_type.clone(),
+                target_id: to_req.id,
+                created_at: Some(chrono::Utc::now()),
+                created_by: Some(get_default_author()),
+            };
+
+            from_req.relationships.push(rel);
+            from_req.modified_at = chrono::Utc::now();
+            backend.update_requirement(&from_req)?;
+            println!("Added relationship: {} --[{:?}]--> {}", from, rel_type, to);
+
+            if *bidirectional {
+                let mut to_req = backend.get_requirement_by_spec_id(to)?.unwrap();
+                let inverse_type = match &rel_type {
+                    RelationshipType::Parent => RelationshipType::Child,
+                    RelationshipType::Child => RelationshipType::Parent,
+                    RelationshipType::Verifies => RelationshipType::VerifiedBy,
+                    RelationshipType::VerifiedBy => RelationshipType::Verifies,
+                    other => other.clone(),
+                };
+                let inv_rel = aida_core::models::Relationship {
+                    rel_type: inverse_type.clone(),
+                    target_id: from_req.id,
+                    created_at: Some(chrono::Utc::now()),
+                    created_by: Some(get_default_author()),
+                };
+                to_req.relationships.push(inv_rel);
+                to_req.modified_at = chrono::Utc::now();
+                backend.update_requirement(&to_req)?;
+                println!("Added inverse: {} --[{:?}]--> {}", to, inverse_type, from);
+            }
+        }
+        Command::Rel(RelationshipCommand::Remove { from, to, .. }) => {
+            let mut from_req = backend
+                .get_requirement_by_spec_id(from)?
+                .ok_or_else(|| anyhow::anyhow!("Source not found: {}", from))?;
+
+            // Look up target UUID
+            let to_req = backend
+                .get_requirement_by_spec_id(to)?
+                .ok_or_else(|| anyhow::anyhow!("Target not found: {}", to))?;
+
+            let before = from_req.relationships.len();
+            from_req.relationships.retain(|r| r.target_id != to_req.id);
+            let removed = before - from_req.relationships.len();
+
+            if removed > 0 {
+                from_req.modified_at = chrono::Utc::now();
+                backend.update_requirement(&from_req)?;
+                println!("Removed {} relationship(s) from {} to {}", removed, from, to);
+            } else {
+                println!("No relationship found from {} to {}", from, to);
+            }
+        }
+
+        // Phase 1: Sync command
+        Command::Db(DbCommand::Sync { pull, push, message }) => {
+            if !aida_core::git_ops::is_git_repo(store_path) {
+                anyhow::bail!("Not a git repository: {}", store_path.display());
+            }
+
+            let branch = aida_core::git_ops::current_branch(store_path)
+                .unwrap_or_else(|_| "main".to_string());
+
+            if *pull {
+                println!("Pulling from origin/{}...", branch);
+                match aida_core::git_ops::pull(store_path, "origin", &branch) {
+                    Ok(()) => println!("  Pull complete."),
+                    Err(e) => eprintln!("  Pull failed: {}", e),
+                }
+            }
+
+            // Stage and commit any pending changes
+            let has_changes = aida_core::git_ops::has_changes(store_path)?;
+            if has_changes {
+                let msg = message.as_deref().unwrap_or("chore: sync pending changes");
+                aida_core::git_ops::add_all(store_path, "objects")?;
+                if store_path.join("metadata.yaml").exists() {
+                    aida_core::git_ops::add(store_path, &["metadata.yaml"])?;
+                }
+                if store_path.join("registry").exists() {
+                    aida_core::git_ops::add_all(store_path, "registry")?;
+                }
+                aida_core::git_ops::commit(store_path, msg)?;
+                println!("Committed: {}", msg);
+            } else {
+                println!("Nothing to commit.");
+            }
+
+            if *push {
+                println!("Pushing to origin/{}...", branch);
+                match aida_core::git_ops::push(store_path, "origin", &branch) {
+                    Ok(true) => println!("  Push complete."),
+                    Ok(false) => {
+                        println!("  Push rejected. Pulling and retrying...");
+                        aida_core::git_ops::pull_rebase(store_path, "origin", &branch)?;
+                        aida_core::git_ops::push(store_path, "origin", &branch)?;
+                        println!("  Push complete after rebase.");
+                    }
+                    Err(e) => eprintln!("  Push failed: {}", e),
+                }
+            }
+
+            if !pull && !push {
+                println!("Use --pull and/or --push to sync with remote.");
+                println!("  aida --file {} db sync --pull --push", store_path.display());
+            }
+        }
+
+        // Phase 3: Export to git backend
+        Command::Db(DbCommand::ExportGit { output }) => {
+            let output_path = std::path::PathBuf::from(output);
+
+            // Load from whatever backend we're using (this handler is already git,
+            // but the export command is also available from the main CLI path)
+            let store = backend.load()?;
+
+            // Create the target git backend
+            let target = aida_core::GitBackend::new(&output_path)?;
+
+            // Initialize git repo if not already
+            if !aida_core::git_ops::is_git_repo(&output_path) {
+                aida_core::git_ops::init(&output_path)?;
+                let git_name = aida_core::git_ops::git_config_get("user.name")
+                    .unwrap_or_else(|_| "AIDA".to_string());
+                let git_email = aida_core::git_ops::git_config_get("user.email")
+                    .unwrap_or_else(|_| "aida@localhost".to_string());
+                aida_core::git_ops::configure_user(&output_path, &git_name, &git_email)?;
+            }
+
+            target.save(&store)?;
+            println!(
+                "Exported {} requirements to {}",
+                store.requirements.len(),
+                output_path.display()
+            );
+        }
+
         _ => {
             eprintln!(
-                "Command not yet supported for git backend. Supported: list, add, show, edit, del, search, comment add, db info"
+                "Command not yet supported for git backend.\n\
+                 Supported: list, add, show, edit, del, search, comment add,\n\
+                 rel add/remove, db info, db sync, db export-git"
             );
             std::process::exit(1);
         }
@@ -2722,6 +2888,39 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
                     println!("Sync:           git push/pull");
                 }
             }
+        }
+        DbCommand::Sync { .. } => {
+            println!(
+                "{} Sync is only available for git-backed stores. Use: aida --file <dir> db sync --pull --push",
+                "!".yellow()
+            );
+        }
+        DbCommand::ExportGit { output } => {
+            let output_path = std::path::PathBuf::from(output);
+
+            // Load from current backend
+            let source_backend = aida_core::create_backend(requirements_path, None)?;
+            let store = source_backend.load()?;
+
+            // Create target git backend
+            let target = aida_core::GitBackend::new(&output_path)?;
+
+            if !aida_core::git_ops::is_git_repo(&output_path) {
+                aida_core::git_ops::init(&output_path)?;
+                let git_name = aida_core::git_ops::git_config_get("user.name")
+                    .unwrap_or_else(|_| "AIDA".to_string());
+                let git_email = aida_core::git_ops::git_config_get("user.email")
+                    .unwrap_or_else(|_| "aida@localhost".to_string());
+                aida_core::git_ops::configure_user(&output_path, &git_name, &git_email)?;
+            }
+
+            target.save(&store)?;
+            println!(
+                "{} Exported {} requirements to git store at {}",
+                "✓".green(),
+                store.requirements.len(),
+                output_path.display()
+            );
         }
     }
 
