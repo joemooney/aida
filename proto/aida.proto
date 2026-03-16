@@ -138,6 +138,7 @@ message Requirement {
     string custom_priority = 21;             // For types with custom priorities
     map<string, string> custom_fields = 22;
     repeated UrlLink urls = 23;
+    string agreed_id = 24;                   // Short agreed ID (e.g., "FR-423") assigned at merge
 }
 
 // A feature definition

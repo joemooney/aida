@@ -668,7 +668,13 @@ id: string,
 /**
  * Human-friendly specification ID (e.g., "SPEC-001")
  */
-spec_id: string | null, 
+spec_id: string | null,
+/**
+ * Short agreed ID assigned at merge-to-trunk (e.g., "FR-423").
+ * Only populated in distributed mode after the merge gate runs.
+ * Both spec_id and agreed_id permanently resolve to the same UUID.
+ */
+agreed_id?: string | null,
 /**
  * Optional prefix override for the spec_id (e.g., "SEC" for security requirements)
  * If set, uses this prefix instead of deriving from feature/type
