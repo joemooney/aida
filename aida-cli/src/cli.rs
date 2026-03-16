@@ -308,6 +308,9 @@ pub enum DbCommand {
     /// Run this at merge-to-trunk to give distributed IDs (FR-7-048) their
     /// short form (FR-423).
     MergeGate,
+
+    /// Show status of the git-backed store (changes, sync state, conflicts)
+    Status,
 }
 
 #[derive(Subcommand, Debug)]
