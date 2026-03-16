@@ -1,6 +1,5 @@
 id: dd108b2e-541e-4878-aa4f-232a4163a073
 spec_id: FR-0236
-agreed_id: FR-203
 title: Database change detection and auto-reload
 description: 'Periodic monitoring of database file modification time (mtime) to detect external changes. When changes detected: auto-reloads if not editing (preserves selection), shows toast notification if editing (defers reload). Configurable settings: db_poll_interval_secs (default 30, 0 to disable), db_auto_reload (default true).'
 status: Completed

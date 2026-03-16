@@ -1,6 +1,5 @@
 id: 6da186f2-cae3-4b75-bc46-d487ced9e96b
 spec_id: FR-0017
-agreed_id: FR-88
 title: In Links tab, double click on link to jump to requirement
 description: In the requirement Links tab, double clicking on a requirement should switch to that requirement
 status: Completed

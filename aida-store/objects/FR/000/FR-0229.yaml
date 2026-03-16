@@ -1,6 +1,5 @@
 id: 611bd5c5-0d47-4ea0-93aa-b6676e6830de
 spec_id: FR-0229
-agreed_id: FR-111
 title: Code Traceability Query and Reporting
 description: |-
   Provide CLI commands and GUI features to query and report on code traceability:

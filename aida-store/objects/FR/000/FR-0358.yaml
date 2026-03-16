@@ -1,6 +1,5 @@
 id: 37b6806f-72b6-46c8-8a14-79d4d797c4cc
 spec_id: FR-0358
-agreed_id: FR-29
 title: Tag-based filtering in web dashboard views
 description: Add tag filtering to the web dashboard filter bar. A tag dropdown populated from all requirement tags allows filtering kanban, list, and timeline views by tag. The tag filter is AND-combined with existing status/priority/type/feature/owner filters. URL-parameter based (?tag=value) for shareability.
 status: Completed

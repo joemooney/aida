@@ -1,6 +1,5 @@
 id: bf646b67-bfa2-49bb-93dd-1eb49f4a085a
 spec_id: FR-0295
-agreed_id: FR-212
 title: Edit req should show the tabs same as Detail view
 description: |-
   The Edit requirement dialog should display the same tabbed interface as the Detail view, including tabs for AI Evaluation, Comments, History, and Relationships.

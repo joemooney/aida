@@ -1,6 +1,5 @@
 id: dfc373ae-03ae-46ef-aaa1-3e9baa21bb86
 spec_id: FR-0357
-agreed_id: FR-47
 title: Templates View - Browse embedded skills, commands, hooks
 description: |-
   GUI view for browsing and previewing all embedded templates used for project scaffolding.

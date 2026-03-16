@@ -1,6 +1,5 @@
 id: 6b55ed68-0975-4dde-83fd-8bce124b364d
 spec_id: FR-0298
-agreed_id: FR-3
 title: Template sync skill for AIDA meta-level management
 description: 'Add /aida-sync slash command and skill for managing template consistency between AIDA source and scaffolded projects. Includes: (1) Detection of AIDA repo vs scaffolded project mode, (2) Symlink integrity verification for AIDA repo, (3) Template-to-binary rebuild reminders, (4) Scaffold status checking for downstream projects, (5) CLAUDE.md documentation verification.'
 status: Completed

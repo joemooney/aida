@@ -1,6 +1,5 @@
 id: a8e0e918-09a1-4b9f-9676-d754db0d1a68
 spec_id: FR-0089
-agreed_id: FR-69
 title: SQLite format support
 description: Be able to store requirements in SQLite
 status: Completed

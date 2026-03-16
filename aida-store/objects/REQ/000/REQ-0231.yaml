@@ -1,6 +1,5 @@
 id: b173e02c-5fae-4894-a01b-767f5a29c202
 spec_id: REQ-0231
-agreed_id: REQ-27
 title: Concurrent Edit Protection
 description: |-
   Prevent data loss when GUI and CLI (or server) modify the same requirements.yaml simultaneously.

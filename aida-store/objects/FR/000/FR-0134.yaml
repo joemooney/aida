@@ -1,6 +1,5 @@
 id: 4de3b4f0-b157-4d50-8549-e98153d2324d
 spec_id: FR-0134
-agreed_id: FR-229
 title: AI Requirement Evaluation
 description: |2+
    I've implemented a complete background AI evaluation system for AIDA with the following components:

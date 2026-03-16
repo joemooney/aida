@@ -1,6 +1,5 @@
 id: 58f1be6d-b5c8-4304-b453-e495a13cadd5
 spec_id: IMPL-0169
-agreed_id: IMPL-4
 prefix_override: IMPL
 title: Scaffolding generates AIDA-aware CLAUDE.md with /aida-capture skill
 description: |2

@@ -1,6 +1,5 @@
 id: e0825afb-fabe-4fd2-8369-80e09bfd338c
 spec_id: FR-0277
-agreed_id: FR-135
 title: Queue view arrow/j/k keys are returning us to r...
 description: Queue view arrow/j/k keys are returning us to requirements list view
 status: Draft

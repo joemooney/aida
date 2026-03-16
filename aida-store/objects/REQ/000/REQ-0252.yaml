@@ -1,6 +1,5 @@
 id: 6b61fca9-9fb8-4678-a49a-70ab43647fbd
 spec_id: REQ-0252
-agreed_id: REQ-5
 title: 'CLI: aida trace scan'
 description: 'Add a CLI command to scan the codebase for trace comments and update trace links: aida trace scan [PATH]. Parses comments matching the pattern // trace:SPEC-ID and creates/updates TraceLink entries. Useful for syncing the database with existing code annotations.'
 status: Draft

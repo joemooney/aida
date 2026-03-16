@@ -1,6 +1,5 @@
 id: 59d3cc0b-25a5-4076-8966-94b8ef4e36b1
 spec_id: FR-0002
-agreed_id: FR-31
 title: Add child requirement button
 description: when a requirement is selected we should be able to add one of the relationship links like child requirement
 status: Approved

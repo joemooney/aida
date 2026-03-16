@@ -1,6 +1,5 @@
 id: 01cb13e7-36e9-4dc1-900c-46d22087db4e
 spec_id: FR-0096
-agreed_id: FR-137
 title: Collapse/hide Detail View
 description: |
   Ability to collapse or hide the Detail View so we can focus on the list

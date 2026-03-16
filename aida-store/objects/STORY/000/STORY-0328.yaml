@@ -1,6 +1,5 @@
 id: 762ba866-b5e3-452c-a73e-f29b60939bea
 spec_id: STORY-0328
-agreed_id: STORY-24
 title: Divergence Detection and Display
 description: |-
   As a user, I want to see when AIDA requirements and GitLab issues have diverged so that I can review and resolve differences.

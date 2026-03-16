@@ -1,6 +1,5 @@
 id: 83c887a3-dae7-445e-86cb-ed8cf59e91c9
 spec_id: FR-0140
-agreed_id: FR-167
 title: Command Support
 description: "Command Support\n\nAllow custom command to be associated with a type. The command line could use substitution such that metadata fields like ID would have their value substitute when \"{{id}}\" is in the command string (case insensitive). The command would run in the backgound by default. The results could be place in the history if that makes sense. I am worried about long running commands and if I close the gui I would want to detach the command execution probably and not have the command killed. Maybe we will want to see the history of command execution but we can worry about that later, maybe an Action could be to view a markdown report of the history of command execution so that it is not mixed with the rest of the requirement history. "
 status: Draft

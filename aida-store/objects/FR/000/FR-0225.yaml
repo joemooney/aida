@@ -1,6 +1,5 @@
 id: 2b1793fb-87e1-4c19-8e9b-419c4ab020c8
 spec_id: FR-0225
-agreed_id: FR-168
 title: When search mode is active and reqs are found a...
 description: |-
   When search mode is active and reqs are found arrow keys misbehave

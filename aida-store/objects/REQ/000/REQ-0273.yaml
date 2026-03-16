@@ -1,6 +1,5 @@
 id: cbc2b6b3-a9c3-4f5a-887a-bb4d0ce92d06
 spec_id: REQ-0273
-agreed_id: REQ-30
 title: '''q v'' opens queue view but the pop-up remains open'
 description: '''q v'' opens queue view but the pop-up remains open'
 status: Draft

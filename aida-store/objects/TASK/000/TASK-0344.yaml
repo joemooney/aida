@@ -1,6 +1,5 @@
 id: 179b31cd-0049-4a28-a015-79133e26fe62
 spec_id: TASK-0344
-agreed_id: TASK-6
 title: Enforce consistent commit message format in scaffolding
 description: 'Update commit-msg hook to validate format: [AI:tool]? type(scope): description (REQ-ID)?. Require REQ-ID for feat/fix commits, allow chore/docs without. Make configurable via .aida/config.toml. Update /aida-commit skill to match.'
 status: InProgress

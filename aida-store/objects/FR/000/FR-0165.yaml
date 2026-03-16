@@ -1,6 +1,5 @@
 id: 452fc8ef-4d73-43af-a759-5435b8ae922c
 spec_id: FR-0165
-agreed_id: FR-75
 title: Smart parent selection for new requirements
 description: 'Add button uses smart heuristic: if selected has children, new req becomes child; if selected has no children but has parent, new req becomes sibling; if selected has no children and no parent, new req is root. New keybindings: Ctrl+N (smart), ''n'' (sibling), ''N'' (child).'
 status: Completed

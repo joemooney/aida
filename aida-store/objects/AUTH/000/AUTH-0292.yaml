@@ -1,6 +1,5 @@
 id: 5bc33a59-c7b9-47d3-b57f-5c95cf19ed88
 spec_id: AUTH-0292
-agreed_id: AUTH-4
 prefix_override: AUTH
 title: Role-Based Access Control (RBAC)
 description: Implement role-based permissions system. Define roles (admin, editor, viewer), permissions per role, and apply authorization checks to API endpoints and UI actions.

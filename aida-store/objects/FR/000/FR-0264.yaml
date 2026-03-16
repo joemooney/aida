@@ -1,6 +1,5 @@
 id: 93bc227e-2a79-44bd-a5a2-e105123ad192
 spec_id: FR-0264
-agreed_id: FR-134
 title: Planned status for implementation workflow
 description: 'The system shall support a ''Planned'' status between Approved and In Progress, allowing requirements to be decomposed and planned before implementation begins. This enables a workflow: Draft → Approved → Planned → In Progress → Completed.'
 status: Completed

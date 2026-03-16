@@ -1,6 +1,5 @@
 id: e66dc8e9-b9f4-4c08-b053-fd55762d1d49
 spec_id: IMPL-0181
-agreed_id: IMPL-3
 prefix_override: IMPL
 title: Implement /aida-release skill
 description: 'Created the /aida-release Claude Code skill with complete release management workflow including pre-release validation, version bumping, release notes generation from AIDA requirements, CHANGELOG maintenance, and git tagging. Skill file: .claude/skills/aida-release.md'

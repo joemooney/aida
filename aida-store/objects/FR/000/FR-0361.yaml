@@ -1,6 +1,5 @@
 id: 919b82ef-04e2-4cec-a52f-7a206e28b033
 spec_id: FR-0361
-agreed_id: FR-222
 title: Active filter chips with individual removal
 description: Active filters display as accent-colored chips below the filter dropdowns showing label:value pairs. Each chip has an X button to remove that specific filter. A 'Clear all' text button appears when 2+ filters are active. Replaces the previous 'Clear (N)' button.
 status: Completed

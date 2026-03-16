@@ -1,6 +1,5 @@
 id: 2a82a590-b200-42ad-843a-456db9d55359
 spec_id: FR-0217
-agreed_id: FR-6
 title: Archive state
 description: 'Add a button to allow archiving a requirement. Achived requirements should not show up unless we explicitly Filter to include Archive. '
 status: Approved

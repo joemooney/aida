@@ -1,6 +1,5 @@
 id: 31e0af07-4b1d-4e77-b7d5-819ec155f8e3
 spec_id: FR-0262
-agreed_id: FR-145
 title: Database-aware scaffolding generates backend-specific CLAUDE.md
 description: |-
   The scaffolding system shall detect the database backend type (SQLite vs YAML) and generate appropriate CLAUDE.md content:

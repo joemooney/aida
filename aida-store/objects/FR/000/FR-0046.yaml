@@ -1,6 +1,5 @@
 id: 0aefc969-49e7-4825-9118-ba20f778636c
 spec_id: FR-0046
-agreed_id: FR-79
 title: Width of Requirements View Panel
 description: "Width of Requirements View Panel will not allow resizing to less than the widest requirement title. We need to be able to resize it to a narrower width and show a horizontal scrollbar when narrower. \n\nThe Requirements Panel can now be resized narrower:\n\n  Changes:\n  - Minimum width reduced from 400px to 200px\n  - Default width set to 400px (preserves initial appearance)\n  - Horizontal scrolling enabled - when the panel is narrower than the content, a horizontal scrollbar appears\n  - Content minimum width set to 300px to prevent text from collapsing completely\n\n  Now you can drag the panel border to make it narrower, and long requirement titles will scroll horizontally instead of forcing a minimum\n  panel width.\n"
 status: Draft

@@ -1,6 +1,5 @@
 id: 93c22e3a-bb6c-4933-9c35-d9b8fd9173c5
 spec_id: FR-0007
-agreed_id: FR-110
 title: Title and description width should be width of window
 description: the title and description text boxes should expand to the width of the window.
 status: Completed

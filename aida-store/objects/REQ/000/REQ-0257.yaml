@@ -1,6 +1,5 @@
 id: 063b9d61-e0bb-45b8-8552-4ea1373d3e8d
 spec_id: REQ-0257
-agreed_id: REQ-21
 title: Commit History Sweep
 description: 'Add capability to sweep through git commit history and trace commits to requirements. For each commit: 1) Parse commit message for requirement references (SPEC-IDs), 2) Analyze changed files for trace comments, 3) Create TraceLinks for code implementing requirements, 4) Optionally create new requirements for commits without references, 5) Generate a report of coverage (commits with/without requirement links). This helps ensure AIDA is a poster child for its own methodology.'
 status: Approved

@@ -1,6 +1,5 @@
 id: c703ae80-8d7d-4027-8600-207053609377
 spec_id: REQ-0303
-agreed_id: REQ-12
 title: Update CLI help and docs to show all requirement types
 description: 'Fixed CLI help text and CLAUDE.md to document all 11 requirement types instead of just the original 4 (functional, non-functional, system, user). Now correctly shows: bug, epic, story, task, spike, sprint, folder types as well.'
 status: Completed

@@ -1,6 +1,5 @@
 id: a8029fa0-c09a-4e9b-a344-215344b56f60
 spec_id: FR-0315
-agreed_id: FR-175
 title: Scaffold status report with diffs in HTML format
 description: |-
   Add --report option to scaffold status command that generates an HTML report showing:

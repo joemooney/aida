@@ -1,6 +1,5 @@
 id: d8fbfd6f-47a7-4f93-94d2-1dc3009e79b0
 spec_id: FR-0023
-agreed_id: FR-152
 title: describe default requirement types
 description: The user guide should explain what each of the  requirement types are intended for and best practices when how to write such requirements.
 status: Planned

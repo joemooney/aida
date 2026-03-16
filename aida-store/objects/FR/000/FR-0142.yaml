@@ -1,6 +1,5 @@
 id: 652d7124-8cf8-422b-875c-0f9784eeb3df
 spec_id: FR-0142
-agreed_id: FR-48
 title: AI Evaluation Apply button to replace with suggested description
 description: |-
   In the AI Evaluation tab can we have an Apply button for the Improved desription that will replace the current description with the suggested
