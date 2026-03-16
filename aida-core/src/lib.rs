@@ -1,4 +1,5 @@
 pub mod ai;
+pub mod conflict;
 pub mod db;
 pub mod dispenser;
 pub mod export;
