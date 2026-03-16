@@ -2116,6 +2116,14 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
                     println!("{}", "─".repeat(40));
                     println!("Consider migrating to SQLite or PostgreSQL for concurrent access.");
                 }
+                BackendType::Git => {
+                    println!();
+                    println!("{}", "Distributed Storage".bold());
+                    println!("{}", "─".repeat(40));
+                    println!("Backend:        Git-backed sharded YAML");
+                    println!("Object files:   objects/TYPE/NNN/SPEC-ID.yaml");
+                    println!("Sync:           git push/pull");
+                }
             }
         }
     }

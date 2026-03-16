@@ -53,6 +53,12 @@ pub fn create_backend(
         if path_str.starts_with("postgres://") || path_str.starts_with("postgresql://") {
             return BackendType::Postgres;
         }
+        // Check if path is a directory (git backend) or contains metadata.yaml
+        if path.is_dir() {
+            if path.join("metadata.yaml").exists() || path.join("objects").exists() {
+                return BackendType::Git;
+            }
+        }
         // Infer from file extension
         match path.extension().and_then(|e| e.to_str()) {
             Some("yaml") | Some("yml") => BackendType::Yaml,
@@ -64,6 +70,7 @@ pub fn create_backend(
     match bt {
         BackendType::Yaml => Ok(Box::new(YamlBackend::new(path))),
         BackendType::Sqlite => Ok(Box::new(SqliteBackend::new(path)?)),
+        BackendType::Git => Ok(Box::new(GitBackend::new(path)?)),
         #[cfg(feature = "postgres")]
         BackendType::Postgres => Ok(Box::new(PostgresBackend::new(&path_str)?)),
         #[cfg(not(feature = "postgres"))]
