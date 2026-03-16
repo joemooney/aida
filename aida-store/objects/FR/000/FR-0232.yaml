@@ -1,5 +1,6 @@
 id: 436fc14e-cccb-4dcc-afc2-d50178ffabce
 spec_id: FR-0232
+agreed_id: FR-118
 title: Non-Interactive CLI Edit Command
 description: Add --status, --priority, --type, --owner, --feature, --tags flags to the 'aida edit' command for script and skill automation. When any flag is provided, edit runs non-interactively. Use -i/--interactive to force interactive mode.
 status: Completed

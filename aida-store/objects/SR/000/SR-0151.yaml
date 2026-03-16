@@ -1,5 +1,6 @@
 id: 09c341cb-66ab-497e-8bae-f6029d26e1ed
 spec_id: SR-0151
+agreed_id: SR-1
 title: Inline Code Traceability Comments
 description: |-
   The system shall support inline traceability comments in generated code that link back to requirement IDs.

@@ -1,5 +1,6 @@
 id: 8cfe1327-da2d-49fa-907e-91281dbd4013
 spec_id: FR-0227
+agreed_id: FR-169
 title: Headless server mode
 description: |-
   Implement a client-server architecture for AIDA using Protocol Buffers for message definitions and gRPC for communication.

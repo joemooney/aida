@@ -1,5 +1,6 @@
 id: 63bf7cd0-fbc5-4a39-b265-4020578955c5
 spec_id: STORY-0329
+agreed_id: STORY-25
 title: GitLab Change Notifications
 description: |-
   As a user, I want to be notified when GitLab issues linked to my requirements change so that I can stay informed without manual checking.

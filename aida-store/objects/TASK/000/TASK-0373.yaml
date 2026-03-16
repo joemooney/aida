@@ -1,5 +1,6 @@
 id: a3cc3493-da0f-4f36-9534-4e652988aaec
 spec_id: TASK-0373
+agreed_id: TASK-1
 title: 'Admin Rebuild & Restart: Dev-Mode Server Rebuild via Web UI'
 description: 'Add a dev-mode-only Admin tab in Settings that triggers cargo build from the browser, streams build output in real-time via SSE, and auto-restarts the server on success. Gated behind AIDA_DEV_MODE=1 env var. Includes: admin.rs backend module with status and SSE rebuild endpoints, frontend API/hooks/component, and Settings tab integration.'
 status: InProgress

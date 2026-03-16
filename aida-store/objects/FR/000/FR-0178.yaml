@@ -1,5 +1,6 @@
 id: 3f9e5185-3d6a-4ca5-82fd-387e94b52adf
 spec_id: FR-0178
+agreed_id: FR-210
 prefix_override: FR
 title: Git tagging for releases
 description: |-

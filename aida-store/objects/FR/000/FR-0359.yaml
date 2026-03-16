@@ -1,5 +1,6 @@
 id: 0bb9d4b5-393d-486e-a35b-faff91ae50fb
 spec_id: FR-0359
+agreed_id: FR-58
 title: Structured search query parsing in search bar
 description: 'The search bar parses field:value syntax on Enter keypress. Supported fields: status, priority, type, feature, owner, tag. Values are normalized (title-cased for status/priority/type). Quoted values supported (e.g. feature:"My Feature"). Remainder text stays as free-text search. Regular keystroke search continues working as before.'
 status: Completed

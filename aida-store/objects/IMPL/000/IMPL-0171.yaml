@@ -1,5 +1,6 @@
 id: 99b3fe30-03e4-4b7e-b52a-aaee0553dc57
 spec_id: IMPL-0171
+agreed_id: IMPL-1
 prefix_override: IMPL
 title: Implement stateless type concept with built-in Folder type (FR-0146)
 description: |-

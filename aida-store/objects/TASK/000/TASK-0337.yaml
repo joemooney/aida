@@ -1,5 +1,6 @@
 id: 61b19487-4000-4b67-87f0-5fd554bfebfa
 spec_id: TASK-0337
+agreed_id: TASK-2
 title: In Add or Edit, ESC should cancel
 description: "In Add or Edit, ESC should cancel if we have not made any  changes, if we have then bring up a confirmation dialog to confirm cancel.\n\n ESC key handling for the Add/Edit forms:\n\n  Features:\n  - ESC cancels immediately if no changes have been made to the form\n  - ~~Shows confirmation dialog if there are unsaved changes with options to \"Discard Changes\" or \"Continue Editing\"~~\n  - ESC while dialog is open closes the dialog (continues editing)\n  - ~~The Cancel button uses the same logic as ESC ~~\n\n  The implementation tracks original form values when entering Add/Edit mode and compares them against current values to detect changes. \n  This  applies to all form fields: title, description, status, priority, type, owner, feature, tags, prefix, and custom fields.\n"
 status: Draft

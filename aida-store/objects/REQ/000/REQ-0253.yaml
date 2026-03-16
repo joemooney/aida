@@ -1,5 +1,6 @@
 id: c5191f5f-f6d5-47f9-93db-603602814ca2
 spec_id: REQ-0253
+agreed_id: REQ-29
 title: Review Requirements Workflow
 description: 'Implement a review workflow where the AI analyzes requirements marked InReview. For each requirement: 1) Fetch requirement, parent, children, and related requirements, 2) Ask AI to evaluate clarity, testability, consistency, 3) Suggest refinements, missing acceptance criteria, conflicts, 4) Optionally update requirement with rationale, acceptance criteria, links. Store review results and suggestions in the requirement.'
 status: Draft

@@ -1,5 +1,6 @@
 id: 055530de-326d-4362-aab1-639239f363e5
 spec_id: FR-0011
+agreed_id: FR-20
 title: Arrow keys should move between requirements in the list
 description: |-
   # aida-gui

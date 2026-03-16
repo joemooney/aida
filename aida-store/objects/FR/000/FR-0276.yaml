@@ -1,5 +1,6 @@
 id: 7adc1976-7512-40a7-a01f-4908b6136514
 spec_id: FR-0276
+agreed_id: FR-193
 title: Ctrl+left should move a req up to be a slbling ...
 description: Ctrl+left should move a req up to be a slbling of its parent (if there is one)
 status: Draft

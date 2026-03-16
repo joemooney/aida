@@ -1,5 +1,6 @@
 id: 9c8c39fc-8467-4005-aefa-b26c7186a9b2
 spec_id: BUG-0380
+agreed_id: BUG-7
 title: 'Fix: skill templates use --tag instead of --tags causing CLI errors'
 description: Most aida add examples in skill templates (aida-req, aida-capture, aida-commit, aida-implement) and CLAUDE.md omitted the --tags flag entirely. Claude Code would guess --tag (singular) which fails with 'unexpected argument'. Fixed by adding --tags examples to all CLI references with explicit notes that the flag is --tags not --tag.
 status: Completed

@@ -1,5 +1,6 @@
 id: 93ad5f8b-46ae-4856-801d-d277914a671b
 spec_id: AUTH-0294
+agreed_id: AUTH-5
 prefix_override: AUTH
 title: Native GUI Authentication
 description: Add authentication to native desktop GUI client similar to web client. Handle session persistence appropriate for desktop environment.

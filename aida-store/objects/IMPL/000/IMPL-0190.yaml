@@ -1,5 +1,6 @@
 id: 4fa4d796-b26a-4a86-b6a2-7ae3136bf1a3
 spec_id: IMPL-0190
+agreed_id: IMPL-2
 prefix_override: IMPL
 title: Auto-repair Duplicate SPEC-IDs on Load
 description: |-

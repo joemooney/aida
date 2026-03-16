@@ -1,5 +1,6 @@
 id: 88956181-fbef-46f5-b7a2-a06114192b96
 spec_id: FR-0166
+agreed_id: FR-143
 title: Settings/AI has Prompts and Skills subtabs
 description: 'The AI settings tab now has two subtabs: Prompts (for AI prompt configuration) and Skills (displays Claude Code skills from .claude/skills/ directory with markdown rendering and collapsible content sections).'
 status: Completed

@@ -1,5 +1,6 @@
 id: 75215088-ffef-4e83-9f90-3ab2cc766422
 spec_id: FR-0183
+agreed_id: FR-192
 prefix_override: FR
 title: Optimistic reload on save for new requirements
 description: |-

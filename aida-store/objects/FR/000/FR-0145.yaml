@@ -1,5 +1,6 @@
 id: 5a5a7d31-6842-4082-ac45-6831e102fde5
 spec_id: FR-0145
+agreed_id: FR-129
 title: Enhanced template support
 description: "Enhanced template support\n  \n\nFor the template system you mentioned:\n  1. Store templates in ~/.aida/templates/ or project templates/ directory\n  2. Add a \"New Project\" wizard that lets you select a template\n  3. Templates could include: AI prompts, type definitions, relationship definitions, ID format preferences\n  4. Could have templates for different methodologies (Agile, Waterfall, SAFe, etc.)"
 status: Draft

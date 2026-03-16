@@ -1,5 +1,6 @@
 id: e88eb8dd-1ed5-4076-9c9e-eeaac44dd994
 spec_id: STORY-0377
+agreed_id: STORY-18
 title: 'My Activity: Planned vs. Actual Work Reconciliation'
 description: |-
   Frontend-only view that shows a user's actual work (requirement changes, comments, creations) cross-referenced against their queue, surfacing the delta between planned and actual work.

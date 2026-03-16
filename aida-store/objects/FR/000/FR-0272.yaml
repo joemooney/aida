@@ -1,5 +1,6 @@
 id: d3a78c9d-5a60-48d7-96f6-862cb82faf7d
 spec_id: FR-0272
+agreed_id: FR-159
 title: gRPC-Web and REST API support
 description: "Extend the headless server (FR-0227) with multi-protocol support for browser and general HTTP clients.\n\n**Implemented Features:**\n- tonic-web layer for gRPC-Web browser clients (WASM support)\n- REST/JSON API on separate configurable port (default 8080)\n- CORS headers for cross-origin browser requests\n- JSON serialization via serde on protobuf types\n\n**REST API Endpoints:**\n- GET /api/ping - Health check\n- GET /api/status - Server status and version\n- GET /api/store - Full store data\n- GET /api/store/metadata - Store metadata  \n- GET /api/requirements - List with filtering\n- GET /api/requirements/:id - Get single requirement\n- POST /api/requirements - Create requirement\n- PUT /api/requirements/:id - Update requirement\n- DELETE /api/requirements/:id - Delete requirement\n- POST /api/requirements/:id/comments - Add comment\n- GET /api/search - Search requirements\n\n**Usage:**\naida-server --port 50051 --rest-port 8080 --database reqs.db"
 status: Completed

@@ -1,5 +1,6 @@
 id: 05c2cdcd-564f-4b3c-a6e6-ca0dbd8850f3
 spec_id: FR-0237
+agreed_id: FR-174
 title: Add menu popup ('a' hotkey)
 description: Popup menu for adding new requirements. Press 'a' to open menu, then 's' for new sibling requirement or 'c' for new child requirement. Supports arrow/j/k navigation, Enter to confirm, Escape to close. Removes overlap between n/N search navigation and add operations.
 status: Completed

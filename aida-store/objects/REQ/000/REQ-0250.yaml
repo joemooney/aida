@@ -1,5 +1,6 @@
 id: 0b538ee1-c4d5-4b9d-9611-6ab9fc58968c
 spec_id: REQ-0250
+agreed_id: REQ-19
 title: 'CLI: aida trace add'
 description: 'Add a CLI command to manually add trace links: aida trace add REQ-ID --file PATH --symbol SYMBOL --lines START-END --type (source|test|config|doc) --notes NOTES. This allows manual annotation of code that implements a requirement.'
 status: Draft

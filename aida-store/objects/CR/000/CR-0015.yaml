@@ -1,5 +1,6 @@
 id: b9c26c5d-ab38-4e9b-a493-8f4a84f88019
 spec_id: CR-0015
+agreed_id: CR-4
 title: add created by
 description: |2
     Changes to aida-core/src/models.rs:

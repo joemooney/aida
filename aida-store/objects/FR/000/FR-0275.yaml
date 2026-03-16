@@ -1,5 +1,6 @@
 id: d441475c-aebc-4743-8298-e5f37cdf0fa8
 spec_id: FR-0275
+agreed_id: FR-22
 title: '''q t'' adds req to queue top but also opens tags...'
 description: |-
   'q t' adds req to queue top but also opens tags pop-up

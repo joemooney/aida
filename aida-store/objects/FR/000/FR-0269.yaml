@@ -1,5 +1,6 @@
 id: b124046c-6637-4f1b-80cb-fab3ea4ef2ff
 spec_id: FR-0269
+agreed_id: FR-211
 title: Template externalization with compile-time embedding
 description: |-
   ## Overview

@@ -1,5 +1,6 @@
 id: 9af27c34-8a93-4285-9ae6-2448a6bcddde
 spec_id: FR-0153
+agreed_id: FR-119
 title: YAML database store last updated and do not ove...
 description: |-
   ## Stale Data Protection for YAML Database

@@ -1,5 +1,6 @@
 id: 02a28ce8-28aa-4e56-88e3-ae29813a3fe0
 spec_id: FR-0018
+agreed_id: FR-200
 title: Break link relationship
 description: support breaking a relationship, a button to delete a relationship.
 status: Approved

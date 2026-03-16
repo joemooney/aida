@@ -1,5 +1,6 @@
 id: f54c4d83-8073-49d1-9229-c712480a83e4
 spec_id: FR-0054
+agreed_id: FR-213
 title: Quick Action button
 description: |
   Instead of Archive and Delete have a single Quick Action button dropdown of actions that can be taken on requirement. Have  Priority (which will be a sub-dropdown of possible priorities for that requirement). Also have Status as a sub-dropdown  with possible priorities for that requirement then also in the Status sub-dropdown, a separator if possible, and Archive and Delete actions.

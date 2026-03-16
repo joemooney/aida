@@ -1,5 +1,6 @@
 id: 216f572f-a9dd-4b3d-af93-b2ab39d60757
 spec_id: FR-0110
+agreed_id: FR-16
 title: For Add requirement, if not title is provided use first line of description as title.
 description: |
   For Add requirement, if not title is provided use first line of description as title.If we start typing in the description and the title is
