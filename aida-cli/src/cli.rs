@@ -1162,6 +1162,25 @@ pub enum GitHubCommand {
         id: String,
     },
 
+    /// Pull GitHub issues into AIDA as requirements
+    Pull {
+        /// Only pull issues with these labels (comma-separated)
+        #[clap(long)]
+        labels: Option<String>,
+
+        /// Only pull open issues (default: true)
+        #[clap(long, default_value = "true")]
+        open_only: bool,
+
+        /// Maximum number of issues to pull
+        #[clap(long, default_value = "50")]
+        limit: u32,
+
+        /// Dry run — show what would be imported without creating requirements
+        #[clap(long)]
+        dry_run: bool,
+    },
+
     /// List labels in the GitHub repository
     Labels {
         /// Create default AIDA labels if missing
