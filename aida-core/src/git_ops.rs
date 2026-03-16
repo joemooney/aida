@@ -150,6 +150,18 @@ pub fn is_remote_reachable(repo: &Path, remote: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Get a git config value (checks local, then global).
+pub fn git_config_get(key: &str) -> Result<String> {
+    let output = Command::new("git")
+        .args(["config", key])
+        .output()?;
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    } else {
+        anyhow::bail!("git config {} not set", key)
+    }
+}
+
 /// Configure user name and email for commits (repo-local, not global).
 pub fn configure_user(repo: &Path, name: &str, email: &str) -> Result<()> {
     git(repo, &["config", "user.name", name])?;

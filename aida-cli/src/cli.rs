@@ -972,6 +972,17 @@ pub enum Command {
         /// Overwrite existing files if already initialized
         #[clap(long)]
         force: bool,
+
+        /// Initialize in distributed mode (git-backed, offline-capable)
+        /// Creates a git-backed object store with node registration.
+        /// Requires a git remote for the aida registry repo.
+        #[clap(long)]
+        distributed: bool,
+
+        /// Git remote URL for the shared aida registry (used with --distributed)
+        /// Example: git@github.com:org/aida-registry.git
+        #[clap(long, requires = "distributed")]
+        registry_remote: Option<String>,
     },
 
     /// Scaffolding management commands
