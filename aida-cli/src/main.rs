@@ -1116,9 +1116,39 @@ fn handle_git_backend_command(
                 .unwrap_or_else(|_| "main".to_string());
 
             if *pull {
+                // Snapshot local state before pull for conflict detection
+                let local_reqs = backend.load()
+                    .map(|s| s.requirements)
+                    .unwrap_or_default();
+
                 println!("Pulling from origin/{}...", branch);
                 match aida_core::git_ops::pull(store_path, "origin", &branch) {
-                    Ok(()) => println!("  Pull complete."),
+                    Ok(()) => {
+                        println!("  Pull complete.");
+
+                        // Detect conflicts with remote changes
+                        let remote_reqs = backend.load()
+                            .map(|s| s.requirements)
+                            .unwrap_or_default();
+
+                        let conflicts = aida_core::conflict::detect_store_conflicts(
+                            &local_reqs,
+                            &remote_reqs,
+                        );
+
+                        if !conflicts.is_empty() {
+                            println!();
+                            println!("{}", "Conflicts detected:".red().bold());
+                            for conflict in &conflicts {
+                                println!();
+                                print!("{}", conflict);
+                            }
+                            println!();
+                            println!(
+                                "Resolve with: aida edit <ID> --title/--status/... to pick the version you want."
+                            );
+                        }
+                    }
                     Err(e) => eprintln!("  Pull failed: {}", e),
                 }
             }
@@ -1136,7 +1166,7 @@ fn handle_git_backend_command(
                 }
                 aida_core::git_ops::commit(store_path, msg)?;
                 println!("Committed: {}", msg);
-            } else {
+            } else if !*pull {
                 println!("Nothing to commit.");
             }
 
@@ -1156,7 +1186,51 @@ fn handle_git_backend_command(
 
             if !pull && !push {
                 println!("Use --pull and/or --push to sync with remote.");
-                println!("  aida --file {} db sync --pull --push", store_path.display());
+                println!("  aida db sync --pull --push");
+            }
+        }
+
+        // Status
+        Command::Db(DbCommand::Status) => {
+            let store = backend.load()?;
+
+            let total = store.requirements.len();
+            let with_agreed = store.requirements.iter()
+                .filter(|r| r.agreed_id.is_some())
+                .count();
+            let without_agreed = total - with_agreed;
+
+            println!("{}", "Distributed Store Status".bold());
+            println!("{}", "─".repeat(45));
+            println!("{:<20} {}", "Path:", store_path.display());
+            println!("{:<20} {}", "Requirements:", total);
+            println!("{:<20} {}", "With agreed ID:", with_agreed);
+            println!("{:<20} {}", "Pending merge-gate:", without_agreed);
+
+            if aida_core::git_ops::is_git_repo(store_path) {
+                let has_changes = aida_core::git_ops::has_changes(store_path).unwrap_or(false);
+                let head = aida_core::git_ops::head_sha(store_path).unwrap_or_else(|_| "?".into());
+                let branch = aida_core::git_ops::current_branch(store_path).unwrap_or_else(|_| "?".into());
+
+                println!("{:<20} {}", "Branch:", branch);
+                println!("{:<20} {}", "HEAD:", head);
+                println!("{:<20} {}", "Working tree:", if has_changes { "uncommitted changes" } else { "clean" });
+
+                let remote_ok = aida_core::git_ops::is_remote_reachable(store_path, "origin");
+                println!("{:<20} {}", "Remote:", if remote_ok { "reachable" } else { "not configured or unreachable" });
+            }
+
+            // Show dispenser state
+            if let Ok(disp) = load_dispenser(store_path) {
+                if let Ok(state) = disp.state() {
+                    let mode_str = match &state.mode {
+                        aida_core::IdMode::Centralized => "centralized".to_string(),
+                        aida_core::IdMode::Distributed { node_id } => format!("distributed (node {})", node_id),
+                    };
+                    println!("{:<20} {}", "ID mode:", mode_str);
+                    let total_dispensed: u32 = state.sequences.values().sum();
+                    println!("{:<20} {}", "IDs dispensed:", total_dispensed);
+                }
             }
         }
 
@@ -1428,10 +1502,12 @@ fn handle_init_distributed(registry_remote: Option<&str>, force: bool) -> Result
     println!("  {}:", "Quick start".bold());
     println!(
         "    {}",
-        "aida --file aida-store add --title \"First req\" --type functional".cyan()
+        "aida add --title \"First req\" --type functional".cyan()
     );
-    println!("    {}", "aida --file aida-store list".cyan());
-    println!("    {}", "ls aida-store/objects/".cyan());
+    println!("    {}", "aida list".cyan());
+    println!("    {}", "aida show FR-1-001".cyan());
+    println!("    {}", "aida db merge-gate".cyan());
+    println!("    {}", "aida db sync --pull --push".cyan());
     println!();
 
     Ok(())
@@ -2986,6 +3062,12 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
         DbCommand::MergeGate => {
             println!(
                 "{} Merge gate is only available for git-backed stores. Use: aida --file <dir> db merge-gate",
+                "!".yellow()
+            );
+        }
+        DbCommand::Status => {
+            println!(
+                "{} Status is only available for git-backed stores. Use: aida --file <dir> db status",
                 "!".yellow()
             );
         }
