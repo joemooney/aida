@@ -1,6 +1,5 @@
 id: d62a47e4-4048-43a4-8d21-10d26e654876
 spec_id: EPIC-0247
-agreed_id: EPIC-8
 title: Agent Planning Phase
 description: 'Add support for a two-phase implementation workflow. Phase 1 (Planning): When implementing a requirement, first ask the AI to produce a structured plan that identifies: 1) modules/files likely affected, 2) additional context needed (related requirements, existing code, schema), 3) step-by-step implementation plan, 4) traceability strategy. Store the plan as a JSON structure that can be reviewed before proceeding to implementation.'
 status: Draft

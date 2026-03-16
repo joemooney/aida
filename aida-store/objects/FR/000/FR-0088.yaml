@@ -1,6 +1,5 @@
 id: 97431bfb-8b24-4990-aa9f-6c8a4a643dd1
 spec_id: FR-0088
-agreed_id: FR-148
 title: JSON database format support
 description: Be able to save in JSON or YAML format
 status: Draft

@@ -1,6 +1,5 @@
 id: 258570ef-9c7a-4395-9508-2fbefb0757b2
 spec_id: STORY-0327
-agreed_id: STORY-1
 title: Poll GitLab for Changes
 description: |-
   As a system, I need to periodically check GitLab for changes to linked issues so that I can detect divergence from AIDA state.

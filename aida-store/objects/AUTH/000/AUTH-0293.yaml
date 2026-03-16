@@ -1,6 +1,5 @@
 id: 7f4c22b6-54d6-47c0-8efd-a8be3d004862
 spec_id: AUTH-0293
-agreed_id: AUTH-3
 prefix_override: AUTH
 title: User Management UI
 description: 'Admin interface for managing users: create/edit/delete users, assign roles, reset passwords/PINs, and view user activity.'

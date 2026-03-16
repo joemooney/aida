@@ -1,6 +1,5 @@
 id: 18eace65-bcd0-49d8-89b6-a38824833155
 spec_id: FR-0127
-agreed_id: FR-63
 title: 'Title textbox height is a tad short '
 description: "Title textbox height is a tad short \nand truncates bottoms of letters, it is fine in edit mode"
 status: Draft

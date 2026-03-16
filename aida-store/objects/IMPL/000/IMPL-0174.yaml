@@ -1,6 +1,5 @@
 id: 99be661c-ffa8-4105-8271-8912e7bcbff1
 spec_id: IMPL-0174
-agreed_id: IMPL-5
 prefix_override: IMPL
 title: Implement --parent option for CLI add command (FR-0172)
 description: |-

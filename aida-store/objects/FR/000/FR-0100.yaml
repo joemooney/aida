@@ -1,6 +1,5 @@
 id: d0650db4-0021-4496-8620-f7f6bf8dbc87
 spec_id: FR-0100
-agreed_id: FR-113
 title: Details View layout
 description: |
   Details View Panel should display with the tabs (Description. Links etc.) at the bottom of the panel when the Details View panel is displayed on the right (as currently implemented). But if the Details View panel is displayed at the bottom (in in List/Details) then a better use of space is to split the Details View panel so that the ID, Type, Status and other non-wide fields are displayed in a vertical column on the left and on the right side of the panel we show the tabs.

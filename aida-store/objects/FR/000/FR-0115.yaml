@@ -1,6 +1,5 @@
 id: afe27507-684f-4ad3-b80b-39c58d9875e8
 spec_id: FR-0115
-agreed_id: FR-95
 title: When I edit a theme the changes to be reflected globally and reverted if I click cancel
 description: When I edit a theme the changes to be reflected globally and reverted if I click cancel
 status: Draft

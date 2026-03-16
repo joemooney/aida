@@ -1,6 +1,5 @@
 id: cc712910-5468-4c7c-a62d-75d7b8110b76
 spec_id: FR-0058
-agreed_id: FR-219
 title: Requirements List view Navigation keys
 description: "Support up/down/Page-Up/Page-Down and Home and End in Requirements List view. Also Mouse Wheel would also be nice \n\n - Page Up/Page Down: Move by 10 items at a time\n  - Home: Jump to the first requirement in the list\n  - End: Jump to the last requirement in the list\n  - Mouse Wheel: Scroll through requirements one at a time (without Ctrl - Ctrl+wheel is still zoom)\n"
 status: Completed

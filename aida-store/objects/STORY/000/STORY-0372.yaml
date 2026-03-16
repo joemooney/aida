@@ -1,6 +1,5 @@
 id: cf801344-a4ad-438d-95f6-59b3a17e4e28
 spec_id: STORY-0372
-agreed_id: STORY-6
 title: Auto-link spec IDs in markdown rendering
 description: Detect known requirement ID patterns (e.g., EPIC-0365, FR-0042, STORY-0366) in markdown content and automatically render them as clickable hyperlinks that open the detail panel. Uses a remark plugin to transform text nodes matching [A-Z]{2,}-\d{3,5} patterns into links.
 status: Completed

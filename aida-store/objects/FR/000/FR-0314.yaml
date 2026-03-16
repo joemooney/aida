@@ -1,6 +1,5 @@
 id: c76623ed-20d3-4cbd-930d-d186e7a092db
 spec_id: FR-0314
-agreed_id: FR-205
 title: In search mode, the arrow keys/j/k are jumping ...
 description: |
   In search mode, the arrow keys/j/k are jumping around in an odd order, maybe by ascending ID and not as shown.

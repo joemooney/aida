@@ -1,6 +1,5 @@
 id: 5e4ad9bb-99fc-41ab-9fc6-eb5692964b44
 spec_id: REQ-0116
-agreed_id: REQ-3
 title: Bug prefix not being used
 description: 'Bug prefix not being used, it is using REQ. Same for Epic/Story/Task/Spike use those as prefixes for those types. '
 status: Completed

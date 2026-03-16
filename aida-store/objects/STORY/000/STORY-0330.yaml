@@ -1,6 +1,5 @@
 id: 4500f5fb-db39-4993-aa2c-f3fbf45533ca
 spec_id: STORY-0330
-agreed_id: STORY-21
 title: Push AIDA Changes to GitLab
 description: |-
   As a user, I want to push AIDA requirement changes to linked GitLab issues so that GitLab stays up-to-date with requirements.

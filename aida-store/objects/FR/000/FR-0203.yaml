@@ -1,6 +1,5 @@
 id: 746091ca-0bc1-49e0-b2e3-12b174447f20
 spec_id: FR-0203
-agreed_id: FR-14
 title: Planning View
 description: New GUI view showing requirements organized by Sprint assignment. Displays Sprints sorted by date with assigned items nested underneath. Includes Backlog section for items without Sprint assignment. Supports drag-and-drop for Sprint assignment.
 status: Draft

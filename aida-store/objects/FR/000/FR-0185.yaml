@@ -1,6 +1,5 @@
 id: 4dba3fb5-cd72-402c-886a-caf0f8f133d4
 spec_id: FR-0185
-agreed_id: FR-5
 title: Team Data Model
 description: |-
   Define the Team entity with the following properties:

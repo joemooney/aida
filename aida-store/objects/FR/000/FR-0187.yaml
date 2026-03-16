@@ -1,6 +1,5 @@
 id: 9f45cb71-a6f7-40bb-b951-c3f5b90fca9b
 spec_id: FR-0187
-agreed_id: FR-64
 title: Settings Members Tab with Users and Teams Sub-tabs
 description: |-
   Add a Members tab to the Settings panel with sub-tabs for Users and Teams:

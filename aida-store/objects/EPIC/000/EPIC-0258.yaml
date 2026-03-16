@@ -1,6 +1,5 @@
 id: e7082183-7023-4223-90f2-621ceefc3890
 spec_id: EPIC-0258
-agreed_id: EPIC-6
 title: AI Integration Report Generation
 description: Generate a comprehensive AI integration report/guide for a project that documents all AI configuration, prompts, skills, traceability data, and scaffolding status. The report should be exportable in both markdown and HTML formats, serving as onboarding documentation, audit trail, and compliance reference.
 status: Completed

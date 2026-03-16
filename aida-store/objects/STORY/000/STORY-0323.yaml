@@ -1,6 +1,5 @@
 id: dd73d844-75b1-4a32-9989-892887608c92
 spec_id: STORY-0323
-agreed_id: STORY-9
 title: Link AIDA Requirements to GitLab Issues
 description: |-
   As a user, I want to link AIDA requirements to GitLab issues so that I can track traceability between specs and implementation work.

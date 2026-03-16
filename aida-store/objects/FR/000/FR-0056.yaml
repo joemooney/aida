@@ -1,6 +1,5 @@
 id: d51487eb-36a5-4266-9c79-29a7c5399849
 spec_id: FR-0056
-agreed_id: FR-130
 title: Double cllick Description to enter Edit
 description: |
   Double click Description to enter Edit, and switch focus to the Description textbox.

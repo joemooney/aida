@@ -1,6 +1,5 @@
 id: e68c7289-1a5b-4951-839b-d0a3f0eedbb4
 spec_id: TASK-0374
-agreed_id: TASK-4
 title: Runtime API key management via Settings Admin UI
 description: Allow PMs/stakeholders to set ANTHROPIC_API_KEY through the Admin tab without needing shell access. Keys stored in-memory with env var fallback. Includes GET/PUT/DELETE endpoints, masked display, and auto-invalidation of chat-status.
 status: Completed

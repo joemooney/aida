@@ -1,6 +1,5 @@
 id: 7e7f5a93-f0ac-4fde-85eb-8852f43065b8
 spec_id: FR-0092
-agreed_id: FR-133
 title: Reference relation
 description: |
   In Links tab add a button for `+ Reference` which will open a modal with a search box that will perform a full fuzzy search for and show a

@@ -1,6 +1,5 @@
 id: dda2b1f7-70b5-485c-8caa-36b31e2aaa6e
 spec_id: FR-0285
-agreed_id: FR-98
 title: '''s'' quick pick, if you type the first letter (n...'
 description: |-
   Status quick-pick keyboard shortcut: When the user presses 's' to open the status picker, typing the first letter of a status name (case-insensitive) should:

@@ -1,6 +1,5 @@
 id: 11bd5d62-8ed3-4ee9-bdbc-a1d9b970bbd8
 spec_id: STORY-0322
-agreed_id: STORY-17
 title: View GitLab Issues in AIDA
 description: |-
   As a user, I want to view GitLab issues within AIDA so that I have a unified view of requirements and bugs.

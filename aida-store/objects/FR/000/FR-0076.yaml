@@ -1,6 +1,5 @@
 id: 0b6acb18-ebe2-49b4-ab44-158213504f25
 spec_id: FR-0076
-agreed_id: FR-53
 title: Filtered Parent
 description: |
   If a requirement is selected by a filter but not its parents, then should show the parents but greyed out.

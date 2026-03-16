@@ -1,6 +1,5 @@
 id: 1cc8912b-7b9a-4e26-b11c-3b34b0dc2883
 spec_id: AUTH-0290
-agreed_id: AUTH-1
 prefix_override: AUTH
 title: Password Authentication
 description: Replace simple PIN with proper password authentication. Implement password strength validation, secure password hashing (argon2 or bcrypt), and password reset functionality.

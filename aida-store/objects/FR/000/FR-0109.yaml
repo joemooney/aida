@@ -1,6 +1,5 @@
 id: 8ca9055b-3302-4768-ae92-fe60cf3d2fd8
 spec_id: FR-0109
-agreed_id: FR-82
 title: New users should get name/email from git config
 description: |-
   New users should get name/email from git config if that file exists
