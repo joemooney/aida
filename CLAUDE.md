@@ -55,16 +55,18 @@ Requirements database: `requirements.db` (SQLite, runtime) / `requirements.yaml`
 A `.git/hooks/pre-commit` script auto-exports `requirements.db` to `requirements.yaml` before each commit. The SQLite binary is **not** tracked in git — only the diffable YAML is committed. This gives full text-based diff history while keeping SQLite as the runtime backend. The hook skips gracefully if `aida` is not installed.
 
 ### Database Storage
-AIDA supports three storage backends:
+AIDA supports four storage backends:
 - **YAML**: Human-readable, git-friendly, good for single-user scenarios
 - **SQLite**: Better for concurrent access (GUI + CLI), optimistic locking
 - **PostgreSQL**: Enterprise-grade, multi-user, native JSONB support
+- **Git**: Distributed, offline-capable. Each requirement is a YAML file in a sharded git repo (`objects/TYPE/NNN/SPEC-ID.yaml`). Supports node-namespaced IDs (`FR-7-001`) with agreed short IDs (`FR-1`) at merge-to-trunk.
 
 To migrate between backends:
 ```bash
 aida db migrate --from yaml --to sqlite
 aida db migrate --from sqlite --to postgres --output "postgres://user:pass@host:5432/db"
 aida db migrate --from postgres --to yaml --output requirements.yaml
+aida db export-git -o aida-store       # Export any backend to git-backed store
 ```
 
 To use PostgreSQL directly:
@@ -72,9 +74,29 @@ To use PostgreSQL directly:
 aida --file "postgres://user:pass@localhost:5432/aida" list
 ```
 
+### Distributed Mode
+For offline-capable, multi-node deployments:
+```bash
+aida init --distributed                # Creates git-backed store in aida-store/
+aida add --title "..." --type functional  # Auto-detected, no --file needed
+aida list                              # Works via .aida/config.toml auto-detection
+aida db merge-gate                     # Assign short agreed IDs (FR-7-001 → FR-1)
+aida db sync --pull --push             # Sync with remote, detects conflicts
+aida db status                         # Show sync status, pending merge-gate items
+```
+
+Key concepts:
+- **Centralized mode** (default): Simple IDs (`FR-001`), central database
+- **Distributed mode**: Node-namespaced IDs (`FR-1-001`), git-based, offline-capable
+- **Agreed IDs**: Short IDs (`FR-1`) assigned at merge-to-trunk via `aida db merge-gate`
+- **Two-tier resolution**: Both `FR-1-001` and `FR-1` resolve to the same requirement
+
+Architecture: `aida-core/src/hlc.rs` (HLC timestamps), `dispenser.rs` (sequence generation), `node.rs` (node identity), `object_store.rs` (sharded YAML), `db/git_backend.rs` (backend), `git_ops.rs` (git commands + CAS registration), `conflict.rs` (conflict detection).
+
 ### Project Initialization
 ```bash
-aida init                              # Initialize AIDA in current directory
+aida init                              # Initialize AIDA in current directory (centralized)
+aida init --distributed                # Initialize in distributed mode (git-backed)
 aida init --no-skills                  # Skip .claude/skills/ and .claude/commands/
 aida init --no-hooks                   # Skip .claude/hooks/ and git hooks
 aida init --force                      # Overwrite existing files if already initialized
