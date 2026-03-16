@@ -1,5 +1,6 @@
 id: 3fe85c39-0da4-477a-9ac5-04ecb9696ec9
 spec_id: FR-0057
+agreed_id: FR-178
 title: Recursive relationships view
 description: |
   In the Relationships tab, ability to list all immediate relationships (as presently implemented), and a checkbox (recursive) to present a tree structure (children collapsed by default)  - protect against infinite cycles.

@@ -1,5 +1,6 @@
 id: d90494ea-22cc-4338-a19f-70dae446fb2a
 spec_id: FR-0347
+agreed_id: FR-76
 title: rust/egui/was/protobuf application frameword
 description: |-
   rust/egui/was/protobuf application framework

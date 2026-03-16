@@ -1,5 +1,6 @@
 id: 15b13fe5-9573-4d42-a530-122e098ecfd7
 spec_id: FR-0271
+agreed_id: FR-68
 title: File attachments for requirements
 description: |-
   Add the ability to attach files to requirements via the GUI.

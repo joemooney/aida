@@ -1,5 +1,6 @@
 id: e2255679-b29c-4c37-9978-d089ffaac919
 spec_id: FR-0283
+agreed_id: FR-46
 title: WASM browser client user settings persistence via localStorage
 description: 'The WASM browser client previously showed error ''Failed to save user settings: operation not supported on this platform'' when trying to save settings changes. User settings (display name, theme, preferences, etc.) are now persisted in the browser using localStorage instead of the file system. Implemented platform-specific settings storage abstraction: on WASM uses localStorage via PlatformServices trait, on native uses file system.'
 status: InProgress

@@ -1,5 +1,6 @@
 id: 68f3a5de-b0e2-4d37-be23-5b855e169b88
 spec_id: FR-0265
+agreed_id: FR-124
 title: Scaffolding version/checksum protection for user modifications
 description: "The scaffolding system shall protect user modifications to generated files by:\n- Adding AIDA headers with version and checksum to generated files\n- Detecting when files have been modified by comparing checksums  \n- Categorizing files as New, Unmodified, Modified, NoHeader, or OlderVersion\n- Skipping modified files by default during re-scaffolding\n- Supporting --force flag to override and overwrite modified files\n\nHeader format for markdown:\n```\n<!-- AIDA Generated: v1.0.0 | checksum:abcd1234 | DO NOT EDIT DIRECTLY -->\n<!-- To customize: copy to .claude/skills/custom/ and modify there -->\n```\n\nHeader format for shell scripts:\n```\n# AIDA Generated: v1.0.0 | checksum:abcd1234\n# To customize: copy this file and modify the copy\n```\n\nImplementation complete:\n- Added SCAFFOLD_VERSION constant and compute_checksum() function\n- Added FileStatus enum with all states\n- Added check_file_status() to parse headers\n- Added ApplyOptions with force flag\n- Added apply_with_options() method\n- Updated preview() to track modified_files and upgradeable_files"
 status: Completed

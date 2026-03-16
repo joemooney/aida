@@ -1,5 +1,6 @@
 id: 85868242-14f2-4e4a-beba-5103c271ce32
 spec_id: FR-0034
+agreed_id: FR-177
 title: dummy req
 description: "# Title\n\n## Subtitle\n\n```lang:rust\nfn main() {\n  print(\"hello world\")\n}\n```\n\n- list\n- of **bold** *italic* \n- items\n- FR-0034\n\n1. one ::red[red text] \n1. two ::blue[blue text]\n1. three ::green[green text]"
 status: Rejected

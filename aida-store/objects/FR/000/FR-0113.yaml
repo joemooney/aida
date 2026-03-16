@@ -1,5 +1,6 @@
 id: 6712451d-ed99-4d45-9377-ffef9c9ff049
 spec_id: FR-0113
+agreed_id: FR-50
 title: Artifact tab
 description: Add an artifact tab to the left of History. An artifact is a file on the filesystem that we will render in this artifact tab. For a test requirement it may be a test sepecification yaml file. The goal is to have different types of artifacts that are supported for which we have the ability to render them in aida. The goal is to have something more than a simple link. Possibly it could be something we control and version if we build versioning of requirements into our model.
 status: Draft

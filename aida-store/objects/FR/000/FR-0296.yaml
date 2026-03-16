@@ -1,5 +1,6 @@
 id: e47f0a6f-8445-41a0-863e-22a61ecc4f45
 spec_id: FR-0296
+agreed_id: FR-107
 title: Claude Code /aida-evaluate slash command
 description: 'Add /aida-evaluate <SPEC-ID> slash command that runs AI evaluation on a requirement from Claude Code CLI. Mirrors the GUI''s ''Evaluate Requirement'' feature (A e hotkey). Evaluates clarity, testability, completeness, and consistency. Displays quality score (1-10) with issues and suggestions. Offers follow-up actions: improve description, split into children, find related, accept, or add comment.'
 status: Completed

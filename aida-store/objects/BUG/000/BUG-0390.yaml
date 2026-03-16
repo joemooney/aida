@@ -1,5 +1,6 @@
 id: 68e98b36-5113-4933-9dfd-c3d8a97a98fe
 spec_id: BUG-0390
+agreed_id: BUG-1
 title: 'Fix: forward ANTHROPIC_API_KEY from .env to Docker container'
 description: Docker compose was not loading the ANTHROPIC_API_KEY from the project .env file into the container, causing Chat to be unavailable. Added env_file directive pointing to ../.env in docker-compose.yml so environment secrets are forwarded to the container automatically.
 status: Completed
@@ -10,9 +11,9 @@ created_at: 2026-02-23T05:49:13.080129296Z
 modified_at: 2026-02-23T05:49:20.485197884Z
 req_type: Bug
 tags:
-- docker
 - chat
 - bug-fix
+- docker
 comments:
 - id: d53834d4-cbaa-40ec-83e1-a2c855e08c0c
   author: joe

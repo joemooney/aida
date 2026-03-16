@@ -1,5 +1,6 @@
 id: d24a14b7-55d2-41b4-b314-be1561757ee9
 spec_id: REQ-0249
+agreed_id: REQ-10
 title: Implementation Phase with Traceability
 description: 'Phase 2 (Implementation): After context gathering, call AI to produce: 1) Code edits as patches, 2) Annotated code with requirement references (// trace:REQ-xxx comments), 3) TraceLink data (file paths, line ranges, symbols, notes), 4) ImplementationInfo updates. Apply patches, run tests, and update the requirements database with all traceability data.'
 status: Draft

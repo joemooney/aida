@@ -1,5 +1,6 @@
 id: 61d821b1-f9dd-45ee-addc-67071649e931
 spec_id: INBOX-0069
+agreed_id: INBOX-1
 prefix_override: INBOX
 title: Inbox capability
 description: An inbox are requirements that are assigned to you to where you were mentioned in a comment. You can mark such requirements as read in which case they are no longer in your inbox. An alter action would be akin to a comment mention except it is simply saying I want you to look at this requirement, so it brings a requirement to someone's attention.

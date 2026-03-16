@@ -1,5 +1,6 @@
 id: 94c6f326-26b6-435e-9416-1b4d8ec4adca
 spec_id: FR-0360
+agreed_id: FR-170
 title: Markdown rendering for requirement descriptions
 description: Requirement descriptions render as markdown in the detail panel view mode using react-markdown with remark-gfm. Supports headings, bold, links, code blocks, tables, and all GFM extensions. Click-to-edit opens a textarea for raw markdown editing with Ctrl+Enter to save. Uses the same prose styling as the docs browser and skills browser.
 status: Completed

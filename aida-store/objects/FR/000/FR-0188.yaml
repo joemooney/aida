@@ -1,5 +1,6 @@
 id: 28d20300-9781-416a-8c1b-3a0f893bb416
 spec_id: FR-0188
+agreed_id: FR-151
 title: User-Requirements View with Configurable Hierarchy
 description: |-
   Add a new view perspective that shows Users as root elements with their owned requirements as children.

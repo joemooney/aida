@@ -1,5 +1,6 @@
 id: 9f1bc1d0-602b-42c4-aae3-bc72bf7e6a4e
 spec_id: FR-0202
+agreed_id: FR-226
 title: SprintAssignment Relationship
 description: Add sprint_assignment and sprint_contains built-in relationship types. Allows assigning requirements to Sprints. Many-to-one cardinality (each item in one Sprint at a time). History tracks Sprint moves for carry-over tracking.
 status: Draft

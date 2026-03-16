@@ -1,5 +1,6 @@
 id: b6911b4c-a0d4-46ee-b87d-c94de49fcd57
 spec_id: FR-0184
+agreed_id: FR-25
 title: Team Management Support
 description: |-
   Add support for Teams to organize users. A Team is a group of users (members). Teams support:

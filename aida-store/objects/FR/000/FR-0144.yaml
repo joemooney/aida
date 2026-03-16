@@ -1,5 +1,6 @@
 id: 9ea9544f-186c-4aa3-9072-5f3936a60e83
 spec_id: FR-0144
+agreed_id: FR-100
 title: '''o'' for Owner hotkey in reqlist'
 description: "'o' for Owner hotkey in reqlist\n\nwhen we type 'o' in the Requirements List, we should be presented with a list of owners and we can select one to update the requirement as new owner.\nthis should be a fuzzy search, if we type a partial name or handle it should filter the users.\n \nOwners may be restricted to users designated as working on that feature.\nwe could have designated approvers per feature, \ncertain users that are only allowed to transition requirements into certain states. \nowner automatically change as we transition status, so in \"Test\" a member of the test team would own perhaps and in \"Implement\" a member of the development team could own. \nThis would require an editor dialog to control status and owner.  So there could be different roles and we assign users to certain roles (probably per feature)  "
 status: Draft

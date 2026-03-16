@@ -1,5 +1,6 @@
 id: 3360ab12-5a4f-4c8f-b8ea-0da8792c7660
 spec_id: FR-0342
+agreed_id: FR-32
 title: Typing '/' in Create New project path, triggers...
 description: |-
   Typing '/' in Create New project path, triggers search hotkey

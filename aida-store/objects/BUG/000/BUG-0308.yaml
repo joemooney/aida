@@ -1,5 +1,6 @@
 id: 1a7ff6ae-021f-4052-8692-6ef11bd031e0
 spec_id: BUG-0308
+agreed_id: BUG-2
 title: Fix type prefix fallback for built-in types not in database
 description: When creating requirements with types like Task, Bug, Story that aren't in the database's type definitions (because the database was created before these types were added to defaults), the CLI would fall back to REQ prefix instead of the type's correct prefix (TASK, BUG, STORY, etc.). Fixed by adding hardcoded fallback prefixes in get_type_prefix function.
 status: Completed

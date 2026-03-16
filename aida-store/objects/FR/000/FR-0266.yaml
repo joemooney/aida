@@ -1,5 +1,6 @@
 id: 682e989c-718f-4e23-a2f9-6bc49d4371c5
 spec_id: FR-0266
+agreed_id: FR-206
 title: AIDA_AUTHOR environment variable for AI authorship attribution
 description: |-
   The CLI shall support an AIDA_AUTHOR environment variable to automatically set the author/owner field for AI-assisted work.

@@ -1,5 +1,6 @@
 id: 3ef749b7-b220-41f8-9a1d-1545d0c43a7f
 spec_id: FR-0103
+agreed_id: FR-74
 title: Dynamically update ID preview when Type changes in Edit form
 description: 'feat: dynamically update ID preview when Type changes in Edit form'
 status: Completed

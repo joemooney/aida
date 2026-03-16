@@ -1,5 +1,6 @@
 id: 924b8768-f882-4bb3-ad8f-bbe9c9fd56b8
 spec_id: FR-0094
+agreed_id: FR-17
 title: Pseudo Relations
 description: 'Completed-By which is a relationship from User to Requirement when a User changes the status to Completed is not a real relationship , but one that is implied by field value and action. '
 status: Draft

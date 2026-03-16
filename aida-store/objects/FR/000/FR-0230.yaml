@@ -1,5 +1,6 @@
 id: ae784602-a0cf-4d07-94b7-bd0ccd783b7c
 spec_id: FR-0230
+agreed_id: FR-224
 title: CI/CD Template Generation for Traceability
 description: |-
   Generate CI/CD pipeline templates that enforce code traceability:

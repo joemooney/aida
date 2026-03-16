@@ -1,5 +1,6 @@
 id: b8621169-8a34-4001-a2e8-936229497c62
 spec_id: FR-0005
+agreed_id: FR-157
 title: Ability to edit existing comment
 description: Even after submitting a comment, we should allow the original comment to text to be updated.
 status: Approved

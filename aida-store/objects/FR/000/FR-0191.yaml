@@ -1,5 +1,6 @@
 id: 7d5f9637-5f9e-4c3c-9706-669341c466f4
 spec_id: FR-0191
+agreed_id: FR-94
 title: KanBan View Support
 description: |-
   Add a KanBan board view for visualizing requirements workflow.

@@ -1,5 +1,6 @@
 id: d58f045f-b729-4a7f-b2f0-04d6353a7af7
 spec_id: FR-0193
+agreed_id: FR-105
 title: Baselines - Requirements Versioning and Snapshots
 description: |-
   Create named snapshots of requirements at specific points in time for release milestones, contract deliverables, or change control. Features:

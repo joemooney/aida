@@ -1,5 +1,6 @@
 id: c9697f28-3a0f-4133-b2e3-9c0dd6220e89
 spec_id: BUG-0386
+agreed_id: BUG-3
 title: 'Fix: Auto-fix action feedback shows diff summary and suggests re-run'
 description: |-
   After running Auto-Fix All in the skill runner panel, the feedback now shows:
@@ -16,6 +17,6 @@ created_at: 2026-02-23T02:49:30.683744854Z
 modified_at: 2026-02-23T02:49:30.683744854Z
 req_type: Bug
 tags:
-- web
 - ux
+- web
 - skills

@@ -1,5 +1,6 @@
 id: 0f650017-d81f-4212-b009-ef147c512ffa
 spec_id: FR-0204
+agreed_id: FR-115
 title: Sprint CLI Commands
 description: "Add aida sprint subcommand with: \n- assign (assign item to sprint), \n- list (list sprint contents), \n- summary (sprint metrics). \n\nAdd --no-sprint filter option to list command for viewing backlog."
 status: Draft

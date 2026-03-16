@@ -1,5 +1,6 @@
 id: f540638b-6631-4531-b199-3b4fec51d469
 spec_id: FR-0263
+agreed_id: FR-59
 title: CLI grep command for searching requirements
 description: 'The aida CLI shall provide a grep subcommand that searches requirement fields with support for: regex patterns (-E), case insensitivity (-i), context lines (-A/-B/-C), field filtering (-f), status/type/feature filters, files-with-matches mode (-l), count mode (-c), and invert match (-v).'
 status: Completed
