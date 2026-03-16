@@ -6272,6 +6272,132 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
             );
             println!("  URL: {}", issue.html_url);
         }
+        GitHubCommand::Pull {
+            labels,
+            open_only,
+            limit,
+            dry_run,
+        } => {
+            let config = aida_core::GitHubConfig::load()?;
+            let client = aida_core::GitHubClient::new(config.clone())?;
+
+            let mut filter = aida_core::GitHubIssueFilter::default();
+            filter.state = Some(if *open_only { "open" } else { "all" }.into());
+            filter.per_page = Some(*limit);
+            if let Some(l) = labels {
+                filter.labels = l.split(',').map(|s| s.trim().to_string()).collect();
+            }
+
+            let issues = rt.block_on(client.list_issues(Some(filter)))?;
+
+            if issues.is_empty() {
+                println!("No issues found to import.");
+                return Ok(());
+            }
+
+            // Check which issues are already imported (by matching title pattern)
+            let store = storage.load()?;
+            let existing_titles: std::collections::HashSet<String> = store
+                .requirements
+                .iter()
+                .map(|r| r.title.clone())
+                .collect();
+
+            let mut to_import: Vec<&aida_core::GitHubIssue> = Vec::new();
+            let mut skipped = 0;
+
+            for issue in &issues {
+                // Skip if already imported (check for [GH-N] prefix or exact title match)
+                let gh_prefix = format!("[GH-{}]", issue.number);
+                let already_exists = existing_titles.contains(&issue.title)
+                    || store.requirements.iter().any(|r| r.title.starts_with(&gh_prefix));
+
+                if already_exists {
+                    skipped += 1;
+                } else {
+                    to_import.push(issue);
+                }
+            }
+
+            if to_import.is_empty() {
+                println!("All {} issues already imported ({} skipped).", issues.len(), skipped);
+                return Ok(());
+            }
+
+            println!(
+                "Found {} issues to import ({} already exist):",
+                to_import.len(),
+                skipped
+            );
+
+            for issue in &to_import {
+                // Determine type from labels
+                let req_type = determine_type_from_labels(&issue.label_names(), &config.labels);
+                let priority = determine_priority_from_labels(&issue.label_names(), &config.labels);
+
+                println!(
+                    "  #{:<6} {:<12} {:<8} {}",
+                    issue.number,
+                    format!("{:?}", req_type),
+                    format!("{:?}", priority),
+                    truncate_str(&issue.title, 50),
+                );
+            }
+
+            if *dry_run {
+                println!("\nDry run — no requirements created.");
+                return Ok(());
+            }
+
+            // Import
+            let mut imported = 0;
+            storage.update_atomically(|store| {
+                for issue in &to_import {
+                    let req_type = determine_type_from_labels(&issue.label_names(), &config.labels);
+                    let priority = determine_priority_from_labels(&issue.label_names(), &config.labels);
+
+                    let mut req = Requirement::new(
+                        format!("[GH-{}] {}", issue.number, issue.title),
+                        issue.body.clone().unwrap_or_default(),
+                    );
+                    req.req_type = req_type;
+                    req.priority = priority;
+                    if let Some(ref assignee) = issue.assignee {
+                        req.owner = assignee.login.clone();
+                    }
+                    // Map GitHub state to AIDA status
+                    if issue.state == "closed" {
+                        req.status = RequirementStatus::Completed;
+                    }
+                    // Add GitHub labels as tags
+                    for label in &issue.labels {
+                        req.tags.insert(format!("gh:{}", label.name));
+                    }
+                    // Add URL link
+                    req.urls.push(aida_core::models::UrlLink {
+                        id: Uuid::now_v7(),
+                        url: issue.html_url.clone(),
+                        title: format!("GitHub #{}", issue.number),
+                        description: None,
+                        open_mode: aida_core::models::UrlOpenMode::NewTab,
+                        added_at: chrono::Utc::now(),
+                        added_by: "github-import".to_string(),
+                        last_verified: None,
+                        last_verified_ok: None,
+                    });
+
+                    let type_prefix = store.get_type_prefix(&req.req_type);
+                    store.add_requirement_with_id(req, None, type_prefix.as_deref());
+                    imported += 1;
+                }
+            })?;
+
+            println!(
+                "\n{} Imported {} issues as requirements.",
+                "✓".green(),
+                imported
+            );
+        }
         GitHubCommand::Labels { create_missing } => {
             let config = aida_core::GitHubConfig::load()?;
             let client = aida_core::GitHubClient::new(config.clone())?;
@@ -6335,6 +6461,53 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Determine AIDA requirement type from GitHub labels.
+fn determine_type_from_labels(
+    labels: &[&str],
+    label_config: &aida_core::GitHubLabelConfig,
+) -> RequirementType {
+    // Check each label against the type mappings (reverse lookup)
+    for label in labels {
+        for (type_name, mapped_label) in &label_config.types {
+            if label.eq_ignore_ascii_case(mapped_label) {
+                return match type_name.as_str() {
+                    "Bug" => RequirementType::Bug,
+                    "Story" => RequirementType::Story,
+                    "Task" => RequirementType::Task,
+                    "Epic" => RequirementType::Epic,
+                    "Functional" => RequirementType::Functional,
+                    "NonFunctional" => RequirementType::NonFunctional,
+                    _ => RequirementType::Task,
+                };
+            }
+        }
+        // Also check common GitHub labels directly
+        let l = label.to_lowercase();
+        if l == "bug" { return RequirementType::Bug; }
+        if l == "enhancement" || l == "feature" { return RequirementType::Story; }
+    }
+    RequirementType::Task // default
+}
+
+/// Determine AIDA priority from GitHub labels.
+fn determine_priority_from_labels(
+    labels: &[&str],
+    label_config: &aida_core::GitHubLabelConfig,
+) -> RequirementPriority {
+    for label in labels {
+        for (priority_name, mapped_label) in &label_config.priorities {
+            if label.eq_ignore_ascii_case(mapped_label) {
+                return match priority_name.as_str() {
+                    "High" => RequirementPriority::High,
+                    "Low" => RequirementPriority::Low,
+                    _ => RequirementPriority::Medium,
+                };
+            }
+        }
+    }
+    RequirementPriority::Medium // default
 }
 
 fn truncate_str(s: &str, max: usize) -> String {

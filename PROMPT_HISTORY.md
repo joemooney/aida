@@ -4045,3 +4045,34 @@ Tested at 1K/10K/50K/100K YAML files. Results: all daily ops under 0.2s at 100K.
 - 15 commits on `distributed-architecture` branch
 - Merged to main via fast-forward
 - 121 unit tests + 10 integration tests all passing
+
+---
+
+### Prompt: Continue distributed architecture — hardening, GitHub integration
+- **Date**: 2026-03-16
+
+#### Hardening & UX
+- Auto-detect distributed store from `.aida/config.toml` — no `--file` needed after init
+- `aida db status` — shows requirements, agreed IDs, git state, dispenser mode, remote status
+- Conflict-aware sync — detects field-level conflicts on `aida db sync --pull`
+- `agreed_id` propagated to TypeScript types, proto definition, gRPC convert layer
+- CLAUDE.md updated with full distributed mode documentation
+- Merge gate fix: agreed IDs use type prefix (FR, BUG, TASK) not feature prefix
+- Show command displays agreed ID, node ID, relationship count, comment count
+
+#### GitHub Integration
+- New module: `aida-core/src/integrations/github/` (client, config, models — ~960 lines)
+- Async HTTP client using reqwest with Bearer token auth, GitHub API v3
+- TOML-based config at `~/.config/aida/github.toml` with label mappings
+- CLI commands (aida github ...):
+  - `config` — set repo, token, API URL, show current config
+  - `test` — verify connection, display repo info
+  - `list` — list issues with state/label/limit filters
+  - `show` — display issue details (supports #42 or GH-42 format)
+  - `push` — create GitHub issue from AIDA requirement with mapped labels
+  - `pull` — import GitHub issues as AIDA requirements with type/priority detection
+  - `labels` — list repo labels, create AIDA defaults
+
+#### Git
+- 28 commits on main
+- 130 unit tests + 10 integration tests all passing
