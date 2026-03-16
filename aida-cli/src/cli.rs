@@ -281,6 +281,28 @@ pub enum DbCommand {
 
     /// Show database statistics and info
     Info,
+
+    /// Sync git-backed store with remote (push/pull)
+    Sync {
+        /// Pull from remote before pushing
+        #[clap(long)]
+        pull: bool,
+
+        /// Push to remote after committing
+        #[clap(long)]
+        push: bool,
+
+        /// Commit message for pending changes
+        #[clap(long, short = 'm')]
+        message: Option<String>,
+    },
+
+    /// Export current database to a git-backed store directory
+    ExportGit {
+        /// Output directory for the git-backed store
+        #[clap(long, short = 'o')]
+        output: String,
+    },
 }
 
 #[derive(Subcommand, Debug)]
