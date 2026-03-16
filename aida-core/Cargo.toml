@@ -13,6 +13,8 @@ native = ["rusqlite", "fs2", "dirs"]
 postgres = ["dep:postgres", "dep:r2d2", "dep:r2d2_postgres"]
 # GitLab integration
 gitlab = ["dep:reqwest", "dep:tokio"]
+# GitHub integration
+github = ["dep:reqwest", "dep:tokio"]
 
 [dependencies]
 # Core dependencies (all platforms)

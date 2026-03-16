@@ -1023,6 +1023,10 @@ pub enum Command {
     #[clap(subcommand)]
     Gitlab(GitLabCommand),
 
+    /// GitHub integration commands
+    #[clap(subcommand)]
+    Github(GitHubCommand),
+
     /// Start MCP (Model Context Protocol) server over stdio
     ///
     /// Exposes AIDA requirements as MCP tools for Claude Code integration.
@@ -1103,5 +1107,65 @@ pub enum Command {
         /// Filter by feature
         #[clap(long)]
         feature: Option<String>,
+    },
+}
+
+/// GitHub integration commands
+#[derive(Subcommand, Debug)]
+pub enum GitHubCommand {
+    /// Configure GitHub connection
+    Config {
+        /// Repository in owner/repo format (e.g., "myorg/myproject")
+        #[clap(long)]
+        repo: Option<String>,
+
+        /// Personal Access Token (or set AIDA_GITHUB_TOKEN env var)
+        #[clap(long)]
+        token: Option<String>,
+
+        /// GitHub API URL (default: https://api.github.com)
+        #[clap(long)]
+        api_url: Option<String>,
+
+        /// Show current configuration
+        #[clap(long)]
+        show: bool,
+    },
+
+    /// Test connection to GitHub
+    Test,
+
+    /// List issues from GitHub
+    List {
+        /// Filter by state (open, closed, all)
+        #[clap(long, default_value = "open")]
+        state: String,
+
+        /// Filter by labels (comma-separated)
+        #[clap(long)]
+        labels: Option<String>,
+
+        /// Maximum number of issues to show
+        #[clap(long, default_value = "20")]
+        limit: u32,
+    },
+
+    /// Show a specific GitHub issue
+    Show {
+        /// Issue number (e.g., 42 or GH-42)
+        number: String,
+    },
+
+    /// Push a requirement to GitHub as an issue
+    Push {
+        /// Requirement ID (spec_id or agreed_id)
+        id: String,
+    },
+
+    /// List labels in the GitHub repository
+    Labels {
+        /// Create default AIDA labels if missing
+        #[clap(long)]
+        create_missing: bool,
     },
 }

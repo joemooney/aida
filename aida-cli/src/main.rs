@@ -49,9 +49,9 @@ use aida_core::{
 };
 
 use crate::cli::{
-    Cli, Command, CommentCommand, ConfigCommand, DbCommand, FeatureCommand, GitLabCommand,
-    QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand, ScaffoldCommand,
-    ServerCommand, TraceCommand, TypeCommand,
+    Cli, Command, CommentCommand, ConfigCommand, DbCommand, FeatureCommand, GitHubCommand,
+    GitLabCommand, QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand,
+    ScaffoldCommand, ServerCommand, TraceCommand, TypeCommand,
 };
 
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
@@ -300,6 +300,9 @@ fn main() -> Result<()> {
         }
         Command::Gitlab(gitlab_cmd) => {
             handle_gitlab_command(gitlab_cmd, &storage)?;
+        }
+        Command::Github(github_cmd) => {
+            handle_github_command(github_cmd, &storage)?;
         }
         Command::McpServe => {
             mcp::run_mcp_server(&storage)?;
@@ -6080,6 +6083,266 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
         }
     }
     Ok(())
+}
+
+// trace:ARCH-github-integration | ai:claude
+/// Handle GitHub integration commands
+fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
+    let rt = tokio::runtime::Runtime::new()?;
+
+    match cmd {
+        GitHubCommand::Config {
+            repo,
+            token,
+            api_url,
+            show,
+        } => {
+            let mut config = aida_core::GitHubConfig::load()?;
+
+            if *show {
+                println!("{}", "GitHub Configuration".bold());
+                println!("{}", "─".repeat(40));
+                println!("API URL:  {}", config.api_url);
+                println!("Repo:     {}", if config.repo.is_empty() { "(not set)" } else { &config.repo });
+                println!(
+                    "Token:    {}",
+                    if config.effective_token().is_ok() {
+                        "configured (AIDA_GITHUB_TOKEN)"
+                    } else {
+                        "not configured"
+                    }
+                );
+                println!("Enabled:  {}", config.enabled);
+                return Ok(());
+            }
+
+            if let Some(r) = repo {
+                config.repo = r.clone();
+            }
+            if let Some(t) = token {
+                std::env::set_var("AIDA_GITHUB_TOKEN", t);
+                config.token = Some(t.clone());
+                println!("{} Token set for this session. Set AIDA_GITHUB_TOKEN env var for persistence.", "!".yellow());
+            }
+            if let Some(u) = api_url {
+                config.api_url = u.clone();
+            }
+
+            config.save()?;
+            println!("{} GitHub configuration saved.", "✓".green());
+        }
+        GitHubCommand::Test => {
+            let config = aida_core::GitHubConfig::load()?;
+            config.validate()?;
+
+            let client = aida_core::GitHubClient::new(config)?;
+            let repo = rt.block_on(client.test_connection())?;
+
+            println!("{} Connected to GitHub", "✓".green());
+            println!("  Repository: {}", repo.full_name);
+            println!("  URL:        {}", repo.html_url);
+            println!("  Default:    {}", repo.default_branch);
+            println!("  Private:    {}", repo.is_private);
+        }
+        GitHubCommand::List { state, labels, limit } => {
+            let config = aida_core::GitHubConfig::load()?;
+            let client = aida_core::GitHubClient::new(config)?;
+
+            let mut filter = aida_core::GitHubIssueFilter::default();
+            filter.state = Some(state.clone());
+            filter.per_page = Some(*limit);
+            if let Some(l) = labels {
+                filter.labels = l.split(',').map(|s| s.trim().to_string()).collect();
+            }
+
+            let issues = rt.block_on(client.list_issues(Some(filter)))?;
+
+            if issues.is_empty() {
+                println!("No issues found.");
+            } else {
+                println!(
+                    "{:<8} {:<10} {:<40} {}",
+                    "#", "State", "Title", "Labels"
+                );
+                println!("{}", "─".repeat(75));
+                for issue in &issues {
+                    let labels_str: String = issue
+                        .labels
+                        .iter()
+                        .map(|l| l.name.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    println!(
+                        "{:<8} {:<10} {:<40} {}",
+                        format!("#{}", issue.number),
+                        issue.state,
+                        truncate_str(&issue.title, 38),
+                        labels_str,
+                    );
+                }
+                println!("\n{} issues", issues.len());
+            }
+        }
+        GitHubCommand::Show { number } => {
+            let config = aida_core::GitHubConfig::load()?;
+            let client = aida_core::GitHubClient::new(config)?;
+
+            // Parse "GH-42" or "42"
+            let num: u64 = number
+                .trim_start_matches("GH-")
+                .trim_start_matches("gh-")
+                .trim_start_matches('#')
+                .parse()
+                .map_err(|_| anyhow::anyhow!("Invalid issue number: {}", number))?;
+
+            let issue = rt.block_on(client.get_issue(num))?;
+
+            println!("{}: #{}", "Number".bold(), issue.number);
+            println!("{}: {}", "Title".bold(), issue.title);
+            println!("{}: {}", "State".bold(), issue.state);
+            println!("{}: {}", "Author".bold(), issue.user.login);
+            if let Some(ref assignee) = issue.assignee {
+                println!("{}: {}", "Assignee".bold(), assignee.login);
+            }
+            if !issue.labels.is_empty() {
+                let labels: Vec<&str> = issue.labels.iter().map(|l| l.name.as_str()).collect();
+                println!("{}: {}", "Labels".bold(), labels.join(", "));
+            }
+            println!("{}: {}", "URL".bold(), issue.html_url);
+            println!("{}: {}", "Comments".bold(), issue.comments);
+            if let Some(ref body) = issue.body {
+                if !body.is_empty() {
+                    println!("\n{}", body);
+                }
+            }
+        }
+        GitHubCommand::Push { id } => {
+            let config = aida_core::GitHubConfig::load()?;
+            let client = aida_core::GitHubClient::new(config.clone())?;
+
+            let store = storage.load()?;
+            let req = store
+                .requirements
+                .iter()
+                .find(|r| r.matches_id(id))
+                .ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", id))?;
+
+            // Build labels from type and priority
+            let mut labels = Vec::new();
+            let type_str = format!("{:?}", req.req_type);
+            if let Some(label) = config.labels.types.get(&type_str) {
+                labels.push(label.clone());
+            }
+            let priority_str = req.effective_priority();
+            if let Some(label) = config.labels.priorities.get(&priority_str) {
+                labels.push(label.clone());
+            }
+            let status_str = req.effective_status();
+            if let Some(label) = config.labels.statuses.get(&status_str) {
+                labels.push(label.clone());
+            }
+
+            // Build issue body with AIDA metadata
+            let display_id = req.display_id();
+            let body = format!(
+                "{}\n\n---\n_AIDA: {} | UUID: {}_",
+                req.description,
+                display_id,
+                req.id,
+            );
+
+            let request = aida_core::GitHubCreateIssueRequest {
+                title: format!("[{}] {}", display_id, req.title),
+                body: Some(body),
+                labels,
+                assignees: if req.owner.is_empty() {
+                    Vec::new()
+                } else {
+                    vec![req.owner.clone()]
+                },
+                milestone: None,
+            };
+
+            let issue = rt.block_on(client.create_issue(&request))?;
+            println!(
+                "{} Created GitHub issue #{} for {}",
+                "✓".green(),
+                issue.number,
+                display_id
+            );
+            println!("  URL: {}", issue.html_url);
+        }
+        GitHubCommand::Labels { create_missing } => {
+            let config = aida_core::GitHubConfig::load()?;
+            let client = aida_core::GitHubClient::new(config.clone())?;
+
+            let existing = rt.block_on(client.list_labels())?;
+            let existing_names: std::collections::HashSet<String> =
+                existing.iter().map(|l| l.name.clone()).collect();
+
+            println!("{}", "Repository Labels".bold());
+            println!("{}", "─".repeat(40));
+            for label in &existing {
+                println!("  {} (#{}) {}", label.name, label.color,
+                    label.description.as_deref().unwrap_or(""));
+            }
+            println!("\n{} labels", existing.len());
+
+            if *create_missing {
+                let all_labels: Vec<(&str, &str)> = config
+                    .labels
+                    .types
+                    .values()
+                    .map(|v| (v.as_str(), "0e8a16"))
+                    .chain(
+                        config
+                            .labels
+                            .priorities
+                            .values()
+                            .map(|v| (v.as_str(), "d93f0b")),
+                    )
+                    .chain(
+                        config
+                            .labels
+                            .statuses
+                            .values()
+                            .map(|v| (v.as_str(), "1d76db")),
+                    )
+                    .collect();
+
+                let mut created = 0;
+                for (name, color) in all_labels {
+                    if !existing_names.contains(name) {
+                        match rt.block_on(client.create_label(name, color, Some("Created by AIDA")))
+                        {
+                            Ok(_) => {
+                                println!("  {} Created label: {}", "✓".green(), name);
+                                created += 1;
+                            }
+                            Err(e) => {
+                                eprintln!("  {} Failed to create {}: {}", "✗".red(), name, e);
+                            }
+                        }
+                    }
+                }
+                if created == 0 {
+                    println!("\nAll AIDA labels already exist.");
+                } else {
+                    println!("\n{} labels created.", created);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn truncate_str(s: &str, max: usize) -> String {
+    if s.len() <= max {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max.saturating_sub(3)])
+    }
 }
 
 // trace:STORY-0321 | ai:claude
