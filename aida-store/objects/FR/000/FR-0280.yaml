@@ -1,5 +1,6 @@
 id: b75d1db6-294a-43c5-b4b8-dbf7d6469ffa
 spec_id: FR-0280
+agreed_id: FR-81
 title: Server graceful shutdown with REST API
 description: The aida-server now properly handles Ctrl+C (SIGINT) by gracefully shutting down both the gRPC server and the REST API server. Uses tokio::sync::watch channel to share shutdown signal between servers. The REST server uses axum's with_graceful_shutdown() to properly close connections before exit.
 status: Completed

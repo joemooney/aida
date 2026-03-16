@@ -1,5 +1,6 @@
 id: a7901e41-ea1f-45cb-b7a5-0c4b550760eb
 spec_id: FR-0150
+agreed_id: FR-185
 title: 'Claude Code Skill: aida-req'
 description: |-
   The system shall provide a Claude Code skill (/aida-req) that guides users through adding new requirements with AI-powered evaluation feedback.

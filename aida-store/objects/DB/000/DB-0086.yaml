@@ -1,5 +1,6 @@
 id: bb81e51e-dd32-48ef-9806-cf26a09643f5
 spec_id: DB-0086
+agreed_id: FR-252
 prefix_override: DB
 title: Database definition
 description: Object types, relationships, etc.

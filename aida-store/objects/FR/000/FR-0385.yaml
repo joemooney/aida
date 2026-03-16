@@ -1,5 +1,6 @@
 id: 3a4d90f3-7b60-4eb7-a32d-15b20fbbb679
 spec_id: FR-0385
+agreed_id: FR-122
 title: 'Web UI Skill Invocation with SSE streaming (pilot: compiler-warnings)'
 description: |-
   The Skills Browser view supports running executable skills directly from the web UI. Pilot implementation uses /aida-compiler-warnings skill. Features:

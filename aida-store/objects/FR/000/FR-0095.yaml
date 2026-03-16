@@ -1,5 +1,6 @@
 id: 5a09caba-1c81-4c8c-bc18-48f677c205b4
 spec_id: FR-0095
+agreed_id: FR-62
 title: New Window Menu option
 description: |
   In Menu add `New Window` option to open a new session. In the new window the user may choose to switch databases for example or work in the

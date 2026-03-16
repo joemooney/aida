@@ -1,5 +1,6 @@
 id: f39500b8-3b2f-43f7-b885-14dd64049f0d
 spec_id: FR-0345
+agreed_id: FR-143
 title: make target to bundle/zip release
 description: |
   make target to bundle/zip release

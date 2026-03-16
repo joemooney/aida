@@ -1,5 +1,6 @@
 id: 8f9fd810-24f7-4e52-9077-8ee3d33b1596
 spec_id: EPIC-0320
+agreed_id: EPIC-2
 title: GitLab Integration
 description: |-
   Integrate AIDA with GitLab for bidirectional issue/bug tracking. Enable teams to use GitLab for developer-facing work (bugs, tasks) while maintaining AIDA as the requirements system of record.

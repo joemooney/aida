@@ -1,5 +1,6 @@
 id: 199c5d9e-73a5-4c1b-b0de-c65580e9d747
 spec_id: FR-0309
+agreed_id: FR-181
 title: Auto-migrate missing default types on database load
 description: |-
   When loading an existing database that was created before newer default types (Bug, Story, Task, Sprint, Folder) were added, automatically add any missing default types to the id_config.requirement_types collection. This ensures databases stay in sync with the built-in type definitions without requiring manual migration steps.

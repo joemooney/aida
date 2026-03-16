@@ -1,5 +1,6 @@
 id: ce9fdd12-0860-4334-90b7-399952ca523a
 spec_id: FR-0064
+agreed_id: FR-107
 title: Users Settings tab
 description: Users settings should be its own tab move it from under Settins/Admin to be its own tab in settings. Just call it "Users"
 status: Draft

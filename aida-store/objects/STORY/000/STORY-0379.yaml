@@ -1,5 +1,6 @@
 id: c9548415-22ce-445c-a323-3f14acfd252a
 spec_id: STORY-0379
+agreed_id: STORY-14
 title: 'Activity stats: add Completed card and status breakdown pills'
 description: Enhanced the Activity stats bar from 4 cards to 5. Added a dedicated Completed stat card (green) showing unique requirements moved to Completed status in the time range. The Worked On card now shows colored breakdown pills (Completed, In Progress, Approved, Created, Commented, Other) counting unique requirements per category from status change events in FieldChange history.
 status: Completed

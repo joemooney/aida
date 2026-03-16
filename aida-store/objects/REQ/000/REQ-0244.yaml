@@ -1,5 +1,6 @@
 id: 8958bb92-431b-4a32-ad02-e5427754d693
 spec_id: REQ-0244
+agreed_id: STORY-32
 title: TraceLink YAML storage
 description: Store TraceLinks as a Vec in the Requirement struct for YAML backend. Each requirement has an optional trace_links field containing the list of TraceLink entries. Ensure proper serialization with serde.
 status: Draft

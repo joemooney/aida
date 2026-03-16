@@ -1,5 +1,6 @@
 id: 072854b9-a4cc-4f05-8ebd-2c655de26a7c
 spec_id: FR-0228
+agreed_id: FR-216
 title: Git Hooks for Code Traceability Validation
 description: |-
   Generate git hooks during project scaffolding to enforce code traceability:

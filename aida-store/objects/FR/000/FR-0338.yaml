@@ -1,5 +1,6 @@
 id: 58992ae5-87e4-4bd1-8bd2-5f3028f41ed4
 spec_id: FR-0338
+agreed_id: FR-104
 title: Updates to req are not syncing between aida ins...
 description: |
   Updates to req are not syncing between aida instances

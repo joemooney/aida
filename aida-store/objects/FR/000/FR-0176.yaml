@@ -1,5 +1,6 @@
 id: ba535047-8a69-437a-93ff-c46c961b4623
 spec_id: FR-0176
+agreed_id: FR-229
 prefix_override: FR
 title: Version number detection and bumping
 description: |-

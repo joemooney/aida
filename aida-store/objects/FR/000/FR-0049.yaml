@@ -1,5 +1,6 @@
 id: 78670bb5-090f-45a1-a022-dfcac4c11dd0
 spec_id: FR-0049
+agreed_id: FR-114
 title: Cut-n-Paste
 description: |
   Ctrl-C copy in a textbox or whenever text is selected should copy the text into the system clipboard and secondard buffer. I do a middle click

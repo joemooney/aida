@@ -1,5 +1,6 @@
 id: 9536e77a-322e-45ca-b14a-a0d18099c6b2
 spec_id: FR-0261
+agreed_id: FR-91
 title: GUI Check Status button for scaffolding
 description: Add 'Check Status' button next to 'Scaffold Project' in the GUI that shows a dialog with scaffolding drift status - comparing expected scaffolded files with actual project state.
 status: Completed

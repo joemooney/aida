@@ -1,5 +1,6 @@
 id: a3af45a9-1b1c-4d4f-91c6-905955c0d9ab
 spec_id: FR-0172
+agreed_id: FR-215
 prefix_override: FR
 title: CLI add command should support --parent option
 description: |-

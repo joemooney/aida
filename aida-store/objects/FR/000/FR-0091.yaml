@@ -1,5 +1,6 @@
 id: 72cc760e-c566-4bbc-b7fb-82bf027f1eaa
 spec_id: FR-0091
+agreed_id: FR-209
 title: preview appearance changes
 description: |-
   When we make a change in appearance, for example "Show status icons" or change theme can we apply that globally temporarily until we click

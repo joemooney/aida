@@ -1,5 +1,6 @@
 id: 05e702d5-ae9e-4ea5-886a-7967b697c24a
 spec_id: REQ-0301
+agreed_id: TASK-11
 title: Add /aida-evaluate slash command and skill
 description: Implemented the /aida-evaluate skill for evaluating requirement quality using AI analysis
 status: Completed

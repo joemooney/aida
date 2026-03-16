@@ -1,5 +1,6 @@
 id: d586f760-6963-4b32-b6d3-01367e86b406
 spec_id: FR-0346
+agreed_id: FR-32
 title: aida-build gui build tool
 description: |-
   GUI Build Configuration Tool
