@@ -781,6 +781,158 @@ fn handle_git_backend_command(
                 }
             }
         }
+        Command::Edit {
+            id,
+            title,
+            description,
+            status,
+            priority,
+            r#type,
+            owner,
+            feature,
+            tags,
+            ..
+        } => {
+            let mut req = backend
+                .get_requirement_by_spec_id(id)?
+                .ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", id))?;
+
+            let mut changed = false;
+            if let Some(t) = title {
+                req.title = t.clone();
+                changed = true;
+            }
+            if let Some(d) = description {
+                req.description = d.clone();
+                changed = true;
+            }
+            if let Some(s) = status {
+                req.set_status_from_str(&capitalize(s));
+                changed = true;
+            }
+            if let Some(p) = priority {
+                req.set_priority_from_str(&capitalize(p));
+                changed = true;
+            }
+            if let Some(t) = r#type {
+                if let Ok(rt) = parse_requirement_type(t) {
+                    req.req_type = rt;
+                    changed = true;
+                }
+            }
+            if let Some(o) = owner {
+                req.owner = o.clone();
+                changed = true;
+            }
+            if let Some(f) = feature {
+                req.feature = f.clone();
+                changed = true;
+            }
+            if let Some(t) = tags {
+                req.tags.clear();
+                for tag in t.split(',') {
+                    req.tags.insert(tag.trim().to_string());
+                }
+                changed = true;
+            }
+
+            if changed {
+                req.modified_at = chrono::Utc::now();
+                backend.update_requirement(&req)?;
+                println!("Updated: {}", id);
+            } else {
+                println!("No changes specified. Use --title, --status, --priority, etc.");
+            }
+        }
+        Command::Del { id, yes } => {
+            let req = backend
+                .get_requirement_by_spec_id(id)?
+                .ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", id))?;
+
+            if !yes {
+                println!("Delete {} — {}?", id, req.title);
+                print!("Confirm (y/N): ");
+                use std::io::Write;
+                std::io::stdout().flush()?;
+                let mut input = String::new();
+                std::io::stdin().read_line(&mut input)?;
+                if !input.trim().eq_ignore_ascii_case("y") {
+                    println!("Cancelled.");
+                    return Ok(());
+                }
+            }
+
+            backend.delete_requirement(&req.id)?;
+            println!("Deleted: {}", id);
+        }
+        Command::Search { query, status, .. } => {
+            let store = backend.load()?;
+            let query_lower = query.to_lowercase();
+
+            let results: Vec<&Requirement> = store
+                .requirements
+                .iter()
+                .filter(|r| !r.archived)
+                .filter(|r| {
+                    r.title.to_lowercase().contains(&query_lower)
+                        || r.description.to_lowercase().contains(&query_lower)
+                        || r.spec_id.as_deref().unwrap_or("").to_lowercase().contains(&query_lower)
+                })
+                .filter(|r| {
+                    status
+                        .as_ref()
+                        .map(|s| r.effective_status().eq_ignore_ascii_case(s))
+                        .unwrap_or(true)
+                })
+                .collect();
+
+            if results.is_empty() {
+                println!("No results for: {}", query);
+            } else {
+                println!(
+                    "{:<14} {:<12} {:<10} {}",
+                    "ID", "Type", "Status", "Title"
+                );
+                println!("{}", "─".repeat(65));
+                for req in &results {
+                    println!(
+                        "{:<14} {:<12} {:<10} {}",
+                        req.spec_id.as_deref().unwrap_or("-"),
+                        format!("{:?}", req.req_type),
+                        req.effective_status(),
+                        req.title,
+                    );
+                }
+                println!("\n{} results", results.len());
+            }
+        }
+        Command::Comment(CommentCommand::Add {
+            id: req_id,
+            content,
+            author,
+            ..
+        }) => {
+            let mut req = backend
+                .get_requirement_by_spec_id(req_id)?
+                .ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", req_id))?;
+
+            let now = chrono::Utc::now();
+            let comment = aida_core::Comment {
+                id: Uuid::now_v7(),
+                content: content.clone().unwrap_or_default(),
+                author: author.clone().unwrap_or_else(|| get_default_author()),
+                created_at: now,
+                modified_at: now,
+                parent_id: None,
+                replies: Vec::new(),
+                reactions: Vec::new(),
+            };
+
+            req.comments.push(comment);
+            req.modified_at = now;
+            backend.update_requirement(&req)?;
+            println!("Comment added to {}", req_id);
+        }
         Command::Db(DbCommand::Info) => {
             let store = backend.load()?;
             println!("{}: {}", "Backend".bold(), "Git (sharded YAML)");
@@ -792,10 +944,20 @@ fn handle_git_backend_command(
                 .map(|l| l.len())
                 .unwrap_or(0);
             println!("{}: {}", "Object files".bold(), file_count);
+
+            // Show git status
+            if aida_core::git_ops::is_git_repo(store_path) {
+                let has_changes = aida_core::git_ops::has_changes(store_path).unwrap_or(false);
+                let status_str = if has_changes { "uncommitted changes" } else { "clean" };
+                println!("{}: {}", "Git".bold(), status_str);
+                if let Ok(sha) = aida_core::git_ops::head_sha(store_path) {
+                    println!("{}: {}", "HEAD".bold(), sha);
+                }
+            }
         }
         _ => {
             eprintln!(
-                "Command not yet supported for git backend. Supported: list, add, show, db info"
+                "Command not yet supported for git backend. Supported: list, add, show, edit, del, search, comment add, db info"
             );
             std::process::exit(1);
         }
