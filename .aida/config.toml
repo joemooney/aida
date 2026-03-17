@@ -1,0 +1,6 @@
+# AIDA distributed mode configuration
+[deployment]
+mode = "distributed"
+store_path = ".aida-store"
+store_type = "worktree"
+branch = "aida-store"

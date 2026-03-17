@@ -66,3 +66,6 @@ docker/.env
 .aida/server.toml
 .aida/.dev-pids/
 .aida/.dev-*.log
+
+# AIDA distributed store (orphan branch worktree)
+.aida-store/
