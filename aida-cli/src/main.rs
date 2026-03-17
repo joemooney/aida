@@ -113,6 +113,19 @@ fn main() -> Result<()> {
     } else {
         // Check for distributed mode config (.aida/config.toml with store_path)
         if let Some(store_path) = detect_distributed_store() {
+            // MCP server needs the Storage class — snapshot git backend to temp YAML
+            if matches!(&cli.command, Command::McpServe) {
+                let backend = aida_core::GitBackend::new(&store_path)?;
+                let store = aida_core::DatabaseBackend::load(&backend)?;
+                let cache_path = store_path.join(".aida").join("mcp-cache.yaml");
+                std::fs::create_dir_all(cache_path.parent().unwrap())?;
+                // Use the YAML backend to write the snapshot
+                let yaml_backend = aida_core::YamlBackend::new(&cache_path);
+                aida_core::DatabaseBackend::save(&yaml_backend, &store)?;
+                let mcp_storage = Storage::new(cache_path);
+                mcp::run_mcp_server(&mcp_storage)?;
+                return Ok(());
+            }
             return handle_git_backend_command(&store_path, &cli.command);
         }
 
