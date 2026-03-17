@@ -43,6 +43,8 @@ pub struct GitBackend {
     dispenser: Option<DispenserHandle>,
     /// Whether to auto-commit changes to git after writes
     auto_commit: bool,
+    /// Whether to record operations in the append-only oplog
+    oplog_enabled: bool,
 }
 
 /// Metadata stored separately from requirements (the "store" fields).
@@ -132,6 +134,7 @@ impl GitBackend {
             metadata_path,
             dispenser: None,
             auto_commit: true,
+            oplog_enabled: true,
         })
     }
 
@@ -147,16 +150,48 @@ impl GitBackend {
         self
     }
 
+    /// Enable or disable the operation log.
+    pub fn with_oplog(mut self, enabled: bool) -> Self {
+        self.oplog_enabled = enabled;
+        self
+    }
+
+    /// Record an operation in the append-only oplog.
+    fn record_op(&self, target_id: uuid::Uuid, kind: crate::oplog::OpKind) {
+        if !self.oplog_enabled {
+            return;
+        }
+        let oplog_path = self.root.join("oplog.yaml");
+        let node_id = self.dispenser.as_ref()
+            .and_then(|d| d.state().ok())
+            .map(|s| match s.mode {
+                crate::dispenser::IdMode::Distributed { node_id } => node_id,
+                _ => 0,
+            })
+            .unwrap_or(0);
+
+        if let Ok(mut log) = crate::oplog::OpLog::load(&oplog_path) {
+            if log.node_id == 0 && node_id > 0 {
+                log.node_id = node_id;
+            }
+            log.append(target_id, "aida".into(), kind);
+            let _ = log.save(&oplog_path);
+        }
+    }
+
     /// Stage all changes and commit to git if auto_commit is enabled.
     /// The commit message describes what changed.
     fn auto_commit(&self, message: &str) {
         if !self.auto_commit || !crate::git_ops::is_git_repo(&self.root) {
             return;
         }
-        // Stage objects and metadata
+        // Stage objects, metadata, and oplog
         let _ = crate::git_ops::add_all(&self.root, "objects");
         if self.metadata_path.exists() {
             let _ = crate::git_ops::add(&self.root, &["metadata.yaml"]);
+        }
+        if self.root.join("oplog.yaml").exists() {
+            let _ = crate::git_ops::add(&self.root, &["oplog.yaml"]);
         }
         // Commit (silently ignore errors — git ops are best-effort)
         let _ = crate::git_ops::commit(&self.root, message);
@@ -312,15 +347,45 @@ impl DatabaseBackend for GitBackend {
     fn update_requirement(&self, requirement: &Requirement) -> Result<()> {
         let spec_id = requirement.spec_id.as_deref()
             .ok_or_else(|| anyhow::anyhow!("Cannot update requirement without spec_id in git backend"))?;
+
+        // Record ops for changed fields (compare with existing if possible)
+        if let Ok(old) = object_store::read_object(&self.objects_root, spec_id) {
+            if old.title != requirement.title {
+                self.record_op(requirement.id, crate::oplog::OpKind::SetTitle {
+                    title: requirement.title.clone(),
+                });
+            }
+            if old.effective_status() != requirement.effective_status() {
+                self.record_op(requirement.id, crate::oplog::OpKind::SetStatus {
+                    status: requirement.effective_status(),
+                });
+            }
+            if old.effective_priority() != requirement.effective_priority() {
+                self.record_op(requirement.id, crate::oplog::OpKind::SetPriority {
+                    priority: requirement.effective_priority(),
+                });
+            }
+            if old.owner != requirement.owner {
+                self.record_op(requirement.id, crate::oplog::OpKind::SetOwner {
+                    owner: requirement.owner.clone(),
+                });
+            }
+            if old.description != requirement.description {
+                self.record_op(requirement.id, crate::oplog::OpKind::SetDescription {
+                    description: requirement.description.clone(),
+                });
+            }
+        }
+
         object_store::write_object(&self.objects_root, requirement)?;
         self.auto_commit(&format!("update {}", spec_id));
         Ok(())
     }
 
     fn delete_requirement(&self, id: &uuid::Uuid) -> Result<()> {
-        // Need to find the spec_id first
         if let Some(req) = object_store::find_by_uuid(&self.objects_root, id)? {
             if let Some(ref spec_id) = req.spec_id {
+                self.record_op(*id, crate::oplog::OpKind::Archive);
                 object_store::delete_object(&self.objects_root, spec_id)?;
                 self.auto_commit(&format!("delete {}", spec_id));
                 return Ok(());
@@ -347,6 +412,15 @@ impl DatabaseBackend for GitBackend {
             let updated_meta = Self::extract_metadata(&temp_store);
             self.save_metadata(&updated_meta)?;
         }
+
+        // Record create operation
+        self.record_op(req.id, crate::oplog::OpKind::Create {
+            title: req.title.clone(),
+            description: req.description.clone(),
+            req_type: format!("{:?}", req.req_type),
+            status: req.effective_status(),
+            priority: req.effective_priority(),
+        });
 
         object_store::write_object(&self.objects_root, &req)?;
         let spec_id = req.spec_id.as_deref().unwrap_or("unknown");

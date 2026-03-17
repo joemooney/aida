@@ -1,5 +1,7 @@
 pub mod ai;
 pub mod conflict;
+#[cfg(all(unix, feature = "native"))]
+pub mod daemon;
 pub mod db;
 pub mod dispenser;
 pub mod export;
