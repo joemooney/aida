@@ -1,0 +1,566 @@
+name: ''
+title: ''
+description: ''
+users: []
+teams: []
+id_config:
+  format: SingleLevel
+  numbering: Global
+  digits: 3
+  requirement_types:
+  - name: Functional
+    prefix: FR
+    description: Functional requirements
+  - name: Non-Functional
+    prefix: NFR
+    description: Non-functional requirements (performance, security, etc.)
+  - name: System
+    prefix: SR
+    description: System-level requirements
+  - name: User
+    prefix: UR
+    description: User story requirements
+  - name: Change Request
+    prefix: CR
+    description: Change requests for modifications to existing functionality
+  - name: Bug
+    prefix: BUG
+    description: Bug reports and defects
+  - name: Epic
+    prefix: EPIC
+    description: Large features spanning multiple stories
+  - name: Story
+    prefix: STORY
+    description: User stories for agile development
+  - name: Task
+    prefix: TASK
+    description: Individual work items
+  - name: Spike
+    prefix: SPIKE
+    description: Research and investigation tasks
+  - name: Sprint
+    prefix: SPRINT
+    description: Sprint planning containers
+  - name: Folder
+    prefix: FOLDER
+    description: Organizational folders
+  - name: Meta
+    prefix: META
+    description: Database configuration and templates
+features: []
+next_feature_number: 1
+next_spec_number: 1
+prefix_counters: {}
+relationship_definitions:
+- name: parent
+  display_name: Parent
+  description: Hierarchical parent requirement
+  inverse: child
+  symmetric: false
+  cardinality: OneToMany
+  source_types: []
+  target_types: []
+  built_in: true
+  color: null
+  icon: null
+- name: child
+  display_name: Child
+  description: Hierarchical child requirement
+  inverse: parent
+  symmetric: false
+  cardinality: ManyToOne
+  source_types: []
+  target_types: []
+  built_in: true
+  color: null
+  icon: null
+- name: verifies
+  display_name: Verifies
+  description: Test or verification relationship
+  inverse: verified_by
+  symmetric: false
+  cardinality: ManyToMany
+  source_types: []
+  target_types: []
+  built_in: true
+  color: null
+  icon: null
+- name: verified_by
+  display_name: Verified By
+  description: Verified by a test requirement
+  inverse: verifies
+  symmetric: false
+  cardinality: ManyToMany
+  source_types: []
+  target_types: []
+  built_in: true
+  color: null
+  icon: null
+- name: duplicate
+  display_name: Duplicate
+  description: Marks requirements as duplicates
+  inverse: null
+  symmetric: true
+  cardinality: ManyToMany
+  source_types: []
+  target_types: []
+  built_in: true
+  color: null
+  icon: null
+- name: references
+  display_name: References
+  description: General reference link
+  inverse: null
+  symmetric: false
+  cardinality: ManyToMany
+  source_types: []
+  target_types: []
+  built_in: true
+  color: null
+  icon: null
+- name: depends_on
+  display_name: Depends On
+  description: Dependency relationship
+  inverse: dependency_of
+  symmetric: false
+  cardinality: ManyToMany
+  source_types: []
+  target_types: []
+  built_in: true
+  color: null
+  icon: null
+- name: dependency_of
+  display_name: Dependency Of
+  description: Inverse dependency relationship
+  inverse: depends_on
+  symmetric: false
+  cardinality: ManyToMany
+  source_types: []
+  target_types: []
+  built_in: true
+  color: null
+  icon: null
+- name: implements
+  display_name: Implements
+  description: Implementation relationship
+  inverse: implemented_by
+  symmetric: false
+  cardinality: ManyToMany
+  source_types: []
+  target_types: []
+  built_in: true
+  color: null
+  icon: null
+- name: implemented_by
+  display_name: Implemented By
+  description: Inverse implementation relationship
+  inverse: implements
+  symmetric: false
+  cardinality: ManyToMany
+  source_types: []
+  target_types: []
+  built_in: true
+  color: null
+  icon: null
+- name: created_by
+  display_name: Created By
+  description: User who created the requirement
+  inverse: null
+  symmetric: false
+  cardinality: ManyToOne
+  source_types: []
+  target_types: []
+  built_in: true
+  color: '#4a9eff'
+  icon: null
+- name: assigned_to
+  display_name: Assigned To
+  description: User assigned to work on this requirement
+  inverse: null
+  symmetric: false
+  cardinality: ManyToOne
+  source_types: []
+  target_types: []
+  built_in: true
+  color: '#22c55e'
+  icon: null
+- name: tested_by
+  display_name: Tested By
+  description: User who tested/verified the requirement
+  inverse: null
+  symmetric: false
+  cardinality: ManyToMany
+  source_types: []
+  target_types: []
+  built_in: true
+  color: '#f59e0b'
+  icon: null
+- name: closed_by
+  display_name: Closed By
+  description: User who closed/completed the requirement
+  inverse: null
+  symmetric: false
+  cardinality: ManyToOne
+  source_types: []
+  target_types: []
+  built_in: true
+  color: '#ef4444'
+  icon: null
+- name: sprint_assignment
+  display_name: Assigned to Sprint
+  description: Assigns a requirement to a Sprint for work planning
+  inverse: sprint_contains
+  symmetric: false
+  cardinality: ManyToOne
+  source_types: []
+  target_types:
+  - Sprint
+  built_in: true
+  color: '#7c3aed'
+  icon: null
+- name: sprint_contains
+  display_name: Sprint Contains
+  description: Items assigned to this Sprint
+  inverse: sprint_assignment
+  symmetric: false
+  cardinality: OneToMany
+  source_types:
+  - Sprint
+  target_types: []
+  built_in: true
+  color: '#7c3aed'
+  icon: null
+reaction_definitions:
+- name: resolved
+  emoji: ✅
+  label: Resolved
+  description: Mark comment as resolved/addressed
+  built_in: true
+- name: rejected
+  emoji: ❌
+  label: Rejected
+  description: Mark comment as rejected/declined
+  built_in: true
+- name: thumbs_up
+  emoji: 👍
+  label: Thumbs Up
+  description: Agree or approve
+  built_in: true
+- name: thumbs_down
+  emoji: 👎
+  label: Thumbs Down
+  description: Disagree or disapprove
+  built_in: true
+- name: question
+  emoji: ❓
+  label: Question
+  description: Needs clarification
+  built_in: true
+- name: important
+  emoji: ⚠️
+  label: Important
+  description: Mark as important/attention needed
+  built_in: true
+meta_counters: {}
+type_definitions:
+- name: Functional
+  display_name: Functional
+  description: Functional requirements describing system behavior
+  prefix: FR
+  built_in: true
+  stateless: false
+- name: NonFunctional
+  display_name: Non-Functional
+  description: Non-functional requirements (performance, security, etc.)
+  prefix: NFR
+  built_in: true
+  stateless: false
+- name: System
+  display_name: System
+  description: System-level requirements
+  prefix: SYS
+  built_in: true
+  stateless: false
+- name: User
+  display_name: User Story
+  description: User stories and user requirements
+  prefix: US
+  built_in: true
+  stateless: false
+- name: ChangeRequest
+  display_name: Change Request
+  description: Change requests for existing functionality
+  prefix: CR
+  statuses:
+  - Draft
+  - Submitted
+  - Under Review
+  - Approved
+  - Rejected
+  - In Progress
+  - Implemented
+  - Verified
+  - Closed
+  custom_fields:
+  - name: impact
+    label: Impact Level
+    field_type: select
+    required: false
+    options:
+    - Low
+    - Medium
+    - High
+    - Critical
+    description: Impact of this change on the system
+    order: 1
+  - name: requested_by
+    label: Requested By
+    field_type: user
+    required: false
+    description: User who requested this change
+    order: 2
+  - name: target_release
+    label: Target Release
+    field_type: text
+    required: false
+    description: Target release version for this change
+    order: 3
+  - name: justification
+    label: Justification
+    field_type: text
+    required: true
+    description: Business justification for the change
+    order: 4
+  built_in: true
+  color: '#9333ea'
+  stateless: false
+- name: Bug
+  display_name: Bug
+  description: Bug reports and defects
+  prefix: BUG
+  statuses:
+  - New
+  - Confirmed
+  - In Progress
+  - Fixed
+  - Verified
+  - Closed
+  - Won't Fix
+  custom_fields:
+  - name: severity
+    label: Severity
+    field_type: select
+    required: false
+    options:
+    - Critical
+    - Major
+    - Minor
+    - Trivial
+    description: Severity of the bug
+    order: 1
+  - name: steps_to_reproduce
+    label: Steps to Reproduce
+    field_type: text
+    required: false
+    description: Steps to reproduce the bug
+    order: 2
+  - name: expected_behavior
+    label: Expected Behavior
+    field_type: text
+    required: false
+    description: What should happen
+    order: 3
+  - name: actual_behavior
+    label: Actual Behavior
+    field_type: text
+    required: false
+    description: What actually happens
+    order: 4
+  built_in: true
+  color: '#dc2626'
+  stateless: false
+- name: Epic
+  display_name: Epic
+  description: Large feature or initiative spanning multiple stories
+  prefix: EPIC
+  statuses:
+  - Draft
+  - Ready
+  - In Progress
+  - Done
+  custom_fields:
+  - name: business_value
+    label: Business Value
+    field_type: text
+    required: false
+    description: Business value or benefit of this epic
+    order: 1
+  - name: target_release
+    label: Target Release
+    field_type: text
+    required: false
+    description: Target release or milestone
+    order: 2
+  - name: story_points
+    label: Story Points
+    field_type: number
+    required: false
+    description: Estimated story points
+    order: 3
+  built_in: true
+  color: '#7c3aed'
+  stateless: false
+- name: Story
+  display_name: Story
+  description: User story for agile development
+  prefix: STORY
+  statuses:
+  - Draft
+  - Ready
+  - In Progress
+  - In Review
+  - Done
+  custom_fields:
+  - name: acceptance_criteria
+    label: Acceptance Criteria
+    field_type: textarea
+    required: false
+    description: Criteria that must be met for the story to be complete
+    order: 1
+  - name: story_points
+    label: Story Points
+    field_type: number
+    required: false
+    description: Estimated story points
+    order: 2
+  - name: assignee
+    label: Assignee
+    field_type: user
+    required: false
+    description: Person assigned to this story
+    order: 3
+  built_in: true
+  color: '#10b981'
+  stateless: false
+- name: Task
+  display_name: Task
+  description: Implementation task or work item
+  prefix: TASK
+  statuses:
+  - To Do
+  - In Progress
+  - In Review
+  - Done
+  custom_fields:
+  - name: estimate_hours
+    label: Estimate (hours)
+    field_type: number
+    required: false
+    description: Estimated hours to complete
+    order: 1
+  - name: assignee
+    label: Assignee
+    field_type: user
+    required: false
+    description: Person assigned to this task
+    order: 2
+  built_in: true
+  color: '#0891b2'
+  stateless: false
+- name: Spike
+  display_name: Spike
+  description: Research or investigation task with time-boxed exploration
+  prefix: SPIKE
+  statuses:
+  - Planned
+  - In Progress
+  - Completed
+  custom_fields:
+  - name: research_question
+    label: Research Question
+    field_type: text
+    required: true
+    description: The question or problem to investigate
+    order: 1
+  - name: time_box
+    label: Time Box
+    field_type: text
+    required: false
+    description: Time allocated for investigation (e.g., '2 days')
+    order: 2
+  - name: findings
+    label: Findings
+    field_type: textarea
+    required: false
+    description: Results and conclusions from the investigation
+    order: 3
+  - name: recommendation
+    label: Recommendation
+    field_type: text
+    required: false
+    description: Recommended next steps based on findings
+    order: 4
+  built_in: true
+  color: '#ca8a04'
+  stateless: false
+- name: Sprint
+  display_name: Sprint
+  description: Time-boxed iteration for work planning
+  prefix: SPRINT
+  statuses:
+  - Draft
+  - In Progress
+  - Completed
+  - Archived
+  custom_fields:
+  - name: sprint_number
+    label: Sprint Number
+    field_type: number
+    required: false
+    description: Sequential sprint number
+    order: 1
+  - name: start_date
+    label: Start Date
+    field_type: text
+    required: false
+    description: Sprint start date (YYYY-MM-DD)
+    order: 2
+  - name: end_date
+    label: End Date
+    field_type: text
+    required: false
+    description: Sprint end date (YYYY-MM-DD)
+    order: 3
+  - name: sprint_goal
+    label: Sprint Goal
+    field_type: text
+    required: false
+    description: Goal or theme for this sprint
+    order: 4
+  - name: velocity
+    label: Planned Velocity
+    field_type: number
+    required: false
+    description: Planned story points for this sprint
+    order: 5
+  built_in: true
+  color: '#7c3aed'
+  stateless: false
+- name: Folder
+  display_name: Folder
+  description: Organizational container for grouping related requirements
+  prefix: FLD
+  built_in: true
+  color: '#6b7280'
+  stateless: true
+- name: Meta
+  display_name: Meta
+  description: Database configuration, prompts, skills, and templates
+  prefix: META
+  built_in: true
+  color: '#8b5cf6'
+  stateless: true
+allowed_prefixes: []
+restrict_prefixes: false
+ai_prompts: {}
+baselines: []
