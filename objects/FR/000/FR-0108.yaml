@@ -1,0 +1,17 @@
+id: 5393145a-5e62-429b-9a56-5df880351518
+spec_id: FR-0108
+title: Owner should be a dropdown
+description: ''
+status: Draft
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-29T19:48:09.264581852Z
+created_by: Unknown User
+modified_at: 2025-11-29T19:48:09.264581852Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
+  created_at: 2025-11-29T19:48:09.264589478Z
+  created_by: Unknown User

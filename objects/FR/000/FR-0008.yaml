@@ -1,0 +1,69 @@
+id: 39824b9c-6ff0-49b9-988d-6819978e547b
+spec_id: FR-0008
+title: comments should be displayed nested
+description: 'the comment replies are being displayed at the same level of indentation without an obvious indication of it being a reply. '
+status: Completed
+priority: Medium
+owner: ''
+feature: 10-COMMENTS
+created_at: 2025-11-25T21:16:56.190236240Z
+modified_at: 2025-12-13T19:46:00.126416366Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 848840ae-7005-4fab-b478-163f9139359e
+comments:
+- id: 0bbf3acb-d745-4eb2-9901-e655f1b5b311
+  author: joe
+  content: my first comment
+  created_at: 2025-12-08T02:53:38.616603245Z
+  modified_at: 2025-12-08T02:53:38.616603245Z
+  replies:
+  - id: 632c4f90-f13e-466e-94ec-6eab42d30baa
+    author: joe
+    content: my reply
+    created_at: 2025-12-08T02:53:49.554423707Z
+    modified_at: 2025-12-08T02:53:49.554423707Z
+    parent_id: 0bbf3acb-d745-4eb2-9901-e655f1b5b311
+  - id: 3fc3abfd-db26-4efe-b927-791e0de343c4
+    author: Joe Mooney
+    content: this is a second comment
+    created_at: 2025-12-13T19:46:00.126407434Z
+    modified_at: 2025-12-13T19:46:00.126407434Z
+    parent_id: 0bbf3acb-d745-4eb2-9901-e655f1b5b311
+- id: 1bca9cd6-d456-407c-8914-8f67a458a37f
+  author: joe
+  content: my 2nd comment
+  created_at: 2025-12-08T02:54:11.218758471Z
+  modified_at: 2025-12-08T02:54:11.218758471Z
+  replies:
+  - id: 3fff7937-7bc5-409d-8641-03debbb67640
+    author: joe
+    content: my 2nd reply
+    created_at: 2025-12-08T02:54:43.454370715Z
+    modified_at: 2025-12-08T02:54:43.454370715Z
+    parent_id: 1bca9cd6-d456-407c-8914-8f67a458a37f
+  reactions:
+  - reaction: resolved
+    author: joe
+    added_at: 2025-12-08T02:54:20.154068834Z
+- id: 030cffaa-488d-4913-8d2b-1e31673919c3
+  author: this is another comment
+  content: web-user
+  created_at: 2026-02-22T21:43:55.648966361Z
+  modified_at: 2026-02-22T21:43:55.648966361Z
+history:
+- id: 07363a30-3f77-4f08-a484-bf0aa488c7eb
+  author: '@joe'
+  timestamp: 2025-11-26T00:57:38.868415547Z
+  changes:
+  - field_name: feature
+    old_value: 97-Uncategorized
+    new_value: COMMENTS
+- id: 7a48da40-fa18-4374-b6e8-23e1cbc3c67d
+  author: Joe Mooney
+  timestamp: 2025-12-08T02:54:55.125838578Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed

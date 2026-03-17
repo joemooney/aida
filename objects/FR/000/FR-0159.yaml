@@ -1,0 +1,35 @@
+id: 84afa9b8-76f4-4bdb-95d2-8309c678d850
+spec_id: FR-0159
+title: Save As menu option for YAML files
+description: |-
+  ## Save As Menu Option
+
+  The system shall provide a "Save As..." menu option that allows users to save the current requirements database to a new file location.
+
+  ### Requirements
+
+  1. **Menu Access**: The "Save As..." option shall be available in the main Menu dropdown
+  2. **File Dialog**: Clicking "Save As..." shall open a native file dialog for selecting the destination
+  3. **File Filter**: The dialog shall filter for YAML files (.yaml, .yml)
+  4. **Save Operation**: The system shall serialize and write all requirements to the selected path
+  5. **Feedback**: Success or failure messages shall be displayed to the user
+
+  ### Use Cases
+
+  - Emergency backup when normal save fails
+  - Creating a copy of requirements for sharing
+  - Exporting to a different location
+
+  ### Acceptance Criteria
+
+  - [x] Save As option appears in Menu
+  - [x] Native file dialog opens on click
+  - [x] Requirements are saved to selected location
+  - [x] Success/error message displayed
+status: Completed
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-02T03:07:26.880567660Z
+modified_at: 2025-12-02T03:07:26.880567660Z
+req_type: Functional

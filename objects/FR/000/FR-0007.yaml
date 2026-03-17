@@ -1,0 +1,38 @@
+id: 93c22e3a-bb6c-4933-9c35-d9b8fd9173c5
+spec_id: FR-0007
+title: Title and description width should be width of window
+description: the title and description text boxes should expand to the width of the window.
+status: Completed
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-25T21:14:25.964300983Z
+modified_at: 2025-12-07T04:04:35.591843703Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 6da186f2-cae3-4b75-bc46-d487ced9e96b
+  created_at: 2025-11-29T19:00:58.295750011Z
+  created_by: Unknown User
+- rel_type: !Custom sprint_assignment
+  target_id: 17098630-b92b-4194-ae1f-e7e901e73a35
+  created_at: 2025-12-07T04:04:35.591842619Z
+  created_by: Joe Mooney
+history:
+- id: 1709885b-510a-43d3-84e2-b740c8cfaa6a
+  author: '@joe'
+  timestamp: 2025-11-29T02:28:14.174443320Z
+  changes:
+  - field_name: description
+    old_value: the title and description is way too narrow. We should expand to the width of the window.
+    new_value: the title and description text boxes should expand to the width of the window.
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
+- id: fc906db6-6246-41e6-8179-777c8f0d6e13
+  author: Joe Mooney
+  timestamp: 2025-12-07T04:04:35.591855716Z
+  changes:
+  - field_name: sprint_assignment
+    old_value: ''
+    new_value: REQ-0210

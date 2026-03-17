@@ -1,0 +1,22 @@
+id: a8e0e918-09a1-4b9f-9676-d754db0d1a68
+spec_id: FR-0089
+title: SQLite format support
+description: Be able to store requirements in SQLite
+status: Completed
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-28T20:47:24.654758521Z
+modified_at: 2025-12-10T03:13:32.581790473Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: bb81e51e-dd32-48ef-9806-cf26a09643f5
+history:
+- id: 68c548a9-41c2-40c8-aa30-f4a149fbe5fc
+  author: CLI
+  timestamp: 2025-12-10T03:13:32.581788063Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed

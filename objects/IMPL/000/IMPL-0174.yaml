@@ -1,0 +1,40 @@
+id: 99be661c-ffa8-4105-8271-8912e7bcbff1
+spec_id: IMPL-0174
+prefix_override: IMPL
+title: Implement --parent option for CLI add command (FR-0172)
+description: |-
+  Implemented (FR-0172)
+
+  ## Changes Made
+
+  ### 1. CLI Definition (aida-cli/src/cli.rs)
+  - Added `--parent <PARENT>` option to Add command
+  - Help text: "Parent requirement ID (UUID or SPEC-ID) to link as child"
+
+  ### 2. Command Handler (aida-cli/src/main.rs)
+  - Updated match pattern to include `parent` field
+  - Added parent to interactive mode check condition
+  - Pass parent to `add_requirement_cli()`
+
+  ### 3. Implementation Logic (add_requirement_cli)
+  - Validate parent exists using `parse_requirement_id()`
+  - After adding requirement, create parent relationship
+  - Uses `store.add_relationship()` with `RelationshipType::Parent`
+  - Shows parent in success output
+
+  ## Behavior
+  - `aida add --parent FR-0146` creates child requirement
+  - Error if parent not found: "Invalid requirement ID"
+  - Parent relationship shown in confirmation: "Parent: FR-0146"
+  - Works with all other add options
+status: Completed
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-02T06:00:20.249140108Z
+modified_at: 2025-12-02T06:00:20.249140108Z
+req_type: Task
+relationships:
+- rel_type: Parent
+  target_id: a3af45a9-1b1c-4d4f-91c6-905955c0d9ab
+  created_at: 2025-12-02T06:00:20.249173421Z

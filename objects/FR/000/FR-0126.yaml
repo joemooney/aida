@@ -1,0 +1,19 @@
+id: c2ac61cd-36a3-4dce-acaa-7b057b1be97d
+spec_id: FR-0126
+title: Allow multiple key bindings to the same action
+description: |-
+  Allow multiple key bindings to the same action
+  I want j/k to move up/down (like vim) in addition to the up/down arrow keys, so I need key bindings allow multiple bindings to the same thing
+status: Draft
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-30T01:34:30.555708742Z
+created_by: Unknown User
+modified_at: 2025-11-30T01:34:30.555708742Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
+  created_at: 2025-11-30T01:34:30.555715874Z
+  created_by: Unknown User

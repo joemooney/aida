@@ -1,0 +1,39 @@
+id: 7b5170c6-97aa-429c-851e-086f89768ccf
+spec_id: REQ-0154
+title: Stale Data Protection / Conflict Detection
+description: |2-
+
+
+    Implemented optimistic concurrency control for the YAML database with the following features:
+
+    Storage Layer (aida-core/src/storage.rs):
+    - Added conflict detection types: ConflictInfo, FieldConflict, SaveResult, ConflictResolution
+    - save_with_conflict_detection() - reloads database before saving, compares timestamps
+    - detect_field_conflicts() - compares 8 key fields (title, description, status, priority, owner, feature, type, tags)
+    - merge_requirement() - intelligently merges non-conflicting changes
+    - save_with_resolution() - handles user's conflict resolution choice
+    - 6 unit tests covering all scenarios
+
+    GUI (aida-gui/src/app.rs):
+    - Tracks original timestamps at load time
+    - Tracks which requirements have been modified locally
+    - Conflict resolution dialog showing field-by-field comparison
+    - Three resolution options: "Use My Changes", "Use Disk Version", "Merge (Keep Non-Conflicting)"
+
+    Commit: 7e0369a pushed to main
+status: Approved
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-01T15:20:55.158696623Z
+created_by: Unknown User
+modified_at: 2025-12-01T15:20:55.158696623Z
+req_type: Task
+relationships:
+- rel_type: Parent
+  target_id: 9af27c34-8a93-4285-9ae6-2448a6bcddde
+  created_at: 2025-12-01T15:20:55.158732180Z
+  created_by: Unknown User
+- rel_type: Parent
+  target_id: dd108b2e-541e-4878-aa4f-232a4163a073
+  created_at: 2025-12-10T04:23:08.750938850Z

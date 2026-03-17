@@ -1,0 +1,21 @@
+id: 12a6b5b1-accd-4072-9c7b-0d138ba7d1da
+spec_id: FR-0343
+title: Limit parent/child to certain types
+description: |-
+  Limit parent/child to certain types
+
+  Be able to specify which types can be children of a given type.
+  This should be protected against when we create new relationships or drag-and-drop
+status: Draft
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-16T03:25:54.017381307Z
+created_by: Joe Mooney
+modified_at: 2025-12-16T03:25:54.017381307Z
+req_type: Functional
+relationships:
+- rel_type: Child
+  target_id: 7aa05791-f617-4ed4-82ab-03a103be84b7
+  created_at: 2025-12-20T20:21:02.963524242Z
+  created_by: Joe Mooney

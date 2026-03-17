@@ -1,0 +1,17 @@
+id: 1d40d398-4b14-447d-9a2d-06ba786c8f2e
+spec_id: FR-0270
+title: ''
+description: "Drag and Drop attachment\n\nI want to be able to add attachments to a req. If I drag a document into a requirement Detail View if possible I would like it to highlight the panel and indicate that we are about to an attachment. The attachment should be stored in an attachments folder, create one if it does not exist. Maybe we create a directory by the name of the req ID. Maybe if it is a git repo we add/commit. Not sure if there is any egui support for this type of behavior?  "
+status: Draft
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-12T06:28:19.497780296Z
+created_by: Joe Mooney
+modified_at: 2025-12-12T06:28:19.497780296Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 2fd609e9-d194-47a3-adbd-417f6306190c
+  created_at: 2025-12-12T06:28:19.726160174Z
+  created_by: Joe Mooney

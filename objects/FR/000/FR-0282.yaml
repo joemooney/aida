@@ -1,0 +1,20 @@
+id: 66918b2a-8230-4091-a387-94d40e686f47
+spec_id: FR-0282
+title: '''G'' to go to end of list'
+description: '''G'' to go to end of list'
+status: Completed
+priority: High
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-12T23:43:09.168375451Z
+created_by: Unknown User
+modified_at: 2025-12-13T19:53:31.600458644Z
+req_type: Functional
+history:
+- id: 9ec45526-a82f-468c-b300-d866ed31def3
+  author: Joe Mooney
+  timestamp: 2025-12-13T19:53:31.600467587Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed

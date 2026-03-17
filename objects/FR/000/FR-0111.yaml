@@ -1,0 +1,25 @@
+id: cc937e52-dd05-4dd9-a75b-ae5cc8ca95b9
+spec_id: FR-0111
+title: Modal dialogs 'x' icon to close in top right
+description: Modal dialoags 'x' icon to close in top right, make sense?
+status: Draft
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-29T21:30:28.397453888Z
+created_by: Unknown User
+modified_at: 2025-11-30T01:35:27.760190178Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
+  created_at: 2025-11-29T21:30:28.397461271Z
+  created_by: Unknown User
+history:
+- id: b5149508-7cf6-42a7-9435-a11de05203bf
+  author: Unknown User
+  timestamp: 2025-11-30T01:35:27.760188704Z
+  changes:
+  - field_name: title
+    old_value: Modal dialoags 'x' icon to close in top right
+    new_value: Modal dialogs 'x' icon to close in top right

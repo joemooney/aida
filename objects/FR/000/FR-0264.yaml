@@ -1,0 +1,17 @@
+id: 93bc227e-2a79-44bd-a5a2-e105123ad192
+spec_id: FR-0264
+title: Planned status for implementation workflow
+description: 'The system shall support a ''Planned'' status between Approved and In Progress, allowing requirements to be decomposed and planned before implementation begins. This enables a workflow: Draft → Approved → Planned → In Progress → Completed.'
+status: Completed
+priority: Medium
+owner: ''
+feature: 154-Uncategorized
+created_at: 2025-12-11T04:25:10.655771664Z
+modified_at: 2025-12-11T04:25:39.911547793Z
+req_type: Functional
+comments:
+- id: d279a346-dcbc-418a-b89c-47b613afbacd
+  author: Unknown
+  content: 'Implementation complete. Commit: 79896c0. Files: aida-core/src/lib.rs (RequirementStatus enum), .claude/skills/aida-plan.md (new skill file), .claude/skills/aida-implement.md (updated)'
+  created_at: 2025-12-11T04:25:39.911538561Z
+  modified_at: 2025-12-11T04:25:39.911538561Z

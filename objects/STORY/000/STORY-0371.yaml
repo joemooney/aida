@@ -1,0 +1,43 @@
+id: b4acfe75-231b-4d04-bd90-40524e72ea39
+spec_id: STORY-0371
+title: 'Queue: Assign-to-queue (inbox) capability'
+description: |-
+  Queue: Assign-to-Queue (Inbox) Capability
+
+  Allow managers, leads, and teammates to push items into another user's queue, creating inbox semantics.
+
+  **Behavior:**
+  - Any user can add an item to any other user's queue
+  - The added_by field records who pushed it
+  - An optional note provides context ("please review before sprint", "blocking client X")
+  - The item appears in the target user's queue at the bottom by default
+  - The queue owner can then reorder or remove it at their discretion
+
+  **UI Integration:**
+  - In requirement detail panel: "Assign to Queue" action → user picker → optional note
+  - In List/Board views: context menu "Add to @user's Queue"
+  - Inbox items visually distinguished (different background or badge)
+
+  **CLI Integration:**
+  - aida queue add FR-042 --user joe --note "urgent, client escalation"
+
+  **Notification (future):**
+  - When items are added to your queue by others, a notification/badge appears
+  - This is a foundation for the broader notification system mentioned in FR-0189
+
+  **Acceptance Criteria:**
+  1. Items can be added to another user's queue via UI and CLI
+  2. added_by field correctly tracks the assigner
+  3. Notes display alongside queued items
+  4. Queue owner retains full control over ordering and removal
+status: Approved
+priority: Medium
+owner: joe
+feature: 219-Uncategorized
+created_at: 2026-02-21T06:50:21.589806781Z
+modified_at: 2026-02-21T06:50:21.589806781Z
+req_type: Story
+relationships:
+- rel_type: Parent
+  target_id: 7622e213-28e8-4401-970e-a55111e7fc2f
+  created_at: 2026-02-21T06:50:28.170266046Z

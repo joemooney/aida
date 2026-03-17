@@ -1,0 +1,38 @@
+id: 28d20300-9781-416a-8c1b-3a0f893bb416
+spec_id: FR-0188
+title: User-Requirements View with Configurable Hierarchy
+description: |-
+  Add a new view perspective that shows Users as root elements with their owned requirements as children.
+
+  ## View Behavior
+  - Root level: Users (from the users list)
+  - Children: Requirements where owner matches the user
+  - Configurable sub-hierarchy:
+    - **Flat mode**: All owned requirements shown as direct children of user (2-level)
+    - **Nested mode**: Owned requirements shown in their parent/child hierarchy, but filtered to only show paths that lead to requirements owned by that user
+
+  ## Configuration
+  1. **New Perspective**: Add 'By Owner' to the Perspective dropdown (alongside Flat, Parent/Child, Verification, References)
+  2. **View Settings tab**: New tab in Settings to configure view behavior:
+     - Secondary hierarchy mode: Flat vs Nested (per perspective type)
+     - Default collapsed/expanded state
+     - Future: Custom view definitions
+
+  ## Technical Notes
+  - When nested mode is enabled, only show parent requirements if they have descendants owned by the user
+  - Grey out/dim intermediate parent nodes that aren't directly owned
+  - Consider caching the filtered tree for performance
+
+  ## Acceptance Criteria
+  - [x] By Owner perspective shows users as roots
+  - [x] Flat mode shows all owned requirements directly under user
+  - [x] Nested mode preserves parent/child relationships
+  - [x] View Settings tab allows configuration
+  - [ ] Settings persist across sessions
+status: Completed
+priority: Medium
+owner: ''
+feature: 103-Views
+created_at: 2025-12-03T03:39:44.483752321Z
+modified_at: 2025-12-03T03:39:44.483752321Z
+req_type: Functional

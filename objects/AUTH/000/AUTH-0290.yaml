@@ -1,0 +1,16 @@
+id: 1cc8912b-7b9a-4e26-b11c-3b34b0dc2883
+spec_id: AUTH-0290
+prefix_override: AUTH
+title: Password Authentication
+description: Replace simple PIN with proper password authentication. Implement password strength validation, secure password hashing (argon2 or bcrypt), and password reset functionality.
+status: Draft
+priority: Medium
+owner: joe
+feature: 169-auth
+created_at: 2025-12-13T18:21:42.785466173Z
+modified_at: 2025-12-13T18:21:42.785466173Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 20196f8e-d69c-41e3-844b-55929b536fe4
+  created_at: 2025-12-13T18:21:52.499627027Z

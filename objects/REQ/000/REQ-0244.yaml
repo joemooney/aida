@@ -1,0 +1,19 @@
+id: 8958bb92-431b-4a32-ad02-e5427754d693
+spec_id: REQ-0244
+title: TraceLink YAML storage
+description: Store TraceLinks as a Vec in the Requirement struct for YAML backend. Each requirement has an optional trace_links field containing the list of TraceLink entries. Ensure proper serialization with serde.
+status: Draft
+priority: High
+owner: ''
+feature: 134-traceability
+created_at: 2025-12-11T00:37:30.564686252Z
+modified_at: 2025-12-12T23:56:02.940152469Z
+req_type: Story
+trace_links:
+- id: 2e9105f6-7d8a-460a-bd50-e297c7358102
+  artifact_type: SourceCode
+  file_path: ./aida-cli/src/main.rs
+  line_start: 2611
+  notes: 'AI tool: claude'
+  created_at: 2025-12-11T00:58:30.967641925Z
+  created_by: scan
