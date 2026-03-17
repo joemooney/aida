@@ -1,5 +1,6 @@
 id: 0f0ac31b-d621-447c-9059-b68bc9d402d7
 spec_id: FR-0279
+agreed_id: FR-196
 title: WASM GUI cross-platform time compatibility
 description: The WASM build of aida-gui uses the web-time crate instead of std::time for Instant and Duration types. This enables the GUI to compile and run in browser environments where std::time::Instant panics due to lack of monotonic clock support. The fix replaces all std::time::Instant with web_time::Instant which uses performance.now() on WASM and std::time on native.
 status: Completed

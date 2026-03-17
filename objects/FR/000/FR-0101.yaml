@@ -1,5 +1,6 @@
 id: 05a9d563-dc72-4bcd-b69c-6095fd396c28
 spec_id: FR-0101
+agreed_id: FR-138
 title: Arrow keys bad behavior in edit mode123456789012345678901234567890AAAAAAAABBBBBBBBBB
 description: " When I am add/edit and I start editing the desription and I press the up arrow, I think the global key binding is being invoked to move to \nthe previous requirement \nFixed! The issue was that the navigation keybindings (Up/Down arrows) were being processed even when in Add/Edit form view. The fix adds\n  explicit checks for:\n\n\n\n  1. in_form_view - when the current view is Add or Edit\n  2. in_settings - when the settings dialog is open\n\n  When any of these conditions are true (or text_input_focused), the keybinding context is set to KeyContext::Global, which prevents the\n  navigation bindings (which have KeyContext::RequirementsList) from being triggered.\n\n  Committed as 0bfa17c and pushed to GitHub.\n"
 status: Draft

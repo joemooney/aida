@@ -1,5 +1,6 @@
 id: 99e2627a-a24b-427b-84bf-d6fe3f10b608
 spec_id: STORY-0331
+agreed_id: STORY-19
 title: Pull GitLab Changes to AIDA
 description: |-
   As a user, I want to pull GitLab issue changes into AIDA requirements so that AIDA reflects implementation updates.

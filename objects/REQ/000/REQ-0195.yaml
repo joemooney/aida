@@ -1,5 +1,6 @@
 id: 11bafd1b-e73e-4dd2-bc75-184fb924dfe3
 spec_id: REQ-0195
+agreed_id: BUG-13
 title: Fix arrow key navigation during search
 description: Arrow key navigation should only move through the visible filtered requirements when a search is active. Previously, navigation would traverse the tree structure even when the display showed a flat filtered list. Now uses flat list behavior when search is active to match what is displayed.
 status: Completed

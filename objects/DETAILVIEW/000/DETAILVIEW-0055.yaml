@@ -1,5 +1,6 @@
 id: ae4d77e5-55a4-4a56-97d1-a030d922a04d
 spec_id: DETAILVIEW-0055
+agreed_id: FR-253
 prefix_override: DETAILVIEW
 title: Requirement Detail View
 description: requirements related to the detail view panel of requirements (i.e. before we clict Edit)

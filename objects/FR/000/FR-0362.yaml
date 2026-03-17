@@ -1,5 +1,6 @@
 id: a4bbcbf5-2bc9-407f-9f05-12dad12c66b3
 spec_id: FR-0362
+agreed_id: FR-105
 title: Inline tag pills in list view rows
 description: Requirement tags display as small inline badges next to the title in list view rows. Shows up to 3 tags with a +N overflow indicator when more exist. Provides at-a-glance tag visibility without needing to open the detail panel.
 status: Completed

@@ -1,5 +1,6 @@
 id: 433f2b0d-0f82-4e32-9b4a-5efd3738d1cf
 spec_id: BUG-0387
+agreed_id: BUG-6
 title: 'Fix: Advanced filter blank screen from duplicate React in Vite bundle'
 description: |-
   The Advanced Query Builder (react-querybuilder) crashed with 'resolveDispatcher() is null' and 'Invalid hook call' errors when opening the Advanced filter in List View.
@@ -16,5 +17,5 @@ modified_at: 2026-02-23T02:49:37.994722750Z
 req_type: Bug
 tags:
 - vite
-- react
 - web
+- react

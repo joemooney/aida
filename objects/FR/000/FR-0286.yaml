@@ -1,5 +1,6 @@
 id: afecc56f-a9b2-4168-9df4-30a1a631cc91
 spec_id: FR-0286
+agreed_id: FR-87
 title: Reload req from database before editing
 description: "Reload req from database before editing\n\nI noticed that I edited in one window and saved, but the edits did not show up in another when when I clicked edit. "
 status: Draft

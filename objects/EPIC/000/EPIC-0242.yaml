@@ -1,5 +1,6 @@
 id: 08beead7-df0a-470f-a7c4-099682d8e24d
 spec_id: EPIC-0242
+agreed_id: EPIC-1
 title: 'TraceLink: Code-to-Requirement Traceability'
 description: 'Add a TraceLink structure to track mappings between code artifacts and requirements. Each TraceLink records: file_path, line_range (start/end), symbol (function/struct/module name), artifact_type (SourceCode, TestCode, Config, Doc), notes, and timestamps. This enables queries like ''show all code implementing REQ-123'' or ''which requirements does this function satisfy?'' The links should be stored in both YAML and SQLite backends.'
 status: Draft

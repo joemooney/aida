@@ -1,5 +1,6 @@
 id: 5d7fd7b2-a29e-439b-8212-0f9f6be0d468
 spec_id: FR-0072
+agreed_id: FR-125
 title: Ctrl+N for new requirement (with no parent)
 description: Ctrl+N for new requirement (with no parent). This way we can add a top level requirement without having to delete the parent relationship that we get automatically with the +Add based on the currently selected requirement.
 status: Draft

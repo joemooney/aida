@@ -1,5 +1,6 @@
 id: fde0a207-de05-4ce6-8ab3-18b3dc67a48f
 spec_id: FR-0316
+agreed_id: FR-57
 title: Add PostgreSQL database backend option
 description: Add PostgreSQL as an additional database backend option alongside existing SQLite and YAML backends. This enables better scalability for multi-user scenarios, native JSON support with jsonb, and enterprise database deployments.
 status: Completed

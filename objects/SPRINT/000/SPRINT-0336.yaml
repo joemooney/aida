@@ -1,5 +1,6 @@
 id: 404b7457-67a2-4376-a0d3-9c5ea1547951
 spec_id: SPRINT-0336
+agreed_id: SPRINT-3
 title: 'Sprint #3 thru 2025-12-07 Friday'
 description: |+
   Sprint #3 thru 2025-12-07 Friday
@@ -74,6 +75,6 @@ history:
     old_value: SPIKE-0335
     new_value: SPRINT-0336
 custom_fields:
-  start_date: 2026-03-06
   end_date: 2026-03-13
+  start_date: 2026-03-06
   sprint_number: '3'

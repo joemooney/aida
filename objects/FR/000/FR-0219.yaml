@@ -1,5 +1,6 @@
 id: a309fe3f-1463-4ac9-9272-270615959eaf
 spec_id: FR-0219
+agreed_id: FR-180
 title: Org Chart Display
 description: "Org Chart Display\n\nthe org chart should detail the numbers of req in different states per team and by individual and any other useful information that you think suited.\nThere could be a summary and an expansion per person listing all the assignments, perhaps by sprint and in backlog. you should be able to click on a requirement and see a popup of the details. \nThere should be an indication of unassigned reqs also and at the top a set of filters similar to the sprint planning. "
 status: Approved

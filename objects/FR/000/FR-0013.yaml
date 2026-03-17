@@ -1,5 +1,6 @@
 id: 87b1dacb-6c52-4f19-b6f8-a5bf41de3529
 spec_id: FR-0013
+agreed_id: FR-214
 title: 'Change/configure window title '
 description: This should be part of the configuration file.
 status: Approved

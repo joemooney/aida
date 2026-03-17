@@ -1,5 +1,6 @@
 id: d0f16bc7-788b-4d6c-ac49-3a48fc678e50
 spec_id: FR-0009
+agreed_id: FR-160
 title: comment emoji reactions
 description: |
   Have several (configuable) emoji that we can attach to a comment. A checkmark for resolved would be a minimal need or one for rejected.

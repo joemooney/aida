@@ -1,5 +1,6 @@
 id: 4d2cce7c-d8e4-4c9b-a6a5-61637a423f12
 spec_id: FR-0067
+agreed_id: FR-161
 title: Database Name
 description: |
   The database should have a name store in the yaml file and it should be used in the Title bar of the Window. You may change the database name in the Settings/Db tab. Likewise there should be a Database Title (oneliner), and a Database Description (multiline)

@@ -1,5 +1,6 @@
 id: 06b5b53a-1f3e-4b34-8210-e5dd9b0c8e34
 spec_id: FR-0284
+agreed_id: FR-40
 title: ''
 description: |-
   Reference another req in the description of a req

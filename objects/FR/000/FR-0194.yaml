@@ -1,5 +1,6 @@
 id: 7e3b996c-1cb5-48f5-bc6e-bae5057c6ab5
 spec_id: FR-0194
+agreed_id: FR-46
 title: Exclude Folder type from KanBan view
 description: Folder type requirements are stateless organizational containers and should not appear in KanBan boards which group by Status or Priority. Filter out Folder types from KanBan column rendering.
 status: Completed

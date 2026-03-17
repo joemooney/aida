@@ -1,0 +1,11 @@
+EPIC = 8
+STORY = 40
+SPIKE = 4
+SR = 1
+TASK = 14
+BUG = 16
+CR = 5
+UR = 2
+FR = 255
+SPRINT = 3
+FOLDER = 6

@@ -1,5 +1,6 @@
 id: 471aae85-4eca-41b0-ba08-e893d8b968a9
 spec_id: FR-0233
+agreed_id: FR-208
 title: Tag picker popup with 't' hotkey
 description: Multi-select tag assignment popup triggered by 't' key in list view. Features fuzzy search filtering, Space to toggle tags or add new ones, Enter to apply all selected tags. Shows currently selected tags at top with click-to-remove.
 status: Completed

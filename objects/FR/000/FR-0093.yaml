@@ -1,5 +1,6 @@
 id: 9aec2046-225d-40e4-aadf-609045e8ab45
 spec_id: FR-0093
+agreed_id: FR-55
 title: Open Additional Requirements List view (split panel)
 description: Abilty to have more than one Requirements List views open and drag requirements between, creating a relationship determined by the view to which you drag the relationship to.
 status: Draft

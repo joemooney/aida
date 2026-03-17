@@ -1,5 +1,6 @@
 id: db05a93d-4ade-49fb-aaba-b6eedf4ec846
 spec_id: FR-0124
+agreed_id: FR-29
 title: Status dropdown should have Other subdropdown f...
 description: |-
   Status dropdown should have Other subdropdown for other statuses

@@ -1,5 +1,6 @@
 id: 2a8e60a3-1508-4f47-8ef3-42032ca5332e
 spec_id: STORY-0376
+agreed_id: STORY-16
 title: 'Queue: Drag from List/Board view to My Queue sidebar drop target'
 description: |-
   Allow users to drag a requirement row from List View (or card from Kanban Board) and drop it onto the "My Queue" nav item in the sidebar to add it to their queue.

@@ -1,5 +1,6 @@
 id: 87a1cfad-50fa-49fe-b8ee-ff27035a15c7
 spec_id: STORY-0382
+agreed_id: STORY-3
 title: Global Create Requirement button with quick-create dropdown and full modal
 description: 'Added a global ''+ New'' button in the header with a quick-create popover (Story/Bug/Task type pills + title input + Create button + ''More options...'' link) and a full creation modal with all fields (type with grouped optgroups, title, description, status, priority, owner, tags). Keyboard shortcut ''c'' opens the quick-create dropdown. Also updated createRequirement API to v2 endpoint. Files: QuickCreateDropdown.tsx, CreateRequirementModal.tsx, Header.tsx, useGlobalHotkeys.ts, api/requirements.ts.'
 status: Completed
@@ -10,6 +11,6 @@ created_at: 2026-02-22T20:35:47.917818690Z
 modified_at: 2026-02-22T20:35:47.917818690Z
 req_type: Story
 tags:
+- web
 - ui
 - create
-- web

@@ -1,5 +1,6 @@
 id: 39824b9c-6ff0-49b9-988d-6819978e547b
 spec_id: FR-0008
+agreed_id: FR-199
 title: comments should be displayed nested
 description: 'the comment replies are being displayed at the same level of indentation without an obvious indication of it being a reply. '
 status: Completed
