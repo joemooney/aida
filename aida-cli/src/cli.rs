@@ -1187,6 +1187,17 @@ pub enum GitHubCommand {
         dry_run: bool,
     },
 
+    /// Sync: detect drift between AIDA requirements and GitHub issues
+    Sync {
+        /// Only check linked items (those with [GH-N] prefix or github URL)
+        #[clap(long)]
+        linked_only: bool,
+
+        /// Apply changes (default: dry-run showing what would change)
+        #[clap(long)]
+        apply: bool,
+    },
+
     /// List labels in the GitHub repository
     Labels {
         /// Create default AIDA labels if missing

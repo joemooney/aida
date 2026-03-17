@@ -69,7 +69,7 @@ export const RequirementsRow = forwardRef<HTMLTableRowElement, RequirementsRowPr
           </div>
         </td>
         <td className="py-3 px-4">
-          <span className="text-[11px] font-mono text-content-muted">{requirement.spec_id}</span>
+          <span className="text-[11px] font-mono text-content-muted" title={requirement.agreed_id ? `Node ID: ${requirement.spec_id}` : undefined}>{requirement.agreed_id || requirement.spec_id}</span>
         </td>
         <td className="py-3 px-4">
           <div className="flex items-center gap-2">

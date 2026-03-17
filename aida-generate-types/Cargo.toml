@@ -7,4 +7,4 @@ description = "Binary to generate TypeScript types from Aida core models"
 
 [dependencies]
 aida-core = { path = "../aida-core" }
-ts-rs = { git = "https://github.com/xazukx/ts-rs.git", branch = "use-ts-enum", features = ["uuid-impl", "chrono-impl", "no-serde-warnings", "serde-json-impl"] }
+ts-rs-forge = { version = "11", features = ["uuid-impl", "chrono-impl", "no-serde-warnings", "serde-json-impl"] }

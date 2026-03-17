@@ -6411,6 +6411,132 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
             );
             println!("  URL: {}", issue.html_url);
         }
+        GitHubCommand::Sync { linked_only, apply } => {
+            let config = aida_core::GitHubConfig::load()?;
+            let client = aida_core::GitHubClient::new(config)?;
+
+            let store = storage.load()?;
+
+            // Find AIDA requirements linked to GitHub issues (by [GH-N] prefix or URL)
+            let linked: Vec<(&Requirement, u64)> = store
+                .requirements
+                .iter()
+                .filter_map(|r| {
+                    // Check [GH-N] prefix
+                    if r.title.starts_with("[GH-") {
+                        if let Some(end) = r.title.find(']') {
+                            if let Ok(n) = r.title[4..end].parse::<u64>() {
+                                return Some((r, n));
+                            }
+                        }
+                    }
+                    // Check URLs
+                    for url in &r.urls {
+                        if url.url.contains("github.com") && url.url.contains("/issues/") {
+                            if let Some(num_str) = url.url.rsplit('/').next() {
+                                if let Ok(n) = num_str.parse::<u64>() {
+                                    return Some((r, n));
+                                }
+                            }
+                        }
+                    }
+                    None
+                })
+                .collect();
+
+            if linked.is_empty() && *linked_only {
+                println!("No linked GitHub issues found.");
+                println!("Link with: aida github push FR-001 (or aida github pull)");
+                return Ok(());
+            }
+
+            println!("{}", "GitHub Sync Status".bold());
+            println!("{}", "─".repeat(65));
+
+            let mut drift_count = 0;
+
+            for (req, issue_number) in &linked {
+                match rt.block_on(client.get_issue(*issue_number)) {
+                    Ok(issue) => {
+                        let mut diffs = Vec::new();
+
+                        // Compare title (strip [GH-N] prefix for comparison)
+                        let aida_title = req.title
+                            .strip_prefix(&format!("[GH-{}] ", issue_number))
+                            .unwrap_or(&req.title);
+                        if aida_title != issue.title {
+                            diffs.push(format!("  title: AIDA='{}' GitHub='{}'",
+                                truncate_str(aida_title, 30),
+                                truncate_str(&issue.title, 30)));
+                        }
+
+                        // Compare state
+                        let aida_closed = matches!(req.status, RequirementStatus::Completed | RequirementStatus::Rejected);
+                        let gh_closed = issue.state == "closed";
+                        if aida_closed != gh_closed {
+                            diffs.push(format!("  state: AIDA={} GitHub={}",
+                                req.effective_status(), issue.state));
+                        }
+
+                        if diffs.is_empty() {
+                            println!("{} #{:<5} {} — in sync",
+                                "✓".green(),
+                                issue_number,
+                                truncate_str(aida_title, 45));
+                        } else {
+                            drift_count += 1;
+                            println!("{} #{:<5} {} — DRIFTED",
+                                "△".yellow(),
+                                issue_number,
+                                truncate_str(aida_title, 45));
+                            for d in &diffs {
+                                println!("    {}", d);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        println!("{} #{:<5} — error: {}",
+                            "✗".red(), issue_number, e);
+                    }
+                }
+            }
+
+            println!();
+            if drift_count == 0 {
+                println!("All {} linked items in sync.", linked.len());
+            } else {
+                println!("{} of {} items have drifted.", drift_count, linked.len());
+                if !apply {
+                    println!("Use --apply to push AIDA state to GitHub.");
+                }
+            }
+
+            if *apply && drift_count > 0 {
+                println!();
+                println!("Applying changes...");
+                for (req, issue_number) in &linked {
+                    let aida_title = req.title
+                        .strip_prefix(&format!("[GH-{}] ", issue_number))
+                        .unwrap_or(&req.title);
+
+                    let aida_closed = matches!(req.status, RequirementStatus::Completed | RequirementStatus::Rejected);
+
+                    let update = aida_core::GitHubUpdateIssueRequest {
+                        title: Some(aida_title.to_string()),
+                        body: Some(req.description.clone()),
+                        state: Some(if aida_closed { "closed".into() } else { "open".into() }),
+                        labels: None,
+                        assignees: None,
+                        milestone: None,
+                    };
+
+                    match rt.block_on(client.update_issue(*issue_number, &update)) {
+                        Ok(_) => println!("  {} Updated #{}", "✓".green(), issue_number),
+                        Err(e) => eprintln!("  {} Failed #{}: {}", "✗".red(), issue_number, e),
+                    }
+                }
+            }
+        }
         GitHubCommand::Pull {
             labels,
             open_only,

@@ -5,7 +5,7 @@
 use crate::ai::client::AiError;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
+use ts_rs_forge::TS;
 
 /// Issue found in a requirement
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

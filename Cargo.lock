@@ -183,7 +183,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "toml",
- "ts-rs",
+ "ts-rs-forge",
  "uuid",
 ]
 
@@ -233,7 +233,7 @@ name = "aida-generate-types"
 version = "0.1.0"
 dependencies = [
  "aida-core",
- "ts-rs",
+ "ts-rs-forge",
 ]
 
 [[package]]
@@ -5404,21 +5404,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
-name = "ts-rs"
+name = "ts-rs-forge"
 version = "11.0.1"
-source = "git+https://github.com/xazukx/ts-rs.git?branch=use-ts-enum#b5c8277ac9f321a0be7453eef029466152b13fc8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0fc6e001e5de7b6ef22869ba85744abc4051cae46cb97fc0188c8dc620ef480"
 dependencies = [
  "chrono",
  "serde_json",
  "thiserror 2.0.18",
- "ts-rs-macros",
+ "ts-rs-forge-macros",
  "uuid",
 ]
 
 [[package]]
-name = "ts-rs-macros"
+name = "ts-rs-forge-macros"
 version = "11.0.1"
-source = "git+https://github.com/xazukx/ts-rs.git?branch=use-ts-enum#b5c8277ac9f321a0be7453eef029466152b13fc8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8da5a95ea1115a74b19a8e4af989cf20b03aa209a4df3813af69d996682867cd"
 dependencies = [
  "proc-macro2",
  "quote",
