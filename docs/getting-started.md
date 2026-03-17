@@ -1,216 +1,252 @@
 # Getting Started with AIDA
 
-AIDA is an AI-native requirements management system with a CLI, web dashboard, and desktop app.
-
-**Related Documentation:**
-- [User Guide](user-guide.md) — Full reference for all features
-- [Administrator's Guide](admin-guide.md) — Storage backends, migration, multi-user setup
-- [Developer's Guide](DEVELOPER_GUIDE.md) — For developers maintaining and extending AIDA
+Add AI-native requirements tracking to any project in under 5 minutes.
 
 ---
 
-## 1. Install
+## Step 1: Install AIDA
 
-Build from source (requires Rust toolchain):
+Choose the method that works for you, from simplest to most flexible:
+
+### Option A: Cargo Install (Recommended)
+
+If you have Rust installed:
 
 ```bash
-git clone https://github.com/joemooney/aida.git
-cd aida
-cargo build --workspace --release
+cargo install --git https://github.com/joemooney/aida.git aida-cli
 ```
 
-This produces binaries in `target/release/`:
-- `aida` — Command-line interface
-- `aida-server` — REST API + gRPC server
-- `aida-desktop` — Native desktop app
+This builds and installs the `aida` binary to `~/.cargo/bin/` (already in your PATH if you use rustup).
 
-The web dashboard (`aida-web-react/`) requires Node.js — see [Launching the Web Dashboard](#4-launch-the-web-dashboard) below.
+Verify:
+```bash
+aida --version
+```
+
+### Option B: Download Pre-built Binary
+
+```bash
+# Linux x86_64
+curl -L https://github.com/joemooney/aida/releases/latest/download/aida-linux-x86_64 -o ~/.local/bin/aida
+chmod +x ~/.local/bin/aida
+
+# macOS (Apple Silicon)
+curl -L https://github.com/joemooney/aida/releases/latest/download/aida-darwin-arm64 -o /usr/local/bin/aida
+chmod +x /usr/local/bin/aida
+```
+
+> **Note**: Pre-built binaries will be available once GitHub releases are set up. Until then, use cargo install or build from source.
+
+### Option C: Docker (No Installation)
+
+Run AIDA without installing anything:
+
+```bash
+# Add an alias to your shell
+alias aida='docker run --rm -v "$(pwd):/repo" -w /repo ghcr.io/joemooney/aida'
+
+# Then use normally
+aida init
+aida list
+```
+
+> **Note**: Docker image will be available once CI publishes it. Until then, build locally: `docker build -t aida .` from the AIDA repo.
+
+### Option D: Build from Source
+
+```bash
+git clone https://github.com/joemooney/aida.git ~/aida
+cd ~/aida
+cargo build --release -p aida-cli
+cp target/release/aida ~/.local/bin/
+```
+
+### Don't Have Rust?
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.cargo/env
+# Then use Option A
+```
 
 ---
 
-## 2. Initialize a Project
+## Step 2: Initialize Your Project
 
-Run `aida init` in your project directory:
+Navigate to your project and run:
 
 ```bash
-cd my-project
+cd ~/my-project
 aida init
 ```
 
 This creates:
+- `requirements.db` — SQLite database for requirements
+- `CLAUDE.md` — Project context for AI assistants
+- `.claude/skills/` — AIDA workflow skills for Claude Code
+- `.mcp.json` — MCP integration for Claude Code
+- `docs/plans/` — Implementation plan archive
 
-| File/Directory | Purpose |
-|---------------|---------|
-| `requirements.db` | SQLite database with seeded META requirements |
-| `CLAUDE.md` | Project context for AI sessions |
-| `.mcp.json` | Claude Code MCP server integration |
-| `.claude/skills/` | 15 workflow skills (`/aida-req`, `/aida-commit`, etc.) |
-| `.claude/commands/` | Slash commands for Claude Code |
-| `.claude/hooks/` | Commit validation hooks |
-| `docs/plans/` | Implementation plan archive |
+That's it. You're ready to use AIDA.
 
-**Options:**
+---
+
+## Step 3: Add Your First Requirement
 
 ```bash
-aida init --no-skills    # Skip .claude/skills/ and .claude/commands/
-aida init --no-hooks     # Skip .claude/hooks/ and git hooks
-aida init --force        # Overwrite existing files
+aida add --title "User authentication" \
+  --type functional \
+  --description "Users can log in with email and password" \
+  --status draft
+```
+
+Or use interactive mode (prompts for each field):
+
+```bash
+aida add
 ```
 
 ---
 
-## 3. First Steps with the CLI
-
-**Add your first requirement:**
+## Step 4: Work With Requirements
 
 ```bash
-aida add --title "User authentication" --type story --status draft
-```
-
-**Or use interactive mode:**
-
-```bash
-aida add --interactive
-```
-
-**List requirements:**
-
-```bash
+# List all requirements
 aida list
-aida list --status draft
-aida list --type story
-```
 
-**View details:**
+# Show details
+aida show FR-001
 
-```bash
-aida show STORY-001
-```
+# Edit
+aida edit FR-001 --status approved --owner alice
 
-**Edit a requirement:**
-
-```bash
-aida edit STORY-001 --status approved --priority high
-```
-
-**Add a comment:**
-
-```bash
-aida comment add STORY-001 "Decided to use JWT tokens for auth"
-```
-
-**Search:**
-
-```bash
+# Search
 aida search "authentication"
-aida grep "auth.*token" -i
-```
 
-For the full CLI reference, see the [User Guide — CLI Usage](user-guide.md#cli-usage).
+# Add a comment
+aida comment add FR-001 --content "Needs OAuth2 support"
+
+# Add a relationship
+aida rel add --from FR-002 --to FR-001 --type references
+
+# Delete
+aida del FR-003 --yes
+```
 
 ---
 
-## 4. Launch the Web Dashboard
+## What's Next?
 
-The React web dashboard is the primary UI for most users. It provides kanban boards, sprint planning, advanced filtering, AI chat, and keyboard shortcuts.
+### For Solo Developers
 
-**Prerequisites:** Node.js 18+ and pnpm (or npm)
+You're done. The SQLite database + YAML export gives you everything you need. A pre-commit hook auto-exports `requirements.yaml` for git-diffable history.
+
+### For Teams (Multi-User)
+
+Two options depending on your connectivity:
+
+**Always connected** — use PostgreSQL:
+```bash
+# Start PostgreSQL (Docker)
+docker run -d --name aida-pg -p 5432:5432 \
+  -e POSTGRES_USER=aida -e POSTGRES_PASSWORD=aida \
+  -e POSTGRES_DB=aida_default postgres:15-alpine
+
+# Migrate your data
+aida db migrate --from sqlite --to postgres \
+  --output "postgres://aida:aida@localhost:5432/aida_default"
+
+# Start the server (REST API + web dashboard)
+aida-server --database "postgres://aida:aida@localhost:5432/aida_default" \
+  --host 0.0.0.0 --rest-port 8080
+
+# Other team members connect via:
+#   CLI:  aida --file "postgres://aida:aida@<your-ip>:5432/aida_default" list
+#   Web:  http://<your-ip>:8080
+```
+
+**Sometimes offline** — use distributed mode:
+```bash
+aida init --distributed
+# Creates an orphan branch 'aida-store' with sharded YAML files
+# Every mutation auto-commits to the store branch
+# Sync with: git push origin aida-store
+# New team member setup: git worktree add .aida-store aida-store
+```
+
+See [storage-modes.md](storage-modes.md) for a full comparison of all 5 storage options.
+See [multi-user-setup.md](multi-user-setup.md) for detailed PostgreSQL multi-user instructions.
+
+### With Claude Code
+
+AIDA is designed for AI-assisted development. If you use Claude Code, the skills are available immediately after `aida init`:
+
+```
+/aida-req          # Add a requirement (AI-assisted quality feedback)
+/aida-implement    # Implement a requirement with traceability
+/aida-commit       # Commit with requirement linking
+/aida-capture      # End-of-session requirement capture
+/aida-onboard      # Interactive project walkthrough
+```
+
+The MCP server lets Claude Code query your requirements database directly — already configured by `aida init`.
+
+### With GitHub
 
 ```bash
-# Terminal 1: Start the REST API server
-cd aida-server
-cargo run
-# Runs on http://localhost:8080
+# Configure (one time)
+export AIDA_GITHUB_TOKEN="ghp_..."
+aida github config --repo your-org/your-project
 
-# Terminal 2: Start the React dashboard
-cd aida-web-react
-pnpm install    # or: npm install
-pnpm dev        # or: npm run dev
-# Opens at http://localhost:5173
+# Push a requirement as a GitHub issue
+aida github push FR-001
+
+# Import GitHub issues as requirements
+aida github pull
+
+# Create AIDA labels in your repo
+aida github labels --create-missing
 ```
-
-The Vite dev server proxies `/api` requests to the REST API on port 8080.
-
-**Web dashboard views:**
-- **Dashboard** — Project-wide status cards, active sprint summary, queue widget
-- **Kanban Board** — Drag-and-drop status columns with tag filtering
-- **List View** — Flat/tree toggle, advanced query builder, drag-to-queue
-- **My Queue** — Personal focus inbox with drag-to-reorder
-- **My Activity** — Planned vs. actual work reconciliation
-- **Sprint Planning** — Drag-and-drop backlog/sprint assignment
-- **Timeline** — Chronological event feed
-- **Chat** — AI-powered Q&A with streaming responses (requires API key)
-- **Settings** — Store metadata, type definitions, admin controls
-
-**Keyboard shortcuts:** Press `?` in the dashboard to see all shortcuts. Highlights: `g+d` Dashboard, `g+b` Kanban, `g+l` List, `j/k` row navigation, `/` search.
 
 ---
 
-## 5. Launch the Desktop App
+## Quick Reference
 
-The native desktop app (egui-based) is an alternative to the web dashboard:
+| Command | What it does |
+|---------|-------------|
+| `aida init` | Initialize AIDA in current project |
+| `aida init --distributed` | Initialize with git-backed distributed store |
+| `aida list` | List all requirements |
+| `aida add --title "..." --type functional` | Add a requirement |
+| `aida show FR-001` | Show requirement details |
+| `aida edit FR-001 --status approved` | Update a requirement |
+| `aida search "keyword"` | Search requirements |
+| `aida comment add FR-001 --content "..."` | Add a comment |
+| `aida rel add --from FR-002 --to FR-001 --type references` | Add relationship |
+| `aida del FR-001 --yes` | Delete a requirement |
+| `aida db info` | Show database info |
+| `aida db status` | Show distributed store status |
+| `aida db merge-gate` | Assign short agreed IDs |
+| `aida db sync --pull --push` | Sync with remote |
+| `aida github push FR-001` | Push to GitHub issue |
+| `aida github pull` | Import GitHub issues |
+
+---
+
+## Uninstall
 
 ```bash
-aida-desktop
+# Remove from a project
+rm -f requirements.db requirements.yaml .mcp.json
+rm -rf .aida/ .claude/skills/aida-* .claude/commands/aida-* docs/plans/
+
+# Remove the binary
+rm -f ~/.cargo/bin/aida          # if installed via cargo
+rm -f ~/.local/bin/aida          # if installed manually
+
+# Remove distributed store (if used)
+git worktree remove .aida-store  # remove worktree
+git branch -D aida-store         # remove orphan branch
 ```
 
-Or open a specific database:
-
-```bash
-aida-desktop --file /path/to/requirements.db
-```
-
-For desktop app features and shortcuts, see the [User Guide — Desktop App](user-guide.md#desktop-app-aida-desktop).
-
----
-
-## 6. Using with Claude Code
-
-If you ran `aida init`, your project is already configured for Claude Code integration.
-
-**Key skills:**
-
-| Skill | Purpose |
-|-------|---------|
-| `/aida-onboard` | Interactive project walkthrough — start here |
-| `/aida-req` | Add a new requirement with AI evaluation |
-| `/aida-implement` | Implement a requirement with traceability |
-| `/aida-commit` | Commit with automatic requirement linking |
-| `/aida-sprint` | Sprint planning |
-| `/aida-standup` | Daily standup from recent commits |
-| `/aida-search` | Unified search across requirements and code |
-
-**MCP server** (for native tool integration):
-
-The `.mcp.json` created by `aida init` configures Claude Code to use AIDA's MCP server, exposing tools like `list_requirements`, `show_requirement`, `add_requirement`, and `search_requirements` directly.
-
----
-
-## 7. Storage Backends
-
-`aida init` creates a SQLite database by default. AIDA also supports YAML and PostgreSQL:
-
-```bash
-# Migrate to PostgreSQL for team use
-aida db migrate --from sqlite --to postgres --output "postgres://user:pass@host:5432/aida"
-
-# Use PostgreSQL directly
-aida --file "postgres://user:pass@localhost:5432/aida" list
-
-# Export back to YAML if needed
-aida db migrate --from sqlite --to yaml
-```
-
-For full details on storage administration, see the [Administrator's Guide](admin-guide.md).
-
----
-
-## Next Steps
-
-- **Organize requirements:** Create folders and features to group requirements
-- **Set up relationships:** Link parent/child, dependency, and verification relationships
-- **Plan a sprint:** Use `/aida-sprint` or the Sprint Planning view in the web dashboard
-- **Customize AI prompts:** Edit META requirements to tune AI evaluation criteria
-- **Export/import templates:** Share requirement hierarchies between projects with `aida export --format tree`
-
-See the [User Guide](user-guide.md) for comprehensive documentation on all features.
+AIDA doesn't modify your source code or git history (unless you add trace comments). Removing it is clean.
