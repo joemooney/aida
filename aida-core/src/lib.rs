@@ -5,6 +5,7 @@ pub mod conflict;
 pub mod daemon;
 pub mod db;
 pub mod dispenser;
+pub mod docs_review;
 pub mod export;
 #[cfg(feature = "native")]
 pub mod git_ops;
