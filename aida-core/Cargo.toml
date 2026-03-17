@@ -5,7 +5,10 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Core library for AIDA requirements management - shared between CLI and GUI"
+description = "Core library for AIDA — AI-native requirements management with structured context for AI coding agents"
+readme = "README.md"
+keywords = ["requirements", "ai", "traceability", "project-management", "mcp"]
+categories = ["development-tools"]
 
 [features]
 default = ["native"]

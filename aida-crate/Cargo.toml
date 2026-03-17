@@ -1,0 +1,15 @@
+[package]
+name = "aida"
+version = "0.1.0"
+edition = "2021"
+authors = ["Joe Mooney"]
+license = "MIT"
+repository = "https://github.com/joemooney/aida"
+homepage = "https://github.com/joemooney/aida"
+description = "AI-native requirements management — track what you build and why, with structured context for AI coding agents"
+readme = "README.md"
+keywords = ["requirements", "ai", "traceability", "project-management", "mcp"]
+categories = ["development-tools", "command-line-utilities"]
+
+[dependencies]
+aida-core = { version = "0.2", path = "../aida-core" }
