@@ -144,26 +144,32 @@ pass "metadata.yaml exists and tracks store state"
 # ============================================================================
 # Test 8: Init distributed mode
 # ============================================================================
-info "Test 8: aida init --distributed (local-only, no remote)"
+info "Test 8: aida init --distributed (worktree mode, default)"
 
 PROJ_DIR="$TEST_DIR/project"
 mkdir -p "$PROJ_DIR"
 cd "$PROJ_DIR"
 
-# Initialize without a remote (local-only mode)
+# Must be a git repo for worktree mode
+git init 2>/dev/null
+git config user.name "Test" && git config user.email "test@test.com"
+echo "# Test" > README.md && git add README.md && git commit -m "initial" 2>/dev/null
+
+# Initialize distributed mode (default = worktree)
 $AIDA init --distributed 2>/dev/null || true
 
-[ -d "$PROJ_DIR/aida-store" ] || fail "aida-store/ directory not created"
-[ -f "$PROJ_DIR/aida-store/metadata.yaml" ] || fail "metadata.yaml not created by init"
+[ -d "$PROJ_DIR/.aida-store" ] || fail ".aida-store/ worktree not created"
+[ -f "$PROJ_DIR/.aida-store/metadata.yaml" ] || fail "metadata.yaml not created by init"
 [ -f "$PROJ_DIR/.aida/config.toml" ] || fail ".aida/config.toml not created"
 
 # Verify config content
 grep -q "distributed" "$PROJ_DIR/.aida/config.toml" || fail "config.toml doesn't mention distributed"
-pass "aida init --distributed creates correct directory layout"
+grep -q "worktree" "$PROJ_DIR/.aida/config.toml" || fail "config.toml doesn't mention worktree"
+pass "aida init --distributed creates worktree layout"
 
-# Verify the aida-store is a git repo
-[ -d "$PROJ_DIR/aida-store/.git" ] || fail "aida-store is not a git repo"
-pass "aida-store/ is a git repository"
+# Verify it's a git worktree (not a standalone repo)
+git worktree list 2>/dev/null | grep -q "aida-store" || fail "aida-store branch not in worktree list"
+pass ".aida-store/ is a git worktree on orphan branch"
 
 cd "$PROJECT_ROOT"
 
