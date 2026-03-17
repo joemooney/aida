@@ -143,6 +143,108 @@ pub fn has_changes(repo: &Path) -> Result<bool> {
     Ok(!result.stdout.is_empty())
 }
 
+// ---------------------------------------------------------------------------
+// Orphan Branch + Worktree
+// ---------------------------------------------------------------------------
+
+/// Create an orphan branch and worktree for the AIDA store.
+///
+/// This is the recommended approach for single-repo projects:
+/// - Creates an orphan branch (no shared history with main)
+/// - Checks it out as a worktree at the given path
+/// - The worktree directory should be added to .gitignore
+///
+/// Returns the worktree path on success.
+pub fn create_store_worktree(
+    repo_root: &Path,
+    worktree_dir: &str,
+    branch_name: &str,
+) -> Result<std::path::PathBuf> {
+    let worktree_path = repo_root.join(worktree_dir);
+
+    // Check if worktree already exists
+    if worktree_path.exists() {
+        // Verify it's actually a worktree
+        let result = git(repo_root, &["worktree", "list"])?;
+        if result.stdout.contains(worktree_dir) {
+            return Ok(worktree_path); // already set up
+        }
+        anyhow::bail!(
+            "Directory {} already exists but is not a git worktree",
+            worktree_path.display()
+        );
+    }
+
+    // Check if the orphan branch already exists (e.g., after clone)
+    let branch_exists = git(repo_root, &["rev-parse", "--verify", branch_name])
+        .map(|r| r.success)
+        .unwrap_or(false);
+
+    if branch_exists {
+        // Branch exists (e.g., from a clone) — just add the worktree
+        let result = git(
+            repo_root,
+            &["worktree", "add", worktree_dir, branch_name],
+        )?;
+        if !result.success {
+            anyhow::bail!(
+                "Failed to add worktree: {}",
+                result.stderr
+            );
+        }
+    } else {
+        // Create orphan branch via worktree
+        // git worktree add --orphan was added in git 2.42+
+        // For compatibility, create it manually
+        let result = git(
+            repo_root,
+            &["worktree", "add", "--detach", worktree_dir],
+        )?;
+        if !result.success {
+            anyhow::bail!(
+                "Failed to create worktree: {}",
+                result.stderr
+            );
+        }
+
+        // Create the orphan branch in the worktree
+        let result = git(&worktree_path, &["checkout", "--orphan", branch_name])?;
+        if !result.success {
+            anyhow::bail!(
+                "Failed to create orphan branch: {}",
+                result.stderr
+            );
+        }
+
+        // Clear the index (orphan branch starts with main's files staged)
+        git(&worktree_path, &["rm", "-rf", "--cached", "."])?;
+        // Clean working tree
+        let _ = git(&worktree_path, &["clean", "-fd"]);
+    }
+
+    Ok(worktree_path)
+}
+
+/// Remove a store worktree and optionally delete the branch.
+pub fn remove_store_worktree(
+    repo_root: &Path,
+    worktree_dir: &str,
+) -> Result<()> {
+    let worktree_path = repo_root.join(worktree_dir);
+    if worktree_path.exists() {
+        git(repo_root, &["worktree", "remove", "--force", worktree_dir])?;
+    }
+    Ok(())
+}
+
+/// Check if a worktree exists for the given directory.
+pub fn has_worktree(repo_root: &Path, worktree_dir: &str) -> bool {
+    let result = git(repo_root, &["worktree", "list"]).ok();
+    result
+        .map(|r| r.stdout.contains(worktree_dir))
+        .unwrap_or(false)
+}
+
 /// Check if the remote is reachable (can we push/pull?).
 pub fn is_remote_reachable(repo: &Path, remote: &str) -> bool {
     git(repo, &["ls-remote", "--exit-code", remote])

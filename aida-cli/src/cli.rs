@@ -1003,13 +1003,19 @@ pub enum Command {
         #[clap(long)]
         force: bool,
 
-        /// Initialize in distributed mode (git-backed, offline-capable)
-        /// Creates a git-backed object store with node registration.
-        /// Requires a git remote for the aida registry repo.
+        /// Initialize in distributed mode (git-backed, offline-capable).
+        /// Default: orphan branch + worktree (store lives in .aida-store/).
+        /// With --sibling: separate repo (store lives in ../aida-store/).
         #[clap(long)]
         distributed: bool,
 
-        /// Git remote URL for the shared aida registry (used with --distributed)
+        /// Use a sibling repo instead of an orphan branch for the store.
+        /// Recommended for multi-repo workspaces where multiple code repos
+        /// share one store.
+        #[clap(long, requires = "distributed")]
+        sibling: bool,
+
+        /// Git remote URL for the shared aida registry (used with --distributed --sibling)
         /// Example: git@github.com:org/aida-registry.git
         #[clap(long, requires = "distributed")]
         registry_remote: Option<String>,

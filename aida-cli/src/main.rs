@@ -82,11 +82,16 @@ fn main() -> Result<()> {
         no_hooks,
         force,
         distributed,
+        sibling,
         registry_remote,
     } = &cli.command
     {
         if *distributed {
-            handle_init_distributed(registry_remote.as_deref(), *force)?;
+            if *sibling {
+                handle_init_distributed_sibling(registry_remote.as_deref(), *force)?;
+            } else {
+                handle_init_distributed_worktree(*force)?;
+            }
         } else {
             handle_init_command(*no_skills, agent, *no_hooks, *force)?;
         }
@@ -1323,7 +1328,141 @@ fn parse_requirement_type(s: &str) -> Result<RequirementType> {
     }
 }
 
-fn handle_init_distributed(registry_remote: Option<&str>, force: bool) -> Result<()> {
+/// Initialize distributed mode using an orphan branch + worktree.
+/// This is the default for single-repo projects.
+/// Store lives at .aida-store/ (worktree of orphan branch 'aida-store').
+fn handle_init_distributed_worktree(force: bool) -> Result<()> {
+    use aida_core::git_ops;
+
+    let cwd = std::env::current_dir()?;
+    let aida_dir = cwd.join(".aida");
+    let worktree_dir = ".aida-store";
+    let branch_name = "aida-store";
+
+    // Must be inside a git repo
+    if !git_ops::is_git_repo(&cwd) {
+        anyhow::bail!(
+            "Not a git repository. Run 'git init' first, or use --sibling for a separate repo."
+        );
+    }
+
+    // Check if already initialized
+    if aida_dir.join("config.toml").exists() && !force {
+        eprintln!(
+            "{} AIDA distributed mode is already initialized (.aida/config.toml exists).",
+            "!".yellow()
+        );
+        eprintln!("  Use {} to reinitialize.", "--force".bold());
+        return Ok(());
+    }
+
+    println!("{}", "Initializing AIDA in distributed mode (orphan branch + worktree)...".bold());
+    println!();
+
+    // Ensure there's at least one commit on main (worktree requires it)
+    let has_commits = git_ops::head_sha(&cwd).is_ok();
+    if !has_commits {
+        // Create an initial commit so worktree can be added
+        std::fs::write(cwd.join(".gitkeep"), "")?;
+        git_ops::add(&cwd, &[".gitkeep"])?;
+
+        let git_name = git_ops::git_config_get("user.name")
+            .unwrap_or_else(|_| "AIDA User".to_string());
+        let git_email = git_ops::git_config_get("user.email")
+            .unwrap_or_else(|_| "aida@localhost".to_string());
+        git_ops::configure_user(&cwd, &git_name, &git_email)?;
+        git_ops::commit(&cwd, "chore: initial commit")?;
+    }
+
+    // Create orphan branch + worktree
+    let store_path = git_ops::create_store_worktree(&cwd, worktree_dir, branch_name)?;
+    println!(
+        "  {} orphan branch '{}' with worktree at {}",
+        "Created".green(),
+        branch_name,
+        worktree_dir
+    );
+
+    // Configure git user in worktree
+    let git_name = git_ops::git_config_get("user.name")
+        .unwrap_or_else(|_| "AIDA User".to_string());
+    let git_email = git_ops::git_config_get("user.email")
+        .unwrap_or_else(|_| "aida@localhost".to_string());
+    git_ops::configure_user(&store_path, &git_name, &git_email)?;
+
+    // Initialize the git backend
+    let backend = aida_core::GitBackend::new(&store_path)?;
+    let store = aida_core::models::RequirementsStore::new();
+    backend.save(&store)?;
+    println!(
+        "  {} {}",
+        "Created".green(),
+        format!("{}/metadata.yaml", worktree_dir).white().bold()
+    );
+
+    // Create initial commit on the orphan branch
+    git_ops::add(&store_path, &["metadata.yaml"])?;
+    std::fs::create_dir_all(store_path.join("objects"))?;
+    std::fs::write(store_path.join("objects/.gitkeep"), "")?;
+    git_ops::add(&store_path, &["objects/.gitkeep"])?;
+    git_ops::commit(&store_path, "chore: initialize AIDA distributed store")?;
+
+    // Add .aida-store to .gitignore on main branch
+    let gitignore_path = cwd.join(".gitignore");
+    let gitignore_entry = format!("\n# AIDA distributed store (orphan branch worktree)\n{}/\n", worktree_dir);
+    if gitignore_path.exists() {
+        let content = std::fs::read_to_string(&gitignore_path)?;
+        if !content.contains(worktree_dir) {
+            let mut file = std::fs::OpenOptions::new()
+                .append(true)
+                .open(&gitignore_path)?;
+            use std::io::Write;
+            file.write_all(gitignore_entry.as_bytes())?;
+        }
+    } else {
+        std::fs::write(&gitignore_path, gitignore_entry)?;
+    }
+
+    // Create .aida/config.toml
+    std::fs::create_dir_all(&aida_dir)?;
+    let config_content = format!(
+        "# AIDA distributed mode configuration\n\
+         [deployment]\n\
+         mode = \"distributed\"\n\
+         store_path = \"{}\"\n\
+         store_type = \"worktree\"\n\
+         branch = \"{}\"\n",
+        worktree_dir, branch_name
+    );
+    std::fs::write(aida_dir.join("config.toml"), &config_content)?;
+
+    println!();
+    println!("{}", "AIDA distributed mode initialized".green().bold());
+    println!();
+    println!("  {}:", "How it works".bold());
+    println!("    Code lives on '{}' branch", git_ops::current_branch(&cwd).unwrap_or("main".into()));
+    println!("    Requirements live on '{}' branch (orphan, separate history)", branch_name);
+    println!("    Worktree at {} (gitignored)", worktree_dir);
+    println!();
+    println!("  {}:", "Quick start".bold());
+    println!("    {}", "aida add --title \"First req\" --type functional".cyan());
+    println!("    {}", "aida list".cyan());
+    println!("    {}", "aida db merge-gate".cyan());
+    println!();
+    println!("  {}:", "Sync store to remote".bold());
+    println!("    {}", format!("git push origin {}", branch_name).cyan());
+    println!();
+    println!("  {}:", "New developer setup".bold());
+    println!("    {}", "git clone <repo>".cyan());
+    println!("    {}", format!("git worktree add {} {}", worktree_dir, branch_name).cyan());
+    println!();
+
+    Ok(())
+}
+
+/// Initialize distributed mode using a sibling repo.
+/// For multi-repo workspaces where multiple code repos share one store.
+fn handle_init_distributed_sibling(registry_remote: Option<&str>, force: bool) -> Result<()> {
     use aida_core::git_ops;
 
     let cwd = std::env::current_dir()?;
