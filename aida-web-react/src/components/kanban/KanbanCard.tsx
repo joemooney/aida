@@ -111,7 +111,7 @@ export function KanbanCard({
     >
       {/* Spec ID + Priority */}
       <div className="flex items-center justify-between mb-1.5">
-        <span className="text-[11px] font-mono text-content-muted">{requirement.spec_id}</span>
+        <span className="text-[11px] font-mono text-content-muted">{requirement.agreed_id || requirement.spec_id}</span>
         <PriorityIcon className={cn('h-3.5 w-3.5', priorityColors[requirement.priority])} />
       </div>
 

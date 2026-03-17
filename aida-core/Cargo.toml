@@ -6,7 +6,6 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Core library for AIDA requirements management - shared between CLI and GUI"
-publish = false  # Uses git-only ts-rs dependency; install via aida-cli or build from source
 
 [features]
 default = ["native"]
@@ -34,7 +33,7 @@ pulldown-cmark = "0.9"
 once_cell = "1.19"
 sha2 = "0.10"  # For PIN hashing
 
-ts-rs = { git = "https://github.com/xazukx/ts-rs.git", branch = "use-ts-enum", features = ["uuid-impl", "chrono-impl", "no-serde-warnings", "serde-json-impl"] }
+ts-rs-forge = { version = "11", features = ["uuid-impl", "chrono-impl", "no-serde-warnings", "serde-json-impl"] }
 
 
 # Native-only dependencies (optional)

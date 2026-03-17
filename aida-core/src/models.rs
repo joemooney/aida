@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::env;
 use std::fmt;
-use ts_rs::TS;
+use ts_rs_forge::TS;
 use uuid::Uuid;
 
 /// Represents the status of a requirement

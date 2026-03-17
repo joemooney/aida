@@ -35,7 +35,7 @@ export function DetailHeader({ requirement, onClose, hideClose }: DetailHeaderPr
     <div className="border-b border-edge px-6 py-4 shrink-0">
       {/* Top row: spec_id + actions */}
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-mono text-content-muted">{requirement.spec_id}</span>
+        <span className="text-xs font-mono text-content-muted" title={requirement.agreed_id ? `Agreed: ${requirement.agreed_id} | Node: ${requirement.spec_id}` : undefined}>{requirement.agreed_id || requirement.spec_id}</span>
         <div className="flex items-center gap-1">
           <button
             onClick={() => evaluate.mutate(reqId)}

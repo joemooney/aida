@@ -28,6 +28,11 @@ export function formatRelativeDate(dateStr: string): string {
   return formatDate(dateStr);
 }
 
+/** Get the best display ID for a requirement: agreed_id if available, otherwise spec_id */
+export function displayId(req: { agreed_id?: string | null; spec_id: string | null }): string {
+  return req.agreed_id || req.spec_id || '?';
+}
+
 export function getInitials(name: string): string {
   return name
     .split(/[\s-]+/)
