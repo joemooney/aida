@@ -3,7 +3,10 @@ name = "aida-cli"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
-description = "CLI for AIDA requirements management"
+license.workspace = true
+repository.workspace = true
+description = "AI-native requirements management CLI — track requirements, trace code, sync with GitHub/GitLab"
+publish = false  # Install via: cargo install --git https://github.com/joemooney/aida.git aida-cli
 
 [[bin]]
 name = "aida"

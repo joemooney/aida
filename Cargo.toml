@@ -13,6 +13,9 @@ members = [
 version = "0.1.0"
 edition = "2021"
 authors = ["Joe Mooney"]
+license = "MIT"
+repository = "https://github.com/joemooney/aida"
+homepage = "https://github.com/joemooney/aida"
 
 [workspace.dependencies]
 # Shared dependencies
