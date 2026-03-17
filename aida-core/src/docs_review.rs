@@ -1,8 +1,12 @@
 // trace:ARCH-docs-review | ai:claude
-//! Documentation review report generator.
+//! Review report generator for documentation and code quality reviews.
 //!
-//! Produces HTML reports with side-by-side before/after diffs,
-//! color-coded by severity, with collapsible sections per file.
+//! Produces reports in multiple formats:
+//! - Markdown with before/after diffs
+//! - HTML with dark-theme side-by-side diff viewer
+//! - SARIF for GitHub Code Scanning integration
+//!
+//! Used by both /aida-docs-review and /aida-code-review skills.
 
 use serde::Serialize;
 
@@ -202,6 +206,57 @@ impl DocReviewReport {
 
         html.push_str(HTML_FOOTER);
         html
+    }
+
+    /// Generate a SARIF report for GitHub Code Scanning integration.
+    pub fn to_sarif(&self, tool_name: &str) -> String {
+        let results: Vec<serde_json::Value> = self
+            .issues
+            .iter()
+            .map(|issue| {
+                let level = match issue.severity {
+                    Severity::Critical => "error",
+                    Severity::Important => "warning",
+                    Severity::Minor => "note",
+                };
+
+                let mut result = serde_json::json!({
+                    "ruleId": format!("aida/{}", issue.category.to_lowercase().replace(' ', "-")),
+                    "level": level,
+                    "message": { "text": issue.description },
+                    "locations": [{
+                        "physicalLocation": {
+                            "artifactLocation": { "uri": issue.file },
+                            "region": { "startLine": issue.line.unwrap_or(1) }
+                        }
+                    }]
+                });
+
+                if let (Some(before), Some(after)) = (&issue.before, &issue.after) {
+                    result["fixes"] = serde_json::json!([{
+                        "description": { "text": format!("Change: {} → {}", before, after) }
+                    }]);
+                }
+
+                result
+            })
+            .collect();
+
+        serde_json::json!({
+            "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json",
+            "version": "2.1.0",
+            "runs": [{
+                "tool": {
+                    "driver": {
+                        "name": tool_name,
+                        "version": env!("CARGO_PKG_VERSION"),
+                        "informationUri": "https://github.com/joemooney/aida"
+                    }
+                },
+                "results": results
+            }]
+        })
+        .to_string()
     }
 }
 
