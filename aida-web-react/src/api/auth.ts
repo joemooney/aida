@@ -1,9 +1,10 @@
 import { apiFetch } from './client';
 
 export interface AuthConfigResponse {
-  mode: 'none' | 'pin' | string;
+  mode: 'none' | 'pin' | 'oidc' | 'both' | string;
   authEnabled: boolean;
-  oidcEnabled?: boolean;
+  pinEnabled: boolean;
+  oidcEnabled: boolean;
   defaultRole?: string;
 }
 

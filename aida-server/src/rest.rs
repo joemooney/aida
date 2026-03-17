@@ -308,6 +308,7 @@ struct AuthLoginRequest {
 struct AuthConfigResponse {
     mode: String,
     auth_enabled: bool,
+    pin_enabled: bool,
     oidc_enabled: bool,
     default_role: String,
 }
@@ -434,6 +435,7 @@ async fn auth_config(
     Ok(Json(AuthConfigResponse {
         mode: auth.mode().as_str().to_string(),
         auth_enabled: auth.is_enabled(),
+        pin_enabled: auth.mode().pin_enabled(),
         oidc_enabled: auth.oidc_enabled(),
         default_role: auth.role_for_handle("").as_str().to_string(),
     }))
@@ -451,10 +453,10 @@ async fn auth_login(
             "Authentication is disabled (AIDA_WEB_AUTH_MODE=none)",
         ));
     }
-    if auth.mode().as_str() == "oidc" {
+    if !auth.mode().pin_enabled() {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
-            "PIN login disabled in OIDC mode",
+            "PIN login not enabled for this auth mode",
         ));
     }
 
@@ -637,6 +639,7 @@ async fn auth_config_legacy(
     Ok(Json(AuthConfigResponse {
         mode: auth.mode().as_str().to_string(),
         auth_enabled: auth.is_enabled(),
+        pin_enabled: auth.mode().pin_enabled(),
         oidc_enabled: auth.oidc_enabled(),
         default_role: auth.role_for_handle("").as_str().to_string(),
     }))
@@ -653,10 +656,10 @@ async fn auth_login_legacy(
             "Authentication is disabled (AIDA_WEB_AUTH_MODE=none)",
         ));
     }
-    if auth.mode().as_str() == "oidc" {
+    if !auth.mode().pin_enabled() {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
-            "PIN login disabled in OIDC mode",
+            "PIN login not enabled for this auth mode",
         ));
     }
 

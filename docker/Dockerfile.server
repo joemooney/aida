@@ -12,9 +12,11 @@ RUN apt-get update && apt-get install -y protobuf-compiler && rm -rf /var/lib/ap
 COPY Cargo.toml Cargo.lock ./
 COPY aida-core ./aida-core
 COPY aida-cli ./aida-cli
+COPY aida-crate ./aida-crate
 COPY aida-server ./aida-server
 COPY aida-desktop ./aida-desktop
 COPY aida-web ./aida-web
+COPY aida-generate-types ./aida-generate-types
 COPY proto ./proto
 
 # Build release binary with postgres feature
@@ -26,6 +28,7 @@ FROM docker.io/library/debian:bookworm-slim
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libssl3 \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -33,19 +36,22 @@ WORKDIR /app
 # Copy binary from builder
 COPY --from=builder /app/target/release/aida-server /app/aida-server
 
-# Create data directory
-RUN mkdir -p /data
+# Create store directory
+RUN mkdir -p /store
 
-# Entrypoint script to read secrets and configure mode
-# - If AIDA_DATABASE_URL secret exists: single-project mode (legacy)
-# - Otherwise: multi-project mode with /data directory
+# Configure git for auto-commits inside container
+RUN git config --global user.email "aida-server@joemooney.com" && \
+    git config --global user.name "AIDA Server"
+
+# Entrypoint script
+# - Git store mode (default): uses /store bind-mount
+# - If AIDA_DATABASE_URL secret exists: single-project mode (postgres/sqlite)
 RUN printf '#!/bin/sh\n\
-# Read database URL from Docker secret if available (single-project mode)\n\
 if [ -f /run/secrets/aida_database_url ]; then\n\
     export AIDA_DATABASE_URL=$(cat /run/secrets/aida_database_url)\n\
-    echo "Single-project mode: using AIDA_DATABASE_URL"\n\
+    echo "Database mode: using AIDA_DATABASE_URL"\n\
 else\n\
-    echo "Multi-project mode: using /data directory"\n\
+    echo "Git store mode: using /store"\n\
 fi\n\
 exec /app/aida-server "$@"\n' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
@@ -54,6 +60,5 @@ ENV RUST_LOG=info
 EXPOSE 50051 8080
 
 ENTRYPOINT ["/app/entrypoint.sh"]
-# Default to multi-project mode with /data directory
-# Override with --database <path> for single-project mode
-CMD ["--host", "0.0.0.0", "--port", "50051", "--rest-port", "8080", "--data-dir", "/data"]
+# Default: single-project git store at /store
+CMD ["--host", "0.0.0.0", "--port", "50051", "--rest-port", "8080", "--database", "/store"]

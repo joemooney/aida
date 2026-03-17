@@ -193,6 +193,8 @@ pub struct ScaffoldConfig {
     pub include_aida_capture_skill: bool,
     /// Include aida-docs skill for documentation management
     pub include_aida_docs_skill: bool,
+    /// Include aida-docs-review skill for exhaustive documentation quality review
+    pub include_aida_docs_review_skill: bool,
     /// Include aida-release skill for release management
     pub include_aida_release_skill: bool,
     /// Include aida-evaluate skill for requirement quality evaluation
@@ -244,6 +246,7 @@ impl Default for ScaffoldConfig {
             include_aida_implement_skill: true,
             include_aida_capture_skill: true,
             include_aida_docs_skill: true,
+            include_aida_docs_review_skill: true,
             include_aida_release_skill: true,
             include_aida_evaluate_skill: true,
             include_aida_commit_skill: true,
@@ -668,6 +671,30 @@ impl Scaffolder {
                 artifacts.push(artifact);
             }
 
+            // Add aida-docs-review skill
+            if self.config.include_aida_docs_review_skill {
+                let path = PathBuf::from(".claude/skills/aida-docs-review.md");
+                let artifact = self.create_artifact(
+                    path.clone(),
+                    self.generate_aida_docs_review_skill(),
+                    "Skill for exhaustive documentation quality review".to_string(),
+                    false,
+                );
+
+                match &artifact.file_status {
+                    FileStatus::New => new_files.push(path),
+                    FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                        modified_files.push(artifact.path.clone())
+                    }
+                    FileStatus::OlderVersion { .. } => {
+                        upgradeable_files.push(artifact.path.clone())
+                    }
+                    FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+                }
+
+                artifacts.push(artifact);
+            }
+
             // Add aida-release skill
             if self.config.include_aida_release_skill {
                 let path = PathBuf::from(".claude/skills/aida-release.md");
@@ -919,6 +946,7 @@ impl Scaffolder {
                 ("aida-implement", self.config.include_aida_implement_skill),
                 ("aida-capture", self.config.include_aida_capture_skill),
                 ("aida-docs", self.config.include_aida_docs_skill),
+                ("aida-docs-review", self.config.include_aida_docs_review_skill),
                 ("aida-release", self.config.include_aida_release_skill),
                 ("aida-evaluate", self.config.include_aida_evaluate_skill),
                 ("aida-commit", self.config.include_aida_commit_skill),
@@ -1293,6 +1321,11 @@ impl Scaffolder {
                 "aida-standup",
                 "Daily standup summary from recent activity",
             ),
+            (
+                "commands/aida-docs-review.md",
+                "aida-docs-review",
+                "Exhaustive documentation quality review",
+            ),
         ];
 
         command_defs
@@ -1350,6 +1383,17 @@ impl Scaffolder {
             .get("skills/aida-docs.md")
             .map(|s| s.to_string())
             .unwrap_or_else(|| "# AIDA Documentation Skill\n\n(template not found)".to_string())
+    }
+
+    /// Generate aida-docs-review skill content (loads from embedded template)
+    fn generate_aida_docs_review_skill(&self) -> String {
+        use crate::templates::EMBEDDED_TEMPLATES;
+        EMBEDDED_TEMPLATES
+            .get("skills/aida-docs-review.md")
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| {
+                "# AIDA Documentation Review Skill\n\n(template not found)".to_string()
+            })
     }
 
     /// Generate aida-release skill content (loads from embedded template)

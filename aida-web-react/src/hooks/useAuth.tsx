@@ -23,6 +23,8 @@ type AuthStatus = 'loading' | 'anonymous' | 'authenticated';
 interface AuthContextValue {
   mode: string;
   authEnabled: boolean;
+  pinEnabled: boolean;
+  oidcEnabled: boolean;
   status: AuthStatus;
   user: AuthMeUser | null;
   error: string | null;
@@ -37,6 +39,8 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState('none');
   const [authEnabled, setAuthEnabled] = useState(false);
+  const [pinEnabled, setPinEnabled] = useState(false);
+  const [oidcEnabled, setOidcEnabled] = useState(false);
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [user, setUser] = useState<AuthMeUser | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -68,6 +72,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         setMode(config.mode);
         setAuthEnabled(config.authEnabled);
+        setPinEnabled(config.pinEnabled ?? false);
+        setOidcEnabled(config.oidcEnabled ?? false);
 
         if (!config.authEnabled) {
           setStatus('authenticated');
@@ -126,6 +132,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthContextValue>(() => ({
     mode,
     authEnabled,
+    pinEnabled,
+    oidcEnabled,
     status,
     user,
     error,
@@ -133,7 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     beginOidcLogin,
     completeOidcLogin,
     logout,
-  }), [authEnabled, beginOidcLogin, completeOidcLogin, error, login, logout, mode, status, user]);
+  }), [authEnabled, pinEnabled, oidcEnabled, beginOidcLogin, completeOidcLogin, error, login, logout, mode, status, user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

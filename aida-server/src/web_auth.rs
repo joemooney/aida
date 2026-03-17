@@ -22,6 +22,7 @@ pub enum WebAuthMode {
     None,
     Pin,
     Oidc,
+    PinAndOidc,
 }
 
 impl WebAuthMode {
@@ -34,6 +35,7 @@ impl WebAuthMode {
         {
             "pin" | "required" | "team" => WebAuthMode::Pin,
             "oidc" | "oauth" | "sso" => WebAuthMode::Oidc,
+            "both" | "pin+oidc" | "all" => WebAuthMode::PinAndOidc,
             _ => WebAuthMode::None,
         }
     }
@@ -43,7 +45,16 @@ impl WebAuthMode {
             WebAuthMode::None => "none",
             WebAuthMode::Pin => "pin",
             WebAuthMode::Oidc => "oidc",
+            WebAuthMode::PinAndOidc => "both",
         }
+    }
+
+    pub fn pin_enabled(self) -> bool {
+        matches!(self, WebAuthMode::Pin | WebAuthMode::PinAndOidc)
+    }
+
+    pub fn oidc_eligible(self) -> bool {
+        matches!(self, WebAuthMode::Oidc | WebAuthMode::PinAndOidc)
     }
 }
 
@@ -261,7 +272,7 @@ impl WebAuthState {
     }
 
     pub fn oidc_enabled(&self) -> bool {
-        self.mode == WebAuthMode::Oidc && self.oidc_config.is_some()
+        self.mode.oidc_eligible() && self.oidc_config.is_some()
     }
 
     pub fn oidc_config(&self) -> Option<&OidcConfig> {
