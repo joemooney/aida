@@ -197,6 +197,34 @@ cargo tree --depth 1 2>&1 | wc -l
 cargo deny check licenses 2>&1 || echo "install: cargo install cargo-deny"
 ```
 
+#### cargo-deny Integration
+
+`cargo-deny` checks 4 dimensions that `cargo audit` alone misses:
+
+```bash
+# Full check (licenses + bans + advisories + sources)
+cargo deny check 2>&1 | head -30
+
+# Just license compatibility
+cargo deny check licenses 2>&1
+
+# Just security advisories (superset of cargo-audit)
+cargo deny check advisories 2>&1
+
+# Check for banned crates
+cargo deny check bans 2>&1
+```
+
+If `cargo-deny` is not installed:
+```bash
+cargo install cargo-deny
+```
+
+Create a default `deny.toml` if one doesn't exist:
+```bash
+cargo deny init
+```
+
 ## Workflow
 
 ### Step 1: Automated Scan
@@ -297,6 +325,40 @@ Ask the user:
 - **Auto-fix clippy warnings?** `cargo clippy --fix`
 - **Create tasks for manual fixes?** Generate AIDA requirements
 - **Apply specific fixes?** Show diff for each, get approval
+
+## Diff-Aware Mode
+
+When reviewing only changed files (e.g., before a PR), use diff-aware mode:
+
+### Step 0: Identify Changed Files
+
+```bash
+# Changes since branching from main
+git diff --name-only main...HEAD -- '*.rs'
+
+# Changes in the last commit
+git diff --name-only HEAD~1
+
+# Staged changes only
+git diff --cached --name-only -- '*.rs'
+```
+
+Only review files returned by these commands. This dramatically reduces review time for incremental changes while still catching issues in new/modified code.
+
+### Comparing Against Baseline
+
+If a previous review report exists, compare:
+
+```bash
+# Previous review
+cat docs/code-review-report.md | grep "^##\\|CRITICAL\\|IMPORTANT" > /tmp/baseline.txt
+
+# Current review
+# (run full review, then compare)
+diff /tmp/baseline.txt /tmp/current.txt
+```
+
+Report new issues vs resolved issues since last review.
 
 ## Severity Guidelines
 

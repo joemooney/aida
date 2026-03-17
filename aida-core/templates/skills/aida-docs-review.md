@@ -96,6 +96,52 @@ Instead of "battle-tested" → "used in production by N projects" (if true)
 - Jargon explained on first use?
 - Acronyms expanded on first use?
 
+## Automated Prose Linting (Optional)
+
+If `vale` is installed, run it for automated prose quality checking:
+
+```bash
+# Check if vale is available
+vale --version 2>/dev/null || echo "Install: brew install vale (or see vale.sh)"
+
+# Run vale on all docs
+vale docs/ README.md CLAUDE.md OVERVIEW.md 2>&1 | head -50
+
+# Run with specific style (Google developer docs style)
+vale --config='.vale.ini' docs/ 2>&1
+```
+
+### Setting Up Vale for This Project
+
+Create `.vale.ini` in the project root:
+
+```ini
+StylesPath = .vale/styles
+MinAlertLevel = suggestion
+
+[*.md]
+BasedOnStyles = Vale, write-good, proselint
+
+# Disable rules that conflict with technical writing
+Vale.Spelling = NO
+```
+
+Install styles:
+```bash
+mkdir -p .vale/styles
+vale sync  # downloads configured styles
+```
+
+Vale catches things the AI review might miss:
+- Passive voice ("was implemented" → "we implemented")
+- Weasel words ("very", "really", "basically")
+- Cliches (535 known phrases)
+- Readability scores (Flesch-Kincaid, Gunning Fog)
+- Style guide violations (Google, Microsoft, write-good)
+
+The AI review focuses on accuracy, freshness, and consistency.
+Vale focuses on prose quality and readability. Use both.
+
 ## Workflow
 
 ### Step 1: Inventory All Documentation

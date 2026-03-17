@@ -137,8 +137,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "aida-cli"
+name = "aida"
 version = "0.1.0"
+dependencies = [
+ "aida-core",
+]
+
+[[package]]
+name = "aida-cli"
+version = "0.2.0"
 dependencies = [
  "aida-core",
  "anyhow",
@@ -160,7 +167,7 @@ dependencies = [
 
 [[package]]
 name = "aida-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -190,7 +197,7 @@ dependencies = [
 
 [[package]]
 name = "aida-desktop"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "aida-core",
  "anyhow",
@@ -231,7 +238,7 @@ dependencies = [
 
 [[package]]
 name = "aida-generate-types"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "aida-core",
  "ts-rs-forge",
@@ -239,7 +246,7 @@ dependencies = [
 
 [[package]]
 name = "aida-server"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "aida-core",
  "anyhow",
@@ -274,7 +281,7 @@ dependencies = [
 
 [[package]]
 name = "aida-web"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "aida-desktop",
  "anyhow",

@@ -8,10 +8,10 @@
 //!
 //! Used by both /aida-docs-review and /aida-code-review skills.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Severity of a documentation issue.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Severity {
     Critical,
     Important,
@@ -31,6 +31,7 @@ impl std::fmt::Display for Severity {
 /// A single documentation issue found during review.
 #[derive(Debug, Clone, Serialize)]
 pub struct DocIssue {
+    pub rule_id: String,
     pub file: String,
     pub line: Option<usize>,
     pub severity: Severity,
@@ -39,6 +40,59 @@ pub struct DocIssue {
     pub before: Option<String>,
     pub after: Option<String>,
 }
+
+/// A review rule definition from the catalog.
+#[derive(Debug, Clone, Serialize)]
+pub struct ReviewRule {
+    pub id: &'static str,
+    pub category: &'static str,
+    pub description: &'static str,
+    pub default_severity: Severity,
+}
+
+/// Catalog of all review rules.
+pub const REVIEW_RULES: &[ReviewRule] = &[
+    // Traceability
+    ReviewRule { id: "TRACE-001", category: "Traceability", description: "Source file has no trace comments", default_severity: Severity::Important },
+    ReviewRule { id: "TRACE-002", category: "Traceability", description: "Trace references non-existent requirement", default_severity: Severity::Critical },
+    ReviewRule { id: "TRACE-003", category: "Traceability", description: "Requirement has no implementing code", default_severity: Severity::Important },
+
+    // Complexity
+    ReviewRule { id: "COMPLEXITY-001", category: "Complexity", description: "File exceeds line limit", default_severity: Severity::Important },
+    ReviewRule { id: "COMPLEXITY-002", category: "Complexity", description: "Function exceeds line limit", default_severity: Severity::Important },
+    ReviewRule { id: "COMPLEXITY-003", category: "Complexity", description: "Excessive nesting depth", default_severity: Severity::Minor },
+
+    // Dead Code
+    ReviewRule { id: "DEAD-001", category: "Dead Code", description: "TODO/FIXME/HACK comment found", default_severity: Severity::Minor },
+    ReviewRule { id: "DEAD-002", category: "Dead Code", description: "Unused dependency detected", default_severity: Severity::Important },
+
+    // Error Handling
+    ReviewRule { id: "ERROR-001", category: "Error Handling", description: "unwrap() in non-test code", default_severity: Severity::Important },
+    ReviewRule { id: "ERROR-002", category: "Error Handling", description: "Error swallowed (let _ = ...)", default_severity: Severity::Minor },
+
+    // Security
+    ReviewRule { id: "SECURITY-001", category: "Security", description: "Potential hardcoded secret", default_severity: Severity::Critical },
+    ReviewRule { id: "SECURITY-002", category: "Security", description: "Unsafe code block without justification", default_severity: Severity::Important },
+    ReviewRule { id: "SECURITY-003", category: "Security", description: "Known vulnerability in dependency", default_severity: Severity::Critical },
+
+    // Consistency
+    ReviewRule { id: "CONSISTENCY-001", category: "Consistency", description: "Inconsistent naming convention", default_severity: Severity::Minor },
+
+    // Tests
+    ReviewRule { id: "TEST-001", category: "Tests", description: "Module has no tests", default_severity: Severity::Important },
+    ReviewRule { id: "TEST-002", category: "Tests", description: "Test only covers happy path", default_severity: Severity::Minor },
+
+    // Documentation
+    ReviewRule { id: "DOCS-001", category: "Documentation", description: "Public API missing doc comment", default_severity: Severity::Minor },
+    ReviewRule { id: "DOCS-002", category: "Documentation", description: "Doc comment contradicts implementation", default_severity: Severity::Important },
+    ReviewRule { id: "DOCS-003", category: "Documentation", description: "Stale content (referenced item no longer exists)", default_severity: Severity::Critical },
+    ReviewRule { id: "DOCS-004", category: "Documentation", description: "Hype/marketing language in technical docs", default_severity: Severity::Minor },
+    ReviewRule { id: "DOCS-005", category: "Documentation", description: "Inconsistency between documents", default_severity: Severity::Important },
+
+    // Dependencies
+    ReviewRule { id: "DEPS-001", category: "Dependencies", description: "Outdated dependency", default_severity: Severity::Minor },
+    ReviewRule { id: "DEPS-002", category: "Dependencies", description: "Dependency with known vulnerability", default_severity: Severity::Critical },
+];
 
 /// Complete documentation review report.
 #[derive(Debug, Clone, Serialize)]
@@ -118,8 +172,8 @@ impl DocReviewReport {
 
             let line_info = issue.line.map(|l| format!(" (line {})", l)).unwrap_or_default();
             md.push_str(&format!(
-                "**{}**: {}{}\n",
-                issue.severity, issue.category, line_info
+                "**[{}]** **{}**: {}{}\n",
+                issue.rule_id, issue.severity, issue.category, line_info
             ));
             md.push_str(&format!("- {}\n", issue.description));
 
@@ -178,11 +232,12 @@ impl DocReviewReport {
 
             html.push_str(&format!(
                 r#"<div class="issue {}">
-<div class="issue-header"><span class="badge {}">{}</span> {}</div>
+<div class="issue-header"><span class="badge {}">{}</span> <code>{}</code> {}</div>
 <p>{}</p>"#,
                 severity_class,
                 severity_class,
                 issue.severity,
+                escape_html(&issue.rule_id),
                 escape_html(&issue.category),
                 escape_html(&issue.description),
             ));
@@ -220,8 +275,14 @@ impl DocReviewReport {
                     Severity::Minor => "note",
                 };
 
+                let rule_id = if issue.rule_id.is_empty() {
+                    format!("aida/{}", issue.category.to_lowercase().replace(' ', "-"))
+                } else {
+                    issue.rule_id.clone()
+                };
+
                 let mut result = serde_json::json!({
-                    "ruleId": format!("aida/{}", issue.category.to_lowercase().replace(' ', "-")),
+                    "ruleId": rule_id,
                     "level": level,
                     "message": { "text": issue.description },
                     "locations": [{
@@ -257,6 +318,20 @@ impl DocReviewReport {
             }]
         })
         .to_string()
+    }
+
+    /// Record review results in the telemetry store.
+    pub fn record_in_telemetry(&self, telemetry: &mut crate::telemetry::TelemetryStore) {
+        telemetry.record(
+            "system",
+            crate::telemetry::EventKind::ReviewCompleted {
+                total_issues: self.issues.len(),
+                critical: self.critical_count(),
+                important: self.important_count(),
+                minor: self.minor_count(),
+            },
+            None,
+        );
     }
 }
 
@@ -328,6 +403,7 @@ mod tests {
         let mut report = DocReviewReport::new();
         report.files_reviewed = 5;
         report.add_issue(DocIssue {
+            rule_id: "DOCS-003".into(),
             file: "README.md".into(),
             line: Some(42),
             severity: Severity::Critical,
@@ -337,6 +413,7 @@ mod tests {
             after: Some("21 skills".into()),
         });
         report.add_issue(DocIssue {
+            rule_id: "DOCS-004".into(),
             file: "README.md".into(),
             line: Some(58),
             severity: Severity::Minor,
@@ -351,12 +428,72 @@ mod tests {
 
         let md = report.to_markdown();
         assert!(md.contains("Documentation Review Report"));
+        assert!(md.contains("[DOCS-003]"));
         assert!(md.contains("CRITICAL"));
         assert!(md.contains("21 skills"));
 
         let html = report.to_html();
         assert!(html.contains("<!DOCTYPE html>"));
         assert!(html.contains("badge critical"));
+        assert!(html.contains("DOCS-003"));
         assert!(html.contains("21 skills"));
+
+        let sarif = report.to_sarif("aida-review");
+        assert!(sarif.contains("DOCS-003"));
+        assert!(sarif.contains("DOCS-004"));
+    }
+
+    #[test]
+    fn test_rule_catalog() {
+        // Verify all rules have unique IDs
+        let mut ids: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        for rule in REVIEW_RULES {
+            assert!(!rule.id.is_empty(), "Rule ID should not be empty");
+            assert!(!rule.category.is_empty(), "Category should not be empty for rule {}", rule.id);
+            assert!(!rule.description.is_empty(), "Description should not be empty for rule {}", rule.id);
+            assert!(ids.insert(rule.id), "Duplicate rule ID: {}", rule.id);
+        }
+        // Verify expected count
+        assert_eq!(REVIEW_RULES.len(), 23);
+    }
+
+    #[test]
+    fn test_record_in_telemetry() {
+        let mut report = DocReviewReport::new();
+        report.files_reviewed = 2;
+        report.add_issue(DocIssue {
+            rule_id: "TRACE-001".into(),
+            file: "lib.rs".into(),
+            line: None,
+            severity: Severity::Important,
+            category: "Traceability".into(),
+            description: "No trace comments".into(),
+            before: None,
+            after: None,
+        });
+        report.add_issue(DocIssue {
+            rule_id: "SECURITY-001".into(),
+            file: "config.rs".into(),
+            line: Some(10),
+            severity: Severity::Critical,
+            category: "Security".into(),
+            description: "Hardcoded secret".into(),
+            before: None,
+            after: None,
+        });
+
+        let mut telemetry = crate::telemetry::TelemetryStore::default();
+        report.record_in_telemetry(&mut telemetry);
+
+        assert_eq!(telemetry.events.len(), 1);
+        match &telemetry.events[0].kind {
+            crate::telemetry::EventKind::ReviewCompleted { total_issues, critical, important, minor } => {
+                assert_eq!(*total_issues, 2);
+                assert_eq!(*critical, 1);
+                assert_eq!(*important, 1);
+                assert_eq!(*minor, 0);
+            }
+            _ => panic!("Expected ReviewCompleted event"),
+        }
     }
 }

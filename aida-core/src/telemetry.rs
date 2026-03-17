@@ -70,6 +70,14 @@ pub enum EventKind {
     // Session
     SessionStart,
     SessionEnd { duration_secs: u64 },
+
+    // Reviews
+    ReviewCompleted {
+        total_issues: usize,
+        critical: usize,
+        important: usize,
+        minor: usize,
+    },
 }
 
 /// A telemetry store — append-only event log.
@@ -124,6 +132,7 @@ impl TelemetryStore {
                 EventKind::SearchPerformed { .. } => "search",
                 EventKind::SessionStart => "session_start",
                 EventKind::SessionEnd { .. } => "session_end",
+                EventKind::ReviewCompleted { .. } => "review_completed",
             };
             *counts.entry(kind_name.to_string()).or_insert(0) += 1;
         }
