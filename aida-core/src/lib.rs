@@ -1,4 +1,5 @@
 pub mod ai;
+pub mod analytics;
 pub mod conflict;
 #[cfg(all(unix, feature = "native"))]
 pub mod daemon;

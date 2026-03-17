@@ -157,6 +157,8 @@ pub fn create_rest_router_legacy(state: Arc<ServerState>) -> Router {
         .route("/api/v2/requirements/:id/parent", put(set_parent_legacy))
         // Reload endpoint
         .route("/api/v2/reload", post(reload_legacy))
+        // Analytics endpoint
+        .route("/api/v2/analytics", get(get_analytics))
         .with_state(state)
 }
 
@@ -3447,4 +3449,20 @@ async fn queue_reorder(
         .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+// ============================================================================
+// Analytics
+// ============================================================================
+
+async fn get_analytics(
+    State(state): State<Arc<ServerState>>,
+) -> Result<Json<aida_core::analytics::AnalyticsReport>, (StatusCode, Json<ApiError>)> {
+    let store = state
+        .backend
+        .load()
+        .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let report = aida_core::analytics::compute_analytics(&store.requirements);
+    Ok(Json(report))
 }
