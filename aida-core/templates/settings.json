@@ -8,6 +8,11 @@
             "type": "command",
             "command": ".claude/hooks/aida-validate-commit.sh",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": ".claude/hooks/aida-git-guardrails.sh",
+            "timeout": 5
           }
         ]
       }
