@@ -494,6 +494,35 @@ fn handle_init_command(no_skills: bool, agent: &str, no_hooks: bool, force: bool
         }
     }
 
+    // Auto-configure Codex MCP if codex is installed
+    if std::process::Command::new("codex")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
+        // Check if already configured
+        let mcp_list = std::process::Command::new("codex")
+            .args(["mcp", "list"])
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+            .unwrap_or_default();
+
+        if !mcp_list.contains("aida") {
+            match std::process::Command::new("codex")
+                .args(["mcp", "add", "aida", "--", "aida", "mcp-serve"])
+                .output()
+            {
+                Ok(o) if o.status.success() => {
+                    println!("{} Codex CLI MCP server configured", "✓".green());
+                }
+                _ => {
+                    // Silently skip — codex mcp add may fail for various reasons
+                }
+            }
+        }
+    }
+
     // Print post-init message
     println!();
     println!("{}", "AIDA initialized ✓".green().bold());
