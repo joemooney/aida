@@ -26,6 +26,28 @@ Use this skill when:
 
 Planning separates design decisions from implementation, allowing you to review the approach before committing effort, identify risks early, and create a clear implementation roadmap. All planning decisions should be captured in the requirements database as child requirements, comments for design decisions, and a status transition to `Planned` when complete.
 
+### Vertical Slices, Not Horizontal Layers
+
+**This is the most important principle.** Decompose work into thin end-to-end slices through all layers, NOT into horizontal layers.
+
+**Wrong (horizontal):**
+1. Build the database schema
+2. Build the API layer
+3. Build the UI
+
+**Right (vertical slices):**
+1. Slice 1: User can create an account (DB + API + UI for signup only)
+2. Slice 2: User can log in (DB + API + UI for login only)
+3. Slice 3: User can reset password (DB + API + UI for reset only)
+
+Each slice is:
+- **Deployable independently** — delivers user-visible value
+- **Testable end-to-end** — can verify the whole flow works
+- **Small enough for one session** — keeps focus and momentum
+- **Demonstrates the pattern** — later slices are faster because the first slice proves the architecture
+
+When decomposing, ask: "Can this child requirement be demo'd to a user?" If not, it's probably a horizontal layer, not a vertical slice.
+
 ## Workflow
 
 ### Step 1: Load Requirement Context
@@ -63,10 +85,12 @@ aida rel add --from <PARENT-ID> --to <CHILD-ID> --type Parent
 ```
 
 Guidelines for decomposition:
+- **Vertical slices**: each child delivers end-to-end value through all layers
 - Each child should be implementable in a focused session
 - Children should have clear boundaries
 - Avoid too many children (3-7 is usually good)
-- Order children by implementation dependency
+- Order children so the first slice proves the architecture (the "tracer bullet")
+- Tag each child as `[HITL]` (needs human review/decision) or `[AFK]` (agent can do autonomously)
 
 ### Step 4: Document Design Decisions
 
@@ -100,10 +124,11 @@ aida edit <CHILD-ID> --status approved
 
 Summarize for the user:
 1. Overview of implementation approach
-2. List of child requirements created
-3. Key design decisions made
-4. Files that will be affected
-5. Any risks or unknowns identified
+2. List of child requirements as vertical slices (numbered in implementation order)
+3. Which slice is the "tracer bullet" (proves the architecture end-to-end)
+4. Key design decisions made
+5. Which items are `[HITL]` vs `[AFK]`
+6. Any risks or unknowns identified
 
 Ask if they want to proceed to implementation with `/aida-implement`.
 
