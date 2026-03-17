@@ -15,6 +15,7 @@ pub mod models;
 pub mod node;
 pub mod object_store;
 pub mod oplog;
+pub mod telemetry;
 #[cfg(feature = "native")]
 pub mod workspace;
 #[cfg(feature = "native")]
