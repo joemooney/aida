@@ -1293,7 +1293,7 @@ fn handle_git_backend_command(
             eprintln!(
                 "Command not yet supported for git backend.\n\
                  Supported: list, add, show, edit, del, search, comment add,\n\
-                 rel add/remove, db info, db sync, db export-git"
+                 rel add/remove, db info/status/sync/merge-gate/export-git/workspace-init"
             );
             std::process::exit(1);
         }
@@ -3212,6 +3212,37 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
                 "{} Status is only available for git-backed stores. Use: aida --file <dir> db status",
                 "!".yellow()
             );
+        }
+        DbCommand::WorkspaceInit { name, remote } => {
+            let cwd = std::env::current_dir()?;
+            let ws_name = name.as_deref().unwrap_or_else(|| {
+                cwd.file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("workspace")
+            });
+
+            println!("{}", "Initializing AIDA workspace...".bold());
+
+            let manifest = aida_core::workspace::init_workspace(
+                &cwd,
+                ws_name,
+                None,
+                remote.as_deref(),
+            )?;
+
+            println!();
+            println!("{} Workspace '{}' initialized", "✓".green(), manifest.name);
+            println!();
+            println!("  {}:", "Repos discovered".bold());
+            for repo in &manifest.repos {
+                println!("    {} ({})", repo.path, repo.name);
+            }
+            println!("  {}:", "Store".bold());
+            println!("    {}/", manifest.store_path);
+            println!();
+            println!("  {}:", "Usage from any repo".bold());
+            println!("    {}", "cd <repo> && aida list".cyan());
+            println!("    {}", "cd <repo> && aida add --title \"...\" --type functional".cyan());
         }
         DbCommand::ExportGit { output } => {
             let output_path = std::path::PathBuf::from(output);

@@ -309,6 +309,17 @@ pub enum DbCommand {
     /// short form (FR-423).
     MergeGate,
 
+    /// Initialize a multi-repo workspace (multiple code repos sharing one store)
+    WorkspaceInit {
+        /// Workspace name
+        #[clap(long)]
+        name: Option<String>,
+
+        /// Git remote URL for the shared store
+        #[clap(long)]
+        remote: Option<String>,
+    },
+
     /// Show status of the git-backed store (changes, sync state, conflicts)
     Status,
 }

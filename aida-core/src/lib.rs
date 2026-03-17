@@ -12,6 +12,9 @@ pub mod meta;
 pub mod models;
 pub mod node;
 pub mod object_store;
+pub mod oplog;
+#[cfg(feature = "native")]
+pub mod workspace;
 #[cfg(feature = "native")]
 pub mod project;
 #[cfg(feature = "native")]
