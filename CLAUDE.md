@@ -55,7 +55,7 @@ Requirements database: `requirements.db` (SQLite, runtime) / `requirements.yaml`
 A `.git/hooks/pre-commit` script auto-exports `requirements.db` to `requirements.yaml` before each commit. The SQLite binary is **not** tracked in git — only the diffable YAML is committed. This gives full text-based diff history while keeping SQLite as the runtime backend. The hook skips gracefully if `aida` is not installed.
 
 ### Database Storage
-AIDA supports four storage backends:
+AIDA supports five storage backends:
 - **YAML**: Human-readable, git-friendly, good for single-user scenarios
 - **SQLite**: Better for concurrent access (GUI + CLI), optimistic locking
 - **PostgreSQL**: Enterprise-grade, multi-user, native JSONB support
@@ -106,7 +106,7 @@ aida init --force                      # Overwrite existing files if already ini
 - `requirements.db` — SQLite database with seeded META requirements
 - `.mcp.json` — Claude Code MCP integration config
 - `CLAUDE.md` — Project context for AI sessions
-- `.claude/skills/` — 15 workflow skills (unless `--no-skills`)
+- `.claude/skills/` — 21 workflow skills (unless `--no-skills`)
 - `.claude/commands/` — Slash commands (unless `--no-skills`)
 - `.claude/hooks/` — Commit validation hooks (unless `--no-hooks`)
 - `docs/plans/` — Implementation plan archive
@@ -213,7 +213,7 @@ docs: update README
 
 ## Claude Code Skills
 
-This project uses AIDA requirements-driven development with 16 skills:
+This project uses AIDA requirements-driven development with 21 skills:
 
 ### Core Skills
 - `/aida-req` — Add new requirements with AI evaluation, quality feedback, and follow-up actions
@@ -232,6 +232,13 @@ This project uses AIDA requirements-driven development with 16 skills:
 - `/aida-standup` — Generate daily standup from recent commits and requirement progress
 - `/aida-onboard` — Interactive project onboarding: architecture summary, requirement stats, first task suggestions
 - `/aida-search` — Unified search across requirements database and codebase
+
+### Design & Analysis
+- `/aida-grill` — Adversarial design interrogation: walk every decision branch before implementing
+- `/aida-decompose` — Break large requirements into vertical slice child requirements
+- `/aida-triage` — Structured bug investigation and root cause diagnosis
+- `/aida-glossary` — Maintain project ubiquitous language / terminology dictionary
+- `/aida-architecture` — Review codebase architecture health and suggest improvements
 
 ### Code Quality
 - `/aida-compiler-warnings` — Analyze compiler/clippy warnings, categorize by risk level, recommend prioritized action plan
