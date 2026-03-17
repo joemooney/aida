@@ -4076,3 +4076,34 @@ Tested at 1K/10K/50K/100K YAML files. Results: all daily ops under 0.2s at 100K.
 #### Git
 - 28 commits on main
 - 130 unit tests + 10 integration tests all passing
+
+---
+
+### Prompt: Worktree storage mode, docs, setup script, first release
+- **Date**: 2026-03-16
+
+#### Orphan Branch + Worktree Storage
+- Researched prior art: git-bug (CRDT ops), git-appraise (notes), Fossil (SQLite artifacts), SIT, git-dit, Bugs Everywhere
+- Key finding: git-bug only survivor; orphan branch + worktree is architecturally superior for AIDA
+- Implemented `aida init --distributed` default as orphan branch + worktree
+- Added `--sibling` flag for multi-repo workspace mode (separate repo)
+- Created `create_store_worktree()`, `remove_store_worktree()`, `has_worktree()` in git_ops
+- Migrated AIDA project itself to worktree mode (354 requirements on `aida-store` branch)
+
+#### Documentation
+- `docs/storage-modes.md` — all 5 storage options with comparison matrix and decision tree
+- `docs/getting-started.md` — rewritten for new users (install, init, first requirement)
+- `docs/multi-user-setup.md` — PostgreSQL multi-user guide
+- `docs/plans/2026-03-16-git-metadata-storage-prior-art.md` — prior art research
+- `.aida/setup.sh` — bootstrap script (build, worktree, install, verify)
+
+#### GitHub Actions Release
+- `.github/workflows/release.yml` — builds for Linux x86_64/ARM64, macOS x86_64/ARM64
+- MIT LICENSE added
+- Package metadata (license, repository, homepage) in workspace Cargo.toml
+- Tagged and released v0.1.0
+
+#### Git
+- v0.1.0 tagged and pushed
+- `aida-store` orphan branch with 354 requirements pushed to GitHub
+- GitHub Actions building pre-built binaries
