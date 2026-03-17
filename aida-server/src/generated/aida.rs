@@ -180,6 +180,9 @@ pub struct Requirement {
     >,
     #[prost(message, repeated, tag = "23")]
     pub urls: ::prost::alloc::vec::Vec<UrlLink>,
+    /// Short agreed ID (e.g., "FR-423") assigned at merge
+    #[prost(string, tag = "24")]
+    pub agreed_id: ::prost::alloc::string::String,
 }
 /// A feature definition
 #[derive(serde::Serialize, serde::Deserialize)]
