@@ -20,23 +20,19 @@ services:
       - --certificatesresolvers.cloudflare.acme.dnschallenge=true
       - --certificatesresolvers.cloudflare.acme.dnschallenge.provider=cloudflare
 
-      # (optional) logs
-      #- --log.level=INFO
-      - --log.level=DEBUG
+      - --log.level=INFO
 
     ports:
       - "80:80"
       - "443:443"
 
     environment:
-      # Traefik reads the token from the secret file
       CF_DNS_API_TOKEN_FILE: /run/secrets/cloudflare_api_token
 
     secrets:
       - cloudflare_api_token
 
     volumes:
-      #docker - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik_letsencrypt:/letsencrypt
       #podman
       - ${XDG_RUNTIME_DIR}/podman/podman.sock:/var/run/docker.sock:ro
@@ -45,7 +41,7 @@ services:
       - proxy
 
 
-  # 🔐 Dummy service to trigger wildcard cert issuance
+  # Dummy service to trigger wildcard cert issuance
   wildcard:
     image: docker.io/library/alpine:3.19
     container_name: traefik-wildcard
@@ -61,6 +57,10 @@ services:
       - traefik.http.routers.wildcard.tls.domains[0].main=joemooney.com
       - traefik.http.routers.wildcard.tls.domains[0].sans=*.joemooney.com
 
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # GitLab - Self-hosted git mirror for private repos
+  # ═══════════════════════════════════════════════════════════════════════════
 
   gitlab:
     image: docker.io/gitlab/gitlab-ce:18.7.0-ce.0
@@ -110,60 +110,6 @@ services:
       - traefik.http.middlewares.gitlab-https-redirect.redirectscheme.scheme=https
 
 
-  postgres:
-    image: docker.io/library/postgres:15-alpine
-    container_name: postgres
-    restart: unless-stopped
-
-    environment:
-      POSTGRES_DB: aida
-      POSTGRES_USER_FILE: /run/secrets/pg_user
-      POSTGRES_PASSWORD_FILE: /run/secrets/pg_password
-
-    secrets:
-      - pg_user
-      - pg_password
-
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-
-    networks:
-      - internal
-
-
-  pgadmin:
-    image: docker.io/dpage/pgadmin4:8
-    container_name: pgadmin
-    restart: unless-stopped
-
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@joemooney.com
-      PGADMIN_DEFAULT_PASSWORD_FILE: /run/secrets/pgadmin_password
-
-    secrets:
-      - pgadmin_password
-
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-
-    networks:
-      - proxy
-      - internal
-
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.pgadmin.rule=Host(`pgadmin.joemooney.com`)
-      - traefik.http.routers.pgadmin.entrypoints=websecure
-      - traefik.http.routers.pgadmin.tls=true
-      - traefik.http.routers.pgadmin.tls.certresolver=cloudflare
-
-      # 🔒 IP allowlist: public IP + home LAN
-      - traefik.http.middlewares.pgadmin-ip.ipallowlist.sourcerange=144.208.111.126/32,192.168.0.0/16
-      - traefik.http.routers.pgadmin.middlewares=pgadmin-ip
-
-      - traefik.http.services.pgadmin.loadbalancer.server.port=80
-
-
   # ═══════════════════════════════════════════════════════════════════════════
   # Cloudflare Tunnel - Secure public access without opening ports
   # ═══════════════════════════════════════════════════════════════════════════
@@ -179,9 +125,6 @@ services:
       - proxy
     depends_on:
       - gitlab
-      # aida-server and aida-web are optional - cloudflared will route to them when available
-      # - aida-server
-      # - aida-web
 
 
   # ═══════════════════════════════════════════════════════════════════════════
@@ -198,75 +141,32 @@ services:
 
     environment:
       RUST_LOG: info
-
-    secrets:
-      - pg_user
-      - pg_password
-      - aida_database_url
+      # Auth: PIN + OIDC (GitLab SSO)
+      AIDA_WEB_AUTH_MODE: both
+      AIDA_WEB_ADMIN_USERS: joe
+      AIDA_WEB_DEFAULT_ROLE: viewer
+      AIDA_WEB_SESSION_STORE: sqlite
+      AIDA_WEB_SESSION_SQLITE_PATH: /store/.aida/sessions.sqlite3
+      # OIDC via GitLab (configure after GitLab is set up)
+      # AIDA_OIDC_CLIENT_ID: aida
+      # AIDA_OIDC_CLIENT_SECRET: <from-gitlab>
+      # AIDA_OIDC_ISSUER_URL: https://gitlab.joemooney.com
+      # AIDA_OIDC_AUTH_URL: https://gitlab.joemooney.com/oauth/authorize
+      # AIDA_OIDC_TOKEN_URL: https://gitlab.joemooney.com/oauth/token
+      # AIDA_OIDC_USERINFO_URL: https://gitlab.joemooney.com/oauth/userinfo
+      # AIDA_OIDC_REDIRECT_URL: https://aida.joemooney.com/auth/callback
 
     volumes:
-      - aida_data:/data
+      # Git-backed requirements store (standalone clone of aida-store branch)
+      - /home/joe/ai/aida-docker-store:/store
 
     networks:
       - proxy
-      - internal
-
-    depends_on:
-      - postgres
 
     labels:
       - traefik.enable=true
-      # Use proxy network for load balancing (not internal)
       - traefik.docker.network=proxy
-
-      # Services (shared between HTTP and HTTPS routers)
       - traefik.http.services.aida-rest.loadbalancer.server.port=8080
-      - traefik.http.services.aida-grpc.loadbalancer.server.port=50051
-
-      # REST API endpoint (for project management) - port 8080
-      # Higher priority (100) to match /api paths first
-      # HTTPS router
-      - traefik.http.routers.aida-rest.rule=Host(`aida-api.joemooney.com`) && PathPrefix(`/api`)
-      - traefik.http.routers.aida-rest.priority=100
-      - traefik.http.routers.aida-rest.entrypoints=websecure
-      - traefik.http.routers.aida-rest.tls=true
-      - traefik.http.routers.aida-rest.tls.certresolver=cloudflare
-      - traefik.http.routers.aida-rest.service=aida-rest
-      - traefik.http.routers.aida-rest.middlewares=aida-cors
-      # HTTP router (for Cloudflare tunnel)
-      - traefik.http.routers.aida-rest-http.rule=Host(`aida-api.joemooney.com`) && PathPrefix(`/api`)
-      - traefik.http.routers.aida-rest-http.priority=100
-      - traefik.http.routers.aida-rest-http.entrypoints=web
-      - traefik.http.routers.aida-rest-http.service=aida-rest
-      - traefik.http.routers.aida-rest-http.middlewares=aida-cors
-
-      # gRPC-Web API endpoint (for WASM client) - port 50051
-      # Lower priority (1) as catch-all for non-/api paths
-      # HTTPS router
-      - traefik.http.routers.aida-grpc.rule=Host(`aida-api.joemooney.com`)
-      - traefik.http.routers.aida-grpc.priority=1
-      - traefik.http.routers.aida-grpc.entrypoints=websecure
-      - traefik.http.routers.aida-grpc.tls=true
-      - traefik.http.routers.aida-grpc.tls.certresolver=cloudflare
-      - traefik.http.routers.aida-grpc.service=aida-grpc
-      - traefik.http.routers.aida-grpc.middlewares=aida-cors
-      # HTTP router (for Cloudflare tunnel)
-      - traefik.http.routers.aida-grpc-http.rule=Host(`aida-api.joemooney.com`)
-      - traefik.http.routers.aida-grpc-http.priority=1
-      - traefik.http.routers.aida-grpc-http.entrypoints=web
-      - traefik.http.routers.aida-grpc-http.service=aida-grpc
-      - traefik.http.routers.aida-grpc-http.middlewares=aida-cors
-
-      # CORS headers for gRPC-Web and REST API
-      - traefik.http.middlewares.aida-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS
-      - traefik.http.middlewares.aida-cors.headers.accesscontrolallowheaders=Content-Type,x-grpc-web,x-user-agent,x-project,Accept
-      - traefik.http.middlewares.aida-cors.headers.accesscontrolalloworiginlist=https://aida.joemooney.com,http://localhost:8080,http://localhost:8088
-      - traefik.http.middlewares.aida-cors.headers.accesscontrolmaxage=86400
-
-      # 🔒 IP allowlist (same as pgadmin for now)
-      #- traefik.http.middlewares.aida-ip.ipallowlist.sourcerange=144.208.111.126/32,192.168.0.0/16
-      #- traefik.http.routers.aida-grpc.middlewares=aida-ip,aida-cors
-      #- traefik.http.routers.aida-rest.middlewares=aida-ip,aida-cors
 
 
   aida-web:
@@ -286,7 +186,8 @@ services:
     labels:
       - traefik.enable=true
 
-      # WASM client
+      # React dashboard at aida.joemooney.com
+      # HTTPS router
       - traefik.http.routers.aida-web.rule=Host(`aida.joemooney.com`)
       - traefik.http.routers.aida-web.entrypoints=websecure
       - traefik.http.routers.aida-web.tls=true
@@ -299,17 +200,10 @@ services:
       - traefik.http.routers.aida-web-http.middlewares=aida-https-redirect
       - traefik.http.middlewares.aida-https-redirect.redirectscheme.scheme=https
 
-      # 🔒 IP allowlist (same as pgadmin for now)
-      #- traefik.http.middlewares.aida-web-ip.ipallowlist.sourcerange=144.208.111.126/32,192.168.0.0/16
-      #- traefik.http.routers.aida-web.middlewares=aida-web-ip
-
 
 networks:
   proxy:
     name: proxy
-  internal:
-    name: internal
-    internal: true
 
 
 volumes:
@@ -317,20 +211,8 @@ volumes:
   gitlab_config:
   gitlab_logs:
   gitlab_data:
-  pg_data:
-  pgadmin_data:
-  aida_data:
 
 
 secrets:
   cloudflare_api_token:
     file: ./secrets/cloudflare_api_token.txt
-  pg_user:
-    file: ./secrets/pg_user.txt
-  pg_password:
-    file: ./secrets/pg_password.txt
-  pgadmin_password:
-    file: ./secrets/pgadmin_password.txt
-  aida_database_url:
-    file: ./secrets/aida_database_url.txt
-
