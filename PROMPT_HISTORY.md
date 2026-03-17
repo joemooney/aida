@@ -4107,3 +4107,49 @@ Tested at 1K/10K/50K/100K YAML files. Results: all daily ops under 0.2s at 100K.
 - v0.1.0 tagged and pushed
 - `aida-store` orphan branch with 354 requirements pushed to GitHub
 - GitHub Actions building pre-built binaries
+
+---
+
+### Prompt: Final push — remaining items
+- **Date**: 2026-03-17
+
+#### crates.io Ready
+- Swapped ts-rs git fork to published ts-rs-forge v11 on crates.io
+- `cargo publish --dry-run -p aida-core` succeeds
+- Awaiting user's crates.io token to publish
+
+#### GitHub Bidirectional Sync
+- `aida github sync` — detects drift between linked AIDA requirements and GitHub issues
+- Compares title and state, shows in-sync/drifted status
+- `--apply` pushes AIDA state to GitHub
+
+#### React Dashboard
+- agreed_id shown in list view, tree view, kanban cards, detail header
+- Hover tooltip shows both agreed and node IDs
+
+#### Skills (8 total new/enhanced)
+- Enhanced `/aida-plan` with vertical slice enforcement, tracer bullets, HITL/AFK tags
+- New `/aida-grill` — adversarial design interrogation (decision tree walking)
+- New `/aida-decompose` — vertical slice breakdown
+- New `/aida-triage` — structured bug investigation
+- New `/aida-glossary` — ubiquitous language dictionary
+- New `/aida-architecture` — codebase architecture health review
+- Git safety guardrails (PreToolUse hook blocking destructive operations)
+- Skills review of mattpocock/skills repo (17 skills analyzed, 10 proposals)
+
+#### Multi-Repo Workspace
+- `aida db workspace-init` — creates shared store for multiple code repos
+- Auto-discovers repos, creates .aida-workspace manifest
+- Per-repo .aida/config.toml pointing to shared store
+- 3 tests
+
+#### Operation Log (CRDT Foundation)
+- Append-only operation log inspired by git-bug
+- Lamport clock for causal ordering with deterministic tiebreaker
+- 14 OpKind variants covering all requirement mutations
+- Merge with dedup and deterministic ordering
+- 8 tests including merge determinism
+
+#### Git
+- 141 unit tests + 10 integration tests
+- v0.2.0 tagged and released
