@@ -1,134 +1,137 @@
-# AIDA — AI Design Assistant
+# AIDA — AI-Native Requirements Management
 
-A requirements management system built in Rust with CLI, native GUI, web dashboard, and AI integration via Claude Code.
+**Track what you build and why, with structured context for AI agents.**
 
-## Project Structure
+AIDA bridges the gap between business intent and code reality. Requirements link to code through trace comments. Commits reference spec IDs. AI assistants query structured data instead of parsing prose.
 
-Cargo workspace with six crates plus a React dashboard:
+## Install
 
-```
-aida/
-├── aida-core/             # Shared library — models, storage, business logic
-├── aida-cli/              # CLI tool (aida binary)
-├── aida-desktop/              # Native + WASM GUI (egui, dual-target)
-├── aida-server/           # gRPC + REST server for headless/remote operation
-├── aida-web/              # Lightweight WASM browser client
-├── aida-generate-types/   # TypeScript type generation from Rust structs
-├── aida-web-react/        # React dashboard (Vite + Tailwind + React Query)
-├── proto/                 # Protocol Buffers definitions
-├── shared/                # Shared TypeScript types (generated)
-└── docs/                  # User documentation and implementation plans
+```bash
+# From source (requires Rust)
+cargo install --git https://github.com/joemooney/aida.git aida-cli
+
+# Pre-built binary (Linux/macOS)
+# See https://github.com/joemooney/aida/releases
 ```
 
 ## Quick Start
 
 ```bash
-# Build everything
-cargo build --workspace
-
-# Run CLI
-aida list                              # List requirements
-aida add --title "..." --description "..." --status draft
-aida show FR-0042                      # Show requirement details
-aida search "authentication"           # Search requirements
-
-# Start the server (gRPC on 50051, REST on 8080)
-cargo run -p aida-server -- --database requirements.db --rest-port 8080
-
-# Run the React dashboard (dev server on port 5173)
-cd aida-web-react && npm install && npm run dev
-
-# Launch the native GUI
-cargo run -p aida-desktop
-
-# Initialize AIDA in a new project
-aida init
+cd my-project
+aida init                                          # initialize AIDA
+aida add --title "User auth" --type functional     # add a requirement
+aida list                                          # list all
+aida show FR-001                                   # show details
+aida edit FR-001 --status approved --owner alice    # update
+aida search "auth"                                 # search
 ```
+
+## Why AIDA?
+
+AI coding assistants write code fast, but nobody tracks **why** the code exists. After a month of AI-assisted development:
+
+- Can you trace a line of code back to a business decision?
+- Does your AI assistant know what the system is supposed to do?
+- Can a new team member understand what was built and why?
+
+AIDA answers these questions with **queryable, typed, relational requirements data** that both humans and AI agents can work with.
+
+```rust
+// trace:FR-042 | ai:claude
+fn validate_token(token: &str) -> Result<Session> { ... }
+```
+
+```
+[AI:claude] feat(auth): add token validation (FR-042)
+```
+
+Every line of code links back to a requirement. Every commit references what it implements.
 
 ## Features
 
-### Requirements Management
-- Full CRUD with SPEC-ID system (human-friendly IDs like FR-0042 alongside UUIDs)
-- Types: Functional, Non-Functional, System, User, Bug, Epic, Story, Task, Spike, Sprint, Folder, Meta
-- Relationships: Parent/Child, Verifies, References, Duplicate, Custom
-- Threaded comments with reactions, full change history tracking
-- Feature-based organization, tags, custom fields, custom type workflows
+- **CLI** — full-featured with interactive prompts and search
+- **React Dashboard** — kanban, list, sprint planning, timeline, AI chat
+- **5 Storage Modes** — YAML, SQLite, PostgreSQL, Git worktree, Git sibling
+- **Distributed Mode** — offline-capable with node-namespaced IDs and git sync
+- **20+ Claude Code Skills** — `/aida-req`, `/aida-implement`, `/aida-commit`, `/aida-grill`, etc.
+- **MCP Server** — any AI agent can query requirements via Model Context Protocol
+- **GitHub Integration** — push/pull/sync requirements as GitHub issues
+- **GitLab Integration** — bidirectional issue sync with label mapping
+- **Two-Tier IDs** — `FR-1-001` (distributed) → `FR-1` (short, at merge)
+- **Conflict Detection** — field-level conflict detection on sync
+- **Telemetry** — measure skill usage, cycle time, traceability coverage
 
-### Storage Backends
-- **YAML** — Human-readable, git-friendly (default)
-- **SQLite** — Concurrent access with optimistic locking
-- **PostgreSQL** — Enterprise-grade with native JSONB and connection pooling
-- Migrate between any backends: `aida db migrate --from yaml --to sqlite`
+## Storage Options
 
-### Interfaces
-- **CLI** (`aida`) — Full-featured with interactive prompts, search, export/import
-- **Native GUI** (`aida-desktop`) — egui-based with multiple views, drag-and-drop, AI evaluation
-- **WASM GUI** — Same codebase as native, runs in browser via trunk
-- **React Dashboard** (`aida-web-react/`) — Modern web UI on port 5173
-  - Dashboard with metrics charts
-  - Kanban board with drag-and-drop status changes
-  - List view with sorting and filtering
-  - Sprint planning with backlog management and charts (burndown, burn-up, velocity)
-  - Skills browser — view, search, and edit skills/commands with markdown preview
-  - Dark/light theme toggle
+| Mode | Best For | IDs | Setup |
+|------|----------|-----|-------|
+| SQLite | Solo dev (default) | `FR-001` | `aida init` |
+| PostgreSQL | Teams, always connected | `FR-001` | `make serve` |
+| Git Worktree | Distributed, offline | `FR-1-001` | `aida init --distributed` |
+| Git Sibling | Multi-repo workspaces | `FR-1-001` | `aida init --distributed --sibling` |
+| YAML | Simplest, git-friendly | `FR-001` | `aida init` |
 
-### Server
-- **gRPC + gRPC-Web** on port 50051 — full API for native and browser clients
-- **REST API** on port 8080 — JSON endpoints for the React dashboard
-- Multi-project support with isolated databases per project
-- Single-project legacy mode for simple setups
+Migrate between any modes: `aida db migrate --from sqlite --to postgres`
 
-### AI Integration — Claude Code
-AIDA scaffolds Claude Code configuration into projects via `aida init`:
-- **15 skills** (`/aida-req`, `/aida-implement`, `/aida-commit`, `/aida-test`, `/aida-sprint`, etc.)
-- **MCP Server** (`aida mcp-serve`) — native Claude Code tool integration
-- Dynamic context injection, template system, commit hooks
-- Meta requirements for customizable AI prompts stored in the database
+## With Claude Code
 
-### GitLab Integration
-- Bidirectional issue sync with label mapping
-- Background polling with conflict detection
-- CLI and GUI support
+After `aida init`, these skills are available:
 
-## Technology Stack
+| Skill | Purpose |
+|-------|---------|
+| `/aida-req` | Add a requirement with AI quality feedback |
+| `/aida-implement` | Implement a requirement with traceability |
+| `/aida-commit` | Commit with automatic requirement linking |
+| `/aida-grill` | Adversarial design review — walk every decision branch |
+| `/aida-plan` | Plan implementation with vertical slice decomposition |
+| `/aida-decompose` | Break large requirements into vertical slices |
+| `/aida-triage` | Structured bug investigation |
+| `/aida-sprint` | Sprint planning and management |
+| `/aida-capture` | End-of-session requirement capture |
 
-| Layer | Technology |
-|-------|-----------|
-| Language | Rust |
-| CLI | clap, inquire |
-| Native GUI | egui (cross-platform) |
-| Web Dashboard | React 19, Vite 8, Tailwind CSS 4, @tanstack/react-query |
-| Server | axum (REST), tonic (gRPC), tokio |
-| Storage | serde_yaml, rusqlite, postgres + r2d2 |
-| WASM | trunk, tonic-web-wasm-client |
-| Protocols | Protocol Buffers (prost), JSON-RPC 2.0 (MCP) |
+## With GitHub
+
+```bash
+export AIDA_GITHUB_TOKEN="ghp_..."
+aida github config --repo org/project
+aida github push FR-001        # create GitHub issue from requirement
+aida github pull               # import GitHub issues as requirements
+aida github sync               # detect drift between AIDA and GitHub
+```
+
+## Multi-User
+
+```bash
+# Start PostgreSQL + server
+make dev-pg && make serve
+
+# Other machines connect via REST API or CLI
+aida --file "postgres://aida:aida@server:5432/aida_default" list
+# Or open http://server:8080 for the React dashboard
+```
+
+## Architecture
+
+```
+aida-core/         Core library — models, storage, distributed architecture
+aida-cli/          CLI binary (aida)
+aida-server/       REST + gRPC server
+aida-web-react/    React dashboard (Vite + Tailwind)
+aida-desktop/      Native GUI (egui)
+```
+
+Built in Rust. 150 tests. 5 storage backends. MIT licensed.
 
 ## Documentation
 
-- **OVERVIEW.md** — Detailed project overview with all features and use cases
-- **CLAUDE.md** — AI assistant instructions and development workflow
-- **docs/user-guide.md** — Comprehensive user documentation
-- **docs/plans/** — Archived implementation plans
+| Doc | What it covers |
+|-----|----------------|
+| [Getting Started](docs/getting-started.md) | Install, init, first requirement |
+| [Storage Modes](docs/storage-modes.md) | All 5 modes with comparison matrix |
+| [Multi-User Setup](docs/multi-user-setup.md) | PostgreSQL team deployment |
+| [Why AIDA?](docs/WHY-AIDA.md) | Problem statement and competitive positioning |
+| [Future Vision](docs/future-vision.md) | AIDA in the agentic coding era |
 
-## Development
+## License
 
-```bash
-# Run tests
-cargo test --workspace
-
-# Build with remote client support
-cargo build -p aida-cli --features remote
-cargo build -p aida-desktop --features remote
-
-# Build WASM client
-make web-build && make web-serve    # Serves on port 8088
-
-# Database migration
-aida db info                         # Show database statistics
-aida db migrate --from yaml --to sqlite
-aida db migrate --from sqlite --to postgres --output "postgres://user:pass@host:5432/db"
-
-# Tree export/import
-aida export --format tree --id FOLDER-001 -o templates.json
-aida import templates.json --parent FOLDER-002 --on-conflict skip
-```
+MIT
