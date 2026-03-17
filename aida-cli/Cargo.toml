@@ -5,14 +5,17 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "AI-native requirements management CLI — track requirements, trace code, sync with GitHub/GitLab"
+description = "AI-native requirements management CLI — track what you build and why, with structured context for AI coding agents"
+readme = "README.md"
+keywords = ["requirements", "ai", "traceability", "cli", "mcp"]
+categories = ["development-tools", "command-line-utilities"]
 
 [[bin]]
 name = "aida"
 path = "src/main.rs"
 
 [dependencies]
-aida-core = { version = "0.1.0", path = "../aida-core", features = ["postgres", "gitlab", "github"] }
+aida-core = { version = "0.2.0", path = "../aida-core", features = ["postgres", "gitlab", "github"] }
 
 # CLI-specific dependencies
 serde = { workspace = true }

@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "aida-core",
     "aida-cli",
+    "aida-crate",
     "aida-desktop",
     "aida-server",
     "aida-web",
@@ -10,7 +11,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Joe Mooney"]
 license = "MIT"
