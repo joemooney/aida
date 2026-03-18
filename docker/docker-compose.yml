@@ -159,6 +159,11 @@ services:
     volumes:
       # Git-backed requirements store (standalone clone of aida-store branch)
       - /home/joe/ai/aida-docker-store:/store
+      # Project files for skills/docs browser (read-only)
+      # .claude/ contains symlinks to aida-core/templates/ so mount both
+      - /home/joe/ai/aida/.claude:/store/.claude:ro
+      - /home/joe/ai/aida/aida-core/templates:/store/aida-core/templates:ro
+      - /home/joe/ai/aida/docs:/store/docs:ro
 
     networks:
       - proxy
