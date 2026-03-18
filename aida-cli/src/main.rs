@@ -50,7 +50,7 @@ use aida_core::{
 
 use crate::cli::{
     Cli, Command, CommentCommand, ConfigCommand, DbCommand, FeatureCommand, GitHubCommand,
-    GitLabCommand, QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand,
+    GitLabCommand, JiraCommand, QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand,
     ScaffoldCommand, ServerCommand, TraceCommand, TypeCommand,
 };
 
@@ -112,6 +112,12 @@ fn main() -> Result<()> {
         explicit_path
     } else {
         // Check for distributed mode config (.aida/config.toml with store_path)
+        // Skip for commands that use their own APIs (Jira, GitHub, GitLab)
+        let is_external_integration = matches!(
+            &cli.command,
+            Command::Jira(_) | Command::Github(_) | Command::Gitlab(_)
+        );
+        if !is_external_integration {
         if let Some(store_path) = detect_distributed_store() {
             // MCP server needs the Storage class — snapshot git backend to temp YAML
             if matches!(&cli.command, Command::McpServe) {
@@ -128,6 +134,7 @@ fn main() -> Result<()> {
             }
             return handle_git_backend_command(&store_path, &cli.command);
         }
+        } // close is_external_integration check
 
         // Auto-detect: first find the base path, then check migration status
         let initial_path = determine_requirements_path(cli.project.as_deref())?;
@@ -321,6 +328,9 @@ fn main() -> Result<()> {
         }
         Command::Github(github_cmd) => {
             handle_github_command(github_cmd, &storage)?;
+        }
+        Command::Jira(jira_cmd) => {
+            handle_jira_command(jira_cmd, &storage)?;
         }
         Command::McpServe => {
             mcp::run_mcp_server(&storage)?;
@@ -6299,6 +6309,234 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
 
 // trace:ARCH-github-integration | ai:claude
 /// Handle GitHub integration commands
+// trace:ARCH-jira-integration | ai:claude
+fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
+    let rt = tokio::runtime::Runtime::new()?;
+
+    match cmd {
+        JiraCommand::Config { url, project, email, show, show_mapping } => {
+            let mut config = aida_core::JiraConfig::load()?;
+
+            if *show {
+                println!("{}", "Jira Configuration".bold());
+                println!("{}", "─".repeat(40));
+                println!("Instance:  {}", if config.instance_url.is_empty() { "(not set)" } else { &config.instance_url });
+                println!("Project:   {}", if config.project_key.is_empty() { "(not set)" } else { &config.project_key });
+                println!("Email:     {}", if config.user_email.is_empty() { "(not set)" } else { &config.user_email });
+                println!("Token:     {}", if config.effective_token().is_ok() { "configured (AIDA_JIRA_TOKEN)" } else { "not configured" });
+                println!("Enabled:   {}", config.enabled);
+                return Ok(());
+            }
+
+            if *show_mapping {
+                println!("{}", "Field Mapping Spec".bold());
+                println!("{}", "─".repeat(50));
+                println!("\n{}", "Type Mapping (AIDA → Jira):".bold());
+                for (aida, jira) in &config.mapping.types {
+                    println!("  {:<20} → {}", aida, jira);
+                }
+                println!("\n{}", "Status Mapping (AIDA → Jira):".bold());
+                for (aida, jira) in &config.mapping.statuses {
+                    println!("  {:<20} → {}", aida, jira);
+                }
+                println!("\n{}", "Priority Mapping (AIDA → Jira):".bold());
+                for (aida, jira) in &config.mapping.priorities {
+                    println!("  {:<20} → {}", aida, jira);
+                }
+                println!("\n{}", "Reverse Type Mapping (Jira → AIDA):".bold());
+                for (jira, aida) in &config.mapping.reverse_types {
+                    println!("  {:<20} → {}", jira, aida);
+                }
+                println!("\n{}", "Reverse Status Mapping (Jira → AIDA):".bold());
+                for (jira, aida) in &config.mapping.reverse_statuses {
+                    println!("  {:<20} → {}", jira, aida);
+                }
+                println!("\nEdit mapping at: {}", aida_core::JiraConfig::config_path()?.display());
+                return Ok(());
+            }
+
+            if let Some(u) = url { config.instance_url = u.clone(); }
+            if let Some(p) = project { config.project_key = p.clone(); }
+            if let Some(e) = email { config.user_email = e.clone(); }
+
+            config.save()?;
+            println!("{} Jira configuration saved.", "✓".green());
+        }
+        JiraCommand::Test => {
+            let config = aida_core::JiraConfig::load()?;
+            let client = aida_core::JiraClient::new(config)?;
+            let project = rt.block_on(client.test_connection())?;
+
+            println!("{} Connected to Jira", "✓".green());
+            println!("  Project: {} ({})", project.name, project.key);
+        }
+        JiraCommand::List { jql, limit } => {
+            let config = aida_core::JiraConfig::load()?;
+            let client = aida_core::JiraClient::new(config.clone())?;
+
+            let results = if let Some(query) = jql {
+                rt.block_on(client.search(query, *limit))?
+            } else {
+                rt.block_on(client.list_issues(*limit))?
+            };
+
+            if results.issues.is_empty() {
+                println!("No issues found.");
+            } else {
+                println!("{:<12} {:<10} {:<12} {:<10} {}", "Key", "Type", "Status", "Priority", "Summary");
+                println!("{}", "─".repeat(75));
+                for issue in &results.issues {
+                    println!("{:<12} {:<10} {:<12} {:<10} {}",
+                        issue.key,
+                        truncate_str(issue.issue_type_name(), 9),
+                        truncate_str(issue.status_name(), 11),
+                        truncate_str(issue.priority_name(), 9),
+                        truncate_str(issue.summary(), 40),
+                    );
+                }
+                println!("\n{} of {} issues", results.issues.len(), results.total);
+            }
+        }
+        JiraCommand::Show { key } => {
+            let config = aida_core::JiraConfig::load()?;
+            let client = aida_core::JiraClient::new(config)?;
+            let issue = rt.block_on(client.get_issue(key))?;
+
+            println!("{}: {}", "Key".bold(), issue.key);
+            println!("{}: {}", "Summary".bold(), issue.summary());
+            println!("{}: {}", "Type".bold(), issue.issue_type_name());
+            println!("{}: {}", "Status".bold(), issue.status_name());
+            println!("{}: {}", "Priority".bold(), issue.priority_name());
+            if let Some(assignee) = issue.assignee_name() {
+                println!("{}: {}", "Assignee".bold(), assignee);
+            }
+            if !issue.labels().is_empty() {
+                println!("{}: {}", "Labels".bold(), issue.labels().join(", "));
+            }
+            let desc = issue.description_text();
+            if !desc.is_empty() {
+                println!("\n{}", desc);
+            }
+        }
+        JiraCommand::Push { id } => {
+            let config = aida_core::JiraConfig::load()?;
+            let client = aida_core::JiraClient::new(config.clone())?;
+
+            let store = storage.load()?;
+            let req = store.requirements.iter()
+                .find(|r| r.matches_id(id))
+                .ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", id))?;
+
+            let display_id = req.display_id();
+            let type_name = config.map_type(&format!("{:?}", req.req_type));
+            let priority_name = config.map_priority(&req.effective_priority());
+
+            let mut labels = Vec::new();
+            labels.push(format!("aida:{}", display_id));
+            for tag in &req.tags {
+                labels.push(format!("aida:{}", tag));
+            }
+
+            let description_text = format!(
+                "{}\n\n---\nAIDA: {} | UUID: {}",
+                req.description, display_id, req.id
+            );
+
+            let request = aida_core::JiraCreateIssueRequest {
+                fields: aida_core::JiraCreateIssueFields {
+                    project: aida_core::JiraProjectRef { key: config.project_key.clone() },
+                    summary: format!("[{}] {}", display_id, req.title),
+                    description: Some(aida_core::text_to_adf(&description_text)),
+                    issuetype: aida_core::JiraIssueTypeRef { name: type_name },
+                    priority: Some(aida_core::JiraPriorityRef { name: priority_name }),
+                    assignee: None,
+                    labels,
+                },
+            };
+
+            let created = rt.block_on(client.create_issue(&request))?;
+            println!("{} Created Jira issue {} for {}",
+                "✓".green(), created.key.white().bold(), display_id);
+            println!("  URL: {}/browse/{}", config.instance_url, created.key);
+        }
+        JiraCommand::Pull { jql, limit, dry_run } => {
+            let config = aida_core::JiraConfig::load()?;
+            let client = aida_core::JiraClient::new(config.clone())?;
+
+            let query = jql.clone().unwrap_or_else(|| {
+                format!("project = {} AND status != Done ORDER BY updated DESC", config.project_key)
+            });
+            let results = rt.block_on(client.search(&query, *limit))?;
+
+            if results.issues.is_empty() {
+                println!("No issues found.");
+                return Ok(());
+            }
+
+            let store = storage.load()?;
+            let existing_titles: std::collections::HashSet<String> = store.requirements.iter()
+                .map(|r| r.title.clone())
+                .collect();
+
+            let mut to_import = Vec::new();
+            let mut skipped = 0;
+
+            for issue in &results.issues {
+                let jira_prefix = format!("[{}]", issue.key);
+                if existing_titles.contains(&issue.fields.summary)
+                    || store.requirements.iter().any(|r| r.title.starts_with(&jira_prefix))
+                {
+                    skipped += 1;
+                } else {
+                    to_import.push(issue);
+                }
+            }
+
+            if to_import.is_empty() {
+                println!("All {} issues already imported ({} skipped).", results.issues.len(), skipped);
+                return Ok(());
+            }
+
+            println!("Found {} issues to import ({} already exist):", to_import.len(), skipped);
+            for issue in &to_import {
+                let aida_type = config.reverse_map_type(issue.issue_type_name());
+                println!("  {:<12} {:<10} {}", issue.key, aida_type, truncate_str(issue.summary(), 50));
+            }
+
+            if *dry_run {
+                println!("\nDry run — no requirements created.");
+                return Ok(());
+            }
+
+            let mut imported = 0;
+            storage.update_atomically(|store| {
+                for issue in &to_import {
+                    let aida_type_str = config.reverse_map_type(issue.issue_type_name());
+                    let aida_status_str = config.reverse_map_status(issue.status_name());
+
+                    let mut req = Requirement::new(
+                        format!("[{}] {}", issue.key, issue.fields.summary),
+                        issue.description_text(),
+                    );
+                    req.req_type = parse_requirement_type(&aida_type_str).unwrap_or(RequirementType::Task);
+                    req.set_status_from_str(&aida_status_str);
+
+                    for label in issue.labels() {
+                        req.tags.insert(format!("jira:{}", label));
+                    }
+
+                    let type_prefix = store.get_type_prefix(&req.req_type);
+                    store.add_requirement_with_id(req, None, type_prefix.as_deref());
+                    imported += 1;
+                }
+            })?;
+
+            println!("\n{} Imported {} issues as requirements.", "✓".green(), imported);
+        }
+    }
+    Ok(())
+}
+
 fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
     let rt = tokio::runtime::Runtime::new()?;
 

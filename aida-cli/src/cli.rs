@@ -1044,6 +1044,10 @@ pub enum Command {
     #[clap(subcommand)]
     Github(GitHubCommand),
 
+    /// Jira integration commands
+    #[clap(subcommand)]
+    Jira(JiraCommand),
+
     /// Start MCP (Model Context Protocol) server over stdio
     ///
     /// Exposes AIDA requirements as MCP tools for Claude Code integration.
@@ -1214,5 +1218,73 @@ pub enum GitHubCommand {
         /// Create default AIDA labels if missing
         #[clap(long)]
         create_missing: bool,
+    },
+}
+
+/// Jira integration commands
+#[derive(Subcommand, Debug)]
+pub enum JiraCommand {
+    /// Configure Jira connection and field mapping
+    Config {
+        /// Jira Cloud instance URL (e.g., https://myorg.atlassian.net)
+        #[clap(long)]
+        url: Option<String>,
+
+        /// Jira project key (e.g., AIDA)
+        #[clap(long)]
+        project: Option<String>,
+
+        /// Email for API authentication
+        #[clap(long)]
+        email: Option<String>,
+
+        /// Show current configuration
+        #[clap(long)]
+        show: bool,
+
+        /// Show the field mapping spec
+        #[clap(long)]
+        show_mapping: bool,
+    },
+
+    /// Test connection to Jira
+    Test,
+
+    /// List issues from Jira
+    List {
+        /// JQL query (default: all issues in configured project)
+        #[clap(long)]
+        jql: Option<String>,
+
+        /// Maximum results
+        #[clap(long, default_value = "20")]
+        limit: u32,
+    },
+
+    /// Show a specific Jira issue
+    Show {
+        /// Issue key (e.g., PROJ-123)
+        key: String,
+    },
+
+    /// Push a requirement to Jira as an issue
+    Push {
+        /// Requirement ID (spec_id or agreed_id)
+        id: String,
+    },
+
+    /// Pull Jira issues into AIDA as requirements
+    Pull {
+        /// JQL filter (default: all open issues in project)
+        #[clap(long)]
+        jql: Option<String>,
+
+        /// Maximum issues to pull
+        #[clap(long, default_value = "50")]
+        limit: u32,
+
+        /// Dry run — show what would be imported
+        #[clap(long)]
+        dry_run: bool,
     },
 }
