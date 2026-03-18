@@ -71,6 +71,15 @@ pub use integrations::github::{
     IssueFilter as GitHubIssueFilter,
     LabelConfig as GitHubLabelConfig,
 };
+#[cfg(feature = "jira")]
+pub use integrations::jira::{
+    ClientError as JiraClientError, ConfigError as JiraConfigError, JiraClient, JiraConfig,
+    JiraIssue, JiraProject, JiraSearchResults, FieldMapping as JiraFieldMapping,
+    CreateIssueRequest as JiraCreateIssueRequest, CreateIssueFields as JiraCreateIssueFields,
+    ProjectRef as JiraProjectRef, IssueTypeRef as JiraIssueTypeRef,
+    PriorityRef as JiraPriorityRef,
+    text_to_adf,
+};
 #[cfg(feature = "gitlab")]
 pub use integrations::gitlab::{
     ClientError as GitLabClientError, ConfigError as GitLabConfigError, ConflictStrategy,

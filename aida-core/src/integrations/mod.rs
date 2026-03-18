@@ -9,3 +9,5 @@
 pub mod github;
 #[cfg(feature = "gitlab")]
 pub mod gitlab;
+#[cfg(feature = "jira")]
+pub mod jira;

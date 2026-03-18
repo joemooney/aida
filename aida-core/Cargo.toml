@@ -20,6 +20,8 @@ postgres = ["dep:postgres", "dep:r2d2", "dep:r2d2_postgres"]
 gitlab = ["dep:reqwest", "dep:tokio"]
 # GitHub integration
 github = ["dep:reqwest", "dep:tokio"]
+# Jira integration
+jira = ["dep:reqwest", "dep:tokio"]
 
 [dependencies]
 # Core dependencies (all platforms)
