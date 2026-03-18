@@ -52,6 +52,17 @@ function getTimeRangeCutoff(range: TimeRange): Date | null {
   }
 }
 
+/** Check if an event author matches the given userId (handle).
+ *  Handles variations: "@joe", "joe", "Joe Mooney" (matched via owner lookup). */
+function authorMatches(author: string, userId: string, ownersByReq: Map<string, string>, reqId: string): boolean {
+  const a = author.toLowerCase().replace(/^@/, '');
+  const u = userId.toLowerCase();
+  if (a === u) return true;
+  // Also match if the requirement's owner is the userId (covers name-based authors)
+  const owner = ownersByReq.get(reqId)?.toLowerCase();
+  return owner === u;
+}
+
 export function buildUserActivity(
   requirements: Requirement[],
   queueEntries: QueueEntry[],
@@ -66,9 +77,12 @@ export function buildUserActivity(
 
   const filterByAuthor = userId !== 'default';
 
+  // Build owner lookup for fallback matching
+  const ownersByReq = new Map(requirements.map((r) => [r.id, r.owner]));
+
   return allEvents
     .filter((e) => {
-      if (filterByAuthor && e.author.toLowerCase() !== userId.toLowerCase()) return false;
+      if (filterByAuthor && !authorMatches(e.author, userId, ownersByReq, e.reqId)) return false;
       if (cutoff && new Date(e.timestamp) < cutoff) return false;
       return true;
     })
