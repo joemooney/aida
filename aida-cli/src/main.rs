@@ -6394,7 +6394,7 @@ fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
                         truncate_str(issue.summary(), 40),
                     );
                 }
-                println!("\n{} of {} issues", results.issues.len(), results.total);
+                println!("\n{} issues", results.issues.len());
             }
         }
         JiraCommand::Show { key } => {

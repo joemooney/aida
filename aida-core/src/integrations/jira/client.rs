@@ -61,7 +61,7 @@ impl JiraClient {
 
     /// Search issues using JQL.
     pub async fn search(&self, jql: &str, max_results: u32) -> Result<JiraSearchResults> {
-        let url = self.config.api_url("/search");
+        let url = self.config.api_url("/search/jql");
         let body = serde_json::json!({
             "jql": jql,
             "maxResults": max_results,

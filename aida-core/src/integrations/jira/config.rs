@@ -57,10 +57,12 @@ fn default_label_prefix() -> String { "aida:".into() }
 
 fn default_type_mapping() -> HashMap<String, String> {
     let mut m = HashMap::new();
-    m.insert("Functional".into(), "Story".into());
-    m.insert("NonFunctional".into(), "Story".into());
-    m.insert("Bug".into(), "Bug".into());
-    m.insert("Story".into(), "Story".into());
+    // Default to Task for most types — safe for all Jira project types.
+    // Override in ~/.config/aida/jira.toml for projects with Story/Bug types.
+    m.insert("Functional".into(), "Task".into());
+    m.insert("NonFunctional".into(), "Task".into());
+    m.insert("Bug".into(), "Task".into());
+    m.insert("Story".into(), "Task".into());
     m.insert("Task".into(), "Task".into());
     m.insert("Epic".into(), "Epic".into());
     m.insert("Spike".into(), "Task".into());
