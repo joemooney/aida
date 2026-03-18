@@ -89,15 +89,17 @@ pub struct JiraIssueFields {
     pub resolution: Option<serde_json::Value>,
 }
 
-/// Jira search results (from /rest/api/3/search).
+/// Jira search results (from /rest/api/3/search/jql — new API).
 #[derive(Debug, Clone, Deserialize)]
 pub struct JiraSearchResults {
-    pub total: u64,
-    #[serde(rename = "maxResults")]
-    pub max_results: u64,
-    #[serde(rename = "startAt")]
-    pub start_at: u64,
     pub issues: Vec<JiraIssue>,
+    #[serde(default, rename = "nextPageToken")]
+    pub next_page_token: Option<String>,
+    #[serde(default, rename = "isLast")]
+    pub is_last: Option<bool>,
+    // Legacy fields (from old /search endpoint)
+    #[serde(default)]
+    pub total: u64,
 }
 
 /// Jira project info.
