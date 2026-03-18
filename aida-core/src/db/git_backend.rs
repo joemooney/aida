@@ -431,6 +431,80 @@ impl DatabaseBackend for GitBackend {
     fn exists(&self) -> bool {
         self.root.exists()
     }
+
+    // Queue operations — stored as registry/queues/{user_id}.yaml
+
+    fn queue_list(&self, user_id: &str, _include_completed: bool) -> Result<Vec<QueueEntry>> {
+        let path = self.root.join("registry/queues").join(format!("{}.yaml", user_id));
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+        let content = std::fs::read_to_string(&path)?;
+        let entries: Vec<QueueEntry> = serde_yaml::from_str(&content).unwrap_or_default();
+        Ok(entries)
+    }
+
+    fn queue_add(&self, entry: QueueEntry) -> Result<()> {
+        let dir = self.root.join("registry/queues");
+        std::fs::create_dir_all(&dir)?;
+        let path = dir.join(format!("{}.yaml", entry.user_id));
+        let mut entries = if path.exists() {
+            let content = std::fs::read_to_string(&path)?;
+            serde_yaml::from_str::<Vec<QueueEntry>>(&content).unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        // Upsert: replace if same requirement_id exists
+        entries.retain(|e| e.requirement_id != entry.requirement_id);
+        entries.push(entry);
+        entries.sort_by_key(|e| e.position);
+        let yaml = serde_yaml::to_string(&entries)?;
+        std::fs::write(&path, yaml)?;
+        self.auto_commit("update queue");
+        Ok(())
+    }
+
+    fn queue_remove(&self, user_id: &str, requirement_id: &uuid::Uuid) -> Result<()> {
+        let path = self.root.join("registry/queues").join(format!("{}.yaml", user_id));
+        if !path.exists() {
+            return Ok(());
+        }
+        let content = std::fs::read_to_string(&path)?;
+        let mut entries: Vec<QueueEntry> = serde_yaml::from_str(&content).unwrap_or_default();
+        entries.retain(|e| e.requirement_id != *requirement_id);
+        let yaml = serde_yaml::to_string(&entries)?;
+        std::fs::write(&path, yaml)?;
+        self.auto_commit("update queue");
+        Ok(())
+    }
+
+    fn queue_reorder(&self, user_id: &str, items: &[(uuid::Uuid, i64)]) -> Result<()> {
+        let path = self.root.join("registry/queues").join(format!("{}.yaml", user_id));
+        if !path.exists() {
+            return Ok(());
+        }
+        let content = std::fs::read_to_string(&path)?;
+        let mut entries: Vec<QueueEntry> = serde_yaml::from_str(&content).unwrap_or_default();
+        for (id, pos) in items {
+            if let Some(entry) = entries.iter_mut().find(|e| e.requirement_id == *id) {
+                entry.position = *pos;
+            }
+        }
+        entries.sort_by_key(|e| e.position);
+        let yaml = serde_yaml::to_string(&entries)?;
+        std::fs::write(&path, yaml)?;
+        self.auto_commit("reorder queue");
+        Ok(())
+    }
+
+    fn queue_clear(&self, user_id: &str, _completed_only: bool) -> Result<()> {
+        let path = self.root.join("registry/queues").join(format!("{}.yaml", user_id));
+        if path.exists() {
+            std::fs::remove_file(&path)?;
+            self.auto_commit("clear queue");
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]

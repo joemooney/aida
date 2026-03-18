@@ -2578,10 +2578,17 @@ fn claude_dir(state: &ServerState) -> PathBuf {
     project_root(state).join(".claude")
 }
 
-/// Get the project root directory, derived from the database file's parent.
-/// Falls back to CWD for relative paths like "requirements.db".
+/// Get the project root directory, derived from the database path.
+/// For directory-based backends (git), the path itself IS the project root.
+/// For file-based backends (sqlite/yaml), the parent directory is the project root.
 fn project_root(state: &ServerState) -> PathBuf {
-    if let Some(parent) = std::path::Path::new(state.backend.path()).parent() {
+    let db_path = std::path::Path::new(state.backend.path());
+    // If the backend path is a directory (git store), use it directly
+    if db_path.is_dir() {
+        return db_path.to_path_buf();
+    }
+    // For file-based backends, use the parent directory
+    if let Some(parent) = db_path.parent() {
         if parent.as_os_str().is_empty() {
             std::env::current_dir().unwrap_or_default()
         } else {
