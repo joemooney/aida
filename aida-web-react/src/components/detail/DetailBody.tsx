@@ -7,6 +7,7 @@ import { EditableText } from '../ui/EditableField';
 import { formatDate, cn } from '../../lib/utils';
 import { useUpdateRequirement } from '../../hooks/useRequirements';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useAuth } from '../../hooks/useAuth';
 
 interface DetailBodyProps {
   requirement: Requirement;
@@ -15,6 +16,7 @@ interface DetailBodyProps {
 
 export function DetailBody({ requirement, autoEditDescription = false }: DetailBodyProps) {
   const { canWrite } = usePermissions();
+  const { user } = useAuth();
   const updateReq = useUpdateRequirement();
   const reqId = requirement.spec_id ?? requirement.id;
   const [newTag, setNewTag] = useState('');
@@ -239,6 +241,15 @@ export function DetailBody({ requirement, autoEditDescription = false }: DetailB
                 placeholder="Assign owner..."
                 disabled={!canWrite}
               />
+              {canWrite && user?.handle && requirement.owner !== user.handle && (
+                <button
+                  onClick={() => save({ owner: user.handle })}
+                  className="shrink-0 rounded border border-edge px-1.5 py-0.5 text-[10px] text-content-secondary hover:border-accent hover:text-accent transition-colors"
+                  title="Assign to me"
+                >
+                  me
+                </button>
+              )}
             </div>
           </div>
 
