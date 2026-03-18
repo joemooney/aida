@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { cn } from '../../lib/utils';
+import { AccountTab } from './AccountTab';
 import { GeneralTab } from './GeneralTab';
 import { RelationshipsTab } from './RelationshipsTab';
 import { TypesTab } from './TypesTab';
@@ -9,9 +10,10 @@ import { AdminTab } from './AdminTab';
 import { ScaffoldTab } from './ScaffoldTab';
 import { usePermissions } from '../../hooks/usePermissions';
 
-type SettingsTab = 'general' | 'relationships' | 'types' | 'reactions' | 'ids' | 'admin' | 'scaffold';
+type SettingsTab = 'account' | 'general' | 'relationships' | 'types' | 'reactions' | 'ids' | 'admin' | 'scaffold';
 
 const tabs: { key: SettingsTab; label: string }[] = [
+  { key: 'account', label: 'Account' },
   { key: 'general', label: 'General' },
   { key: 'relationships', label: 'Relationships' },
   { key: 'types', label: 'Types' },
@@ -26,6 +28,7 @@ export function SettingsView() {
   const availableTabs = tabs.filter((tab) => {
     if (tab.key === 'admin') return canAdmin;
     if (tab.key === 'scaffold') return canAdmin;
+    if (tab.key === 'account') return true;
     if (tab.key === 'general') return true;
     return canWrite;
   });
@@ -65,6 +68,7 @@ export function SettingsView() {
 
       {/* Tab content */}
       <div>
+        {resolvedActiveTab === 'account' && <AccountTab />}
         {resolvedActiveTab === 'general' && <GeneralTab />}
         {resolvedActiveTab === 'relationships' && <RelationshipsTab />}
         {resolvedActiveTab === 'types' && <TypesTab />}
