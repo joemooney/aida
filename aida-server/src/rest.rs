@@ -62,6 +62,8 @@ pub fn create_rest_router(project_manager: Arc<ProjectManager>) -> Router {
         .route("/api/v2/auth/oidc/callback", get(auth_oidc_callback))
         .route("/api/v2/auth/me", get(auth_me))
         .route("/api/v2/auth/logout", post(auth_logout))
+        .route("/api/v2/auth/pin", put(auth_set_pin))
+        .route("/api/v2/auth/register", post(auth_register))
         .route("/api/v2/users", get(list_users))
         .route("/api/v2/requirements", get(list_requirements_v2))
         .with_state(state)
@@ -88,6 +90,8 @@ pub fn create_rest_router_legacy(state: Arc<ServerState>) -> Router {
         .route("/api/v2/auth/oidc/callback", get(auth_oidc_callback_legacy))
         .route("/api/v2/auth/me", get(auth_me))
         .route("/api/v2/auth/logout", post(auth_logout))
+        .route("/api/v2/auth/pin", put(auth_set_pin_legacy))
+        .route("/api/v2/auth/register", post(auth_register_legacy))
         .route("/api/v2/requirements", get(list_requirements_v2_legacy))
         .route("/api/v2/requirements", post(create_requirement_v2_legacy))
         .route("/api/v2/requirements/:id", get(get_requirement_v2_legacy))
@@ -610,6 +614,224 @@ async fn auth_logout(
     if let Some(token) = extract_token(&headers) {
         auth.remove_session(&token).await;
     }
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ── Account management ──────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RegisterRequest {
+    handle: String,
+    name: String,
+    #[serde(default)]
+    email: String,
+    #[serde(default)]
+    pin: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SetPinRequest {
+    #[serde(default)]
+    current_pin: String,
+    new_pin: String,
+}
+
+async fn auth_register(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<Arc<WebAuthState>>,
+    headers: HeaderMap,
+    Json(body): Json<RegisterRequest>,
+) -> Result<Json<AuthLoginResponse>, (StatusCode, Json<ApiError>)> {
+    if !auth.is_enabled() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "Authentication is disabled",
+        ));
+    }
+
+    let handle = body.handle.trim().to_lowercase();
+    if handle.is_empty() || handle.len() > 32 {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "Handle must be 1-32 characters",
+        ));
+    }
+
+    let backend = get_project_backend(&state, &headers).await?;
+    let project = headers
+        .get("x-project")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("default")
+        .to_string();
+
+    // Check handle uniqueness
+    {
+        let store = backend.store.read().await;
+        if store.users.iter().any(|u| u.handle.to_lowercase() == handle) {
+            return Err(ApiError::new(
+                StatusCode::CONFLICT,
+                "Handle already taken",
+            ));
+        }
+    }
+
+    let mut user = models::User::new(body.name.trim().to_string(), body.email.trim().to_string(), handle.clone());
+    if !body.pin.is_empty() {
+        user.set_pin(&body.pin);
+    }
+
+    let mut store = backend.store.write().await;
+    store.add_user(user.clone());
+    if let Err(e) = backend.backend.save(&store) {
+        tracing::error!("Failed to save after register: {e}");
+    }
+
+    let role = auth.role_for_handle(&user.handle);
+    let session_token = auth
+        .create_session(
+            user.id.to_string(),
+            user.handle.clone(),
+            user.name.clone(),
+            project,
+            role,
+        )
+        .await;
+
+    Ok(Json(AuthLoginResponse {
+        authenticated: true,
+        mode: auth.mode().as_str().to_string(),
+        session_token,
+        user: auth_user_to_response(&user, role.as_str()),
+    }))
+}
+
+async fn auth_set_pin(
+    State(state): State<Arc<AppState>>,
+    Extension(auth): Extension<Arc<WebAuthState>>,
+    Extension(session_user): Extension<AuthenticatedUser>,
+    headers: HeaderMap,
+    Json(body): Json<SetPinRequest>,
+) -> Result<StatusCode, (StatusCode, Json<ApiError>)> {
+    if !auth.mode().pin_enabled() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PIN auth not enabled",
+        ));
+    }
+
+    if body.new_pin.is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "New PIN cannot be empty",
+        ));
+    }
+
+    let backend = get_project_backend(&state, &headers).await?;
+    let mut store = backend.store.write().await;
+
+    let user = store
+        .users
+        .iter_mut()
+        .find(|u| u.id.to_string() == session_user.user_id)
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "User not found"))?;
+
+    // If user already has a PIN, verify the current one
+    if user.has_pin() && !user.verify_pin(&body.current_pin) {
+        return Err(ApiError::new(
+            StatusCode::UNAUTHORIZED,
+            "Current PIN is incorrect",
+        ));
+    }
+
+    user.set_pin(&body.new_pin);
+    if let Err(e) = backend.backend.save(&store) {
+        tracing::error!("Failed to save after PIN change: {e}");
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// Legacy variants for single-project mode
+async fn auth_register_legacy(
+    State(state): State<Arc<ServerState>>,
+    Extension(auth): Extension<Arc<WebAuthState>>,
+    Json(body): Json<RegisterRequest>,
+) -> Result<Json<AuthLoginResponse>, (StatusCode, Json<ApiError>)> {
+    if !auth.is_enabled() {
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, "Authentication is disabled"));
+    }
+
+    let handle = body.handle.trim().to_lowercase();
+    if handle.is_empty() || handle.len() > 32 {
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, "Handle must be 1-32 characters"));
+    }
+
+    state.check_reload().await;
+
+    {
+        let store = state.store.read().await;
+        if store.users.iter().any(|u| u.handle.to_lowercase() == handle) {
+            return Err(ApiError::new(StatusCode::CONFLICT, "Handle already taken"));
+        }
+    }
+
+    let mut user = models::User::new(body.name.trim().to_string(), body.email.trim().to_string(), handle.clone());
+    if !body.pin.is_empty() {
+        user.set_pin(&body.pin);
+    }
+
+    let mut store = state.store.write().await;
+    store.add_user(user.clone());
+    if let Err(e) = state.backend.save(&store) {
+        tracing::error!("Failed to save after register: {e}");
+    }
+
+    let role = auth.role_for_handle(&user.handle);
+    let session_token = auth
+        .create_session(user.id.to_string(), user.handle.clone(), user.name.clone(), "default".to_string(), role)
+        .await;
+
+    Ok(Json(AuthLoginResponse {
+        authenticated: true,
+        mode: auth.mode().as_str().to_string(),
+        session_token,
+        user: auth_user_to_response(&user, role.as_str()),
+    }))
+}
+
+async fn auth_set_pin_legacy(
+    State(state): State<Arc<ServerState>>,
+    Extension(auth): Extension<Arc<WebAuthState>>,
+    Extension(session_user): Extension<AuthenticatedUser>,
+    Json(body): Json<SetPinRequest>,
+) -> Result<StatusCode, (StatusCode, Json<ApiError>)> {
+    if !auth.mode().pin_enabled() {
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, "PIN auth not enabled"));
+    }
+    if body.new_pin.is_empty() {
+        return Err(ApiError::new(StatusCode::BAD_REQUEST, "New PIN cannot be empty"));
+    }
+
+    state.check_reload().await;
+    let mut store = state.store.write().await;
+
+    let user = store
+        .users
+        .iter_mut()
+        .find(|u| u.id.to_string() == session_user.user_id)
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "User not found"))?;
+
+    if user.has_pin() && !user.verify_pin(&body.current_pin) {
+        return Err(ApiError::new(StatusCode::UNAUTHORIZED, "Current PIN is incorrect"));
+    }
+
+    user.set_pin(&body.new_pin);
+    if let Err(e) = state.backend.save(&store) {
+        tracing::error!("Failed to save after PIN change: {e}");
+    }
+
     Ok(StatusCode::NO_CONTENT)
 }
 

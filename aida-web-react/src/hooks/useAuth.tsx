@@ -32,6 +32,7 @@ interface AuthContextValue {
   beginOidcLogin: () => Promise<void>;
   completeOidcLogin: (code: string, state: string) => Promise<void>;
   logout: () => Promise<void>;
+  refreshSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -141,7 +142,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     beginOidcLogin,
     completeOidcLogin,
     logout,
-  }), [authEnabled, pinEnabled, oidcEnabled, beginOidcLogin, completeOidcLogin, error, login, logout, mode, status, user]);
+    refreshSession,
+  }), [authEnabled, pinEnabled, oidcEnabled, beginOidcLogin, completeOidcLogin, error, login, logout, mode, refreshSession, status, user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

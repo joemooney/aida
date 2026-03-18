@@ -664,6 +664,7 @@ fn is_public_api_path(path: &str) -> bool {
         || path == "/api/v2/auth/config"
         || path == "/api/v2/auth/login"
         || path == "/api/v2/auth/logout"
+        || path == "/api/v2/auth/register"
         || path == "/api/v2/auth/oidc/start"
         || path == "/api/v2/auth/oidc/callback"
 }

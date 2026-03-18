@@ -80,3 +80,29 @@ export function finishOidc(code: string, state: string): Promise<AuthLoginRespon
   const params = new URLSearchParams({ code, state });
   return apiFetch<AuthLoginResponse>(`/v2/auth/oidc/callback?${params.toString()}`);
 }
+
+export interface RegisterRequest {
+  handle: string;
+  name: string;
+  email?: string;
+  pin?: string;
+}
+
+export function register(request: RegisterRequest): Promise<AuthLoginResponse> {
+  return apiFetch<AuthLoginResponse>('/v2/auth/register', {
+    method: 'POST',
+    body: JSON.stringify(request),
+  });
+}
+
+export interface SetPinRequest {
+  currentPin?: string;
+  newPin: string;
+}
+
+export function setPin(request: SetPinRequest): Promise<void> {
+  return apiFetch<void>('/v2/auth/pin', {
+    method: 'PUT',
+    body: JSON.stringify(request),
+  });
+}
