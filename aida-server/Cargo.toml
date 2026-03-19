@@ -14,7 +14,7 @@ default = []
 postgres = ["aida-core/postgres"]
 
 [dependencies]
-aida-core = { path = "../aida-core" }
+aida-core = { path = "../aida-core", features = ["jira"] }
 
 # gRPC dependencies
 tonic = { workspace = true }
