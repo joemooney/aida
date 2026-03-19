@@ -6459,6 +6459,152 @@ fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
                 "✓".green(), created.key.white().bold(), display_id);
             println!("  URL: {}/browse/{}", config.instance_url, created.key);
         }
+        JiraCommand::Sync { apply } => {
+            let config = aida_core::JiraConfig::load()?;
+            let client = aida_core::JiraClient::new(config.clone())?;
+
+            let store = storage.load()?;
+
+            // Find AIDA requirements linked to Jira issues
+            // Link detection: title starts with [DEV-N] or [PROJ-N], or has jira: tags
+            let linked: Vec<(&Requirement, String)> = store.requirements.iter()
+                .filter_map(|r| {
+                    // Check [KEY-N] prefix in title
+                    if r.title.starts_with('[') {
+                        if let Some(end) = r.title.find(']') {
+                            let key = &r.title[1..end];
+                            if key.contains('-') && key.split('-').last().map(|n| n.parse::<u64>().is_ok()).unwrap_or(false) {
+                                return Some((r, key.to_string()));
+                            }
+                        }
+                    }
+                    // Check jira: tags
+                    for tag in &r.tags {
+                        if let Some(key) = tag.strip_prefix("jira:key:") {
+                            return Some((r, key.to_string()));
+                        }
+                    }
+                    None
+                })
+                .collect();
+
+            // Also find Jira issues with aida: labels that aren't linked from AIDA side
+            let jql = format!(
+                "project = {} AND labels in (\"aida:{}\") ORDER BY updated DESC",
+                config.project_key,
+                config.mapping.label_prefix.trim_end_matches(':')
+            );
+            // Try to find aida-labeled issues, but don't fail if JQL is wrong
+            let jira_issues = rt.block_on(client.search(
+                &format!("project = {} ORDER BY updated DESC", config.project_key),
+                50,
+            )).unwrap_or_else(|_| aida_core::JiraSearchResults {
+                issues: Vec::new(),
+                next_page_token: None,
+                is_last: Some(true),
+                total: 0,
+            });
+
+            if linked.is_empty() && jira_issues.issues.is_empty() {
+                println!("No linked items found.");
+                println!("Link with: aida jira push FR-001 (or aida jira pull)");
+                return Ok(());
+            }
+
+            println!("{}", "Jira Sync Status".bold());
+            println!("{}", "─".repeat(70));
+
+            let mut in_sync = 0;
+            let mut drifted = 0;
+            let mut errors = 0;
+
+            for (req, jira_key) in &linked {
+                match rt.block_on(client.get_issue(jira_key)) {
+                    Ok(issue) => {
+                        let mut diffs = Vec::new();
+
+                        // Compare title (strip [KEY] prefix for comparison)
+                        let aida_title = req.title
+                            .strip_prefix(&format!("[{}] ", jira_key))
+                            .unwrap_or(&req.title);
+                        if aida_title != issue.summary() {
+                            diffs.push(format!("  title: AIDA='{}' Jira='{}'",
+                                truncate_str(aida_title, 25),
+                                truncate_str(issue.summary(), 25)));
+                        }
+
+                        // Compare status using mapping
+                        let expected_jira_status = config.map_status(&req.effective_status());
+                        let actual_jira_status = issue.status_name();
+                        if expected_jira_status != actual_jira_status {
+                            diffs.push(format!("  status: AIDA={} (→{}) Jira={}",
+                                req.effective_status(),
+                                expected_jira_status,
+                                actual_jira_status));
+                        }
+
+                        // Compare priority
+                        let expected_priority = config.map_priority(&req.effective_priority());
+                        let actual_priority = issue.priority_name();
+                        if expected_priority != actual_priority {
+                            diffs.push(format!("  priority: AIDA={} (→{}) Jira={}",
+                                req.effective_priority(),
+                                expected_priority,
+                                actual_priority));
+                        }
+
+                        let spec_id = req.display_id();
+                        if diffs.is_empty() {
+                            in_sync += 1;
+                            println!("{} {:<12} ↔ {:<10} {} — in sync",
+                                "✓".green(), spec_id, jira_key, truncate_str(aida_title, 35));
+                        } else {
+                            drifted += 1;
+                            println!("{} {:<12} ↔ {:<10} {} — DRIFTED",
+                                "△".yellow(), spec_id, jira_key, truncate_str(aida_title, 35));
+                            for d in &diffs {
+                                println!("    {}", d);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        errors += 1;
+                        println!("{} {} ↔ {} — error: {}",
+                            "✗".red(),
+                            req.display_id(),
+                            jira_key,
+                            e);
+                    }
+                }
+            }
+
+            println!();
+            println!("{} in sync, {} drifted, {} errors (of {} linked)",
+                in_sync, drifted, errors, linked.len());
+
+            if drifted > 0 && !apply {
+                println!("\nUse --apply to push AIDA state to Jira.");
+            }
+
+            if *apply && drifted > 0 {
+                println!("\nApplying changes...");
+                for (req, jira_key) in &linked {
+                    let aida_title = req.title
+                        .strip_prefix(&format!("[{}] ", jira_key))
+                        .unwrap_or(&req.title);
+
+                    let fields = serde_json::json!({
+                        "summary": aida_title,
+                        "priority": { "name": config.map_priority(&req.effective_priority()) },
+                    });
+
+                    match rt.block_on(client.update_issue(jira_key, &fields)) {
+                        Ok(_) => println!("  {} Updated {}", "✓".green(), jira_key),
+                        Err(e) => eprintln!("  {} Failed {}: {}", "✗".red(), jira_key, e),
+                    }
+                }
+            }
+        }
         JiraCommand::Pull { jql, limit, dry_run } => {
             let config = aida_core::JiraConfig::load()?;
             let client = aida_core::JiraClient::new(config.clone())?;

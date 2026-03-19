@@ -1273,6 +1273,13 @@ pub enum JiraCommand {
         id: String,
     },
 
+    /// Sync: detect drift between AIDA requirements and linked Jira issues
+    Sync {
+        /// Apply changes — push AIDA state to Jira for drifted items
+        #[clap(long)]
+        apply: bool,
+    },
+
     /// Pull Jira issues into AIDA as requirements
     Pull {
         /// JQL filter (default: all open issues in project)
