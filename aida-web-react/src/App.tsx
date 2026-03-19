@@ -13,6 +13,7 @@ import { SettingsView } from './components/settings/SettingsView';
 import { QueuePage } from './components/queue/QueuePage';
 import { ActivityPage } from './components/activity/ActivityPage';
 import { ChatPage } from './components/chat/ChatPage';
+import { JiraSyncView } from './components/jira-sync/JiraSyncView';
 import { LoginPage } from './components/auth/LoginPage';
 import { AuthCallbackPage } from './components/auth/AuthCallbackPage';
 import { Spinner } from './components/ui/Spinner';
@@ -51,6 +52,7 @@ export default function App() {
             <Route path="docs/view/*" element={<DocFullPage />} />
             <Route path="req/:id" element={<RequirementFullPage />} />
             <Route path="chat" element={<ChatPage />} />
+            <Route path="jira-sync" element={<JiraSyncView />} />
             <Route path="settings" element={<SettingsView />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Inbox, Activity, Columns3, List, Zap, Clock, Sparkles, FileText, MessageCircle, Settings, ChevronLeft, ChevronRight, Bookmark } from 'lucide-react';
+import { LayoutDashboard, Inbox, Activity, Columns3, List, Zap, Clock, Sparkles, FileText, MessageCircle, ArrowLeftRight, Settings, ChevronLeft, ChevronRight, Bookmark } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useRequirements } from '../../hooks/useRequirements';
 import { useSavedViews } from '../../hooks/useSavedViews';
@@ -23,6 +23,7 @@ const navItems = [
   { to: '/skills', icon: Sparkles, label: 'Skills' },
   { to: '/docs', icon: FileText, label: 'Docs' },
   { to: '/chat', icon: MessageCircle, label: 'Chat' },
+  { to: '/jira-sync', icon: ArrowLeftRight, label: 'Jira Sync' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 

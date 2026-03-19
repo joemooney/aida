@@ -163,6 +163,8 @@ pub fn create_rest_router_legacy(state: Arc<ServerState>) -> Router {
         .route("/api/v2/reload", post(reload_legacy))
         // Analytics endpoint
         .route("/api/v2/analytics", get(get_analytics))
+        // Jira sync endpoint
+        .route("/api/v2/jira/sync", get(get_jira_sync))
         .with_state(state)
 }
 
@@ -3697,4 +3699,160 @@ async fn get_analytics(
 
     let report = aida_core::analytics::compute_analytics(&store.requirements);
     Ok(Json(report))
+}
+
+// ============================================================================
+// Jira Sync
+// ============================================================================
+
+#[derive(Serialize)]
+struct JiraSyncItem {
+    aida_id: String,
+    aida_title: String,
+    aida_status: String,
+    jira_key: String,
+    jira_status: Option<String>,
+    jira_summary: Option<String>,
+    sync_status: String, // "in_sync", "drifted", "error"
+    diffs: Vec<JiraSyncDiff>,
+}
+
+#[derive(Serialize)]
+struct JiraSyncDiff {
+    field: String,
+    aida_value: String,
+    jira_value: String,
+}
+
+#[derive(Serialize)]
+struct JiraSyncResponse {
+    items: Vec<JiraSyncItem>,
+    total: usize,
+    in_sync: usize,
+    drifted: usize,
+    errors: usize,
+}
+
+async fn get_jira_sync(
+    State(state): State<Arc<ServerState>>,
+) -> Result<Json<JiraSyncResponse>, (StatusCode, Json<ApiError>)> {
+    let store = state
+        .backend
+        .load()
+        .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Find linked requirements (title starts with [KEY-N])
+    let linked: Vec<(&aida_core::Requirement, String)> = store.requirements.iter()
+        .filter_map(|r| {
+            if r.title.starts_with('[') {
+                if let Some(end) = r.title.find(']') {
+                    let key = &r.title[1..end];
+                    if key.contains('-') && key.split('-').last().map(|n| n.parse::<u64>().is_ok()).unwrap_or(false) {
+                        return Some((r, key.to_string()));
+                    }
+                }
+            }
+            None
+        })
+        .collect();
+
+    // Try to load Jira config and check issues
+    let config = aida_core::JiraConfig::load()
+        .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let mut items = Vec::new();
+    let mut in_sync = 0;
+    let mut drifted = 0;
+    let mut errors = 0;
+
+    if config.validate().is_ok() {
+        let client = aida_core::JiraClient::new(config.clone())
+            .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        for (req, jira_key) in &linked {
+            match client.get_issue(jira_key).await {
+                Ok(issue) => {
+                    let mut diffs = Vec::new();
+                    let aida_title = req.title
+                        .strip_prefix(&format!("[{}] ", jira_key))
+                        .unwrap_or(&req.title);
+
+                    if aida_title != issue.summary() {
+                        diffs.push(JiraSyncDiff {
+                            field: "title".into(),
+                            aida_value: aida_title.to_string(),
+                            jira_value: issue.summary().to_string(),
+                        });
+                    }
+
+                    let expected_status = config.map_status(&req.effective_status());
+                    if expected_status != issue.status_name() {
+                        diffs.push(JiraSyncDiff {
+                            field: "status".into(),
+                            aida_value: format!("{} (→{})", req.effective_status(), expected_status),
+                            jira_value: issue.status_name().to_string(),
+                        });
+                    }
+
+                    let status = if diffs.is_empty() {
+                        in_sync += 1;
+                        "in_sync"
+                    } else {
+                        drifted += 1;
+                        "drifted"
+                    };
+
+                    items.push(JiraSyncItem {
+                        aida_id: req.display_id(),
+                        aida_title: aida_title.to_string(),
+                        aida_status: req.effective_status(),
+                        jira_key: jira_key.clone(),
+                        jira_status: Some(issue.status_name().to_string()),
+                        jira_summary: Some(issue.summary().to_string()),
+                        sync_status: status.into(),
+                        diffs,
+                    });
+                }
+                Err(e) => {
+                    errors += 1;
+                    items.push(JiraSyncItem {
+                        aida_id: req.display_id(),
+                        aida_title: req.title.clone(),
+                        aida_status: req.effective_status(),
+                        jira_key: jira_key.clone(),
+                        jira_status: None,
+                        jira_summary: None,
+                        sync_status: "error".into(),
+                        diffs: vec![JiraSyncDiff {
+                            field: "connection".into(),
+                            aida_value: "".into(),
+                            jira_value: e.to_string(),
+                        }],
+                    });
+                }
+            }
+        }
+    } else {
+        // No Jira config — return linked items without checking
+        for (req, jira_key) in &linked {
+            items.push(JiraSyncItem {
+                aida_id: req.display_id(),
+                aida_title: req.title.clone(),
+                aida_status: req.effective_status(),
+                jira_key: jira_key.clone(),
+                jira_status: None,
+                jira_summary: None,
+                sync_status: "unchecked".into(),
+                diffs: Vec::new(),
+            });
+        }
+    }
+
+    Ok(Json(JiraSyncResponse {
+        total: items.len(),
+        in_sync,
+        drifted,
+        errors,
+        items,
+    }))
 }
