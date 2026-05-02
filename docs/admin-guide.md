@@ -117,94 +117,40 @@ This enables administrators to enforce naming conventions across the team.
 
 ## Storage Backends
 
-The system supports two storage backends, each with different characteristics suited to different use cases.
+**As of EPIC-1-001 (2026-05-02), AIDA's canonical model is git-orphan-branch + SQLite cache view.** New projects (`aida init`) get this by default. Other modes are either alternatives for specific scenarios (PostgreSQL for shared server-backed deployments, sibling repo for multi-repo workspaces) or deprecated legacy paths (standalone YAML, standalone SQLite-canonical).
 
-### YAML Backend (Default)
+For the full mode comparison, when to use each, and migration guidance, see **[Storage Modes](storage-modes.md)**.
 
-**File Extension:** `.yaml` or `.yml`
+### Quick reference
 
-**Characteristics:**
-- Human-readable plain text format
-- Version control friendly (Git-compatible)
-- Easy manual editing and inspection
-- Entire database loaded into memory on access
-- Best for small to medium projects (< 1000 requirements)
+| Mode | Default? | When |
+|------|----------|------|
+| Git worktree | ✅ default | Most projects |
+| Git sibling | `--sibling` flag | Multi-repo workspaces |
+| PostgreSQL | opt-in (`--features postgres`) | Teams wanting a shared server-backed projection |
+| Legacy SQLite | `--centralized` (deprecated) | Backwards compat for pre-EPIC-1-001 projects |
+| Legacy YAML | manually point `--file requirements.yaml` (deprecated) | Single-file scenarios; not recommended |
 
-**File Structure:**
-```yaml
-name: "my-project"
-title: "My Project Requirements"
-description: "Project description"
-next_spec_number: 100
-next_feature_number: 5
-features:
-  - { number: 1, name: "Authentication", prefix: "AUTH" }
-id_config:
-  format: "SingleLevel"
-  numbering: "GlobalSequential"
-  digits: 3
-requirements:
-  - id: "uuid-here"
-    spec_id: "AUTH-001"
-    title: "User Login"
-    # ... other fields
-users:
-  - id: "uuid-here"
-    spec_id: "$USER-001"
-    name: "John Doe"
-    # ... other fields
+### Cache management (git-canonical mode)
+
+The SQLite cache lives at `.aida/cache.db` (gitignored, auto-rebuilt). It's a derived projection — never authoritative.
+
+```bash
+aida cache status      # Compare cache HEAD vs git HEAD; show counts; report FRESH/STALE
+aida cache rebuild     # Force a full rebuild from git
 ```
 
-**Advantages:**
-- Easy backup (just copy the file)
-- Works with text editors
-- Git diff shows meaningful changes
-- No additional dependencies
+The cache rebuilds automatically on the next read whenever its recorded HEAD SHA differs from the orphan branch's actual HEAD (e.g., after `git pull` brings in remote requirement changes).
 
-**Disadvantages:**
-- Slower for large datasets
-- Entire file rewritten on each save
-- Potential for merge conflicts with concurrent edits
+### Backend auto-detection
 
-### SQLite Backend
+The CLI auto-detects mode based on what's present in the project root:
 
-**File Extension:** `.db`, `.sqlite`, or `.sqlite3`
-
-**Characteristics:**
-- Binary database format
-- Efficient single-record CRUD operations
-- WAL (Write-Ahead Logging) mode for concurrent access
-- Better performance for large projects (1000+ requirements)
-- Complex fields stored as JSON within SQLite
-
-**Advantages:**
-- Fast random access to individual records
-- Better concurrent access handling
-- Efficient for large datasets
-- ACID transaction support
-
-**Disadvantages:**
-- Not human-readable
-- Git diffs not meaningful
-- Requires SQLite tools for direct inspection
-
-### Choosing a Backend
-
-| Use Case | Recommended Backend |
-|----------|---------------------|
-| Version control with Git | YAML |
-| Small team (1-5 people) | YAML |
-| Large requirements set (1000+) | SQLite |
-| Frequent concurrent access | SQLite |
-| Manual file editing needed | YAML |
-| Integration with other tools | YAML or JSON export |
-
-### Backend Auto-Detection
-
-The system automatically detects the backend type based on file extension:
-
-- `.yaml`, `.yml` → YAML backend
-- `.db`, `.sqlite`, `.sqlite3` → SQLite backend
+- `.aida/config.toml` with `mode = "distributed"` → git-canonical via `CachedGitBackend`
+- `.aida/config.toml` not present, `requirements.db` exists → legacy SQLite (deprecated path)
+- `.aida/config.toml` not present, only `requirements.yaml` → legacy YAML (deprecated path)
+- `--file postgres://...` → PostgreSQL (requires `postgres` feature flag)
+- `--file <path-to-dir>` → git-canonical at the explicit directory
 
 ---
 
