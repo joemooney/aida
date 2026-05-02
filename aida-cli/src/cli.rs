@@ -1029,21 +1029,26 @@ pub enum Command {
         #[clap(long)]
         force: bool,
 
-        /// Initialize in distributed mode (git-backed, offline-capable).
-        /// Default: orphan branch + worktree (store lives in .aida-store/).
-        /// With --sibling: separate repo (store lives in ../aida-store/).
-        #[clap(long)]
+        /// (deprecated, accepted for backwards compat) Initialize in
+        /// distributed mode. As of EPIC-1-001 distributed is the default,
+        /// so this flag is a no-op. Use `--centralized` to opt out.
+        #[clap(long, hide = true)]
         distributed: bool,
+
+        /// Initialize in legacy centralized mode (SQLite-canonical, single
+        /// requirements.db). Deprecated — git-canonical is now the default.
+        #[clap(long)]
+        centralized: bool,
 
         /// Use a sibling repo instead of an orphan branch for the store.
         /// Recommended for multi-repo workspaces where multiple code repos
-        /// share one store.
-        #[clap(long, requires = "distributed")]
+        /// share one store. Implies distributed mode.
+        #[clap(long)]
         sibling: bool,
 
-        /// Git remote URL for the shared aida registry (used with --distributed --sibling)
+        /// Git remote URL for the shared aida registry (used with --sibling).
         /// Example: git@github.com:org/aida-registry.git
-        #[clap(long, requires = "distributed")]
+        #[clap(long)]
         registry_remote: Option<String>,
     },
 
