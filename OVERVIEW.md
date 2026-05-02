@@ -1,48 +1,48 @@
 # Requirements Manager - Project Overview
 
-A professional requirements management system built in Rust, providing CLI, web dashboard, and desktop app interfaces for managing software requirements with rich features including relationships, comments, history tracking, and multi-project support.
+An AI-native requirements management tool built in Rust, providing a CLI and React web dashboard for managing software requirements with stable identifiers, typed relationships, and code-to-requirement trace links — designed to give AI coding agents (Claude Code, MCP-aware tools) durable context across sessions about *what exists and why*.
 
 ## Vision
 
-Create a lightweight, AI-native requirements management tool that is:
-- Usable from CLI, web dashboard, and desktop app
-- Flexible enough for different project needs (SQLite default, YAML and PostgreSQL also supported)
-- Deeply integrated with AI development workflows (Claude Code skills, MCP server)
-- Capable of tracking requirement relationships, history, and code traceability
-- Supports both centralized (PostgreSQL) and distributed (git-based, offline-capable) deployment modes
+The defensible niche is the **agent-collaboration layer**: stable spec IDs, typed relationships, code-to-spec trace comments, and an MCP server that exposes all of this to coding agents. Karpathy-style "structured markdown queryable by Claude" is the floor; AIDA adds the relationship graph, identifier stability, and enforcement loop that prevents an agent (or human) from re-inventing what already exists.
 
-## Development Tracks
+Pitch: *AIDA is the durable, agent-readable spec layer for AI-assisted software development — stable IDs, typed relationships, and code-to-spec traces that give Claude (and you) a map of what exists and why, across sessions.*
 
-AIDA is being developed on two parallel tracks:
+## Architecture
 
-- **Main branch**: Centralized PostgreSQL-first architecture, focusing on UUID v7, HLC timestamps, `aida server start/stop`, GitHub integration, and UX improvements. See `docs/plans/2026-03-15-main-branch-improvements.md`.
-- **`distributed-architecture` branch**: Exploring git-as-event-log, node-namespaced IDs, CRDT conflict resolution, and multi-repo workspace support for disconnected/air-gapped scenarios. See `docs/plans/2026-03-15-distributed-architecture-identity.md`.
+**Storage (EPIC-1-001):** Git orphan branch is the canonical writer-of-record (one YAML file per requirement under `objects/TYPE/NNN/SPEC-ID.yaml` on the `aida-store` branch). A SQLite cache (`.aida/cache.db`, gitignored) is a rebuildable read projection used to make list/filter/search fast without scanning hundreds of YAML files. YAML export (`requirements.yaml`) is a one-shot diff artifact via the pre-commit hook. PostgreSQL is opt-in via feature flag for teams wanting a server-backed shared projection.
 
-The goal is dual-mode operation: centralized mode for teams with connectivity, distributed mode for offline-first workflows — configurable per deployment, sharing UUID v7 and HLC timestamps as common foundations.
+**Distributed mode** is the default since `aida init --distributed`: HLC timestamps, node-namespaced IDs (`FR-7-001`), agreed short IDs (`FR-1`) assigned at merge-to-trunk via `aida db merge-gate`, conflict detection across nodes, offline-capable.
+
+**Surfaces:**
+- **CLI (`aida`)** — full-featured, the primary work surface for solo dev
+- **MCP server (`aida mcp-serve`)** — native Claude Code integration; the highest-leverage surface for the agent-context vision
+- **React web dashboard (`aida-web-react`)** — kanban/sprint/queue/chat UI for browsing, sharing, and PM-style work
+- **REST + gRPC server (`aida-server`)** — backs the dashboard and exposes a public API
+
+The native desktop app and WASM browser client (egui-based) were extracted to a separate repo on 2026-05-02 to keep the main project focused on the agent layer; the React dashboard's keyboard navigation (`j/k`, `g+key` chords, quick pickers) covers the vi-feel use case.
 
 ## Project Structure
 
-This is a Cargo workspace with multiple crates plus a React web dashboard:
-
 ```
 aida/
-├── aida-core/           # Shared library - models, storage, business logic
-├── aida-cli/            # CLI tool (aida binary)
-├── aida-server/         # REST API + gRPC server (port 8080)
-├── aida-web-react/      # React web dashboard (port 5173) — primary UI
-├── aida-desktop/        # Desktop app (native egui, also builds to WASM)
-├── aida-web/            # Lightweight WASM browser client (alternative)
-├── proto/               # Protocol Buffers definitions
-├── docs/                # User documentation (markdown + HTML)
-└── helper/              # Helper scripts for documentation generation
+├── aida-core/             # Shared library — models, storage, cache, dispenser, HLC, conflict
+├── aida-cli/              # CLI tool (`aida` binary) + MCP server
+├── aida-crate/            # Published `aida` crate metadata (depends on aida-core)
+├── aida-server/           # REST + gRPC server (port 8080), serves the React dashboard
+├── aida-web-react/        # React 19 + Vite + Tailwind dashboard (port 5173 dev)
+├── aida-generate-types/   # Generates TypeScript types from Rust models
+├── aida-store/ (branch)   # Orphan branch holding canonical YAML requirements
+├── proto/                 # Protocol Buffers definitions
+├── docs/                  # Markdown docs (incl. plans/ archive of design docs)
+└── tests/                 # Integration test scripts
 ```
 
 ## Key Features
 
-### Three Interfaces
-- **CLI (`aida`)**: Full-featured command-line interface for scripting and quick operations
-- **Web Dashboard (`aida-web-react`)**: React-based browser UI — the preferred interface for most users, with kanban boards, sprint planning, advanced filtering, AI chat, and keyboard shortcuts
-- **Desktop App (`aida-desktop`)**: Native egui-based desktop application with tabbed views (also builds to WASM)
+### Two Primary Interfaces
+- **CLI (`aida`)** — the daily-driver surface; full-featured command-line interface for solo work and scripting
+- **Web Dashboard (`aida-web-react`)** — React-based UI for kanban boards, sprint planning, my-queue inbox, advanced filtering, AI chat, settings; primary for stakeholders and shared/team contexts
 
 ### SPEC-ID System
 Human-friendly identifiers (SPEC-001, SPEC-002) alongside internal UUIDs. Configurable ID formats with feature-based prefixes. ID prefix filtering and management with optional admin-controlled restriction.
@@ -108,28 +108,8 @@ Define connections between requirements:
 - Remote CLI operations via `--server` flag or `AIDA_SERVER` environment variable
 - Server commands: `aida server status`, `aida server list`, `aida server get <ID>`, `aida server ping`
 - Configurable port (default 50051), host, database path, and logging
-- **Desktop Remote Client**: Connect desktop app to remote server with `aida-desktop --server <addr>`
-  - Requires `--features remote` at build time
-  - StorageBackend abstraction for transparent local/remote switching
 - **gRPC-Web Support**: Server supports gRPC-Web protocol for browser clients
 - **REST API**: HTTP/JSON endpoints for external integration (port 8080)
-
-### Unified Storage Architecture (FR-0278)
-- **StorageClient Trait**: Unified interface for both local and remote storage access
-  - `load()`, `save()`, `create_requirement()`, `update_requirement()`, `delete_requirement()`
-  - `add_comment()`, `add_relationship()`, `get_server_status()`
-- **GrpcStorageClient**: gRPC-based implementation of StorageClient
-  - Connects to aida-server via tonic gRPC client
-  - Converts between Rust types and Protocol Buffer messages
-  - Blocking async operations using tokio runtime
-- **EmbeddedServer**: Native desktop wrapper for local storage (native feature)
-  - Spawns aida-server as subprocess on localhost
-  - Auto-discovers available port
-  - Graceful shutdown on drop (SIGTERM)
-- **Architecture Benefits**:
-  - Consistent storage interface across native/web platforms
-  - Reduced conditional compilation in business logic
-  - Server handles all database operations (YAML/SQLite)
 
 ### React Dashboard (`aida-web-react/`)
 - **Stack**: React 19 + Vite 8 + Tailwind CSS 4 + @tanstack/react-query
@@ -159,44 +139,8 @@ Define connections between requirements:
 - **Keyboard shortcuts**: Centralized hotkey system (`useHotkeys` + `HotkeyProvider`) with chord navigation (`g+d/q/a/b/l/s/t/c/x` for view switching), `?` help modal, `/` search focus, `j/k` list row selection, `Enter` to open detail, `q` to queue, `s/p/o` quick pickers for status/priority/owner changes, chord indicator badge, and input field exclusion
 - **Design choices**: URL-based filter and detail state, optimistic updates for drag-and-drop status changes
 
-### WASM Browser Client (FR-0273)
-- **Dual-Target Desktop App (`aida-desktop`)**: Same codebase for native desktop and WASM browser
-  - Full-featured web client with nearly identical UI to desktop
-  - Uses conditional compilation to gate native-only features
-  - Native-only: threads, file system, AI evaluation, edit locks
-  - Web: uses gRPC-Web protocol via `tonic-web-wasm-client`
-  - Build: `make web-build` or `cd aida-desktop && trunk build`
-  - Serve: `make web-serve` (port 8088)
-- **Lightweight Client (`aida-web`)**: Alternative simplified browser client
-  - Separate crate for minimal WASM bundle size
-  - Build: `make web-build-lite`
-  - Serve: `make web-serve-lite`
-- Both clients:
-  - Built with `trunk` (Rust WASM build tool)
-  - Use `eframe`/`egui` for UI (same framework as native GUI)
-  - Connect to server via gRPC-Web protocol
-
-### Shared UI Components
-- **Reusable egui components** in `aida-desktop/src/ui/` for native and WASM
-  - `formatters.rs`: Text formatters for status/priority/type/timestamps
-  - `badges.rs`: Colored badge/dot rendering
-  - `list_item.rs`: Requirement list item rendering
-  - `requirement_form.rs`: Form components with combo boxes
-  - `comment_list.rs`: Comment rendering and input
-  - `detail_view.rs`: Full requirement detail view
-- `aida-web` re-exports proto types from `aida-desktop` for type compatibility
-- Consistent UI rendering between native desktop and browser clients
-
-### Desktop App Features
-- Multiple view perspectives (Flat, Parent/Child, Verification, References)
-- Two-level filtering (Root/Children) for hierarchical views
-- User settings (name, email, handle, font size)
-- Zoom controls (Ctrl+MouseWheel, keyboard shortcuts)
-- Collapsible comment trees
-- Tabbed interface (Description, Comments, Links, History)
-- **Personal Work Queue** (EPIC-0365): User-managed priority inbox
-  - **GUI (aida-desktop)**: Rankings 1-100, hotkeys, stored in local YAML settings
-  - **Full-stack (My Queue)**: Database-backed, REST API, CLI, React web UI
+### Personal Work Queue (EPIC-0365)
+- **Full-stack (My Queue)**: Database-backed, REST API, CLI, React web UI
     - Database: `queue_entries` table (SQLite/PostgreSQL), gapped-integer positions
     - REST API: `GET/POST /api/v2/queue/:user_id`, `DELETE/PATCH /:req_id`, `POST /reorder`
     - CLI: `aida queue list|add|remove|move|clear` with `--user`, `--top`, `--note` flags
@@ -258,15 +202,14 @@ Model Context Protocol server for Claude Code integration:
 
 ## Technology Stack
 
-- **Language**: Rust
-- **GUI Framework**: egui (cross-platform, native and WASM)
-- **Storage**: YAML (serde_yaml), SQLite (rusqlite), PostgreSQL (postgres, r2d2)
+- **Language**: Rust (workspace: aida-core, aida-cli, aida-crate, aida-server, aida-generate-types)
+- **Storage**: Git orphan branch (canonical) + SQLite cache (rebuildable projection); YAML export; PostgreSQL opt-in
 - **CLI Framework**: clap
 - **Interactive Prompts**: inquire
-- **gRPC/RPC**: tonic, prost (Protocol Buffers)
-- **gRPC-Web**: tonic-web (server), tonic-web-wasm-client (browser)
-- **WASM Build Tool**: trunk
-- **Async Runtime**: tokio (native), browser-native (WASM)
+- **gRPC/RPC**: tonic, prost (Protocol Buffers) — server only
+- **REST**: axum (server)
+- **Async Runtime**: tokio
+- **Web UI**: React 19 + Vite + Tailwind CSS 4 + @tanstack/react-query (`aida-web-react/`)
 
 ## Data Storage
 
@@ -390,17 +333,17 @@ aida rel add --from FR-0001 --to FR-0002 --type parent  # Add relationship
 cd aida-server && cargo run       # Start REST API on port 8080
 cd aida-web-react && npm run dev  # Start React dashboard on port 5173
 
-# Desktop app
-aida-desktop                          # Launch native desktop app
-
 # Server mode
 aida-server --port 50051          # Start gRPC server
 aida --server localhost:50051 server list  # Remote list
 
+# Cache (git-canonical mode)
+aida cache status                         # Compare cache HEAD vs git HEAD
+aida cache rebuild                        # Force-replay git store -> SQLite cache
+
 # Database migration
 aida db info                              # Show database info and statistics
-aida db migrate --from yaml --to sqlite   # Migrate YAML to SQLite
-aida db migrate --from sqlite --to postgres --output "postgres://user:pass@host:5432/db"
+aida db export-git -o aida-store          # Export legacy backend to git-canonical store
 
 # Open user guide
 aida user-guide                   # Open in browser (light mode)

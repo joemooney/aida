@@ -4170,3 +4170,43 @@ Tested at 1K/10K/50K/100K YAML files. Results: all daily ops under 0.2s at 100K.
   - Key finding: AIDA's only defensible differentiation is "deep integration between structured requirements and AI coding agent workflows" — the "context layer for agents" positioning
   - Honest assessment: AIDA cannot compete with Jira/Linear on collaboration features; should focus on agent context integration
   - Identified 12-18 month window before major players add structured-context-for-agents features
+
+---
+
+## Session 54: Audit, Prune, and Git-Canonical Storage Refactor (2026-05-02)
+
+After ~6 weeks of inactivity following the March 15-18 sprint burst, returned for an audit + path-forward session. Outcome: 11 commits shipped on `main` covering housekeeping, an architectural commitment to git-as-canonical storage, and a Phase 1+2 implementation of that commitment.
+
+### Cherry-pick + push housekeeping
+- Reviewed remote `spock-dev` branch (2 commits, branched 2026-03-08, 74 commits behind main): a small `UNDERSTANDING_SKILLS.md` doc + a large "spock changes" commit adding `aida store {init,push,pull,status}` CLI duplicating distributed-mode functionality main already had
+- Cherry-picked only the doc as `7dd2de1`; rejected the parallel/regressive code
+- Pushed pending `agreed_id` commit
+
+### Path-forward audit
+- User asked for direction; concerned about keeping pace with the agentic landscape solo
+- Read Karpathy's LLM-wiki article — his "structured markdown queryable by Claude" is the floor; AIDA adds the relationship graph + identifier stability + enforcement loop that prevents re-inventing what already exists
+- Audited git activity (massive March 15-18 burst then dead silence — classic overcommit signal), code volume (aida-desktop = 43k LOC with 6 commits in 6 months — abandoned), requirements DB (176 of 362 in Draft = 49% un-curated), Claude Code primitive overlap
+- Delivered a keep/demote/extract/cut framework with one-sentence pitch: "AIDA is the durable, agent-readable spec layer for AI-assisted software development — stable IDs, typed relationships, and code-to-spec traces that give Claude (and you) a map of what exists and why, across sessions."
+
+### Prune (commit 4a948e5)
+- Extracted `aida-desktop` + `aida-web` (51,221 LOC) to `/home/joe/ai/aida-desktop/` via `git filter-repo` — preserved 18 commits of history + standalone Cargo.toml + README explaining the `aida-core` path-dep that needs repointing if reactivated
+- Removed both crates from main repo workspace; cargo check --workspace passes; workspace shrank from 7 → 5 crates
+- Skipped: `aida-store/` is the live distributed-mode store (not an empty crate); `vibe-kanban/` is a gitignored local clone of BloopAI's project (not part of repo)
+
+### Storage architecture decision (commits 106785c, 609c420, dd3b4d1, 807a069, af7739e, 9b990b9, a630b88, 29370a7)
+- User agreed with "collapse to git as canonical, SQLite as derived materialized view, YAML as export, Postgres as opt-in plugin"
+- Captured EPIC-1-001 (Approved, High); deferred bulk-import write-behind batching as `FR-1-002` child requirement
+- Design doc at `docs/plans/2026-05-02-git-canonical-storage.md` with all 4 design decisions resolved (write-through writes; detect-and-rebuild on cache HEAD-SHA mismatch; aggressively simplified cache schema with FTS5; hard-cut, no deprecation window)
+- Compressed original 4 phases to 3
+- **Phase 1 implementation**: cache_schema.sql, cache.rs (Cache struct with rebuild/upsert/delete + HEAD-SHA stale detection, Mutex-wrapped Connection for Send+Sync), cached_git_backend.rs (CachedGitBackend wrapper implementing DatabaseBackend, write-through), CLI cache subcommand (rebuild/status), default_cache_path probe starts at store's parent so cache lives at `<project>/.aida/cache.db` (gitignored, never inside orphan-branch worktree). Verified end-to-end on live AIDA store (357 reqs).
+- **Phase 2 implementation** (read-path swap): RequirementSummary projection + ListFilter + Cache::list_summaries (SQL index pushdown) + Cache::search (FTS5). Wired CLI `aida list` and `aida search` in distributed mode to use cache-backed queries — sub-ms vs ~360 YAML reads. db::create_backend for git paths now returns CachedGitBackend automatically — aida-server gets cache for free.
+- **Stale tracked snapshot cleanup** (807a069): removed 357 stale YAML files at top-level `aida-store/` (last touched 2026-03-15, missing today's EPIC-1-001) — the `.aida-store/` orphan-branch worktree is the live source
+- **Workspace deps cleanup** (29370a7): dropped unused eframe/egui from workspace.dependencies after desktop removal
+- **Documentation** (9b990b9): rewrote CLAUDE.md storage section — git canonical, SQLite cache, YAML export, Postgres opt-in (replaced misleading "five storage backends" framing). OVERVIEW.md surgically updated to remove desktop/WASM references.
+
+All test suites pass (6 cache tests added); workspace builds clean. EPIC-1-001 marked In-Progress.
+
+### What remains for EPIC-1-001
+- Phase 3 hard-cut: remove `yaml_backend.rs` and `sqlite_backend.rs` standalone-canonical paths; extract `postgres_backend.rs` to `aida-backend-postgres` plugin crate
+- Server REST endpoints still call `backend.load()` rather than `list_summaries()` — touching the server endpoints to use cache-backed summaries is a follow-up
+- AIDA's legacy `requirements.db` exists alongside the orphan branch — eventual cleanup needed
