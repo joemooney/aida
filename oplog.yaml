@@ -1,0 +1,10 @@
+operations:
+- id: 019deaa4-dcd0-7541-95f0-ae88f28fc0e6
+  target_id: 019deaa4-9b9d-7fd1-aec5-0aec24f4b255
+  author: aida
+  node_id: 1
+  lamport: 1
+  timestamp: 2026-05-02T21:42:46.224238843Z
+  kind: Archive
+clock: 1
+node_id: 1
