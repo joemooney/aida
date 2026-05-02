@@ -1008,25 +1008,14 @@ fn handle_git_backend_command(
             println!("Deleted: {}", id);
         }
         Command::Search { query, status, .. } => {
-            let store = backend.load()?;
-            let query_lower = query.to_lowercase();
-
-            let results: Vec<&Requirement> = store
-                .requirements
-                .iter()
-                .filter(|r| !r.archived)
-                .filter(|r| {
-                    r.title.to_lowercase().contains(&query_lower)
-                        || r.description.to_lowercase().contains(&query_lower)
-                        || r.spec_id.as_deref().unwrap_or("").to_lowercase().contains(&query_lower)
-                })
-                .filter(|r| {
-                    status
-                        .as_ref()
-                        .map(|s| r.effective_status().eq_ignore_ascii_case(s))
-                        .unwrap_or(true)
-                })
-                .collect();
+            // Cache-backed FTS5 search (EPIC-1-001 Phase 2). Replaces a
+            // full-store load + in-memory substring scan.
+            // trace:EPIC-1-001 | ai:claude
+            let mut results = backend.search(query, 200)?;
+            if let Some(s) = status {
+                let needle = s.clone();
+                results.retain(|r| r.status.eq_ignore_ascii_case(&needle));
+            }
 
             if results.is_empty() {
                 println!("No results for: {}", query);
@@ -1037,11 +1026,16 @@ fn handle_git_backend_command(
                 );
                 println!("{}", "─".repeat(65));
                 for req in &results {
+                    let display_id = req
+                        .agreed_id
+                        .as_deref()
+                        .or(req.spec_id.as_deref())
+                        .unwrap_or("?");
                     println!(
                         "{:<14} {:<12} {:<10} {}",
-                        req.display_id(),
-                        format!("{:?}", req.req_type),
-                        req.effective_status(),
+                        display_id,
+                        req.req_type,
+                        req.status,
                         req.title,
                     );
                 }
