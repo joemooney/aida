@@ -1,1 +1,16 @@
 *.sqlite3
+
+# Dispenser/operation lockfiles (transient)
+.aida/*.lock
+
+# MCP-server cache snapshots (regenerated each invocation)
+.aida/mcp-cache.yaml
+.aida/mcp-cache.yaml.lock
+
+# Per-project SQLite cache view (lives here historically due to early
+# default_cache_path bug; now lives at the project's .aida/cache.db
+# but keep this entry to ensure no stragglers)
+.aida/cache.db
+.aida/cache.db-journal
+.aida/cache.db-shm
+.aida/cache.db-wal
