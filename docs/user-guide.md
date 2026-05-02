@@ -12,7 +12,6 @@ An AI-native requirements management system with CLI, web dashboard, and desktop
 - [Getting Started](#getting-started)
 - [CLI Usage](#cli-usage)
 - [Web Dashboard](#web-dashboard)
-- [Desktop App (aida-desktop)](#desktop-app-aida-desktop)
 - [Working with Requirements](#working-with-requirements)
   - [Meta Requirements](#meta-requirements)
 - [Features and Organization](#features-and-organization)
@@ -36,18 +35,18 @@ Build the project from source:
 cargo build --workspace --release
 ```
 
-This creates three binaries in `target/release/`:
-- `aida` — Command-line interface
-- `aida-server` — REST API + gRPC server
-- `aida-desktop` — Native desktop app
+This creates two binaries in `target/release/`:
+- `aida` — command-line interface (also embeds the MCP server: `aida mcp-serve`)
+- `aida-server` — REST API + gRPC server (port 8080)
 
 ### Quick Start
 
 1. **Initialize your project:**
    ```bash
+   git init               # if not already a git repo
    aida init
    ```
-   This creates `requirements.db`, scaffolds Claude Code config (`.claude/skills/`, `.mcp.json`, `CLAUDE.md`), and creates `docs/plans/`.
+   Default is **distributed git-canonical mode**: creates orphan branch `aida-store` with worktree at `.aida-store/`, SQLite cache at `.aida/cache.db`, scaffolds Claude Code config (`.claude/skills/`, `.claude/commands/`, `.mcp.json`, `CLAUDE.md`, `AGENTS.md`), and creates `docs/plans/`. Pass `--centralized` for the deprecated SQLite-canonical mode.
 
 2. **Add your first requirement:**
    ```bash
@@ -56,21 +55,16 @@ This creates three binaries in `target/release/`:
 
 3. **List all requirements:**
    ```bash
-   aida list
+   aida list                  # Cache-backed (sub-ms)
    ```
 
-4. **Launch the web dashboard** (preferred UI):
+4. **Launch the web dashboard:**
    ```bash
    # Terminal 1: REST API
    cd aida-server && cargo run
    # Terminal 2: React dashboard
    cd aida-web-react && pnpm dev
    # Opens at http://localhost:5173
-   ```
-
-5. **Or launch the desktop app:**
-   ```bash
-   aida-desktop
    ```
 
 ---
@@ -286,97 +280,6 @@ The description editor includes expand/collapse, live preview, and a markdown he
 
 - **Chat**: Ask questions about requirements in natural language. Requires `ANTHROPIC_API_KEY` (set via environment variable or Admin settings). Model configurable via `AIDA_CHAT_MODEL`.
 - **AI Evaluate**: One-click quality evaluation via the sparkles button in the detail header. Results (score, strengths, issues, suggestions) display inline and persist on the requirement.
-
----
-
-## Desktop App (aida-desktop)
-
-The native desktop app is an egui-based application that also builds to WASM for browser use.
-
-### Launching
-
-```bash
-aida-desktop                                    # Launch with auto-detected database
-aida-desktop --file /path/to/requirements.db    # Open specific database
-```
-
-### Main Interface
-
-The desktop app consists of three main areas:
-
-1. **Top Bar** — Action buttons, requirement count, and settings
-2. **Left Panel** — Requirements list with search filter (collapsible in edit mode)
-3. **Main Area** — Detail view, forms, or welcome screen
-
-### Responsive Layout
-
-When editing or adding requirements, the left panel remains visible if the window is wide enough (900+ pixels). You can:
-- Click the **▶ Hide** button in the left panel header to collapse it
-- Click **◀ Show List** in the form area to restore the panel
-
-### Navigation
-
-- Click a requirement in the left panel to view its details
-- Double-click a requirement to open it for editing
-- Use the search box to filter requirements by title or description
-- Click tabs (Description, Comments, Links, History) to switch views
-- Use arrow keys to navigate up/down through the requirements list
-- Press Enter to edit the selected requirement
-- Press Space to expand/collapse tree nodes (in hierarchical views)
-
-### Actions
-
-| Button | Action |
-|--------|--------|
-| **+ Add** | Create a new requirement |
-| **Reload** | Refresh from disk |
-| **Edit** | Edit selected requirement |
-| **Delete** | Delete selected requirement |
-| **Settings** | Open settings dialog |
-| **Help** | Open this user guide |
-
-### View Perspectives
-
-| View | Description |
-|------|-------------|
-| **Flat List** | Simple list of all requirements |
-| **Parent/Child** | Hierarchical tree showing parent-child relationships |
-| **Verification** | Groups requirements by verification relationships |
-| **References** | Groups requirements by reference relationships |
-
-In tree views, use the +/- buttons or press Space to expand/collapse nodes.
-
-### View Presets
-
-Save your current view configuration (perspective, direction, and filters) as a named preset:
-
-- **Save**: Configure your view, click "💾 Save As...", enter a name
-- **Use**: Select from the View dropdown under "Saved Presets"
-- **Delete**: Click the ✕ button next to the preset name
-- **Modified indicator**: An asterisk (e.g., "My View*") shows unsaved changes
-- **Reset (↺)**: Return to default Flat List view with no filters
-
-### Filtering Requirements
-
-Click the "Filters" dropdown in the top bar. Two-level filtering:
-
-- **Root filters**: Apply to top-level requirements
-- **Children filters**: Apply to nested requirements in hierarchical views (uncheck "Same as root" for independent filtering)
-
-Filter by type, feature, ID prefix, or archived status.
-
-### Comments and Reactions
-
-- **Adding comments**: Select requirement → Comments tab → "+ Add Comment"
-- **Threading**: Click "Reply" on any comment for nested replies
-- **Reactions**: Click 😊 on a comment to add emoji reactions (✅ Resolved, ❌ Rejected, 👍 👎 ❓ ⚠️)
-- **Custom reactions**: Configure in Settings > Reactions tab
-
-### Links Tab
-
-**External Links:** Add URLs with titles and descriptions, with format verification.
-
-**Relationships:** View, navigate (double-click), and manage relationships to other requirements with color-coded type indicators.
 
 ---
 
@@ -656,12 +559,14 @@ Override with: `AIDA_REGISTRY_PATH` environment variable
 
 ### Project Resolution Order
 
-1. Local `requirements.db` in current directory (SQLite, preferred)
-2. Local `requirements.yaml` in current directory (YAML fallback)
-3. `--project` command line option
-4. `AIDA_DB_NAME` environment variable
-5. Single project in registry (if only one exists)
-6. Default project from registry
+1. Distributed mode: `.aida/config.toml` with `mode = "distributed"` → git-canonical store at the configured path (default: `.aida-store/`)
+2. `--file <path>` explicit override (directory → git store, `.db` → legacy SQLite, `.yaml` → legacy YAML, `postgres://...` → PostgreSQL)
+3. Legacy: local `requirements.db` in current directory (SQLite-canonical, deprecated)
+4. Legacy: local `requirements.yaml` in current directory (YAML-canonical, deprecated)
+5. `--project` command line option
+6. `AIDA_DB_NAME` environment variable
+7. Single project in registry (if only one exists)
+8. Default project from registry
 
 ### Example Setup
 

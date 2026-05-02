@@ -1,15 +1,17 @@
 # AIDA Multi-User Setup Guide
 
-**Last updated**: 2026-03-16
+**Last updated**: 2026-05-02
 
-This guide covers setting up AIDA for multi-user access via PostgreSQL. This is the centralized mode — all users connect to a single PostgreSQL database, no distributed IDs needed.
+This guide covers setting up AIDA for multi-user access via **PostgreSQL** — a server-backed shared projection where all users connect to a single PostgreSQL database. The git-canonical store (default `aida init`) is the recommended path for most multi-user scenarios because it gives you offline capability and git-native conflict resolution. Reach for PostgreSQL when you specifically want a server-of-record that's always-online and want SQL-level access patterns.
+
+> **PostgreSQL support is opt-in via the `postgres` Cargo feature.** A default `cargo install aida-cli` will NOT include PostgreSQL drivers. Build with `--features postgres` to enable. This is also why `aida db migrate --to postgres` may fail on a default build.
 
 ---
 
 ## Prerequisites
 
 - PostgreSQL 15+ running (via Docker or native)
-- `aida` and `aida-server` binaries built: `cargo build --features postgres,gitlab,github`
+- `aida` and `aida-server` binaries built with PostgreSQL support: `cargo build --features postgres` (add `,gitlab,github,jira` if you also want those integrations — all opt-in)
 - Network access between machines (same LAN or VPN)
 
 ## Quick Start
