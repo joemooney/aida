@@ -5,6 +5,10 @@
 //! while maintaining a consistent interface.
 
 #[cfg(feature = "native")]
+mod cache;
+#[cfg(feature = "native")]
+mod cached_git_backend;
+#[cfg(feature = "native")]
 mod git_backend;
 #[cfg(feature = "native")]
 mod migration;
@@ -24,6 +28,10 @@ pub use migration::{
 pub use migration::{migrate_from_postgres, migrate_to_postgres};
 #[cfg(feature = "postgres")]
 pub use postgres_backend::PostgresBackend;
+#[cfg(feature = "native")]
+pub use cache::Cache;
+#[cfg(feature = "native")]
+pub use cached_git_backend::CachedGitBackend;
 #[cfg(feature = "native")]
 pub use git_backend::GitBackend;
 #[cfg(feature = "native")]
