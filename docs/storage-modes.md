@@ -1,276 +1,195 @@
 # AIDA Storage Modes
 
-**Last updated**: 2026-03-16
+**Last updated**: 2026-05-02 (Phase 3 of EPIC-1-001 — git-canonical is now the default)
 
-AIDA supports multiple storage backends and deployment modes. This document covers all options, when to use each, and how to set them up.
+AIDA's recommended deployment is **git-canonical with a SQLite read cache**. Other modes exist for specific scenarios (PostgreSQL for shared server-backed deployments) or backwards compatibility (legacy single-file YAML / standalone SQLite). This document explains all options and how to choose.
+
+## TL;DR
+
+```
+Default:                                      aida init
+                                              → orphan branch + cache view
+
+Multi-repo workspace (one store, many repos): aida init --sibling
+
+Server-backed shared projection:              build with `--features postgres`,
+                                              point at postgres:// URL
+
+Legacy SQLite-canonical (deprecated):         aida init --centralized
+```
 
 ---
 
 ## Overview
 
-| Mode | IDs | Offline? | Multi-user? | Setup |
-|------|-----|----------|-------------|-------|
-| [YAML](#1-yaml-file) | `FR-001` | Yes (solo) | No | `aida init` |
-| [SQLite](#2-sqlite) | `FR-001` | Yes (solo) | Limited | `aida init` (default) |
-| [PostgreSQL](#3-postgresql) | `FR-001` | No | Yes | `make dev-pg` + migrate |
-| [Git Worktree](#4-git-worktree) | `FR-1-001` → `FR-1` | Yes | Yes | `aida init --distributed` |
-| [Git Sibling](#5-git-sibling-repo) | `FR-1-001` → `FR-1` | Yes | Yes | `aida init --distributed --sibling` |
+| Mode | IDs | Offline? | Multi-user? | Status |
+|------|-----|----------|-------------|--------|
+| [Git worktree (default)](#git-worktree-default) | `FR-1-001` → `FR-1` | Yes | Yes (via git) | **Recommended** |
+| [Git sibling](#git-sibling-repo) | `FR-1-001` → `FR-1` | Yes | Yes (via git) | Recommended for multi-repo |
+| [PostgreSQL](#postgresql-opt-in) | `FR-001` | No | Yes | Opt-in (feature flag) |
+| [Legacy SQLite](#legacy-sqlite-deprecated) | `FR-001` | Yes (solo) | Limited | Deprecated |
+| [Legacy YAML](#legacy-yaml-deprecated) | `FR-001` | Yes (solo) | No | Deprecated |
 
 ---
 
-## 1. YAML File
+## Git Worktree (default)
 
-**Best for**: Solo developer, small project, maximum simplicity.
+**Best for**: Solo developers and teams alike. The default for `aida init`.
 
 ```bash
+cd my-project
+git init       # if not already a git repo
 aida init
-# Creates requirements.yaml (if no requirements.db exists)
 ```
 
 **How it works**:
-- All requirements stored in a single `requirements.yaml` file
-- File is tracked in git — full diff history
-- No external dependencies
-
-**Limitations**:
-- No concurrent access — file-level locking only
-- Large files become unwieldy (>500 requirements)
-- Merge conflicts on the monolithic file when multiple branches touch requirements
+- Requirements live on an orphan git branch named `aida-store` (separate history from your code)
+- One YAML file per requirement: `objects/<TYPE>/000/SPEC-ID.yaml`
+- A worktree at `.aida-store/` (gitignored) is the live working copy
+- A SQLite read cache at `.aida/cache.db` (gitignored, auto-rebuilt) projects summary fields for fast list/filter/search
+- Writes go to git first, then the cache (write-through). Stale-detection compares the cache's HEAD SHA against the orphan branch's HEAD; mismatch triggers rebuild on next read.
+- IDs are node-namespaced (`FR-1-001`); short agreed IDs (`FR-1`) get assigned at merge-to-trunk via `aida db merge-gate`
 
 **Files**:
 ```
 myproject/
-├── requirements.yaml     ← all requirements in one file
-└── .git/
+├── .git/                                  ← code branch (main, etc.)
+├── .aida/
+│   ├── config.toml                        ← distributed-mode marker
+│   └── cache.db                           ← SQLite read cache (gitignored)
+├── .aida-store/                           ← worktree of aida-store branch (gitignored)
+│   ├── metadata.yaml
+│   └── objects/
+│       ├── FR/000/FR-1-001.yaml
+│       └── EPIC/000/EPIC-1-001.yaml
+└── (your code)
 ```
 
----
-
-## 2. SQLite
-
-**Best for**: Solo developer or small team on a shared machine, moderate project size.
-
+**Sync to remote**:
 ```bash
-aida init
-# Creates requirements.db (SQLite, default)
+cd .aida-store && git push -u origin aida-store
+# Or via aida helper:
+aida db sync --pull --push
 ```
 
-**How it works**:
-- SQLite database with WAL mode for concurrent read access
-- Optimistic locking via version column
-- Pre-commit hook exports to `requirements.yaml` for git-diffable history
-
-**Limitations**:
-- Binary file — can't be diffed directly in git
-- Single-machine only (SQLite doesn't support network access)
-- Pre-commit hook required to maintain YAML export
-
-**Files**:
-```
-myproject/
-├── requirements.db       ← SQLite database (gitignored)
-├── requirements.yaml     ← auto-exported by pre-commit hook (tracked)
-└── .git/hooks/pre-commit ← auto-export hook
-```
-
----
-
-## 3. PostgreSQL
-
-**Best for**: Teams with reliable network connectivity, web dashboard users.
-
-```bash
-# Start PostgreSQL
-make dev-pg
-
-# Migrate from SQLite
-aida db migrate --from sqlite --to postgres \
-  --output "postgres://aida:aida@localhost:5432/aida_default"
-
-# Use directly
-aida --file "postgres://aida:aida@localhost:5432/aida_default" list
-
-# Or start the server for web/REST access
-make serve
-```
-
-**How it works**:
-- Central PostgreSQL database — all users connect to same instance
-- Full concurrent read/write with MVCC
-- Optimistic locking — version conflicts reported, never silent overwrites
-- REST API + React dashboard via `aida-server`
-
-**Limitations**:
-- Requires running PostgreSQL server
-- No offline access — needs network connectivity
-- No built-in git history (use YAML export for snapshots)
-
-**Connection methods**:
-
-| Method | Command |
-|--------|---------|
-| Direct CLI | `aida --file "postgres://user:pass@host:5432/db" list` |
-| REST API | `curl http://host:8080/api/v2/requirements` |
-| React dashboard | `http://host:8080` in browser |
-| MCP (Claude Code) | Configure `.mcp.json` with connection string |
-
-**Files**:
-```
-myproject/
-├── .aida/docker-compose.dev.yml  ← PostgreSQL container
-├── pgdata/                       ← PostgreSQL data (gitignored)
-└── (no local requirements file needed)
-```
-
-See [docs/multi-user-setup.md](multi-user-setup.md) for detailed instructions.
-
----
-
-## 4. Git Worktree (Distributed, Default)
-
-**Best for**: Single-repo projects that need offline capability, distributed teams, or git-native history.
-
-```bash
-aida init --distributed
-```
-
-**How it works**:
-- Creates an **orphan branch** called `aida-store` with no shared history with your code branch
-- Checks it out as a **worktree** at `.aida-store/` (gitignored on main)
-- Each requirement is a separate YAML file in a sharded directory layout
-- Every mutation auto-commits to the orphan branch
-- IDs are node-namespaced (`FR-1-001`) with short agreed IDs (`FR-1`) at merge gate
-- Sync via standard `git push origin aida-store`
-
-**Two branches, one repo, one remote**:
-```
-main branch:        source code, CLAUDE.md, docs
-aida-store branch:  requirements (orphan, separate history)
-```
-
-**New developer setup** (after cloning):
+**New developer setup**:
 ```bash
 git clone <repo>
-git worktree add .aida-store aida-store
-# Done — aida commands auto-detect the store
+git worktree add .aida-store aida-store    # check out the orphan branch
+aida list                                  # cache rebuilds on first run
 ```
-
-**Files**:
-```
-myproject/
-├── .aida/
-│   └── config.toml               ← points to .aida-store
-├── .aida-store/                   ← worktree (gitignored on main)
-│   ├── .git                       ← worktree link to main .git
-│   ├── metadata.yaml              ← store config, counters
-│   ├── objects/
-│   │   ├── FR/000/FR-1-001.yaml   ← one file per requirement
-│   │   ├── BUG/000/BUG-1-002.yaml
-│   │   └── ...
-│   ├── registry/
-│   │   └── agreed_counters.toml   ← agreed ID counters
-│   └── .aida/
-│       ├── node.toml              ← node identity
-│       └── dispenser.toml         ← sequence counter state
-├── src/                           ← your code (on main branch)
-└── .git/                          ← shared git database
-```
-
-**Advantages**:
-- One repo, one remote, one clone
-- Clean separation — code diffs never include requirements
-- Standard `git push/pull` for sync
-- Full offline capability
-- Works with any git host (GitHub, GitLab, Gitea, bare repos)
-
-**Limitations**:
-- Requires `git worktree add` step for new developers
-- Not suitable for multi-repo workspaces (use sibling mode instead)
 
 ---
 
-## 5. Git Sibling Repo (Distributed, Multi-Repo)
+## Git Sibling Repo
 
-**Best for**: Multiple code repos sharing one requirements store, enterprise workspaces.
+**Best for**: Multi-repo workspaces where multiple code repos share one requirements store.
 
 ```bash
-aida init --distributed --sibling [--registry-remote git@github.com:org/aida-store.git]
+cd my-workspace
+aida init --sibling --registry-remote git@github.com:org/aida-registry.git
 ```
 
 **How it works**:
-- Creates a **separate git repo** at `aida-store/` alongside the code repo
-- Same sharded YAML file layout as worktree mode
-- Each code repo in the workspace points to the shared store
-- Node registration via CAS push loop ensures unique IDs across all repos
+- The store lives in `../aida-store/` as a separate git repo, not as an orphan branch in your code repo
+- All other behavior matches git worktree mode (cache, write-through, agreed IDs, sync)
 
-**Workspace layout**:
+**Files**:
 ```
 workspace/
-├── pacgate/              ← code repo 1
-│   └── .aida/config.toml → store_path = "../aida-store"
-├── pacinet/              ← code repo 2
-│   └── .aida/config.toml → store_path = "../aida-store"
-├── aida-store/           ← shared requirements store (separate git repo)
-│   ├── objects/
-│   ├── metadata.yaml
-│   └── registry/nodes.toml
-└── .aida-workspace       ← workspace config (optional)
+├── code-repo-1/
+│   ├── .aida/config.toml          ← points to ../aida-store
+│   └── .aida/cache.db
+├── code-repo-2/
+│   ├── .aida/config.toml          ← points to ../aida-store
+│   └── .aida/cache.db
+└── aida-store/                    ← shared requirements (own git repo)
 ```
 
-**Advantages**:
-- Requirements shared across multiple code repos
-- Each repo can reference requirements from any other repo
-- Cross-repo relationships work naturally (both objects in same store)
-- Independent access control (store repo can have different permissions)
+---
 
-**Limitations**:
-- Two repos to manage (code + store)
-- Developers must clone both repos
-- More complex setup than worktree mode
+## PostgreSQL (opt-in)
+
+**Best for**: Teams that want a server-backed shared projection and don't need offline capability.
+
+PostgreSQL support is gated behind the `postgres` Cargo feature. Default builds **don't** include it; you build/install with the feature explicitly:
+
+```bash
+cargo install --git https://github.com/joemooney/aida.git aida-cli --features postgres
+```
+
+Then point at a connection string:
+
+```bash
+aida --file "postgres://user:pass@host:5432/aida_default" list
+```
+
+**How it works**:
+- One PostgreSQL row per requirement in a normalized schema
+- JSON columns for `history`, `comments`, `relationships`, etc.
+- No git store, no orphan branch, no offline capability
+- Concurrency via PostgreSQL's MVCC
+
+**Future direction** (per EPIC-1-001): PostgreSQL support will be extracted into a separate `aida-backend-postgres` plugin crate. Same usage; cleaner separation.
+
+---
+
+## Legacy SQLite (deprecated)
+
+**Status**: Deprecated. `aida init --centralized` prints a warning. Use git-canonical instead.
+
+```bash
+# Only if you really need it:
+aida init --centralized
+# Creates requirements.db (SQLite, single file)
+```
+
+**Why it exists**: Pre-EPIC-1-001 default. Single SQLite file with optimistic locking; the pre-commit hook auto-exports to `requirements.yaml` for diffable history.
+
+**Why you shouldn't use it for new projects**: No distributed support, no offline-friendly conflict resolution, no agent-readable per-object YAML, single point of contention for writes. The git-canonical store gives you all the same single-machine ergonomics plus everything else.
+
+---
+
+## Legacy YAML (deprecated)
+
+**Status**: Deprecated. The standalone `requirements.yaml` mode predates SQLite-canonical and predates git-canonical by a wider margin.
+
+**Why you shouldn't use it**: A monolithic YAML file forces full reload + full rewrite for every operation; merge conflicts on shared branches are guaranteed. The git-canonical store gives you per-object YAML files (still diffable, no merge conflicts) plus the cache for query speed.
 
 ---
 
 ## Comparison Matrix
 
-| Feature | YAML | SQLite | PostgreSQL | Git Worktree | Git Sibling |
+| Feature | Git Worktree | Git Sibling | PostgreSQL | Legacy SQLite | Legacy YAML |
 |---------|------|--------|------------|-------------|-------------|
-| **Concurrent writes** | No | Limited | Yes (MVCC) | Yes (per-file) | Yes (per-file) |
-| **Offline capable** | Yes | Yes | No | Yes | Yes |
-| **Git-diffable** | Yes (monolithic) | No (binary) | No | Yes (per-file) | Yes (per-file) |
-| **Merge conflicts** | Frequent | N/A | N/A | Rare (per-file) | Rare (per-file) |
-| **Web dashboard** | Via server | Via server | Via server | Via server | Via server |
-| **REST API** | Via server | Via server | Via server | Via server | Via server |
-| **Multi-repo workspace** | No | No | Yes | No | Yes |
-| **Node-namespaced IDs** | No | No | No | Yes | Yes |
-| **Agreed IDs (short)** | N/A | N/A | N/A | Yes (merge gate) | Yes (merge gate) |
-| **Auto-commit history** | N/A | N/A | N/A | Yes | Yes |
-| **Setup complexity** | None | None | Docker | `git worktree add` | Two repos |
-| **Max practical scale** | ~500 reqs | ~100K reqs | Unlimited | ~100K reqs | ~100K reqs |
+| **Default in `aida init`** | ✅ | --sibling | (opt-in build) | --centralized | (no longer offered) |
+| **Concurrent writes** | Yes (per-file in git) | Yes (per-file in git) | Yes (MVCC) | Limited (file lock) | No |
+| **Offline capable** | ✅ | ✅ | ❌ | ✅ (solo) | ✅ (solo) |
+| **Agent-readable YAML** | ✅ | ✅ | ❌ | (yaml export only) | ✅ |
+| **Cache-accelerated queries** | ✅ | ✅ | (postgres is its own index) | ❌ | ❌ |
+| **Git history per object** | ✅ | ✅ | ❌ | ❌ | ❌ |
+| **Merge conflicts** | Rare (per-file) | Rare (per-file) | N/A | N/A | Frequent (monolithic file) |
+| **Web dashboard** | Via aida-server | Via aida-server | Via aida-server | Via aida-server | Via aida-server |
+| **Multi-repo workspace** | ❌ | ✅ | ✅ | ❌ | ❌ |
+| **Node-namespaced IDs** | ✅ (`FR-1-001`) | ✅ (`FR-1-001`) | ❌ | ❌ | ❌ |
+| **Agreed short IDs (merge gate)** | ✅ | ✅ | ❌ | ❌ | ❌ |
+| **Setup complexity** | Trivial (`aida init`) | One extra flag | Build w/ feature + DB setup | Trivial (`--centralized`) | Trivial (manual) |
+| **Max practical scale** | ~100K reqs | ~100K reqs | Unlimited | ~100K reqs | ~500 reqs |
 
 ---
 
-## Migration Between Modes
-
-All modes use the same `Requirement` data model — migration is lossless.
+## Migration
 
 ```bash
-# YAML → SQLite
+# Export legacy backend → git-canonical store (one-time, idempotent)
+aida db export-git -o aida-store
+
+# Migrate between legacy backends (still works for backwards compat)
 aida db migrate --from yaml --to sqlite
-
-# SQLite → PostgreSQL
-aida db migrate --from sqlite --to postgres \
-  --output "postgres://user:pass@host:5432/db"
-
-# PostgreSQL → YAML
-aida db migrate --from postgres --to yaml --output requirements.yaml
-
-# Any backend → Git store
-aida db export-git -o /path/to/store
-
-# Git store → PostgreSQL (via REST API)
-aida-server --database /path/to/store --rest-port 8080
-# PostgreSQL is then a read model / cache of the git store
+aida db migrate --from sqlite --to postgres --output "postgres://..."
 ```
+
+A first-class `aida db migrate --to git-canonical` command for legacy SQLite/YAML projects is planned but not yet shipped. For now, use `aida db export-git -o aida-store` followed by `aida init` (which creates the `.aida/config.toml` distributed marker).
 
 ---
 
@@ -279,52 +198,40 @@ aida-server --database /path/to/store --rest-port 8080
 ```
 Start here
     │
-    ├── Solo developer, small project?
-    │       → YAML or SQLite (aida init)
+    ├── New project? → aida init  (git worktree, default)
     │
-    ├── Team, always online?
-    │       → PostgreSQL (make dev-pg + make serve)
+    ├── Multiple code repos sharing requirements?
+    │       → aida init --sibling  (git sibling repo)
     │
-    ├── Need offline/disconnected capability?
-    │   │
-    │   ├── Single code repo?
-    │   │       → Git Worktree (aida init --distributed)
-    │   │
-    │   └── Multiple code repos sharing requirements?
-    │           → Git Sibling (aida init --distributed --sibling)
+    ├── Team with always-on connectivity, want server-backed shared projection?
+    │       → Build with --features postgres, point at a postgres:// URL
     │
-    └── Air-gapped / classified network?
-            → Git Sibling with manual sync
+    └── Existing project on legacy SQLite/YAML?
+            → Continue using it (deprecated, still works)
+            → Or migrate: aida db export-git -o aida-store && aida init
 ```
+
+For most projects: `aida init` and don't think about it.
 
 ---
 
 ## Combining Modes
 
-Modes are not mutually exclusive:
+The git store is the canonical write-of-record; PostgreSQL or external systems can be derived projections.
 
-**Git store + PostgreSQL cache**:
+**Git store + PostgreSQL projection** (advanced; requires postgres feature):
 ```bash
-# Git store is source of truth
-aida init --distributed
-
-# PostgreSQL provides fast queries + web dashboard
-aida-server --database .aida-store --rest-port 8080
-# Server reads from git store, serves via REST API
-```
-
-**SQLite + YAML export**:
-```bash
-# SQLite for runtime, YAML for git history
-aida init  # creates requirements.db
-# Pre-commit hook auto-exports to requirements.yaml
+aida init                       # git is canonical
+# Periodically replicate the git store into a PostgreSQL projection for
+# read-heavy team queries. Implementation pattern; not yet a built-in command.
 ```
 
 **Git store + GitHub Issues sync**:
 ```bash
-# Git store locally, push selected requirements to GitHub
-aida init --distributed
+aida init
 aida github config --repo org/project
-aida github push FR-1-001  # creates GitHub issue
-aida github pull            # import GitHub issues
+aida github push FR-1-001       # creates GitHub issue from requirement
+aida github pull                # imports GitHub issues as requirements
 ```
+
+**Git store + GitLab / Jira sync**: same pattern via `aida gitlab` and `aida jira` subcommands (require corresponding feature flags).
