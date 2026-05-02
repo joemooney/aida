@@ -28,6 +28,13 @@ impl CachedGitBackend {
     /// it is rebuilt before this constructor returns.
     pub fn open(git_root: &Path, cache_path: &Path) -> Result<Self> {
         let inner = GitBackend::new(git_root)?;
+        Self::with_inner(inner, cache_path)
+    }
+
+    /// Wrap an already-configured GitBackend (e.g., one that was built with
+    /// `.with_dispenser(...)`). The cache is opened or created at
+    /// `cache_path` and rebuilt if stale before this returns.
+    pub fn with_inner(inner: GitBackend, cache_path: &Path) -> Result<Self> {
         let cache = Cache::open(cache_path)?;
         let backend = CachedGitBackend { inner, cache };
         backend.ensure_cache_fresh()?;
@@ -35,11 +42,14 @@ impl CachedGitBackend {
     }
 
     /// Default cache location for a project's git store at `git_root`:
-    /// `<git_root>/../.aida/cache.db` — sibling to `.aida/config.toml`.
+    /// `<project_root>/.aida/cache.db`. We never put the cache *inside* the
+    /// store directory — that would pollute the orphan branch's worktree —
+    /// so the probe starts at `git_root.parent()` and walks up.
     pub fn default_cache_path(git_root: &Path) -> PathBuf {
-        // Walk up to find the project root containing .aida/, fall back to
-        // putting the cache next to the store.
-        let mut probe = git_root.to_path_buf();
+        let mut probe = match git_root.parent() {
+            Some(p) => p.to_path_buf(),
+            None => return git_root.with_extension("cache.db"),
+        };
         for _ in 0..6 {
             if probe.join(".aida").is_dir() {
                 return probe.join(".aida").join("cache.db");
@@ -49,7 +59,9 @@ impl CachedGitBackend {
                 None => break,
             }
         }
-        git_root.join(".cache.db")
+        // Fall back to a sibling file next to the store root so we still
+        // never write inside it.
+        git_root.with_extension("cache.db")
     }
 
     pub fn cache(&self) -> &Cache {

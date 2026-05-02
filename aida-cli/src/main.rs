@@ -49,9 +49,9 @@ use aida_core::{
 };
 
 use crate::cli::{
-    Cli, Command, CommentCommand, ConfigCommand, DbCommand, FeatureCommand, GitHubCommand,
-    GitLabCommand, JiraCommand, QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand,
-    ScaffoldCommand, ServerCommand, TraceCommand, TypeCommand,
+    CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand, FeatureCommand,
+    GitHubCommand, GitLabCommand, JiraCommand, QueueCommand, RelDefCommand, RelationshipCommand,
+    ReportCommand, ScaffoldCommand, ServerCommand, TraceCommand, TypeCommand,
 };
 
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
@@ -281,6 +281,12 @@ fn main() -> Result<()> {
         }
         Command::Db(db_cmd) => {
             handle_db_command(db_cmd, &requirements_path)?;
+        }
+        Command::Cache(_) => {
+            anyhow::bail!(
+                "aida cache commands are only available in git-canonical (distributed) mode. \
+                 Run `aida init --distributed` first, or pass --file pointing to a git store."
+            );
         }
         Command::Rel(rel_cmd) => {
             handle_relationship_command(rel_cmd, &storage)?;
@@ -742,10 +748,15 @@ fn handle_git_backend_command(
     command: &Command,
 ) -> Result<()> {
     let dispenser = load_dispenser(store_path)?;
-    let backend = aida_core::GitBackend::new(store_path)?
+    let inner = aida_core::GitBackend::new(store_path)?
         .with_dispenser(dispenser);
+    let cache_path = aida_core::CachedGitBackend::default_cache_path(store_path);
+    let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
 
     match command {
+        Command::Cache(cache_cmd) => {
+            return handle_cache_command(cache_cmd, &backend);
+        }
         Command::List { status, r#type, .. } => {
             let store = backend.load()?;
             let reqs: Vec<&Requirement> = store
@@ -2943,6 +2954,63 @@ fn handle_type_command(cmd: &TypeCommand, storage: &Storage) -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+/// Handle `aida cache {rebuild,status}` against a CachedGitBackend.
+/// trace:EPIC-1-001 | ai:claude
+fn handle_cache_command(
+    cmd: &CacheCommand,
+    backend: &aida_core::CachedGitBackend,
+) -> Result<()> {
+    use aida_core::DatabaseBackend;
+
+    match cmd {
+        CacheCommand::Rebuild => {
+            let n = backend.rebuild_cache()?;
+            println!(
+                "{}: Cache rebuilt. {} requirement(s) projected from git store at {}.",
+                "OK".green(),
+                n,
+                backend.cache().path().display()
+            );
+        }
+        CacheCommand::Status => {
+            let cache = backend.cache();
+            let recorded_sha = cache.source_head_sha()?.unwrap_or_default();
+            let actual_sha = aida_core::git_ops::head_sha(backend.path()).unwrap_or_default();
+            let count = cache.requirement_count()?;
+            let built_at = cache.built_at()?.unwrap_or_else(|| "(never)".into());
+            let store_count = backend.list_requirements(true)?.len();
+
+            println!("Cache path:       {}", cache.path().display());
+            println!("Cached requirements: {}", count);
+            println!("Store requirements:  {}", store_count);
+            println!("Last built:       {}", built_at);
+            println!(
+                "Cache HEAD SHA:   {}",
+                if recorded_sha.is_empty() {
+                    "(none)".to_string()
+                } else {
+                    recorded_sha.clone()
+                }
+            );
+            println!(
+                "Store HEAD SHA:   {}",
+                if actual_sha.is_empty() {
+                    "(no git head — non-git store?)".to_string()
+                } else {
+                    actual_sha.clone()
+                }
+            );
+            let stale = recorded_sha != actual_sha || recorded_sha.is_empty();
+            if stale && !actual_sha.is_empty() {
+                println!("Status:           {} — run `aida cache rebuild`", "STALE".yellow());
+            } else {
+                println!("Status:           {}", "FRESH".green());
+            }
+        }
+    }
     Ok(())
 }
 

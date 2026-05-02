@@ -69,3 +69,10 @@ docker/.env
 
 # AIDA distributed store (orphan branch worktree)
 .aida-store/
+
+# AIDA SQLite cache projection (rebuildable from git store)
+# trace:EPIC-1-001 | ai:claude
+.aida/cache.db
+.aida/cache.db-journal
+.aida/cache.db-shm
+.aida/cache.db-wal
