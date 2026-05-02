@@ -4,9 +4,7 @@ members = [
     "aida-core",
     "aida-cli",
     "aida-crate",
-    "aida-desktop",
     "aida-server",
-    "aida-web",
     "aida-generate-types",
 ]
 
