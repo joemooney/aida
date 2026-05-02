@@ -39,11 +39,6 @@ inquire = { version = "0.9.1", features = ["editor"] }
 colored = "2.0"
 regex = "1.10"
 
-# GUI dependencies
-eframe = "0.29"
-egui = "0.29"
-egui_extras = { version = "0.29", features = ["all_loaders"] }
-
 # gRPC/Protocol Buffers dependencies
 tonic = "0.12"
 tonic-build = "0.12"
