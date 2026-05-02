@@ -77,17 +77,24 @@ Navigate to your project and run:
 
 ```bash
 cd ~/my-project
+git init           # if not already a git repo
 aida init
 ```
 
-This creates:
-- `requirements.db` — SQLite database for requirements
-- `CLAUDE.md` — Project context for AI assistants
-- `.claude/skills/` — AIDA workflow skills for Claude Code
-- `.mcp.json` — MCP integration for Claude Code
-- `docs/plans/` — Implementation plan archive
+This creates (the **distributed git-canonical** default):
+- `aida-store` orphan git branch with worktree at `.aida-store/` (gitignored) — canonical store, one YAML file per requirement
+- `.aida/config.toml` — distributed-mode marker
+- `.aida/cache.db` (gitignored) — SQLite read cache, auto-rebuilt
+- META requirements seeded into the orphan store
+- `CLAUDE.md` — project context for AI assistants
+- `AGENTS.md` — project context for Codex-compatible agents
+- `.claude/skills/`, `.claude/commands/`, `.claude/hooks/` — Claude Code workflow scaffolding
+- `.mcp.json` — MCP integration
+- `docs/plans/` — implementation plan archive
 
 That's it. You're ready to use AIDA.
+
+> **Need the legacy SQLite-canonical mode?** Pass `--centralized` (deprecated, prints a warning). For multi-repo workspaces use `--sibling` instead.
 
 ---
 
@@ -137,45 +144,36 @@ aida del FR-003 --yes
 
 ## What's Next?
 
-### For Solo Developers
+### Solo developers / small teams
 
-You're done. The SQLite database + YAML export gives you everything you need. A pre-commit hook auto-exports `requirements.yaml` for git-diffable history.
+You're done. The git-canonical store gives you per-requirement YAML files (diffable, mergeable, agent-readable) plus a SQLite cache for fast list/filter/search. Mutations auto-commit to the orphan branch. Push the branch to share:
 
-### For Teams (Multi-User)
-
-Two options depending on your connectivity:
-
-**Always connected** — use PostgreSQL:
 ```bash
-# Start PostgreSQL (Docker)
-docker run -d --name aida-pg -p 5432:5432 \
-  -e POSTGRES_USER=aida -e POSTGRES_PASSWORD=aida \
-  -e POSTGRES_DB=aida_default postgres:15-alpine
-
-# Migrate your data
-aida db migrate --from sqlite --to postgres \
-  --output "postgres://aida:aida@localhost:5432/aida_default"
-
-# Start the server (REST API + web dashboard)
-aida-server --database "postgres://aida:aida@localhost:5432/aida_default" \
-  --host 0.0.0.0 --rest-port 8080
-
-# Other team members connect via:
-#   CLI:  aida --file "postgres://aida:aida@<your-ip>:5432/aida_default" list
-#   Web:  http://<your-ip>:8080
+cd .aida-store && git push -u origin aida-store
+# Or via aida helper:
+aida db sync --pull --push
 ```
 
-**Sometimes offline** — use distributed mode:
+### Multi-repo workspaces
+
+If multiple code repos share one requirements store:
+
 ```bash
-aida init --distributed
-# Creates an orphan branch 'aida-store' with sharded YAML files
-# Every mutation auto-commits to the store branch
-# Sync with: git push origin aida-store
-# New team member setup: git worktree add .aida-store aida-store
+aida init --sibling --registry-remote git@github.com:org/aida-registry.git
+# The store lives at ../aida-store/ as its own repo
 ```
 
-See [storage-modes.md](storage-modes.md) for a full comparison of all 5 storage options.
-See [multi-user-setup.md](multi-user-setup.md) for detailed PostgreSQL multi-user instructions.
+### Teams wanting a server-backed shared projection
+
+Build with the `postgres` feature, run `aida-server` against a Postgres connection string. Note: this is a server-backed projection, **not** the canonical store — git is still the source of truth.
+
+```bash
+cargo install --git https://github.com/joemooney/aida.git aida-cli --features postgres
+# See docs/multi-user-setup.md for full instructions
+```
+
+See [storage-modes.md](storage-modes.md) for the full mode comparison.
+See [multi-user-setup.md](multi-user-setup.md) for PostgreSQL deployment details.
 
 ### With Claude Code
 
@@ -214,21 +212,23 @@ aida github labels --create-missing
 
 | Command | What it does |
 |---------|-------------|
-| `aida init` | Initialize AIDA in current project |
-| `aida init --distributed` | Initialize with git-backed distributed store |
-| `aida list` | List all requirements |
+| `aida init` | Initialize AIDA in current project (default: distributed git-canonical) |
+| `aida init --sibling` | Initialize for multi-repo workspace (sibling-repo store) |
+| `aida init --centralized` | Legacy SQLite mode (deprecated) |
+| `aida list` | List all requirements (cache-backed, sub-ms) |
 | `aida add --title "..." --type functional` | Add a requirement |
-| `aida show FR-001` | Show requirement details |
-| `aida edit FR-001 --status approved` | Update a requirement |
-| `aida search "keyword"` | Search requirements |
-| `aida comment add FR-001 --content "..."` | Add a comment |
-| `aida rel add --from FR-002 --to FR-001 --type references` | Add relationship |
-| `aida del FR-001 --yes` | Delete a requirement |
-| `aida db info` | Show database info |
-| `aida db status` | Show distributed store status |
-| `aida db merge-gate` | Assign short agreed IDs |
-| `aida db sync --pull --push` | Sync with remote |
-| `aida github push FR-001` | Push to GitHub issue |
+| `aida show FR-1-001` | Show requirement details |
+| `aida edit FR-1-001 --status approved` | Update a requirement |
+| `aida search "keyword"` | Cache-backed FTS5 search |
+| `aida comment add FR-1-001 --content "..."` | Add a comment |
+| `aida rel add --from FR-1-002 --to FR-1-001 --type references` | Add relationship |
+| `aida del FR-1-001 --yes` | Delete a requirement |
+| `aida cache status` | Compare cache HEAD vs git HEAD |
+| `aida cache rebuild` | Force-rebuild cache from git store |
+| `aida db status` | Show distributed store sync state |
+| `aida db merge-gate` | Assign short agreed IDs (`FR-7-001` → `FR-1`) |
+| `aida db sync --pull --push` | Sync orphan branch with remote |
+| `aida github push FR-1-001` | Push to GitHub issue (requires `github` feature) |
 | `aida github pull` | Import GitHub issues |
 
 ---
@@ -236,17 +236,18 @@ aida github labels --create-missing
 ## Uninstall
 
 ```bash
-# Remove from a project
-rm -f requirements.db requirements.yaml .mcp.json
+# Remove distributed-mode store + scaffolding from a project
+git worktree remove .aida-store        # remove the worktree
+git branch -D aida-store               # remove the orphan branch
 rm -rf .aida/ .claude/skills/aida-* .claude/commands/aida-* docs/plans/
+rm -f .mcp.json AGENTS.md              # if generated
+
+# Remove legacy centralized files (if you ever used --centralized)
+rm -f requirements.db requirements.yaml
 
 # Remove the binary
-rm -f ~/.cargo/bin/aida          # if installed via cargo
-rm -f ~/.local/bin/aida          # if installed manually
-
-# Remove distributed store (if used)
-git worktree remove .aida-store  # remove worktree
-git branch -D aida-store         # remove orphan branch
+rm -f ~/.cargo/bin/aida                # if installed via cargo
+rm -f ~/.local/bin/aida                # if installed manually
 ```
 
 AIDA doesn't modify your source code or git history (unless you add trace comments). Removing it is clean.
