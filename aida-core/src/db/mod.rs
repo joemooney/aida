@@ -77,7 +77,13 @@ pub fn create_backend(
     match bt {
         BackendType::Yaml => Ok(Box::new(YamlBackend::new(path))),
         BackendType::Sqlite => Ok(Box::new(SqliteBackend::new(path)?)),
-        BackendType::Git => Ok(Box::new(GitBackend::new(path)?)),
+        BackendType::Git => {
+            // Git paths get the cache wrapper automatically (EPIC-1-001).
+            // Cache lives at the project's .aida/cache.db; if probe fails to
+            // locate one, falls back to a sibling file next to the store.
+            let cache_path = CachedGitBackend::default_cache_path(path);
+            Ok(Box::new(CachedGitBackend::open(path, &cache_path)?))
+        }
         #[cfg(feature = "postgres")]
         BackendType::Postgres => Ok(Box::new(PostgresBackend::new(&path_str)?)),
         #[cfg(not(feature = "postgres"))]

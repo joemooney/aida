@@ -54,24 +54,23 @@ Requirements database: `requirements.db` (SQLite, runtime) / `requirements.yaml`
 ### Git Pre-commit Hook
 A `.git/hooks/pre-commit` script auto-exports `requirements.db` to `requirements.yaml` before each commit. The SQLite binary is **not** tracked in git — only the diffable YAML is committed. This gives full text-based diff history while keeping SQLite as the runtime backend. The hook skips gracefully if `aida` is not installed.
 
-### Database Storage
-AIDA supports five storage backends:
-- **YAML**: Human-readable, git-friendly, good for single-user scenarios
-- **SQLite**: Better for concurrent access (GUI + CLI), optimistic locking
-- **PostgreSQL**: Enterprise-grade, multi-user, native JSONB support
-- **Git**: Distributed, offline-capable. Each requirement is a YAML file in a sharded git repo (`objects/TYPE/NNN/SPEC-ID.yaml`). Supports node-namespaced IDs (`FR-7-001`) with agreed short IDs (`FR-1`) at merge-to-trunk.
+### Database Storage (EPIC-1-001)
 
-To migrate between backends:
-```bash
-aida db migrate --from yaml --to sqlite
-aida db migrate --from sqlite --to postgres --output "postgres://user:pass@host:5432/db"
-aida db migrate --from postgres --to yaml --output requirements.yaml
-aida db export-git -o aida-store       # Export any backend to git-backed store
-```
+**Canonical model: git-orphan-branch + SQLite cache view.** The git store is the source of truth; the SQLite cache (`.aida/cache.db`, gitignored) is a rebuildable read projection used by list/filter/search to avoid scanning hundreds of YAML files per query. See `docs/plans/2026-05-02-git-canonical-storage.md`.
 
-To use PostgreSQL directly:
+- **Git** (canonical): One YAML file per requirement under `objects/TYPE/NNN/SPEC-ID.yaml`. Node-namespaced IDs (`FR-7-001`) with agreed short IDs (`FR-1`) assigned at merge-to-trunk. HLC timestamps + dispenser-based sequence generation enable distributed, offline-capable operation.
+- **SQLite cache**: Auto-rebuilt on stale-detection (cache HEAD-SHA vs git HEAD-SHA). Holds summary fields only — full records always read from canonical YAML. Manage via `aida cache rebuild` and `aida cache status`.
+- **YAML export**: One-shot diffable artifact via the pre-commit hook (`requirements.yaml`). Not a runtime backend.
+- **PostgreSQL** (opt-in): For teams wanting a server-backed shared projection. Compiled in only with the `postgres` feature flag; will be extracted to a separate `aida-backend-postgres` plugin crate.
+
+Legacy standalone YAML / SQLite backends (`yaml_backend.rs`, `sqlite_backend.rs`) still exist for migration tooling but are no longer the canonical write path. New projects should use `aida init --distributed` (the default).
+
 ```bash
-aida --file "postgres://user:pass@localhost:5432/aida" list
+aida cache status                      # Compare cache HEAD vs git HEAD; show counts
+aida cache rebuild                     # Force-replay git → SQLite cache
+aida db export-git -o aida-store       # Export legacy backend to git-store form
+aida db merge-gate                     # Assign short agreed IDs after merge to trunk
+aida db sync --pull --push             # Sync orphan branch with remote
 ```
 
 ### Distributed Mode
