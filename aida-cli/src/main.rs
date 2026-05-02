@@ -81,19 +81,28 @@ fn main() -> Result<()> {
         agent,
         no_hooks,
         force,
-        distributed,
+        distributed: _,
+        centralized,
         sibling,
         registry_remote,
     } = &cli.command
     {
-        if *distributed {
-            if *sibling {
-                handle_init_distributed_sibling(registry_remote.as_deref(), *force)?;
-            } else {
-                handle_init_distributed_worktree(*force)?;
-            }
-        } else {
+        // Default: distributed (git-canonical) mode per EPIC-1-001.
+        // --sibling implies distributed-sibling. --centralized opts into
+        // the deprecated SQLite-canonical path.
+        // trace:EPIC-1-001 | ai:claude
+        if *centralized {
             handle_init_command(*no_skills, agent, *no_hooks, *force)?;
+        } else if *sibling {
+            handle_init_distributed_sibling(
+                registry_remote.as_deref(),
+                *force,
+                *no_skills,
+                agent,
+                *no_hooks,
+            )?;
+        } else {
+            handle_init_distributed_worktree(*force, *no_skills, agent, *no_hooks)?;
         }
         return Ok(());
     }
@@ -413,6 +422,15 @@ fn main() -> Result<()> {
 
 // trace:TASK-0001 | ai:claude:high
 fn handle_init_command(no_skills: bool, agent: &str, no_hooks: bool, force: bool) -> Result<()> {
+    eprintln!(
+        "{}: --centralized initializes a SQLite-canonical store, which is deprecated.",
+        "warning".yellow().bold()
+    );
+    eprintln!(
+        "         Run `aida init` (without flags) to use the recommended git-canonical store."
+    );
+    eprintln!();
+
     let db_path = std::path::PathBuf::from("requirements.db");
 
     // Check existing state
@@ -440,6 +458,35 @@ fn handle_init_command(no_skills: bool, agent: &str, no_hooks: bool, force: bool
     // Create docs/plans/
     std::fs::create_dir_all("docs/plans")?;
 
+    // Run the shared workflow scaffolding (skills, hooks, mcp, codex).
+    let root = std::env::current_dir().unwrap_or_default();
+    complete_init_scaffolding(
+        &root,
+        &store,
+        agent,
+        no_skills,
+        no_hooks,
+        force,
+        db_path.clone(),
+        "Requirements database (SQLite)",
+    )
+}
+
+/// Workflow scaffolding shared by all `aida init` modes — builds skills,
+/// commands, hooks, MCP integration, etc. Called by both centralized and
+/// distributed init paths after their respective storage setup is complete.
+/// trace:EPIC-1-001 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn complete_init_scaffolding(
+    root: &std::path::Path,
+    store: &RequirementsStore,
+    agent: &str,
+    no_skills: bool,
+    no_hooks: bool,
+    force: bool,
+    db_path: std::path::PathBuf,
+    storage_label: &str,
+) -> Result<()> {
     // Build ScaffoldConfig with escape hatches
     let mut config = ScaffoldConfig::default();
     match agent {
@@ -492,10 +539,9 @@ fn handle_init_command(no_skills: bool, agent: &str, no_hooks: bool, force: bool
     }
 
     // Run scaffold
-    let root = std::env::current_dir().unwrap_or_default();
     let config_for_output = config.clone();
-    let mut scaffolder = Scaffolder::with_database(root.clone(), config, db_path);
-    let preview = scaffolder.preview(&store);
+    let mut scaffolder = Scaffolder::with_database(root.to_path_buf(), config, db_path);
+    let preview = scaffolder.preview(store);
 
     let mut _created_count = 0;
     let mut updated_count = 0;
@@ -557,11 +603,7 @@ fn handle_init_command(no_skills: bool, agent: &str, no_hooks: bool, force: bool
     println!("{}", "AIDA initialized ✓".green().bold());
     println!();
     println!("  {}:", "Created".bold());
-    println!(
-        "    {}{}Requirements database (SQLite)",
-        "requirements.db".white().bold(),
-        " ".repeat(24)
-    );
+    println!("    {}", storage_label);
     if config_for_output.generate_claude_md {
         println!(
             "    {}{}Claude Code MCP integration",
@@ -1389,7 +1431,12 @@ fn parse_requirement_type(s: &str) -> Result<RequirementType> {
 /// Initialize distributed mode using an orphan branch + worktree.
 /// This is the default for single-repo projects.
 /// Store lives at .aida-store/ (worktree of orphan branch 'aida-store').
-fn handle_init_distributed_worktree(force: bool) -> Result<()> {
+fn handle_init_distributed_worktree(
+    force: bool,
+    no_skills: bool,
+    agent: &str,
+    no_hooks: bool,
+) -> Result<()> {
     use aida_core::git_ops;
 
     let cwd = std::env::current_dir()?;
@@ -1450,7 +1497,8 @@ fn handle_init_distributed_worktree(force: bool) -> Result<()> {
 
     // Initialize the git backend
     let backend = aida_core::GitBackend::new(&store_path)?;
-    let store = aida_core::models::RequirementsStore::new();
+    let mut store = aida_core::models::RequirementsStore::new();
+    seed_meta_requirements(&mut store)?;
     backend.save(&store)?;
     println!(
         "  {} {}",
@@ -1463,6 +1511,7 @@ fn handle_init_distributed_worktree(force: bool) -> Result<()> {
     std::fs::create_dir_all(store_path.join("objects"))?;
     std::fs::write(store_path.join("objects/.gitkeep"), "")?;
     git_ops::add(&store_path, &["objects/.gitkeep"])?;
+    git_ops::add(&store_path, &["objects"])?;
     git_ops::commit(&store_path, "chore: initialize AIDA distributed store")?;
 
     // Add .aida-store to .gitignore on main branch
@@ -1494,25 +1543,38 @@ fn handle_init_distributed_worktree(force: bool) -> Result<()> {
     );
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
 
-    println!();
-    println!("{}", "AIDA distributed mode initialized".green().bold());
-    println!();
-    println!("  {}:", "How it works".bold());
-    println!("    Code lives on '{}' branch", git_ops::current_branch(&cwd).unwrap_or("main".into()));
-    println!("    Requirements live on '{}' branch (orphan, separate history)", branch_name);
-    println!("    Worktree at {} (gitignored)", worktree_dir);
-    println!();
-    println!("  {}:", "Quick start".bold());
-    println!("    {}", "aida add --title \"First req\" --type functional".cyan());
-    println!("    {}", "aida list".cyan());
-    println!("    {}", "aida db merge-gate".cyan());
+    // Create docs/plans/ for plan archive (per CLAUDE.md convention).
+    std::fs::create_dir_all(cwd.join("docs/plans"))?;
+
+    // Run the shared workflow scaffolding (skills, hooks, mcp, codex).
+    let storage_label = format!(
+        "{}{}Git-canonical store ({}, orphan branch '{}')",
+        worktree_dir.white().bold(),
+        " ".repeat(20),
+        worktree_dir,
+        branch_name
+    );
+    complete_init_scaffolding(
+        &cwd,
+        &store,
+        agent,
+        no_skills,
+        no_hooks,
+        force,
+        std::path::PathBuf::from(worktree_dir),
+        &storage_label,
+    )?;
+
     println!();
     println!("  {}:", "Sync store to remote".bold());
     println!("    {}", format!("git push origin {}", branch_name).cyan());
     println!();
     println!("  {}:", "New developer setup".bold());
     println!("    {}", "git clone <repo>".cyan());
-    println!("    {}", format!("git worktree add {} {}", worktree_dir, branch_name).cyan());
+    println!(
+        "    {}",
+        format!("git worktree add {} {}", worktree_dir, branch_name).cyan()
+    );
     println!();
 
     Ok(())
@@ -1520,7 +1582,13 @@ fn handle_init_distributed_worktree(force: bool) -> Result<()> {
 
 /// Initialize distributed mode using a sibling repo.
 /// For multi-repo workspaces where multiple code repos share one store.
-fn handle_init_distributed_sibling(registry_remote: Option<&str>, force: bool) -> Result<()> {
+fn handle_init_distributed_sibling(
+    registry_remote: Option<&str>,
+    force: bool,
+    no_skills: bool,
+    agent: &str,
+    no_hooks: bool,
+) -> Result<()> {
     use aida_core::git_ops;
 
     let cwd = std::env::current_dir()?;
@@ -1587,7 +1655,8 @@ fn handle_init_distributed_sibling(registry_remote: Option<&str>, force: bool) -
 
     // Initialize the git backend (creates objects/ and metadata.yaml)
     let backend = aida_core::GitBackend::new(&store_dir)?;
-    let store = aida_core::models::RequirementsStore::new();
+    let mut store = aida_core::models::RequirementsStore::new();
+    seed_meta_requirements(&mut store)?;
     backend.save(&store)?;
     println!(
         "  {} {}",
@@ -1690,24 +1759,29 @@ fn handle_init_distributed_sibling(registry_remote: Option<&str>, force: bool) -
     );
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
 
-    println!();
-    println!("{}", "AIDA distributed mode initialized".green().bold());
-    println!();
-    println!("  {}:", "Directory layout".bold());
-    println!("    {:<30} Project config", ".aida/config.toml".white().bold());
-    println!("    {:<30} Git-backed object store", "aida-store/".white().bold());
-    println!("    {:<30} Sharded requirement files", "aida-store/objects/".white().bold());
-    println!("    {:<30} Store metadata & counters", "aida-store/metadata.yaml".white().bold());
-    println!();
-    println!("  {}:", "Quick start".bold());
-    println!(
-        "    {}",
-        "aida add --title \"First req\" --type functional".cyan()
+    // Create docs/plans/ for plan archive (per CLAUDE.md convention).
+    std::fs::create_dir_all(cwd.join("docs/plans"))?;
+
+    // Run the shared workflow scaffolding (skills, hooks, mcp, codex).
+    let storage_label = format!(
+        "{}{}Git-canonical store (sibling repo at ../aida-store/)",
+        "aida-store/".white().bold(),
+        " ".repeat(20)
     );
-    println!("    {}", "aida list".cyan());
-    println!("    {}", "aida show FR-1-001".cyan());
-    println!("    {}", "aida db merge-gate".cyan());
-    println!("    {}", "aida db sync --pull --push".cyan());
+    complete_init_scaffolding(
+        &cwd,
+        &store,
+        agent,
+        no_skills,
+        no_hooks,
+        force,
+        std::path::PathBuf::from("aida-store"),
+        &storage_label,
+    )?;
+
+    println!();
+    println!("  {}:", "Sync store to remote".bold());
+    println!("    {}", "cd aida-store && git push -u origin main".cyan());
     println!();
 
     Ok(())

@@ -49,10 +49,10 @@ Features: structured search (`owner:joe`, `tag:frontend` syntax in search bar), 
 
 This project uses AIDA for requirements tracking. **Do NOT maintain a separate REQUIREMENTS.md file.**
 
-Requirements database: `requirements.db` (SQLite, runtime) / `requirements.yaml` (tracked in git)
+Requirements live on the `aida-store` orphan branch (one YAML file per requirement under `objects/TYPE/000/SPEC-ID.yaml`). A worktree at `.aida-store/` (gitignored) is the live working copy. A SQLite cache at `.aida/cache.db` (gitignored, auto-rebuilt) accelerates list/filter/search queries.
 
 ### Git Pre-commit Hook
-A `.git/hooks/pre-commit` script auto-exports `requirements.db` to `requirements.yaml` before each commit. The SQLite binary is **not** tracked in git — only the diffable YAML is committed. This gives full text-based diff history while keeping SQLite as the runtime backend. The hook skips gracefully if `aida` is not installed.
+A `.git/hooks/pre-commit` script auto-exports the legacy `requirements.db` (if present) to `requirements.yaml` before each commit. This was useful in centralized mode for diffable history; in distributed mode the canonical YAML files on the orphan branch already provide diffable history per object. The hook skips gracefully if `aida` is not installed.
 
 ### Database Storage (EPIC-1-001)
 
@@ -63,7 +63,7 @@ A `.git/hooks/pre-commit` script auto-exports `requirements.db` to `requirements
 - **YAML export**: One-shot diffable artifact via the pre-commit hook (`requirements.yaml`). Not a runtime backend.
 - **PostgreSQL** (opt-in): For teams wanting a server-backed shared projection. Compiled in only with the `postgres` feature flag; will be extracted to a separate `aida-backend-postgres` plugin crate.
 
-Legacy standalone YAML / SQLite backends (`yaml_backend.rs`, `sqlite_backend.rs`) still exist for migration tooling but are no longer the canonical write path. New projects should use `aida init --distributed` (the default).
+Legacy standalone YAML / SQLite backends (`yaml_backend.rs`, `sqlite_backend.rs`) still exist for migration tooling but are no longer the canonical write path. New projects use `aida init` — the default is now git-canonical (was opt-in via `--distributed` before EPIC-1-001 Phase 3). Pass `--centralized` for the legacy SQLite path (deprecated, prints a warning).
 
 ```bash
 aida cache status                      # Compare cache HEAD vs git HEAD; show counts
@@ -73,36 +73,42 @@ aida db merge-gate                     # Assign short agreed IDs after merge to 
 aida db sync --pull --push             # Sync orphan branch with remote
 ```
 
-### Distributed Mode
-For offline-capable, multi-node deployments:
+### Distributed Mode (default since EPIC-1-001 Phase 3)
 ```bash
-aida init --distributed                # Creates git-backed store in aida-store/
+aida init                              # Default: git-canonical, orphan branch + worktree
 aida add --title "..." --type functional  # Auto-detected, no --file needed
-aida list                              # Works via .aida/config.toml auto-detection
+aida list                              # Cache-backed (sub-ms vs full-store load)
+aida search "<query>"                  # Cache-backed FTS5 search
+aida cache status                      # Compare cache HEAD vs git HEAD
+aida cache rebuild                     # Force-replay git store -> SQLite cache
 aida db merge-gate                     # Assign short agreed IDs (FR-7-001 → FR-1)
 aida db sync --pull --push             # Sync with remote, detects conflicts
 aida db status                         # Show sync status, pending merge-gate items
 ```
 
 Key concepts:
-- **Centralized mode** (default): Simple IDs (`FR-001`), central database
-- **Distributed mode**: Node-namespaced IDs (`FR-1-001`), git-based, offline-capable
+- **Distributed mode** (default): Node-namespaced IDs (`FR-1-001`), git-based, offline-capable, cache-accelerated
+- **Centralized mode** (deprecated, opt-in via `aida init --centralized`): Simple IDs (`FR-001`), single SQLite database
 - **Agreed IDs**: Short IDs (`FR-1`) assigned at merge-to-trunk via `aida db merge-gate`
 - **Two-tier resolution**: Both `FR-1-001` and `FR-1` resolve to the same requirement
 
-Architecture: `aida-core/src/hlc.rs` (HLC timestamps), `dispenser.rs` (sequence generation), `node.rs` (node identity), `object_store.rs` (sharded YAML), `db/git_backend.rs` (backend), `git_ops.rs` (git commands + CAS registration), `conflict.rs` (conflict detection).
+Architecture: `aida-core/src/hlc.rs` (HLC timestamps), `dispenser.rs` (sequence generation), `node.rs` (node identity), `object_store.rs` (sharded YAML), `db/git_backend.rs` (backend), `db/cache.rs` (SQLite projection), `db/cached_git_backend.rs` (write-through wrapper), `git_ops.rs` (git commands + CAS registration), `conflict.rs` (conflict detection).
 
 ### Project Initialization
 ```bash
-aida init                              # Initialize AIDA in current directory (centralized)
-aida init --distributed                # Initialize in distributed mode (git-backed)
+aida init                              # Default: distributed (git-canonical) — RECOMMENDED
+aida init --centralized                # Legacy SQLite mode (deprecated, prints warning)
+aida init --sibling                    # Distributed mode using a sibling repo (multi-repo workspaces)
 aida init --no-skills                  # Skip .claude/skills/ and .claude/commands/
 aida init --no-hooks                   # Skip .claude/hooks/ and git hooks
 aida init --force                      # Overwrite existing files if already initialized
 ```
 
-`aida init` creates:
-- `requirements.db` — SQLite database with seeded META requirements
+`aida init` (default, distributed) creates:
+- Orphan branch `aida-store` with worktree at `.aida-store/` (gitignored) — canonical git-backed store
+- `.aida/config.toml` — distributed-mode marker
+- `.aida/cache.db` — SQLite read cache (gitignored, auto-rebuilt)
+- META requirements seeded into the orphan store
 - `.mcp.json` — Claude Code MCP integration config
 - `CLAUDE.md` — Project context for AI sessions
 - `.claude/skills/` — 21 workflow skills (unless `--no-skills`)
