@@ -12,7 +12,7 @@ use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
-use super::cache::Cache;
+use super::cache::{Cache, ListFilter, RequirementSummary};
 use super::git_backend::GitBackend;
 use super::traits::{BackendType, DatabaseBackend, UpdateResult};
 use crate::models::{QueueEntry, Requirement, RequirementsStore, User};
@@ -91,6 +91,21 @@ impl CachedGitBackend {
         let store = self.inner.load().context("Failed to load git store for cache rebuild")?;
         self.cache.rebuild_from_store(&store, &head)?;
         Ok(())
+    }
+
+    /// Cache-backed list query with filter pushdown. Returns lightweight
+    /// summaries — full Requirement records require a follow-up
+    /// `get_requirement` call. Triggers a stale-check first so callers
+    /// always see fresh data.
+    pub fn list_summaries(&self, filter: &ListFilter) -> Result<Vec<RequirementSummary>> {
+        self.ensure_cache_fresh()?;
+        self.cache.list_summaries(filter)
+    }
+
+    /// Cache-backed FTS5 search across spec_id, agreed_id, title, description.
+    pub fn search(&self, query: &str, limit: usize) -> Result<Vec<RequirementSummary>> {
+        self.ensure_cache_fresh()?;
+        self.cache.search(query, limit)
     }
 
     /// Force a full cache rebuild, regardless of staleness. Used by the

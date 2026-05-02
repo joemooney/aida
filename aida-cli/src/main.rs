@@ -757,30 +757,22 @@ fn handle_git_backend_command(
         Command::Cache(cache_cmd) => {
             return handle_cache_command(cache_cmd, &backend);
         }
-        Command::List { status, r#type, .. } => {
-            let store = backend.load()?;
-            let reqs: Vec<&Requirement> = store
-                .requirements
-                .iter()
-                .filter(|r| !r.archived)
-                .filter(|r| {
-                    status
-                        .as_ref()
-                        .map(|s| r.effective_status().eq_ignore_ascii_case(s))
-                        .unwrap_or(true)
-                })
-                .filter(|r| {
-                    r#type
-                        .as_ref()
-                        .map(|t| format!("{:?}", r.req_type).eq_ignore_ascii_case(t))
-                        .unwrap_or(true)
-                })
-                .collect();
+        Command::List { status, r#type, feature, .. } => {
+            // Cache-backed list (EPIC-1-001 Phase 2). The CachedGitBackend
+            // ensures the cache is fresh before querying, so this is one
+            // SQLite query instead of ~360 YAML reads.
+            // trace:EPIC-1-001 | ai:claude
+            let filter = aida_core::ListFilter {
+                status: status.clone(),
+                req_type: r#type.clone(),
+                feature: feature.clone(),
+                ..Default::default()
+            };
+            let reqs = backend.list_summaries(&filter)?;
 
             if reqs.is_empty() {
                 println!("No requirements found.");
             } else {
-                // Check if any have agreed IDs
                 let has_agreed = reqs.iter().any(|r| r.agreed_id.is_some());
 
                 if has_agreed {
@@ -790,12 +782,17 @@ fn handle_git_backend_command(
                     );
                     println!("{}", "─".repeat(78));
                     for req in &reqs {
+                        let display_id = req
+                            .agreed_id
+                            .as_deref()
+                            .or(req.spec_id.as_deref())
+                            .unwrap_or("?");
                         println!(
                             "{:<12} {:<14} {:<12} {:<10} {}",
-                            req.display_id(),
+                            display_id,
                             req.spec_id.as_deref().unwrap_or("-"),
-                            format!("{:?}", req.req_type),
-                            req.effective_status(),
+                            req.req_type,
+                            req.status,
                             req.title,
                         );
                     }
@@ -806,12 +803,16 @@ fn handle_git_backend_command(
                     );
                     println!("{}", "─".repeat(74));
                     for req in &reqs {
+                        let display_id = req
+                            .spec_id
+                            .as_deref()
+                            .unwrap_or("?");
                         println!(
                             "{:<14} {:<12} {:<10} {:<10} {}",
-                            req.display_id(),
-                            format!("{:?}", req.req_type),
-                            req.effective_status(),
-                            req.effective_priority(),
+                            display_id,
+                            req.req_type,
+                            req.status,
+                            req.priority,
                             req.title,
                         );
                     }
