@@ -228,6 +228,17 @@ pub enum ScaffoldCommand {
     },
 }
 
+/// Commands for the SQLite read-cache that projects the git-canonical store
+/// for fast list/filter/search queries (EPIC-1-001).
+#[derive(Subcommand, Debug)]
+pub enum CacheCommand {
+    /// Force a full rebuild of the cache from the git store
+    Rebuild,
+
+    /// Show cache state (HEAD comparison, requirement count, last build time)
+    Status,
+}
+
 #[derive(Subcommand, Debug)]
 pub enum DbCommand {
     /// Register a project in the registry
@@ -927,6 +938,10 @@ pub enum Command {
     /// Database management commands
     #[clap(subcommand)]
     Db(DbCommand),
+
+    /// SQLite cache view commands (git-canonical mode only)
+    #[clap(subcommand)]
+    Cache(CacheCommand),
 
     /// Relationship management commands
     #[clap(subcommand)]
