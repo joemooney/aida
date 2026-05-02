@@ -15,6 +15,49 @@ use uuid::Uuid;
 
 use crate::models::{Requirement, RequirementsStore};
 
+/// Lightweight projection of a Requirement, sourced from the cache rather
+/// than from canonical YAML. Contains just the fields needed for list /
+/// filter / search views — heavy fields (history, comments, relationships,
+/// custom_fields, etc.) live in the YAML file and require a full record
+/// fetch via `GitBackend::get_requirement` if needed.
+#[derive(Debug, Clone)]
+pub struct RequirementSummary {
+    pub id: Uuid,
+    pub spec_id: Option<String>,
+    pub agreed_id: Option<String>,
+    pub title: String,
+    pub description: String,
+    pub status: String,
+    pub priority: String,
+    pub owner: String,
+    pub feature: String,
+    pub req_type: String,
+    pub tags: Vec<String>,
+    pub created_at: String,
+    pub modified_at: String,
+    pub archived: bool,
+    pub yaml_path: String,
+}
+
+/// Filter passed to cache list queries. All fields are AND'd together;
+/// each field's match semantics are documented inline.
+#[derive(Debug, Default, Clone)]
+pub struct ListFilter {
+    /// Case-insensitive equality match on the cache's status string.
+    pub status: Option<String>,
+    /// Case-insensitive equality match on req_type (matches the Debug
+    /// formatting used during projection — e.g. "Functional", "Bug").
+    pub req_type: Option<String>,
+    /// Exact match on owner (handle).
+    pub owner: Option<String>,
+    /// Exact match on feature.
+    pub feature: Option<String>,
+    /// If false, archived requirements are filtered out (default behavior).
+    pub include_archived: bool,
+    /// Optional cap on returned rows (after ordering by modified_at DESC).
+    pub limit: Option<usize>,
+}
+
 const SCHEMA_SQL: &str = include_str!("cache_schema.sql");
 const SCHEMA_VERSION: &str = "1";
 
@@ -145,6 +188,78 @@ impl Cache {
         delete_one_uncommitted(&conn, id)
     }
 
+    // ----------------------------------------------------------------- query
+
+    /// Return a filtered list of summaries. Uses indexed columns for filter
+    /// pushdown and orders by modified_at DESC so callers see freshest
+    /// requirements first.
+    pub fn list_summaries(&self, filter: &ListFilter) -> Result<Vec<RequirementSummary>> {
+        let mut sql = String::from(
+            "SELECT id, spec_id, agreed_id, title, description, status, priority,
+                    owner, feature, req_type, tags_json, created_at, modified_at,
+                    archived, yaml_path
+             FROM requirements_cache WHERE 1=1",
+        );
+        let mut args: Vec<String> = Vec::new();
+
+        if !filter.include_archived {
+            sql.push_str(" AND archived = 0");
+        }
+        if let Some(s) = &filter.status {
+            sql.push_str(" AND LOWER(status) = LOWER(?)");
+            args.push(s.clone());
+        }
+        if let Some(t) = &filter.req_type {
+            sql.push_str(" AND LOWER(req_type) = LOWER(?)");
+            args.push(t.clone());
+        }
+        if let Some(o) = &filter.owner {
+            sql.push_str(" AND owner = ?");
+            args.push(o.clone());
+        }
+        if let Some(f) = &filter.feature {
+            sql.push_str(" AND feature = ?");
+            args.push(f.clone());
+        }
+
+        sql.push_str(" ORDER BY modified_at DESC");
+        if let Some(n) = filter.limit {
+            sql.push_str(&format!(" LIMIT {}", n));
+        }
+
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(&sql)?;
+        let param_refs: Vec<&dyn rusqlite::ToSql> =
+            args.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
+        let rows = stmt
+            .query_map(param_refs.as_slice(), row_to_summary)?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
+    }
+
+    /// FTS5 full-text search over spec_id, agreed_id, title, description.
+    /// Uses MATCH semantics — pass an FTS5 query expression (a bare word
+    /// works for prefix-tolerant token matching).
+    pub fn search(&self, query: &str, limit: usize) -> Result<Vec<RequirementSummary>> {
+        let conn = self.conn.lock().unwrap();
+        // FTS5 requires the MATCH clause to use the bare table name, not an
+        // alias — hence no `f` alias on requirements_fts.
+        let sql = "SELECT c.id, c.spec_id, c.agreed_id, c.title, c.description,
+                          c.status, c.priority, c.owner, c.feature, c.req_type,
+                          c.tags_json, c.created_at, c.modified_at, c.archived,
+                          c.yaml_path
+                   FROM requirements_fts
+                   JOIN requirements_cache c ON c.id = requirements_fts.id
+                   WHERE requirements_fts MATCH ? AND c.archived = 0
+                   ORDER BY rank
+                   LIMIT ?";
+        let mut stmt = conn.prepare(sql)?;
+        let rows = stmt
+            .query_map(params![query, limit as i64], row_to_summary)?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
+    }
+
     // ----------------------------------------------------------------- stats
 
     pub fn requirement_count(&self) -> Result<usize> {
@@ -207,6 +322,33 @@ fn insert_one(conn: &Connection, req: &Requirement) -> Result<()> {
         ],
     )?;
     Ok(())
+}
+
+fn row_to_summary(row: &rusqlite::Row) -> rusqlite::Result<RequirementSummary> {
+    let id_str: String = row.get(0)?;
+    let id = Uuid::parse_str(&id_str).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))
+    })?;
+    let tags_json: String = row.get(10)?;
+    let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
+    let archived_int: i64 = row.get(13)?;
+    Ok(RequirementSummary {
+        id,
+        spec_id: row.get(1)?,
+        agreed_id: row.get(2)?,
+        title: row.get(3)?,
+        description: row.get(4)?,
+        status: row.get(5)?,
+        priority: row.get(6)?,
+        owner: row.get(7)?,
+        feature: row.get(8)?,
+        req_type: row.get(9)?,
+        tags,
+        created_at: row.get(11)?,
+        modified_at: row.get(12)?,
+        archived: archived_int != 0,
+        yaml_path: row.get(14)?,
+    })
 }
 
 fn delete_one_uncommitted(conn: &Connection, id: &Uuid) -> Result<()> {
@@ -275,6 +417,68 @@ mod tests {
             .delete_requirement(&store.requirements[1].id)
             .unwrap();
         assert_eq!(cache.requirement_count().unwrap(), 1);
+    }
+
+    #[test]
+    fn list_summaries_filters_and_orders() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut store = RequirementsStore::new();
+        let mut a = sample_req("FR-1-001", "alpha");
+        a.owner = "joe".into();
+        let mut b = sample_req("FR-1-002", "beta");
+        b.owner = "spock".into();
+        let mut c = sample_req("BUG-1-003", "gamma");
+        c.owner = "joe".into();
+        c.archived = true;
+        store.requirements.push(a);
+        store.requirements.push(b);
+        store.requirements.push(c);
+
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        // Default filter: skip archived → 2 rows.
+        let all = cache.list_summaries(&ListFilter::default()).unwrap();
+        assert_eq!(all.len(), 2);
+
+        // Filter by owner.
+        let mine = cache
+            .list_summaries(&ListFilter {
+                owner: Some("joe".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(mine.len(), 1);
+        assert_eq!(mine[0].spec_id.as_deref(), Some("FR-1-001"));
+
+        // include_archived returns the BUG too.
+        let everything = cache
+            .list_summaries(&ListFilter {
+                include_archived: true,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(everything.len(), 3);
+    }
+
+    #[test]
+    fn search_uses_fts5() {
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut store = RequirementsStore::new();
+        store.requirements.push(sample_req("FR-1-001", "git canonical storage"));
+        store.requirements.push(sample_req("FR-1-002", "react dashboard"));
+        store.requirements.push(sample_req("FR-1-003", "canonical readme"));
+
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        let hits = cache.search("canonical", 10).unwrap();
+        assert_eq!(hits.len(), 2);
+        let titles: Vec<_> = hits.iter().map(|h| h.title.as_str()).collect();
+        assert!(titles.contains(&"git canonical storage"));
+        assert!(titles.contains(&"canonical readme"));
     }
 
     #[test]

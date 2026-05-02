@@ -29,7 +29,7 @@ pub use migration::{migrate_from_postgres, migrate_to_postgres};
 #[cfg(feature = "postgres")]
 pub use postgres_backend::PostgresBackend;
 #[cfg(feature = "native")]
-pub use cache::Cache;
+pub use cache::{Cache, ListFilter, RequirementSummary};
 #[cfg(feature = "native")]
 pub use cached_git_backend::CachedGitBackend;
 #[cfg(feature = "native")]
