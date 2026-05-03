@@ -2,7 +2,13 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
-#[clap(author, version, about = "A simple requirements management system")]
+#[clap(
+    author,
+    version,
+    about = "AI-native requirements management — durable, agent-readable specs",
+    after_help = "Less-common commands (db, cache, gitlab, mcp-serve, etc.) are hidden \
+                  by default. Run `aida help-all` for the full inventory grouped by topic."
+)]
 pub struct Cli {
     /// Path to the requirements file (overrides auto-detection)
     #[clap(long)]
@@ -988,15 +994,15 @@ pub enum Command {
     },
 
     /// Feature management commands
-    #[clap(subcommand)]
+    #[clap(subcommand, hide = true)]
     Feature(FeatureCommand),
 
     /// Database management commands
-    #[clap(subcommand)]
+    #[clap(subcommand, hide = true)]
     Db(DbCommand),
 
     /// SQLite cache view commands (git-canonical mode only)
-    #[clap(subcommand)]
+    #[clap(subcommand, hide = true)]
     Cache(CacheCommand),
 
     /// Show this project's status — storage mode, requirement counts,
@@ -1011,7 +1017,7 @@ pub enum Command {
 
     /// AIDA-developer-only commands: activate the in-repo dev binary,
     /// run dev servers, install shell helpers. End users don't need these.
-    #[clap(subcommand)]
+    #[clap(subcommand, hide = true)]
     Dev(DevCommand),
 
     /// Upgrade aida to the latest release (or a specified version).
@@ -1039,11 +1045,11 @@ pub enum Command {
     },
 
     /// Relationship management commands
-    #[clap(subcommand)]
+    #[clap(subcommand, hide = true)]
     Rel(RelationshipCommand),
 
     /// Relationship definition management commands
-    #[clap(subcommand)]
+    #[clap(subcommand, hide = true)]
     RelDef(RelDefCommand),
 
     /// Manage comments on requirements
@@ -1051,14 +1057,15 @@ pub enum Command {
     Comment(CommentCommand),
 
     /// ID configuration commands
-    #[clap(subcommand)]
+    #[clap(subcommand, hide = true)]
     Config(ConfigCommand),
 
     /// Requirement type management commands
-    #[clap(subcommand, name = "type")]
+    #[clap(subcommand, name = "type", hide = true)]
     Type(TypeCommand),
 
     /// Export requirements to different formats
+    #[clap(hide = true)]
     Export {
         /// Output format (mapping, json, tree)
         #[clap(long, short = 'f', default_value = "mapping")]
@@ -1074,6 +1081,7 @@ pub enum Command {
     },
 
     /// Import requirements from a tree JSON file
+    #[clap(hide = true)]
     Import {
         /// Path to the tree JSON file to import
         file: PathBuf,
@@ -1088,6 +1096,7 @@ pub enum Command {
     },
 
     /// Open the user guide in the default browser
+    #[clap(hide = true)]
     UserGuide {
         /// Open in dark mode
         #[clap(long)]
@@ -1095,15 +1104,15 @@ pub enum Command {
     },
 
     /// Server management commands (requires --server or AIDA_SERVER)
-    #[clap(subcommand)]
+    #[clap(subcommand, hide = true)]
     Server(ServerCommand),
 
     /// Code-to-requirement traceability commands
-    #[clap(subcommand)]
+    #[clap(subcommand, hide = true)]
     Trace(TraceCommand),
 
     /// Report generation commands
-    #[clap(subcommand)]
+    #[clap(subcommand, hide = true)]
     Report(ReportCommand),
 
     /// Initialize AIDA in the current project
@@ -1148,28 +1157,30 @@ pub enum Command {
     },
 
     /// Scaffolding management commands
-    #[clap(subcommand)]
+    #[clap(subcommand, hide = true)]
     Scaffold(ScaffoldCommand),
 
     /// GitLab integration commands
-    #[clap(subcommand)]
+    #[clap(subcommand, hide = true)]
     Gitlab(GitLabCommand),
 
     /// GitHub integration commands
-    #[clap(subcommand)]
+    #[clap(subcommand, hide = true)]
     Github(GitHubCommand),
 
     /// Jira integration commands
-    #[clap(subcommand)]
+    #[clap(subcommand, hide = true)]
     Jira(JiraCommand),
 
     /// Start MCP (Model Context Protocol) server over stdio
     ///
     /// Exposes AIDA requirements as MCP tools for Claude Code integration.
     /// Reads JSON-RPC 2.0 requests from stdin, writes responses to stdout.
+    #[clap(hide = true)]
     McpServe,
 
     /// Search requirements for a pattern (like grep)
+    #[clap(hide = true)]
     Grep {
         /// Pattern to search for (regex supported with -E)
         pattern: String,
@@ -1224,7 +1235,7 @@ pub enum Command {
     },
 
     /// Personal work queue commands
-    #[clap(subcommand)]
+    #[clap(subcommand, hide = true)]
     Queue(QueueCommand),
 
     /// Simple search for requirements (case-insensitive by default)
@@ -1244,6 +1255,10 @@ pub enum Command {
         #[clap(long)]
         feature: Option<String>,
     },
+
+    /// List all commands (including the less-common ones hidden from
+    /// `aida --help`), grouped by topic.
+    HelpAll,
 }
 
 /// GitHub integration commands
