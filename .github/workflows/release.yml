@@ -55,13 +55,18 @@ jobs:
           if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
             export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
           fi
-          cargo build --release --target ${{ matrix.target }} -p aida-cli
+          cargo build --release --target ${{ matrix.target }} -p aida-cli -p aida-server
 
       - name: Package
         run: |
-          cp target/${{ matrix.target }}/release/aida ${{ matrix.name }}
-          chmod +x ${{ matrix.name }}
-          tar czf ${{ matrix.name }}.tar.gz ${{ matrix.name }}
+          # Stage both binaries under a per-target dir so the tarball
+          # contains aida + aida-server at the top level (not renamed).
+          # scripts/install.sh and `aida upgrade` look for these names.
+          mkdir -p stage/${{ matrix.name }}
+          cp target/${{ matrix.target }}/release/aida        stage/${{ matrix.name }}/aida
+          cp target/${{ matrix.target }}/release/aida-server stage/${{ matrix.name }}/aida-server
+          chmod +x stage/${{ matrix.name }}/aida stage/${{ matrix.name }}/aida-server
+          tar czf ${{ matrix.name }}.tar.gz -C stage/${{ matrix.name }} aida aida-server
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
