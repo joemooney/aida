@@ -4377,6 +4377,7 @@ fn upgrade_dev_mode_sibling_scan(check: bool, version: Option<&str>, yes: bool) 
     if check {
         if stale.is_empty() {
             println!("{}: all sibling installs are at {}.", "OK".green(), target_tag);
+            print_unreleased_dev_hint(&exe, &target_tag);
         } else {
             println!(
                 "{}: {} sibling install(s) are stale. Re-run without --check to upgrade.",
@@ -4389,6 +4390,7 @@ fn upgrade_dev_mode_sibling_scan(check: bool, version: Option<&str>, yes: bool) 
 
     if stale.is_empty() {
         println!("{}: nothing to do — all sibling installs are at {}.", "OK".green(), target_tag);
+        print_unreleased_dev_hint(&exe, &target_tag);
         return Ok(());
     }
 
@@ -4489,6 +4491,66 @@ fn query_binary_version(path: &std::path::Path) -> Option<(String, String)> {
 
 /// Common locations where users typically have aida installed. Order matters
 /// for display; we use it as-is for the scan-and-report output.
+/// Walk up from `start` (a binary path or directory) looking for the aida
+/// repo root. Used to discover the dev binary's source repo so we can ask
+/// "is this build ahead of the latest release tag".
+fn find_aida_repo_above(start: &std::path::Path) -> Option<std::path::PathBuf> {
+    let mut probe = if start.is_file() {
+        start.parent()?.to_path_buf()
+    } else {
+        start.to_path_buf()
+    };
+    for _ in 0..6 {
+        if is_aida_repo(&probe) {
+            return Some(probe);
+        }
+        probe = match probe.parent() {
+            Some(p) => p.to_path_buf(),
+            None => return None,
+        };
+    }
+    None
+}
+
+/// When `aida upgrade` runs from a developer build and finds all sibling
+/// installs already at the latest released tag, surface the fact that the
+/// dev build itself is ahead of that tag — otherwise the user might think
+/// "everything's up to date" when really there are unreleased commits
+/// sitting in their repo. Pure hint; doesn't trigger any action.
+fn print_unreleased_dev_hint(exe: &std::path::Path, target_tag: &str) {
+    let repo = match find_aida_repo_above(exe) {
+        Some(r) => r,
+        None => return,
+    };
+    let latest = match git_describe_latest_tag(&repo) {
+        Some(t) => t,
+        None => return,
+    };
+    if latest != target_tag {
+        // Latest tag locally doesn't match the latest published release —
+        // probably a fetch lag. Don't speculate; just bail quietly.
+        return;
+    }
+    let ahead = git_commits_since_tag(&repo, &latest).unwrap_or(0);
+    if ahead == 0 {
+        return;
+    }
+    println!();
+    println!(
+        "{}: this dev build is {} commit{} ahead of {}.",
+        "Note".blue(),
+        ahead,
+        if ahead == 1 { "" } else { "s" },
+        latest
+    );
+    println!("      To ship those changes and refresh your installs:");
+    println!(
+        "        cd {} && ./scripts/release.sh patch",
+        repo.display()
+    );
+    println!("      Then re-run `aida upgrade`.");
+}
+
 /// File mtime as `YYYY-MM-DD` for display next to a binary's version. Useful
 /// as a universal "when was this binary placed here" indicator — works even
 /// for binaries built before the build-banner stamps existed (pre-EPIC-1-001).
