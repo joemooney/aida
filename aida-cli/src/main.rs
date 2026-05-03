@@ -3265,18 +3265,63 @@ fn handle_dev_status() -> Result<()> {
     Ok(())
 }
 
-fn handle_dev_shell_init(install: bool) -> Result<()> {
-    let helpers = r#"# AIDA dev workflow helpers (added by `aida dev shell-init`)
-aida-on()  { eval "$(command aida dev activate "$@")"; }
-aida-off() { eval "$(command aida dev deactivate)"; }
+/// Shell helpers emitted by `aida dev shell-init`. The aida-on helper
+/// walks up from PWD looking for an aida repo with a built `target/` —
+/// this avoids the bootstrap chicken-and-egg where the released `aida`
+/// on PATH doesn't yet support the `dev` subcommand.
+const SHELL_HELPERS: &str = r#"# Locate an aida binary that supports `dev activate`. Order:
+#   1. walk up from PWD looking for an aida repo with target/{release|debug}/aida
+#   2. fall back to $AIDA_DEV_REPO/target/{release|debug}/aida
+#   3. fall back to whatever `aida` is on PATH
+__aida_find_bin() {
+    local probe="$PWD"
+    while [ -n "$probe" ] && [ "$probe" != "/" ]; do
+        if [ -f "$probe/Cargo.toml" ] && grep -q 'repository = "https://github.com/joemooney/aida"' "$probe/Cargo.toml" 2>/dev/null; then
+            for c in "$probe/target/release/aida" "$probe/target/debug/aida"; do
+                [ -x "$c" ] && { printf '%s\n' "$c"; return 0; }
+            done
+        fi
+        probe=$(dirname "$probe")
+    done
+    if [ -n "$AIDA_DEV_REPO" ]; then
+        for c in "$AIDA_DEV_REPO/target/release/aida" "$AIDA_DEV_REPO/target/debug/aida"; do
+            [ -x "$c" ] && { printf '%s\n' "$c"; return 0; }
+        done
+    fi
+    command -v aida
+}
+
+aida-on() {
+    local bin
+    bin=$(__aida_find_bin)
+    if [ -z "$bin" ]; then
+        echo "aida-on: no aida binary found." >&2
+        echo "        cd into the aida repo (with target/ built), set AIDA_DEV_REPO," >&2
+        echo "        or install: curl -sSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.sh | bash" >&2
+        return 1
+    fi
+    eval "$("$bin" dev activate "$@")"
+}
+
+aida-off() {
+    # When activated, `aida` on PATH is the dev binary which knows `dev deactivate`.
+    # If somehow not on PATH, fall back to the smart finder.
+    local bin
+    bin=$(command -v aida || __aida_find_bin)
+    [ -z "$bin" ] && { echo "aida-off: no aida binary found." >&2; return 1; }
+    eval "$("$bin" dev deactivate)"
+}
 "#;
 
+const HELPERS_BEGIN_MARKER: &str = "# >>> aida dev workflow helpers >>>";
+const HELPERS_END_MARKER: &str = "# <<< aida dev workflow helpers <<<";
+
+fn handle_dev_shell_init(install: bool) -> Result<()> {
     if !install {
-        print!("{}", helpers);
+        print!("{}\n{}{}\n", HELPERS_BEGIN_MARKER, SHELL_HELPERS, HELPERS_END_MARKER);
         return Ok(());
     }
 
-    // Detect the shell rc to write into.
     let shell = std::env::var("SHELL").unwrap_or_default();
     let home = dirs::home_dir().context("Cannot determine home directory")?;
     let rc_path = if shell.ends_with("/zsh") || shell.ends_with("zsh") {
@@ -3285,36 +3330,86 @@ aida-off() { eval "$(command aida dev deactivate)"; }
         home.join(".bashrc")
     };
 
-    // Idempotency: skip if the marker comment already exists.
-    let marker = "# AIDA dev workflow helpers";
     let existing = std::fs::read_to_string(&rc_path).unwrap_or_default();
-    if existing.contains(marker) {
-        eprintln!(
-            "{}: {} already contains AIDA dev helpers — leaving it alone.",
-            "OK".green(),
-            rc_path.display()
-        );
-        return Ok(());
-    }
+    let new_block = format!(
+        "{}\n{}{}\n",
+        HELPERS_BEGIN_MARKER, SHELL_HELPERS, HELPERS_END_MARKER
+    );
 
-    let mut new_content = existing;
-    if !new_content.ends_with('\n') {
-        new_content.push('\n');
-    }
-    new_content.push('\n');
-    new_content.push_str(helpers);
+    // If we wrote a block before, replace it. Otherwise append.
+    let new_content = if let Some(start) = existing.find(HELPERS_BEGIN_MARKER) {
+        let end_after = existing[start..]
+            .find(HELPERS_END_MARKER)
+            .map(|e| start + e + HELPERS_END_MARKER.len())
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "found begin marker but no end marker in {} — please clean up manually",
+                    rc_path.display()
+                )
+            })?;
+        // Eat the trailing newline immediately after the end marker, if any,
+        // so we don't accumulate blank lines on repeated installs.
+        let end_after = if existing.as_bytes().get(end_after) == Some(&b'\n') {
+            end_after + 1
+        } else {
+            end_after
+        };
+        let mut s = existing[..start].to_string();
+        s.push_str(&new_block);
+        s.push_str(&existing[end_after..]);
+        s
+    } else if existing.contains("# AIDA dev workflow helpers") {
+        // Migration from the previous (markerless) layout: drop the old
+        // three-line block by line and append the new one.
+        let mut kept: Vec<&str> = Vec::new();
+        let mut skipping = false;
+        let mut skipped = 0usize;
+        for line in existing.lines() {
+            if line.starts_with("# AIDA dev workflow helpers") {
+                skipping = true;
+                skipped += 1;
+                continue;
+            }
+            if skipping {
+                if line.starts_with("aida-on") || line.starts_with("aida-off") {
+                    skipped += 1;
+                    continue;
+                }
+                skipping = false;
+            }
+            kept.push(line);
+        }
+        eprintln!(
+            "  (migrating: removed {} lines of legacy markerless helpers)",
+            skipped
+        );
+        let mut s = kept.join("\n");
+        if !s.ends_with('\n') {
+            s.push('\n');
+        }
+        s.push('\n');
+        s.push_str(&new_block);
+        s
+    } else {
+        let mut s = existing;
+        if !s.ends_with('\n') {
+            s.push('\n');
+        }
+        s.push('\n');
+        s.push_str(&new_block);
+        s
+    };
+
     std::fs::write(&rc_path, new_content)
         .with_context(|| format!("Failed to write {}", rc_path.display()))?;
 
     eprintln!(
-        "{}: appended helpers to {}.\n  Reload your shell or run: source {}",
+        "{}: helpers installed in {}.",
         "OK".green(),
-        rc_path.display(),
         rc_path.display()
     );
-    eprintln!("\n  After reload:");
-    eprintln!("    aida-on        # activate dev build");
-    eprintln!("    aida-off       # back to released aida");
+    eprintln!("  Reload: source {}", rc_path.display());
+    eprintln!("  Then:   aida-on  (activate)  /  aida-off  (deactivate)");
     Ok(())
 }
 
