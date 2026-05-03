@@ -120,6 +120,12 @@ fn main() -> Result<()> {
         return handle_dev_command(dev_cmd);
     }
 
+    // Help-all is pure text; no storage needed.
+    if let Command::HelpAll = &cli.command {
+        print_help_all();
+        return Ok(());
+    }
+
     // Determine which requirements file to use
     // trace:REQ-0231 | ai:claude:high
     let requirements_path = if let Some(ref explicit_file) = cli.file {
@@ -315,6 +321,7 @@ fn main() -> Result<()> {
         }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
+        Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::Rel(rel_cmd) => {
             handle_relationship_command(rel_cmd, &storage)?;
         }
@@ -822,6 +829,7 @@ fn handle_git_backend_command(
         }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
+        Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::List { status, r#type, feature, .. } => {
             // Cache-backed list (EPIC-1-001 Phase 2). The CachedGitBackend
             // ensures the cache is fresh before querying, so this is one
@@ -3108,6 +3116,114 @@ fn handle_cache_command(
 // build, foreground supervisor for aida-server + vite, shell-init helpers.
 // trace:EPIC-1-001 | ai:claude
 // ----------------------------------------------------------------------------
+
+// ----------------------------------------------------------------------------
+// `aida help-all` — full command inventory grouped by topic. Includes the
+// commands that are #[clap(hide = true)] in the default `aida --help`.
+// trace:EPIC-1-001 | ai:claude
+// ----------------------------------------------------------------------------
+
+fn print_help_all() {
+    let groups: &[(&str, &[(&str, &str)])] = &[
+        (
+            "Daily use",
+            &[
+                ("add",     "Add a new requirement"),
+                ("list",    "List all requirements"),
+                ("show",    "Show details for a specific requirement"),
+                ("edit",    "Edit an existing requirement"),
+                ("del",     "Delete a requirement"),
+                ("search",  "Simple search for requirements (case-insensitive)"),
+                ("comment", "Manage comments on requirements"),
+                ("status",  "Show this project's status (storage, counts, sync, recent activity)"),
+            ],
+        ),
+        (
+            "Project lifecycle",
+            &[
+                ("init",     "Initialize AIDA in the current project"),
+                ("upgrade",  "Upgrade aida to the latest release"),
+                ("scaffold", "Scaffolding management (skills, hooks, MCP)"),
+            ],
+        ),
+        (
+            "Requirements graph",
+            &[
+                ("rel",     "Relationship management commands"),
+                ("rel-def", "Relationship-type definitions"),
+                ("trace",   "Code-to-requirement traceability"),
+                ("queue",   "Personal work queue"),
+            ],
+        ),
+        (
+            "Configuration & metadata",
+            &[
+                ("config",  "ID configuration (prefixes, formats, etc.)"),
+                ("type",    "Requirement-type management"),
+                ("feature", "Feature management"),
+            ],
+        ),
+        (
+            "Storage management",
+            &[
+                ("db",    "Database management commands (migrate, sync, merge-gate, etc.)"),
+                ("cache", "SQLite cache view (rebuild, status) — git-canonical mode only"),
+            ],
+        ),
+        (
+            "Data exchange",
+            &[
+                ("export", "Export requirements to different formats"),
+                ("import", "Import requirements from a tree JSON file"),
+                ("grep",   "Advanced regex search across requirements"),
+                ("report", "Report generation"),
+            ],
+        ),
+        (
+            "Integrations & servers",
+            &[
+                ("server",     "Connect to or manage a remote AIDA server"),
+                ("mcp-serve",  "Start MCP server over stdio (for Claude Code)"),
+                ("github",     "GitHub Issues integration"),
+                ("gitlab",     "GitLab Issues integration"),
+                ("jira",       "Jira integration"),
+            ],
+        ),
+        (
+            "AIDA development (working on aida itself)",
+            &[
+                ("dev",        "Activate dev binary, run dev servers, install shell helpers"),
+                ("help-all",   "This command — full inventory grouped by topic"),
+            ],
+        ),
+        (
+            "Misc",
+            &[
+                ("user-guide", "Open the user guide in the default browser"),
+            ],
+        ),
+    ];
+
+    println!(
+        "{}",
+        "AIDA — full command inventory (run `aida <command> --help` for details)".bold()
+    );
+    println!();
+    for (group, cmds) in groups {
+        println!("{}", group.cyan().bold());
+        for (name, desc) in *cmds {
+            println!("  {:<14} {}", name.green(), desc);
+        }
+        println!();
+    }
+    println!(
+        "Default `aida --help` shows only the daily-use subset. {}",
+        "Tip:".bold()
+    );
+    println!("  - `aida <topic> --help` works for any command, even hidden ones");
+    println!("  - `aida status` is the best entry point for \"what's going on here?\"");
+    println!("  - `aida dev shell-init --install` to get the aida-on / aida-off helpers");
+}
 
 fn handle_dev_command(cmd: &DevCommand) -> Result<()> {
     match cmd {
