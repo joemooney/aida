@@ -111,13 +111,35 @@ else
     install_cmd=(sudo install -m 755)
 fi
 
-for bin in aida aida-server; do
-    src="$tmpdir/$bin"
-    if [ -f "$src" ]; then
-        "${install_cmd[@]}" "$src" "$PREFIX/$bin"
-        echo "  installed $PREFIX/$bin"
-    fi
-done
+# The release tarball has shipped two layouts at different times:
+#   v0.4.0 era: a single file named `aida-${target}` (renamed binary).
+#   future:     two files `aida` and `aida-server` at top level.
+# Handle both, fail loudly if neither matches (was: silent no-op).
+installed_any=0
+
+if [ -f "$tmpdir/aida-${target}" ]; then
+    "${install_cmd[@]}" "$tmpdir/aida-${target}" "$PREFIX/aida"
+    echo "  installed $PREFIX/aida"
+    installed_any=1
+fi
+if [ -f "$tmpdir/aida" ]; then
+    "${install_cmd[@]}" "$tmpdir/aida" "$PREFIX/aida"
+    echo "  installed $PREFIX/aida"
+    installed_any=1
+fi
+if [ -f "$tmpdir/aida-server" ]; then
+    "${install_cmd[@]}" "$tmpdir/aida-server" "$PREFIX/aida-server"
+    echo "  installed $PREFIX/aida-server"
+    installed_any=1
+fi
+
+if [ "$installed_any" = "0" ]; then
+    echo "error: extracted tarball at $tmpdir contains no aida binary I recognize." >&2
+    echo "       expected one of: aida-${target}, aida" >&2
+    echo "       tarball contents:" >&2
+    ls -la "$tmpdir" >&2
+    exit 1
+fi
 
 # ---- Post-install --------------------------------------------------------
 
