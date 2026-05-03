@@ -8,14 +8,13 @@ WORKDIR /app
 # Install protobuf compiler
 RUN apt-get update && apt-get install -y protobuf-compiler && rm -rf /var/lib/apt/lists/*
 
-# Copy workspace files
+# Copy workspace files (5 active crates after the 2026-05-02 desktop/web
+# extraction — see /docs/archive/ for what was removed).
 COPY Cargo.toml Cargo.lock ./
 COPY aida-core ./aida-core
 COPY aida-cli ./aida-cli
 COPY aida-crate ./aida-crate
 COPY aida-server ./aida-server
-COPY aida-desktop ./aida-desktop
-COPY aida-web ./aida-web
 COPY aida-generate-types ./aida-generate-types
 COPY proto ./proto
 

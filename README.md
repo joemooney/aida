@@ -27,16 +27,34 @@ Every line of code links back to a requirement. Every commit references what it 
 
 ## Quick start
 
+### Install
+
+**Pre-built binary** (Linux x86_64 / arm64, macOS x86_64 / arm64) — no Rust toolchain needed:
+
 ```bash
-# Install (requires Rust)
+# pick your target: linux-x86_64, linux-arm64, darwin-x86_64, darwin-arm64
+TARGET=linux-x86_64
+curl -L https://github.com/joemooney/aida/releases/latest/download/aida-${TARGET}.tar.gz \
+  | tar xz -C /tmp \
+  && sudo install -m 755 /tmp/aida /usr/local/bin/aida \
+  && sudo install -m 755 /tmp/aida-server /usr/local/bin/aida-server
+```
+
+**From source** (requires Rust toolchain — always pulls latest `main`):
+
+```bash
 cargo install --git https://github.com/joemooney/aida.git aida-cli
+```
 
-# Initialize a new project (one command, distributed git-canonical mode)
+> Optional integrations (PostgreSQL, GitHub/GitLab/Jira sync) are off by default. Add `--features postgres,github,gitlab,jira` to the `cargo install` line if you need them.
+
+### Bootstrap a project
+
+```bash
 cd my-project
-git init
-aida init
+git init                                 # if not already a git repo
+aida init                                # one command: store + cache + skills + MCP
 
-# Add a requirement
 aida add --title "User auth" --type story
 aida list
 aida show FR-1-001
