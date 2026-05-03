@@ -3257,22 +3257,68 @@ fn handle_dev_command(cmd: &DevCommand) -> Result<()> {
 /// Locate an AIDA repo: prefer `--repo` arg, then $AIDA_DEV_REPO, then CWD
 /// if it looks like one. Returns absolute path.
 fn resolve_aida_repo(repo_arg: Option<&str>) -> Result<std::path::PathBuf> {
-    let candidate: std::path::PathBuf = if let Some(p) = repo_arg {
-        std::path::PathBuf::from(p)
+    // Track WHICH source we used so the error message can be specific about
+    // what to fix.
+    let (candidate, source): (std::path::PathBuf, &str) = if let Some(p) = repo_arg {
+        (std::path::PathBuf::from(p), "--repo")
     } else if let Ok(p) = std::env::var("AIDA_DEV_REPO") {
-        std::path::PathBuf::from(p)
+        (std::path::PathBuf::from(p), "$AIDA_DEV_REPO")
     } else {
-        std::env::current_dir()?
+        (std::env::current_dir()?, "PWD")
     };
+
     let canonical = candidate.canonicalize().with_context(|| {
-        format!("Cannot resolve AIDA repo path: {}", candidate.display())
+        format!("Cannot resolve AIDA repo path ({}): {}", source, candidate.display())
     })?;
+
     if !is_aida_repo(&canonical) {
-        anyhow::bail!(
-            "Not an AIDA repository: {}\n\
-             Run `aida dev activate` from inside the joemooney/aida checkout, or pass --repo /path/to/aida.",
+        // Build a context-specific error. PWD-based failure is most often a
+        // shell that hasn't picked up the AIDA_DEV_REPO export yet (the
+        // `aida dev shell-init --install` flow writes it to .bashrc but
+        // doesn't reload the current shell). Surface that fix prominently.
+        let in_bashrc = dirs::home_dir()
+            .map(|h| h.join(".bashrc"))
+            .filter(|p| p.exists())
+            .and_then(|p| std::fs::read_to_string(&p).ok())
+            .map(|s| s.contains("AIDA_DEV_REPO"))
+            .unwrap_or(false);
+
+        let mut msg = format!(
+            "Cannot locate the aida repo for activation:\n  \
+             - {} ({}) is not a joemooney/aida checkout",
+            source,
             canonical.display()
         );
+        if source == "PWD" {
+            msg.push_str("\n  - $AIDA_DEV_REPO is not set in this shell");
+            if in_bashrc {
+                msg.push_str(
+                    "\n\n\
+                     Your ~/.bashrc has the export, but this shell hasn't picked it up yet:\n  \
+                       exec bash      (restart bash in place)\n  \
+                       source ~/.bashrc",
+                );
+            } else {
+                msg.push_str(
+                    "\n\n\
+                     One-time setup (from inside the aida repo):\n  \
+                       aida dev shell-init --install\n  \
+                       exec bash    (or: source ~/.bashrc)",
+                );
+            }
+            msg.push_str(
+                "\n\nOr pass it directly:\n  \
+                 aida dev activate --repo /path/to/aida",
+            );
+        } else {
+            msg.push_str(&format!(
+                "\n\n\
+                 Check that {} points at a real aida checkout (must contain a Cargo.toml \
+                 with `repository = \"https://github.com/joemooney/aida\"`).",
+                source
+            ));
+        }
+        anyhow::bail!("{}", msg);
     }
     Ok(canonical)
 }
