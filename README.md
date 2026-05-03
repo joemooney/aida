@@ -52,6 +52,8 @@ cargo install --git https://github.com/joemooney/aida.git aida-cli
 
 > Optional integrations (PostgreSQL, GitHub/GitLab/Jira sync) are off by default. Add `--features postgres,github,gitlab,jira` to the `cargo install` line if you need them.
 
+**Working on AIDA itself?** Clone the repo, `cargo build`, then `eval "$(target/debug/aida dev shell-init)"` (or `target/debug/aida dev shell-init --install` to wire `aida-on`/`aida-off` aliases into your `~/.bashrc` permanently). After that, `aida-on` from inside the repo activates your in-repo build pyenv-style — no need to install a released binary first. See [CLAUDE.md](CLAUDE.md) for the full dev workflow.
+
 ### Bootstrap a project
 
 ```bash
