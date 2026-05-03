@@ -107,6 +107,12 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
+    // Handle upgrade before storage resolution — it needs no DB.
+    // trace:EPIC-1-001 | ai:claude
+    if let Command::Upgrade { check, version, yes } = &cli.command {
+        return handle_upgrade_command(*check, version.as_deref(), *yes);
+    }
+
     // Determine which requirements file to use
     // trace:REQ-0231 | ai:claude:high
     let requirements_path = if let Some(ref explicit_file) = cli.file {
@@ -297,6 +303,10 @@ fn main() -> Result<()> {
                  Run `aida init --distributed` first, or pass --file pointing to a git store."
             );
         }
+        Command::Status { no_dev_context } => {
+            handle_status_command(*no_dev_context, None, &storage)?;
+        }
+        Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Rel(rel_cmd) => {
             handle_relationship_command(rel_cmd, &storage)?;
         }
@@ -799,6 +809,10 @@ fn handle_git_backend_command(
         Command::Cache(cache_cmd) => {
             return handle_cache_command(cache_cmd, &backend);
         }
+        Command::Status { no_dev_context } => {
+            return handle_status_command_distributed(*no_dev_context, store_path, &backend);
+        }
+        Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::List { status, r#type, feature, .. } => {
             // Cache-backed list (EPIC-1-001 Phase 2). The CachedGitBackend
             // ensures the cache is fresh before querying, so this is one
@@ -3081,6 +3095,608 @@ fn handle_cache_command(
         }
     }
     Ok(())
+}
+
+// ----------------------------------------------------------------------------
+// `aida status` — comprehensive project overview, with extra sections when
+// the current project is the aida repo itself.
+// trace:EPIC-1-001 | ai:claude
+// ----------------------------------------------------------------------------
+
+/// Distributed-mode status: read from CachedGitBackend so we get cache-backed
+/// counts, sync state, and recent activity.
+fn handle_status_command_distributed(
+    no_dev_context: bool,
+    store_path: &std::path::Path,
+    backend: &aida_core::CachedGitBackend,
+) -> Result<()> {
+    use aida_core::DatabaseBackend;
+
+    let store = backend.load()?;
+    let project_root = std::env::current_dir()?;
+
+    println!("{}", "─── Project ───".bold());
+    let name = if store.name.is_empty() { "(unnamed)" } else { &store.name };
+    println!("  Name:         {}", name.white().bold());
+    println!("  Mode:         {} (orphan branch)", "distributed git-canonical".cyan());
+    println!("  Store path:   {}", store_path.display());
+    println!();
+
+    // Requirement counts grouped by status.
+    let summaries = backend.list_summaries(&aida_core::ListFilter {
+        include_archived: true,
+        ..Default::default()
+    })?;
+    let total = summaries.len();
+    let mut by_status: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    for s in &summaries {
+        *by_status.entry(s.status.clone()).or_insert(0) += 1;
+    }
+    println!("{}", "─── Requirements ───".bold());
+    println!("  Total:        {}", total);
+    for (status, count) in &by_status {
+        println!("    {:<14} {}", status, count);
+    }
+    println!();
+
+    // Cache state.
+    let cache = backend.cache();
+    let cached = cache.requirement_count()?;
+    let recorded_sha = cache.source_head_sha()?.unwrap_or_default();
+    let actual_sha = aida_core::git_ops::head_sha(store_path).unwrap_or_default();
+    let stale = recorded_sha != actual_sha || recorded_sha.is_empty();
+    println!("{}", "─── Cache ───".bold());
+    println!("  Path:         {}", cache.path().display());
+    println!("  Rows:         {} (store has {})", cached, total);
+    println!(
+        "  Status:       {}",
+        if stale && !actual_sha.is_empty() {
+            format!("{} — run `aida cache rebuild`", "STALE".yellow())
+        } else {
+            "FRESH".green().to_string()
+        }
+    );
+    println!();
+
+    // Sync state — orphan-branch ahead/behind origin/aida-store.
+    if let Some((ahead, behind)) = orphan_branch_sync_state(store_path) {
+        println!("{}", "─── Sync ───".bold());
+        match (ahead, behind) {
+            (0, 0) => println!("  Branch aida-store: in sync with origin"),
+            (a, 0) => println!(
+                "  Branch aida-store: {} ahead of origin (run `git push origin aida-store`)",
+                a.to_string().yellow()
+            ),
+            (0, b) => println!(
+                "  Branch aida-store: {} behind origin (run `git fetch && git pull` in {})",
+                b.to_string().yellow(),
+                store_path.display()
+            ),
+            (a, b) => println!(
+                "  Branch aida-store: {} ahead, {} behind (diverged)",
+                a.to_string().red(),
+                b.to_string().red()
+            ),
+        }
+        println!();
+    }
+
+    // Recent activity — top 5 most recently modified.
+    let mut recent = summaries.clone();
+    recent.sort_by(|a, b| b.modified_at.cmp(&a.modified_at));
+    println!("{}", "─── Recent activity ───".bold());
+    for r in recent.iter().take(5) {
+        let id = r
+            .agreed_id
+            .as_deref()
+            .or(r.spec_id.as_deref())
+            .unwrap_or("?");
+        let modified = r.modified_at.split('T').next().unwrap_or(&r.modified_at);
+        println!(
+            "  {:<14} {:<12} {} — {}",
+            id, r.status, modified, r.title
+        );
+    }
+    if recent.is_empty() {
+        println!("  (no requirements yet)");
+    }
+    println!();
+
+    // AIDA-self developer context — only when this project IS the aida repo.
+    if !no_dev_context && is_aida_repo(&project_root) {
+        print_aida_dev_context(&project_root);
+    }
+
+    Ok(())
+}
+
+/// Legacy-mode status: minimal output via the file-based Storage class.
+fn handle_status_command(
+    no_dev_context: bool,
+    store_path_override: Option<&std::path::Path>,
+    storage: &Storage,
+) -> Result<()> {
+    let store = storage.load()?;
+    let project_root = std::env::current_dir()?;
+
+    println!("{}", "─── Project ───".bold());
+    let name = if store.name.is_empty() { "(unnamed)" } else { &store.name };
+    println!("  Name:         {}", name.white().bold());
+    let mode = if storage.is_sqlite() {
+        "centralized SQLite (deprecated)"
+    } else {
+        "centralized YAML (deprecated)"
+    };
+    println!("  Mode:         {}", mode.yellow());
+    println!("  Store path:   {}", storage.path().display());
+    println!();
+
+    let total = store.requirements.len();
+    let mut by_status: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    for r in &store.requirements {
+        *by_status.entry(r.effective_status()).or_insert(0) += 1;
+    }
+    println!("{}", "─── Requirements ───".bold());
+    println!("  Total:        {}", total);
+    for (status, count) in &by_status {
+        println!("    {:<14} {}", status, count);
+    }
+    println!();
+
+    println!(
+        "{}: this project is on a deprecated centralized backend.",
+        "WARN".yellow()
+    );
+    println!(
+        "      Migrate by running `aida db export-git -o aida-store && aida init` to switch to git-canonical."
+    );
+    println!();
+
+    if !no_dev_context && is_aida_repo(&project_root) {
+        print_aida_dev_context(&project_root);
+    }
+
+    let _ = store_path_override; // reserved for future use
+    Ok(())
+}
+
+/// Detect whether `project_root` is the aida repo itself — used to opt into
+/// the developer-context section. We check the workspace root Cargo.toml for
+/// the joemooney/aida repository URL.
+fn is_aida_repo(project_root: &std::path::Path) -> bool {
+    let cargo_toml = project_root.join("Cargo.toml");
+    if let Ok(content) = std::fs::read_to_string(&cargo_toml) {
+        // Match the workspace.package repository field exactly so this is
+        // robust against forks: only the canonical repo gets dev context.
+        return content.contains("repository = \"https://github.com/joemooney/aida\"")
+            && content.contains("[workspace]");
+    }
+    false
+}
+
+fn print_aida_dev_context(project_root: &std::path::Path) {
+    println!("{}", "─── AIDA development context ───".bold());
+
+    // Workspace version vs latest tag.
+    let workspace_version = read_workspace_version(project_root).unwrap_or_else(|| "?".into());
+    let latest_tag = git_describe_latest_tag(project_root).unwrap_or_else(|| "(none)".into());
+    let commits_since_tag = git_commits_since_tag(project_root, &latest_tag).unwrap_or(0);
+    println!("  Workspace version:  v{}", workspace_version);
+    println!("  Latest release tag: {}", latest_tag);
+    if commits_since_tag > 0 {
+        println!(
+            "  {} commits ahead of {} — release-readiness: {}",
+            commits_since_tag,
+            latest_tag,
+            "ready to cut a release".yellow()
+        );
+    } else {
+        println!("  Tree matches latest tag — no pending release");
+    }
+
+    // Template-symlink integrity.
+    let symlink_status = check_template_symlinks(project_root);
+    println!("  Template symlinks:  {}", symlink_status);
+
+    // Quick build sanity (just check `target/` exists and Cargo.lock is in sync).
+    let cargo_lock_synced = project_root.join("Cargo.lock").exists();
+    println!(
+        "  Cargo.lock present: {}",
+        if cargo_lock_synced {
+            "yes".green().to_string()
+        } else {
+            "NO".red().to_string()
+        }
+    );
+
+    println!();
+    println!("  Helpful:");
+    println!("    {}    {}", "scripts/release.sh".cyan(), "— bump version + tag + push");
+    println!("    {}    {}", "scripts/publish.sh".cyan(), "— cargo publish to crates.io");
+    println!();
+}
+
+fn read_workspace_version(root: &std::path::Path) -> Option<String> {
+    let content = std::fs::read_to_string(root.join("Cargo.toml")).ok()?;
+    let mut in_workspace_package = false;
+    for line in content.lines() {
+        let line = line.trim();
+        if line == "[workspace.package]" {
+            in_workspace_package = true;
+            continue;
+        }
+        if in_workspace_package {
+            if line.starts_with('[') {
+                break;
+            }
+            if let Some(rest) = line.strip_prefix("version") {
+                let v = rest
+                    .trim_start_matches(|c: char| c.is_whitespace() || c == '=')
+                    .trim_matches('"');
+                return Some(v.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn git_describe_latest_tag(root: &std::path::Path) -> Option<String> {
+    let out = std::process::Command::new("git")
+        .args(["describe", "--tags", "--abbrev=0"])
+        .current_dir(root)
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+fn git_commits_since_tag(root: &std::path::Path, tag: &str) -> Option<usize> {
+    if tag == "(none)" {
+        return None;
+    }
+    let out = std::process::Command::new("git")
+        .args(["rev-list", "--count", &format!("{}..HEAD", tag)])
+        .current_dir(root)
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&out.stdout).trim().parse().ok()
+}
+
+fn check_template_symlinks(root: &std::path::Path) -> String {
+    let claude_skills = root.join(".claude/skills");
+    if !claude_skills.is_dir() {
+        return "no .claude/skills/ directory".to_string();
+    }
+    let mut total = 0;
+    let mut broken = 0;
+    if let Ok(entries) = std::fs::read_dir(&claude_skills) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            // Only count the actual symlinks (skip non-symlink files).
+            if let Ok(meta) = std::fs::symlink_metadata(&path) {
+                if meta.file_type().is_symlink() {
+                    total += 1;
+                    if !path.exists() {
+                        broken += 1;
+                    }
+                }
+            }
+        }
+    }
+    if total == 0 {
+        return "no symlinks (templates copied, not symlinked)".to_string();
+    }
+    if broken == 0 {
+        format!("{}/{} OK", total, total).green().to_string()
+    } else {
+        format!("{} broken / {}", broken, total).red().to_string()
+    }
+}
+
+/// Returns (ahead, behind) of `aida-store` branch vs `origin/aida-store`.
+fn orphan_branch_sync_state(store_path: &std::path::Path) -> Option<(usize, usize)> {
+    // Run inside the store worktree so we see the right branch.
+    let ahead = std::process::Command::new("git")
+        .args(["rev-list", "--count", "origin/aida-store..HEAD"])
+        .current_dir(store_path)
+        .output()
+        .ok()?;
+    let behind = std::process::Command::new("git")
+        .args(["rev-list", "--count", "HEAD..origin/aida-store"])
+        .current_dir(store_path)
+        .output()
+        .ok()?;
+    if !ahead.status.success() || !behind.status.success() {
+        return None;
+    }
+    let a: usize = String::from_utf8_lossy(&ahead.stdout)
+        .trim()
+        .parse()
+        .ok()?;
+    let b: usize = String::from_utf8_lossy(&behind.stdout)
+        .trim()
+        .parse()
+        .ok()?;
+    Some((a, b))
+}
+
+// ----------------------------------------------------------------------------
+// `aida upgrade` — fetch latest release and replace the running binary.
+// trace:EPIC-1-001 | ai:claude
+// ----------------------------------------------------------------------------
+
+/// How aida was installed on this machine. Determines the upgrade strategy.
+enum InstallMethod {
+    /// Found under `~/.cargo/bin/` — installed via `cargo install`.
+    /// Upgrade by re-running `cargo install --git`.
+    Cargo(std::path::PathBuf),
+    /// Found in a system bin dir (`/usr/local/bin`, `/opt/...`, etc.) —
+    /// installed via release tarball. Upgrade by downloading the matching
+    /// release artifact and replacing the binary in place.
+    Binary(std::path::PathBuf),
+    /// Found inside a `target/debug` or `target/release` directory — the
+    /// running binary is a developer build. Refuse to upgrade.
+    DeveloperBuild(std::path::PathBuf),
+}
+
+fn detect_install_method() -> Result<InstallMethod> {
+    let exe = std::env::current_exe().context("Failed to determine current binary path")?;
+    let exe_str = exe.to_string_lossy();
+
+    if exe_str.contains("/target/debug/") || exe_str.contains("/target/release/") {
+        return Ok(InstallMethod::DeveloperBuild(exe));
+    }
+
+    // Cargo install puts binaries in $CARGO_HOME/bin (default ~/.cargo/bin).
+    let cargo_home = std::env::var("CARGO_HOME").ok();
+    let cargo_bin = cargo_home
+        .map(|h| std::path::PathBuf::from(h).join("bin"))
+        .or_else(|| dirs::home_dir().map(|h| h.join(".cargo/bin")));
+    if let Some(bin) = cargo_bin {
+        if exe.starts_with(&bin) {
+            return Ok(InstallMethod::Cargo(exe));
+        }
+    }
+
+    Ok(InstallMethod::Binary(exe))
+}
+
+fn current_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
+/// Compile-time-resolved release-artifact target name (matches the matrix in
+/// `.github/workflows/release.yml`). Returns None on unsupported platforms.
+fn release_target() -> Option<&'static str> {
+    use std::env::consts::{ARCH, OS};
+    match (OS, ARCH) {
+        ("linux", "x86_64") => Some("linux-x86_64"),
+        ("linux", "aarch64") => Some("linux-arm64"),
+        ("macos", "x86_64") => Some("darwin-x86_64"),
+        ("macos", "aarch64") => Some("darwin-arm64"),
+        _ => None,
+    }
+}
+
+/// Query GitHub for the latest release tag. Uses curl; no extra dep needed.
+fn fetch_latest_release_tag() -> Result<String> {
+    let out = std::process::Command::new("curl")
+        .args([
+            "-sSL",
+            "-H",
+            "Accept: application/vnd.github+json",
+            "https://api.github.com/repos/joemooney/aida/releases/latest",
+        ])
+        .output()
+        .context("Failed to invoke curl — is it installed?")?;
+    if !out.status.success() {
+        anyhow::bail!("curl failed: {}", String::from_utf8_lossy(&out.stderr));
+    }
+    let body = String::from_utf8(out.stdout).context("GitHub API response not UTF-8")?;
+    // Tiny parser — avoids a serde_json dep here and keeps the code simple.
+    for line in body.lines() {
+        let line = line.trim();
+        if let Some(rest) = line.strip_prefix("\"tag_name\":") {
+            let v = rest.trim().trim_start_matches('"');
+            if let Some(end) = v.find('"') {
+                return Ok(v[..end].to_string());
+            }
+        }
+    }
+    anyhow::bail!("Could not parse latest release tag from GitHub response");
+}
+
+/// Strip a leading `v` from a tag string (`v0.4.0` -> `0.4.0`).
+fn strip_v(s: &str) -> &str {
+    s.strip_prefix('v').unwrap_or(s)
+}
+
+fn handle_upgrade_command(check: bool, version: Option<&str>, yes: bool) -> Result<()> {
+    let current = current_version();
+    let install = detect_install_method()?;
+
+    // Print current/installed-from info up front.
+    let install_label = match &install {
+        InstallMethod::Cargo(p) => format!("cargo install ({})", p.display()),
+        InstallMethod::Binary(p) => format!("pre-built binary ({})", p.display()),
+        InstallMethod::DeveloperBuild(p) => format!("developer build ({})", p.display()),
+    };
+    println!("Current version: v{}", current);
+    println!("Installed via:   {}", install_label);
+
+    // Determine target version.
+    let target_tag = match version {
+        Some(v) => v.to_string(),
+        None => {
+            print!("Querying github.com/joemooney/aida for latest release... ");
+            std::io::Write::flush(&mut std::io::stdout()).ok();
+            let tag = fetch_latest_release_tag()?;
+            println!("{}", tag);
+            tag
+        }
+    };
+    let target_version = strip_v(&target_tag);
+
+    println!("Target version:  {}", target_tag);
+
+    // Same-version short-circuit.
+    if target_version == current {
+        println!("\n{}: already on {}.", "OK".green(), target_tag);
+        return Ok(());
+    }
+
+    if check {
+        println!(
+            "\n{}: an upgrade is available. Run `aida upgrade` (without --check) to install.",
+            "INFO".blue()
+        );
+        return Ok(());
+    }
+
+    // Refuse for developer builds — they should use `cargo build`.
+    if let InstallMethod::DeveloperBuild(p) = &install {
+        anyhow::bail!(
+            "Refusing to upgrade a developer build at {}.\n\
+             You're working on aida itself — run `cargo build --release` instead.",
+            p.display()
+        );
+    }
+
+    // Confirm unless --yes.
+    if !yes {
+        print!("\nUpgrade from v{} to {}? [y/N]: ", current, target_tag);
+        std::io::Write::flush(&mut std::io::stdout()).ok();
+        let mut answer = String::new();
+        std::io::BufRead::read_line(&mut std::io::stdin().lock(), &mut answer).ok();
+        if !matches!(answer.trim().to_lowercase().as_str(), "y" | "yes") {
+            println!("Cancelled.");
+            return Ok(());
+        }
+    }
+
+    match install {
+        InstallMethod::Cargo(_) => upgrade_via_cargo(&target_tag),
+        InstallMethod::Binary(p) => upgrade_via_release_tarball(&p, &target_tag),
+        InstallMethod::DeveloperBuild(_) => unreachable!(),
+    }
+}
+
+/// Re-run `cargo install --git ...` to refresh the binary. Pins to the
+/// requested tag so the install matches what the user asked for.
+fn upgrade_via_cargo(tag: &str) -> Result<()> {
+    println!(
+        "\nRunning: cargo install --git https://github.com/joemooney/aida.git --tag {} --force aida-cli",
+        tag
+    );
+    let status = std::process::Command::new("cargo")
+        .args([
+            "install",
+            "--git",
+            "https://github.com/joemooney/aida.git",
+            "--tag",
+            tag,
+            "--force",
+            "aida-cli",
+        ])
+        .status()
+        .context("Failed to invoke cargo")?;
+    if !status.success() {
+        anyhow::bail!("cargo install failed");
+    }
+    println!("\n{}: upgraded to {}.", "OK".green(), tag);
+    Ok(())
+}
+
+/// Download the release tarball matching this platform, extract, and install
+/// over the existing binary. Uses sudo if the destination is not writable by
+/// the current user.
+fn upgrade_via_release_tarball(current_exe: &std::path::Path, tag: &str) -> Result<()> {
+    let target = release_target()
+        .ok_or_else(|| anyhow::anyhow!("Unsupported platform — no release artifact available. Use `cargo install --git` instead."))?;
+    let url = format!(
+        "https://github.com/joemooney/aida/releases/download/{}/aida-{}.tar.gz",
+        tag, target
+    );
+
+    let temp_dir = std::env::temp_dir().join(format!("aida-upgrade-{}", std::process::id()));
+    std::fs::create_dir_all(&temp_dir)?;
+
+    println!("\nDownloading {} ...", url);
+    let status = std::process::Command::new("curl")
+        .args(["-fSL", "-o"])
+        .arg(temp_dir.join("aida.tar.gz"))
+        .arg(&url)
+        .status()
+        .context("Failed to invoke curl")?;
+    if !status.success() {
+        anyhow::bail!(
+            "Download failed. Verify {} exists and you have network access.",
+            url
+        );
+    }
+
+    println!("Extracting...");
+    let status = std::process::Command::new("tar")
+        .args(["xzf"])
+        .arg(temp_dir.join("aida.tar.gz"))
+        .arg("-C")
+        .arg(&temp_dir)
+        .status()
+        .context("Failed to invoke tar")?;
+    if !status.success() {
+        anyhow::bail!("tar extraction failed");
+    }
+
+    let dest_dir = current_exe
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("Could not determine install directory"))?;
+    let needs_sudo = !dest_writable(dest_dir);
+
+    let install_one = |name: &str| -> Result<()> {
+        let src = temp_dir.join(name);
+        if !src.exists() {
+            // Some artifacts only ship `aida`; aida-server is optional.
+            return Ok(());
+        }
+        let dst = dest_dir.join(name);
+        let mut cmd = if needs_sudo {
+            let mut c = std::process::Command::new("sudo");
+            c.arg("install");
+            c
+        } else {
+            std::process::Command::new("install")
+        };
+        cmd.args(["-m", "755"]).arg(&src).arg(&dst);
+        let s = cmd.status().with_context(|| format!("Failed to install {}", name))?;
+        if !s.success() {
+            anyhow::bail!("install failed for {}", name);
+        }
+        println!("  {} {}", "Installed".green(), dst.display());
+        Ok(())
+    };
+
+    install_one("aida")?;
+    install_one("aida-server")?;
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+    println!("\n{}: upgraded to {}.", "OK".green(), tag);
+    Ok(())
+}
+
+fn dest_writable(dir: &std::path::Path) -> bool {
+    let probe = dir.join(format!(".aida-upgrade-probe-{}", std::process::id()));
+    match std::fs::write(&probe, b"") {
+        Ok(_) => {
+            let _ = std::fs::remove_file(&probe);
+            true
+        }
+        Err(_) => false,
+    }
 }
 
 fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) -> Result<()> {

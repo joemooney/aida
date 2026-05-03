@@ -943,6 +943,33 @@ pub enum Command {
     #[clap(subcommand)]
     Cache(CacheCommand),
 
+    /// Show this project's status — storage mode, requirement counts,
+    /// cache state, sync state, recent activity. When run inside the AIDA
+    /// repo itself, also shows release-readiness diagnostics.
+    Status {
+        /// Suppress the AIDA-development-context section even when running
+        /// inside the aida repo
+        #[clap(long)]
+        no_dev_context: bool,
+    },
+
+    /// Upgrade aida to the latest release (or a specified version).
+    /// Detects how aida was installed (cargo / pre-built binary) and uses
+    /// the matching upgrade strategy.
+    Upgrade {
+        /// Compare current version to latest release; report only, don't install.
+        #[clap(long)]
+        check: bool,
+
+        /// Install a specific version instead of latest. Format: `v0.4.0`.
+        #[clap(long)]
+        version: Option<String>,
+
+        /// Skip confirmation prompt
+        #[clap(long, short = 'y')]
+        yes: bool,
+    },
+
     /// Relationship management commands
     #[clap(subcommand)]
     Rel(RelationshipCommand),
