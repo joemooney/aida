@@ -29,16 +29,20 @@ Every line of code links back to a requirement. Every commit references what it 
 
 ### Install
 
-**Pre-built binary** (Linux x86_64 / arm64, macOS x86_64 / arm64) — no Rust toolchain needed:
+**Pre-built binary** (Linux x86_64 / arm64, macOS x86_64 / arm64) — no Rust toolchain needed. Auto-detects platform, installs to `~/.local/bin/`:
 
 ```bash
-# pick your target: linux-x86_64, linux-arm64, darwin-x86_64, darwin-arm64
-TARGET=linux-x86_64
-curl -L https://github.com/joemooney/aida/releases/latest/download/aida-${TARGET}.tar.gz \
-  | tar xz -C /tmp \
-  && sudo install -m 755 /tmp/aida /usr/local/bin/aida \
-  && sudo install -m 755 /tmp/aida-server /usr/local/bin/aida-server
+curl -sSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.sh | bash
 ```
+
+Pin a specific release or change the install prefix:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.sh | bash -s -- --version v0.4.0
+curl -sSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.sh | bash -s -- --prefix /usr/local/bin
+```
+
+After install, `aida upgrade` is the one-command path for future versions.
 
 **From source** (requires Rust toolchain — always pulls latest `main`):
 

@@ -95,7 +95,7 @@ build: ## Build all packages (debug mode)
 build-release: ## Build all packages (release mode, optimized)
 	cargo build --workspace --release
 
-build-all: build cli-remote gui-remote ## Build everything including remote features
+build-all: build cli-remote ## Build everything including remote features
 
 cli: ## Build CLI only (aida binary)
 	cargo build -p aida-cli
@@ -103,28 +103,28 @@ cli: ## Build CLI only (aida binary)
 cli-remote: ## Build CLI with remote server support
 	cargo build -p aida-cli --features remote
 
-gui: ## Build GUI only (aida-desktop binary)
-	cargo build -p aida-desktop
-
-gui-remote: ## Build GUI with remote server support
-	cargo build -p aida-desktop --features remote
-
 server: ## Build gRPC/REST server (aida-server binary)
 	cargo build -p aida-server
 
-install: build-release ## Install binaries to ~/.cargo/bin
-	cargo install --path aida-cli
-	cargo install --path aida-desktop
-	cargo install --path aida-server
+# AIDA developer install — overlays your in-repo dev build to ~/.cargo/bin/.
+# Whether `aida` from your shell hits this or a released binary depends on
+# PATH ordering (run `aida status` to see which install is active).
+install: build-release ## Install in-repo dev build to ~/.cargo/bin (developer)
+	cargo install --path aida-cli --force
+	cargo install --path aida-server --force
 
-install-cli: ## Install CLI only
-	cargo install --path aida-cli
+install-cli: ## Install CLI only (developer, in-repo build)
+	cargo install --path aida-cli --force
 
-install-gui: ## Install GUI only
-	cargo install --path aida-desktop
+install-server: ## Install server only (developer, in-repo build)
+	cargo install --path aida-server --force
 
-install-server: ## Install server only
-	cargo install --path aida-server
+# End-user install — fetches the latest released binary, no Rust needed.
+install-released: ## Install latest released binary to ~/.local/bin (end user)
+	./scripts/install.sh
+
+install-released-version: ## Install a specific released version (use VERSION=v0.4.0)
+	./scripts/install.sh --version $(VERSION)
 
 #==============================================================================
 # RUN TARGETS
@@ -132,12 +132,6 @@ install-server: ## Install server only
 
 run-cli: cli ## Run CLI (use ARGS="..." for arguments)
 	./target/debug/aida $(ARGS)
-
-run-gui: gui ## Run GUI application
-	./target/debug/aida-desktop
-
-run-gui-remote: gui-remote ## Run GUI connected to remote server
-	./target/debug/aida-desktop --server 127.0.0.1:$(SERVER_PORT)
 
 run-server: server ## Run gRPC/REST server (use DB=path, FORCE=1 to kill existing)
 	./target/debug/aida-server --port $(SERVER_PORT) --rest-port $(REST_PORT) --database $(DB) $(FORCE_FLAG)
@@ -153,22 +147,17 @@ run-server-bg: server ## Run server in background (use FORCE=1 to kill existing)
 stop-server: ## Stop running AIDA server
 	@pkill -x "aida-server" 2>/dev/null && echo "Stopped aida-server" || echo "No aida-server running"
 
-stop-web: ## Stop running trunk/web server
-	@pkill -f "^trunk serve" 2>/dev/null && echo "Stopped trunk" || echo "No trunk running"
-
-stop-all: ## Stop all running servers (aida-server, trunk, aida-desktop)
+stop-all: ## Stop all running AIDA processes (aida-server, vite dev server)
 	@echo "Stopping all AIDA processes..."
 	@pkill -x "aida-server" 2>/dev/null && echo "  Stopped aida-server" || echo "  No aida-server running"
-	@pkill -f "^trunk serve" 2>/dev/null && echo "  Stopped trunk" || echo "  No trunk running"
-	@pkill -x "aida-desktop" 2>/dev/null && echo "  Stopped aida-desktop" || echo "  No aida-desktop running"
+	@pkill -f "vite.*aida-web-react" 2>/dev/null && echo "  Stopped vite dev server" || echo "  No vite running"
 	@echo "Done."
 
 ps-servers: ## Show running AIDA processes
 	@echo "Running AIDA processes:"
 	@pgrep -x "aida-server" 2>/dev/null | while read pid; do echo "  aida-server (PID $$pid)"; done || true
-	@pgrep -f "^trunk serve" 2>/dev/null | while read pid; do echo "  trunk (PID $$pid)"; done || true
-	@pgrep -x "aida-desktop" 2>/dev/null | while read pid; do echo "  aida-desktop (PID $$pid)"; done || true
-	@pgrep -x "aida-server" >/dev/null 2>&1 || pgrep -f "^trunk serve" >/dev/null 2>&1 || pgrep -x "aida-desktop" >/dev/null 2>&1 || echo "  (none)"
+	@pgrep -f "vite.*aida-web-react" 2>/dev/null | while read pid; do echo "  vite dev server (PID $$pid)"; done || true
+	@pgrep -x "aida-server" >/dev/null 2>&1 || pgrep -f "vite.*aida-web-react" >/dev/null 2>&1 || echo "  (none)"
 
 #==============================================================================
 # DATABASE TARGETS
@@ -288,41 +277,19 @@ test-grpc-ping: cli-remote ## Test gRPC ping
 	./target/debug/aida --server 127.0.0.1:$(SERVER_PORT) server ping
 
 #==============================================================================
-# WASM WEB CLIENT TARGETS
+# REACT WEB DASHBOARD (aida-web-react/)
 #==============================================================================
-# Primary web client is aida-desktop (full-featured, same codebase as desktop)
-# Alternative: aida-web (lightweight, separate crate - use web-*-lite targets)
 
-WEB_PORT ?= 8088
+REACT_PORT ?= 5173
 
-web-build: ## Build WASM web client (requires trunk)
-	cd aida-desktop && trunk build
+web-dev: ## Run React dashboard dev server (port 5173) — needs aida-server too
+	cd aida-web-react && npm run dev -- --port $(REACT_PORT)
 
-web-build-release: ## Build WASM web client (release/optimized)
-	cd aida-desktop && trunk build --release
+web-build: ## Build React dashboard for production (output: aida-web-react/dist)
+	cd aida-web-react && npm run build
 
-web-serve: ## Serve WASM web client for development (port 8088)
-	cd aida-desktop && trunk serve --port $(WEB_PORT)
-
-web-serve-force: ## Serve web client, killing any existing trunk process on port
-	@-pkill -f "trunk serve.*$(WEB_PORT)" 2>/dev/null || true
-	@sleep 0.2
-	cd aida-desktop && trunk serve --port $(WEB_PORT)
-
-web-clean: ## Clean web build artifacts
-	rm -rf aida-desktop/dist aida-web/dist
-
-web-deps: ## Install WASM build dependencies
-	rustup target add wasm32-unknown-unknown
-	cargo install --locked trunk
-	@echo "WASM dependencies installed"
-
-# Lightweight web client (aida-web) - alternative to full aida-desktop
-web-build-lite: ## Build lightweight web client (aida-web)
-	cd aida-web && trunk build
-
-web-serve-lite: ## Serve lightweight web client (aida-web)
-	cd aida-web && trunk serve --port $(WEB_PORT)
+web-install: ## Install React dashboard npm dependencies
+	cd aida-web-react && npm install
 
 #==============================================================================
 # TEMPLATE SYNC TARGETS (AIDA Development Only)
