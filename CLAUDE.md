@@ -69,6 +69,28 @@ If you work conversationally without explicit `/aida-req` calls, use `/aida-capt
 
 Every implementation plan must be saved to `docs/plans/YYYY-MM-DD-<slug>.md`. Include `## Related Requirements` (AIDA spec IDs) and `## Status` (In Progress → Completed). The `docs/plans/` directory is part of the standard project structure scaffolded by `aida init`.
 
+## AIDA-developer workflow (only when working on AIDA itself)
+
+```bash
+# One-time: install shell helpers (aida-on / aida-off) into ~/.bashrc or ~/.zshrc
+aida dev shell-init --install
+
+# Per-shell: activate the in-repo build (pyenv-style)
+aida-on                                # alias for: eval "$(aida dev activate)"
+# now `aida` resolves to ./target/{release|debug}/aida (whichever is freshest)
+
+aida dev status                        # confirms activation, shows binary mtime
+aida dev serve                         # foreground supervisor for aida-server (8080) + vite (5173)
+                                       # Ctrl+C stops both
+
+aida-off                               # alias for: eval "$(aida dev deactivate)"
+# back to the released aida on PATH
+```
+
+`aida dev activate` prepends `target/{release,debug}/` (whichever is more recently built) to PATH and prefixes the shell prompt with `(aida-debug)` or `(aida-release)` so you can see the active build at a glance. `aida dev deactivate` undoes both.
+
+For releases, `scripts/release.sh {major|minor|patch|<explicit>}` bumps the workspace version, generates tag notes from `git log <prev>..HEAD`, commits, tags, and pushes (which triggers `.github/workflows/release.yml` to build and publish binary tarballs).
+
 ## Code traceability
 
 ### Inline trace comments
