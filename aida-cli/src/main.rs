@@ -109,8 +109,8 @@ fn main() -> Result<()> {
 
     // Handle upgrade before storage resolution — it needs no DB.
     // trace:EPIC-1-001 | ai:claude
-    if let Command::Upgrade { check, version, yes } = &cli.command {
-        return handle_upgrade_command(*check, version.as_deref(), *yes);
+    if let Command::Upgrade { check, version, yes, target } = &cli.command {
+        return handle_upgrade_command(*check, version.as_deref(), *yes, target.as_deref());
     }
 
     // Handle dev commands before storage resolution — most need no DB.
@@ -4022,11 +4022,37 @@ fn strip_v(s: &str) -> &str {
     s.strip_prefix('v').unwrap_or(s)
 }
 
-fn handle_upgrade_command(check: bool, version: Option<&str>, yes: bool) -> Result<()> {
-    let current = current_version();
+fn handle_upgrade_command(
+    check: bool,
+    version: Option<&str>,
+    yes: bool,
+    target: Option<&str>,
+) -> Result<()> {
+    // --target path: upgrade a specific binary, regardless of what's running.
+    if let Some(target) = target {
+        return upgrade_specific_binary(std::path::Path::new(target), check, version, yes);
+    }
+
     let install = detect_install_method()?;
 
-    // Print current/installed-from info up front.
+    // Developer build: don't try to upgrade ourselves; instead scan for
+    // sibling installs and offer to upgrade them.
+    if let InstallMethod::DeveloperBuild(_) = &install {
+        return upgrade_dev_mode_sibling_scan(check, version, yes);
+    }
+
+    upgrade_running_binary(install, check, version, yes)
+}
+
+/// The original "upgrade the binary I'm running" flow. Used for cargo and
+/// pre-built binary installs.
+fn upgrade_running_binary(
+    install: InstallMethod,
+    check: bool,
+    version: Option<&str>,
+    yes: bool,
+) -> Result<()> {
+    let current = current_version();
     let install_label = match &install {
         InstallMethod::Cargo(p) => format!("cargo install ({})", p.display()),
         InstallMethod::Binary(p) => format!("pre-built binary ({})", p.display()),
@@ -4035,22 +4061,10 @@ fn handle_upgrade_command(check: bool, version: Option<&str>, yes: bool) -> Resu
     println!("Current version: v{}", current);
     println!("Installed via:   {}", install_label);
 
-    // Determine target version.
-    let target_tag = match version {
-        Some(v) => v.to_string(),
-        None => {
-            print!("Querying github.com/joemooney/aida for latest release... ");
-            std::io::Write::flush(&mut std::io::stdout()).ok();
-            let tag = fetch_latest_release_tag()?;
-            println!("{}", tag);
-            tag
-        }
-    };
+    let target_tag = resolve_target_tag(version)?;
     let target_version = strip_v(&target_tag);
-
     println!("Target version:  {}", target_tag);
 
-    // Same-version short-circuit.
     if target_version == current {
         println!("\n{}: already on {}.", "OK".green(), target_tag);
         return Ok(());
@@ -4064,25 +4078,9 @@ fn handle_upgrade_command(check: bool, version: Option<&str>, yes: bool) -> Resu
         return Ok(());
     }
 
-    // Refuse for developer builds — they should use `cargo build`.
-    if let InstallMethod::DeveloperBuild(p) = &install {
-        anyhow::bail!(
-            "Refusing to upgrade a developer build at {}.\n\
-             You're working on aida itself — run `cargo build --release` instead.",
-            p.display()
-        );
-    }
-
-    // Confirm unless --yes.
-    if !yes {
-        print!("\nUpgrade from v{} to {}? [y/N]: ", current, target_tag);
-        std::io::Write::flush(&mut std::io::stdout()).ok();
-        let mut answer = String::new();
-        std::io::BufRead::read_line(&mut std::io::stdin().lock(), &mut answer).ok();
-        if !matches!(answer.trim().to_lowercase().as_str(), "y" | "yes") {
-            println!("Cancelled.");
-            return Ok(());
-        }
+    if !yes && !confirm(&format!("\nUpgrade from v{} to {}? [y/N]: ", current, target_tag)) {
+        println!("Cancelled.");
+        return Ok(());
     }
 
     match install {
@@ -4090,6 +4088,254 @@ fn handle_upgrade_command(check: bool, version: Option<&str>, yes: bool) -> Resu
         InstallMethod::Binary(p) => upgrade_via_release_tarball(&p, &target_tag),
         InstallMethod::DeveloperBuild(_) => unreachable!(),
     }
+}
+
+/// `--target PATH` flow: upgrade a specific binary path regardless of what's
+/// currently running. Lets a dev-build session refresh `~/.local/bin/aida`.
+fn upgrade_specific_binary(
+    target_path: &std::path::Path,
+    check: bool,
+    version: Option<&str>,
+    yes: bool,
+) -> Result<()> {
+    let install = classify_install_path(target_path);
+
+    let current = query_binary_version(target_path)
+        .map(|v| format!("v{}", v))
+        .unwrap_or_else(|| "(not installed)".into());
+    let target_tag = resolve_target_tag(version)?;
+
+    println!("Target binary: {}", target_path.display());
+    println!("Install type:  {}", install_method_label(&install));
+    println!("Current:       {}", current);
+    println!("Target:        {}", target_tag);
+
+    if let InstallMethod::DeveloperBuild(p) = &install {
+        anyhow::bail!(
+            "Refusing to upgrade a developer build at {}.\n\
+             Pass --target pointing at a real install (e.g. ~/.local/bin/aida).",
+            p.display()
+        );
+    }
+
+    if current == format!("v{}", strip_v(&target_tag)) {
+        println!("\n{}: {} already on {}.", "OK".green(), target_path.display(), target_tag);
+        return Ok(());
+    }
+
+    if check {
+        println!(
+            "\n{}: upgrade available for {}. Re-run without --check to install.",
+            "INFO".blue(),
+            target_path.display()
+        );
+        return Ok(());
+    }
+
+    if !yes
+        && !confirm(&format!(
+            "\nUpgrade {} to {}? [y/N]: ",
+            target_path.display(),
+            target_tag
+        ))
+    {
+        println!("Cancelled.");
+        return Ok(());
+    }
+
+    match install {
+        InstallMethod::Cargo(_) => upgrade_via_cargo(&target_tag),
+        InstallMethod::Binary(p) => upgrade_via_release_tarball(&p, &target_tag),
+        InstallMethod::DeveloperBuild(_) => unreachable!(),
+    }
+}
+
+/// From a developer build, scan known install locations and report on
+/// sibling aida installs, offering to upgrade any that are stale.
+fn upgrade_dev_mode_sibling_scan(check: bool, version: Option<&str>, yes: bool) -> Result<()> {
+    let exe = std::env::current_exe()?;
+    println!("Current version: v{}", current_version());
+    println!(
+        "Installed via:   developer build ({})",
+        exe.display()
+    );
+    println!(
+        "Note: developer build doesn't need upgrading. Looking for other installs..."
+    );
+    println!();
+
+    let target_tag = resolve_target_tag(version)?;
+    let target_version = strip_v(&target_tag);
+
+    let candidates = sibling_install_candidates();
+    let mut found: Vec<(std::path::PathBuf, Option<String>)> = Vec::new();
+    for path in candidates {
+        if path.exists() && path != exe {
+            let ver = query_binary_version(&path);
+            found.push((path, ver));
+        }
+    }
+
+    if found.is_empty() {
+        println!("(no other aida installs found at common locations)");
+        println!("  Searched: ~/.local/bin/, ~/.cargo/bin/, /usr/local/bin/, /opt/aida/bin/");
+        return Ok(());
+    }
+
+    println!("Found:");
+    let mut stale: Vec<std::path::PathBuf> = Vec::new();
+    for (path, ver) in &found {
+        let label = match ver {
+            Some(v) if v == target_version => format!("v{}  {}", v, "up to date".green()),
+            Some(v) => format!(
+                "v{}  ({}, latest is {})",
+                v,
+                "stale".yellow(),
+                target_tag
+            ),
+            None => "(could not detect version)".to_string(),
+        };
+        println!("  {:<40}  {}", path.display(), label);
+        if let Some(v) = ver {
+            if v != target_version {
+                stale.push(path.clone());
+            }
+        }
+    }
+    println!();
+
+    if check {
+        if stale.is_empty() {
+            println!("{}: all sibling installs are at {}.", "OK".green(), target_tag);
+        } else {
+            println!(
+                "{}: {} sibling install(s) are stale. Re-run without --check to upgrade.",
+                "INFO".blue(),
+                stale.len()
+            );
+        }
+        return Ok(());
+    }
+
+    if stale.is_empty() {
+        println!("{}: nothing to do — all sibling installs are at {}.", "OK".green(), target_tag);
+        return Ok(());
+    }
+
+    for path in stale {
+        println!();
+        if !yes
+            && !confirm(&format!(
+                "Upgrade {} to {}? [y/N]: ",
+                path.display(),
+                target_tag
+            ))
+        {
+            println!("  skipped {}", path.display());
+            continue;
+        }
+        let install = classify_install_path(&path);
+        let result = match install {
+            InstallMethod::Cargo(_) => upgrade_via_cargo(&target_tag),
+            InstallMethod::Binary(_) => upgrade_via_release_tarball(&path, &target_tag),
+            InstallMethod::DeveloperBuild(_) => {
+                eprintln!(
+                    "  {} {} is itself a developer build, skipping",
+                    "warning:".yellow(),
+                    path.display()
+                );
+                Ok(())
+            }
+        };
+        if let Err(e) = result {
+            eprintln!("  {} {}: {}", "error:".red(), path.display(), e);
+        }
+    }
+
+    Ok(())
+}
+
+// ---- shared helpers -------------------------------------------------------
+
+fn install_method_label(install: &InstallMethod) -> String {
+    match install {
+        InstallMethod::Cargo(_) => "cargo install".to_string(),
+        InstallMethod::Binary(_) => "pre-built binary".to_string(),
+        InstallMethod::DeveloperBuild(_) => "developer build".to_string(),
+    }
+}
+
+fn resolve_target_tag(version: Option<&str>) -> Result<String> {
+    match version {
+        Some(v) => Ok(format!("v{}", v.strip_prefix('v').unwrap_or(v))),
+        None => {
+            print!("Querying github.com/joemooney/aida for latest release... ");
+            std::io::Write::flush(&mut std::io::stdout()).ok();
+            let tag = fetch_latest_release_tag()?;
+            println!("{}", tag);
+            Ok(tag)
+        }
+    }
+}
+
+fn confirm(prompt: &str) -> bool {
+    print!("{}", prompt);
+    std::io::Write::flush(&mut std::io::stdout()).ok();
+    let mut answer = String::new();
+    if std::io::BufRead::read_line(&mut std::io::stdin().lock(), &mut answer).is_err() {
+        return false;
+    }
+    matches!(answer.trim().to_lowercase().as_str(), "y" | "yes")
+}
+
+/// Run `<path> --version` and parse the trailing whitespace-separated token
+/// as the semver. Returns None if the binary doesn't run or output doesn't
+/// look like a version.
+fn query_binary_version(path: &std::path::Path) -> Option<String> {
+    let out = std::process::Command::new(path)
+        .arg("--version")
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout).to_string();
+    s.split_whitespace()
+        .last()
+        .filter(|v| v.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false))
+        .map(String::from)
+}
+
+/// Common locations where users typically have aida installed. Order matters
+/// for display; we use it as-is for the scan-and-report output.
+fn sibling_install_candidates() -> Vec<std::path::PathBuf> {
+    let mut paths = Vec::new();
+    if let Some(home) = dirs::home_dir() {
+        paths.push(home.join(".local/bin/aida"));
+        paths.push(home.join(".cargo/bin/aida"));
+    }
+    paths.push(std::path::PathBuf::from("/usr/local/bin/aida"));
+    paths.push(std::path::PathBuf::from("/opt/aida/bin/aida"));
+    paths
+}
+
+/// Like `detect_install_method` but classifies an arbitrary path rather
+/// than the running binary.
+fn classify_install_path(path: &std::path::Path) -> InstallMethod {
+    let path_str = path.to_string_lossy();
+    if path_str.contains("/target/debug/") || path_str.contains("/target/release/") {
+        return InstallMethod::DeveloperBuild(path.to_path_buf());
+    }
+    let cargo_home = std::env::var("CARGO_HOME").ok();
+    let cargo_bin = cargo_home
+        .map(|h| std::path::PathBuf::from(h).join("bin"))
+        .or_else(|| dirs::home_dir().map(|h| h.join(".cargo/bin")));
+    if let Some(bin) = cargo_bin {
+        if path.starts_with(&bin) {
+            return InstallMethod::Cargo(path.to_path_buf());
+        }
+    }
+    InstallMethod::Binary(path.to_path_buf())
 }
 
 /// Re-run `cargo install --git ...` to refresh the binary. Pins to the

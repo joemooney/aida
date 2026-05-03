@@ -1016,9 +1016,11 @@ pub enum Command {
 
     /// Upgrade aida to the latest release (or a specified version).
     /// Detects how aida was installed (cargo / pre-built binary) and uses
-    /// the matching upgrade strategy.
+    /// the matching upgrade strategy. From a developer build with no
+    /// --target, scans common install locations and offers to upgrade
+    /// any stale sibling installs.
     Upgrade {
-        /// Compare current version to latest release; report only, don't install.
+        /// Compare current/sibling versions to latest release; report only, don't install.
         #[clap(long)]
         check: bool,
 
@@ -1029,6 +1031,11 @@ pub enum Command {
         /// Skip confirmation prompt
         #[clap(long, short = 'y')]
         yes: bool,
+
+        /// Upgrade a specific binary path instead of the currently-running one.
+        /// Useful from a developer shell to upgrade `~/.local/bin/aida` etc.
+        #[clap(long)]
+        target: Option<String>,
     },
 
     /// Relationship management commands
