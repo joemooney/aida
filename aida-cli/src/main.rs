@@ -3441,8 +3441,24 @@ const HELPERS_BEGIN_MARKER: &str = "# >>> aida dev workflow helpers >>>";
 const HELPERS_END_MARKER: &str = "# <<< aida dev workflow helpers <<<";
 
 fn handle_dev_shell_init(install: bool) -> Result<()> {
+    // If we're inside the aida repo, capture its absolute path so we can
+    // bake an `export AIDA_DEV_REPO=...` line into the helpers block. That
+    // makes `aida-on` work from any directory (e.g. while working in
+    // ~/ai/paradox), not only from inside or under the aida checkout.
+    let repo = std::env::current_dir()
+        .ok()
+        .and_then(|cwd| find_aida_repo_above(&cwd));
+    let env_export = match &repo {
+        Some(r) => format!(
+            "export AIDA_DEV_REPO='{}'\n\n",
+            r.display()
+        ),
+        None => String::new(),
+    };
+    let helpers_block = format!("{}{}", env_export, SHELL_HELPERS);
+
     if !install {
-        print!("{}\n{}{}\n", HELPERS_BEGIN_MARKER, SHELL_HELPERS, HELPERS_END_MARKER);
+        print!("{}\n{}{}\n", HELPERS_BEGIN_MARKER, helpers_block, HELPERS_END_MARKER);
         return Ok(());
     }
 
@@ -3457,7 +3473,7 @@ fn handle_dev_shell_init(install: bool) -> Result<()> {
     let existing = std::fs::read_to_string(&rc_path).unwrap_or_default();
     let new_block = format!(
         "{}\n{}{}\n",
-        HELPERS_BEGIN_MARKER, SHELL_HELPERS, HELPERS_END_MARKER
+        HELPERS_BEGIN_MARKER, helpers_block, HELPERS_END_MARKER
     );
 
     // If we wrote a block before, replace it. Otherwise append.
@@ -3532,6 +3548,25 @@ fn handle_dev_shell_init(install: bool) -> Result<()> {
         "OK".green(),
         rc_path.display()
     );
+    match &repo {
+        Some(r) => eprintln!(
+            "  AIDA_DEV_REPO={} (so aida-on works from any directory)",
+            r.display()
+        ),
+        None => {
+            eprintln!(
+                "  {}: not run from inside the aida repo, so AIDA_DEV_REPO was NOT set.",
+                "Note".yellow()
+            );
+            eprintln!(
+                "         aida-on will only find the dev binary when you cd into the repo."
+            );
+            eprintln!(
+                "         To make it work everywhere, re-run from the aida repo or add manually:"
+            );
+            eprintln!("           export AIDA_DEV_REPO=/path/to/aida");
+        }
+    }
     eprintln!("  Reload: source {}", rc_path.display());
     eprintln!("  Then:   aida-on  (activate)  /  aida-off  (deactivate)");
     Ok(())
