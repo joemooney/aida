@@ -3249,6 +3249,8 @@ fn handle_dev_command(cmd: &DevCommand) -> Result<()> {
             web_port,
             no_web,
         } => handle_dev_serve(*rest_port, *grpc_port, *web_port, *no_web),
+        DevCommand::Release { bump } => handle_dev_release(bump),
+        DevCommand::Patch => handle_dev_release("patch"),
     }
 }
 
@@ -3712,6 +3714,142 @@ fn handle_dev_serve(
 }
 
 /// Stream a child's stdout/stderr to the parent's stderr with a prefix.
+/// `aida dev release [bump]` — the one-command release flow:
+/// 1. run scripts/release.sh (bumps version, tags, pushes, interactive)
+/// 2. wait for the GitHub Actions workflow to publish the binary tarballs
+///    (HEAD-poll the asset URL with timeout)
+/// 3. upgrade sibling installs to the new version (auto-yes)
+///
+/// `aida dev patch` is a thin alias that calls this with bump = "patch".
+/// trace:EPIC-1-001 | ai:claude
+fn handle_dev_release(bump: &str) -> Result<()> {
+    // Locate the aida repo. Prefer PWD walk, then $AIDA_DEV_REPO.
+    let cwd = std::env::current_dir()?;
+    let repo = find_aida_repo_above(&cwd)
+        .or_else(|| {
+            std::env::var("AIDA_DEV_REPO")
+                .ok()
+                .map(std::path::PathBuf::from)
+                .filter(|p| is_aida_repo(p))
+        })
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Not in an aida repo. cd into the aida checkout, set AIDA_DEV_REPO, \
+                 or run `eval \"$(aida dev activate)\"` first."
+            )
+        })?;
+
+    let script = repo.join("scripts/release.sh");
+    if !script.is_file() {
+        anyhow::bail!(
+            "scripts/release.sh not found at {} — is this checkout up to date?",
+            script.display()
+        );
+    }
+
+    println!(
+        "{}",
+        format!("─── Step 1/3: ./scripts/release.sh {} ───", bump).bold()
+    );
+    println!("Working in {}", repo.display());
+    println!();
+
+    // Run release.sh interactively — it prints the version-bump diff and
+    // asks for confirmation. Inheriting stdio means the user sees and
+    // responds to the prompts directly.
+    let status = std::process::Command::new(&script)
+        .arg(bump)
+        .current_dir(&repo)
+        .status()
+        .with_context(|| format!("Failed to invoke {}", script.display()))?;
+    if !status.success() {
+        anyhow::bail!(
+            "release.sh exited non-zero (likely cancelled at the confirmation \
+             prompt). Aborting upgrade phase — your tree may have a pending \
+             version bump; resolve manually if needed."
+        );
+    }
+
+    // After release.sh completes, the new tag is the latest one in the repo.
+    let new_tag = git_describe_latest_tag(&repo).ok_or_else(|| {
+        anyhow::anyhow!("release.sh succeeded but no tag is reachable — confused state, please check `git tag --list` manually.")
+    })?;
+
+    println!();
+    println!(
+        "{}",
+        format!("─── Step 2/3: waiting for {} release artifacts ───", new_tag).bold()
+    );
+    let target = release_target().ok_or_else(|| {
+        anyhow::anyhow!(
+            "Unsupported platform — can't auto-poll for tarballs. Wait for the \
+             release.yml workflow to finish and run `aida upgrade` manually."
+        )
+    })?;
+    let asset_url = format!(
+        "https://github.com/joemooney/aida/releases/download/{}/aida-{}.tar.gz",
+        new_tag, target
+    );
+    println!("Polling {} ...", asset_url);
+    poll_until_published(&asset_url, std::time::Duration::from_secs(600))?;
+
+    println!();
+    println!(
+        "{}",
+        format!("─── Step 3/3: upgrading sibling installs to {} ───", new_tag).bold()
+    );
+    let bare_version = strip_v(&new_tag).to_string();
+    upgrade_dev_mode_sibling_scan(false, Some(&bare_version), true)?;
+
+    println!();
+    println!(
+        "{}: shipped {} and refreshed sibling installs.",
+        "DONE".green().bold(),
+        new_tag
+    );
+    Ok(())
+}
+
+/// HEAD-poll an URL until it returns 200 or `timeout` elapses. Used by
+/// `aida dev release` to wait for the GitHub Actions release workflow to
+/// publish its tarballs after we push the tag.
+fn poll_until_published(url: &str, timeout: std::time::Duration) -> Result<()> {
+    let start = std::time::Instant::now();
+    let mut tick: u32 = 0;
+    loop {
+        if start.elapsed() > timeout {
+            anyhow::bail!(
+                "Timed out after {} seconds. The release workflow may have failed.\n\
+                 Check status: https://github.com/joemooney/aida/actions\n\
+                 Once tarballs are published, run `aida upgrade --yes`.",
+                timeout.as_secs()
+            );
+        }
+        let out = std::process::Command::new("curl")
+            .args(["-sIL", "-o", "/dev/null", "-w", "%{http_code}"])
+            .arg(url)
+            .output()
+            .context("Failed to invoke curl")?;
+        let code = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if code == "200" {
+            println!("\n  ✓ artifact available ({}s)", start.elapsed().as_secs());
+            return Ok(());
+        }
+        // Animated dots so the user sees we're not stuck.
+        let dots = ".".repeat(((tick % 4) + 1) as usize);
+        print!(
+            "\r  ... waiting for tarball ({:>3}s elapsed, http {}, last poll {}){}    ",
+            start.elapsed().as_secs(),
+            code,
+            tick,
+            dots
+        );
+        std::io::Write::flush(&mut std::io::stdout()).ok();
+        tick += 1;
+        std::thread::sleep(std::time::Duration::from_secs(15));
+    }
+}
+
 fn spawn_log_pump<R: tokio::io::AsyncRead + Unpin + Send + 'static>(
     prefix: &'static str,
     reader: Option<R>,
