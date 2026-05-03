@@ -228,6 +228,62 @@ pub enum ScaffoldCommand {
     },
 }
 
+/// Developer commands for working *on* AIDA itself (pyenv-style activation
+/// of an in-repo build, running dev servers, installing shell helpers).
+/// trace:EPIC-1-001 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum DevCommand {
+    /// Emit shell code that prepends the in-repo build dir to PATH.
+    /// Use as: `eval "$(aida dev activate)"`. The `target/release` build
+    /// is preferred over `target/debug`; whichever has been built more
+    /// recently wins.
+    Activate {
+        /// Override the AIDA repo path (defaults to current directory if it
+        /// looks like the aida repo, or $AIDA_DEV_REPO if set).
+        #[clap(long)]
+        repo: Option<String>,
+    },
+
+    /// Emit shell code that undoes a previous `aida dev activate`.
+    /// Use as: `eval "$(aida dev deactivate)"`.
+    Deactivate,
+
+    /// Run aida-server (REST/gRPC) and the React dev server (vite) in the
+    /// foreground. Ctrl+C stops both. Defaults to serving the current
+    /// project's store; React dev server only starts when run from the
+    /// AIDA repo (since aida-web-react/ lives there).
+    Serve {
+        /// Override the REST/HTTP port for aida-server (default: 8080)
+        #[clap(long)]
+        rest_port: Option<u16>,
+
+        /// Override the gRPC port for aida-server (default: 50051)
+        #[clap(long)]
+        grpc_port: Option<u16>,
+
+        /// Override the vite dev server port (default: 5173)
+        #[clap(long)]
+        web_port: Option<u16>,
+
+        /// Skip starting the React dev server even when aida-web-react/ exists
+        #[clap(long)]
+        no_web: bool,
+    },
+
+    /// Show current dev-activation state: is AIDA_DEV_ACTIVE set, what
+    /// binary is being used, when was it built, what's the AIDA repo path.
+    Status,
+
+    /// Print shell helper functions (aida-on, aida-off) suitable for
+    /// pasting into ~/.bashrc or ~/.zshrc. Pass --install to append them
+    /// directly.
+    ShellInit {
+        /// Detect the user's shell and append the helpers to its rc file
+        #[clap(long)]
+        install: bool,
+    },
+}
+
 /// Commands for the SQLite read-cache that projects the git-canonical store
 /// for fast list/filter/search queries (EPIC-1-001).
 #[derive(Subcommand, Debug)]
@@ -952,6 +1008,11 @@ pub enum Command {
         #[clap(long)]
         no_dev_context: bool,
     },
+
+    /// AIDA-developer-only commands: activate the in-repo dev binary,
+    /// run dev servers, install shell helpers. End users don't need these.
+    #[clap(subcommand)]
+    Dev(DevCommand),
 
     /// Upgrade aida to the latest release (or a specified version).
     /// Detects how aida was installed (cargo / pre-built binary) and uses

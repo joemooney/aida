@@ -49,9 +49,9 @@ use aida_core::{
 };
 
 use crate::cli::{
-    CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand, FeatureCommand,
-    GitHubCommand, GitLabCommand, JiraCommand, QueueCommand, RelDefCommand, RelationshipCommand,
-    ReportCommand, ScaffoldCommand, ServerCommand, TraceCommand, TypeCommand,
+    CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand, DevCommand,
+    FeatureCommand, GitHubCommand, GitLabCommand, JiraCommand, QueueCommand, RelDefCommand,
+    RelationshipCommand, ReportCommand, ScaffoldCommand, ServerCommand, TraceCommand, TypeCommand,
 };
 
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
@@ -111,6 +111,14 @@ fn main() -> Result<()> {
     // trace:EPIC-1-001 | ai:claude
     if let Command::Upgrade { check, version, yes } = &cli.command {
         return handle_upgrade_command(*check, version.as_deref(), *yes);
+    }
+
+    // Handle dev commands before storage resolution — most need no DB.
+    // (Dev::Serve does interact with storage but spawns aida-server which
+    // handles that itself; the wrapper just supervises the children.)
+    // trace:EPIC-1-001 | ai:claude
+    if let Command::Dev(dev_cmd) = &cli.command {
+        return handle_dev_command(dev_cmd);
     }
 
     // Determine which requirements file to use
@@ -307,6 +315,7 @@ fn main() -> Result<()> {
             handle_status_command(*no_dev_context, None, &storage)?;
         }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
+        Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::Rel(rel_cmd) => {
             handle_relationship_command(rel_cmd, &storage)?;
         }
@@ -813,6 +822,7 @@ fn handle_git_backend_command(
             return handle_status_command_distributed(*no_dev_context, store_path, &backend);
         }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
+        Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::List { status, r#type, feature, .. } => {
             // Cache-backed list (EPIC-1-001 Phase 2). The CachedGitBackend
             // ensures the cache is fresh before querying, so this is one
@@ -3095,6 +3105,407 @@ fn handle_cache_command(
         }
     }
     Ok(())
+}
+
+// ----------------------------------------------------------------------------
+// `aida dev` — developer-only commands: pyenv-style activate of an in-repo
+// build, foreground supervisor for aida-server + vite, shell-init helpers.
+// trace:EPIC-1-001 | ai:claude
+// ----------------------------------------------------------------------------
+
+fn handle_dev_command(cmd: &DevCommand) -> Result<()> {
+    match cmd {
+        DevCommand::Activate { repo } => handle_dev_activate(repo.as_deref()),
+        DevCommand::Deactivate => handle_dev_deactivate(),
+        DevCommand::Status => handle_dev_status(),
+        DevCommand::ShellInit { install } => handle_dev_shell_init(*install),
+        DevCommand::Serve {
+            rest_port,
+            grpc_port,
+            web_port,
+            no_web,
+        } => handle_dev_serve(*rest_port, *grpc_port, *web_port, *no_web),
+    }
+}
+
+/// Locate an AIDA repo: prefer `--repo` arg, then $AIDA_DEV_REPO, then CWD
+/// if it looks like one. Returns absolute path.
+fn resolve_aida_repo(repo_arg: Option<&str>) -> Result<std::path::PathBuf> {
+    let candidate: std::path::PathBuf = if let Some(p) = repo_arg {
+        std::path::PathBuf::from(p)
+    } else if let Ok(p) = std::env::var("AIDA_DEV_REPO") {
+        std::path::PathBuf::from(p)
+    } else {
+        std::env::current_dir()?
+    };
+    let canonical = candidate.canonicalize().with_context(|| {
+        format!("Cannot resolve AIDA repo path: {}", candidate.display())
+    })?;
+    if !is_aida_repo(&canonical) {
+        anyhow::bail!(
+            "Not an AIDA repository: {}\n\
+             Run `aida dev activate` from inside the joemooney/aida checkout, or pass --repo /path/to/aida.",
+            canonical.display()
+        );
+    }
+    Ok(canonical)
+}
+
+/// Pick the freshest aida binary in the repo's target/. Prefers
+/// `target/release/aida` when its mtime is newer than `target/debug/aida`,
+/// else falls back to whichever exists. Errors when neither exists.
+fn pick_dev_binary_dir(repo: &std::path::Path) -> Result<(std::path::PathBuf, &'static str)> {
+    let release = repo.join("target/release/aida");
+    let debug = repo.join("target/debug/aida");
+    let release_mtime = std::fs::metadata(&release).and_then(|m| m.modified()).ok();
+    let debug_mtime = std::fs::metadata(&debug).and_then(|m| m.modified()).ok();
+    match (release_mtime, debug_mtime) {
+        (Some(rm), Some(dm)) => {
+            if rm >= dm {
+                Ok((repo.join("target/release"), "release"))
+            } else {
+                Ok((repo.join("target/debug"), "debug"))
+            }
+        }
+        (Some(_), None) => Ok((repo.join("target/release"), "release")),
+        (None, Some(_)) => Ok((repo.join("target/debug"), "debug")),
+        (None, None) => anyhow::bail!(
+            "No aida binary found at {} or {}.\n\
+             Run `cargo build --release` (or just `cargo build`) first.",
+            release.display(),
+            debug.display()
+        ),
+    }
+}
+
+fn handle_dev_activate(repo_arg: Option<&str>) -> Result<()> {
+    let repo = resolve_aida_repo(repo_arg)?;
+    let (bin_dir, profile) = pick_dev_binary_dir(&repo)?;
+
+    // Quote-safety: paths shouldn't contain double-quotes in practice;
+    // single-quote everything we emit so shell evaluation is safe.
+    println!("# aida dev activate — using {} build at {}", profile, bin_dir.display());
+    println!("export AIDA_DEV_REPO='{}'", repo.display());
+    println!("export AIDA_DEV_BIN='{}'", bin_dir.display());
+    println!("export AIDA_DEV_PROFILE='{}'", profile);
+    println!("export AIDA_DEV_ACTIVE=1");
+    println!("if [ -z \"${{AIDA_DEV_PREV_PATH+x}}\" ]; then");
+    println!("    export AIDA_DEV_PREV_PATH=\"$PATH\"");
+    println!("fi");
+    println!("export PATH='{}':\"$PATH\"", bin_dir.display());
+    println!("if [ -z \"${{AIDA_DEV_PREV_PS1+x}}\" ]; then");
+    println!("    export AIDA_DEV_PREV_PS1=\"$PS1\"");
+    println!("fi");
+    println!("export PS1=\"(aida-{}) $PS1\"", profile);
+    println!(
+        "echo '✓ aida dev activated ({} build at {})'",
+        profile,
+        bin_dir.display()
+    );
+    Ok(())
+}
+
+fn handle_dev_deactivate() -> Result<()> {
+    println!("# aida dev deactivate — restoring previous PATH and PS1");
+    println!("if [ -n \"${{AIDA_DEV_PREV_PATH+x}}\" ]; then");
+    println!("    export PATH=\"$AIDA_DEV_PREV_PATH\"");
+    println!("    unset AIDA_DEV_PREV_PATH");
+    println!("fi");
+    println!("if [ -n \"${{AIDA_DEV_PREV_PS1+x}}\" ]; then");
+    println!("    export PS1=\"$AIDA_DEV_PREV_PS1\"");
+    println!("    unset AIDA_DEV_PREV_PS1");
+    println!("fi");
+    println!("unset AIDA_DEV_REPO AIDA_DEV_BIN AIDA_DEV_PROFILE AIDA_DEV_ACTIVE");
+    println!("echo '✓ aida dev deactivated'");
+    Ok(())
+}
+
+fn handle_dev_status() -> Result<()> {
+    let active = std::env::var("AIDA_DEV_ACTIVE").is_ok();
+    println!(
+        "Activation:   {}",
+        if active {
+            "ACTIVE".green().to_string()
+        } else {
+            "(not active — `eval \"$(aida dev activate)\"` to enable)"
+                .yellow()
+                .to_string()
+        }
+    );
+    if active {
+        if let Ok(p) = std::env::var("AIDA_DEV_REPO") {
+            println!("Repo:         {}", p);
+        }
+        if let Ok(b) = std::env::var("AIDA_DEV_BIN") {
+            println!("Binary dir:   {}", b);
+            let aida_path = std::path::PathBuf::from(&b).join("aida");
+            if let Ok(meta) = std::fs::metadata(&aida_path) {
+                if let Ok(modified) = meta.modified() {
+                    if let Ok(d) = modified.duration_since(std::time::UNIX_EPOCH) {
+                        let dt = chrono::DateTime::<chrono::Utc>::from_timestamp(d.as_secs() as i64, 0)
+                            .map(|t| t.to_rfc3339())
+                            .unwrap_or_else(|| "?".into());
+                        println!("Built at:     {}", dt);
+                    }
+                }
+            }
+        }
+        if let Ok(p) = std::env::var("AIDA_DEV_PROFILE") {
+            println!("Build profile: {}", p);
+        }
+    }
+
+    // Also report which `aida` actually wins on PATH right now.
+    if let Ok(out) = std::process::Command::new("which").arg("aida").output() {
+        let resolved = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if !resolved.is_empty() {
+            println!("`which aida`: {}", resolved);
+        }
+    }
+    Ok(())
+}
+
+fn handle_dev_shell_init(install: bool) -> Result<()> {
+    let helpers = r#"# AIDA dev workflow helpers (added by `aida dev shell-init`)
+aida-on()  { eval "$(command aida dev activate "$@")"; }
+aida-off() { eval "$(command aida dev deactivate)"; }
+"#;
+
+    if !install {
+        print!("{}", helpers);
+        return Ok(());
+    }
+
+    // Detect the shell rc to write into.
+    let shell = std::env::var("SHELL").unwrap_or_default();
+    let home = dirs::home_dir().context("Cannot determine home directory")?;
+    let rc_path = if shell.ends_with("/zsh") || shell.ends_with("zsh") {
+        home.join(".zshrc")
+    } else {
+        home.join(".bashrc")
+    };
+
+    // Idempotency: skip if the marker comment already exists.
+    let marker = "# AIDA dev workflow helpers";
+    let existing = std::fs::read_to_string(&rc_path).unwrap_or_default();
+    if existing.contains(marker) {
+        eprintln!(
+            "{}: {} already contains AIDA dev helpers — leaving it alone.",
+            "OK".green(),
+            rc_path.display()
+        );
+        return Ok(());
+    }
+
+    let mut new_content = existing;
+    if !new_content.ends_with('\n') {
+        new_content.push('\n');
+    }
+    new_content.push('\n');
+    new_content.push_str(helpers);
+    std::fs::write(&rc_path, new_content)
+        .with_context(|| format!("Failed to write {}", rc_path.display()))?;
+
+    eprintln!(
+        "{}: appended helpers to {}.\n  Reload your shell or run: source {}",
+        "OK".green(),
+        rc_path.display(),
+        rc_path.display()
+    );
+    eprintln!("\n  After reload:");
+    eprintln!("    aida-on        # activate dev build");
+    eprintln!("    aida-off       # back to released aida");
+    Ok(())
+}
+
+fn handle_dev_serve(
+    rest_port: Option<u16>,
+    grpc_port: Option<u16>,
+    web_port: Option<u16>,
+    no_web: bool,
+) -> Result<()> {
+    use std::process::Stdio;
+    use tokio::process::Command as TokioCommand;
+    use tokio::sync::mpsc;
+
+    let cwd = std::env::current_dir()?;
+    let repo_for_web = if !no_web && cwd.join("aida-web-react").is_dir() {
+        Some(cwd.clone())
+    } else {
+        None
+    };
+
+    // Locate the aida-server binary: prefer the in-repo build (since dev
+    // workflow), fall back to PATH.
+    let server_bin = locate_aida_server_binary(&cwd)?;
+
+    let rest = rest_port.unwrap_or(8080);
+    let grpc = grpc_port.unwrap_or(50051);
+    let web = web_port.unwrap_or(5173);
+
+    let store_path = detect_distributed_store().unwrap_or_else(|| cwd.clone());
+
+    println!("{}", "─── aida dev serve ───".bold());
+    println!("  REST/HTTP:  http://localhost:{}", rest);
+    println!("  gRPC:       localhost:{}", grpc);
+    if repo_for_web.is_some() {
+        println!("  React dev:  http://localhost:{}", web);
+    } else if no_web {
+        println!("  React dev:  skipped (--no-web)");
+    } else {
+        println!("  React dev:  skipped (no aida-web-react/ in cwd)");
+    }
+    println!("  Store:      {}", store_path.display());
+    println!("  Press Ctrl+C to stop");
+    println!();
+
+    // Run inside a tokio runtime so we can supervise children + signals.
+    let runtime = tokio::runtime::Runtime::new()?;
+    runtime.block_on(async move {
+        let (tx, mut rx) = mpsc::unbounded_channel::<()>();
+
+        // Start aida-server.
+        let mut server_child = TokioCommand::new(&server_bin)
+            .args([
+                "--host",
+                "0.0.0.0",
+                "--port",
+                &grpc.to_string(),
+                "--rest-port",
+                &rest.to_string(),
+                "--database",
+            ])
+            .arg(&store_path)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()
+            .with_context(|| format!("Failed to spawn aida-server at {}", server_bin.display()))?;
+
+        spawn_log_pump("server", server_child.stdout.take(), tx.clone());
+        spawn_log_pump("server", server_child.stderr.take(), tx.clone());
+
+        // Optionally start vite dev server.
+        let mut web_child = if let Some(repo) = repo_for_web {
+            let cwd = repo.join("aida-web-react");
+            if !cwd.join("node_modules").is_dir() {
+                eprintln!(
+                    "[web] note: aida-web-react/node_modules not found — run `npm install` first."
+                );
+            }
+            let child = TokioCommand::new("npm")
+                .args(["run", "dev", "--", "--port", &web.to_string()])
+                .current_dir(&cwd)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .kill_on_drop(true)
+                .spawn()
+                .context("Failed to spawn `npm run dev` for aida-web-react")?;
+            Some(child)
+        } else {
+            None
+        };
+
+        if let Some(ref mut w) = web_child {
+            spawn_log_pump("web", w.stdout.take(), tx.clone());
+            spawn_log_pump("web", w.stderr.take(), tx.clone());
+        }
+
+        // Helper future: wait for a child to exit naturally.
+        async fn wait_child(child: &mut tokio::process::Child) -> std::io::Result<std::process::ExitStatus> {
+            child.wait().await
+        }
+
+        // Race Ctrl+C against either child exiting.
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {
+                eprintln!("\n[dev serve] Ctrl+C — stopping children...");
+            }
+            r = wait_child(&mut server_child) => {
+                eprintln!("\n[dev serve] aida-server exited unexpectedly: {:?}", r);
+            }
+            r = async {
+                if let Some(ref mut w) = web_child {
+                    wait_child(w).await
+                } else {
+                    std::future::pending().await
+                }
+            } => {
+                eprintln!("\n[dev serve] vite dev server exited unexpectedly: {:?}", r);
+            }
+        }
+
+        // Send SIGTERM (kill_on_drop fires SIGKILL on drop, but we want
+        // a chance for clean shutdown first).
+        let _ = server_child.start_kill();
+        if let Some(ref mut w) = web_child {
+            let _ = w.start_kill();
+        }
+        let _ = server_child.wait().await;
+        if let Some(mut w) = web_child {
+            let _ = w.wait().await;
+        }
+
+        // Drop the sender so log-pump tasks can exit cleanly.
+        drop(tx);
+        while rx.recv().await.is_some() {}
+
+        Ok::<_, anyhow::Error>(())
+    })?;
+
+    eprintln!("[dev serve] stopped.");
+    Ok(())
+}
+
+/// Stream a child's stdout/stderr to the parent's stderr with a prefix.
+fn spawn_log_pump<R: tokio::io::AsyncRead + Unpin + Send + 'static>(
+    prefix: &'static str,
+    reader: Option<R>,
+    _done: tokio::sync::mpsc::UnboundedSender<()>,
+) {
+    let Some(reader) = reader else { return };
+    tokio::spawn(async move {
+        use tokio::io::{AsyncBufReadExt, BufReader};
+        let mut lines = BufReader::new(reader).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            eprintln!("[{}] {}", prefix, line);
+        }
+    });
+}
+
+/// Resolve the aida-server binary: prefer the in-repo target/{release,debug}
+/// build, fall back to whatever's on PATH.
+fn locate_aida_server_binary(cwd: &std::path::Path) -> Result<std::path::PathBuf> {
+    // If we're in (or under) the aida repo, use its built binary.
+    let mut probe = cwd.to_path_buf();
+    for _ in 0..4 {
+        if is_aida_repo(&probe) {
+            let release = probe.join("target/release/aida-server");
+            if release.exists() {
+                return Ok(release);
+            }
+            let debug = probe.join("target/debug/aida-server");
+            if debug.exists() {
+                return Ok(debug);
+            }
+            anyhow::bail!(
+                "Found aida repo at {} but no aida-server binary in target/. Run `cargo build` first.",
+                probe.display()
+            );
+        }
+        match probe.parent() {
+            Some(p) => probe = p.to_path_buf(),
+            None => break,
+        }
+    }
+    // Fall back to PATH.
+    if let Ok(out) = std::process::Command::new("which").arg("aida-server").output() {
+        let p = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if !p.is_empty() {
+            return Ok(std::path::PathBuf::from(p));
+        }
+    }
+    anyhow::bail!("aida-server not found on PATH and no in-repo build available")
 }
 
 // ----------------------------------------------------------------------------
