@@ -14,7 +14,7 @@
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
-use super::traits::{BackendType, DatabaseBackend, UpdateResult, VersionConflict};
+use super::traits::{BackendType, DatabaseBackend};
 use crate::models::{
     DispenserHandle, QueueEntry, Requirement, RequirementsStore,
 };

@@ -83,10 +83,6 @@ impl UserRole {
         }
     }
 
-    pub fn can_read(self) -> bool {
-        true
-    }
-
     pub fn can_write(self) -> bool {
         matches!(self, UserRole::Admin | UserRole::Editor)
     }
@@ -119,6 +115,9 @@ enum SessionStore {
 
 #[derive(Debug, Clone)]
 pub struct OidcConfig {
+    /// Discovery URL for OIDC metadata; loaded at config time but not yet
+    /// consumed by the auth flow (we use the explicit endpoints below).
+    #[allow(dead_code)]
     pub issuer_url: Option<String>,
     pub client_id: String,
     pub client_secret: Option<String>,
@@ -173,6 +172,7 @@ pub struct OidcUserInfo {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)] // InvalidState is reserved for upcoming CSRF state checks
 pub enum OidcError {
     NotConfigured,
     InvalidState,

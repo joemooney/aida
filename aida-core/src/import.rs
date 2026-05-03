@@ -604,7 +604,7 @@ pub fn create_backup(source_path: &Path) -> Result<String> {
 
 /// Execute an import operation with the given configuration
 pub fn execute_import(
-    import_content: &str,
+    _import_content: &str,
     target_path: &Path,
     config: &ImportConfig,
     validation: &ImportValidation,

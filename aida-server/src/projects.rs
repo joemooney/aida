@@ -201,12 +201,6 @@ impl ProjectManager {
         Ok(state)
     }
 
-    /// Check if a backend is loaded for a project
-    pub async fn is_backend_loaded(&self, project: &str) -> bool {
-        let backends = self.backends.read().await;
-        backends.contains_key(project)
-    }
-
     /// Validate project name
     fn is_valid_project_name(name: &str) -> bool {
         if name.is_empty() || name.len() > 64 {

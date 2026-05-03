@@ -18,7 +18,6 @@ use aida_core::{
     get_registry_path,
     seed_meta_requirements,
     ArtifactType,
-    BackendType,
     Cardinality,
     Comment,
     DatabaseBackend,
@@ -2443,7 +2442,7 @@ fn edit_requirement_interactive(storage: &Storage, id_str: &str) -> Result<()> {
 
     // Track changes
     let mut changes: Vec<FieldChange> = Vec::new();
-    let old_req = req.clone();
+    let _old_req = req.clone();
 
     println!("Editing requirement: {}", req.title);
     println!("Leave field empty to keep current value");
@@ -2604,9 +2603,6 @@ fn delete_requirement(storage: &Storage, id_str: &str, skip_confirm: bool) -> Re
     Ok(())
 }
 
-fn parse_uuid(id_str: &str) -> Result<Uuid> {
-    Uuid::parse_str(id_str).with_context(|| format!("Invalid UUID: {}", id_str))
-}
 
 /// Parse requirement ID - accepts either UUID or SPEC-ID
 fn parse_requirement_id(id_str: &str, store: &RequirementsStore) -> Result<Uuid> {
@@ -7994,12 +7990,7 @@ fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
                 .collect();
 
             // Also find Jira issues with aida: labels that aren't linked from AIDA side
-            let jql = format!(
-                "project = {} AND labels in (\"aida:{}\") ORDER BY updated DESC",
-                config.project_key,
-                config.mapping.label_prefix.trim_end_matches(':')
-            );
-            // Try to find aida-labeled issues, but don't fail if JQL is wrong
+            // (TODO: tighten JQL to filter on aida:label_prefix once verified)
             let jira_issues = rt.block_on(client.search(
                 &format!("project = {} ORDER BY updated DESC", config.project_key),
                 50,
@@ -8949,7 +8940,7 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
 
         // trace:STORY-0325 | ai:claude
         GitLabCommand::Status { id, diverged } => {
-            use aida_core::{GitLabSyncState, LinkOrigin, SyncStatus};
+            use aida_core::{LinkOrigin, SyncStatus};
 
             // Check if storage is SQLite (sync state only works with SQLite)
             if !storage.is_sqlite() {
@@ -9017,7 +9008,7 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
                 };
 
                 // Status icon and color
-                let (status_icon, status_color) = match state.sync_status {
+                let (status_icon, _status_color) = match state.sync_status {
                     SyncStatus::InSync => ("✓", "green"),
                     SyncStatus::AidaModified => ("△", "yellow"),
                     SyncStatus::GitLabModified => ("▽", "cyan"),

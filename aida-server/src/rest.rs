@@ -290,6 +290,7 @@ struct UpdateRequirementRequest {
     custom_priority: Option<String>,
     custom_fields: Option<std::collections::HashMap<String, String>>,
     replace_custom_fields: Option<bool>,
+    #[allow(dead_code)] // accepted from clients for audit; not yet stamped into the requirement record
     modified_by: Option<String>,
 }
 
@@ -298,6 +299,7 @@ struct UpdateRequirementRequest {
 struct AddCommentRequest {
     content: String,
     author: Option<String>,
+    #[allow(dead_code)] // accepted from clients for threading; not yet wired into the comment add path
     parent_comment_id: Option<String>,
 }
 
@@ -1073,7 +1075,7 @@ async fn delete_project(
 // Server status handlers
 // ============================================================================
 
-async fn ping(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+async fn ping(State(_state): State<Arc<AppState>>) -> impl IntoResponse {
     Json(PingResponse {
         status: "ok".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
