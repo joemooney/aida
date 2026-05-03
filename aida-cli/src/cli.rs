@@ -288,6 +288,18 @@ pub enum DevCommand {
         #[clap(long)]
         install: bool,
     },
+
+    /// One-command release: bump version + tag + push (via scripts/release.sh),
+    /// wait for the GitHub Actions workflow to publish binary tarballs, then
+    /// upgrade your sibling installs to the new version. Default bump: patch.
+    Release {
+        /// Version bump kind: major, minor, patch, or an explicit version like "0.5.0"
+        #[clap(default_value = "patch")]
+        bump: String,
+    },
+
+    /// Alias for `aida dev release patch` — the most common case.
+    Patch,
 }
 
 /// Commands for the SQLite read-cache that projects the git-canonical store
