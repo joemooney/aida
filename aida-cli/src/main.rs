@@ -4346,17 +4346,28 @@ fn upgrade_dev_mode_sibling_scan(check: bool, version: Option<&str>, yes: bool) 
     println!("Found:");
     let mut stale: Vec<std::path::PathBuf> = Vec::new();
     for (path, probed) in &found {
+        let mtime = file_mtime_short(path);
         let (label, is_stale) = match probed {
-            Some((v, banner)) if v == target_version => {
-                (format!("{}  {}", banner, "up to date".green()), false)
-            }
+            Some((v, banner)) if v == target_version => (
+                format!("{}  · mtime {}  {}", banner, mtime, "up to date".green()),
+                false,
+            ),
             Some((_, banner)) => (
-                format!("{}  ({}, latest is {})", banner, "stale".yellow(), target_tag),
+                format!(
+                    "{}  · mtime {}  ({}, latest is {})",
+                    banner,
+                    mtime,
+                    "stale".yellow(),
+                    target_tag
+                ),
                 true,
             ),
-            None => ("(could not detect version)".to_string(), false),
+            None => (
+                format!("(could not detect version) · mtime {}", mtime),
+                false,
+            ),
         };
-        println!("  {:<40}  {}", path.display(), label);
+        println!("  {:<36}  {}", path.display(), label);
         if is_stale {
             stale.push(path.clone());
         }
@@ -4478,6 +4489,23 @@ fn query_binary_version(path: &std::path::Path) -> Option<(String, String)> {
 
 /// Common locations where users typically have aida installed. Order matters
 /// for display; we use it as-is for the scan-and-report output.
+/// File mtime as `YYYY-MM-DD` for display next to a binary's version. Useful
+/// as a universal "when was this binary placed here" indicator — works even
+/// for binaries built before the build-banner stamps existed (pre-EPIC-1-001).
+fn file_mtime_short(path: &std::path::Path) -> String {
+    let modified = match std::fs::metadata(path).and_then(|m| m.modified()) {
+        Ok(m) => m,
+        Err(_) => return "(?)".to_string(),
+    };
+    let secs = match modified.duration_since(std::time::UNIX_EPOCH) {
+        Ok(d) => d.as_secs() as i64,
+        Err(_) => return "(?)".to_string(),
+    };
+    chrono::DateTime::<chrono::Utc>::from_timestamp(secs, 0)
+        .map(|t| t.format("%Y-%m-%d").to_string())
+        .unwrap_or_else(|| "(?)".to_string())
+}
+
 fn sibling_install_candidates() -> Vec<std::path::PathBuf> {
     let mut paths = Vec::new();
     if let Some(home) = dirs::home_dir() {
