@@ -1,5 +1,14 @@
 # AIDA Docker Quickstart — single-container build
-# Serves REST API + React dashboard on port 8080
+# Serves REST API + React dashboard on port 8080.
+#
+# Storage (post EPIC-1-001):
+#   The container runs `aida-server` against a directory passed as --data-dir.
+#   For git-canonical projects, mount the host's `.aida-store/` (orphan-branch
+#   worktree) at /data, e.g.:
+#     docker run -v $(pwd)/.aida-store:/data -p 8080:8080 aida
+#   The cache rebuilds automatically on first read inside the container.
+#   For legacy SQLite-canonical projects, mount the directory containing
+#   requirements.db at /data instead.
 
 # =============================================================================
 # Stage 1: Build React dashboard
@@ -31,12 +40,12 @@ WORKDIR /build
 # Copy workspace manifest and lockfile
 COPY Cargo.toml Cargo.lock ./
 
-# Copy all workspace crates (preserving directory structure)
+# Copy workspace crates (5 active crates after the 2026-05-02 desktop/web
+# extraction — see /docs/archive/ for what was removed).
 COPY aida-core/ aida-core/
 COPY aida-cli/ aida-cli/
+COPY aida-crate/ aida-crate/
 COPY aida-server/ aida-server/
-COPY aida-desktop/ aida-desktop/
-COPY aida-web/ aida-web/
 COPY aida-generate-types/ aida-generate-types/
 
 # Proto files (needed by build.rs)

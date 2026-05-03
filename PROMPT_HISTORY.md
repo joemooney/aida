@@ -4210,3 +4210,45 @@ All test suites pass (6 cache tests added); workspace builds clean. EPIC-1-001 m
 - Phase 3 hard-cut: remove `yaml_backend.rs` and `sqlite_backend.rs` standalone-canonical paths; extract `postgres_backend.rs` to `aida-backend-postgres` plugin crate
 - Server REST endpoints still call `backend.load()` rather than `list_summaries()` — touching the server endpoints to use cache-backed summaries is a follow-up
 - AIDA's legacy `requirements.db` exists alongside the orphan branch — eventual cleanup needed
+
+### Phase 3 user-facing portion (commit 5e66f87, same day)
+
+User asked to complete Phase 3 with "don't overthink this" + "fine-tuned for a simple project ASAP". Resolved by flipping the `aida init` default to git-canonical:
+
+- `aida-cli/src/cli.rs` Init command: new `--centralized` flag (deprecated, prints warning); `--distributed` retained as no-op for backwards compat (hidden); `--sibling` no longer requires `--distributed` (implies it)
+- `aida-cli/src/main.rs`: dispatch flipped — default → distributed worktree, `--sibling` → distributed sibling, `--centralized` → legacy
+- Extracted `complete_init_scaffolding()` helper so all three init paths get the same skills/commands/hooks/MCP/codex scaffolding (was: only legacy centralized got it). Both distributed handlers now seed META requirements + create `docs/plans/` for feature parity.
+- Verified end-to-end on `/tmp/aida-test-init`: `aida init` → orphan branch + worktree + `.aida/config.toml` + skills + commands + hooks + MCP + AGENTS.md + docs/plans + 6 META reqs seeded + cache FRESH at HEAD `12b79df`. `aida add TASK-1-001` succeeded.
+- Code-cleanup pieces (delete legacy backends, extract postgres) deferred — would require unwinding ~1500 LOC of `Storage` class usage, no immediate user value beyond "less code"; legacy code only reachable via deprecated `--centralized` opt-in.
+
+### Hook fix (commit 8dd3a3a)
+
+User reported `.claude/hooks/aida-validate-commit.sh: not found` errors when Bash was invoked from a CWD other than the project root (e.g. inside `.aida-store/`). Root cause: `.claude/settings.json` used relative paths. Fixed by switching to `$CLAUDE_PROJECT_DIR/.claude/hooks/...`. Edited `aida-core/templates/settings.json` (master template — `.claude/settings.json` symlinks to it). Future projects scaffolded by `aida init` inherit the fix.
+
+### Documentation review / consolidate / archive (commits 2cd7de6, bda95ef, 3662d05, 3016c7c, 96a7362; archive in implicit prior commit)
+
+User noted README's "5 Storage Modes" framing put diverse storage modes front and center, misleading after EPIC-1-001. Asked for review/consolidate/archive/update of all docs.
+
+- **Archive (one commit, 22 files moved):** Created `docs/archive/` with a README explaining what's there. Project root drops 17→4 markdown files (CLAUDE.md, OVERVIEW.md, PROMPT_HISTORY.md, README.md). docs/ drops 24→9 active files. Archived: FINAL_*, PLAN, IMPLEMENTATION_PLAN, six INTEGRATION_* variants, SIMPLIFIED_INTEGRATION, three SPEC_ID docs, UUID_SPEC_ID_VERIFICATION, unified-gui-plan, unified-storage-architecture, PROJECT_EVALUATION_2026-02-28, AI_INTEGRATION_DESIGN, EXTERNAL_INTEGRATION_ARCHITECTURE, RELATIONSHIP_DESIGN, SPRINT_EPIC_DESIGN, DEVELOPER_GUIDE.md+.html. Deleted empty GEMINI.md.
+- **README.md** (137→92 lines): leads with one-sentence pitch from path-forward audit; 5-storage-modes table moved to admin-guide / storage-modes; removed extracted-crate refs; trimmed skill list; one-paragraph Architecture summary.
+- **CLAUDE.md** (352→163 lines, 54% reduction): wall-of-text dashboard view dump replaced by pointer to OVERVIEW.md; storage section rewritten around git-canonical; init defaults updated; 21-skill bulleted listing condensed; removed misleading Docker Quickstart line.
+- **docs/storage-modes.md** (full rewrite): TL;DR `aida init` git-canonical; legacy YAML/SQLite explicitly deprecated; PostgreSQL flagged as opt-in feature flag; 5-column comparison matrix with default + status columns; updated decision tree.
+- **docs/admin-guide.md** storage section: removed "two backends" framing (was completely wrong post-EPIC-1-001); added cache management section; updated auto-detection rules.
+- **docs/getting-started.md**: rewritten Step 2 + What's Next + Quick Reference around git-canonical defaults; node-namespaced IDs (`FR-1-001`).
+- **docs/user-guide.md**: deleted ~91-line Desktop App section, updated Quick Start, fixed Project Resolution Order.
+- **docs/multi-user-setup.md**: reframed PostgreSQL as opt-in feature flag.
+- **Global `~/.claude/CLAUDE.md`** rewritten in place to be AIDA-aware: detects AIDA-initialized projects (`.aida/config.toml`, `requirements.db`, `aida-store` branch) and instructs to use AIDA commands instead of maintaining `REQUIREMENTS.md`. Kept OVERVIEW.md / PROMPT_HISTORY.md / git-workflow / `.ports` / "stop asking compaction" preferences.
+
+### Paradox project bootstrap
+
+User asked to bootstrap AIDA on `~/ai/paradox` ("discard or do whatever is necessary"). Project had a half-initialized state from before today's Phase 3 work — `.aida/config.toml` and `.aida-store/` worktree existed but no scaffolding (no `.claude/`, no `.mcp.json`, no `CLAUDE.md`). The `aida-git-guardrails.sh` hook blocked an attempt to bundle `git branch -D aida-store` (correctly, doing its job). Removed worktree + `.aida/`, ran `aida init` which reused the existing orphan branch and ran the full scaffolding. Verified: 6 META requirements seeded, cache FRESH at HEAD `7a3a385`, all scaffolding present.
+
+### Install / release / Docker fix (commits this session)
+
+User asked four questions:
+1. **Install path**: README only mentions `cargo install --git ...` from source. Added pre-built binary install option (curl + tar to /usr/local/bin) — v0.3.0 release tarballs already exist for linux-{x86_64,arm64} and darwin-{x86_64,arm64}.
+2. **github sync**: `main` is current (pushed after each commit); GitHub releases are 6 weeks stale (last v0.3.0 on 2026-03-17); not on crates.io. Cut v0.4.0 by bumping `[workspace.package]` version + tag push (release workflow auto-triggers on `v*` tag).
+3. **PROMPT_HISTORY**: had Session 54 entry from earlier commit but not today's later work. Appended (this entry).
+4. **Docker**: was broken — `Dockerfile` and `docker/Dockerfile.server` both `COPY aida-desktop/` and `COPY aida-web/` (removed in 4a948e5). Fixed by removing those COPY lines + adding a comment about volume-mounting `.aida-store/` for git-canonical mode. Top-level Dockerfile now serves the React dashboard against any data directory passed at `/data`.
+
+Bumped `[workspace.package]` version 0.2.0 → 0.4.0 plus the path-dep version constraints in `aida-cli/Cargo.toml` and `aida-crate/Cargo.toml`. Workspace builds clean.
