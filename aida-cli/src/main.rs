@@ -67,6 +67,18 @@ fn get_default_author() -> String {
 }
 
 fn main() -> Result<()> {
+    // Intercept --version / -V before clap so we can include the build-time
+    // banner (build.rs stamps build time + git sha + dirty flag). Clap's
+    // built-in #[clap(version)] only knows the package version, which can't
+    // distinguish two binaries at the same version built at different times.
+    {
+        let args: Vec<String> = std::env::args().collect();
+        if args.len() == 2 && (args[1] == "--version" || args[1] == "-V") {
+            println!("aida {}", build_banner());
+            return Ok(());
+        }
+    }
+
     let mut cli = Cli::parse();
 
     // Check for AIDA_SERVER environment variable if --server not specified
@@ -3899,6 +3911,7 @@ fn print_aida_dev_context(project_root: &std::path::Path) {
     let workspace_version = read_workspace_version(project_root).unwrap_or_else(|| "?".into());
     let latest_tag = git_describe_latest_tag(project_root).unwrap_or_else(|| "(none)".into());
     let commits_since_tag = git_commits_since_tag(project_root, &latest_tag).unwrap_or(0);
+    println!("  Running binary:     {}", build_banner());
     println!("  Workspace version:  v{}", workspace_version);
     println!("  Latest release tag: {}", latest_tag);
     if commits_since_tag > 0 {
@@ -4088,6 +4101,38 @@ fn current_version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
+/// Build git SHA stamped at compile time (or "unknown" if git wasn't
+/// available in the build env). Set by build.rs.
+fn build_git_sha() -> &'static str {
+    env!("AIDA_BUILD_GIT_SHA")
+}
+
+/// Whether the working tree had uncommitted changes at build time.
+fn build_git_dirty() -> bool {
+    env!("AIDA_BUILD_GIT_DIRTY") == "1"
+}
+
+/// Build time as ISO-8601 UTC, formatted at runtime from the unix-epoch
+/// seconds stamped at compile time.
+fn build_time_iso() -> String {
+    let secs: i64 = env!("AIDA_BUILD_UNIX_TIME").parse().unwrap_or(0);
+    chrono::DateTime::<chrono::Utc>::from_timestamp(secs, 0)
+        .map(|t| t.format("%Y-%m-%dT%H:%M:%SZ").to_string())
+        .unwrap_or_else(|| "(unknown)".to_string())
+}
+
+/// One-line build banner for use in --version and status output:
+///   "0.4.0 (built 2026-05-03T01:23:45Z, sha 866b050[+dirty])"
+fn build_banner() -> String {
+    format!(
+        "{} (built {}, sha {}{})",
+        current_version(),
+        build_time_iso(),
+        build_git_sha(),
+        if build_git_dirty() { "+dirty" } else { "" }
+    )
+}
+
 /// Compile-time-resolved release-artifact target name (matches the matrix in
 /// `.github/workflows/release.yml`). Returns None on unsupported platforms.
 fn release_target() -> Option<&'static str> {
@@ -4170,8 +4215,9 @@ fn upgrade_running_binary(
         InstallMethod::Binary(p) => format!("pre-built binary ({})", p.display()),
         InstallMethod::DeveloperBuild(p) => format!("developer build ({})", p.display()),
     };
-    println!("Current version: v{}", current);
+    println!("Current version: {}", build_banner());
     println!("Installed via:   {}", install_label);
+    let _ = current; // version is included in build_banner()
 
     let target_tag = resolve_target_tag(version)?;
     let target_version = strip_v(&target_tag);
@@ -4212,14 +4258,17 @@ fn upgrade_specific_binary(
 ) -> Result<()> {
     let install = classify_install_path(target_path);
 
-    let current = query_binary_version(target_path)
-        .map(|v| format!("v{}", v))
+    let probed = query_binary_version(target_path);
+    let current_version = probed.as_ref().map(|(v, _)| v.clone());
+    let current_banner = probed
+        .as_ref()
+        .map(|(_, b)| b.clone())
         .unwrap_or_else(|| "(not installed)".into());
     let target_tag = resolve_target_tag(version)?;
 
     println!("Target binary: {}", target_path.display());
     println!("Install type:  {}", install_method_label(&install));
-    println!("Current:       {}", current);
+    println!("Current:       {}", current_banner);
     println!("Target:        {}", target_tag);
 
     if let InstallMethod::DeveloperBuild(p) = &install {
@@ -4230,7 +4279,7 @@ fn upgrade_specific_binary(
         );
     }
 
-    if current == format!("v{}", strip_v(&target_tag)) {
+    if current_version.as_deref() == Some(strip_v(&target_tag)) {
         println!("\n{}: {} already on {}.", "OK".green(), target_path.display(), target_tag);
         return Ok(());
     }
@@ -4266,7 +4315,7 @@ fn upgrade_specific_binary(
 /// sibling aida installs, offering to upgrade any that are stale.
 fn upgrade_dev_mode_sibling_scan(check: bool, version: Option<&str>, yes: bool) -> Result<()> {
     let exe = std::env::current_exe()?;
-    println!("Current version: v{}", current_version());
+    println!("Current version: {}", build_banner());
     println!(
         "Installed via:   developer build ({})",
         exe.display()
@@ -4280,11 +4329,11 @@ fn upgrade_dev_mode_sibling_scan(check: bool, version: Option<&str>, yes: bool) 
     let target_version = strip_v(&target_tag);
 
     let candidates = sibling_install_candidates();
-    let mut found: Vec<(std::path::PathBuf, Option<String>)> = Vec::new();
+    let mut found: Vec<(std::path::PathBuf, Option<(String, String)>)> = Vec::new();
     for path in candidates {
         if path.exists() && path != exe {
-            let ver = query_binary_version(&path);
-            found.push((path, ver));
+            let probed = query_binary_version(&path);
+            found.push((path, probed));
         }
     }
 
@@ -4296,22 +4345,20 @@ fn upgrade_dev_mode_sibling_scan(check: bool, version: Option<&str>, yes: bool) 
 
     println!("Found:");
     let mut stale: Vec<std::path::PathBuf> = Vec::new();
-    for (path, ver) in &found {
-        let label = match ver {
-            Some(v) if v == target_version => format!("v{}  {}", v, "up to date".green()),
-            Some(v) => format!(
-                "v{}  ({}, latest is {})",
-                v,
-                "stale".yellow(),
-                target_tag
+    for (path, probed) in &found {
+        let (label, is_stale) = match probed {
+            Some((v, banner)) if v == target_version => {
+                (format!("{}  {}", banner, "up to date".green()), false)
+            }
+            Some((_, banner)) => (
+                format!("{}  ({}, latest is {})", banner, "stale".yellow(), target_tag),
+                true,
             ),
-            None => "(could not detect version)".to_string(),
+            None => ("(could not detect version)".to_string(), false),
         };
         println!("  {:<40}  {}", path.display(), label);
-        if let Some(v) = ver {
-            if v != target_version {
-                stale.push(path.clone());
-            }
+        if is_stale {
+            stale.push(path.clone());
         }
     }
     println!();
@@ -4400,10 +4447,12 @@ fn confirm(prompt: &str) -> bool {
     matches!(answer.trim().to_lowercase().as_str(), "y" | "yes")
 }
 
-/// Run `<path> --version` and parse the trailing whitespace-separated token
-/// as the semver. Returns None if the binary doesn't run or output doesn't
-/// look like a version.
-fn query_binary_version(path: &std::path::Path) -> Option<String> {
+/// Run `<path> --version` and parse out (version, full_banner). The banner
+/// is everything after the program-name prefix and may include a build-time
+/// stamp ("0.4.0 (built 2026-05-03T01:30:00Z, sha 866b050)") for binaries
+/// built post-EPIC-1-001 — older binaries just have "0.4.0". Returns None
+/// if the binary doesn't run or output doesn't look like a version.
+fn query_binary_version(path: &std::path::Path) -> Option<(String, String)> {
     let out = std::process::Command::new(path)
         .arg("--version")
         .output()
@@ -4411,11 +4460,20 @@ fn query_binary_version(path: &std::path::Path) -> Option<String> {
     if !out.status.success() {
         return None;
     }
-    let s = String::from_utf8_lossy(&out.stdout).to_string();
-    s.split_whitespace()
-        .last()
-        .filter(|v| v.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false))
+    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    // Strip the leading program name ("aida ", "aida-cli ", "aida-server ").
+    let banner = ["aida-cli ", "aida-server ", "aida "]
+        .iter()
+        .find_map(|p| s.strip_prefix(*p))
         .map(String::from)
+        .unwrap_or(s);
+    // Pluck the first whitespace-separated token as the bare version.
+    let version = banner
+        .split_whitespace()
+        .next()
+        .filter(|v| v.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false))?
+        .to_string();
+    Some((version, banner))
 }
 
 /// Common locations where users typically have aida installed. Order matters
