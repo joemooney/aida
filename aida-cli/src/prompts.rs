@@ -2,9 +2,7 @@ use anyhow::Result;
 use inquire::{Confirm, Select, Text};
 use std::env;
 use std::path::PathBuf;
-use uuid::Uuid;
 
-use aida_core::project::list_available_projects;
 use aida_core::{Requirement, RequirementPriority, RequirementStatus, RequirementType};
 
 /// Prompts the user for a new requirement
@@ -101,37 +99,6 @@ pub fn prompt_new_requirement(store: &mut aida_core::RequirementsStore) -> Resul
     Ok(req)
 }
 
-/// Prompts the user to select a requirement from a list
-pub fn prompt_select_requirement(titles: Vec<(Uuid, String)>) -> Result<Uuid> {
-    let options: Vec<String> = titles.iter().map(|(_, title)| title.clone()).collect();
-
-    let options_clone = options.clone();
-    let selection = Select::new("Select a requirement:", options_clone).prompt()?;
-
-    let index = options.iter().position(|t| t == &selection).unwrap();
-    Ok(titles[index].0)
-}
-
-/// Prompts the user to select a project
-pub fn prompt_select_project() -> Result<String> {
-    let projects = list_available_projects()?;
-
-    if projects.is_empty() {
-        anyhow::bail!("No projects found in registry");
-    }
-
-    let options: Vec<String> = projects
-        .iter()
-        .map(|(name, desc)| format!("{} ({})", name, desc))
-        .collect();
-
-    let selection = Select::new("Select a project:", options).prompt()?;
-
-    // Extract the project name from the selection (before the space)
-    let project_name = selection.split(' ').next().unwrap();
-
-    Ok(project_name.to_string())
-}
 
 /// Prompts the user for project registration details
 pub fn prompt_register_project() -> Result<(String, PathBuf, String, bool)> {

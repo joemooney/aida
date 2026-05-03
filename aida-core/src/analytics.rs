@@ -5,7 +5,9 @@
 //! quality score trends, cycle time distributions, and more from the
 //! existing requirement data (history entries, AI evaluations, timestamps).
 
-use chrono::{DateTime, Duration, Utc, Datelike, NaiveDate};
+use chrono::{DateTime, Datelike, Utc};
+#[cfg(test)]
+use chrono::Duration;
 use serde::Serialize;
 use std::collections::HashMap;
 

@@ -117,32 +117,6 @@ pub fn import_from_json<P: AsRef<Path>>(json_path: P) -> Result<RequirementsStor
     Ok(store)
 }
 
-/// Exports data from any backend to a JSON file
-///
-/// # Arguments
-/// * `backend` - The source backend
-/// * `json_path` - Path to the destination JSON file
-pub fn export_backend_to_json<P: AsRef<Path>>(
-    backend: &dyn DatabaseBackend,
-    json_path: P,
-) -> Result<()> {
-    let store = backend.load()?;
-    export_to_json(&store, json_path)
-}
-
-/// Imports data from a JSON file into any backend
-///
-/// # Arguments
-/// * `json_path` - Path to the source JSON file
-/// * `backend` - The destination backend
-pub fn import_json_to_backend<P: AsRef<Path>>(
-    json_path: P,
-    backend: &dyn DatabaseBackend,
-) -> Result<()> {
-    let store = import_from_json(json_path)?;
-    backend.save(&store)
-}
-
 /// Migrates data from any backend to PostgreSQL
 ///
 /// # Arguments
