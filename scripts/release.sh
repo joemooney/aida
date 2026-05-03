@@ -13,6 +13,13 @@
 # binaries for linux-{x86_64,arm64} and darwin-{x86_64,arm64} and attaches
 # them to the GitHub release.
 #
+# Conventions enforced by this script:
+#   - workspace.package.version uses full form ("0.5.0")
+#   - aida-crate package version uses full form ("0.5.0")
+#   - aida-core path-dep version constraints use short form ("0.5") —
+#     cargo treats this and "0.5.0" identically for matching, but short
+#     form survives patch bumps without churn
+#
 # trace:EPIC-1-001 | ai:claude
 
 set -euo pipefail
@@ -64,42 +71,91 @@ fi
 
 echo "bumping workspace from v$current -> v$new"
 
-# Bump workspace.package.version
+# Bump workspace.package.version (full form).
 sed -i.bak -E "/^\[workspace\.package\]/,/^\[/ s/^version = \"$current\"/version = \"$new\"/" Cargo.toml
 rm -f Cargo.toml.bak
 
-# Bump aida-crate package version
+# Bump aida-crate package version (full form).
 sed -i.bak -E "0,/^version = \"$current\"/ s/^version = \"$current\"/version = \"$new\"/" aida-crate/Cargo.toml
 rm -f aida-crate/Cargo.toml.bak
 
-# Bump aida-core path-dep version constraints in dependents.
-# (Workspace path deps still need a `version =` field for `cargo publish` to work.)
+# Bump aida-core path-dep version constraints in dependents (short form).
+# Match either short ("0.4") or any full ("0.4.x") form on the way in;
+# always emit short ("0.5") on the way out.
 short_current=$(echo "$current" | awk -F. '{print $1"."$2}')
 short_new=$(echo "$new" | awk -F. '{print $1"."$2}')
-sed -i.bak -E "s/aida-core = \\{ version = \"$short_current(\\.0)?\"/aida-core = { version = \"$short_new\"/" \
+sed -i.bak -E "s/aida-core = \\{ version = \"$short_current(\\.[0-9]+)?\"/aida-core = { version = \"$short_new\"/" \
     aida-cli/Cargo.toml aida-crate/Cargo.toml
 rm -f aida-cli/Cargo.toml.bak aida-crate/Cargo.toml.bak
 
 # Refresh Cargo.lock.
 cargo build --workspace --offline >/dev/null 2>&1 || cargo build --workspace
 
-# Show the diff so the human can sanity-check before the commit lands.
+# Generate tag notes from `git log <prev_tag>..HEAD`. Saved to a temp file
+# so we can both display them and feed them to `git tag -a -F`. The temp
+# file is preserved if the user cancels — they can use it to tag manually.
+prev_tag=$(git describe --tags --abbrev=0 2>/dev/null || true)
+notes_file=$(mktemp -t aida-release-notes-XXXXXX)
+{
+    echo "v$new"
+    echo
+    if [ -n "$prev_tag" ]; then
+        echo "Changes since $prev_tag:"
+        echo
+        git log "${prev_tag}..HEAD" --pretty=format:"- %s" --no-merges
+        echo
+    else
+        echo "Initial release."
+    fi
+} > "$notes_file"
+
+# Show the version-bump diff and the proposed tag notes.
 echo
-echo "─── Diff ───"
+echo "─── Version bump diff ───"
 git --no-pager diff Cargo.toml Cargo.lock aida-cli/Cargo.toml aida-crate/Cargo.toml
 echo
+echo "─── Tag notes (will be used for v$new) ───"
+cat "$notes_file"
+echo
+echo "─── End tag notes ───"
+echo
 
-read -r -p "Commit, tag v$new, and push tag? [y/N]: " answer
+read -r -p "Commit + tag v$new + push? [y/N]: " answer
 case "${answer,,}" in
-    y|yes) ;;
-    *) echo "cancelled. Re-run after manual fixes."; exit 1 ;;
+    y|yes)
+        ;;
+    *)
+        cat <<EOM
+
+cancelled. The version bump is in your working tree but not committed.
+Pick one:
+
+  1. Proceed manually (use the auto-generated tag notes):
+       git add Cargo.toml Cargo.lock aida-cli/Cargo.toml aida-crate/Cargo.toml
+       git commit -m "chore: release v$new"
+       git tag -a v$new -F $notes_file
+       git push origin main
+       git push origin v$new
+
+  2. Discard the bump (stay on v$current):
+       git restore Cargo.toml Cargo.lock aida-cli/Cargo.toml aida-crate/Cargo.toml
+
+  3. Re-run the script after deciding (a clean working tree is required).
+
+Tag notes saved at: $notes_file
+EOM
+        exit 1
+        ;;
 esac
 
 git add Cargo.toml Cargo.lock aida-cli/Cargo.toml aida-crate/Cargo.toml
 git commit -m "chore: release v$new"
-git tag -a "v$new" -m "v$new"
+git tag -a "v$new" -F "$notes_file"
 git push origin HEAD
 git push origin "v$new"
+
+# Tag now lives in the repo; safe to clean the temp file.
+rm -f "$notes_file"
 
 echo
 echo "✓ tag v$new pushed."
