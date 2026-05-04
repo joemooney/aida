@@ -142,6 +142,7 @@ aida comment add <ID> "..."            # Add implementation note
 
 AIDA's whole value depends on the requirements DB staying in sync with reality. **For agents working on this project, treat `/aida-capture` as a required habit, not an optional safety net:**
 
+- **Glance at the Claude Code statusbar.** The bundled `.claude/settings.json` wires `aida statusline` into the statusbar so it shows project · active role · queue depth · cache freshness. If the role you expect isn't there, you forgot to `aida role enter <name>` before starting the session.
 1. **Spec-first when introducing a new theme.** When the conversation reaches for a new command, a new field on a core model, a new skill, or a new architectural pattern — pause and `aida add --type epic --status in-progress` BEFORE the implementation commits. ~2 min cost; saves an hour of backfill later.
 2. **Don't reuse one EPIC as a catchall.** If the work being done is no longer "what the EPIC was originally about," that's a signal to create a new EPIC, not stretch the existing one. Trace signal degrades fast when one EPIC absorbs unrelated work.
 3. **Run `/aida-capture`** at any natural session pause: when the user is about to step away, when context is approaching compaction, at end of focused work, or whenever explicitly asked. It's a 5-minute pass that catches missed reqs.
