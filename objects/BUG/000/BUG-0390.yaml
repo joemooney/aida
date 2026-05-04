@@ -12,8 +12,8 @@ modified_at: 2026-02-23T05:49:20.485197884Z
 req_type: Bug
 tags:
 - bug-fix
-- chat
 - docker
+- chat
 comments:
 - id: d53834d4-cbaa-40ec-83e1-a2c855e08c0c
   author: joe

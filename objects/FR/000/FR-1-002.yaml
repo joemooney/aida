@@ -25,10 +25,10 @@ created_at: 2026-05-02T21:28:09.819088898Z
 modified_at: 2026-05-02T21:28:10.363059450Z
 req_type: Functional
 tags:
-- storage
-- deferred
 - performance
+- storage
 - bulk-import
+- deferred
 relationships:
 - rel_type: Parent
   target_id: 019dea8d-c189-72e3-a27f-ea562a6ff148
