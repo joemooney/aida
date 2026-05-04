@@ -30,6 +30,8 @@ regex = { workspace = true }
 dirs = { workspace = true }
 tokio = { workspace = true }
 hostname = "0.4"
+toml = { workspace = true }
+rusqlite = { workspace = true }
 
 # gRPC client dependencies (optional)
 tonic = { workspace = true, optional = true }
