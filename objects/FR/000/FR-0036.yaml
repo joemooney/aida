@@ -33,11 +33,17 @@ priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-27T01:40:55.651758804Z
-modified_at: 2025-11-27T06:35:03.495147287Z
+modified_at: 2026-05-04T19:39:28.378760770Z
 req_type: Functional
 relationships:
 - rel_type: Parent
   target_id: 2fd609e9-d194-47a3-adbd-417f6306190c
+comments:
+- id: 019df480-b2fa-7182-a2f6-72928ed0ea0f
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:39:28.378760770Z
+  modified_at: 2026-05-04T19:39:28.378760770Z
 history:
 - id: 8d06115c-95c3-468b-9aad-887f1a604a3b
   author: '@joe'
