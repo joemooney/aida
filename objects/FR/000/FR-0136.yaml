@@ -24,13 +24,13 @@ description: |-
   - Include attachment metadata in exports (filename, size, hash)
   - Optionally include attachment files in export archives
   - Maintain referential integrity when requirements are deleted (prompt to delete or orphan attachments)
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-30T18:38:19.957263864Z
 created_by: Unknown User
-modified_at: 2026-05-04T19:33:47.249227941Z
+modified_at: 2026-05-04T19:33:48.312805336Z
 req_type: Functional
 relationships:
 - rel_type: Parent
