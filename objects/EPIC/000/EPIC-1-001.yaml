@@ -37,10 +37,10 @@ created_at: 2026-05-02T21:17:31.912989874Z
 modified_at: 2026-05-02T22:32:26.959417121Z
 req_type: Epic
 tags:
-- architecture
 - refactor
-- git-backend
 - storage
+- architecture
+- git-backend
 comments:
 - id: 019dea8e-fe66-7fe3-8528-5460da42dbe4
   author: joe
