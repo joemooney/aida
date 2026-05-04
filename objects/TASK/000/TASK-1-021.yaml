@@ -37,7 +37,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-04T18:44:08.462445407Z
-modified_at: 2026-05-04T18:44:13.254772722Z
+modified_at: 2026-05-04T18:50:07.919213376Z
 req_type: Task
 tags:
 - scope
@@ -48,4 +48,10 @@ relationships:
   target_id: 019df145-aa09-7531-91df-ef3090b34407
   created_at: 2026-05-04T18:44:13.254764075Z
   created_by: joe
+comments:
+- id: 019df453-86af-7931-9e7c-5c2bbd2b5962
+  author: joe
+  content: ''
+  created_at: 2026-05-04T18:50:07.919213376Z
+  modified_at: 2026-05-04T18:50:07.919213376Z
 custom_status: In-progress
