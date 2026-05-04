@@ -26,12 +26,12 @@ description: |
     - If only Title is set: "Title"
     - If only Name is set: "Name"
     - If neither is set: "Requirements Manager"
-status: Approved
+status: Rejected
 priority: Medium
 owner: bill
 feature: 97-Uncategorized
 created_at: 2025-11-27T22:29:31.052887770Z
-modified_at: 2026-05-04T19:29:30.703843011Z
+modified_at: 2026-05-04T19:29:31.967509294Z
 req_type: Functional
 relationships:
 - rel_type: Parent
