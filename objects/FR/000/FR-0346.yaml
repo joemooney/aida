@@ -25,13 +25,13 @@ description: |-
   - [ ] Build errors are parsed and displayed with file:line references
   - [ ] Keyboard shortcut (e.g., Ctrl+B) triggers build with last configuration
   - [ ] Configuration persists between sessions
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-16T05:12:58.863716032Z
 created_by: Joe Mooney
-modified_at: 2026-05-04T19:33:17.758988255Z
+modified_at: 2026-05-04T19:33:18.902326070Z
 req_type: Functional
 comments:
 - id: 019df47b-0b3e-7040-afdf-28008257b63b
