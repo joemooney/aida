@@ -234,6 +234,47 @@ pub enum ScaffoldCommand {
     },
 }
 
+/// Persona / hat commands. A role is a persistent named context that you
+/// can resume across shells — captures the working directory, last
+/// activity, optional purpose, and acts as a label in the statusline.
+/// State lives at `<project>/.aida/roles/<name>.toml`.
+/// trace:EPIC-1-001 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum RoleCommand {
+    /// Enter (resume or create) a role. Outputs shell code to be eval'd:
+    ///   `eval "$(aida role enter architect)"`
+    /// or via the `aida-role` shell helper installed by `aida dev shell-init`.
+    Enter {
+        /// Role name — e.g. architect, reviewer, implementer
+        name: String,
+
+        /// Set or update the role's stated purpose
+        #[clap(long)]
+        purpose: Option<String>,
+
+        /// Restore the role's last working directory (cd in the eval output)
+        #[clap(long)]
+        cd: bool,
+    },
+
+    /// List all roles defined for this project, sorted by last activity.
+    List,
+
+    /// Show details for one role (defaults to the active role if any).
+    Show {
+        name: Option<String>,
+    },
+
+    /// Deactivate the current role (state preserved). Outputs shell code:
+    ///   `eval "$(aida role end)"`
+    End,
+
+    /// Delete a role's state file permanently.
+    Delete {
+        name: String,
+    },
+}
+
 /// Developer commands for working *on* AIDA itself (pyenv-style activation
 /// of an in-repo build, running dev servers, installing shell helpers).
 /// trace:EPIC-1-001 | ai:claude
@@ -1031,6 +1072,18 @@ pub enum Command {
     /// run dev servers, install shell helpers. End users don't need these.
     #[clap(subcommand, hide = true)]
     Dev(DevCommand),
+
+    /// Manage personas / hats — persistent named contexts that resume
+    /// across shells. `aida role enter <name>` switches; `aida role list`
+    /// shows what's defined for this project. State at `.aida/roles/`.
+    #[clap(subcommand)]
+    Role(RoleCommand),
+
+    /// One-line project + role summary suitable for shell prompts and
+    /// the `statusLine.command` setting in ~/.claude/settings.json.
+    /// Sub-50ms (reads the cache only). Format:
+    ///   aida · <project> · role:<name> · reqs:N · cache:fresh|stale
+    Statusline,
 
     /// Upgrade aida to the latest release (or a specified version).
     /// Detects how aida was installed (cargo / pre-built binary) and uses

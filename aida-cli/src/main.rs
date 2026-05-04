@@ -50,7 +50,8 @@ use aida_core::{
 use crate::cli::{
     CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand, DevCommand,
     FeatureCommand, GitHubCommand, GitLabCommand, JiraCommand, QueueCommand, RelDefCommand,
-    RelationshipCommand, ReportCommand, ScaffoldCommand, ServerCommand, TraceCommand, TypeCommand,
+    RelationshipCommand, ReportCommand, RoleCommand, ScaffoldCommand, ServerCommand, TraceCommand,
+    TypeCommand,
 };
 
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
@@ -136,6 +137,15 @@ fn main() -> Result<()> {
     if let Command::HelpAll = &cli.command {
         print_help_all();
         return Ok(());
+    }
+
+    // Roles + statusline dispatch before storage init — roles are TOML
+    // files at .aida/roles/, statusline reads the cache directly.
+    if let Command::Role(role_cmd) = &cli.command {
+        return handle_role_command(role_cmd);
+    }
+    if let Command::Statusline = &cli.command {
+        return handle_statusline_command();
     }
 
     // Determine which requirements file to use
@@ -334,6 +344,8 @@ fn main() -> Result<()> {
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
+        Command::Role(_) => unreachable!("role is dispatched before storage init"),
+        Command::Statusline => unreachable!("statusline is dispatched before storage init"),
         Command::Rel(rel_cmd) => {
             handle_relationship_command(rel_cmd, &storage)?;
         }
@@ -919,6 +931,8 @@ fn handle_git_backend_command(
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
+        Command::Role(_) => unreachable!("role is dispatched before storage init"),
+        Command::Statusline => unreachable!("statusline is dispatched before storage init"),
         Command::List { status, r#type, feature, .. } => {
             // Cache-backed list (EPIC-1-001 Phase 2). The CachedGitBackend
             // ensures the cache is fresh before querying, so this is one
@@ -3242,6 +3256,357 @@ fn handle_cache_command(
 // trace:EPIC-1-001 | ai:claude
 // ----------------------------------------------------------------------------
 
+// ----------------------------------------------------------------------------
+// `aida role` — persistent personas / hats. State lives at
+// <project>/.aida/roles/<name>.toml. Resume by name to restore working
+// directory and surface the role in the statusline.
+// trace:EPIC-1-001 | ai:claude
+// ----------------------------------------------------------------------------
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct RoleState {
+    name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    purpose: Option<String>,
+    created_at: chrono::DateTime<chrono::Utc>,
+    last_active_at: chrono::DateTime<chrono::Utc>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    working_directory: Option<std::path::PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    notes: Option<String>,
+}
+
+fn statusline_project_root() -> std::path::PathBuf {
+    // Roles + statusline live in the project that is the user's CWD
+    // (or any ancestor with `.aida/config.toml`). Falls back to CWD if
+    // no marker is found.
+    let cwd = std::env::current_dir().unwrap_or_else(|_| ".".into());
+    let mut probe = cwd.clone();
+    for _ in 0..8 {
+        if probe.join(".aida").join("config.toml").exists() {
+            return probe;
+        }
+        match probe.parent() {
+            Some(p) => probe = p.to_path_buf(),
+            None => break,
+        }
+    }
+    cwd
+}
+
+fn roles_dir(project_root: &std::path::Path) -> std::path::PathBuf {
+    project_root.join(".aida/roles")
+}
+
+fn role_file(project_root: &std::path::Path, name: &str) -> std::path::PathBuf {
+    roles_dir(project_root).join(format!("{}.toml", name))
+}
+
+fn load_role(project_root: &std::path::Path, name: &str) -> Result<RoleState> {
+    let path = role_file(project_root, name);
+    let content = std::fs::read_to_string(&path)
+        .with_context(|| format!("No such role: {} (looked at {})", name, path.display()))?;
+    let state: RoleState = toml::from_str(&content)
+        .with_context(|| format!("Failed to parse role file {}", path.display()))?;
+    Ok(state)
+}
+
+fn save_role(project_root: &std::path::Path, state: &RoleState) -> Result<()> {
+    let path = role_file(project_root, &state.name);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let content = toml::to_string_pretty(state)?;
+    std::fs::write(&path, content)
+        .with_context(|| format!("Failed to write {}", path.display()))?;
+    Ok(())
+}
+
+fn list_roles(project_root: &std::path::Path) -> Result<Vec<RoleState>> {
+    let dir = roles_dir(project_root);
+    if !dir.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut roles = Vec::new();
+    for entry in std::fs::read_dir(&dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension() == Some(std::ffi::OsStr::new("toml")) {
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                if let Ok(state) = toml::from_str::<RoleState>(&content) {
+                    roles.push(state);
+                }
+            }
+        }
+    }
+    roles.sort_by(|a, b| b.last_active_at.cmp(&a.last_active_at));
+    Ok(roles)
+}
+
+fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
+    let project_root = statusline_project_root();
+    match cmd {
+        RoleCommand::Enter {
+            name,
+            purpose,
+            cd,
+        } => handle_role_enter(&project_root, name, purpose.as_deref(), *cd),
+        RoleCommand::List => handle_role_list(&project_root),
+        RoleCommand::Show { name } => handle_role_show(&project_root, name.as_deref()),
+        RoleCommand::End => handle_role_end(),
+        RoleCommand::Delete { name } => handle_role_delete(&project_root, name),
+    }
+}
+
+fn handle_role_enter(
+    project_root: &std::path::Path,
+    name: &str,
+    purpose: Option<&str>,
+    cd: bool,
+) -> Result<()> {
+    // Resume if exists, otherwise create. Tracking "was_existing" before
+    // any mutation so the user sees the right verb in the eval output.
+    let existing = load_role(project_root, name).ok();
+    let was_existing = existing.is_some();
+    let mut state = existing.unwrap_or_else(|| RoleState {
+        name: name.to_string(),
+        purpose: purpose.map(String::from),
+        created_at: chrono::Utc::now(),
+        last_active_at: chrono::Utc::now(),
+        working_directory: std::env::current_dir().ok(),
+        notes: None,
+    });
+    state.last_active_at = chrono::Utc::now();
+    if let Some(p) = purpose {
+        state.purpose = Some(p.to_string());
+    }
+    state.working_directory = std::env::current_dir().ok();
+    save_role(project_root, &state)?;
+
+    // Emit shell code for eval.
+    let cwd = state
+        .working_directory
+        .as_deref()
+        .unwrap_or(project_root)
+        .display();
+    println!("# aida role enter — {}", state.name);
+    println!("export AIDA_SESSION_ROLE='{}'", state.name);
+    if let Some(p) = &state.purpose {
+        println!("export AIDA_SESSION_PURPOSE='{}'", p.replace('\'', "'\\''"));
+    } else {
+        println!("unset AIDA_SESSION_PURPOSE");
+    }
+    println!("export AIDA_SESSION_PROJECT='{}'", project_root.display());
+    if cd {
+        println!("cd '{}'", cwd);
+    }
+    let verb = if was_existing { "Resumed" } else { "Created and entered" };
+    println!(
+        "echo '✓ {} role: {}{}'",
+        verb,
+        state.name,
+        state
+            .purpose
+            .as_ref()
+            .map(|p| format!(" — {}", p))
+            .unwrap_or_default()
+    );
+    Ok(())
+}
+
+fn handle_role_end() -> Result<()> {
+    // Use a uniquely-named env var rather than `local` so the eval works
+    // both at the shell top level and inside a wrapper function.
+    println!("# aida role end");
+    println!("__AIDA_ROLE_END_PREV=\"${{AIDA_SESSION_ROLE:-}}\"");
+    println!("unset AIDA_SESSION_ROLE AIDA_SESSION_PURPOSE AIDA_SESSION_PROJECT");
+    println!("if [ -n \"$__AIDA_ROLE_END_PREV\" ]; then");
+    println!("    echo \"✓ Deactivated role: $__AIDA_ROLE_END_PREV\"");
+    println!("else");
+    println!("    echo 'No role active.'");
+    println!("fi");
+    println!("unset __AIDA_ROLE_END_PREV");
+    Ok(())
+}
+
+fn handle_role_list(project_root: &std::path::Path) -> Result<()> {
+    let roles = list_roles(project_root)?;
+    let active = std::env::var("AIDA_SESSION_ROLE").ok();
+    if roles.is_empty() {
+        println!("(no roles defined for {})", project_root.display());
+        println!(
+            "Create one with: {} {}",
+            "aida-role".cyan(),
+            "<name>".dimmed()
+        );
+        return Ok(());
+    }
+    println!("Roles for {}:", project_root.display());
+    for role in &roles {
+        let marker = if active.as_deref() == Some(&role.name) {
+            "*".green().to_string()
+        } else {
+            " ".to_string()
+        };
+        let last = humanize_relative(role.last_active_at);
+        let purpose = role
+            .purpose
+            .as_deref()
+            .map(|p| format!(" — {}", p))
+            .unwrap_or_default();
+        println!(
+            "  {} {:<16} last active {}{}",
+            marker, role.name.bold(), last, purpose
+        );
+    }
+    Ok(())
+}
+
+fn handle_role_show(project_root: &std::path::Path, name: Option<&str>) -> Result<()> {
+    let resolved = match name {
+        Some(n) => n.to_string(),
+        None => std::env::var("AIDA_SESSION_ROLE").map_err(|_| {
+            anyhow::anyhow!("No role active and no name given. Use `aida role list` to see options.")
+        })?,
+    };
+    let state = load_role(project_root, &resolved)?;
+    println!("Role:        {}", state.name.bold());
+    println!(
+        "Purpose:     {}",
+        state.purpose.as_deref().unwrap_or("(none)")
+    );
+    println!("Created:     {}", state.created_at.to_rfc3339());
+    println!(
+        "Last active: {} ({})",
+        state.last_active_at.to_rfc3339(),
+        humanize_relative(state.last_active_at)
+    );
+    if let Some(d) = &state.working_directory {
+        println!("Last cwd:    {}", d.display());
+    }
+    if let Some(n) = &state.notes {
+        println!("Notes:       {}", n);
+    }
+    Ok(())
+}
+
+fn handle_role_delete(project_root: &std::path::Path, name: &str) -> Result<()> {
+    let path = role_file(project_root, name);
+    if !path.exists() {
+        anyhow::bail!("No such role: {} ({})", name, path.display());
+    }
+    std::fs::remove_file(&path)?;
+    println!("{}: deleted role '{}' ({})", "OK".green(), name, path.display());
+    Ok(())
+}
+
+fn humanize_relative(t: chrono::DateTime<chrono::Utc>) -> String {
+    let now = chrono::Utc::now();
+    let delta = now.signed_duration_since(t);
+    let secs = delta.num_seconds();
+    if secs < 0 {
+        return "just now".to_string();
+    }
+    if secs < 60 {
+        return format!("{}s ago", secs);
+    }
+    let mins = secs / 60;
+    if mins < 60 {
+        return format!("{}m ago", mins);
+    }
+    let hours = mins / 60;
+    if hours < 24 {
+        return format!("{}h ago", hours);
+    }
+    let days = hours / 24;
+    format!("{}d ago", days)
+}
+
+// ----------------------------------------------------------------------------
+// `aida statusline` — fast one-liner for shell prompts and Claude Code's
+// statusLine.command setting. Cache-only; no git operations, no API calls.
+// trace:EPIC-1-001 | ai:claude
+// ----------------------------------------------------------------------------
+
+fn handle_statusline_command() -> Result<()> {
+    let project_root = statusline_project_root();
+    let project_name = project_root
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "?".into());
+
+    // Try to read project name from store metadata (fall back to dir name).
+    let store_name = std::fs::read_to_string(project_root.join("aida-store/metadata.yaml"))
+        .or_else(|_| std::fs::read_to_string(project_root.join(".aida-store/metadata.yaml")))
+        .ok()
+        .and_then(|content| {
+            content
+                .lines()
+                .find_map(|l| l.strip_prefix("name:").map(|v| v.trim().trim_matches('"').trim_matches('\'').to_string()))
+                .filter(|s| !s.is_empty())
+        });
+    let project_label = store_name.unwrap_or(project_name);
+
+    let role = std::env::var("AIDA_SESSION_ROLE").ok();
+
+    // Cache stats — fast SQLite lookups, no rebuild.
+    let cache_path = project_root.join(".aida/cache.db");
+    let (req_count, cache_label) = if cache_path.exists() {
+        match rusqlite::Connection::open_with_flags(
+            &cache_path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        ) {
+            Ok(conn) => {
+                let count: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM requirements_cache WHERE archived = 0",
+                        [],
+                        |r| r.get(0),
+                    )
+                    .unwrap_or(0);
+                let recorded_sha: Option<String> = conn
+                    .query_row(
+                        "SELECT value FROM cache_meta WHERE key = 'source_head_sha'",
+                        [],
+                        |r| r.get(0),
+                    )
+                    .ok();
+                let actual_sha = aida_core::git_ops::head_sha(
+                    &project_root.join(".aida-store"),
+                )
+                .ok()
+                .or_else(|| {
+                    aida_core::git_ops::head_sha(&project_root.join("aida-store")).ok()
+                })
+                .unwrap_or_default();
+                let stale = recorded_sha.as_deref().map(|s| s != actual_sha).unwrap_or(true);
+                let label = if !actual_sha.is_empty() && stale {
+                    "stale"
+                } else {
+                    "fresh"
+                };
+                (Some(count as usize), Some(label))
+            }
+            Err(_) => (None, None),
+        }
+    } else {
+        (None, None)
+    };
+
+    let mut parts: Vec<String> = vec!["aida".to_string(), project_label];
+    if let Some(r) = role {
+        parts.push(format!("role:{}", r));
+    }
+    if let Some(c) = req_count {
+        parts.push(format!("reqs:{}", c));
+    }
+    if let Some(l) = cache_label {
+        parts.push(format!("cache:{}", l));
+    }
+    println!("{}", parts.join(" · "));
+    Ok(())
+}
+
 fn print_help_all() {
     let groups: &[(&str, &[(&str, &str)])] = &[
         (
@@ -3589,6 +3954,19 @@ aida-off() {
     bin=$(command -v aida || __aida_find_bin)
     [ -z "$bin" ] && { echo "aida-off: no aida binary found." >&2; return 1; }
     eval "$("$bin" dev deactivate)"
+}
+
+# Persona / hat helpers (aida role …)
+aida-role() {
+    if [ -z "$1" ]; then
+        command aida role list
+        return $?
+    fi
+    eval "$(command aida role enter "$@")"
+}
+
+aida-role-end() {
+    eval "$(command aida role end)"
 }
 "#;
 
