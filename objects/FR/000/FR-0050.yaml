@@ -3,12 +3,12 @@ spec_id: FR-0050
 agreed_id: FR-162
 title: Color Coding
 description: Allow for color coding of requirement prefixes based on Status or maybe an icon indicating status.
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-27T06:40:51.828689546Z
-modified_at: 2026-05-04T19:34:56.710452709Z
+modified_at: 2026-05-04T19:34:57.798817830Z
 req_type: Functional
 relationships:
 - rel_type: Parent
