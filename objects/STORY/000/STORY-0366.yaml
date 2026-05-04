@@ -32,12 +32,12 @@ description: |-
   2. CRUD operations: add, remove, reorder, list
   3. Cross-client visibility (CLI and web see same queue)
   4. Migration path from existing GUI local queue format
-status: Approved
+status: Rejected
 priority: High
 owner: joe
 feature: 214-Uncategorized
 created_at: 2026-02-21T06:49:27.970661965Z
-modified_at: 2026-05-04T19:29:11.374414204Z
+modified_at: 2026-05-04T19:29:12.588927273Z
 req_type: Story
 relationships:
 - rel_type: Parent
