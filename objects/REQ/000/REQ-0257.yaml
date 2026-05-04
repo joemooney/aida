@@ -8,8 +8,14 @@ priority: High
 owner: ''
 feature: 147-traceability
 created_at: 2025-12-11T00:45:49.848325419Z
-modified_at: 2025-12-11T02:19:58.118267184Z
+modified_at: 2026-05-04T19:29:21.882180858Z
 req_type: Story
+comments:
+- id: 019df477-71da-73b1-ac83-4ae138aefd62
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:29:21.882180858Z
+  modified_at: 2026-05-04T19:29:21.882180858Z
 history:
 - id: 2cdab21f-5cf8-448f-85dc-74e75f4f352c
   author: Joe Mooney
