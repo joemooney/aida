@@ -14,12 +14,12 @@ description: |2
     - Empty set = show all (no filter applied)
     - Non-empty set = only show requirements matching one of the selected values
     - Filters work independently for root requirements and child requirements
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-27T16:50:11.501316511Z
-modified_at: 2026-05-04T19:29:40.913008053Z
+modified_at: 2026-05-04T19:29:41.930507630Z
 req_type: Functional
 relationships:
 - rel_type: Parent
