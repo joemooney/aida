@@ -28,12 +28,12 @@ description: |-
   3. Select version bump type (major/minor/patch)
   4. Review/edit generated release notes
   5. Execute release (tag, update files, commit)
-status: Draft
+status: Rejected
 priority: High
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-02T06:09:28.437117418Z
-modified_at: 2026-05-04T19:32:40.130596393Z
+modified_at: 2026-05-04T19:32:41.161563283Z
 req_type: Functional
 comments:
 - id: 019df47a-7842-7ad2-a54f-83d332a176ed
