@@ -5,13 +5,13 @@ title: 'Sprint #3 thru 2025-12-07 Friday'
 description: |+
   Sprint #3 thru 2025-12-07 Friday
 
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-07T17:02:15.896382981Z
 created_by: Joe Mooney
-modified_at: 2026-05-04T19:32:24.722507467Z
+modified_at: 2026-05-04T19:32:25.723689667Z
 req_type: Sprint
 relationships:
 - rel_type: !Custom sprint_contains
@@ -81,6 +81,6 @@ history:
     old_value: SPIKE-0335
     new_value: SPRINT-0336
 custom_fields:
-  end_date: 2026-03-13
   start_date: 2026-03-06
   sprint_number: '3'
+  end_date: 2026-03-13
