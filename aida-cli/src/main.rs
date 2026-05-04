@@ -5704,12 +5704,17 @@ fn print_unreleased_dev_hint(exe: &std::path::Path, target_tag: &str) {
         if ahead == 1 { "" } else { "s" },
         latest
     );
-    println!("      To ship those changes and refresh your installs:");
+    println!("      To ship those changes AND refresh your sibling installs in one shot:");
+    println!("        {}", "aida dev patch".cyan());
     println!(
-        "        cd {} && ./scripts/release.sh patch",
+        "      (or `aida dev release {{minor|major|<version>}}` for a different bump)"
+    );
+    println!();
+    println!(
+        "      Or do it manually: `cd {} && ./scripts/release.sh patch`,",
         repo.display()
     );
-    println!("      Then re-run `aida upgrade`.");
+    println!("      then re-run `aida upgrade`.");
 }
 
 /// File mtime as `YYYY-MM-DD` for display next to a binary's version. Useful
