@@ -3,12 +3,12 @@ spec_id: FR-0281
 agreed_id: FR-37
 title: WASM gRPC-Web client connection to server
 description: Connect the WASM browser client to the aida-server via gRPC-Web protocol. The new_wasm() function currently creates an empty RequirementsStore. It should initialize the tonic-web-wasm-client gRPC client and fetch requirements from the server on startup. This enables the browser-based GUI to display and manage requirements stored in the server database.
-status: InProgress
+status: Rejected
 priority: High
 owner: joe
 feature: 165-web-client
 created_at: 2025-12-12T23:06:04.598091806Z
-modified_at: 2026-05-04T19:26:58.367278509Z
+modified_at: 2026-05-04T19:27:00.352110791Z
 req_type: Functional
 comments:
 - id: 907b4c77-ee19-4d0b-94f8-fe7bc5cf72f0
