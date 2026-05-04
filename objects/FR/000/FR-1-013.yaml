@@ -43,11 +43,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-04T17:54:34.687480440Z
-modified_at: 2026-05-04T19:00:58.898404416Z
+modified_at: 2026-05-04T19:04:03.639924289Z
 req_type: Functional
 relationships:
 - rel_type: Parent
   target_id: 019df146-788f-7813-b185-f0762b823ee5
   created_at: 2026-05-04T17:54:40.532289189Z
   created_by: joe
+comments:
+- id: 019df460-4737-7ed3-980e-a08c69590345
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:04:03.639924289Z
+  modified_at: 2026-05-04T19:04:03.639924289Z
 custom_status: In-progress
