@@ -28,7 +28,7 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-01T15:20:55.158696623Z
 created_by: Unknown User
-modified_at: 2025-12-01T15:20:55.158696623Z
+modified_at: 2026-05-04T19:29:23.990788982Z
 req_type: Task
 relationships:
 - rel_type: Parent
@@ -38,3 +38,9 @@ relationships:
 - rel_type: Parent
   target_id: dd108b2e-541e-4878-aa4f-232a4163a073
   created_at: 2025-12-10T04:23:08.750938850Z
+comments:
+- id: 019df477-7a16-73a2-a654-f239c339ec62
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:29:23.990788982Z
+  modified_at: 2026-05-04T19:29:23.990788982Z
