@@ -3,13 +3,13 @@ spec_id: FR-0111
 agreed_id: FR-43
 title: Modal dialogs 'x' icon to close in top right
 description: Modal dialoags 'x' icon to close in top right, make sense?
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-29T21:30:28.397453888Z
 created_by: Unknown User
-modified_at: 2026-05-04T19:33:35.959893777Z
+modified_at: 2026-05-04T19:33:37.135133851Z
 req_type: Functional
 relationships:
 - rel_type: Parent
