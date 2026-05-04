@@ -3461,53 +3461,88 @@ fn record_role_activity(spec_id: &str, action: &str) {
 fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
     let project_root = statusline_project_root();
     match cmd {
-        RoleCommand::Enter {
+        RoleCommand::Enter { name, cd } => handle_role_enter(&project_root, name, *cd),
+        RoleCommand::Add {
             name,
             purpose,
-            cd,
             global,
-        } => handle_role_enter(&project_root, name, purpose.as_deref(), *cd, *global),
+        } => handle_role_add(&project_root, name, purpose.as_deref(), *global),
         RoleCommand::List => handle_role_list(&project_root),
         RoleCommand::Show { name } => handle_role_show(&project_root, name.as_deref()),
         RoleCommand::End => handle_role_end(),
-        RoleCommand::Delete { name } => handle_role_delete(&project_root, name),
+        RoleCommand::Delete { name, yes } => handle_role_delete(&project_root, name, *yes),
+        RoleCommand::Scaffold => handle_role_scaffold(),
     }
 }
 
 fn handle_role_enter(
     project_root: &std::path::Path,
     name: &str,
-    purpose: Option<&str>,
     cd: bool,
-    global: bool,
 ) -> Result<()> {
-    // Resume if exists, otherwise create. load_role checks both project
-    // and global locations transparently.
-    let existing = load_role(project_root, name).ok();
-    let was_existing = existing.is_some();
-    let (mut state, _) = existing.unwrap_or_else(|| {
-        let s = RoleState {
-            name: name.to_string(),
-            purpose: purpose.map(String::from),
-            created_at: chrono::Utc::now(),
-            last_active_at: chrono::Utc::now(),
-            working_directory: std::env::current_dir().ok(),
-            notes: None,
-            global,
-            activity: Vec::new(),
-        };
-        let path = role_save_path(project_root, &s).unwrap_or_else(|_| {
-            project_role_file(project_root, name)
-        });
-        (s, path)
-    });
+    let (mut state, _) = load_role(project_root, name).map_err(|_| {
+        anyhow::anyhow!(
+            "No such role: {}\n\
+             Create it with: `aida role add {}` (or `aida-role add {}` from your shell).\n\
+             See available roles with: `aida role list`",
+            name,
+            name,
+            name
+        )
+    })?;
     state.last_active_at = chrono::Utc::now();
-    if let Some(p) = purpose {
-        state.purpose = Some(p.to_string());
-    }
     state.working_directory = std::env::current_dir().ok();
     let save_path = role_save_path(project_root, &state)?;
     save_role_at(&state, &save_path)?;
+    emit_role_enter_eval(project_root, &state, cd, /* was_existing */ true);
+    Ok(())
+}
+
+fn handle_role_add(
+    project_root: &std::path::Path,
+    name: &str,
+    purpose: Option<&str>,
+    global: bool,
+) -> Result<()> {
+    if let Ok((existing, path)) = load_role(project_root, name) {
+        anyhow::bail!(
+            "Role '{}' already exists at {}.\n\
+             Resume it with: `aida role enter {}`\n\
+             See its details with: `aida role show {}`\n\
+             ({})",
+            name,
+            path.display(),
+            name,
+            name,
+            if existing.global {
+                "currently a global role"
+            } else {
+                "currently a project role"
+            }
+        );
+    }
+    let state = RoleState {
+        name: name.to_string(),
+        purpose: purpose.map(String::from),
+        created_at: chrono::Utc::now(),
+        last_active_at: chrono::Utc::now(),
+        working_directory: std::env::current_dir().ok(),
+        notes: None,
+        global,
+        activity: Vec::new(),
+    };
+    let save_path = role_save_path(project_root, &state)?;
+    save_role_at(&state, &save_path)?;
+    emit_role_enter_eval(project_root, &state, /* cd */ false, /* was_existing */ false);
+    Ok(())
+}
+
+fn emit_role_enter_eval(
+    project_root: &std::path::Path,
+    state: &RoleState,
+    cd: bool,
+    was_existing: bool,
+) {
 
     // Emit shell code for eval.
     let cwd = state
@@ -3554,7 +3589,6 @@ fn handle_role_enter(
             );
         }
     }
-    Ok(())
 }
 
 fn handle_role_end() -> Result<()> {
@@ -3655,10 +3689,104 @@ fn handle_role_show(project_root: &std::path::Path, name: Option<&str>) -> Resul
     Ok(())
 }
 
-fn handle_role_delete(project_root: &std::path::Path, name: &str) -> Result<()> {
-    let (_state, path) = load_role(project_root, name)?;
+fn handle_role_delete(project_root: &std::path::Path, name: &str, yes: bool) -> Result<()> {
+    let (state, path) = load_role(project_root, name)?;
+    let scope = if state.global { " [global]" } else { "" };
+    if !yes {
+        eprintln!(
+            "Delete role '{}{}'? (purpose: {}, last active: {})",
+            name,
+            scope,
+            state.purpose.as_deref().unwrap_or("(none)"),
+            humanize_relative(state.last_active_at)
+        );
+        eprintln!("Type 'y' to confirm:");
+        let mut answer = String::new();
+        if std::io::BufRead::read_line(&mut std::io::stdin().lock(), &mut answer).is_err() {
+            eprintln!("Cancelled.");
+            return Ok(());
+        }
+        if !matches!(answer.trim().to_lowercase().as_str(), "y" | "yes") {
+            eprintln!("Cancelled.");
+            return Ok(());
+        }
+    }
     std::fs::remove_file(&path)?;
     println!("{}: deleted role '{}' ({})", "OK".green(), name, path.display());
+    Ok(())
+}
+
+/// Starter role set installed by `aida role scaffold`. Idempotent — skips
+/// any name that already exists (anywhere). All starter roles are global
+/// since they're meant to apply across projects.
+const STARTER_ROLES: &[(&str, &str)] = &[
+    (
+        "triage",
+        "Process the backlog: review drafts, close stale items, group related work.",
+    ),
+    (
+        "architect",
+        "Design work: explore tradeoffs, write/review plans, capture decisions in docs/plans/.",
+    ),
+    (
+        "implementer",
+        "Heads-down coding on a specific feature or fix. Drive a requirement to completed.",
+    ),
+    (
+        "reviewer",
+        "Code/PR review. Walk diffs, check trace comments, verify against requirements.",
+    ),
+];
+
+fn handle_role_scaffold() -> Result<()> {
+    let project_root = statusline_project_root();
+    let mut created = 0usize;
+    let mut skipped = 0usize;
+    println!("Installing starter global roles at ~/.aida/roles/");
+    println!();
+    for (name, purpose) in STARTER_ROLES {
+        if load_role(&project_root, name).is_ok() {
+            println!("  {} {} (already exists, skipped)", "~".yellow(), name);
+            skipped += 1;
+            continue;
+        }
+        let state = RoleState {
+            name: (*name).to_string(),
+            purpose: Some((*purpose).to_string()),
+            created_at: chrono::Utc::now(),
+            last_active_at: chrono::Utc::now(),
+            working_directory: None,
+            notes: None,
+            global: true,
+            activity: Vec::new(),
+        };
+        let path = role_save_path(&project_root, &state)?;
+        save_role_at(&state, &path)?;
+        println!("  {} {} — {}", "+".green(), name, purpose);
+        created += 1;
+    }
+    println!();
+    if created == 0 {
+        println!(
+            "{}: all {} starter role(s) already exist — nothing to do.",
+            "OK".green(),
+            skipped
+        );
+    } else {
+        println!(
+            "{}: scaffolded {} role(s){}.",
+            "OK".green(),
+            created,
+            if skipped > 0 {
+                format!(" ({} already existed)", skipped)
+            } else {
+                String::new()
+            }
+        );
+        println!();
+        println!("Try them: {}", "aida-role triage".cyan());
+        println!("List all: {}", "aida-role list".cyan());
+    }
     Ok(())
 }
 
@@ -4128,12 +4256,40 @@ aida-off() {
 }
 
 # Persona / hat helpers (aida role …)
+# - `aida-role` (no args)         → list
+# - `aida-role list`              → list
+# - `aida-role add <name> ...`    → create + enter
+# - `aida-role del <name>`        → delete (with confirmation unless -y)
+# - `aida-role show [<name>]`     → details
+# - `aida-role scaffold`          → install starter set of global roles
+# - `aida-role <name>`            → enter existing
 aida-role() {
-    if [ -z "$1" ]; then
-        command aida role list
-        return $?
-    fi
-    eval "$(command aida role enter "$@")"
+    case "${1:-}" in
+        ""|list)
+            command aida role list
+            ;;
+        add)
+            shift
+            eval "$(command aida role add "$@")"
+            ;;
+        del|delete|rm)
+            shift
+            command aida role delete "$@"
+            ;;
+        show)
+            shift
+            command aida role show "$@"
+            ;;
+        scaffold)
+            command aida role scaffold
+            ;;
+        end)
+            eval "$(command aida role end)"
+            ;;
+        *)
+            eval "$(command aida role enter "$@")"
+            ;;
+    esac
 }
 
 aida-role-end() {

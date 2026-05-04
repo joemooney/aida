@@ -241,20 +241,28 @@ pub enum ScaffoldCommand {
 /// trace:EPIC-1-001 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum RoleCommand {
-    /// Enter (resume or create) a role. Outputs shell code to be eval'd:
+    /// Enter (resume) an existing role. Errors if the role doesn't exist —
+    /// use `aida role add` to create a new one. Outputs shell code:
     ///   `eval "$(aida role enter architect)"`
-    /// or via the `aida-role` shell helper installed by `aida dev shell-init`.
+    /// or via the `aida-role` shell helper.
     Enter {
-        /// Role name — e.g. architect, reviewer, implementer
+        /// Role name — must already exist
         name: String,
-
-        /// Set or update the role's stated purpose
-        #[clap(long)]
-        purpose: Option<String>,
 
         /// Restore the role's last working directory (cd in the eval output)
         #[clap(long)]
         cd: bool,
+    },
+
+    /// Add a new role, then enter it. Errors if the name already exists
+    /// (use `aida role enter` to resume an existing one).
+    Add {
+        /// Role name — e.g. architect, reviewer, implementer
+        name: String,
+
+        /// Set the role's stated purpose
+        #[clap(long)]
+        purpose: Option<String>,
 
         /// Store this role globally (~/.aida/roles/) instead of per-project.
         /// Useful for personas you carry across projects (triage, code-review).
@@ -262,7 +270,8 @@ pub enum RoleCommand {
         global: bool,
     },
 
-    /// List all roles defined for this project, sorted by last activity.
+    /// List all roles for this project (and any global roles), sorted
+    /// by last activity. Active role marked with `*`.
     List,
 
     /// Show details for one role (defaults to the active role if any).
@@ -274,10 +283,20 @@ pub enum RoleCommand {
     ///   `eval "$(aida role end)"`
     End,
 
-    /// Delete a role's state file permanently.
+    /// Delete a role's state file permanently. Confirms before deleting
+    /// unless --yes is passed.
     Delete {
         name: String,
+
+        /// Skip confirmation prompt
+        #[clap(long, short = 'y')]
+        yes: bool,
     },
+
+    /// Install a starter set of global roles (triage, architect,
+    /// implementer, reviewer) at ~/.aida/roles/. Idempotent — skips any
+    /// that already exist; safe to re-run.
+    Scaffold,
 }
 
 /// Developer commands for working *on* AIDA itself (pyenv-style activation
