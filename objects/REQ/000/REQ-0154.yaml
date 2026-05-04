@@ -22,13 +22,13 @@ description: |2-
     - Three resolution options: "Use My Changes", "Use Disk Version", "Merge (Keep Non-Conflicting)"
 
     Commit: 7e0369a pushed to main
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-01T15:20:55.158696623Z
 created_by: Unknown User
-modified_at: 2026-05-04T19:29:23.990788982Z
+modified_at: 2026-05-04T19:29:25.084332158Z
 req_type: Task
 relationships:
 - rel_type: Parent
