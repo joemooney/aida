@@ -11,7 +11,7 @@ created_at: 2026-02-22T21:30:34.418112889Z
 modified_at: 2026-02-22T21:30:34.418112889Z
 req_type: Story
 tags:
-- markdown
-- editor
 - ui
+- editor
 - web
+- markdown

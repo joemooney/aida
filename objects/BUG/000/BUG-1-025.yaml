@@ -27,8 +27,8 @@ created_at: 2026-05-04T19:20:00.576982769Z
 modified_at: 2026-05-04T19:20:00.576982769Z
 req_type: Bug
 tags:
-- data-integrity
-- status
 - cli
+- status
+- data-integrity
 - models
 custom_status: In-progress
