@@ -4,13 +4,13 @@ agreed_id: FR-13
 prefix_override: NOTES
 title: A place to store notes and observations.
 description: A place to store notes and observations.
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-30T00:48:03.665435136Z
 created_by: Unknown User
-modified_at: 2026-05-04T19:39:26.560711162Z
+modified_at: 2026-05-04T19:39:27.458639775Z
 req_type: Functional
 relationships:
 - rel_type: Child
