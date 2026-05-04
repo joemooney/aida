@@ -30,11 +30,11 @@ created_at: 2026-05-04T06:25:34.078156796Z
 modified_at: 2026-05-04T06:26:09.377415643Z
 req_type: Functional
 tags:
-- deferred
-- global
-- queue
 - multi-project
 - ux
+- global
+- deferred
+- queue
 relationships:
 - rel_type: Parent
   target_id: 019df145-ea4e-7440-b80d-88a34684f39c

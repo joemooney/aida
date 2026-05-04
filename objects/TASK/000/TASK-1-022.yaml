@@ -1,0 +1,43 @@
+id: 019df457-f06c-7811-9cb4-8d77d89fbea3
+spec_id: TASK-1-022
+title: 'Phase 3: per-role Claude Code system-prompt addenda via SessionStart hook'
+description: |-
+  Implements the second Phase 3 deliverable from EPIC-1-005: per-role text injected into Claude Code's context at session start, so the agent sees role-specific instructions automatically when the user is wearing a particular hat.
+
+  ## Schema
+
+  Add to RoleState (TOML, serde default for back-compat):
+  - system_prompt: Option<String> — free-form text shown to the model on session start
+
+  ## CLI
+
+  - aida role prompt set [--name X] <content>  — set the addendum
+  - aida role prompt show [--name X]            — print it
+  - aida role prompt clear [--name X]           — remove it
+  - aida role show — extended to indicate when an addendum is set
+
+  ## Hook
+
+  New aida-core/templates/hooks/aida-role-context.sh fires on SessionStart:
+  - Reads AIDA_SESSION_ROLE from env (skips silently if absent)
+  - Looks up the role's TOML in .aida/roles/ then ~/.aida/roles/
+  - Emits JSON envelope: {hookSpecificOutput: {hookEventName: SessionStart, additionalContext: ...}}
+  - Content includes role name, purpose, system_prompt addendum
+
+  Wire into templates/settings.json under SessionStart so .claude/settings.json (which is a symlink) picks it up automatically. Add a per-file symlink at .claude/hooks/aida-role-context.sh for this repo.
+
+  ## Out of scope
+
+  Seeding default system_prompt text for the starter roles (dialog, implementer, etc.) — that's a content-design decision worth its own task. This slice ships the mechanism only.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-04T18:54:57.132606773Z
+modified_at: 2026-05-04T18:54:57.132606773Z
+req_type: Task
+tags:
+- roles
+- claude-code
+- hooks
+custom_status: In-progress
