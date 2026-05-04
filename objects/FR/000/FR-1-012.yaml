@@ -33,8 +33,8 @@ tags:
 - global
 - multi-project
 - queue
-- deferred
 - ux
+- deferred
 relationships:
 - rel_type: Parent
   target_id: 019df145-ea4e-7440-b80d-88a34684f39c

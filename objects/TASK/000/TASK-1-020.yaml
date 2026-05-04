@@ -10,12 +10,12 @@ description: |-
   - 'aida rel show <ID>' — only 'rel list <ID>' exists; 'show' is the natural verb so add it as a visible alias.
 
   All four are small CLI plumbing fixes inside aida-cli.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-04T18:28:55.729653180Z
-modified_at: 2026-05-04T18:28:55.729653180Z
+modified_at: 2026-05-04T18:32:48.600096702Z
 req_type: Task
 tags:
 - cli
