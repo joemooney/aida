@@ -4,12 +4,12 @@ agreed_id: FR-253
 prefix_override: DETAILVIEW
 title: Requirement Detail View
 description: requirements related to the detail view panel of requirements (i.e. before we clict Edit)
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-27T17:07:50.165704716Z
-modified_at: 2026-05-04T19:28:46.693002526Z
+modified_at: 2026-05-04T19:28:47.738473003Z
 req_type: Functional
 relationships:
 - rel_type: Parent
