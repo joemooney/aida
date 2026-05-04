@@ -44,9 +44,9 @@ modified_at: 2026-05-04T04:38:33.011220550Z
 req_type: Epic
 tags:
 - observability
-- status
 - cli
 - statusline
+- status
 comments:
 - id: 019df147-e133-7d00-9c34-af387d308f69
   author: joe

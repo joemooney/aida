@@ -43,7 +43,7 @@ history:
 
       ID should now be sprint?
 custom_fields:
+  end_date: 2026-03-06
+  sprint_goal: get front end web up to speed
   start_date: 2026-02-27
   sprint_number: '2'
-  sprint_goal: get front end web up to speed
-  end_date: 2026-03-06
