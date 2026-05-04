@@ -3,12 +3,12 @@ spec_id: FR-0053
 agreed_id: FR-112
 title: ability to filter based on user relationship + name
 description: Ability to filter by a user relationship e.g. (owned-by) and provide a user identifer (name, handler or id)
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-27T16:56:06.315250924Z
-modified_at: 2026-05-04T19:38:36.824813400Z
+modified_at: 2026-05-04T19:38:38.066564889Z
 req_type: Functional
 relationships:
 - rel_type: Parent
