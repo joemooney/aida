@@ -3,13 +3,13 @@ spec_id: FR-0106
 agreed_id: FR-65
 title: Add - select parent heuristically
 description: "When you click '+ Add' heuristic: create a new requirement and the parent should be the parent of the currently selected requirement (i.e. a sibling), unless the selected requirement has children, in which case make it a child, or if the selected requirement has no children and has no parent then make it a root (no parent) requirement. \n\nUpdate the default key bindings such that Ctrl+n is new sibling requirement. Ctrl+Shift+N is a new child requirement,\n\nIn the reqlist 'n' to add a new sibling requirement; 'N' to add a new child requriement"
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-29T19:34:27.501813315Z
 created_by: Unknown User
-modified_at: 2026-05-04T19:28:21.943793143Z
+modified_at: 2026-05-04T19:28:22.933663734Z
 req_type: Functional
 relationships:
 - rel_type: Parent
