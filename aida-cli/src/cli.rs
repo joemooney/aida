@@ -710,6 +710,7 @@ pub enum RelationshipCommand {
     },
 
     /// List all relationships for a requirement
+    #[clap(visible_alias = "show")]
     List {
         /// Requirement ID (UUID or SPEC-ID)
         id: String,
@@ -1056,6 +1057,11 @@ pub enum Command {
     Show {
         /// The ID of the requirement to show
         id: String,
+
+        /// Print comment bodies inline after the description (instead of just
+        /// the count). Equivalent to following up with `aida comment list <ID>`.
+        #[clap(long, short = 'c')]
+        comments: bool,
     },
 
     /// Edit an existing requirement
@@ -1383,6 +1389,10 @@ pub enum Command {
         /// Filter by feature
         #[clap(long)]
         feature: Option<String>,
+
+        /// Maximum number of matches to return (default: 200)
+        #[clap(long, short = 'n', default_value = "200")]
+        limit: usize,
     },
 
     /// List all commands (including the less-common ones hidden from

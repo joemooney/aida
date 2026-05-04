@@ -281,7 +281,9 @@ fn main() -> Result<()> {
         } => {
             list_requirements(&storage, status, priority, r#type, feature, tags)?;
         }
-        Command::Show { id } => {
+        Command::Show { id, .. } => {
+            // Legacy SQLite show_requirement always prints comments inline,
+            // so the --comments flag is a no-op here. Git backend honors it.
             show_requirement(&storage, id)?;
         }
         Command::Edit {
@@ -439,10 +441,13 @@ fn main() -> Result<()> {
             case_sensitive,
             status,
             feature,
+            ..
         } => {
             // Search is a simplified version of grep with sensible defaults:
             // - Case insensitive by default (unless -s/--case-sensitive)
             // - Searches all text fields (title, description, comments)
+            // The --limit flag is honored by the git backend's FTS5 path; the
+            // legacy grep walks the in-memory store and ignores it.
             grep_requirements(
                 &storage,
                 query,
@@ -1064,7 +1069,7 @@ fn handle_git_backend_command(
                 }
             }
         }
-        Command::Show { id } => {
+        Command::Show { id, comments } => {
             record_role_activity(id, "show");
             match backend.get_requirement_by_spec_id(id)? {
                 Some(req) => {
@@ -1096,6 +1101,12 @@ fn handle_git_backend_command(
                     }
                     if !req.description.is_empty() {
                         println!("\n{}", req.description);
+                    }
+                    if *comments && !req.comments.is_empty() {
+                        println!("\n{}:", "Comments".green().bold());
+                        for c in &req.comments {
+                            print_comment(c, 0);
+                        }
                     }
                 }
                 None => {
@@ -1188,11 +1199,11 @@ fn handle_git_backend_command(
             backend.delete_requirement(&req.id)?;
             println!("Deleted: {}", id);
         }
-        Command::Search { query, status, .. } => {
+        Command::Search { query, status, limit, .. } => {
             // Cache-backed FTS5 search (EPIC-1-001 Phase 2). Replaces a
             // full-store load + in-memory substring scan.
             // trace:EPIC-1-001 | ai:claude
-            let mut results = backend.search(query, 200)?;
+            let mut results = backend.search(query, *limit)?;
             if let Some(s) = status {
                 let needle = s.clone();
                 results.retain(|r| r.status.eq_ignore_ascii_case(&needle));
@@ -1250,6 +1261,23 @@ fn handle_git_backend_command(
             req.modified_at = now;
             backend.update_requirement(&req)?;
             println!("Comment added to {}", req_id);
+        }
+        Command::Comment(CommentCommand::List { id }) => {
+            // trace:TASK-1-020 | ai:claude
+            record_role_activity(id, "show");
+            let req = backend
+                .get_requirement_by_spec_id(id)?
+                .ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", id))?;
+            println!("{}: {}", "Requirement".cyan(), req.title);
+            println!();
+            if req.comments.is_empty() {
+                println!("{}", "No comments yet".dimmed());
+            } else {
+                println!("{}:", "Comments".green().bold());
+                for c in &req.comments {
+                    print_comment(c, 0);
+                }
+            }
         }
         Command::Db(DbCommand::Info) => {
             let store = backend.load()?;
@@ -1351,6 +1379,54 @@ fn handle_git_backend_command(
                 println!("Removed {} relationship(s) from {} to {}", removed, from, to);
             } else {
                 println!("No relationship found from {} to {}", from, to);
+            }
+        }
+        Command::Rel(RelationshipCommand::List { id }) => {
+            // trace:TASK-1-020 | ai:claude
+            record_role_activity(id, "show");
+            let req = backend
+                .get_requirement_by_spec_id(id)?
+                .ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", id))?;
+
+            println!("{}: {}", "Requirement".blue(), req.title);
+            if let Some(spec_id) = &req.spec_id {
+                println!("{}: {}", "SPEC-ID".blue(), spec_id);
+            }
+            println!("{}: {}", "UUID".blue(), req.id);
+            println!();
+
+            if req.relationships.is_empty() {
+                println!("{}", "No relationships found.".yellow());
+            } else {
+                println!("{}:", "Relationships".green());
+                for relationship in &req.relationships {
+                    let target = backend.get_requirement(&relationship.target_id)?;
+                    let description = match &relationship.rel_type {
+                        RelationshipType::Parent => "is parent of".to_string(),
+                        RelationshipType::Child => "is child of".to_string(),
+                        RelationshipType::Duplicate => "is duplicate of".to_string(),
+                        RelationshipType::Verifies => "verifies".to_string(),
+                        RelationshipType::VerifiedBy => "is verified by".to_string(),
+                        RelationshipType::References => "references".to_string(),
+                        RelationshipType::Custom(name) => name.clone(),
+                    };
+                    if let Some(target_req) = target {
+                        let target_spec = target_req.spec_id.as_deref().unwrap_or("N/A");
+                        println!(
+                            "  {} {} - {}",
+                            description.cyan(),
+                            target_spec.yellow(),
+                            target_req.title
+                        );
+                    } else {
+                        println!(
+                            "  {} {} {}",
+                            description.cyan(),
+                            relationship.target_id.to_string().yellow(),
+                            "(not found)".red()
+                        );
+                    }
+                }
             }
         }
 
@@ -1546,9 +1622,9 @@ fn handle_git_backend_command(
         _ => {
             eprintln!(
                 "Command not yet supported for git backend.\n\
-                 Supported: list, add, show, edit, del, search, comment add,\n\
+                 Supported: list, add, show, edit, del, search, comment add/list,\n\
                  queue list/add/remove/move/clear,\n\
-                 rel add/remove, db info/status/sync/merge-gate/export-git/workspace-init"
+                 rel add/remove/list, db info/status/sync/merge-gate/export-git/workspace-init"
             );
             std::process::exit(1);
         }
