@@ -22,18 +22,18 @@ description: |-
   Anything that resolves a SPEC-ID against the current store: queue add/done, show, edit, comment add, rel add, etc. Probably worth a shared helper.
 
   Parent: EPIC-1-009 (CLI ergonomics).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-04T06:25:32.872714756Z
-modified_at: 2026-05-04T19:07:49.544262107Z
+modified_at: 2026-05-04T19:15:24.688144924Z
 req_type: Functional
 tags:
-- ergonomics
-- cli
-- error-messages
 - ux
+- ergonomics
+- error-messages
+- cli
 relationships:
 - rel_type: Parent
   target_id: 019df146-d47d-7e31-9ba7-b58246eb5b4d

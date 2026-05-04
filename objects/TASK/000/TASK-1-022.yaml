@@ -38,8 +38,8 @@ modified_at: 2026-05-04T18:58:50.949077648Z
 req_type: Task
 tags:
 - roles
-- claude-code
 - hooks
+- claude-code
 relationships:
 - rel_type: Child
   target_id: 019df145-aa09-7531-91df-ef3090b34407
