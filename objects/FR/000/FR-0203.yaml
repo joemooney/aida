@@ -3,12 +3,12 @@ spec_id: FR-0203
 agreed_id: FR-36
 title: Planning View
 description: New GUI view showing requirements organized by Sprint assignment. Displays Sprints sorted by date with assigned items nested underneath. Includes Backlog section for items without Sprint assignment. Supports drag-and-drop for Sprint assignment.
-status: Draft
+status: Rejected
 priority: High
 owner: ''
 feature: 1-REQ
 created_at: 2025-12-07T00:31:15.135616660Z
-modified_at: 2026-05-04T19:35:43.818686538Z
+modified_at: 2026-05-04T19:35:44.996060915Z
 req_type: Functional
 relationships:
 - rel_type: Parent
