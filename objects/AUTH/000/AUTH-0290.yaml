@@ -4,12 +4,12 @@ agreed_id: FR-5
 prefix_override: AUTH
 title: Password Authentication
 description: Replace simple PIN with proper password authentication. Implement password strength validation, secure password hashing (argon2 or bcrypt), and password reset functionality.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: 169-auth
 created_at: 2025-12-13T18:21:42.785466173Z
-modified_at: 2026-05-04T19:35:55.903975312Z
+modified_at: 2026-05-04T19:35:58.111046334Z
 req_type: Functional
 relationships:
 - rel_type: Parent
