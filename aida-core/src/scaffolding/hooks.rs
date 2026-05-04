@@ -211,7 +211,7 @@ commit_type=$(echo "$msg" | grep -oE '^(\[AI:[^\]]+\] )?(feat|fix|docs|style|ref
 case "$commit_type" in
     *feat*|*fix*)
         # Require requirement ID for features and fixes
-        if ! echo "$msg" | grep -qE '\([A-Z]+-[0-9]+\)'; then
+        if ! echo "$msg" | grep -qE '\([A-Z]+(-[0-9]+){1,2}\)'; then
             cat >&2 <<EOF
 Commit blocked: Missing requirement ID
 
@@ -232,7 +232,7 @@ EOF
 esac
 
 # Validate that the requirement exists
-req_id=$(echo "$msg" | grep -oE '\([A-Z]+-[0-9]+\)' | head -1 | tr -d '()')
+req_id=$(echo "$msg" | grep -oE '\([A-Z]+(-[0-9]+){1,2}\)' | head -1 | tr -d '()')
 
 if [ -n "$req_id" ]; then
     if command -v aida &> /dev/null; then
@@ -283,7 +283,7 @@ if echo "$tool_response" | grep -qiE '(error|failed|abort)'; then
 fi
 
 # Extract requirement IDs from commit message
-req_ids=$(echo "$command" | grep -oE '\([A-Z]+-[0-9]+\)' | tr -d '()' | sort -u || true)
+req_ids=$(echo "$command" | grep -oE '\([A-Z]+(-[0-9]+){1,2}\)' | tr -d '()' | sort -u || true)
 
 if [ -z "$req_ids" ]; then
     exit 0  # No requirements referenced
