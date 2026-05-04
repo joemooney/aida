@@ -3,12 +3,12 @@ spec_id: FR-0002
 agreed_id: FR-53
 title: Add child requirement button
 description: when a requirement is selected we should be able to add one of the relationship links like child requirement
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-25T19:47:01.146320499Z
-modified_at: 2026-05-04T19:28:32.361592805Z
+modified_at: 2026-05-04T19:28:34.230306643Z
 req_type: Functional
 relationships:
 - rel_type: Parent
