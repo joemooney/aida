@@ -37,10 +37,10 @@ created_at: 2026-05-04T04:36:07.817607363Z
 modified_at: 2026-05-04T04:38:30.202788973Z
 req_type: Epic
 tags:
+- cli
 - personas
 - sessions
 - roles
-- cli
 comments:
 - id: 019df147-d63a-7a02-b73a-6500bc332a28
   author: joe

@@ -43,8 +43,8 @@ req_type: Epic
 tags:
 - architecture
 - cleanup
-- documentation
 - prune
+- documentation
 comments:
 - id: 019df147-ed8b-7200-85a1-8d62a25e9bcb
   author: joe
