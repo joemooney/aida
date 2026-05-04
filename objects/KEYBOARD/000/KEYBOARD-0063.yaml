@@ -20,12 +20,12 @@ description: |2
     - Settings UI updated to show and allow editing context for each keybinding via a dropdown
 
     This prevents issues like arrow keys navigating the list while typing in a search box, or Enter triggering edit mode when submitting a form.
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-27T01:23:00.651993728Z
-modified_at: 2026-05-04T19:34:45.950185950Z
+modified_at: 2026-05-04T19:34:46.952466527Z
 req_type: Functional
 relationships:
 - rel_type: Child
