@@ -10,12 +10,12 @@ description: |2+
     - One-click to switch to any project
 
 
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-28T03:47:02.328158796Z
-modified_at: 2026-05-04T19:28:23.916750067Z
+modified_at: 2026-05-04T19:28:24.868729490Z
 req_type: Functional
 relationships:
 - rel_type: Parent
