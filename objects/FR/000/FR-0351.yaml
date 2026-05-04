@@ -7,13 +7,13 @@ description: |-
 
   Every req that is edited/created is added to a history, along with each req we mark/highlight
   We can quickly goto/prev goto/next with 'g p' and 'g n'
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-16T05:30:31.290985117Z
 created_by: Joe Mooney
-modified_at: 2026-05-04T19:33:04.864418583Z
+modified_at: 2026-05-04T19:33:05.927648224Z
 req_type: Functional
 comments:
 - id: 019df47a-d8e0-7592-8c56-7218f6a0dbde
