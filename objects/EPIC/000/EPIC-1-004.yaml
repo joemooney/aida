@@ -27,7 +27,7 @@ modified_at: 2026-05-04T04:35:45.242117121Z
 req_type: Epic
 tags:
 - cli
-- shell
 - release
 - dev-workflow
+- shell
 custom_status: In-progress

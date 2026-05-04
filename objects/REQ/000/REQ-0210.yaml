@@ -45,5 +45,5 @@ history:
 custom_fields:
   sprint_number: '2'
   start_date: 2026-02-27
-  sprint_goal: get front end web up to speed
   end_date: 2026-03-06
+  sprint_goal: get front end web up to speed
