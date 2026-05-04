@@ -3,12 +3,12 @@ spec_id: FR-0094
 agreed_id: FR-39
 title: Pseudo Relations
 description: 'Completed-By which is a relationship from User to Requirement when a User changes the status to Completed is not a real relationship , but one that is implied by field value and action. '
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-29T00:48:20.890058174Z
-modified_at: 2026-05-04T19:35:57.015134183Z
+modified_at: 2026-05-04T19:36:00.066149977Z
 req_type: Functional
 relationships:
 - rel_type: Parent
