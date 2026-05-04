@@ -19,16 +19,15 @@ description: |-
   1. set_status_from_str must accept all canonical variants of each status: 'InProgress', 'In Progress', 'In-progress', 'in-progress', 'in_progress' all → RequirementStatus::InProgress with custom_status=None. Same for Planned.
   2. Tighten the wildcard arm so only TRULY non-standard strings fall through (project-specific custom statuses).
   3. One-time data sweep: any requirement whose custom_status normalizes to a canonical RequirementStatus should be migrated (custom_status=None, status=enum).
-status: Draft
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-04T19:20:00.576982769Z
-modified_at: 2026-05-04T19:20:00.576982769Z
+modified_at: 2026-05-04T19:22:15.795447648Z
 req_type: Bug
 tags:
-- models
-- cli
 - status
 - data-integrity
-custom_status: In-progress
+- models
+- cli
