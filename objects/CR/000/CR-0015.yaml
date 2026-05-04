@@ -20,12 +20,12 @@ description: |2
     4. When hovering over a relationship in the Links tab, the tooltip now shows creator info if available
 
     The fields are optional (Option<>) to maintain backward compatibility with existing YAML data files that don't have these fields.
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-25T23:03:34.032116653Z
-modified_at: 2026-05-04T19:29:53.819466905Z
+modified_at: 2026-05-04T19:29:54.725497032Z
 req_type: ChangeRequest
 comments:
 - id: 019df477-ee9b-77d3-8f01-18f2669a1078
