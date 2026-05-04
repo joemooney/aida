@@ -18,12 +18,12 @@ description: |-
   - Status filters include "Folder" as a filter option
   - Metrics dashboards exclude "Folder" requirements from status counts unless explicitly included
   - Child requirements under a "Folder" parent are not affected by the parent's status
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-30T20:34:15.691110691Z
-modified_at: 2026-05-04T19:28:35.400224725Z
+modified_at: 2026-05-04T19:28:36.357091145Z
 req_type: Functional
 comments:
 - id: 019df476-bc48-7433-81c2-688ead8ce306
