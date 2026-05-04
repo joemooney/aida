@@ -11,9 +11,9 @@ created_at: 2026-02-23T05:49:01.227228469Z
 modified_at: 2026-02-23T05:49:18.702404260Z
 req_type: Task
 tags:
+- docker
 - infrastructure
 - git
-- docker
 comments:
 - id: f2fcc2f8-6c33-443e-bc80-8b6293fdfdbc
   author: joe

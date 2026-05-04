@@ -1,0 +1,44 @@
+id: 019df145-aa09-7531-91df-ef3090b34407
+spec_id: EPIC-1-005
+title: Personas / role-keyed sessions
+description: |-
+  Per-shell active role identifier with persistent state, enabling multiple Claude Code sessions to wear different hats (dialog/architect/implementer/reviewer/triage) on the same project.
+
+  ## Surfaces
+
+  - aida role enter <name> — eval-pattern; sets AIDA_SESSION_ROLE, AIDA_SESSION_PURPOSE, AIDA_SESSION_PROJECT in calling shell
+  - aida role add <name> [--purpose ...] [--global] — explicit create
+  - aida role list / show / end / delete / scaffold
+  - /aida-pickup skill (see related queue EPIC) — the consumer side of the pattern
+
+  ## State schema
+
+  State files at <project>/.aida/roles/<name>.toml (project-scoped) or ~/.aida/roles/<name>.toml (--global). Schema: name, purpose, created_at, last_active_at, working_directory, notes, global flag, activity log (last 10 spec_ids touched newest-first).
+
+  Activity tracking: aida show/edit/add/comment while a role is active appends to its log. On resume, surfaces "Last touched while in this role: ..." — turns role resume into actual session restoration vs just an env-var flip.
+
+  ## Starter set (aida role scaffold)
+
+  - dialog — Captain / customer / PO hat (driver)
+  - triage — backlog processing
+  - architect — design work
+  - implementer — heads-down coding
+  - reviewer — code/PR review
+
+  ## Deferred to Phase 3
+
+  - Scope query filters per role (auto-apply --tag/--status to aida list/queue while role active)
+  - Per-role Claude Code system-prompt addenda
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-04T04:36:07.817607363Z
+modified_at: 2026-05-04T04:36:07.817607363Z
+req_type: Epic
+tags:
+- personas
+- cli
+- sessions
+- roles
+custom_status: In-progress
