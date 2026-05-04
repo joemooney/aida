@@ -9,7 +9,7 @@ owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-07T17:05:37.196534650Z
 created_by: Joe Mooney
-modified_at: 2025-12-07T17:05:43.129974405Z
+modified_at: 2026-05-04T19:35:33.411234904Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -20,6 +20,12 @@ relationships:
   target_id: 404b7457-67a2-4376-a0d3-9c5ea1547951
   created_at: 2025-12-07T17:05:43.129974099Z
   created_by: Joe Mooney
+comments:
+- id: 019df47d-1d23-7050-8314-4797e595b457
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:35:33.411234904Z
+  modified_at: 2026-05-04T19:35:33.411234904Z
 history:
 - id: b95d55d8-5243-4f62-bd3f-84b2ac6c2ece
   author: Joe Mooney
