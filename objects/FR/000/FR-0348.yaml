@@ -3,13 +3,13 @@ spec_id: FR-0348
 agreed_id: FR-204
 title: Add a splash screen, or put the aida logo at le...
 description: Add a splash screen, or put the aida logo at least in the logs
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-16T05:25:22.192982734Z
 created_by: Joe Mooney
-modified_at: 2026-05-04T19:28:11.567035844Z
+modified_at: 2026-05-04T19:28:12.580407467Z
 req_type: Functional
 comments:
 - id: 019df476-5f2f-7a81-b0ee-a72e58e6601d
