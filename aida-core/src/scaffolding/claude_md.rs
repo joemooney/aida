@@ -138,8 +138,15 @@ aida comment add <ID> "..."            # Add implementation note
 - Create child requirements for sub-tasks discovered during implementation
 - Link related requirements with: `aida rel add --from <FROM> --to <TO> --type <Parent|Verifies|References>`
 
-### Session Workflow
-If you work conversationally without explicit /aida-req calls, use `/aida-capture` at session end to review and capture any requirements that were discussed but not yet added to the database.
+### Session Workflow — capture proactively, not reactively
+
+AIDA's whole value depends on the requirements DB staying in sync with reality. **For agents working on this project, treat `/aida-capture` as a required habit, not an optional safety net:**
+
+1. **Spec-first when introducing a new theme.** When the conversation reaches for a new command, a new field on a core model, a new skill, or a new architectural pattern — pause and `aida add --type epic --status in-progress` BEFORE the implementation commits. ~2 min cost; saves an hour of backfill later.
+2. **Don't reuse one EPIC as a catchall.** If the work being done is no longer "what the EPIC was originally about," that's a signal to create a new EPIC, not stretch the existing one. Trace signal degrades fast when one EPIC absorbs unrelated work.
+3. **Run `/aida-capture`** at any natural session pause: when the user is about to step away, when context is approaching compaction, at end of focused work, or whenever explicitly asked. It's a 5-minute pass that catches missed reqs.
+4. **Yellow flag at >5 untracked commits.** If you've shipped 5+ commits without a corresponding requirement entry, treat that as a signal — offer to capture before continuing.
+5. **Trace comments must match reality.** `// trace:EPIC-N | ai:claude` on code that has nothing to do with EPIC-N is misinformation that compounds. If you're unsure which spec a piece of work belongs to, that's the signal it needs its own.
 "#,
             db_storage_section
         );
