@@ -9,12 +9,12 @@ description: |2
     1. Selection: The new requirement is automatically selected in the requirements list
     2. Scrolling: The list scrolls to center the new requirement in view
     3. Detail View: Switches to Detail view to show the new requirement's details
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-27T21:54:16.298495675Z
-modified_at: 2026-05-04T19:32:57.962895232Z
+modified_at: 2026-05-04T19:32:59.835765226Z
 req_type: Functional
 tags:
 - crud
