@@ -29,17 +29,17 @@ description: |-
   ## Out of scope
 
   Seeding default system_prompt text for the starter roles (dialog, implementer, etc.) — that's a content-design decision worth its own task. This slice ships the mechanism only.
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-04T18:54:57.132606773Z
-modified_at: 2026-05-04T18:58:45.112500498Z
+modified_at: 2026-05-04T18:58:50.949077648Z
 req_type: Task
 tags:
-- roles
-- claude-code
 - hooks
+- claude-code
+- roles
 relationships:
 - rel_type: Child
   target_id: 019df145-aa09-7531-91df-ef3090b34407

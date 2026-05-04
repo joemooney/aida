@@ -30,6 +30,6 @@ relationships:
   created_by: Joe Mooney
 custom_fields:
   start_date: 2026-02-20
-  end_date: 2026-02-27
   sprint_goal: Clean up baseline
+  end_date: 2026-02-27
   sprint_number: '1'
