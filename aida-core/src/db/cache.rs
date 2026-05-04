@@ -63,6 +63,17 @@ pub struct ListFilter {
     pub limit: Option<usize>,
 }
 
+/// Strip space/hyphen/underscore and lowercase. Mirrors the normalization
+/// in `Requirement::set_status_from_str` so the user-typed filter value
+/// matches the cache's stored Debug form regardless of casing or word-break
+/// punctuation. trace:BUG-1-025 | ai:claude
+fn normalize_status_filter(s: &str) -> String {
+    s.chars()
+        .filter(|c| !matches!(c, ' ' | '-' | '_'))
+        .collect::<String>()
+        .to_lowercase()
+}
+
 const SCHEMA_SQL: &str = include_str!("cache_schema.sql");
 const SCHEMA_VERSION: &str = "1";
 
@@ -211,8 +222,15 @@ impl Cache {
             sql.push_str(" AND archived = 0");
         }
         if let Some(s) = &filter.status {
-            sql.push_str(" AND LOWER(status) = LOWER(?)");
-            args.push(s.clone());
+            // The cache stores RequirementStatus's Debug form (e.g.
+            // "InProgress" — no space/hyphen). Users type "in-progress",
+            // "In Progress", "InProgress", etc. Strip space/hyphen/underscore
+            // from both sides and lowercase so every variant matches.
+            // trace:BUG-1-025 | ai:claude
+            sql.push_str(
+                " AND LOWER(REPLACE(REPLACE(REPLACE(status, ' ', ''), '-', ''), '_', '')) = ?",
+            );
+            args.push(normalize_status_filter(s));
         }
         if let Some(t) = &filter.req_type {
             sql.push_str(" AND LOWER(req_type) = LOWER(?)");
