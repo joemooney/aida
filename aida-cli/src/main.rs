@@ -1537,6 +1537,12 @@ fn handle_git_backend_command(
             let storage = Storage::new(store_path);
             handle_queue_command(queue_cmd, &storage)?;
         }
+        Command::Scaffold(scaffold_cmd) => {
+            // Scaffold apply / status / preview / extract — same pattern.
+            // Storage façade now handles directory paths via GitBackend.load().
+            let storage = Storage::new(store_path);
+            handle_scaffold_command(scaffold_cmd, &storage, store_path)?;
+        }
         _ => {
             eprintln!(
                 "Command not yet supported for git backend.\n\
