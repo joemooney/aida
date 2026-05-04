@@ -7,13 +7,13 @@ description: |-
 
   a ranking number or ordinal is a way to order reqs in a way other than priority or status
   where priority may be set by a manager or team, an ordinal or ranking is a personal ordering that is not such much meta data of the req but of the user. It is a helpful tool to keep an inbox ordered in terms of how you want to sequence activities
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-07T19:21:58.984960265Z
 created_by: joe
-modified_at: 2026-05-04T19:38:16.704236062Z
+modified_at: 2026-05-04T19:38:17.644149810Z
 req_type: Functional
 relationships:
 - rel_type: !Custom sprint_assignment
