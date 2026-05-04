@@ -404,6 +404,16 @@ impl Storage {
             return self.load_sqlite();
         }
 
+        // Directory paths → git-canonical store (EPIC-1-001).
+        // Lets the Storage façade work transparently for `aida queue` and
+        // any other handler that takes a Storage but the storage path is
+        // pointing at .aida-store/.
+        if self.file_path.is_dir() {
+            use crate::db::DatabaseBackend;
+            let backend = crate::db::GitBackend::new(&self.file_path)?;
+            return backend.load();
+        }
+
         // Create the file if it doesn't exist
         if !self.file_path.exists() {
             let parent = self
@@ -1471,58 +1481,50 @@ impl Storage {
     // =========================================================================
     // trace:STORY-0366 | ai:claude
 
+    /// Pick the right backend for queue operations: SQLite for .db paths,
+    /// GitBackend for directory paths. Returns an error for YAML files (no
+    /// queue support there). Per EPIC-1-001 the canonical path is git.
+    fn queue_backend(&self) -> Result<Box<dyn crate::db::DatabaseBackend>> {
+        if self.is_sqlite() {
+            return Ok(Box::new(crate::db::SqliteBackend::new(&self.file_path)?));
+        }
+        if self.file_path.is_dir() {
+            return Ok(Box::new(crate::db::GitBackend::new(&self.file_path)?));
+        }
+        anyhow::bail!(
+            "Queue is only supported for SQLite or git-canonical (directory) backends — \
+             got {:?}",
+            self.file_path
+        )
+    }
+
     /// List queue entries for a user
     pub fn queue_list(
         &self,
         user_id: &str,
         include_completed: bool,
     ) -> Result<Vec<crate::models::QueueEntry>> {
-        if !self.is_sqlite() {
-            anyhow::bail!("Queue is only supported for SQLite databases");
-        }
-        use crate::db::{DatabaseBackend, SqliteBackend};
-        let backend = SqliteBackend::new(&self.file_path)?;
-        backend.queue_list(user_id, include_completed)
+        self.queue_backend()?.queue_list(user_id, include_completed)
     }
 
     /// Add an entry to a user's queue
     pub fn queue_add(&self, entry: crate::models::QueueEntry) -> Result<()> {
-        if !self.is_sqlite() {
-            anyhow::bail!("Queue is only supported for SQLite databases");
-        }
-        use crate::db::{DatabaseBackend, SqliteBackend};
-        let backend = SqliteBackend::new(&self.file_path)?;
-        backend.queue_add(entry)
+        self.queue_backend()?.queue_add(entry)
     }
 
     /// Remove an entry from a user's queue
     pub fn queue_remove(&self, user_id: &str, requirement_id: &uuid::Uuid) -> Result<()> {
-        if !self.is_sqlite() {
-            anyhow::bail!("Queue is only supported for SQLite databases");
-        }
-        use crate::db::{DatabaseBackend, SqliteBackend};
-        let backend = SqliteBackend::new(&self.file_path)?;
-        backend.queue_remove(user_id, requirement_id)
+        self.queue_backend()?.queue_remove(user_id, requirement_id)
     }
 
     /// Reorder queue entries
     pub fn queue_reorder(&self, user_id: &str, items: &[(uuid::Uuid, i64)]) -> Result<()> {
-        if !self.is_sqlite() {
-            anyhow::bail!("Queue is only supported for SQLite databases");
-        }
-        use crate::db::{DatabaseBackend, SqliteBackend};
-        let backend = SqliteBackend::new(&self.file_path)?;
-        backend.queue_reorder(user_id, items)
+        self.queue_backend()?.queue_reorder(user_id, items)
     }
 
     /// Clear queue entries
     pub fn queue_clear(&self, user_id: &str, completed_only: bool) -> Result<()> {
-        if !self.is_sqlite() {
-            anyhow::bail!("Queue is only supported for SQLite databases");
-        }
-        use crate::db::{DatabaseBackend, SqliteBackend};
-        let backend = SqliteBackend::new(&self.file_path)?;
-        backend.queue_clear(user_id, completed_only)
+        self.queue_backend()?.queue_clear(user_id, completed_only)
     }
 }
 

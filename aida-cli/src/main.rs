@@ -1529,10 +1529,19 @@ fn handle_git_backend_command(
             );
         }
 
+        Command::Queue(queue_cmd) => {
+            // Reuse the legacy Storage handler — it works against any
+            // DatabaseBackend via Storage trait shims, and our GitBackend
+            // already implements queue_list/add/remove/reorder/clear.
+            // Wrap our backend in a Storage façade pointing at the store path.
+            let storage = Storage::new(store_path);
+            handle_queue_command(queue_cmd, &storage)?;
+        }
         _ => {
             eprintln!(
                 "Command not yet supported for git backend.\n\
                  Supported: list, add, show, edit, del, search, comment add,\n\
+                 queue list/add/remove/move/clear,\n\
                  rel add/remove, db info/status/sync/merge-gate/export-git/workspace-init"
             );
             std::process::exit(1);
@@ -3725,6 +3734,10 @@ fn handle_role_delete(project_root: &std::path::Path, name: &str, yes: bool) -> 
 /// any name that already exists (anywhere). All starter roles are global
 /// since they're meant to apply across projects.
 const STARTER_ROLES: &[(&str, &str)] = &[
+    (
+        "dialog",
+        "Captain / customer / PO hat. Chat with the agent, capture requirements as they emerge, route work to doer roles via `aida queue add --for <role>`. Driver, not implementer.",
+    ),
     (
         "triage",
         "Process the backlog: review drafts, close stale items, group related work.",
@@ -9148,17 +9161,56 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
         QueueCommand::List {
             user,
             include_completed,
+            role,
+            all,
         } => {
             let user_id = get_user(user);
-            let entries = storage.queue_list(&user_id, *include_completed)?;
+            let raw_entries = storage.queue_list(&user_id, *include_completed)?;
             let store = storage.load()?;
 
+            // Determine effective role filter:
+            //   --all       → no filter (override active-role default)
+            //   --role X    → filter to for_role==X (or X="any" → no filter)
+            //   neither     → if AIDA_SESSION_ROLE set, filter to that
+            //                 else no filter
+            let role_filter: Option<String> = if *all {
+                None
+            } else if let Some(r) = role {
+                if r == "any" {
+                    None
+                } else {
+                    Some(r.clone())
+                }
+            } else {
+                std::env::var("AIDA_SESSION_ROLE").ok().filter(|s| !s.is_empty())
+            };
+
+            let entries: Vec<&aida_core::QueueEntry> = match &role_filter {
+                Some(r) => raw_entries
+                    .iter()
+                    .filter(|e| e.for_role.as_deref() == Some(r.as_str()))
+                    .collect(),
+                None => raw_entries.iter().collect(),
+            };
+
             if entries.is_empty() {
-                println!("{}", "Your queue is empty.".dimmed());
+                if let Some(r) = &role_filter {
+                    println!(
+                        "{} (no items routed to role {}; pass --all to see your full queue)",
+                        "Your queue".dimmed(),
+                        r.cyan()
+                    );
+                } else {
+                    println!("{}", "Your queue is empty.".dimmed());
+                }
                 return Ok(());
             }
 
-            println!("{}", format!("My Queue ({} items)", entries.len()).bold());
+            let title = match &role_filter {
+                Some(r) => format!("My Queue · role:{} ({} items)", r, entries.len()),
+                None => format!("My Queue ({} items)", entries.len()),
+            };
+            println!("{}", title.bold());
             println!("{}", "─".repeat(80));
 
             for (i, entry) in entries.iter().enumerate() {
@@ -9192,6 +9244,14 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 if entry.added_by != user_id {
                     print!("  {}", format!("(from @{})", entry.added_by).dimmed());
                 }
+                // Always surface the for_role tag in unfiltered views, OR
+                // when the entry is routed somewhere different from the
+                // active filter (shouldn't normally happen post-filter).
+                if role_filter.is_none() {
+                    if let Some(ref r) = entry.for_role {
+                        print!("  {}", format!("[for:{}]", r).cyan());
+                    }
+                }
                 if let Some(ref note) = entry.note {
                     print!("  {}", format!("\"{}\"", note).dimmed().italic());
                 }
@@ -9204,6 +9264,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             bottom: _,
             user,
             note,
+            r#for,
         } => {
             let user_id = get_user(user);
             let store = storage.load()?;
@@ -9233,15 +9294,21 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 added_by: user_id.clone(),
                 note: note.clone(),
                 added_at: chrono::Utc::now(),
+                for_role: r#for.clone(),
             };
             storage.queue_add(entry)?;
 
             let spec_id = req.spec_id.as_deref().unwrap_or("???");
+            let routing = match r#for {
+                Some(r) => format!(" [for:{}]", r.cyan()),
+                None => String::new(),
+            };
             println!(
-                "{} Added {} ({}) to queue",
+                "{} Added {} ({}) to queue{}",
                 "✓".green(),
                 spec_id.bold(),
-                req.title
+                req.title,
+                routing
             );
         }
         QueueCommand::Remove { id, user } => {
