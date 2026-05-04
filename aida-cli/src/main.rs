@@ -3567,6 +3567,13 @@ fn emit_role_enter_eval(
         .unwrap_or(project_root)
         .display();
     println!("# aida role enter — {}", state.name);
+    // Strip any prior role prefix from PS1 (anywhere in the string, not just
+    // at the front — `aida dev activate` may have prepended its own prefix
+    // since this role was entered). Keyed off the prior AIDA_SESSION_ROLE
+    // so the match is a literal substring. ${VAR/pat/} works in bash and zsh.
+    println!("if [ -n \"${{PS1+x}}\" ] && [ -n \"${{AIDA_SESSION_ROLE:-}}\" ]; then");
+    println!("    PS1=\"${{PS1/(role:$AIDA_SESSION_ROLE) /}}\"");
+    println!("fi");
     println!("export AIDA_SESSION_ROLE='{}'", state.name);
     if let Some(p) = &state.purpose {
         println!("export AIDA_SESSION_PURPOSE='{}'", p.replace('\'', "'\\''"));
@@ -3574,6 +3581,9 @@ fn emit_role_enter_eval(
         println!("unset AIDA_SESSION_PURPOSE");
     }
     println!("export AIDA_SESSION_PROJECT='{}'", project_root.display());
+    println!("if [ -n \"${{PS1+x}}\" ]; then");
+    println!("    export PS1=\"(role:{}) $PS1\"", state.name);
+    println!("fi");
     if cd {
         println!("cd '{}'", cwd);
     }
@@ -3612,6 +3622,11 @@ fn handle_role_end() -> Result<()> {
     // both at the shell top level and inside a wrapper function.
     println!("# aida role end");
     println!("__AIDA_ROLE_END_PREV=\"${{AIDA_SESSION_ROLE:-}}\"");
+    // Strip the role's PS1 prefix before unsetting, while we still know
+    // the role name to match against.
+    println!("if [ -n \"${{PS1+x}}\" ] && [ -n \"$__AIDA_ROLE_END_PREV\" ]; then");
+    println!("    PS1=\"${{PS1/(role:$__AIDA_ROLE_END_PREV) /}}\"");
+    println!("fi");
     println!("unset AIDA_SESSION_ROLE AIDA_SESSION_PURPOSE AIDA_SESSION_PROJECT");
     println!("if [ -n \"$__AIDA_ROLE_END_PREV\" ]; then");
     println!("    echo \"✓ Deactivated role: $__AIDA_ROLE_END_PREV\"");
