@@ -3,13 +3,13 @@ spec_id: FR-0221
 agreed_id: FR-50
 title: Sprint ordering displayed in dropdown and sprin...
 description: Sprint ordering displayed in dropdown and sprint planning should be time ordered
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-07T17:05:37.196534650Z
 created_by: Joe Mooney
-modified_at: 2026-05-04T19:35:33.411234904Z
+modified_at: 2026-05-04T19:35:35.268167471Z
 req_type: Functional
 relationships:
 - rel_type: Parent
