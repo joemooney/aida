@@ -14,12 +14,12 @@ description: |
     - Matching requirements: Normal display (full color)
     - Non-matching ancestors: Displayed but greyed out/dimmed, showing the path to the matching child
     - Non-matching siblings/other branches: Hidden (as they are now)
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-28T03:52:10.460760188Z
-modified_at: 2026-05-04T19:35:25.554478787Z
+modified_at: 2026-05-04T19:35:27.554868266Z
 req_type: Functional
 relationships:
 - rel_type: Parent
