@@ -31,9 +31,9 @@ modified_at: 2026-05-04T06:26:08.390625531Z
 req_type: Functional
 tags:
 - cli
+- ux
 - ergonomics
 - error-messages
-- ux
 relationships:
 - rel_type: Parent
   target_id: 019df146-d47d-7e31-9ba7-b58246eb5b4d

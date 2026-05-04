@@ -41,8 +41,8 @@ created_at: 2026-05-04T04:37:49.938673688Z
 modified_at: 2026-05-04T04:38:36.171793359Z
 req_type: Epic
 tags:
-- cleanup
 - architecture
+- cleanup
 - documentation
 - prune
 comments:
