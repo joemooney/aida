@@ -3,12 +3,12 @@ spec_id: REQ-0257
 agreed_id: STORY-37
 title: Commit History Sweep
 description: 'Add capability to sweep through git commit history and trace commits to requirements. For each commit: 1) Parse commit message for requirement references (SPEC-IDs), 2) Analyze changed files for trace comments, 3) Create TraceLinks for code implementing requirements, 4) Optionally create new requirements for commits without references, 5) Generate a report of coverage (commits with/without requirement links). This helps ensure AIDA is a poster child for its own methodology.'
-status: Approved
+status: Rejected
 priority: High
 owner: ''
 feature: 147-traceability
 created_at: 2025-12-11T00:45:49.848325419Z
-modified_at: 2026-05-04T19:29:21.882180858Z
+modified_at: 2026-05-04T19:29:22.957892481Z
 req_type: Story
 comments:
 - id: 019df477-71da-73b1-ac83-4ae138aefd62
