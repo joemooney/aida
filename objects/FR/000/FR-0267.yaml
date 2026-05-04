@@ -29,12 +29,12 @@ description: |-
   # Import after clone
   aida db migrate --from yaml --to sqlite
   ```
-status: Draft
+status: Rejected
 priority: High
 owner: ai:claude:joe
 feature: 157-release
 created_at: 2025-12-11T06:34:32.423442394Z
-modified_at: 2026-05-04T19:32:46.823826956Z
+modified_at: 2026-05-04T19:32:47.907796265Z
 req_type: Functional
 comments:
 - id: 019df47a-9267-7953-bc91-baeeafeeae67
