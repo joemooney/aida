@@ -3,13 +3,13 @@ spec_id: FR-0107
 agreed_id: FR-61
 title: Actions should include assigning owner
 description: ''
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-29T19:47:50.198455813Z
 created_by: Unknown User
-modified_at: 2026-05-04T19:34:10.456847305Z
+modified_at: 2026-05-04T19:34:11.431838126Z
 req_type: Functional
 relationships:
 - rel_type: Parent
