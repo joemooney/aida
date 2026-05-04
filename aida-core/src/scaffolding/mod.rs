@@ -83,6 +83,18 @@ fn check_file_status(file_path: &PathBuf, expected_content: &str) -> FileStatus 
         Err(_) => return FileStatus::New,
     };
 
+    // JSON files are headerless (JSON has no comment syntax). Compare by
+    // raw content equality. trace:EPIC-1-001 | ai:claude
+    if file_path.extension().and_then(|e| e.to_str()) == Some("json") {
+        if content == expected_content {
+            return FileStatus::Unmodified;
+        }
+        return FileStatus::Modified {
+            expected_checksum: compute_checksum(expected_content),
+            actual_checksum: compute_checksum(&content),
+        };
+    }
+
     // Try to parse AIDA header (markdown format)
     // Format: <!-- AIDA Generated: v{version} | checksum:{hash} | DO NOT EDIT DIRECTLY -->
     let md_header_pattern = regex::Regex::new(
@@ -430,9 +442,17 @@ impl Scaffolder {
             FileStatus::New
         };
 
-        // Generate content with appropriate header
-        // For files with YAML frontmatter (---), insert header AFTER the closing ---
-        let content = if is_shell {
+        // Generate content with appropriate header.
+        //   - JSON files: no header (JSON has no comment syntax — the HTML
+        //     comment we'd otherwise prepend breaks parsers like Claude Code's
+        //     settings reader). trace:EPIC-1-001 | ai:claude
+        //   - Shell files: `# ...` comment header.
+        //   - Markdown with YAML frontmatter: header inserted after closing `---`.
+        //   - Other (markdown, html, etc.): `<!-- ... -->` header at top.
+        let is_json = path.extension().and_then(|e| e.to_str()) == Some("json");
+        let content = if is_json {
+            raw_content.clone()
+        } else if is_shell {
             format!(
                 "{}{}",
                 generate_aida_header_shell(&raw_content),
