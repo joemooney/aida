@@ -597,6 +597,19 @@ impl Storage {
             return Ok(store);
         }
 
+        // Directory paths → git-canonical store (EPIC-1-001). Same pattern
+        // as Storage::load() — delegate to GitBackend so any handler that
+        // takes a Storage façade can mutate the canonical store.
+        // trace:EPIC-1-001 | ai:claude
+        if self.file_path.is_dir() {
+            use crate::db::DatabaseBackend;
+            let backend = crate::db::GitBackend::new(&self.file_path)?;
+            let mut store = backend.load()?;
+            update_fn(&mut store);
+            backend.save(&store)?;
+            return Ok(store);
+        }
+
         // YAML path: Acquire exclusive lock
         let mut lock_file = self.acquire_write_lock()?;
 

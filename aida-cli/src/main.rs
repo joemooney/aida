@@ -9399,6 +9399,159 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 println!("{} Cleared all items from queue", "✓".green());
             }
         }
+        // trace:EPIC-1-001 | ai:claude
+        QueueCommand::Next { role, all, user } => {
+            let user_id = get_user(user);
+            let raw_entries = storage.queue_list(&user_id, /* include_completed */ false)?;
+            let store = storage.load()?;
+
+            // Same role-filter logic as queue list: --all overrides; --role X
+            // explicit; otherwise inherit from active role; fall through to
+            // "no filter" if nothing's set.
+            let role_filter: Option<String> = if *all {
+                None
+            } else if let Some(r) = role {
+                if r == "any" { None } else { Some(r.clone()) }
+            } else {
+                std::env::var("AIDA_SESSION_ROLE")
+                    .ok()
+                    .filter(|s| !s.is_empty())
+            };
+
+            let next_entry = raw_entries
+                .iter()
+                .filter(|e| match &role_filter {
+                    Some(r) => e.for_role.as_deref() == Some(r.as_str()),
+                    None => true,
+                })
+                .min_by_key(|e| e.position);
+
+            match next_entry {
+                None => {
+                    let scope = match &role_filter {
+                        Some(r) => format!(" for role {}", r.cyan()),
+                        None => String::new(),
+                    };
+                    println!("{} Queue is empty{}.", "Nothing to do —".dimmed(), scope);
+                    println!("  ({})", "pick up new work via aida-role dialog or wait for items".dimmed());
+                    return Ok(());
+                }
+                Some(entry) => {
+                    let req = store
+                        .requirements
+                        .iter()
+                        .find(|r| r.id == entry.requirement_id);
+                    let spec_id = req.and_then(|r| r.spec_id.as_deref()).unwrap_or("???");
+                    let title = req.map(|r| r.title.as_str()).unwrap_or("(deleted)");
+                    let status = req
+                        .map(|r| format!("{}", r.status))
+                        .unwrap_or_else(|| "Unknown".to_string());
+                    let priority = req
+                        .map(|r| format!("{}", r.priority))
+                        .unwrap_or_else(|| "?".to_string());
+                    let owner = req.map(|r| r.owner.as_str()).unwrap_or("");
+                    let description = req.map(|r| r.description.as_str()).unwrap_or("");
+
+                    println!("{}", "Next up:".bold());
+                    println!("  {}: {}", spec_id.green().bold(), title.bold());
+                    println!(
+                        "  Status: {}  ·  Priority: {}{}",
+                        status,
+                        priority,
+                        if owner.is_empty() {
+                            String::new()
+                        } else {
+                            format!("  ·  Owner: {}", owner)
+                        }
+                    );
+                    if let Some(ref r) = entry.for_role {
+                        println!("  Routed for: {}", r.cyan());
+                    }
+                    if let Some(ref note) = entry.note {
+                        println!("  Note: {}", note.italic());
+                    }
+                    if !description.is_empty() {
+                        println!();
+                        println!("{}", "Description (first 10 lines):".dimmed());
+                        for line in description.lines().take(10) {
+                            println!("  {}", line);
+                        }
+                        if description.lines().count() > 10 {
+                            println!("  {}", "…".dimmed());
+                        }
+                    }
+                    println!();
+                    println!("{}", "Suggested commands:".dimmed());
+                    println!("  {} {}    full details", "aida show".cyan(), spec_id);
+                    println!(
+                        "  {} {}     mark in-progress",
+                        "aida edit".cyan(),
+                        format!("{} --status in-progress", spec_id)
+                    );
+                    println!(
+                        "  {} {}    when finished (marks complete + dequeues)",
+                        "aida queue done".cyan(),
+                        spec_id
+                    );
+                }
+            }
+        }
+        // trace:EPIC-1-001 | ai:claude
+        QueueCommand::Done { id, user, yes } => {
+            let user_id = get_user(user);
+            let store = storage.load()?;
+
+            let req = if let Ok(uuid) = uuid::Uuid::parse_str(id) {
+                store.requirements.iter().find(|r| r.id == uuid)
+            } else {
+                store
+                    .requirements
+                    .iter()
+                    .find(|r| r.spec_id.as_deref() == Some(id.as_str()))
+            }
+            .ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", id))?;
+
+            let spec_id = req.spec_id.as_deref().unwrap_or("???");
+
+            if !yes {
+                eprintln!(
+                    "Mark {} ({}) as completed and remove from queue?",
+                    spec_id.bold(),
+                    req.title
+                );
+                eprintln!("Type 'y' to confirm:");
+                let mut answer = String::new();
+                if std::io::BufRead::read_line(&mut std::io::stdin().lock(), &mut answer).is_err() {
+                    eprintln!("Cancelled.");
+                    return Ok(());
+                }
+                if !matches!(answer.trim().to_lowercase().as_str(), "y" | "yes") {
+                    eprintln!("Cancelled. Requirement and queue untouched.");
+                    return Ok(());
+                }
+            }
+
+            // Update status to Completed via update_atomically — works
+            // across SQLite and git-canonical modes.
+            let req_id = req.id;
+            storage.update_atomically(|s| {
+                if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
+                    r.status = aida_core::RequirementStatus::Completed;
+                    r.modified_at = chrono::Utc::now();
+                }
+            })?;
+            storage.queue_remove(&user_id, &req_id)?;
+
+            println!(
+                "{} {} marked completed and removed from queue.",
+                "✓".green(),
+                spec_id.bold()
+            );
+            println!(
+                "  ({})",
+                "run `aida queue next` to see what's next".dimmed()
+            );
+        }
     }
     Ok(())
 }

@@ -1,0 +1,121 @@
+---
+name: aida-pickup
+description: Producer/consumer queue loop — peek at the next item routed to your active role, work it, mark it done, repeat. Use this between work items to pick up the next thing without re-entering the conversation.
+allowed-tools:
+  - Bash
+  - Read
+  - Grep
+  - Edit
+  - Write
+---
+
+# AIDA Pickup Skill
+
+## Purpose
+
+Drive the implementer / reviewer / triage / architect loop where the active
+role pulls the next item from the queue, works on it, marks it complete,
+and pulls the next. Pairs with the `dialog` role on the producer side
+(see `/aida-role` and `aida queue add --for <role>`).
+
+## When to use
+
+- The user is in a doer role (implementer, reviewer, etc.) and asks
+  "what's next?" or "pick up the next task"
+- After completing a piece of work — proactively offer to grab the next
+  item from the queue
+- At the start of a focused work session — show what's queued before
+  the user dives in
+
+## Skip if
+
+- No role is active (`AIDA_SESSION_ROLE` empty) — suggest `aida-role <name>`
+  first so the queue filter has a target
+- The user is in `dialog` mode — that's the producer seat, not the consumer
+
+## Active role
+
+!`echo "Role: ${AIDA_SESSION_ROLE:-(none active)}"`
+
+## Current queue head
+
+!`aida queue next 2>/dev/null || echo "(no items)"`
+
+## Workflow
+
+### Step 1: Check the queue
+
+Run `aida queue next` to see the top item routed to the current role.
+The output includes:
+- spec_id, title, status, priority, owner
+- The note from whoever queued it (often the dialog seat)
+- First 10 lines of the description
+- Suggested follow-up commands
+
+If the queue is empty, surface that to the user and stop. Don't fabricate
+work — empty queue is a real signal.
+
+### Step 2: Confirm pickup
+
+Show the user the item and ask whether to start. Examples:
+
+> Next up: **FR-1-042 — Add OAuth provider** (Approved · High · joe)
+>
+> Note from dialog: "high priority, customer ask"
+>
+> Want me to start on this? I'll mark it in-progress before diving in.
+
+If the user says no (wants to skip, prioritize differently, etc.), stop
+here. Don't auto-skip to the next item — the queue order encodes priority.
+
+### Step 3: Mark in-progress
+
+Once the user confirms:
+
+```bash
+aida edit <spec_id> --status in-progress
+```
+
+This makes it visible to other sessions / dashboards that someone's on it.
+
+### Step 4: Do the work
+
+Drive the actual implementation. Read the requirement (`aida show <spec_id>`),
+follow related links, write the code, add trace comments
+(`// trace:<spec_id> | ai:claude`), commit.
+
+### Step 5: Mark done atomically
+
+When the work lands:
+
+```bash
+aida queue done <spec_id>
+```
+
+This is one atomic step that:
+- Sets status to Completed
+- Removes the item from the queue
+
+Equivalent to: `aida edit <spec_id> --status completed && aida queue remove <spec_id>`
+
+### Step 6: Loop
+
+After step 5 succeeds, optionally suggest re-running pickup to grab the next
+item. Don't auto-loop without confirmation — the user may want to break,
+review, switch roles, or call it for the day.
+
+## Producer side reminder
+
+If the user complains the queue is always empty, gently remind them about
+the dialog/captain seat:
+
+> The queue is filled by whoever wears the `dialog` role
+> (`aida-role dialog`, then `aida queue add <id> --for implementer`).
+> Want to switch hats and queue some work?
+
+## Related skills / commands
+
+- `/aida-role` — switch personas
+- `aida queue list --all` — see the full queue including other-role items
+- `aida queue add <id> --for <role> --note "..."` — route work
+- `aida statusline` — confirm the active role + queue depth
