@@ -458,6 +458,69 @@ fn main() -> Result<()> {
 }
 
 // trace:TASK-0001 | ai:claude:high
+/// Count requirements in a git-canonical store at `store_path`. Returns
+/// None if the store doesn't exist or can't be opened — caller treats that
+/// as "no data to lose, proceed".
+/// trace:EPIC-1-001 | ai:claude
+fn count_requirements_in_store(store_path: &std::path::Path) -> Option<usize> {
+    if !store_path.is_dir() {
+        return None;
+    }
+    let backend = aida_core::GitBackend::new(store_path).ok()?;
+    let store = aida_core::DatabaseBackend::load(&backend).ok()?;
+    Some(store.requirements.len())
+}
+
+/// Same as count_requirements_in_store but for a legacy SQLite-canonical
+/// store at `db_path`.
+fn count_requirements_in_sqlite(db_path: &std::path::Path) -> Result<usize> {
+    let storage = Storage::new(db_path);
+    Ok(storage.load()?.requirements.len())
+}
+
+/// Surface the data-loss risk of `aida init --force` on a populated store.
+/// Returns true if the user confirmed (typed "reset"), false otherwise.
+/// Bails the parent caller via Ok if the user cancels — caller pattern is
+/// `if !confirm_destructive_reset(...)? { return Ok(()); }`.
+/// trace:EPIC-1-001 | ai:claude
+fn confirm_destructive_reset(count: usize, store_path: &std::path::Path) -> Result<bool> {
+    eprintln!();
+    eprintln!(
+        "{} `aida init --force` will RESET the requirements store at {}.",
+        "DANGER:".red().bold(),
+        store_path.display()
+    );
+    eprintln!(
+        "        {} existing requirement(s) will be lost.",
+        count.to_string().red().bold()
+    );
+    eprintln!();
+    eprintln!(
+        "If you only wanted to refresh scaffolding (CLAUDE.md, .claude/skills/, hooks),"
+    );
+    eprintln!(
+        "cancel here and run instead:  {}",
+        "aida scaffold apply --force".cyan()
+    );
+    eprintln!();
+    eprintln!(
+        "Type `{}` (literally) to confirm the destructive reset, or anything else to cancel:",
+        "reset".bold()
+    );
+    let mut answer = String::new();
+    if std::io::BufRead::read_line(&mut std::io::stdin().lock(), &mut answer).is_err() {
+        eprintln!("Cancelled.");
+        return Ok(false);
+    }
+    if answer.trim() == "reset" {
+        eprintln!("{} proceeding with reset.", "Confirmed:".yellow());
+        Ok(true)
+    } else {
+        eprintln!("Cancelled. Store untouched.");
+        Ok(false)
+    }
+}
+
 fn handle_init_command(no_skills: bool, agent: &str, no_hooks: bool, force: bool) -> Result<()> {
     eprintln!(
         "{}: --centralized initializes a SQLite-canonical store, which is deprecated.",
@@ -477,7 +540,21 @@ fn handle_init_command(no_skills: bool, agent: &str, no_hooks: bool, force: bool
             "!".yellow()
         );
         eprintln!("  Use {} to reinitialize.", "--force".bold());
+        eprintln!(
+            "  To refresh just the scaffolding (CLAUDE.md, .claude/skills/, hooks),"
+        );
+        eprintln!("  use `aida scaffold apply --force` instead — preserves your store.");
         return Ok(());
+    }
+
+    // --force on a populated SQLite store would lose every requirement. Count
+    // first; require the user to type "reset" to confirm if non-empty.
+    if force && db_path.exists() {
+        if let Ok(count) = count_requirements_in_sqlite(&db_path) {
+            if count > 0 && !confirm_destructive_reset(count, &db_path)? {
+                return Ok(());
+            }
+        }
     }
 
     // Create the database
@@ -1501,7 +1578,23 @@ fn handle_init_distributed_worktree(
             "!".yellow()
         );
         eprintln!("  Use {} to reinitialize.", "--force".bold());
+        eprintln!(
+            "  To refresh just the scaffolding (CLAUDE.md, .claude/skills/, hooks),"
+        );
+        eprintln!("  use `aida scaffold apply --force` instead — preserves your store.");
         return Ok(());
+    }
+
+    // --force on a populated store would silently wipe N requirements and reseed
+    // an empty store with just META prompts. Surface that loudly: count what
+    // would be lost and require the user to type "reset" to acknowledge.
+    if force {
+        let existing_store = cwd.join(worktree_dir);
+        if let Some(count) = count_requirements_in_store(&existing_store) {
+            if count > 0 && !confirm_destructive_reset(count, &existing_store)? {
+                return Ok(());
+            }
+        }
     }
 
     println!("{}", "Initializing AIDA in distributed mode (orphan branch + worktree)...".bold());
@@ -1645,7 +1738,21 @@ fn handle_init_distributed_sibling(
             "!".yellow()
         );
         eprintln!("  Use {} to reinitialize.", "--force".bold());
+        eprintln!(
+            "  To refresh just the scaffolding (CLAUDE.md, .claude/skills/, hooks),"
+        );
+        eprintln!("  use `aida scaffold apply --force` instead — preserves your store.");
         return Ok(());
+    }
+
+    // --force on a populated store would silently wipe N requirements. Same
+    // guard as the worktree path: count + require typed confirmation.
+    if force {
+        if let Some(count) = count_requirements_in_store(&store_dir) {
+            if count > 0 && !confirm_destructive_reset(count, &store_dir)? {
+                return Ok(());
+            }
+        }
     }
 
     println!("{}", "Initializing AIDA in distributed mode...".bold());
@@ -4051,12 +4158,97 @@ fn handle_status_command_distributed(
     }
     println!();
 
+    // Scaffolding freshness — only useful for non-AIDA-self projects, since
+    // AIDA's own .claude/ uses symlinks into aida-core/templates/ and can't
+    // drift. The aida-self block below has its own template-symlink check.
+    if !is_aida_repo(&project_root) {
+        print_scaffolding_freshness(&project_root);
+    }
+
     // AIDA-self developer context — only when this project IS the aida repo.
     if !no_dev_context && is_aida_repo(&project_root) {
         print_aida_dev_context(&project_root);
     }
 
     Ok(())
+}
+
+/// Compare a project's `.claude/skills/`, `.claude/commands/`, `.claude/hooks/`
+/// (and CLAUDE.md / AGENTS.md / .mcp.json) against the templates embedded in
+/// the running aida binary. Reports counts of files that match exactly vs
+/// files that have drifted, and suggests `aida scaffold apply --force` if
+/// there's drift. Quiet when the project has no scaffolding at all.
+/// trace:EPIC-1-001 | ai:claude
+fn print_scaffolding_freshness(project_root: &std::path::Path) {
+    use aida_core::scaffolding::{ScaffoldConfig, Scaffolder};
+
+    // Need a RequirementsStore to drive the scaffolder, but we only care
+    // about template content — an empty store is fine for comparison.
+    let empty_store = aida_core::models::RequirementsStore::new();
+    let config = ScaffoldConfig::default();
+    let mut scaffolder = Scaffolder::with_database(
+        project_root.to_path_buf(),
+        config,
+        std::path::PathBuf::from("requirements.db"), // dummy; only used for path-substitution in templates
+    );
+    let preview = scaffolder.preview(&empty_store);
+
+    let mut total = 0usize;
+    let mut present = 0usize;
+    let mut matches = 0usize;
+    let mut drifted: Vec<std::path::PathBuf> = Vec::new();
+
+    for artifact in &preview.artifacts {
+        total += 1;
+        let full = project_root.join(&artifact.path);
+        if !full.exists() {
+            // missing; not "drifted" (probably user opted out via --no-skills)
+            continue;
+        }
+        present += 1;
+        let on_disk = match std::fs::read(&full) {
+            Ok(b) => b,
+            Err(_) => continue,
+        };
+        if on_disk == artifact.content.as_bytes() {
+            matches += 1;
+        } else {
+            drifted.push(artifact.path.clone());
+        }
+    }
+
+    // No scaffolding present at all — stay quiet (probably a non-aida project
+    // that just happens to have a .aida/config.toml from somewhere unrelated).
+    if present == 0 {
+        return;
+    }
+
+    println!("{}", "─── Scaffolding ───".bold());
+    println!("  Templates compared: {} total, {} present in project", total, present);
+    if drifted.is_empty() {
+        println!(
+            "  Status:             {} — all {} present file(s) match the embedded templates",
+            "FRESH".green(),
+            matches
+        );
+    } else {
+        println!(
+            "  Status:             {} — {} file(s) differ from the embedded templates",
+            "STALE".yellow(),
+            drifted.len()
+        );
+        for path in drifted.iter().take(5) {
+            println!("    - {}", path.display());
+        }
+        if drifted.len() > 5 {
+            println!("    ... and {} more", drifted.len() - 5);
+        }
+        println!(
+            "  Refresh with:       {} (or `aida scaffold apply --dry-run` to preview)",
+            "aida scaffold apply --force".cyan()
+        );
+    }
+    println!();
 }
 
 /// Legacy-mode status: minimal output via the file-based Storage class.
@@ -7270,6 +7462,13 @@ fn handle_scaffold_command(
 
             let preview = scaffolder.preview(&store);
 
+            let mut created = 0usize;
+            let mut updated = 0usize;
+            let mut unchanged = 0usize;
+            let mut skipped = 0usize;
+            let mut would_create = 0usize;
+            let mut would_update = 0usize;
+
             for artifact in &preview.artifacts {
                 let full_path = root.join(&artifact.path);
                 let exists = full_path.exists();
@@ -7280,11 +7479,24 @@ fn handle_scaffold_command(
                         "~".yellow(),
                         artifact.path.display()
                     );
+                    skipped += 1;
+                    continue;
+                }
+
+                // Detect "no-op" updates: file exists and content already
+                // matches what we'd write. Lets us tell the user "0 files
+                // needed updating" instead of "all files updated".
+                let already_matches = exists
+                    && std::fs::read(&full_path)
+                        .map(|bytes| bytes == artifact.content.as_bytes())
+                        .unwrap_or(false);
+
+                if already_matches {
+                    unchanged += 1;
                     continue;
                 }
 
                 if !*dry_run {
-                    // Create parent directories if needed
                     if let Some(parent) = full_path.parent() {
                         std::fs::create_dir_all(parent)?;
                     }
@@ -7298,11 +7510,60 @@ fn handle_scaffold_command(
                     artifact.path.display(),
                     action
                 );
+                if *dry_run {
+                    if exists {
+                        would_update += 1;
+                    } else {
+                        would_create += 1;
+                    }
+                } else if exists {
+                    updated += 1;
+                } else {
+                    created += 1;
+                }
             }
 
-            if !*dry_run {
-                println!();
-                println!("{} Scaffold applied successfully", "✓".green());
+            println!();
+            if *dry_run {
+                let total_changes = would_create + would_update;
+                if total_changes == 0 {
+                    println!(
+                        "{} Already up to date — {} file(s) match templates exactly, nothing would change.",
+                        "✓".green(),
+                        unchanged
+                    );
+                } else {
+                    println!(
+                        "{} Dry run: would create {}, update {} ({} unchanged, {} skipped).",
+                        "ℹ".blue(),
+                        would_create,
+                        would_update,
+                        unchanged,
+                        skipped
+                    );
+                }
+            } else {
+                let total_changes = created + updated;
+                if total_changes == 0 && skipped == 0 {
+                    println!(
+                        "{} Already up to date — {} file(s) match templates exactly, nothing changed.",
+                        "✓".green(),
+                        unchanged
+                    );
+                } else {
+                    println!(
+                        "{} Scaffold applied: {} created, {} updated, {} unchanged{}.",
+                        "✓".green(),
+                        created,
+                        updated,
+                        unchanged,
+                        if skipped > 0 {
+                            format!(", {} skipped (use --force)", skipped)
+                        } else {
+                            String::new()
+                        }
+                    );
+                }
             }
         }
 
