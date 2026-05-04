@@ -36,8 +36,8 @@ created_at: 2026-05-04T04:37:24.221961550Z
 modified_at: 2026-05-04T04:37:24.221961550Z
 req_type: Epic
 tags:
-- cli
-- quality
-- ergonomics
 - help
+- quality
 - scaffolding
+- cli
+- ergonomics
