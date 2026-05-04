@@ -31,7 +31,7 @@ if echo "$tool_response" | grep -qiE '(error|failed|abort)'; then
 fi
 
 # Extract requirement IDs from commit message
-req_ids=$(echo "$command" | grep -oE '\([A-Z]+-[0-9]+\)' | tr -d '()' | sort -u || true)
+req_ids=$(echo "$command" | grep -oE '\([A-Z]+(-[0-9]+){1,2}\)' | tr -d '()' | sort -u || true)
 
 if [ -z "$req_ids" ]; then
     exit 0  # No requirements referenced
