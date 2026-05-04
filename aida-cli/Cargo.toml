@@ -41,6 +41,9 @@ prost = { workspace = true, optional = true }
 default = []
 remote = ["tonic", "prost", "tonic-build"]
 
+[dev-dependencies]
+tempfile = "3.8"
+
 [build-dependencies]
 tonic-build = { workspace = true, optional = true }
 

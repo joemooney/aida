@@ -1,4 +1,5 @@
 mod cli;
+mod not_found;
 #[cfg(feature = "remote")]
 mod client;
 mod mcp;
@@ -1132,7 +1133,7 @@ fn handle_git_backend_command(
                     }
                 }
                 None => {
-                    eprintln!("Requirement not found: {}", id);
+                    eprintln!("{}", not_found::requirement_not_found(id, Some(store_path)));
                 }
             }
         }
@@ -1151,7 +1152,7 @@ fn handle_git_backend_command(
             record_role_activity(id, "edit");
             let mut req = backend
                 .get_requirement_by_spec_id(id)?
-                .ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", id))?;
+                .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
 
             let mut changed = false;
             if let Some(t) = title {
@@ -1203,7 +1204,7 @@ fn handle_git_backend_command(
         Command::Del { id, yes } => {
             let req = backend
                 .get_requirement_by_spec_id(id)?
-                .ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", id))?;
+                .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
 
             if !yes {
                 println!("Delete {} — {}?", id, req.title);
@@ -1265,7 +1266,7 @@ fn handle_git_backend_command(
             record_role_activity(req_id, "comment");
             let mut req = backend
                 .get_requirement_by_spec_id(req_id)?
-                .ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", req_id))?;
+                .ok_or_else(|| not_found::requirement_not_found(req_id, Some(store_path)))?;
 
             let now = chrono::Utc::now();
             let comment = aida_core::Comment {
@@ -1289,7 +1290,7 @@ fn handle_git_backend_command(
             record_role_activity(id, "show");
             let req = backend
                 .get_requirement_by_spec_id(id)?
-                .ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", id))?;
+                .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
             println!("{}: {}", "Requirement".cyan(), req.title);
             println!();
             if req.comments.is_empty() {
@@ -1332,11 +1333,11 @@ fn handle_git_backend_command(
         }) => {
             let mut from_req = backend
                 .get_requirement_by_spec_id(from)?
-                .ok_or_else(|| anyhow::anyhow!("Source not found: {}", from))?;
+                .ok_or_else(|| not_found::requirement_not_found(from, Some(store_path)))?;
 
             let to_req = backend
                 .get_requirement_by_spec_id(to)?
-                .ok_or_else(|| anyhow::anyhow!("Target not found: {}", to))?;
+                .ok_or_else(|| not_found::requirement_not_found(to, Some(store_path)))?;
 
             let rel_type = match r#type.to_lowercase().as_str() {
                 "parent" => RelationshipType::Parent,
@@ -1384,12 +1385,12 @@ fn handle_git_backend_command(
         Command::Rel(RelationshipCommand::Remove { from, to, .. }) => {
             let mut from_req = backend
                 .get_requirement_by_spec_id(from)?
-                .ok_or_else(|| anyhow::anyhow!("Source not found: {}", from))?;
+                .ok_or_else(|| not_found::requirement_not_found(from, Some(store_path)))?;
 
             // Look up target UUID
             let to_req = backend
                 .get_requirement_by_spec_id(to)?
-                .ok_or_else(|| anyhow::anyhow!("Target not found: {}", to))?;
+                .ok_or_else(|| not_found::requirement_not_found(to, Some(store_path)))?;
 
             let before = from_req.relationships.len();
             from_req.relationships.retain(|r| r.target_id != to_req.id);
@@ -1408,7 +1409,7 @@ fn handle_git_backend_command(
             record_role_activity(id, "show");
             let req = backend
                 .get_requirement_by_spec_id(id)?
-                .ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", id))?;
+                .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
 
             println!("{}: {}", "Requirement".blue(), req.title);
             if let Some(spec_id) = &req.spec_id {
@@ -2864,7 +2865,12 @@ fn delete_requirement(storage: &Storage, id_str: &str, skip_confirm: bool) -> Re
 }
 
 
-/// Parse requirement ID - accepts either UUID or SPEC-ID
+/// Parse requirement ID - accepts either UUID or SPEC-ID. Used by the legacy
+/// SQLite path; the git-canonical dispatch resolves IDs directly via
+/// `get_requirement_by_spec_id` and uses `not_found::requirement_not_found`
+/// at the call site (with the actual store path).
+///
+/// trace:FR-1-011 | ai:claude
 fn parse_requirement_id(id_str: &str, store: &RequirementsStore) -> Result<Uuid> {
     // Try parsing as UUID first
     if let Ok(uuid) = Uuid::parse_str(id_str) {
@@ -2876,10 +2882,11 @@ fn parse_requirement_id(id_str: &str, store: &RequirementsStore) -> Result<Uuid>
         return Ok(req.id);
     }
 
-    anyhow::bail!(
-        "Invalid requirement ID: '{}'. Must be either a UUID or SPEC-ID (e.g., SPEC-001)",
-        id_str
-    )
+    // The legacy helper doesn't have the storage path threaded through, so
+    // we use the None-path variant which inspects cwd and reports "no aida
+    // store found" / "cd into project root" — the right hint for the most
+    // common failure mode (running aida from outside any AIDA project).
+    Err(not_found::requirement_not_found(id_str, None))
 }
 
 fn parse_status(status_str: &str) -> Result<RequirementStatus> {
@@ -9643,7 +9650,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     .iter()
                     .find(|r| r.spec_id.as_deref() == Some(id.as_str()))
             }
-            .ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", id))?;
+            .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
 
             let position = if *top {
                 let entries = storage.queue_list(&user_id, true)?;
@@ -9688,7 +9695,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     .iter()
                     .find(|r| r.spec_id.as_deref() == Some(id.as_str()))
             }
-            .ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", id))?;
+            .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
 
             storage.queue_remove(&user_id, &req.id)?;
             let spec_id = req.spec_id.as_deref().unwrap_or("???");
@@ -9713,7 +9720,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     .iter()
                     .find(|r| r.spec_id.as_deref() == Some(id.as_str()))
             }
-            .ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", id))?;
+            .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
 
             let entries = storage.queue_list(&user_id, true)?;
             let new_position = if *top {
@@ -9729,7 +9736,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         .iter()
                         .find(|r| r.spec_id.as_deref() == Some(before_id.as_str()))
                 }
-                .ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", before_id))?;
+                .ok_or_else(|| not_found::requirement_not_found(before_id, Some(storage.path())))?;
 
                 entries
                     .iter()
@@ -9888,7 +9895,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     .iter()
                     .find(|r| r.spec_id.as_deref() == Some(id.as_str()))
             }
-            .ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", id))?;
+            .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
 
             let spec_id = req.spec_id.as_deref().unwrap_or("???");
 
@@ -10053,7 +10060,7 @@ fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
             let store = storage.load()?;
             let req = store.requirements.iter()
                 .find(|r| r.matches_id(id))
-                .ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", id))?;
+                .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
 
             let display_id = req.display_id();
             let type_name = config.map_type(&format!("{:?}", req.req_type));
@@ -10444,7 +10451,7 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
                 .requirements
                 .iter()
                 .find(|r| r.matches_id(id))
-                .ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", id))?;
+                .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
 
             // Build labels from type and priority
             let mut labels = Vec::new();
