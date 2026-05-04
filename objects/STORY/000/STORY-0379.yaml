@@ -11,8 +11,8 @@ created_at: 2026-02-22T18:23:02.151416315Z
 modified_at: 2026-02-22T18:23:02.151416315Z
 req_type: Story
 tags:
-- react
 - frontend
+- react
 relationships:
 - rel_type: Parent
   target_id: e88eb8dd-1ed5-4076-9c9e-eeaac44dd994
