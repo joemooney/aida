@@ -255,6 +255,11 @@ pub enum RoleCommand {
         /// Restore the role's last working directory (cd in the eval output)
         #[clap(long)]
         cd: bool,
+
+        /// Store this role globally (~/.aida/roles/) instead of per-project.
+        /// Useful for personas you carry across projects (triage, code-review).
+        #[clap(long)]
+        global: bool,
     },
 
     /// List all roles defined for this project, sorted by last activity.

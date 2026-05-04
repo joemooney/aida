@@ -1059,9 +1059,13 @@ fn handle_git_backend_command(
                     last.spec_id.as_deref().unwrap_or("?"),
                     last.title
                 );
+                if let Some(sid) = last.spec_id.as_deref() {
+                    record_role_activity(sid, "add");
+                }
             }
         }
         Command::Show { id } => {
+            record_role_activity(id, "show");
             match backend.get_requirement_by_spec_id(id)? {
                 Some(req) => {
                     println!("{}: {}", "ID".bold(), req.display_id());
@@ -1111,6 +1115,7 @@ fn handle_git_backend_command(
             tags,
             ..
         } => {
+            record_role_activity(id, "edit");
             let mut req = backend
                 .get_requirement_by_spec_id(id)?
                 .ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", id))?;
@@ -1224,6 +1229,7 @@ fn handle_git_backend_command(
             author,
             ..
         }) => {
+            record_role_activity(req_id, "comment");
             let mut req = backend
                 .get_requirement_by_spec_id(req_id)?
                 .ok_or_else(|| anyhow::anyhow!("Requirement not found: {}", req_id))?;
@@ -3274,7 +3280,29 @@ struct RoleState {
     working_directory: Option<std::path::PathBuf>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     notes: Option<String>,
+
+    /// True if this role file lives in ~/.aida/roles/ rather than per-project.
+    /// Persisted so `aida role list` can mark global roles distinctly without
+    /// re-checking the filesystem location.
+    #[serde(default)]
+    global: bool,
+
+    /// Last N requirements touched while this role was active. Newest first.
+    /// Bounded at ACTIVITY_MAX entries; older entries fall off the end.
+    #[serde(default)]
+    activity: Vec<RoleActivity>,
 }
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct RoleActivity {
+    /// Requirement spec_id (or agreed_id) touched
+    spec_id: String,
+    /// What the user did: "show", "edit", "add", "comment"
+    action: String,
+    at: chrono::DateTime<chrono::Utc>,
+}
+
+const ACTIVITY_MAX: usize = 10;
 
 fn statusline_project_root() -> std::path::PathBuf {
     // Roles + statusline live in the project that is the user's CWD
@@ -3294,53 +3322,140 @@ fn statusline_project_root() -> std::path::PathBuf {
     cwd
 }
 
-fn roles_dir(project_root: &std::path::Path) -> std::path::PathBuf {
+/// Per-project role storage: <project>/.aida/roles/
+fn project_roles_dir(project_root: &std::path::Path) -> std::path::PathBuf {
     project_root.join(".aida/roles")
 }
 
-fn role_file(project_root: &std::path::Path, name: &str) -> std::path::PathBuf {
-    roles_dir(project_root).join(format!("{}.toml", name))
+/// Global role storage: ~/.aida/roles/ — for personas you carry across
+/// projects (e.g., "triage", "code-review").
+fn global_roles_dir() -> Option<std::path::PathBuf> {
+    dirs::home_dir().map(|h| h.join(".aida/roles"))
 }
 
-fn load_role(project_root: &std::path::Path, name: &str) -> Result<RoleState> {
-    let path = role_file(project_root, name);
-    let content = std::fs::read_to_string(&path)
-        .with_context(|| format!("No such role: {} (looked at {})", name, path.display()))?;
-    let state: RoleState = toml::from_str(&content)
-        .with_context(|| format!("Failed to parse role file {}", path.display()))?;
-    Ok(state)
+fn project_role_file(project_root: &std::path::Path, name: &str) -> std::path::PathBuf {
+    project_roles_dir(project_root).join(format!("{}.toml", name))
 }
 
-fn save_role(project_root: &std::path::Path, state: &RoleState) -> Result<()> {
-    let path = role_file(project_root, &state.name);
+fn global_role_file(name: &str) -> Option<std::path::PathBuf> {
+    global_roles_dir().map(|d| d.join(format!("{}.toml", name)))
+}
+
+/// Load a role by name. Looks in the project first, then the global dir.
+/// Returns the state plus the path it was loaded from (for save-back).
+fn load_role(
+    project_root: &std::path::Path,
+    name: &str,
+) -> Result<(RoleState, std::path::PathBuf)> {
+    let project_path = project_role_file(project_root, name);
+    if project_path.exists() {
+        let content = std::fs::read_to_string(&project_path)
+            .with_context(|| format!("Failed to read role file {}", project_path.display()))?;
+        let state: RoleState = toml::from_str(&content)
+            .with_context(|| format!("Failed to parse role file {}", project_path.display()))?;
+        return Ok((state, project_path));
+    }
+    if let Some(global_path) = global_role_file(name) {
+        if global_path.exists() {
+            let content = std::fs::read_to_string(&global_path)
+                .with_context(|| format!("Failed to read role file {}", global_path.display()))?;
+            let state: RoleState = toml::from_str(&content)
+                .with_context(|| format!("Failed to parse role file {}", global_path.display()))?;
+            return Ok((state, global_path));
+        }
+    }
+    anyhow::bail!(
+        "No such role: {} (looked at {} and {})",
+        name,
+        project_path.display(),
+        global_role_file(name)
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "(no global dir)".into())
+    )
+}
+
+/// Save back to the same location the role was loaded from (or the
+/// project / global location based on `state.global` for fresh roles).
+fn save_role_at(state: &RoleState, path: &std::path::Path) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
     let content = toml::to_string_pretty(state)?;
-    std::fs::write(&path, content)
+    std::fs::write(path, content)
         .with_context(|| format!("Failed to write {}", path.display()))?;
     Ok(())
 }
 
-fn list_roles(project_root: &std::path::Path) -> Result<Vec<RoleState>> {
-    let dir = roles_dir(project_root);
-    if !dir.is_dir() {
-        return Ok(Vec::new());
+fn role_save_path(project_root: &std::path::Path, state: &RoleState) -> Result<std::path::PathBuf> {
+    if state.global {
+        global_role_file(&state.name)
+            .ok_or_else(|| anyhow::anyhow!("Cannot determine $HOME for global role storage"))
+    } else {
+        Ok(project_role_file(project_root, &state.name))
     }
+}
+
+fn list_roles(project_root: &std::path::Path) -> Result<Vec<RoleState>> {
     let mut roles = Vec::new();
-    for entry in std::fs::read_dir(&dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.extension() == Some(std::ffi::OsStr::new("toml")) {
-            if let Ok(content) = std::fs::read_to_string(&path) {
-                if let Ok(state) = toml::from_str::<RoleState>(&content) {
-                    roles.push(state);
+    for dir in [Some(project_roles_dir(project_root)), global_roles_dir()]
+        .into_iter()
+        .flatten()
+    {
+        if !dir.is_dir() {
+            continue;
+        }
+        for entry in std::fs::read_dir(&dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension() == Some(std::ffi::OsStr::new("toml")) {
+                if let Ok(content) = std::fs::read_to_string(&path) {
+                    if let Ok(state) = toml::from_str::<RoleState>(&content) {
+                        roles.push(state);
+                    }
                 }
             }
         }
     }
     roles.sort_by(|a, b| b.last_active_at.cmp(&a.last_active_at));
     Ok(roles)
+}
+
+/// Append an activity entry to the active role's log (best-effort; silently
+/// no-op if no role active or the role file is unwriteable). Called from
+/// the show/edit/add/comment paths so resuming a role surfaces what the
+/// user was working on last.
+fn record_role_activity(spec_id: &str, action: &str) {
+    let role_name = match std::env::var("AIDA_SESSION_ROLE") {
+        Ok(n) if !n.is_empty() => n,
+        _ => return,
+    };
+    let project = match std::env::var("AIDA_SESSION_PROJECT") {
+        Ok(p) => std::path::PathBuf::from(p),
+        Err(_) => statusline_project_root(),
+    };
+    let (mut state, path) = match load_role(&project, &role_name) {
+        Ok(t) => t,
+        Err(_) => return,
+    };
+    // Dedupe consecutive entries on the same spec_id+action.
+    let entry = RoleActivity {
+        spec_id: spec_id.to_string(),
+        action: action.to_string(),
+        at: chrono::Utc::now(),
+    };
+    let dup = state
+        .activity
+        .first()
+        .map(|prev| prev.spec_id == entry.spec_id && prev.action == entry.action)
+        .unwrap_or(false);
+    if !dup {
+        state.activity.insert(0, entry);
+        state.activity.truncate(ACTIVITY_MAX);
+    } else if let Some(first) = state.activity.first_mut() {
+        first.at = entry.at;
+    }
+    state.last_active_at = chrono::Utc::now();
+    let _ = save_role_at(&state, &path);
 }
 
 fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
@@ -3350,7 +3465,8 @@ fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
             name,
             purpose,
             cd,
-        } => handle_role_enter(&project_root, name, purpose.as_deref(), *cd),
+            global,
+        } => handle_role_enter(&project_root, name, purpose.as_deref(), *cd, *global),
         RoleCommand::List => handle_role_list(&project_root),
         RoleCommand::Show { name } => handle_role_show(&project_root, name.as_deref()),
         RoleCommand::End => handle_role_end(),
@@ -3363,25 +3479,35 @@ fn handle_role_enter(
     name: &str,
     purpose: Option<&str>,
     cd: bool,
+    global: bool,
 ) -> Result<()> {
-    // Resume if exists, otherwise create. Tracking "was_existing" before
-    // any mutation so the user sees the right verb in the eval output.
+    // Resume if exists, otherwise create. load_role checks both project
+    // and global locations transparently.
     let existing = load_role(project_root, name).ok();
     let was_existing = existing.is_some();
-    let mut state = existing.unwrap_or_else(|| RoleState {
-        name: name.to_string(),
-        purpose: purpose.map(String::from),
-        created_at: chrono::Utc::now(),
-        last_active_at: chrono::Utc::now(),
-        working_directory: std::env::current_dir().ok(),
-        notes: None,
+    let (mut state, _) = existing.unwrap_or_else(|| {
+        let s = RoleState {
+            name: name.to_string(),
+            purpose: purpose.map(String::from),
+            created_at: chrono::Utc::now(),
+            last_active_at: chrono::Utc::now(),
+            working_directory: std::env::current_dir().ok(),
+            notes: None,
+            global,
+            activity: Vec::new(),
+        };
+        let path = role_save_path(project_root, &s).unwrap_or_else(|_| {
+            project_role_file(project_root, name)
+        });
+        (s, path)
     });
     state.last_active_at = chrono::Utc::now();
     if let Some(p) = purpose {
         state.purpose = Some(p.to_string());
     }
     state.working_directory = std::env::current_dir().ok();
-    save_role(project_root, &state)?;
+    let save_path = role_save_path(project_root, &state)?;
+    save_role_at(&state, &save_path)?;
 
     // Emit shell code for eval.
     let cwd = state
@@ -3401,16 +3527,33 @@ fn handle_role_enter(
         println!("cd '{}'", cwd);
     }
     let verb = if was_existing { "Resumed" } else { "Created and entered" };
+    let scope = if state.global { " [global]" } else { "" };
     println!(
-        "echo '✓ {} role: {}{}'",
+        "echo '✓ {} role: {}{}{}'",
         verb,
         state.name,
+        scope,
         state
             .purpose
             .as_ref()
             .map(|p| format!(" — {}", p))
             .unwrap_or_default()
     );
+    // Surface what the user was last working on under this role —
+    // makes "resume" feel like a real session, not just a label switch.
+    if was_existing && !state.activity.is_empty() {
+        println!("echo ''");
+        println!(
+            "echo '  Last touched while in this role:'"
+        );
+        for entry in state.activity.iter().take(5) {
+            let when = humanize_relative(entry.at);
+            println!(
+                "echo '    {} — {} ({})'",
+                entry.spec_id, entry.action, when
+            );
+        }
+    }
     Ok(())
 }
 
@@ -3448,6 +3591,11 @@ fn handle_role_list(project_root: &std::path::Path) -> Result<()> {
         } else {
             " ".to_string()
         };
+        let scope = if role.global {
+            " [global]".dimmed().to_string()
+        } else {
+            String::new()
+        };
         let last = humanize_relative(role.last_active_at);
         let purpose = role
             .purpose
@@ -3455,8 +3603,12 @@ fn handle_role_list(project_root: &std::path::Path) -> Result<()> {
             .map(|p| format!(" — {}", p))
             .unwrap_or_default();
         println!(
-            "  {} {:<16} last active {}{}",
-            marker, role.name.bold(), last, purpose
+            "  {} {:<16}{} last active {}{}",
+            marker,
+            role.name.bold(),
+            scope,
+            last,
+            purpose
         );
     }
     Ok(())
@@ -3469,8 +3621,9 @@ fn handle_role_show(project_root: &std::path::Path, name: Option<&str>) -> Resul
             anyhow::anyhow!("No role active and no name given. Use `aida role list` to see options.")
         })?,
     };
-    let state = load_role(project_root, &resolved)?;
-    println!("Role:        {}", state.name.bold());
+    let (state, path) = load_role(project_root, &resolved)?;
+    println!("Role:        {}{}", state.name.bold(), if state.global { " [global]".dimmed().to_string() } else { String::new() });
+    println!("Stored at:   {}", path.display());
     println!(
         "Purpose:     {}",
         state.purpose.as_deref().unwrap_or("(none)")
@@ -3487,14 +3640,23 @@ fn handle_role_show(project_root: &std::path::Path, name: Option<&str>) -> Resul
     if let Some(n) = &state.notes {
         println!("Notes:       {}", n);
     }
+    if !state.activity.is_empty() {
+        println!();
+        println!("Recent activity (newest first):");
+        for entry in &state.activity {
+            println!(
+                "  {:<14} {:<10} {}",
+                entry.spec_id,
+                entry.action,
+                humanize_relative(entry.at)
+            );
+        }
+    }
     Ok(())
 }
 
 fn handle_role_delete(project_root: &std::path::Path, name: &str) -> Result<()> {
-    let path = role_file(project_root, name);
-    if !path.exists() {
-        anyhow::bail!("No such role: {} ({})", name, path.display());
-    }
+    let (_state, path) = load_role(project_root, name)?;
     std::fs::remove_file(&path)?;
     println!("{}: deleted role '{}' ({})", "OK".green(), name, path.display());
     Ok(())
@@ -3594,8 +3756,17 @@ fn handle_statusline_command() -> Result<()> {
     };
 
     let mut parts: Vec<String> = vec!["aida".to_string(), project_label];
-    if let Some(r) = role {
+    if let Some(r) = &role {
         parts.push(format!("role:{}", r));
+
+        // If the active role has a recent activity entry, surface the
+        // newest spec_id so the prompt reminds you what you were working on.
+        // Read fast: TOML file, no extra dependencies.
+        if let Ok((state, _)) = load_role(&project_root, r) {
+            if let Some(latest) = state.activity.first() {
+                parts.push(format!("@{}", latest.spec_id));
+            }
+        }
     }
     if let Some(c) = req_count {
         parts.push(format!("reqs:{}", c));
