@@ -24,12 +24,12 @@ description: |-
   - Verify current branch
   - Run test suite (with option to skip)
   - Report clear pass/fail for each check
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-02T06:10:18.775681757Z
-modified_at: 2026-05-04T19:32:42.201781635Z
+modified_at: 2026-05-04T19:32:43.419519063Z
 req_type: Functional
 relationships:
 - rel_type: Parent
