@@ -3,13 +3,13 @@ spec_id: FR-0189
 agreed_id: FR-165
 title: Work Queue View
 description: "Work Queue View\n\nA user or team can have a work queue folder type. This is an ordered list of requirements with a ranking. It is a type of Inbox and we will have other inboxes (such as notifcations, or mentions in comments). A user or a manager may wish to see what is in the work queue for that user. They can drag items higher or lower. "
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-03T03:53:18.076961209Z
 created_by: Joe Mooney
-modified_at: 2026-05-04T19:35:13.059240912Z
+modified_at: 2026-05-04T19:35:14.343767040Z
 req_type: Functional
 relationships:
 - rel_type: References
