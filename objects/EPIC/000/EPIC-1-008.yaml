@@ -44,6 +44,6 @@ modified_at: 2026-05-04T04:37:00.687454668Z
 req_type: Epic
 tags:
 - cli
+- statusline
 - observability
 - status
-- statusline

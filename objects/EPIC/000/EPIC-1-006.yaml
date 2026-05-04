@@ -32,5 +32,5 @@ req_type: Epic
 tags:
 - roles
 - producer-consumer
-- queue
 - workflow
+- queue
