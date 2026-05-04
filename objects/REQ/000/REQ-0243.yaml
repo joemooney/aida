@@ -3,12 +3,12 @@ spec_id: REQ-0243
 agreed_id: STORY-36
 title: TraceLink data model
 description: 'Define the TraceLink struct with fields: id (Uuid), requirement_id (Uuid), artifact_type (enum: SourceCode, TestCode, Config, Doc), file_path (String), symbol (Option String for function/struct/module name), line_range (Option tuple for start/end lines), notes (Option String), created_at (DateTime), created_by (Option String). Include serde serialization support.'
-status: Draft
+status: Completed
 priority: High
 owner: ''
 feature: 133-traceability
 created_at: 2025-12-11T00:37:02.685135148Z
-modified_at: 2026-05-04T19:37:37.080742468Z
+modified_at: 2026-05-04T19:37:38.096067310Z
 req_type: Story
 comments:
 - id: 019df47f-0038-7592-8586-5578f650d867
