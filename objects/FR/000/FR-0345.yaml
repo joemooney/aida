@@ -4,13 +4,13 @@ agreed_id: FR-143
 title: make target to bundle/zip release
 description: |
   make target to bundle/zip release
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: 97-Uncategorized
 created_at: 2025-12-16T05:11:45.611051287Z
 created_by: Joe Mooney
-modified_at: 2026-05-04T19:37:57.072930089Z
+modified_at: 2026-05-04T19:37:58.215703890Z
 req_type: Functional
 comments:
 - id: 019df47f-4e50-7f61-b75e-6d206a1d79c9
