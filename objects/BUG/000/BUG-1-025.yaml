@@ -24,10 +24,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-04T19:20:00.576982769Z
-modified_at: 2026-05-04T19:22:15.795447648Z
+modified_at: 2026-05-04T19:23:13.786142940Z
 req_type: Bug
 tags:
-- status
 - data-integrity
 - models
 - cli
+- status
+comments:
+- id: 019df471-d3fa-76d3-811f-ad68b765f72c
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:23:13.786142940Z
+  modified_at: 2026-05-04T19:23:13.786142940Z
