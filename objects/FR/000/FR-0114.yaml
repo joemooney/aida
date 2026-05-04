@@ -13,13 +13,13 @@ description: |2+
     3. Rename prefixes by clicking the pencil (✏) button - renaming to an existing prefix will merge requirements
     4. See and manage allowed prefixes
 
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-29T22:12:47.675501842Z
 created_by: Unknown User
-modified_at: 2026-05-04T19:28:44.485084361Z
+modified_at: 2026-05-04T19:28:45.651306738Z
 req_type: Functional
 relationships:
 - rel_type: Parent
