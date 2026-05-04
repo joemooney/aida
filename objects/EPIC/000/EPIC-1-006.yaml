@@ -31,9 +31,9 @@ modified_at: 2026-05-04T04:38:31.080542130Z
 req_type: Epic
 tags:
 - workflow
-- producer-consumer
 - roles
 - queue
+- producer-consumer
 comments:
 - id: 019df147-d9a8-7f71-9cde-7a2d91d6f78e
   author: joe

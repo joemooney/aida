@@ -31,10 +31,10 @@ modified_at: 2026-05-04T06:26:09.377415643Z
 req_type: Functional
 tags:
 - global
-- multi-project
 - queue
-- ux
 - deferred
+- multi-project
+- ux
 relationships:
 - rel_type: Parent
   target_id: 019df145-ea4e-7440-b80d-88a34684f39c
