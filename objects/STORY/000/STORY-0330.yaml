@@ -80,12 +80,12 @@ description: |-
   - Validation of GitLab state before update
   - Rollback on partial failure (if possible)
   - Clear error messages for common issues (closed issue, locked, etc.)
-status: Draft
+status: Rejected
 priority: High
 owner: joe
 feature: 199-GitLab
 created_at: 2025-12-14T16:33:54.371114276Z
-modified_at: 2026-05-04T19:35:24.483357501Z
+modified_at: 2026-05-04T19:35:26.512269299Z
 req_type: Story
 relationships:
 - rel_type: Parent
