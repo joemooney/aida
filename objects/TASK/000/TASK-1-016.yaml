@@ -1,0 +1,26 @@
+id: 019df42f-2b53-75a1-b93e-1e8d875b41b8
+spec_id: TASK-1-016
+title: Enforce skill<->command parity in scaffolding template (CI check or make target)
+description: |-
+  Root cause behind BUG-1-014 and TASK-1-015 is the absence of an invariant: every skill in aida-core/templates/skills/ should have a matching aida-core/templates/commands/<name>.md (with the documented exception of aida-status, which is command-only).
+
+  Without enforcement, future skill additions can silently land without their slash command, leaving them undiscoverable in fresh Claude sessions.
+
+  Options:
+  - Extend 'make sync-templates' with a parity check
+  - Add a small test in aida-core that walks both directories and asserts parity (allowlist for command-only entries like aida-status)
+  - Pre-commit hook in this repo
+
+  Lowest-cost option is probably the cargo test.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-04T18:10:25.235697605Z
+modified_at: 2026-05-04T18:10:25.235697605Z
+req_type: Task
+tags:
+- ci
+- templates
+- invariant
+- scaffolding
