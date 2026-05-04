@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-29T00:32:45.333241402Z
-modified_at: 2025-11-30T06:46:39.167748172Z
+modified_at: 2026-05-04T19:33:53.857686857Z
 req_type: Functional
 relationships:
 - rel_type: Parent
@@ -19,6 +19,12 @@ relationships:
   target_id: 2fa72f4a-8d65-4197-89ea-cc462ca32023
   created_at: 2025-11-29T01:51:21.249120875Z
   created_by: '@joe'
+comments:
+- id: 019df47b-9841-7633-8fdc-0ba39c5c21e2
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:33:53.857686857Z
+  modified_at: 2026-05-04T19:33:53.857686857Z
 history:
 - id: 180ec1e9-b2b1-4ac1-bda1-c269236ea9e7
   author: '@joe'
