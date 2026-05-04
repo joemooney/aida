@@ -881,7 +881,8 @@ pub enum GitLabCommand {
 /// Personal work queue commands (STORY-0368)
 #[derive(Subcommand, Debug)]
 pub enum QueueCommand {
-    /// List items in your queue
+    /// List items in your queue. When a role is active and --role is not
+    /// passed explicitly, defaults to filtering on that role.
     List {
         /// User ID (defaults to AIDA_USER or system user)
         #[clap(long)]
@@ -889,6 +890,13 @@ pub enum QueueCommand {
         /// Include completed requirements
         #[clap(long)]
         include_completed: bool,
+        /// Filter to items routed to a specific role (e.g., "implementer").
+        /// Pass --role any to show all items including unrouted.
+        #[clap(long)]
+        role: Option<String>,
+        /// Show all items regardless of any active-role default filter
+        #[clap(long)]
+        all: bool,
     },
     /// Add a requirement to your queue
     Add {
@@ -906,6 +914,11 @@ pub enum QueueCommand {
         /// Note explaining why this was queued
         #[clap(long)]
         note: Option<String>,
+        /// Route this item to a specific role queue (e.g., "implementer",
+        /// "architect"). The other role wearer can then `aida queue list`
+        /// while in that role to see incoming work.
+        #[clap(long)]
+        r#for: Option<String>,
     },
     /// Remove a requirement from your queue
     Remove {

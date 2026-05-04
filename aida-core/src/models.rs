@@ -6141,4 +6141,11 @@ pub struct QueueEntry {
     pub note: Option<String>,
     /// When the entry was added
     pub added_at: DateTime<Utc>,
+    /// Routing tag: this item is meant for whoever wears this role
+    /// (e.g., "implementer", "architect"). Used by `aida queue add --for X`
+    /// and surfaced via `aida queue list --role X`. None = unrouted /
+    /// general queue.
+    /// trace:EPIC-1-001 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub for_role: Option<String>,
 }

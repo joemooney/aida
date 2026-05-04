@@ -1346,6 +1346,9 @@ impl DatabaseBackend for PostgresBackend {
                 added_by: row.get(3),
                 note: row.get(4),
                 added_at: row.get(5),
+                // Postgres queue_entries schema predates role routing
+                // (EPIC-1-001). Always None; git-canonical mode supports it.
+                for_role: None,
             })
             .collect();
 
