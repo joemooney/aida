@@ -1,0 +1,23 @@
+id: 019df440-1d31-7572-af1a-e61116333ee6
+spec_id: TASK-1-020
+title: 'Wire up missing CLI surfaces: comment list, search --limit, show --comments, rel show'
+description: |-
+  Several CLI commands either fail or have ergonomic gaps on the git backend:
+
+  - 'aida comment list <ID>' — falls through to the git-backend wildcard; only 'comment add' is wired up there, so listing returns 'Command not yet supported for git backend'.
+  - 'aida search <query> --limit N' — flag does not exist; backend.search() already takes a limit param (currently hardcoded to 200).
+  - 'aida show <ID>' — surfaces a 'Comments: N comment(s)' tally but provides no flag to print the bodies; users have to fall back to 'comment list'.
+  - 'aida rel show <ID>' — only 'rel list <ID>' exists; 'show' is the natural verb so add it as a visible alias.
+
+  All four are small CLI plumbing fixes inside aida-cli.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-04T18:28:55.729653180Z
+modified_at: 2026-05-04T18:28:55.729653180Z
+req_type: Task
+tags:
+- cli
+- polish
+custom_status: In-progress
