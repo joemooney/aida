@@ -3483,9 +3483,8 @@ fn handle_role_enter(
     let (mut state, _) = load_role(project_root, name).map_err(|_| {
         anyhow::anyhow!(
             "No such role: {}\n\
-             Create it with: `aida role add {}` (or `aida-role add {}` from your shell).\n\
+             Create it with: `aida role add {}`\n\
              See available roles with: `aida role list`",
-            name,
             name,
             name
         )
@@ -3537,49 +3536,16 @@ fn handle_role_add(
     Ok(())
 }
 
-/// Warn the user when an eval-only command is run with stdout attached to a
-/// terminal. Without the warning, `aida role enter foo` looks successful
-/// (you see export lines scroll by) but actually does nothing — the env
-/// vars get set in the `aida` subprocess, not the parent shell. The warning
-/// goes to stderr so it doesn't break script callers that pipe stdout to
-/// `eval`.
-/// trace:EPIC-1-001 | ai:claude
-fn warn_if_eval_required(direct_command: &str, helper_command: &str) {
-    use std::io::IsTerminal;
-    if !std::io::stdout().is_terminal() {
-        return;
-    }
-    eprintln!(
-        "{}: `{}` outputs shell code that must be eval'd by your shell.",
-        "Note".yellow().bold(),
-        direct_command
-    );
-    eprintln!(
-        "      Running it directly does nothing — the env vars get set in the"
-    );
-    eprintln!("      `aida` subprocess, not your current shell.");
-    eprintln!();
-    eprintln!("      Use the shell helper instead:");
-    eprintln!("        {}", helper_command.cyan());
-    eprintln!("      Or:");
-    eprintln!("        eval \"$({})\"", direct_command.cyan());
-    eprintln!();
-    eprintln!("      The shell code that would have been eval'd:");
-    eprintln!("      ----");
-}
-
 fn emit_role_enter_eval(
     project_root: &std::path::Path,
     state: &RoleState,
     cd: bool,
     was_existing: bool,
 ) {
-    warn_if_eval_required(
-        &format!("aida role enter {}", state.name),
-        &format!("aida-role {}", state.name),
-    );
-
-    // Emit shell code for eval.
+    // Emit shell code for eval. The `aida()` shell wrapper installed by
+    // `aida dev shell-init --install` automatically eval's our stdout for
+    // role enter / dev activate / etc., so direct invocation Just Works in
+    // an interactive shell. Scripts can still pipe to `eval "$(...)"`.
     let cwd = state
         .working_directory
         .as_deref()
@@ -3627,7 +3593,6 @@ fn emit_role_enter_eval(
 }
 
 fn handle_role_end() -> Result<()> {
-    warn_if_eval_required("aida role end", "aida-role-end");
     // Use a uniquely-named env var rather than `local` so the eval works
     // both at the shell top level and inside a wrapper function.
     println!("# aida role end");
@@ -3649,8 +3614,12 @@ fn handle_role_list(project_root: &std::path::Path) -> Result<()> {
         println!("(no roles defined for {})", project_root.display());
         println!(
             "Create one with: {} {}",
-            "aida-role".cyan(),
+            "aida role add".cyan(),
             "<name>".dimmed()
+        );
+        println!(
+            "Or install a starter set: {}",
+            "aida role scaffold".cyan()
         );
         return Ok(());
     }
@@ -3820,8 +3789,8 @@ fn handle_role_scaffold() -> Result<()> {
             }
         );
         println!();
-        println!("Try them: {}", "aida-role triage".cyan());
-        println!("List all: {}", "aida-role list".cyan());
+        println!("Try them: {}", "aida role enter triage".cyan());
+        println!("List all: {}", "aida role list".cyan());
     }
     Ok(())
 }
@@ -4041,7 +4010,7 @@ fn print_help_all() {
     );
     println!("  - `aida <topic> --help` works for any command, even hidden ones");
     println!("  - `aida status` is the best entry point for \"what's going on here?\"");
-    println!("  - `aida dev shell-init --install` to get the aida-on / aida-off helpers");
+    println!("  - `aida dev shell-init --install` to wire up the `aida` shell wrapper");
 }
 
 fn handle_dev_command(cmd: &DevCommand) -> Result<()> {
@@ -4161,8 +4130,6 @@ fn handle_dev_activate(repo_arg: Option<&str>) -> Result<()> {
     let repo = resolve_aida_repo(repo_arg)?;
     let (bin_dir, profile) = pick_dev_binary_dir(&repo)?;
 
-    warn_if_eval_required("aida dev activate", "aida-on");
-
     // Quote-safety: paths shouldn't contain double-quotes in practice;
     // single-quote everything we emit so shell evaluation is safe.
     println!("# aida dev activate — using {} build at {}", profile, bin_dir.display());
@@ -4187,7 +4154,6 @@ fn handle_dev_activate(repo_arg: Option<&str>) -> Result<()> {
 }
 
 fn handle_dev_deactivate() -> Result<()> {
-    warn_if_eval_required("aida dev deactivate", "aida-off");
     println!("# aida dev deactivate — restoring previous PATH and PS1");
     println!("if [ -n \"${{AIDA_DEV_PREV_PATH+x}}\" ]; then");
     println!("    export PATH=\"$AIDA_DEV_PREV_PATH\"");
@@ -4247,92 +4213,35 @@ fn handle_dev_status() -> Result<()> {
     Ok(())
 }
 
-/// Shell helpers emitted by `aida dev shell-init`. The aida-on helper
-/// walks up from PWD looking for an aida repo with a built `target/` —
-/// this avoids the bootstrap chicken-and-egg where the released `aida`
-/// on PATH doesn't yet support the `dev` subcommand.
-const SHELL_HELPERS: &str = r#"# Locate an aida binary that supports `dev activate`. Order:
-#   1. walk up from PWD looking for an aida repo with target/{release|debug}/aida
-#   2. fall back to $AIDA_DEV_REPO/target/{release|debug}/aida
-#   3. fall back to whatever `aida` is on PATH
-__aida_find_bin() {
-    local probe="$PWD"
-    while [ -n "$probe" ] && [ "$probe" != "/" ]; do
-        if [ -f "$probe/Cargo.toml" ] && grep -q 'repository = "https://github.com/joemooney/aida"' "$probe/Cargo.toml" 2>/dev/null; then
-            for c in "$probe/target/release/aida" "$probe/target/debug/aida"; do
-                [ -x "$c" ] && { printf '%s\n' "$c"; return 0; }
-            done
-        fi
-        probe=$(dirname "$probe")
-    done
-    if [ -n "$AIDA_DEV_REPO" ]; then
-        for c in "$AIDA_DEV_REPO/target/release/aida" "$AIDA_DEV_REPO/target/debug/aida"; do
-            [ -x "$c" ] && { printf '%s\n' "$c"; return 0; }
-        done
-    fi
-    command -v aida
-}
-
-aida-on() {
-    local bin
-    bin=$(__aida_find_bin)
-    if [ -z "$bin" ]; then
-        echo "aida-on: no aida binary found." >&2
-        echo "        cd into the aida repo (with target/ built), set AIDA_DEV_REPO," >&2
-        echo "        or install: curl -sSL https://raw.githubusercontent.com/joemooney/aida/main/scripts/install.sh | bash" >&2
-        return 1
-    fi
-    eval "$("$bin" dev activate "$@")"
-}
-
-aida-off() {
-    # When activated, `aida` on PATH is the dev binary which knows `dev deactivate`.
-    # If somehow not on PATH, fall back to the smart finder.
-    local bin
-    bin=$(command -v aida || __aida_find_bin)
-    [ -z "$bin" ] && { echo "aida-off: no aida binary found." >&2; return 1; }
-    eval "$("$bin" dev deactivate)"
-}
-
-# Persona / hat helpers (aida role …)
-# - `aida-role` (no args)         → list
-# - `aida-role list`              → list
-# - `aida-role add <name> ...`    → create + enter
-# - `aida-role del <name>`        → delete (with confirmation unless -y)
-# - `aida-role show [<name>]`     → details
-# - `aida-role scaffold`          → install starter set of global roles
-# - `aida-role <name>`            → enter existing
-aida-role() {
-    case "${1:-}" in
-        ""|list)
-            command aida role list
-            ;;
-        add)
-            shift
-            eval "$(command aida role add "$@")"
-            ;;
-        del|delete|rm)
-            shift
-            command aida role delete "$@"
-            ;;
-        show)
-            shift
-            command aida role show "$@"
-            ;;
-        scaffold)
-            command aida role scaffold
-            ;;
-        end)
-            eval "$(command aida role end)"
+/// Shell helpers emitted by `aida dev shell-init`. A single `aida()` wrapper
+/// function — pyenv/rbenv style. For most subcommands it just delegates to
+/// the binary. For the handful of eval-only subcommands (dev activate, dev
+/// deactivate, role enter, role end, role add — those that need to mutate
+/// the calling shell), it wraps them in `eval "$(command aida ...)"` so
+/// they actually take effect in the user's shell instead of getting lost
+/// in the subprocess.
+///
+/// Use `command aida ...` to bypass the wrapper and invoke the binary
+/// directly (e.g., for scripting where you want raw stdout).
+const SHELL_HELPERS: &str = r#"# AIDA shell wrapper.
+#
+# Most `aida` subcommands run as plain commands. The few that need to
+# modify the calling shell (set env vars, prepend PATH, change PS1) get
+# automatically eval'd so they take effect here, not in the subprocess.
+#
+# Bypass the wrapper with `command aida ...` if you need raw stdout.
+aida() {
+    # Take the first two positional words verbatim — that's enough to
+    # disambiguate every eval-required subcommand we have.
+    local _aida_cmd="${1:-} ${2:-}"
+    case "$_aida_cmd" in
+        "dev activate"|"dev deactivate"|"role enter"|"role end"|"role add")
+            eval "$(command aida "$@")"
             ;;
         *)
-            eval "$(command aida role enter "$@")"
+            command aida "$@"
             ;;
     esac
-}
-
-aida-role-end() {
-    eval "$(command aida role end)"
 }
 "#;
 
@@ -4346,9 +4255,10 @@ const LEGACY_END_MARKER: &str = "# <<< aida dev workflow helpers <<<";
 
 fn handle_dev_shell_init(install: bool) -> Result<()> {
     // If we're inside the aida repo, capture its absolute path so we can
-    // bake an `export AIDA_DEV_REPO=...` line into the helpers block. That
-    // makes `aida-on` work from any directory (e.g. while working in
-    // ~/ai/paradox), not only from inside or under the aida checkout.
+    // bake an `export AIDA_DEV_REPO=...` line into the helpers file. That
+    // lets `aida dev activate` find the in-repo build from any directory
+    // (e.g. while working in ~/ai/paradox), not only from inside or under
+    // the aida checkout.
     let repo = std::env::current_dir()
         .ok()
         .and_then(|cwd| find_aida_repo_above(&cwd));
@@ -4527,7 +4437,7 @@ fn handle_dev_shell_init(install: bool) -> Result<()> {
                 "Note".yellow()
             );
             eprintln!(
-                "         aida-on will only find the dev binary when you cd into the repo."
+                "         `aida dev activate` will only find the dev binary when you cd into the repo."
             );
             eprintln!(
                 "         To make it work everywhere, re-run from the aida repo or add manually:"
@@ -4536,7 +4446,15 @@ fn handle_dev_shell_init(install: bool) -> Result<()> {
         }
     }
     eprintln!("  Reload: source {}", rc_path.display());
-    eprintln!("  Then:   aida-on (activate) / aida-role (list) / aida-role <name> (enter)");
+    eprintln!(
+        "  Then any of: {}, {}, {}",
+        "aida dev activate".cyan(),
+        "aida role list".cyan(),
+        "aida role enter <name>".cyan()
+    );
+    eprintln!(
+        "  All eval-required commands now Just Work — the wrapper handles the eval."
+    );
     Ok(())
 }
 
