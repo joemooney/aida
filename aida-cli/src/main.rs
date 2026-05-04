@@ -3537,12 +3537,47 @@ fn handle_role_add(
     Ok(())
 }
 
+/// Warn the user when an eval-only command is run with stdout attached to a
+/// terminal. Without the warning, `aida role enter foo` looks successful
+/// (you see export lines scroll by) but actually does nothing — the env
+/// vars get set in the `aida` subprocess, not the parent shell. The warning
+/// goes to stderr so it doesn't break script callers that pipe stdout to
+/// `eval`.
+/// trace:EPIC-1-001 | ai:claude
+fn warn_if_eval_required(direct_command: &str, helper_command: &str) {
+    use std::io::IsTerminal;
+    if !std::io::stdout().is_terminal() {
+        return;
+    }
+    eprintln!(
+        "{}: `{}` outputs shell code that must be eval'd by your shell.",
+        "Note".yellow().bold(),
+        direct_command
+    );
+    eprintln!(
+        "      Running it directly does nothing — the env vars get set in the"
+    );
+    eprintln!("      `aida` subprocess, not your current shell.");
+    eprintln!();
+    eprintln!("      Use the shell helper instead:");
+    eprintln!("        {}", helper_command.cyan());
+    eprintln!("      Or:");
+    eprintln!("        eval \"$({})\"", direct_command.cyan());
+    eprintln!();
+    eprintln!("      The shell code that would have been eval'd:");
+    eprintln!("      ----");
+}
+
 fn emit_role_enter_eval(
     project_root: &std::path::Path,
     state: &RoleState,
     cd: bool,
     was_existing: bool,
 ) {
+    warn_if_eval_required(
+        &format!("aida role enter {}", state.name),
+        &format!("aida-role {}", state.name),
+    );
 
     // Emit shell code for eval.
     let cwd = state
@@ -3592,6 +3627,7 @@ fn emit_role_enter_eval(
 }
 
 fn handle_role_end() -> Result<()> {
+    warn_if_eval_required("aida role end", "aida-role-end");
     // Use a uniquely-named env var rather than `local` so the eval works
     // both at the shell top level and inside a wrapper function.
     println!("# aida role end");
@@ -4125,6 +4161,8 @@ fn handle_dev_activate(repo_arg: Option<&str>) -> Result<()> {
     let repo = resolve_aida_repo(repo_arg)?;
     let (bin_dir, profile) = pick_dev_binary_dir(&repo)?;
 
+    warn_if_eval_required("aida dev activate", "aida-on");
+
     // Quote-safety: paths shouldn't contain double-quotes in practice;
     // single-quote everything we emit so shell evaluation is safe.
     println!("# aida dev activate — using {} build at {}", profile, bin_dir.display());
@@ -4149,6 +4187,7 @@ fn handle_dev_activate(repo_arg: Option<&str>) -> Result<()> {
 }
 
 fn handle_dev_deactivate() -> Result<()> {
+    warn_if_eval_required("aida dev deactivate", "aida-off");
     println!("# aida dev deactivate — restoring previous PATH and PS1");
     println!("if [ -n \"${{AIDA_DEV_PREV_PATH+x}}\" ]; then");
     println!("    export PATH=\"$AIDA_DEV_PREV_PATH\"");
