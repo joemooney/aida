@@ -3083,28 +3083,60 @@ impl Requirement {
             .unwrap_or_else(|| self.status.to_string())
     }
 
-    /// Sets the status from a string, using custom_status for non-standard values
+    /// Sets the status from a string, using custom_status for non-standard values.
+    ///
+    /// Accepts every canonical variant a user is likely to type:
+    /// - case-insensitive match
+    /// - hyphens, underscores, and spaces between words are interchangeable
+    /// - so "in-progress", "In Progress", "InProgress", "in_progress" all
+    ///   map to RequirementStatus::InProgress.
+    ///
+    /// Truly non-standard strings (project-specific statuses) still fall
+    /// through to custom_status. Whenever a canonical status IS recognized,
+    /// custom_status is cleared so a previously-set custom value can't keep
+    /// overriding effective_status() forever (BUG-1-025).
+    /// trace:BUG-1-025 | ai:claude
     pub fn set_status_from_str(&mut self, status_str: &str) {
-        match status_str {
-            "Draft" => {
+        // Normalize: lowercase, collapse whitespace/hyphen/underscore so the
+        // match table only needs canonical forms.
+        let normalized: String = status_str
+            .chars()
+            .filter_map(|c| match c {
+                ' ' | '-' | '_' => None,
+                c if c.is_ascii_alphabetic() => Some(c.to_ascii_lowercase()),
+                c => Some(c),
+            })
+            .collect();
+
+        match normalized.as_str() {
+            "draft" => {
                 self.status = RequirementStatus::Draft;
                 self.custom_status = None;
             }
-            "Approved" => {
+            "approved" => {
                 self.status = RequirementStatus::Approved;
                 self.custom_status = None;
             }
-            "Completed" => {
+            "planned" => {
+                self.status = RequirementStatus::Planned;
+                self.custom_status = None;
+            }
+            "inprogress" => {
+                self.status = RequirementStatus::InProgress;
+                self.custom_status = None;
+            }
+            "completed" => {
                 self.status = RequirementStatus::Completed;
                 self.custom_status = None;
             }
-            "Rejected" => {
+            "rejected" => {
                 self.status = RequirementStatus::Rejected;
                 self.custom_status = None;
             }
-            other => {
-                // Custom status - keep enum at Draft but store custom value
-                self.custom_status = Some(other.to_string());
+            _ => {
+                // Custom status - preserve the original (un-normalized) form
+                // so the user's chosen casing/spacing is what surfaces.
+                self.custom_status = Some(status_str.to_string());
             }
         }
     }
@@ -5872,6 +5904,62 @@ mod tests {
 
         // Third requirement should be unchanged
         assert_eq!(store.requirements[2].spec_id.as_deref(), Some("FR-0002"));
+    }
+
+    /// trace:BUG-1-025 | ai:claude
+    #[test]
+    fn set_status_from_str_accepts_canonical_variants() {
+        let mut req = Requirement::new("t".into(), "d".into());
+
+        // All these forms should map to InProgress with custom_status=None.
+        for s in &[
+            "InProgress",
+            "in-progress",
+            "In Progress",
+            "in_progress",
+            "IN-PROGRESS",
+            "InProgress  ",
+        ] {
+            req.custom_status = Some("stale".into()); // pretend a previous bad value
+            req.set_status_from_str(s);
+            assert_eq!(
+                req.status, RequirementStatus::InProgress,
+                "{:?} should map to InProgress",
+                s
+            );
+            assert_eq!(req.custom_status, None, "{:?} should clear custom_status", s);
+        }
+
+        // Same for Planned.
+        for s in &["Planned", "planned", "PLANNED"] {
+            req.custom_status = Some("stale".into());
+            req.set_status_from_str(s);
+            assert_eq!(req.status, RequirementStatus::Planned);
+            assert_eq!(req.custom_status, None);
+        }
+
+        // Truly non-standard strings still flow into custom_status, preserving
+        // the original casing.
+        req.set_status_from_str("Awaiting Review");
+        assert_eq!(req.custom_status.as_deref(), Some("Awaiting Review"));
+    }
+
+    /// trace:BUG-1-025 | ai:claude — regression: setting Completed must clear
+    /// a previously-set custom_status, otherwise effective_status() returns the
+    /// stale string forever.
+    #[test]
+    fn set_status_from_str_clears_stale_custom_status() {
+        let mut req = Requirement::new("t".into(), "d".into());
+        req.set_status_from_str("in-progress"); // bug-era data: would have set custom_status
+        assert_eq!(req.custom_status, None); // post-fix: enum value, no custom
+        assert_eq!(req.effective_status(), "In Progress");
+
+        req.custom_status = Some("In-progress".into()); // simulate already-corrupted record
+        req.status = RequirementStatus::Draft;
+        req.set_status_from_str("Completed");
+        assert_eq!(req.status, RequirementStatus::Completed);
+        assert_eq!(req.custom_status, None);
+        assert_eq!(req.effective_status(), "Completed");
     }
 
     #[test]
