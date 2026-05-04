@@ -1,7 +1,12 @@
 use super::*;
 
 impl Scaffolder {
-    /// Generate Claude Code settings.json content
+    /// Generate Claude Code settings.json content. Hook commands use
+    /// `$CLAUDE_PROJECT_DIR/...` so they resolve regardless of CWD when
+    /// Claude Code invokes them — relative `.claude/hooks/...` paths
+    /// silently failed when the Bash tool was used from any cwd other
+    /// than the project root (e.g., inside .aida-store/).
+    /// trace:EPIC-1-001 | ai:claude
     pub(super) fn generate_claude_settings_json(&self) -> String {
         let mut hooks = Vec::new();
 
@@ -13,7 +18,7 @@ impl Scaffolder {
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/aida-validate-commit.sh",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/aida-validate-commit.sh",
             "timeout": 10
           }
         ]
@@ -30,7 +35,7 @@ impl Scaffolder {
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/aida-track-commits.sh",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/aida-track-commits.sh",
             "timeout": 15
           }
         ]
