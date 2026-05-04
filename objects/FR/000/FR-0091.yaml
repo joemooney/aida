@@ -10,8 +10,14 @@ priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-28T21:59:56.082585533Z
-modified_at: 2025-11-28T21:59:56.082585533Z
+modified_at: 2026-05-04T19:33:22.071134408Z
 req_type: Functional
 relationships:
 - rel_type: Parent
   target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
+comments:
+- id: 019df47b-1c17-7500-b31b-2932ca7fcac3
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:33:22.071134408Z
+  modified_at: 2026-05-04T19:33:22.071134408Z
