@@ -6,13 +6,13 @@ description: |-
   When search mode is active and reqs are found arrow keys misbehave
 
   there is a clash between normal arrow keys up/down and the selected reqs when we are in search mode. maybe the up/down should only be allowed to navigate to matching reqs?
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-08T00:33:39.000717746Z
 created_by: joe
-modified_at: 2026-05-04T19:33:28.393599514Z
+modified_at: 2026-05-04T19:33:29.667020415Z
 req_type: Functional
 relationships:
 - rel_type: Parent
