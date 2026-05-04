@@ -25,7 +25,7 @@ priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-27T01:23:00.651993728Z
-modified_at: 2025-11-27T21:20:59.098122052Z
+modified_at: 2026-05-04T19:34:45.950185950Z
 req_type: Functional
 relationships:
 - rel_type: Child
@@ -42,6 +42,12 @@ relationships:
   target_id: f5bd306f-ea72-45c4-a26e-8fcf57e7ad85
   created_at: 2025-12-07T17:07:06.363012125Z
   created_by: Joe Mooney
+comments:
+- id: 019df47c-63be-71c1-8802-7e33bbbd8ac1
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:34:45.950185950Z
+  modified_at: 2026-05-04T19:34:45.950185950Z
 history:
 - id: 7c9e1863-b8fe-4de3-aff1-f959da34fe07
   author: '@joe'
