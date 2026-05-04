@@ -9918,11 +9918,14 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             }
 
             // Update status to Completed via update_atomically — works
-            // across SQLite and git-canonical modes.
+            // across SQLite and git-canonical modes. set_status_from_str
+            // also clears any stale custom_status so the canonical enum
+            // value actually takes effect (BUG-1-025).
+            // trace:BUG-1-025 | ai:claude
             let req_id = req.id;
             storage.update_atomically(|s| {
                 if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-                    r.status = aida_core::RequirementStatus::Completed;
+                    r.set_status_from_str("Completed");
                     r.modified_at = chrono::Utc::now();
                 }
             })?;
