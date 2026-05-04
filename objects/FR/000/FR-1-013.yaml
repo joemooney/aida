@@ -38,12 +38,12 @@ description: |-
 
   - Parent: EPIC-1-008 (aida status + statusline)
   - Related: EPIC-1-005 (personas — this is what makes the statusline most valuable)
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-04T17:54:34.687480440Z
-modified_at: 2026-05-04T19:04:03.639924289Z
+modified_at: 2026-05-04T19:04:10.386602758Z
 req_type: Functional
 relationships:
 - rel_type: Parent
