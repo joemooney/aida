@@ -52,6 +52,11 @@ pub struct ListFilter {
     pub owner: Option<String>,
     /// Exact match on feature.
     pub feature: Option<String>,
+    /// All listed tags must be present on the requirement (AND, not OR).
+    /// Empty = no tag filter. Match is exact-string against the JSON array
+    /// stored in the cache via LIKE '%"<tag>"%'.
+    /// trace:TASK-1-021 | ai:claude
+    pub tags: Vec<String>,
     /// If false, archived requirements are filtered out (default behavior).
     pub include_archived: bool,
     /// Optional cap on returned rows (after ordering by modified_at DESC).
@@ -220,6 +225,13 @@ impl Cache {
         if let Some(f) = &filter.feature {
             sql.push_str(" AND feature = ?");
             args.push(f.clone());
+        }
+        // trace:TASK-1-021 | ai:claude
+        // tags_json is a JSON array text column; bracket each tag with quotes
+        // to avoid `foo` matching `foobar` mid-string.
+        for tag in &filter.tags {
+            sql.push_str(" AND tags_json LIKE ?");
+            args.push(format!("%\"{}\"%", tag.replace('\\', "\\\\").replace('"', "\\\"")));
         }
 
         sql.push_str(" ORDER BY modified_at DESC");

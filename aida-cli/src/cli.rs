@@ -297,6 +297,61 @@ pub enum RoleCommand {
     /// implementer, reviewer) at ~/.aida/roles/. Idempotent — skips any
     /// that already exist; safe to re-run.
     Scaffold,
+
+    /// Manage per-role scope filters. Scope filters are auto-applied to
+    /// `aida list` and `aida queue list/next` while the role is active —
+    /// e.g. set `--tags inbox --status draft` on the `triage` role to
+    /// always see just the inbox-tagged drafts when wearing that hat.
+    /// Override on a single command with explicit --tags/--status flags
+    /// or --no-scope.
+    /// trace:TASK-1-021 | ai:claude
+    #[clap(subcommand)]
+    Scope(RoleScopeCommand),
+}
+
+/// Scope-filter management for a role. State persists to the role's TOML
+/// file, so the filter follows the role into every shell that enters it.
+/// trace:TASK-1-021 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum RoleScopeCommand {
+    /// Set scope filters on a role. Defaults to the active role; pass --name
+    /// to target a different one. At least one of --tags/--status required.
+    Set {
+        /// Role name (defaults to active role from AIDA_SESSION_ROLE)
+        #[clap(long)]
+        name: Option<String>,
+
+        /// Comma-separated tags to AND into the default filter
+        #[clap(long)]
+        tags: Option<String>,
+
+        /// Status to auto-apply (e.g. draft, approved, in-progress)
+        #[clap(long)]
+        status: Option<String>,
+    },
+
+    /// Show the scope filters for a role (defaults to active role).
+    Show {
+        /// Role name (defaults to active role from AIDA_SESSION_ROLE)
+        #[clap(long)]
+        name: Option<String>,
+    },
+
+    /// Clear scope filters. Without flags, clears all scope; with --tags
+    /// or --status, clears just that field.
+    Clear {
+        /// Role name (defaults to active role from AIDA_SESSION_ROLE)
+        #[clap(long)]
+        name: Option<String>,
+
+        /// Clear only the tag scope
+        #[clap(long)]
+        tags: bool,
+
+        /// Clear only the status scope
+        #[clap(long)]
+        status: bool,
+    },
 }
 
 /// Developer commands for working *on* AIDA itself (pyenv-style activation
@@ -898,6 +953,10 @@ pub enum QueueCommand {
         /// Show all items regardless of any active-role default filter
         #[clap(long)]
         all: bool,
+        /// Bypass the active role's scope_tags / scope_status filters.
+        /// trace:TASK-1-021 | ai:claude
+        #[clap(long)]
+        no_scope: bool,
     },
     /// Add a requirement to your queue
     Add {
@@ -965,6 +1024,10 @@ pub enum QueueCommand {
         /// User ID (defaults to AIDA_USER or system user)
         #[clap(long)]
         user: Option<String>,
+        /// Bypass the active role's scope_tags / scope_status filters.
+        /// trace:TASK-1-021 | ai:claude
+        #[clap(long)]
+        no_scope: bool,
     },
     /// Mark a requirement as completed AND remove it from your queue in one
     /// atomic step. Convenience for the implementer's done-then-pickup-next
@@ -1051,6 +1114,11 @@ pub enum Command {
         /// Filter by tags (comma separated)
         #[clap(long)]
         tags: Option<String>,
+
+        /// Bypass the active role's scope filters for this command.
+        /// trace:TASK-1-021 | ai:claude
+        #[clap(long)]
+        no_scope: bool,
     },
 
     /// Show details for a specific requirement

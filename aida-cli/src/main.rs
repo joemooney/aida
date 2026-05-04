@@ -50,8 +50,8 @@ use aida_core::{
 use crate::cli::{
     CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand, DevCommand,
     FeatureCommand, GitHubCommand, GitLabCommand, JiraCommand, QueueCommand, RelDefCommand,
-    RelationshipCommand, ReportCommand, RoleCommand, ScaffoldCommand, ServerCommand, TraceCommand,
-    TypeCommand,
+    RelationshipCommand, ReportCommand, RoleCommand, RoleScopeCommand, ScaffoldCommand,
+    ServerCommand, TraceCommand, TypeCommand,
 };
 
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
@@ -278,7 +278,9 @@ fn main() -> Result<()> {
             r#type,
             feature,
             tags,
+            ..
         } => {
+            // Legacy SQLite path doesn't honor role scope (deprecated backend).
             list_requirements(&storage, status, priority, r#type, feature, tags)?;
         }
         Command::Show { id, .. } => {
@@ -938,15 +940,35 @@ fn handle_git_backend_command(
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline => unreachable!("statusline is dispatched before storage init"),
-        Command::List { status, r#type, feature, .. } => {
+        Command::List { status, r#type, feature, tags, no_scope, .. } => {
             // Cache-backed list (EPIC-1-001 Phase 2). The CachedGitBackend
             // ensures the cache is fresh before querying, so this is one
             // SQLite query instead of ~360 YAML reads.
             // trace:EPIC-1-001 | ai:claude
+            //
+            // Phase 3 scope filters: when a role is active and has scope set,
+            // its tags/status are AND'd into the filter. Explicit --tags or
+            // --status on the command line override the role scope; --no-scope
+            // bypasses it entirely.
+            // trace:TASK-1-021 | ai:claude
+            let cli_tags: Vec<String> = tags
+                .as_deref()
+                .map(|t| t.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
+                .unwrap_or_default();
+            let scope = if *no_scope { None } else { active_role_scope() };
+            let (effective_tags, effective_status) = match scope {
+                Some((scope_tags, scope_status)) => {
+                    let final_tags = if !cli_tags.is_empty() { cli_tags } else { scope_tags };
+                    let final_status = status.clone().or(scope_status);
+                    (final_tags, final_status)
+                }
+                None => (cli_tags, status.clone()),
+            };
             let filter = aida_core::ListFilter {
-                status: status.clone(),
+                status: effective_status,
                 req_type: r#type.clone(),
                 feature: feature.clone(),
+                tags: effective_tags,
                 ..Default::default()
             };
             let reqs = backend.list_summaries(&filter)?;
@@ -3382,6 +3404,21 @@ struct RoleState {
     /// Bounded at ACTIVITY_MAX entries; older entries fall off the end.
     #[serde(default)]
     activity: Vec<RoleActivity>,
+
+    /// Phase 3 scope filter: tags AND'd into the default filter for
+    /// `aida list` and `aida queue list/next` while this role is active.
+    /// Empty = no tag scope. Override on a single command with explicit
+    /// --tags or --no-scope.
+    /// trace:TASK-1-021 | ai:claude
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    scope_tags: Vec<String>,
+
+    /// Phase 3 scope filter: status auto-applied while this role is active.
+    /// None = no status scope. Override on a single command with explicit
+    /// --status or --no-scope.
+    /// trace:TASK-1-021 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    scope_status: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -3563,6 +3600,107 @@ fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
         RoleCommand::End => handle_role_end(),
         RoleCommand::Delete { name, yes } => handle_role_delete(&project_root, name, *yes),
         RoleCommand::Scaffold => handle_role_scaffold(),
+        RoleCommand::Scope(scope_cmd) => handle_role_scope(&project_root, scope_cmd),
+    }
+}
+
+/// Resolve a role name from --name or AIDA_SESSION_ROLE; error if neither.
+/// trace:TASK-1-021 | ai:claude
+fn resolve_role_name(name: Option<&str>) -> Result<String> {
+    if let Some(n) = name {
+        return Ok(n.to_string());
+    }
+    match std::env::var("AIDA_SESSION_ROLE") {
+        Ok(n) if !n.is_empty() => Ok(n),
+        _ => anyhow::bail!(
+            "No role active and no --name given. Either `aida role enter <name>` first \
+             or pass --name to target a specific role."
+        ),
+    }
+}
+
+/// Read the active role's scope (tags, status), if any. Returns None when
+/// no role is active or the role file is unreadable. Used by `aida list`
+/// and `aida queue list/next` to compose default filters.
+/// trace:TASK-1-021 | ai:claude
+fn active_role_scope() -> Option<(Vec<String>, Option<String>)> {
+    let role_name = std::env::var("AIDA_SESSION_ROLE").ok().filter(|s| !s.is_empty())?;
+    let project = std::env::var("AIDA_SESSION_PROJECT")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| statusline_project_root());
+    let (state, _) = load_role(&project, &role_name).ok()?;
+    if state.scope_tags.is_empty() && state.scope_status.is_none() {
+        return None;
+    }
+    Some((state.scope_tags, state.scope_status))
+}
+
+fn handle_role_scope(project_root: &std::path::Path, cmd: &RoleScopeCommand) -> Result<()> {
+    match cmd {
+        RoleScopeCommand::Set {
+            name,
+            tags,
+            status,
+        } => {
+            if tags.is_none() && status.is_none() {
+                anyhow::bail!(
+                    "At least one of --tags or --status is required.\n\
+                     Use `aida role scope clear` to remove an existing scope."
+                );
+            }
+            let role_name = resolve_role_name(name.as_deref())?;
+            let (mut state, path) = load_role(project_root, &role_name)?;
+            if let Some(t) = tags {
+                state.scope_tags = t
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+            }
+            if let Some(s) = status {
+                state.scope_status = Some(s.clone());
+            }
+            save_role_at(&state, &path)?;
+            print_role_scope(&state);
+        }
+        RoleScopeCommand::Show { name } => {
+            let role_name = resolve_role_name(name.as_deref())?;
+            let (state, _) = load_role(project_root, &role_name)?;
+            print_role_scope(&state);
+        }
+        RoleScopeCommand::Clear {
+            name,
+            tags,
+            status,
+        } => {
+            let role_name = resolve_role_name(name.as_deref())?;
+            let (mut state, path) = load_role(project_root, &role_name)?;
+            // No flags = clear everything; otherwise clear only the specified field(s).
+            let clear_all = !*tags && !*status;
+            if clear_all || *tags {
+                state.scope_tags.clear();
+            }
+            if clear_all || *status {
+                state.scope_status = None;
+            }
+            save_role_at(&state, &path)?;
+            print_role_scope(&state);
+        }
+    }
+    Ok(())
+}
+
+fn print_role_scope(state: &RoleState) {
+    println!("{} {}", "Role:".bold(), state.name.cyan());
+    if state.scope_tags.is_empty() && state.scope_status.is_none() {
+        println!("  {}", "No scope filters set.".dimmed());
+        return;
+    }
+    if !state.scope_tags.is_empty() {
+        println!("  {}: {}", "tags".bold(), state.scope_tags.join(", "));
+    }
+    if let Some(s) = &state.scope_status {
+        println!("  {}: {}", "status".bold(), s);
     }
 }
 
@@ -3620,6 +3758,8 @@ fn handle_role_add(
         notes: None,
         global,
         activity: Vec::new(),
+        scope_tags: Vec::new(),
+        scope_status: None,
     };
     let save_path = role_save_path(project_root, &state)?;
     save_role_at(&state, &save_path)?;
@@ -3785,6 +3925,17 @@ fn handle_role_show(project_root: &std::path::Path, name: Option<&str>) -> Resul
     if let Some(n) = &state.notes {
         println!("Notes:       {}", n);
     }
+    // trace:TASK-1-021 | ai:claude
+    if !state.scope_tags.is_empty() || state.scope_status.is_some() {
+        let mut parts: Vec<String> = Vec::new();
+        if !state.scope_tags.is_empty() {
+            parts.push(format!("tags={}", state.scope_tags.join(",")));
+        }
+        if let Some(s) = &state.scope_status {
+            parts.push(format!("status={}", s));
+        }
+        println!("Scope:       {}", parts.join(" "));
+    }
     if !state.activity.is_empty() {
         println!();
         println!("Recent activity (newest first):");
@@ -3874,6 +4025,8 @@ fn handle_role_scaffold() -> Result<()> {
             notes: None,
             global: true,
             activity: Vec::new(),
+            scope_tags: Vec::new(),
+            scope_status: None,
         };
         let path = role_save_path(&project_root, &state)?;
         save_role_at(&state, &path)?;
@@ -9265,6 +9418,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             include_completed,
             role,
             all,
+            no_scope,
         } => {
             let user_id = get_user(user);
             let raw_entries = storage.queue_list(&user_id, *include_completed)?;
@@ -9287,13 +9441,40 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 std::env::var("AIDA_SESSION_ROLE").ok().filter(|s| !s.is_empty())
             };
 
-            let entries: Vec<&aida_core::QueueEntry> = match &role_filter {
-                Some(r) => raw_entries
-                    .iter()
-                    .filter(|e| e.for_role.as_deref() == Some(r.as_str()))
-                    .collect(),
-                None => raw_entries.iter().collect(),
-            };
+            // Phase 3 scope: AND the active role's scope_tags / scope_status
+            // on top of the role-routing filter. --all and --no-scope both
+            // bypass; --all also bypasses role routing.
+            // trace:TASK-1-021 | ai:claude
+            let scope = if *all || *no_scope { None } else { active_role_scope() };
+
+            let entries: Vec<&aida_core::QueueEntry> = raw_entries
+                .iter()
+                .filter(|e| match &role_filter {
+                    Some(r) => e.for_role.as_deref() == Some(r.as_str()),
+                    None => true,
+                })
+                .filter(|e| {
+                    let Some((scope_tags, scope_status)) = &scope else {
+                        return true;
+                    };
+                    let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id) else {
+                        return true;
+                    };
+                    if let Some(want) = scope_status {
+                        if !format!("{}", req.status).eq_ignore_ascii_case(want)
+                            && !format!("{:?}", req.status).eq_ignore_ascii_case(want)
+                        {
+                            return false;
+                        }
+                    }
+                    for tag in scope_tags {
+                        if !req.tags.iter().any(|t| t == tag) {
+                            return false;
+                        }
+                    }
+                    true
+                })
+                .collect();
 
             if entries.is_empty() {
                 if let Some(r) = &role_filter {
@@ -9491,7 +9672,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             }
         }
         // trace:EPIC-1-001 | ai:claude
-        QueueCommand::Next { role, all, user } => {
+        QueueCommand::Next { role, all, user, no_scope } => {
             let user_id = get_user(user);
             let raw_entries = storage.queue_list(&user_id, /* include_completed */ false)?;
             let store = storage.load()?;
@@ -9509,11 +9690,36 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     .filter(|s| !s.is_empty())
             };
 
+            // Phase 3 scope filter (see queue list).
+            // trace:TASK-1-021 | ai:claude
+            let scope = if *all || *no_scope { None } else { active_role_scope() };
+
             let next_entry = raw_entries
                 .iter()
                 .filter(|e| match &role_filter {
                     Some(r) => e.for_role.as_deref() == Some(r.as_str()),
                     None => true,
+                })
+                .filter(|e| {
+                    let Some((scope_tags, scope_status)) = &scope else {
+                        return true;
+                    };
+                    let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id) else {
+                        return true;
+                    };
+                    if let Some(want) = scope_status {
+                        if !format!("{}", req.status).eq_ignore_ascii_case(want)
+                            && !format!("{:?}", req.status).eq_ignore_ascii_case(want)
+                        {
+                            return false;
+                        }
+                    }
+                    for tag in scope_tags {
+                        if !req.tags.iter().any(|t| t == tag) {
+                            return false;
+                        }
+                    }
+                    true
                 })
                 .min_by_key(|e| e.position);
 
