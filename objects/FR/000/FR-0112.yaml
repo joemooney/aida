@@ -3,13 +3,13 @@ spec_id: FR-0112
 agreed_id: FR-157
 title: Role support
 description: 'Support for different roles. '
-status: Draft
+status: Completed
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-29T21:31:29.234371177Z
 created_by: Unknown User
-modified_at: 2026-05-04T19:37:32.960583117Z
+modified_at: 2026-05-04T19:37:34.016138524Z
 req_type: Functional
 relationships:
 - rel_type: Parent
