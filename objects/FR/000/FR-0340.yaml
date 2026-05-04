@@ -32,13 +32,13 @@ description: |-
   3. Requirement details appear in bottom panel when selected
   4. All panels support vim-style keyboard navigation
   5. Works with both YAML and SQLite backends
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-15T02:20:38.253604688Z
 created_by: Joe Mooney
-modified_at: 2026-05-04T19:29:51.669417317Z
+modified_at: 2026-05-04T19:29:52.683686008Z
 req_type: Functional
 relationships:
 - rel_type: References
