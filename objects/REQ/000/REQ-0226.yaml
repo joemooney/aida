@@ -3,13 +3,13 @@ spec_id: REQ-0226
 agreed_id: FOLDER-5
 title: Skills related requirements
 description: Skills related requirements
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-02T03:31:15.832402271Z
 created_by: Unknown User
-modified_at: 2026-05-04T19:38:14.684652923Z
+modified_at: 2026-05-04T19:38:15.606152672Z
 req_type: Folder
 relationships:
 - rel_type: Parent
