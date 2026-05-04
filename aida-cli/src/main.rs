@@ -9433,7 +9433,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         None => String::new(),
                     };
                     println!("{} Queue is empty{}.", "Nothing to do —".dimmed(), scope);
-                    println!("  ({})", "pick up new work via aida-role dialog or wait for items".dimmed());
+                    println!("  ({})", "pick up new work via `aida role enter dialog` or wait for items".dimmed());
                     return Ok(());
                 }
                 Some(entry) => {

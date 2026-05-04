@@ -16,7 +16,7 @@ allowed-tools:
 Drive the implementer / reviewer / triage / architect loop where the active
 role pulls the next item from the queue, works on it, marks it complete,
 and pulls the next. Pairs with the `dialog` role on the producer side
-(see `/aida-role` and `aida queue add --for <role>`).
+(see `aida role enter dialog` and `aida queue add --for <role>`).
 
 ## When to use
 
@@ -29,8 +29,10 @@ and pulls the next. Pairs with the `dialog` role on the producer side
 
 ## Skip if
 
-- No role is active (`AIDA_SESSION_ROLE` empty) — suggest `aida-role <name>`
-  first so the queue filter has a target
+- No role is active (`AIDA_SESSION_ROLE` empty) — suggest
+  `eval "$(aida role enter <name>)"` first so the queue filter has a target
+  (or the `aida-role <name>` shell helper if `aida dev shell-init --install`
+  has been run)
 - The user is in `dialog` mode — that's the producer seat, not the consumer
 
 ## Active role
@@ -110,12 +112,23 @@ If the user complains the queue is always empty, gently remind them about
 the dialog/captain seat:
 
 > The queue is filled by whoever wears the `dialog` role
-> (`aida-role dialog`, then `aida queue add <id> --for implementer`).
+> (`eval "$(aida role enter dialog)"`, then
+> `aida queue add <id> --for implementer`).
 > Want to switch hats and queue some work?
 
 ## Related skills / commands
 
-- `/aida-role` — switch personas
+- `aida role enter <name>` / `aida role list` — switch personas
 - `aida queue list --all` — see the full queue including other-role items
 - `aida queue add <id> --for <role> --note "..."` — route work
 - `aida statusline` — confirm the active role + queue depth
+
+## Shell helper (for developers)
+
+`aida role enter <name>` prints shell code; you must `eval` it for the role to
+attach to the current shell. `aida dev shell-init --install` adds two helpers
+(`aida-role` and `aida-off`) that wrap the eval, so you can type
+`aida-role implementer` instead of `eval "$(aida role enter implementer)"`.
+The helpers are convenience only — recommend the canonical `aida role enter`
+form in user-facing instructions, since it works in every shell regardless of
+whether the helpers are installed.
