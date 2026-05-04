@@ -30,12 +30,12 @@ description: |+
 
     To create an Agile project: Menu → New Project → select "agile" template.
 
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-28T05:52:20.673612400Z
-modified_at: 2026-05-04T19:35:20.294803947Z
+modified_at: 2026-05-04T19:35:23.361677655Z
 req_type: Functional
 relationships:
 - rel_type: Parent
