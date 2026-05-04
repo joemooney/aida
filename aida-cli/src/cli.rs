@@ -307,6 +307,56 @@ pub enum RoleCommand {
     /// trace:TASK-1-021 | ai:claude
     #[clap(subcommand)]
     Scope(RoleScopeCommand),
+
+    /// Manage the per-role Claude Code system-prompt addendum. The text
+    /// is injected into Claude's context at session start via the
+    /// aida-role-context.sh hook when this role is active.
+    /// trace:TASK-1-022 | ai:claude
+    #[clap(subcommand)]
+    Prompt(RolePromptCommand),
+}
+
+/// System-prompt addendum management. Text persists to the role's TOML
+/// alongside scope filters; a SessionStart hook reads it and emits it
+/// to the model as additionalContext.
+/// trace:TASK-1-022 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum RolePromptCommand {
+    /// Set the system-prompt addendum. Defaults to the active role; pass
+    /// --name to target a different one. Pass content as the positional
+    /// argument or via --content; --stdin reads from stdin (handy for
+    /// multi-line text via `aida role prompt set --stdin < addendum.md`).
+    Set {
+        /// Role name (defaults to active role from AIDA_SESSION_ROLE)
+        #[clap(long)]
+        name: Option<String>,
+
+        /// Addendum text (positional)
+        content: Option<String>,
+
+        /// Addendum text (alternative to positional, useful for shells
+        /// that mangle special characters in arguments)
+        #[clap(long, conflicts_with = "content")]
+        content_flag: Option<String>,
+
+        /// Read addendum from stdin
+        #[clap(long, conflicts_with_all = ["content", "content_flag"])]
+        stdin: bool,
+    },
+
+    /// Print the current system-prompt addendum (defaults to active role).
+    Show {
+        /// Role name (defaults to active role from AIDA_SESSION_ROLE)
+        #[clap(long)]
+        name: Option<String>,
+    },
+
+    /// Remove the system-prompt addendum (defaults to active role).
+    Clear {
+        /// Role name (defaults to active role from AIDA_SESSION_ROLE)
+        #[clap(long)]
+        name: Option<String>,
+    },
 }
 
 /// Scope-filter management for a role. State persists to the role's TOML

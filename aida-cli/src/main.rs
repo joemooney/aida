@@ -50,8 +50,8 @@ use aida_core::{
 use crate::cli::{
     CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand, DevCommand,
     FeatureCommand, GitHubCommand, GitLabCommand, JiraCommand, QueueCommand, RelDefCommand,
-    RelationshipCommand, ReportCommand, RoleCommand, RoleScopeCommand, ScaffoldCommand,
-    ServerCommand, TraceCommand, TypeCommand,
+    RelationshipCommand, ReportCommand, RoleCommand, RolePromptCommand, RoleScopeCommand,
+    ScaffoldCommand, ServerCommand, TraceCommand, TypeCommand,
 };
 
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
@@ -3419,6 +3419,14 @@ struct RoleState {
     /// trace:TASK-1-021 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     scope_status: Option<String>,
+
+    /// Phase 3 system-prompt addendum: free-form text injected into Claude
+    /// Code's context at SessionStart (via the aida-role-context.sh hook)
+    /// when this role is active. Lets you keep role-specific instructions
+    /// to the model alongside the role itself.
+    /// trace:TASK-1-022 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    system_prompt: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -3601,6 +3609,72 @@ fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
         RoleCommand::Delete { name, yes } => handle_role_delete(&project_root, name, *yes),
         RoleCommand::Scaffold => handle_role_scaffold(),
         RoleCommand::Scope(scope_cmd) => handle_role_scope(&project_root, scope_cmd),
+        RoleCommand::Prompt(prompt_cmd) => handle_role_prompt(&project_root, prompt_cmd),
+    }
+}
+
+/// trace:TASK-1-022 | ai:claude
+fn handle_role_prompt(project_root: &std::path::Path, cmd: &RolePromptCommand) -> Result<()> {
+    match cmd {
+        RolePromptCommand::Set {
+            name,
+            content,
+            content_flag,
+            stdin,
+        } => {
+            let role_name = resolve_role_name(name.as_deref())?;
+            let (mut state, path) = load_role(project_root, &role_name)?;
+
+            let text = if *stdin {
+                use std::io::Read;
+                let mut buf = String::new();
+                std::io::stdin().read_to_string(&mut buf)?;
+                buf.trim_end().to_string()
+            } else if let Some(c) = content_flag.as_deref().or(content.as_deref()) {
+                c.to_string()
+            } else {
+                anyhow::bail!(
+                    "No content given. Pass it as a positional argument, via --content, \
+                     or pipe with --stdin."
+                );
+            };
+
+            if text.trim().is_empty() {
+                anyhow::bail!(
+                    "Empty addendum. Use `aida role prompt clear` to remove an existing one."
+                );
+            }
+            state.system_prompt = Some(text);
+            save_role_at(&state, &path)?;
+            print_role_prompt(&state);
+        }
+        RolePromptCommand::Show { name } => {
+            let role_name = resolve_role_name(name.as_deref())?;
+            let (state, _) = load_role(project_root, &role_name)?;
+            print_role_prompt(&state);
+        }
+        RolePromptCommand::Clear { name } => {
+            let role_name = resolve_role_name(name.as_deref())?;
+            let (mut state, path) = load_role(project_root, &role_name)?;
+            state.system_prompt = None;
+            save_role_at(&state, &path)?;
+            println!("Role: {}", state.name.cyan());
+            println!("  {}", "Addendum cleared.".dimmed());
+        }
+    }
+    Ok(())
+}
+
+fn print_role_prompt(state: &RoleState) {
+    println!("Role: {}", state.name.cyan());
+    match &state.system_prompt {
+        None => println!("  {}", "No system-prompt addendum set.".dimmed()),
+        Some(text) => {
+            println!("  {} ({} chars):", "Addendum".bold(), text.len());
+            for line in text.lines() {
+                println!("    {}", line);
+            }
+        }
     }
 }
 
@@ -3760,6 +3834,7 @@ fn handle_role_add(
         activity: Vec::new(),
         scope_tags: Vec::new(),
         scope_status: None,
+        system_prompt: None,
     };
     let save_path = role_save_path(project_root, &state)?;
     save_role_at(&state, &save_path)?;
@@ -3936,6 +4011,12 @@ fn handle_role_show(project_root: &std::path::Path, name: Option<&str>) -> Resul
         }
         println!("Scope:       {}", parts.join(" "));
     }
+    // trace:TASK-1-022 | ai:claude
+    if let Some(text) = &state.system_prompt {
+        let preview: String = text.lines().next().unwrap_or("").chars().take(80).collect();
+        let suffix = if text.len() > preview.len() { "…" } else { "" };
+        println!("Addendum:    {} chars — {}{}", text.len(), preview, suffix);
+    }
     if !state.activity.is_empty() {
         println!();
         println!("Recent activity (newest first):");
@@ -4027,6 +4108,7 @@ fn handle_role_scaffold() -> Result<()> {
             activity: Vec::new(),
             scope_tags: Vec::new(),
             scope_status: None,
+            system_prompt: None,
         };
         let path = role_save_path(&project_root, &state)?;
         save_role_at(&state, &path)?;
