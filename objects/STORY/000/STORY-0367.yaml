@@ -34,12 +34,12 @@ description: |-
   2. Auto-filters completed items unless explicitly requested
   3. Reorder endpoint handles bulk position updates atomically
   4. Returns enriched requirement data with each entry
-status: Approved
+status: Rejected
 priority: High
 owner: joe
 feature: 215-Uncategorized
 created_at: 2026-02-21T06:49:39.758002534Z
-modified_at: 2026-05-04T19:29:09.296044911Z
+modified_at: 2026-05-04T19:29:10.241836772Z
 req_type: Story
 relationships:
 - rel_type: Parent
