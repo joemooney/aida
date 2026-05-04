@@ -30,8 +30,8 @@ created_at: 2026-05-04T06:25:32.872714756Z
 modified_at: 2026-05-04T19:15:24.688144924Z
 req_type: Functional
 tags:
-- ux
 - ergonomics
+- ux
 - error-messages
 - cli
 relationships:

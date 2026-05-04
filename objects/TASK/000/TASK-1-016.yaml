@@ -20,7 +20,7 @@ created_at: 2026-05-04T18:10:25.235697605Z
 modified_at: 2026-05-04T18:10:25.235697605Z
 req_type: Task
 tags:
-- invariant
 - templates
+- invariant
 - ci
 - scaffolding
