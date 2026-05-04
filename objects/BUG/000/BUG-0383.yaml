@@ -13,5 +13,5 @@ req_type: Bug
 tags:
 - api
 - web
-- bugfix
 - cache
+- bugfix

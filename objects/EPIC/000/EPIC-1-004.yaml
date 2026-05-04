@@ -26,10 +26,10 @@ created_at: 2026-05-04T04:35:45.242117121Z
 modified_at: 2026-05-04T04:38:29.273886748Z
 req_type: Epic
 tags:
-- shell
-- cli
 - dev-workflow
+- cli
 - release
+- shell
 comments:
 - id: 019df147-d299-7b23-ab59-4d03af72488b
   author: joe
