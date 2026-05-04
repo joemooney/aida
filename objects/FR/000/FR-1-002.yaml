@@ -26,8 +26,8 @@ modified_at: 2026-05-02T21:28:10.363059450Z
 req_type: Functional
 tags:
 - deferred
-- bulk-import
 - performance
+- bulk-import
 - storage
 relationships:
 - rel_type: Parent
