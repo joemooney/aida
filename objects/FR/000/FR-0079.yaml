@@ -13,12 +13,12 @@ description: |+
     - Preserves any command-line arguments passed to the application
     - The application closes after spawning the new process
 
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-28T18:19:53.122343216Z
-modified_at: 2026-05-04T19:34:30.762536353Z
+modified_at: 2026-05-04T19:34:31.736613764Z
 req_type: Functional
 relationships:
 - rel_type: Parent
