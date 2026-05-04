@@ -3,12 +3,12 @@ spec_id: FR-0071
 agreed_id: FR-153
 title: Drag requirement in requirements list should scroll
 description: As we drag a requirement in requirements list the window should scroll up or down as we reach the top or bottom of the currently displayed requirements.
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-27T22:45:01.777700151Z
-modified_at: 2026-05-04T19:34:40.120482867Z
+modified_at: 2026-05-04T19:34:41.041523462Z
 req_type: Functional
 relationships:
 - rel_type: Parent
