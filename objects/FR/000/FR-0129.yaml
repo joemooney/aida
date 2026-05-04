@@ -10,13 +10,13 @@ description: |-
     edit button which will allow us to specify values for Priority and Status. Then the values shown for those fields would be based on the
     requirement type. Thoughts? We can keep the Edit Icons as is and if the status or priority matches (case insnesitive) then that will be used
     otherwise the default.
-status: Approved
+status: Rejected
 priority: High
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-30T02:23:48.712180251Z
 created_by: Unknown User
-modified_at: 2026-05-04T19:28:42.145996521Z
+modified_at: 2026-05-04T19:28:43.322817834Z
 req_type: Functional
 relationships:
 - rel_type: Parent
