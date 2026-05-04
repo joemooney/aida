@@ -78,13 +78,19 @@ priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-27T06:28:15.111308891Z
-modified_at: 2025-11-27T06:41:28.386481785Z
+modified_at: 2026-05-04T19:34:54.583700230Z
 req_type: Functional
 relationships:
 - rel_type: Parent
   target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
 - rel_type: Child
   target_id: e2ad9c97-b276-4414-9dc9-9e7d07c42b8a
+comments:
+- id: 019df47c-8577-7ec1-b182-57a609649423
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:34:54.583700230Z
+  modified_at: 2026-05-04T19:34:54.583700230Z
 history:
 - id: 3a78df95-7b21-464a-ae57-9de6af5ad533
   author: '@joe'
