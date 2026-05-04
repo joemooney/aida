@@ -3,12 +3,12 @@ spec_id: FR-0060
 agreed_id: FR-120
 title: scheduling ability
 description: requirements that get attached to a weekly, monthly etc schedule
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-27T21:11:24.651889295Z
-modified_at: 2026-05-04T19:38:34.824564016Z
+modified_at: 2026-05-04T19:38:35.789032380Z
 req_type: Functional
 relationships:
 - rel_type: Parent
