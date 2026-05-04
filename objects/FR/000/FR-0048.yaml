@@ -3,12 +3,12 @@ spec_id: FR-0048
 agreed_id: FR-224
 title: textboxes should show a right click menu with Copy, Paste , Cut (optional)
 description: textboxes should show a right click menu with Copy, Paste , Cut (optional)
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-27T06:18:35.852016323Z
-modified_at: 2026-05-04T19:34:58.854830370Z
+modified_at: 2026-05-04T19:35:00.145909833Z
 req_type: Functional
 relationships:
 - rel_type: Parent
