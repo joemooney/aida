@@ -23,12 +23,12 @@ description: |2
     - PageUp/PageDown: Navigate selection by page
     - Home/End: Jump to first/last item
     - Click: Select an item
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-27T23:08:44.110738408Z
-modified_at: 2026-05-04T19:34:28.525060775Z
+modified_at: 2026-05-04T19:34:29.604373084Z
 req_type: Functional
 relationships:
 - rel_type: Parent
