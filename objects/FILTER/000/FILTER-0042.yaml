@@ -32,12 +32,12 @@ description: |
     - This allows scenarios like "show only Functional Requirements at root, but display all their children"
 
     Committed as 24e6b37 and pushed to GitHub.
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-27T04:10:22.591989434Z
-modified_at: 2026-05-04T19:30:27.323609602Z
+modified_at: 2026-05-04T19:30:28.448758776Z
 req_type: Functional
 relationships:
 - rel_type: Child
