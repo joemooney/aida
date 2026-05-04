@@ -5,12 +5,12 @@ title: preview appearance changes
 description: |-
   When we make a change in appearance, for example "Show status icons" or change theme can we apply that globally temporarily until we click
     Save or Cancel. That way we can see the preview the changes more easily
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-28T21:59:56.082585533Z
-modified_at: 2026-05-04T19:33:22.071134408Z
+modified_at: 2026-05-04T19:33:23.167254757Z
 req_type: Functional
 relationships:
 - rel_type: Parent
