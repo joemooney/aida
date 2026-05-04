@@ -5,13 +5,13 @@ title: Child dragged to parent makes sibling
 description: |2-
 
   dragging a child to its parent makes it a sibling of the parent (i.e change parent of child to parent of parent). This way we can correct cases where we inadvertently created a child when we meant to create a sibling
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-29T01:51:21.249079253Z
 created_by: '@joe'
-modified_at: 2026-05-04T19:34:19.373008046Z
+modified_at: 2026-05-04T19:34:20.470048060Z
 req_type: Functional
 relationships:
 - rel_type: Parent
