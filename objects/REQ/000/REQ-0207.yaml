@@ -3,13 +3,13 @@ spec_id: REQ-0207
 agreed_id: SPRINT-1
 title: Initial Sprint support and misc features
 description: Initial Sprint support and misc features
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-07T02:35:07.537957762Z
 created_by: Joe Mooney
-modified_at: 2026-05-04T19:32:29.924056084Z
+modified_at: 2026-05-04T19:32:30.882083229Z
 req_type: Sprint
 relationships:
 - rel_type: !Custom sprint_contains
@@ -35,7 +35,7 @@ comments:
   created_at: 2026-05-04T19:32:29.924056084Z
   modified_at: 2026-05-04T19:32:29.924056084Z
 custom_fields:
-  sprint_goal: Clean up baseline
   end_date: 2026-02-27
   sprint_number: '1'
   start_date: 2026-02-20
+  sprint_goal: Clean up baseline
