@@ -951,6 +951,33 @@ pub enum QueueCommand {
         #[clap(long)]
         completed: bool,
     },
+    /// Peek at the top item in your queue without removing it. When a role
+    /// is active and --role is not passed, defaults to filtering on it.
+    /// Use this between work items to see what's next.
+    Next {
+        /// Filter to items routed to a specific role
+        #[clap(long)]
+        role: Option<String>,
+        /// Show the top item from the full queue regardless of role
+        #[clap(long)]
+        all: bool,
+        /// User ID (defaults to AIDA_USER or system user)
+        #[clap(long)]
+        user: Option<String>,
+    },
+    /// Mark a requirement as completed AND remove it from your queue in one
+    /// atomic step. Convenience for the implementer's done-then-pickup-next
+    /// loop. Equivalent to: `aida edit <id> --status completed && aida queue remove <id>`.
+    Done {
+        /// Requirement ID (UUID or SPEC-ID)
+        id: String,
+        /// User ID (defaults to AIDA_USER or system user)
+        #[clap(long)]
+        user: Option<String>,
+        /// Skip confirmation
+        #[clap(long, short = 'y')]
+        yes: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
