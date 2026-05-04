@@ -6,13 +6,13 @@ description: |-
   Delete requirement, select next requirement in list
 
   instead of selecting the first requirement in the req list when we delete a requirement, select the next one
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-13T19:48:18.999923376Z
 created_by: Joe Mooney
-modified_at: 2026-05-04T19:28:39.901114094Z
+modified_at: 2026-05-04T19:28:40.902706855Z
 req_type: Functional
 comments:
 - id: 019df476-cddd-7163-88f4-eb915e2ca242
