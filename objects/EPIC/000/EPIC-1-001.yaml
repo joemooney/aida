@@ -29,18 +29,18 @@ description: |-
   2. cargo check --workspace passes after each phase
   3. Web UI query latency unchanged or better
   4. One round-trip: aida edit -> git commit on aida-store -> SQLite cache updated -> web UI sees change
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-02T21:17:31.912989874Z
-modified_at: 2026-05-04T19:17:06.935553943Z
+modified_at: 2026-05-04T19:22:13.659495466Z
 req_type: Epic
 tags:
 - git-backend
 - architecture
-- storage
 - refactor
+- storage
 comments:
 - id: 019dea8e-fe66-7fe3-8528-5460da42dbe4
   author: joe
@@ -67,4 +67,3 @@ comments:
   content: ''
   created_at: 2026-05-04T19:17:06.935553943Z
   modified_at: 2026-05-04T19:17:06.935553943Z
-custom_status: In-progress
