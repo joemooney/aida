@@ -4,12 +4,12 @@ agreed_id: FR-3
 prefix_override: CHANGEREQUESTS
 title: Change Request support
 description: 'Change Request should be one of the default requirement types. '
-status: Approved
+status: Rejected
 priority: High
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-25T21:30:08.455035192Z
-modified_at: 2026-05-04T19:29:43.138019631Z
+modified_at: 2026-05-04T19:29:44.028136975Z
 req_type: Functional
 relationships:
 - rel_type: !Custom sprint_assignment
