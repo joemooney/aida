@@ -5,12 +5,12 @@ title: user guide should have requirements best practices
 description: |-
   Put a good primer into the User Guide as to what constitutes a good requirements and what are industry best practices.
   We may want to identify some conventions that was can opt-in/opt-out and see if we can enforce.
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-26T22:15:57.031832023Z
-modified_at: 2026-05-04T19:29:49.542509943Z
+modified_at: 2026-05-04T19:29:50.583763796Z
 req_type: Functional
 relationships:
 - rel_type: Parent
