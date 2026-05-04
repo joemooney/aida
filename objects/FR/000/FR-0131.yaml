@@ -20,13 +20,13 @@ description: |2
     - Quick-change popup ('p' key) shows type-specific priorities
     - Add/Edit form dropdown shows type-specific priorities
     - Settings > Types allows configuring custom priorities per type
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-30T05:21:30.635827807Z
 created_by: Unknown User
-modified_at: 2026-05-04T19:38:25.604171522Z
+modified_at: 2026-05-04T19:38:26.681455217Z
 req_type: Functional
 relationships:
 - rel_type: Parent
