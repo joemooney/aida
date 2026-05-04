@@ -3,12 +3,12 @@ spec_id: FR-0201
 agreed_id: FR-191
 title: Sprint Requirement Type
 description: Add Sprint to RequirementType enum. Sprints are time-boxed iterations that contain work items. Includes custom fields for sprint_number, start_date, end_date, sprint_goal, velocity.
-status: Completed
+status: Rejected
 priority: High
 owner: ''
 feature: 112-Uncategorized
 created_at: 2025-12-07T00:30:59.548639777Z
-modified_at: 2026-05-04T19:36:10.943740371Z
+modified_at: 2026-05-04T19:36:12.010191145Z
 req_type: Functional
 relationships:
 - rel_type: Parent
