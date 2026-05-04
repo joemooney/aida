@@ -7,13 +7,13 @@ description: |
   We have a choice to either go to the next/prev search or go in order of displayed reqs.
   We have n/N for going to next/prev search.
   But it feels natural for j/k to go up and down to the next selected by the search.
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-12-13T20:07:57.859999970Z
 created_by: Joe Mooney
-modified_at: 2026-05-04T19:33:13.564790269Z
+modified_at: 2026-05-04T19:33:14.701663937Z
 req_type: Functional
 comments:
 - id: 019df47a-fadc-7d21-ad91-5d1f94dcab17
