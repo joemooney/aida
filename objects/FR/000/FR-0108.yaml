@@ -3,13 +3,13 @@ spec_id: FR-0108
 agreed_id: FR-102
 title: Owner should be a dropdown
 description: ''
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-29T19:48:09.264581852Z
 created_by: Unknown User
-modified_at: 2026-05-04T19:34:08.246893312Z
+modified_at: 2026-05-04T19:34:09.287598438Z
 req_type: Functional
 relationships:
 - rel_type: Parent
