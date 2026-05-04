@@ -18,18 +18,18 @@ description: |-
   - aida dev patch ships a release end-to-end without manual intervention
   - aida() wrapper Just Works for `aida role enter <x>` and `aida dev activate` interactively
   - shell-init file under 30 lines; ~/.bashrc footprint is exactly 3 lines (source stub)
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-04T04:35:45.242117121Z
-modified_at: 2026-05-04T19:26:09.699277152Z
+modified_at: 2026-05-04T19:26:10.564602770Z
 req_type: Epic
 tags:
-- shell
-- cli
 - release
 - dev-workflow
+- shell
+- cli
 comments:
 - id: 019df147-d299-7b23-ab59-4d03af72488b
   author: joe
