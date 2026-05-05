@@ -8718,9 +8718,145 @@ fn handle_scaffold_command(
                 println!("  Use --force to overwrite existing files");
             }
         }
+        ScaffoldCommand::Diff {
+            path,
+            project_root,
+            no_color,
+            context,
+        } => {
+            // trace:FR-1-027 | ai:claude
+            let store = storage.load()?;
+            let root = project_root
+                .clone()
+                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+            if !root.exists() {
+                anyhow::bail!("Project root does not exist: {}", root.display());
+            }
+
+            let config = ScaffoldConfig::default();
+            // Use with_database so our preview matches what `scaffold status`
+            // produces — without the db_path the scaffolder renders CLAUDE.md
+            // / AGENTS.md against legacy defaults, which then "drifts" against
+            // a fresh `aida init` for purely cosmetic reasons.
+            let mut scaffolder = aida_core::scaffolding::Scaffolder::with_database(
+                root.clone(),
+                config.clone(),
+                db_path.to_path_buf(),
+            );
+            let preview = scaffolder.preview(&store);
+
+            // Resolve which artifacts to diff. When `path` is given, restrict
+            // to that one entry (error if not in the manifest); else walk all
+            // artifacts and diff any whose on-disk content differs.
+            // Exit codes per FR-1-027: 0=clean, 1=drift, 2=usage error.
+            let targets: Vec<&aida_core::scaffolding::ScaffoldArtifact> = match path {
+                Some(p) => {
+                    let needle = p.clone();
+                    match preview.artifacts.iter().find(|a| a.path == needle) {
+                        Some(matched) => vec![matched],
+                        None => {
+                            eprintln!(
+                                "Error: {} is not a scaffolded file (run `aida scaffold status` to see what is)",
+                                needle.display()
+                            );
+                            std::process::exit(2);
+                        }
+                    }
+                }
+                None => preview.artifacts.iter().collect(),
+            };
+
+            let any_drift = print_scaffold_diffs(&root, &targets, *context, *no_color)?;
+            if any_drift {
+                std::process::exit(1);
+            }
+        }
     }
 
     Ok(())
+}
+
+/// Walk the resolved artifact set, diffing each against its on-disk copy.
+/// Returns true if any drift was emitted (so the caller can set exit code).
+/// Files that are missing on disk are reported as a single header + note,
+/// not as a full diff (the unified-diff format isn't useful when actual is
+/// empty / nonexistent — `aida scaffold status` already covers that case).
+/// trace:FR-1-027 | ai:claude
+fn print_scaffold_diffs(
+    project_root: &std::path::Path,
+    artifacts: &[&aida_core::scaffolding::ScaffoldArtifact],
+    context_lines: usize,
+    no_color: bool,
+) -> Result<bool> {
+    use similar::{ChangeTag, TextDiff};
+
+    if no_color {
+        colored::control::set_override(false);
+    }
+
+    let mut any_drift = false;
+    let mut printed_count = 0;
+    for artifact in artifacts {
+        let full_path = project_root.join(&artifact.path);
+        let actual = match std::fs::read_to_string(&full_path) {
+            Ok(s) => s,
+            Err(_) => {
+                // Missing file: only surface when single-file mode (one
+                // artifact) so `aida scaffold diff` (no arg) doesn't spam
+                // output for the dozens of files that aren't there yet on
+                // a partial scaffold.
+                if artifacts.len() == 1 {
+                    println!(
+                        "{}",
+                        format!("# {} is missing on disk", artifact.path.display())
+                            .yellow()
+                    );
+                    any_drift = true;
+                }
+                continue;
+            }
+        };
+
+        // Use the same equality rule as scaffold status (trim end-of-file
+        // whitespace) so we don't report drift on a single trailing newline.
+        if actual.trim() == artifact.content.trim() {
+            continue;
+        }
+
+        if printed_count > 0 {
+            println!();
+        }
+        printed_count += 1;
+        any_drift = true;
+
+        // File header (git-diff style).
+        println!("{}", format!("--- a/{}  (template)", artifact.path.display()).red());
+        println!("{}", format!("+++ b/{}  (on disk)", artifact.path.display()).green());
+
+        let diff = TextDiff::configure()
+            .algorithm(similar::Algorithm::Myers)
+            .diff_lines(&artifact.content, &actual);
+
+        for hunk in diff.unified_diff().context_radius(context_lines).iter_hunks() {
+            // Hunk header: @@ -N,M +N,M @@ in cyan, like git diff.
+            println!("{}", format!("{}", hunk.header()).cyan());
+            for change in hunk.iter_changes() {
+                let line = change.value();
+                // Strip trailing newline so we can println without doubling.
+                let line = line.strip_suffix('\n').unwrap_or(line);
+                match change.tag() {
+                    ChangeTag::Delete => println!("{}", format!("-{}", line).red()),
+                    ChangeTag::Insert => println!("{}", format!("+{}", line).green()),
+                    ChangeTag::Equal => println!(" {}", line),
+                }
+            }
+        }
+    }
+
+    if !any_drift {
+        eprintln!("{}", "No drift — scaffold matches on-disk files.".dimmed());
+    }
+    Ok(any_drift)
 }
 
 /// Search requirements for a pattern
