@@ -2,10 +2,10 @@ id: 019df9fb-5948-70a3-b9ac-ab9c7479e2b3
 spec_id: TASK-1-006
 title: Test agreed ID block integration
 description: ''
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-05T21:11:32.424254109Z
-modified_at: 2026-05-05T21:11:32.424254109Z
+modified_at: 2026-05-05T21:12:05.234915840Z
 req_type: Task
