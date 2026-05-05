@@ -59,11 +59,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-05T04:18:42.878915614Z
-modified_at: 2026-05-05T04:18:42.878915614Z
+modified_at: 2026-05-05T04:18:49.003118582Z
 req_type: Functional
 tags:
+- managed-merge
+- jsonpath
 - upgrade
 - settings
-- jsonpath
 - scaffolding
-- managed-merge
+relationships:
+- rel_type: Child
+  target_id: 019df46f-23d7-7853-bd39-0d01cb5ed3ea
+  created_at: 2026-05-05T04:18:49.003110673Z
+  created_by: joe
