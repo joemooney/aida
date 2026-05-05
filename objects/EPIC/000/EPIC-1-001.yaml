@@ -37,8 +37,8 @@ created_at: 2026-05-02T21:17:31.912989874Z
 modified_at: 2026-05-04T04:38:28.199824827Z
 req_type: Epic
 tags:
-- storage
 - architecture
+- storage
 - refactor
 - git-backend
 comments:
