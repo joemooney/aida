@@ -232,6 +232,30 @@ pub enum ScaffoldCommand {
         #[clap(long)]
         force: bool,
     },
+
+    /// Show a unified diff between embedded templates and on-disk files
+    /// for any drifted scaffold artifact. Exits 1 if any drift is found,
+    /// 0 if clean. Pairs with `aida scaffold status` — when that reports
+    /// "N modified" this is how you actually see what changed.
+    /// trace:FR-1-027 | ai:claude
+    Diff {
+        /// Specific path (relative to project root) to diff. When omitted,
+        /// every modified file is diffed in turn with file headers between.
+        path: Option<PathBuf>,
+
+        /// Project root directory (defaults to current directory)
+        #[clap(long)]
+        project_root: Option<PathBuf>,
+
+        /// Force plain output even on a TTY (the colored crate normally
+        /// auto-disables when piped). Equivalent to NO_COLOR=1.
+        #[clap(long)]
+        no_color: bool,
+
+        /// Number of context lines around each hunk
+        #[clap(long, short = 'U', default_value = "3")]
+        context: usize,
+    },
 }
 
 /// Persona / hat commands. A role is a persistent named context that you
