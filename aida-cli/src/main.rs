@@ -8851,23 +8851,74 @@ fn handle_scaffold_command(
     Ok(())
 }
 
-/// Return true when on-disk `actual` matches the expected `expected` per
-/// the file's comparison rule. AGENTS.md uses delimited-block comparison
-/// (FR-1-035) so user content outside the AIDA-AUTOGEN markers doesn't
-/// trigger false drift; everything else uses whole-content trim-equality
-/// (matches `aida scaffold status`).
+/// What `scaffold upgrade` should do for a single artifact, computed from
+/// its category + drift state.
+/// trace:FR-1-028 | ai:claude
+enum UpgradeAction {
+    /// File missing on disk — create it.
+    Create,
+    /// File exists, drifted — full overwrite. Templates by default;
+    /// anything when `--force`.
+    Overwrite,
+    /// File exists with AIDA-AUTOGEN markers and the block content is
+    /// drifted — rewrite just the marked block, preserve user content
+    /// outside the markers.
+    RewriteAidaBlock,
+    /// File exists, drifted, but the file is user-owned (Seed without
+    /// markers, or ManagedMerge in v1) — log and skip.
+    LeaveAlone,
+    /// File exists and matches — silent count.
+    None,
+}
+
+/// Replace the content between `<!-- AIDA-AUTOGEN-BEGIN -->` and
+/// `<!-- AIDA-AUTOGEN-END -->` in `actual` with the corresponding block
+/// from `expected`. Preserves everything outside the markers verbatim.
+/// Falls back to `actual` if either side is missing markers (defensive
+/// — caller should only invoke this when both have markers).
+/// trace:FR-1-028 | ai:claude
+fn rewrite_aida_block(actual: &str, expected: &str) -> String {
+    use aida_core::scaffolding::extract_aida_block;
+    let Some(actual_block) = extract_aida_block(actual) else {
+        return actual.to_string();
+    };
+    let Some(expected_block) = extract_aida_block(expected) else {
+        return actual.to_string();
+    };
+    // Replace the first occurrence of the actual block with the expected
+    // block. Both extract_aida_block returns are slices of the original
+    // strings (between markers), so we can match-replace inside `actual`.
+    actual.replacen(actual_block, expected_block, 1)
+}
+
+/// Mirror of `report.rs::file_matches_for_status`. Seeds (CLAUDE.md,
+/// AGENTS.md) use marker-presence semantics — CLAUDE.md is matching if
+/// the file exists at all; AGENTS.md only needs block-content comparison
+/// when AIDA-AUTOGEN markers are present (user can opt out by removing
+/// them). Templates and managed-merge use whole-content equality.
 /// trace:FR-1-028 | ai:claude
 fn file_matches_artifact(path: &std::path::Path, actual: &str, expected: &str) -> bool {
-    if path.file_name().and_then(|s| s.to_str()) == Some("AGENTS.md") {
-        match (
-            aida_core::scaffolding::extract_aida_block(actual),
-            aida_core::scaffolding::extract_aida_block(expected),
-        ) {
-            (Some(a), Some(e)) => a.trim() == e.trim(),
-            _ => actual.trim() == expected.trim(),
+    use aida_core::FileCategory;
+    match FileCategory::from_path(path) {
+        FileCategory::Seed => {
+            let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+            match name {
+                "CLAUDE.md" => true, // presence-only
+                "AGENTS.md" => {
+                    match aida_core::scaffolding::extract_aida_block(actual) {
+                        // markers present → AIDA owns the block content
+                        Some(a) => match aida_core::scaffolding::extract_aida_block(expected) {
+                            Some(e) => a.trim() == e.trim(),
+                            None => true,
+                        },
+                        // markers absent → user opted out, fully their file
+                        None => true,
+                    }
+                }
+                _ => actual.trim() == expected.trim(),
+            }
         }
-    } else {
-        actual.trim() == expected.trim()
+        FileCategory::Template | FileCategory::ManagedMerge => actual.trim() == expected.trim(),
     }
 }
 
@@ -8938,38 +8989,70 @@ fn run_scaffold_upgrade(
         };
 
         // Decide action.
-        let should_write = if !exists {
-            // Missing entirely — every category creates it.
-            true
+        // Special case: AGENTS.md with AIDA-AUTOGEN markers gets a
+        // block-only rewrite (preserves user content outside the block).
+        // Any other Seed drift is left alone (user owns the file).
+        let action = if !exists {
+            UpgradeAction::Create
         } else if !drifted {
-            // Matching — never write.
-            false
+            UpgradeAction::None
         } else if force {
-            true
+            UpgradeAction::Overwrite
         } else {
             match cat {
-                FileCategory::Template => true,
-                FileCategory::Seed => false,
-                FileCategory::ManagedMerge => false,
+                FileCategory::Template => UpgradeAction::Overwrite,
+                FileCategory::Seed => {
+                    if artifact.path.file_name().and_then(|s| s.to_str()) == Some("AGENTS.md")
+                        && std::fs::read_to_string(&on_disk_path)
+                            .ok()
+                            .and_then(|s| {
+                                aida_core::scaffolding::extract_aida_block(&s)
+                                    .map(|_| ())
+                            })
+                            .is_some()
+                    {
+                        UpgradeAction::RewriteAidaBlock
+                    } else {
+                        UpgradeAction::LeaveAlone
+                    }
+                }
+                FileCategory::ManagedMerge => UpgradeAction::LeaveAlone,
             }
         };
 
-        if should_write {
-            if !dry_run {
-                if let Some(parent) = on_disk_path.parent() {
-                    std::fs::create_dir_all(parent)?;
+        match action {
+            UpgradeAction::Create => {
+                if !dry_run {
+                    if let Some(parent) = on_disk_path.parent() {
+                        std::fs::create_dir_all(parent)?;
+                    }
+                    std::fs::write(&on_disk_path, &artifact.content)?;
                 }
-                std::fs::write(&on_disk_path, &artifact.content)?;
-            }
-            if exists {
-                stats.upgraded.push(artifact.path.clone());
-            } else {
                 stats.created.push(artifact.path.clone());
             }
-        } else if !drifted {
-            stats.unchanged += 1;
-        } else {
-            stats.left_alone.push(artifact.path.clone());
+            UpgradeAction::Overwrite => {
+                if !dry_run {
+                    if let Some(parent) = on_disk_path.parent() {
+                        std::fs::create_dir_all(parent)?;
+                    }
+                    std::fs::write(&on_disk_path, &artifact.content)?;
+                }
+                stats.upgraded.push(artifact.path.clone());
+            }
+            UpgradeAction::RewriteAidaBlock => {
+                if !dry_run {
+                    let actual = std::fs::read_to_string(&on_disk_path)?;
+                    let merged = rewrite_aida_block(&actual, &artifact.content);
+                    std::fs::write(&on_disk_path, merged)?;
+                }
+                stats.upgraded.push(artifact.path.clone());
+            }
+            UpgradeAction::LeaveAlone => {
+                stats.left_alone.push(artifact.path.clone());
+            }
+            UpgradeAction::None => {
+                stats.unchanged += 1;
+            }
         }
     }
 
