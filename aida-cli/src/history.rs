@@ -558,19 +558,24 @@ fn pick_author_email(email: &str) -> String {
     email.split('@').next().unwrap_or(email).to_string()
 }
 
+/// HH:MM if today (in the user's local tz), else "MM-DD HH:MM". Always
+/// converts the input ISO timestamp from UTC (or whatever offset it
+/// carries) into the user's local time first — YAML modified_at fields
+/// are stored as UTC (`Z` suffix), so showing the raw HH:MM made
+/// timestamps look up to 12 hours in the future on west-of-UTC
+/// machines.
+/// trace:FR-1-037 | ai:claude
 fn short_clock(iso: &str) -> String {
-    // Just HH:MM if today, "MM-DD HH:MM" if older — keeps the column
-    // narrow without losing recency information.
-    let Some((date_str, rest)) = iso.split_once('T') else {
+    use chrono::{DateTime, FixedOffset, Local};
+    let Ok(dt_offset) = iso.parse::<DateTime<FixedOffset>>() else {
         return iso.to_string();
     };
-    let hhmm = &rest[..rest.len().min(5)];
-    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-    if date_str == today {
-        hhmm.to_string()
+    let dt_local = dt_offset.with_timezone(&Local);
+    let today = Local::now().date_naive();
+    if dt_local.date_naive() == today {
+        dt_local.format("%H:%M").to_string()
     } else {
-        let mm_dd = date_str.get(5..10).unwrap_or(date_str);
-        format!("{} {}", mm_dd, hhmm)
+        dt_local.format("%m-%d %H:%M").to_string()
     }
 }
 
@@ -876,19 +881,21 @@ fn yaml_array_len(v: &Value, key: &str) -> usize {
         .unwrap_or(0)
 }
 
-/// Trim the ISO timestamp to "YYYY-MM-DD HH:MM" — full RFC3339 is too noisy
-/// for a feed view, but date+time without timezone is enough to scan.
+/// "YYYY-MM-DD HH:MM" in the user's LOCAL timezone. Full RFC3339 is too
+/// noisy for a feed view, but date+time without timezone is enough to
+/// scan. Always converts to local — input ISO strings are usually UTC
+/// (`Z` suffix on YAML modified_at) and showing them raw made timestamps
+/// look up to 12 hours in the future on west-of-UTC machines.
+/// trace:FR-1-037 | ai:claude
 fn human_timestamp(iso: &str) -> String {
-    iso.split_once('T')
-        .map(|(d, t)| {
-            let t = t.split_once('.').map(|(a, _)| a).unwrap_or(t);
-            let t = t.split_once('+').map(|(a, _)| a).unwrap_or(t);
-            let t = t.split_once('-').map(|(a, _)| a).unwrap_or(t);
-            let t = t.strip_suffix('Z').unwrap_or(t);
-            let t = &t[..t.len().min(5)];
-            format!("{} {}", d, t)
-        })
-        .unwrap_or_else(|| iso.to_string())
+    use chrono::{DateTime, FixedOffset, Local};
+    let Ok(dt_offset) = iso.parse::<DateTime<FixedOffset>>() else {
+        return iso.to_string();
+    };
+    dt_offset
+        .with_timezone(&Local)
+        .format("%Y-%m-%d %H:%M")
+        .to_string()
 }
 
 fn format_oneline(e: &Event) -> String {
@@ -1009,15 +1016,32 @@ mod tests {
     }
 
     #[test]
-    fn human_timestamp_trims_tz_and_seconds() {
-        assert_eq!(
-            human_timestamp("2026-05-04T18:02:38-07:00"),
-            "2026-05-04 18:02"
-        );
-        assert_eq!(
-            human_timestamp("2026-05-04T18:02:38.123456Z"),
-            "2026-05-04 18:02"
-        );
+    fn human_timestamp_converts_utc_to_local() {
+        // The input is UTC; the output is in the user's local zone. We
+        // can't assert a specific value here without controlling TZ, but
+        // we CAN assert the parse path round-trips: parsing then
+        // formatting produces the same instant regardless of zone.
+        use chrono::{DateTime, FixedOffset, Local};
+        let iso = "2026-05-04T18:02:38.123456Z";
+        let formatted = human_timestamp(iso);
+        // Re-parse our formatted local string + assert it matches the
+        // expected local representation of the original UTC instant.
+        let utc: DateTime<FixedOffset> = iso.parse().unwrap();
+        let expected = utc
+            .with_timezone(&Local)
+            .format("%Y-%m-%d %H:%M")
+            .to_string();
+        assert_eq!(formatted, expected);
+        // Sanity: the bug we're guarding against is "shows raw UTC HH:MM
+        // regardless of local zone" — so on west-of-UTC machines the
+        // output should NOT contain "18:02" verbatim.
+        if Local::now().offset().local_minus_utc() < 0 {
+            assert!(
+                !formatted.ends_with("18:02"),
+                "output is still in UTC: {}",
+                formatted
+            );
+        }
     }
 
     #[test]
