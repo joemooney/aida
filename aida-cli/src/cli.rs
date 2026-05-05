@@ -327,6 +327,32 @@ pub enum SessionCommand {
         #[clap(long, short = 'n', default_value = "20")]
         limit: usize,
     },
+
+    /// Launch a new Claude Code session, recording the active role + a
+    /// user-chosen title so `aida session list` can show them
+    /// reliably (instead of greping the auto-generated subject). Execs
+    /// `claude --permission-mode <mode>` once the launch metadata is
+    /// recorded; permission-mode defaults to `bypassPermissions`
+    /// (matching the user's typical "auto" workflow).
+    /// trace:FR-1-044 | ai:claude
+    New {
+        /// Title for the session (shown in `aida session list`). When
+        /// omitted, you'll be prompted interactively.
+        #[clap(long, short = 't')]
+        title: Option<String>,
+
+        /// Claude Code permission mode. Most common values:
+        /// `bypassPermissions` (default — no prompts), `acceptEdits`
+        /// (auto-accept edits, prompt other tools), `default` (prompt
+        /// for everything), `plan`.
+        #[clap(long, default_value = "bypassPermissions")]
+        permission_mode: String,
+
+        /// Override the role recorded for this session (defaults to
+        /// $AIDA_SESSION_ROLE).
+        #[clap(long)]
+        role: Option<String>,
+    },
 }
 
 /// activity, optional purpose, and acts as a label in the statusline.

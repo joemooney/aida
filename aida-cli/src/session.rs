@@ -27,6 +27,11 @@ pub struct SessionMeta {
     pub spec: Option<String>,
     pub title: Option<String>,
     pub size_bytes: u64,
+    /// Timestamp of the first event in the .jsonl. Used for launch-log
+    /// correlation in FR-1-044 — matches the session to a `aida session
+    /// new` record so the user-chosen title and authoritative role can
+    /// override the grep heuristic.
+    pub started_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 pub fn list(limit: usize, no_color: bool) -> Result<()> {
@@ -48,6 +53,160 @@ pub fn resume(id: Option<String>, limit: usize) -> Result<()> {
         None => pick_interactive(limit)?,
     };
     exec_claude_resume(&target)
+}
+
+/// `aida session new` — capture role + title up-front, append a record
+/// to `~/.aida/session-launches.log`, then exec `claude
+/// --permission-mode <mode>`. Subsequent `aida session list` calls read
+/// the launches log and join it with the .jsonl files (cwd + start-time
+/// match) to surface the user-chosen title and authoritative role —
+/// instead of falling back to the grep heuristic.
+/// trace:FR-1-044 | ai:claude
+pub fn new_session(
+    title: Option<String>,
+    permission_mode: &str,
+    role_override: Option<String>,
+) -> Result<()> {
+    let role = role_override
+        .or_else(|| std::env::var("AIDA_SESSION_ROLE").ok())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "-".to_string());
+
+    let title = match title {
+        Some(t) if !t.trim().is_empty() => t,
+        _ => inquire::Text::new("Title for this session?")
+            .with_help_message("Shown in `aida session list`. Leave blank to skip.")
+            .prompt()
+            .unwrap_or_default(),
+    };
+
+    append_launch_log(&role, permission_mode, &title)?;
+
+    eprintln!(
+        "{} {} → claude --permission-mode {}",
+        "▶".green().bold(),
+        format!("session new (role:{}, title:{:?})", role, title).dimmed(),
+        permission_mode,
+    );
+
+    exec_claude_new(permission_mode)
+}
+
+const LAUNCH_LOG_REL: &str = ".aida/session-launches.log";
+
+fn launch_log_path() -> Result<PathBuf> {
+    let home = dirs::home_dir().context("HOME not set; cannot locate launches log")?;
+    Ok(home.join(LAUNCH_LOG_REL))
+}
+
+/// Append a launch record. Format: TSV with these fields, one record per
+/// line (newline-terminated):
+///   iso_ts \t role-or-dash \t cwd \t permission_mode \t title
+/// trace:FR-1-044 | ai:claude
+fn append_launch_log(role: &str, permission_mode: &str, title: &str) -> Result<()> {
+    use std::io::Write;
+    let path = launch_log_path()?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let line = format!(
+        "{}\t{}\t{}\t{}\t{}\n",
+        chrono::Utc::now().to_rfc3339(),
+        if role.is_empty() { "-" } else { role },
+        cwd.display(),
+        permission_mode,
+        sanitize_for_tsv(title),
+    );
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .with_context(|| format!("failed to open {}", path.display()))?;
+    f.write_all(line.as_bytes())?;
+    Ok(())
+}
+
+fn sanitize_for_tsv(s: &str) -> String {
+    s.replace('\t', " ").replace('\n', " ").replace('\r', " ")
+}
+
+/// Replace this process with `claude --permission-mode <mode>`.
+fn exec_claude_new(permission_mode: &str) -> Result<()> {
+    use std::process::Command;
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        let err = Command::new("claude")
+            .args(["--permission-mode", permission_mode])
+            .exec();
+        anyhow::bail!("failed to exec claude: {}", err);
+    }
+    #[cfg(not(unix))]
+    {
+        let status = Command::new("claude")
+            .args(["--permission-mode", permission_mode])
+            .status()
+            .context("failed to spawn claude")?;
+        std::process::exit(status.code().unwrap_or(1));
+    }
+}
+
+/// One line of `~/.aida/session-launches.log`, parsed back into structured
+/// form so `aida session list` can correlate by cwd + timestamp.
+#[derive(Debug, Clone)]
+struct LaunchRecord {
+    ts: chrono::DateTime<chrono::Utc>,
+    role: String,
+    cwd: String,
+    title: String,
+}
+
+fn read_launches_for_cwd(cwd: &Path) -> Vec<LaunchRecord> {
+    let Ok(path) = launch_log_path() else {
+        return Vec::new();
+    };
+    let Ok(content) = std::fs::read_to_string(&path) else {
+        return Vec::new();
+    };
+    let cwd_str = cwd.to_string_lossy().to_string();
+    content
+        .lines()
+        .filter_map(|line| {
+            let mut it = line.splitn(5, '\t');
+            let ts = it.next()?;
+            let role = it.next()?;
+            let recorded_cwd = it.next()?;
+            let _mode = it.next()?;
+            let title = it.next().unwrap_or("");
+            if recorded_cwd != cwd_str {
+                return None;
+            }
+            let parsed_ts = chrono::DateTime::parse_from_rfc3339(ts).ok()?.with_timezone(&chrono::Utc);
+            Some(LaunchRecord {
+                ts: parsed_ts,
+                role: role.to_string(),
+                cwd: recorded_cwd.to_string(),
+                title: title.to_string(),
+            })
+        })
+        .collect()
+}
+
+/// Find the closest launch record (by timestamp) that's within `window`
+/// seconds before-or-after the session's start time. Uses the .jsonl's
+/// FIRST event timestamp (≈ launch time), not the file mtime (which
+/// updates on every event).
+/// trace:FR-1-044 | ai:claude
+fn match_launch(
+    launches: &[LaunchRecord],
+    session_started_at: chrono::DateTime<chrono::Utc>,
+    window_sec: i64,
+) -> Option<&LaunchRecord> {
+    launches
+        .iter()
+        .filter(|l| (session_started_at - l.ts).num_seconds().abs() <= window_sec)
+        .min_by_key(|l| (session_started_at - l.ts).num_seconds().abs())
 }
 
 /// Walk Claude Code's per-project session directory for the current cwd
@@ -75,9 +234,27 @@ fn collect_sessions(limit: usize) -> Result<Vec<SessionMeta>> {
     entries.truncate(limit);
 
     let now = SystemTime::now();
+    let launches = read_launches_for_cwd(&cwd);
     let metas = entries
         .into_iter()
-        .filter_map(|(path, mtime)| parse_session_meta(&path, mtime, now).ok())
+        .filter_map(|(path, mtime)| {
+            let mut meta = parse_session_meta(&path, mtime, now).ok()?;
+            // FR-1-044: try to attribute the session to a launch
+            // record. The .jsonl's FIRST event timestamp is the right
+            // anchor — file mtime updates on every event so it drifts
+            // away from the actual launch time as the session is used.
+            if let Some(started) = meta.started_at {
+                if let Some(launch) = match_launch(&launches, started, 60) {
+                    if !launch.title.is_empty() {
+                        meta.title = Some(launch.title.clone());
+                    }
+                    if launch.role != "-" {
+                        meta.role = Some(launch.role.clone());
+                    }
+                }
+            }
+            Some(meta)
+        })
         .collect();
     Ok(metas)
 }
@@ -115,11 +292,24 @@ fn parse_session_meta(path: &Path, mtime: SystemTime, now: SystemTime) -> Result
     let mut role: Option<String> = None;
     let mut title: Option<String> = None;
     let mut spec: Option<String> = None;
+    let mut started_at: Option<chrono::DateTime<chrono::Utc>> = None;
     for (i, line) in reader.lines().enumerate() {
-        if i >= MAX_LINES && title.is_some() && role.is_some() {
+        if i >= MAX_LINES && title.is_some() && role.is_some() && started_at.is_some() {
             break;
         }
         let Ok(line) = line else { continue };
+
+        // First event with a `"timestamp":"..."` field — gives us a
+        // close-to-launch-time anchor for FR-1-044's launches.log
+        // correlation. Skip the file-history-snapshot's timestamp
+        // (which has its own, slightly different timestamp).
+        if started_at.is_none() {
+            if let Some(ts_str) = extract_str(&line, "\"timestamp\":\"") {
+                if let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(&ts_str) {
+                    started_at = Some(parsed.with_timezone(&chrono::Utc));
+                }
+            }
+        }
 
         // ai-title event — what Claude Code's resume picker shows.
         if title.is_none() {
@@ -175,6 +365,7 @@ fn parse_session_meta(path: &Path, mtime: SystemTime, now: SystemTime) -> Result
         spec,
         title,
         size_bytes,
+        started_at,
     })
 }
 
@@ -448,5 +639,45 @@ mod tests {
         // depends on $HOME at test time.
         let dir = claude_project_dir(Path::new("/home/joe/ai/aida")).unwrap();
         assert!(dir.to_string_lossy().ends_with("-home-joe-ai-aida"));
+    }
+
+    /// FR-1-044: launch-log correlation finds the closest record within
+    /// the time window and ignores records outside it.
+    #[test]
+    fn match_launch_picks_closest_within_window() {
+        let base: chrono::DateTime<chrono::Utc> = "2026-05-04T18:00:00Z".parse().unwrap();
+        let mk = |secs_offset: i64, title: &str| LaunchRecord {
+            ts: base + chrono::Duration::seconds(secs_offset),
+            role: "implementer".into(),
+            cwd: "/x".into(),
+            title: title.into(),
+        };
+        let launches = vec![
+            mk(-120, "way-before"),    // 2min before — outside 60s window
+            mk(-10, "ten-before"),     // 10s before — inside window
+            mk(45, "forty-five-after"), // 45s after — inside window, but farther than -10
+            mk(200, "way-after"),      // outside window
+        ];
+        let session_started = base; // exactly base
+        let m = match_launch(&launches, session_started, 60).unwrap();
+        assert_eq!(m.title, "ten-before");
+    }
+
+    #[test]
+    fn match_launch_returns_none_when_all_outside_window() {
+        let base: chrono::DateTime<chrono::Utc> = "2026-05-04T18:00:00Z".parse().unwrap();
+        let launches = vec![LaunchRecord {
+            ts: base + chrono::Duration::seconds(-200),
+            role: "implementer".into(),
+            cwd: "/x".into(),
+            title: "old".into(),
+        }];
+        assert!(match_launch(&launches, base, 60).is_none());
+    }
+
+    #[test]
+    fn sanitize_for_tsv_drops_tabs_newlines() {
+        assert_eq!(sanitize_for_tsv("a\tb\nc"), "a b c");
+        assert_eq!(sanitize_for_tsv("plain"), "plain");
     }
 }
