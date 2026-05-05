@@ -8697,10 +8697,18 @@ fn handle_scaffold_command(
                     std::fs::create_dir_all(parent)?;
                 }
 
-                // Load from embedded and write to disk
+                // Load from embedded and write to disk WITH the AIDA-Generated
+                // header so the file round-trips cleanly via `scaffold status`
+                // (i.e. user can extract → cp into project → status reports
+                // clean, instead of "modified" because the bare embedded bytes
+                // have no header). trace:BUG-1-034 | ai:claude
                 let mut temp_loader = TemplateLoader::new();
                 if let Some(content) = temp_loader.load(key) {
-                    std::fs::write(&full_path, &content)?;
+                    let wrapped = aida_core::scaffolding::wrap_with_aida_header(
+                        std::path::Path::new(key),
+                        &content,
+                    );
+                    std::fs::write(&full_path, &wrapped)?;
                     println!("  {} {} (extracted)", "+".green(), key);
                     extracted += 1;
                 }

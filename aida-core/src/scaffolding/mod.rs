@@ -56,6 +56,49 @@ fn generate_aida_header_shell(content: &str) -> String {
     )
 }
 
+/// Wrap raw embedded-template bytes with the appropriate AIDA-Generated
+/// header so the result matches what `scaffold apply` would write to disk.
+/// Public so callers like `aida scaffold extract` can produce files that
+/// round-trip cleanly through `scaffold status` (BUG-1-034).
+///
+/// Header form depends on file type:
+/// - `.json`             → no header (JSON has no comment syntax; an HTML
+///   comment breaks parsers like Claude Code's settings reader).
+/// - shell scripts (`.sh`) → `# AIDA Generated: ...` shell-comment header
+///   prepended.
+/// - markdown with YAML frontmatter (starts with `---\n` and has a
+///   closing `---\n`) → header inserted *after* the frontmatter so YAML
+///   parsers still work.
+/// - everything else (plain markdown, HTML) → `<!-- ... -->` HTML-comment
+///   header at the top.
+///
+/// trace:BUG-1-034 | ai:claude
+pub fn wrap_with_aida_header(path: &std::path::Path, raw_content: &str) -> String {
+    let is_shell = path.extension().and_then(|e| e.to_str()) == Some("sh");
+    let is_json = path.extension().and_then(|e| e.to_str()) == Some("json");
+
+    if is_json {
+        raw_content.to_string()
+    } else if is_shell {
+        format!(
+            "{}{}",
+            generate_aida_header_shell(raw_content),
+            raw_content
+        )
+    } else if raw_content.starts_with("---\n") {
+        let after_open = 4; // past "---\n"
+        if let Some(close_pos) = raw_content[after_open..].find("\n---\n") {
+            let fm_end = after_open + close_pos + 5; // past "\n---\n"
+            let (frontmatter, body) = raw_content.split_at(fm_end);
+            format!("{}{}{}", frontmatter, generate_aida_header(body), body)
+        } else {
+            format!("{}{}", generate_aida_header(raw_content), raw_content)
+        }
+    } else {
+        format!("{}{}", generate_aida_header(raw_content), raw_content)
+    }
+}
+
 /// Find the AIDA header line in file content, skipping YAML frontmatter if present
 fn find_aida_header_line(content: &str) -> Option<&str> {
     // If content starts with YAML frontmatter, skip past it
@@ -442,35 +485,13 @@ impl Scaffolder {
             FileStatus::New
         };
 
-        // Generate content with appropriate header.
-        //   - JSON files: no header (JSON has no comment syntax — the HTML
-        //     comment we'd otherwise prepend breaks parsers like Claude Code's
-        //     settings reader). trace:EPIC-1-001 | ai:claude
-        //   - Shell files: `# ...` comment header.
-        //   - Markdown with YAML frontmatter: header inserted after closing `---`.
-        //   - Other (markdown, html, etc.): `<!-- ... -->` header at top.
-        let is_json = path.extension().and_then(|e| e.to_str()) == Some("json");
-        let content = if is_json {
-            raw_content.clone()
-        } else if is_shell {
-            format!(
-                "{}{}",
-                generate_aida_header_shell(&raw_content),
-                raw_content
-            )
-        } else if raw_content.starts_with("---\n") {
-            // Split at the closing --- and insert header after frontmatter
-            let after_open = 4; // past "---\n"
-            if let Some(close_pos) = raw_content[after_open..].find("\n---\n") {
-                let fm_end = after_open + close_pos + 5; // past "\n---\n"
-                let (frontmatter, body) = raw_content.split_at(fm_end);
-                format!("{}{}{}", frontmatter, generate_aida_header(body), body)
-            } else {
-                format!("{}{}", generate_aida_header(&raw_content), raw_content)
-            }
-        } else {
-            format!("{}{}", generate_aida_header(&raw_content), raw_content)
-        };
+        // Wrap with the appropriate AIDA-Generated header. The same helper
+        // is used by `aida scaffold extract` so the two paths can't drift
+        // apart again (BUG-1-034). The `is_shell` parameter is now ignored
+        // here — wrap_with_aida_header derives it from the file extension.
+        // trace:BUG-1-034 | ai:claude
+        let _ = is_shell; // silence unused-arg warning; semantic is in helper
+        let content = wrap_with_aida_header(&path, &raw_content);
 
         ScaffoldArtifact {
             path,
