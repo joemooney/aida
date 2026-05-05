@@ -10,17 +10,17 @@ description: |-
   - aida statusline (clean cache) drops the cache part entirely
   - aida statusline (stale cache) shows cache:stale in red
   - No CLI flag needed — single-line behavior change
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-05T03:50:29.782988872Z
-modified_at: 2026-05-05T03:54:03.219365740Z
+modified_at: 2026-05-05T03:54:08.928834127Z
 req_type: Task
 tags:
-- cli
 - statusline
 - ux
+- cli
 comments:
 - id: 019df645-8053-7631-b85e-b19c4995daad
   author: joe
