@@ -1537,6 +1537,60 @@ pub enum Command {
         limit: usize,
     },
 
+    /// Project event timeline — `git log` for the requirements store.
+    /// Walks the orphan branch's git log, decodes each commit's YAML diff,
+    /// and emits one logical event per change (status transition, comment
+    /// added, tags edited, requirement added/deleted, etc.) in
+    /// reverse-chronological order.
+    /// trace:FR-1-037 | ai:claude
+    History {
+        /// Most-recent N events (default 50). Filtering happens after
+        /// decoding, so a tight --limit may show fewer than N if the most
+        /// recent commits don't pass the filters.
+        #[clap(long, short = 'n', default_value = "50")]
+        limit: usize,
+
+        /// Walk at most N commits before stopping. Lets you cap work on a
+        /// huge store. Default: 5x --limit, so filters have headroom.
+        #[clap(long)]
+        max_commits: Option<usize>,
+
+        /// Only show events for this requirement (SPEC-ID match).
+        #[clap(long)]
+        id: Option<String>,
+
+        /// Only show events of this requirement type (functional, bug, …).
+        #[clap(long)]
+        r#type: Option<String>,
+
+        /// Only show events authored by this user (matches against the
+        /// last_modified_by HLC field if present, else the git committer
+        /// email).
+        #[clap(long)]
+        author: Option<String>,
+
+        /// Only show events after this date (ISO 8601, e.g. 2026-05-01).
+        #[clap(long)]
+        since: Option<String>,
+
+        /// Only show events before this date (ISO 8601).
+        #[clap(long)]
+        until: Option<String>,
+
+        /// Filter to status transitions only.
+        #[clap(long)]
+        status_changes: bool,
+
+        /// Filter to comment events only.
+        #[clap(long)]
+        comments: bool,
+
+        /// Terse one-line-per-event format. Default is multi-line with
+        /// headers per commit.
+        #[clap(long)]
+        oneline: bool,
+    },
+
     /// List all commands (including the less-common ones hidden from
     /// `aida --help`), grouped by topic.
     HelpAll,

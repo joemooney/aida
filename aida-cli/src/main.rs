@@ -1,4 +1,5 @@
 mod cli;
+mod history;
 mod not_found;
 #[cfg(feature = "remote")]
 mod client;
@@ -471,6 +472,16 @@ fn main() -> Result<()> {
         Command::Init { .. } => {
             // Handled before path resolution above; unreachable
             unreachable!("Init command should be handled before path resolution");
+        }
+        Command::History { .. } => {
+            // History walks the orphan branch; only meaningful in git-canonical
+            // mode, which is dispatched via handle_git_backend_command. Falling
+            // through to legacy means the user is on a SQLite-only project.
+            anyhow::bail!(
+                "aida history requires the distributed git-canonical store \
+                 (run `aida init` to migrate, or this project is on the \
+                 deprecated --centralized backend)"
+            );
         }
     }
 
@@ -1641,6 +1652,34 @@ fn handle_git_backend_command(
             // Storage façade now handles directory paths via GitBackend.load().
             let storage = Storage::new(store_path);
             handle_scaffold_command(scaffold_cmd, &storage, store_path)?;
+        }
+        Command::History {
+            limit,
+            max_commits,
+            id,
+            r#type,
+            author,
+            since,
+            until,
+            status_changes,
+            comments,
+            oneline,
+        } => {
+            // trace:FR-1-037 | ai:claude
+            let max = max_commits.unwrap_or(*limit * 5);
+            let opts = history::HistoryOpts {
+                limit: *limit,
+                max_commits: max.max(*limit),
+                id_filter: id.clone(),
+                type_filter: r#type.clone(),
+                author_filter: author.clone(),
+                since: since.clone(),
+                until: until.clone(),
+                status_changes_only: *status_changes,
+                comments_only: *comments,
+                oneline: *oneline,
+            };
+            history::run(store_path, &opts)?;
         }
         _ => {
             eprintln!(
