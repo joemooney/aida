@@ -51,7 +51,7 @@ use aida_core::{
 };
 
 use crate::cli::{
-    CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand, DevCommand,
+    BlockCommand, CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand, DevCommand,
     FeatureCommand, GitHubCommand, GitLabCommand, JiraCommand, QueueCommand, RelDefCommand,
     RelationshipCommand, ReportCommand, RoleCommand, RolePromptCommand, RoleScopeCommand,
     ScaffoldCommand, ServerCommand, SessionCommand, TraceCommand, TypeCommand,
@@ -907,6 +907,66 @@ fn detect_distributed_store() -> Option<std::path::PathBuf> {
     None
 }
 
+/// Read `use_agreed_blocks` from `.aida/config.toml` in the project directory.
+/// Returns true (enabled) by default when not set. Returns false when explicitly
+/// set to `false` to opt out of agreed ID blocks (use node-namespaced shard IDs only).
+// trace:FR-2-005 | ai:claude
+fn use_agreed_blocks(project_dir: &std::path::Path) -> bool {
+    let config_path = project_dir.join(".aida").join("config.toml");
+    if !config_path.exists() {
+        return true; // default: enabled
+    }
+    let Ok(content) = std::fs::read_to_string(&config_path) else {
+        return true;
+    };
+    for line in content.lines() {
+        let line = line.trim();
+        if line.starts_with("use_agreed_blocks") {
+            if let Some(val) = line.split('=').nth(1) {
+                return val.trim() != "false";
+            }
+        }
+    }
+    true // default: enabled
+}
+
+/// Read node_id from the store's node.toml; defaults to 1 for unregistered nodes.
+fn load_node_id(store_path: &std::path::Path) -> u32 {
+    use aida_core::NodeConfig;
+    let node_config_path = store_path.join(".aida").join("node.toml");
+    if node_config_path.exists() {
+        NodeConfig::load(&node_config_path).map(|c| c.node_id).unwrap_or(1)
+    } else {
+        // Fall back to dispenser.toml node_id
+        let dispenser_path = store_path.join(".aida").join("dispenser.toml");
+        if dispenser_path.exists() {
+            if let Ok(content) = std::fs::read_to_string(&dispenser_path) {
+                for line in content.lines() {
+                    let line = line.trim();
+                    if line.starts_with("node_id") {
+                        if let Some(val) = line.split('=').nth(1) {
+                            if let Ok(id) = val.trim().parse::<u32>() {
+                                return id;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        1
+    }
+}
+
+/// Get the local hostname for informational block registry labels.
+fn hostname() -> String {
+    std::process::Command::new("hostname")
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .unwrap_or_else(|| "unknown".into())
+}
+
 /// Load or create the distributed dispenser for a git-backed store.
 /// Reads node config from {store}/.aida/node.toml; defaults to node_id=1
 /// if no node registration has happened yet.
@@ -1082,6 +1142,73 @@ fn handle_git_backend_command(
             }
             if let Some(p) = prefix {
                 req.prefix_override = Some(p.to_uppercase());
+            }
+
+            // Try to assign an agreed ID from a pre-allocated block (FR-2-005).
+            // Skipped when use_agreed_blocks = false in .aida/config.toml.
+            let project_dir = std::env::current_dir().unwrap_or_default();
+            if use_agreed_blocks(&project_dir) {
+                let node_id = load_node_id(store_path);
+                let blocks_path = store_path.join("registry").join("blocks.yaml");
+                if blocks_path.exists() {
+                    // Determine type prefix same way the store would
+                    let type_prefix = match &req.prefix_override {
+                        Some(p) => p.clone(),
+                        None => {
+                            // Mirror get_type_prefix fallback for common types
+                            match req.req_type {
+                                aida_core::models::RequirementType::Functional => "FR",
+                                aida_core::models::RequirementType::Bug => "BUG",
+                                aida_core::models::RequirementType::Epic => "EPIC",
+                                aida_core::models::RequirementType::Story => "STORY",
+                                aida_core::models::RequirementType::Task => "TASK",
+                                aida_core::models::RequirementType::Spike => "SPIKE",
+                                _ => "FR",
+                            }.to_string()
+                        }
+                    };
+
+                    if let Ok(mut registry) = aida_core::BlockRegistry::load(&blocks_path) {
+                        match registry.find_active_block(node_id, &type_prefix) {
+                            None => {
+                                // No block for this type — fall through to shard ID silently
+                            }
+                            Some(idx) if registry.blocks[idx].is_exhausted() => {
+                                anyhow::bail!(
+                                    "Agreed ID block for {} exhausted on node {}. \
+                                     Run `aida db block claim --type {}` to allocate a new block (requires network).",
+                                    type_prefix, node_id, type_prefix
+                                );
+                            }
+                            Some(_) => {
+                                if let Some((agreed_id, is_low)) = registry.dispense(node_id, &type_prefix) {
+                                    if is_low {
+                                        eprintln!(
+                                            "{} {} block running low ({} remaining). Run `aida db block claim --type {}` soon.",
+                                            "WARNING:".yellow().bold(),
+                                            type_prefix,
+                                            registry.find_active_block(node_id, &type_prefix)
+                                                .map(|i| registry.blocks[i].remaining())
+                                                .unwrap_or(0),
+                                            type_prefix
+                                        );
+                                    }
+                                    // Persist the updated next pointer
+                                    if let Err(e) = registry.save(&blocks_path) {
+                                        eprintln!("Warning: could not save blocks.yaml: {}", e);
+                                    } else {
+                                        // Commit the pointer advance to the store
+                                        let _ = aida_core::git_ops::add(store_path, &["registry/blocks.yaml"]);
+                                    }
+                                    req.agreed_id = Some(agreed_id.clone());
+                                    // Use the agreed ID as the spec_id so it is immediately
+                                    // visible as the primary identifier.
+                                    req.spec_id = Some(agreed_id);
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // Use update_atomically to generate the ID with store's config
@@ -1615,6 +1742,11 @@ fn handle_git_backend_command(
                     println!("  {} → {}", node_id, agreed_id.green().bold());
                 }
             }
+        }
+
+        // trace:FR-2-005 | ai:claude
+        Command::Db(DbCommand::Block { subcommand }) => {
+            handle_block_command(subcommand, store_path)?;
         }
 
         // Phase 3: Export to git backend
@@ -3367,6 +3499,170 @@ fn handle_type_command(cmd: &TypeCommand, storage: &Storage) -> Result<()> {
 
 /// Handle `aida cache {rebuild,status}` against a CachedGitBackend.
 /// trace:EPIC-1-001 | ai:claude
+/// Handle `aida db block <subcommand>` — pre-allocated agreed ID blocks.
+// trace:FR-2-005 | ai:claude
+fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Result<()> {
+    use aida_core::BlockRegistry;
+
+    let blocks_path = store_path.join("registry").join("blocks.yaml");
+    let node_id = load_node_id(store_path);
+
+    match cmd {
+        BlockCommand::Claim { r#type, size } => {
+            let type_prefix = r#type.to_uppercase();
+
+            // Load or create registry, push-wins loop
+            let max_retries = 3;
+            for attempt in 0..max_retries {
+                // Pull before modifying to reduce races
+                let branch = aida_core::git_ops::current_branch(store_path)
+                    .unwrap_or_else(|_| "aida-store".to_string());
+                if attempt > 0 {
+                    let _ = aida_core::git_ops::pull_rebase(store_path, "origin", &branch);
+                }
+
+                let mut registry = BlockRegistry::load(&blocks_path)?;
+                let block = registry.claim_block(
+                    node_id,
+                    std::env::var("USER").unwrap_or_else(|_| "unknown".into()),
+                    hostname(),
+                    type_prefix.clone(),
+                    *size,
+                );
+                registry.save(&blocks_path)?;
+
+                // Commit the new block
+                aida_core::git_ops::add(store_path, &["registry/blocks.yaml"])?;
+                aida_core::git_ops::commit(
+                    store_path,
+                    &format!(
+                        "chore: claim {}-{}..{} for node {}",
+                        type_prefix, block.range_start, block.range_end, node_id
+                    ),
+                )?;
+
+                // Push — retry on rejection
+                match aida_core::git_ops::push(store_path, "origin", &branch) {
+                    Ok(true) => {
+                        println!(
+                            "{} Claimed {}-{}..{} for node {} ({})",
+                            "".green().bold(),
+                            type_prefix,
+                            block.range_start,
+                            block.range_end,
+                            node_id,
+                            block.owner
+                        );
+                        return Ok(());
+                    }
+                    Ok(false) => {
+                        // Push rejected — undo commit, pull, retry
+                        let _ = std::process::Command::new("git")
+                            .args(["reset", "--soft", "HEAD~1"])
+                            .current_dir(store_path)
+                            .output();
+                        if attempt + 1 == max_retries {
+                            anyhow::bail!(
+                                "Could not push block claim after {} attempts. Run `aida db sync --pull` and retry.",
+                                max_retries
+                            );
+                        }
+                        eprintln!(
+                            "{} Push rejected (concurrent claim), retrying ({}/{})...",
+                            "!".yellow(), attempt + 1, max_retries
+                        );
+                    }
+                    Err(e) => anyhow::bail!("Push failed: {}", e),
+                }
+            }
+            anyhow::bail!("Failed to claim block after {} attempts", max_retries);
+        }
+
+        BlockCommand::List => {
+            let registry = BlockRegistry::load(&blocks_path)?;
+            if registry.blocks.is_empty() {
+                println!("No blocks claimed yet. Run `aida db block claim` to allocate one.");
+                return Ok(());
+            }
+            println!(
+                "{:<8}  {:<6}  {:<12}  {:<12}  {:<10}  {}",
+                "Node", "Type", "Range", "Next", "Remaining", "Owner"
+            );
+            println!("{}", "─".repeat(70));
+            for b in &registry.blocks {
+                let remaining = b.remaining();
+                let remaining_str = if b.is_exhausted() {
+                    "exhausted".red().to_string()
+                } else if b.is_low() {
+                    format!("{}", remaining).yellow().to_string()
+                } else {
+                    format!("{}", remaining)
+                };
+                println!(
+                    "{:<8}  {:<6}  {}-{}..{}  {:<12}  {:<10}  {}",
+                    b.node_id,
+                    b.type_prefix,
+                    b.type_prefix,
+                    b.range_start,
+                    b.range_end,
+                    format!("{}-{}", b.type_prefix, b.next),
+                    remaining_str,
+                    b.owner
+                );
+            }
+        }
+
+        BlockCommand::Status => {
+            let registry = BlockRegistry::load(&blocks_path)?;
+            let my_blocks: Vec<_> = registry.blocks.iter().filter(|b| b.node_id == node_id).collect();
+            if my_blocks.is_empty() {
+                println!(
+                    "No blocks for node {}. Run `aida db block claim` to allocate one.",
+                    node_id
+                );
+                return Ok(());
+            }
+            println!("Blocks for node {}:", node_id);
+            println!("{}", "─".repeat(50));
+            for b in my_blocks {
+                let remaining = b.remaining();
+                if b.is_exhausted() {
+                    println!(
+                        "  {} {}: {} (exhausted — run `aida db block claim --type {}`)",
+                        "".red(),
+                        b.type_prefix,
+                        format!("{}-{}..{}", b.type_prefix, b.range_start, b.range_end),
+                        b.type_prefix
+                    );
+                } else if b.is_low() {
+                    println!(
+                        "  {} {}: {} remaining ({}-{}..{}) — {} Low, claim soon",
+                        "".yellow(),
+                        b.type_prefix,
+                        remaining,
+                        b.type_prefix,
+                        b.range_start,
+                        b.range_end,
+                        "WARNING:".yellow().bold()
+                    );
+                } else {
+                    println!(
+                        "  {} {}: {} remaining ({}-{}..{})",
+                        "".green(),
+                        b.type_prefix,
+                        remaining,
+                        b.type_prefix,
+                        b.range_start,
+                        b.range_end
+                    );
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn handle_cache_command(
     cmd: &CacheCommand,
     backend: &aida_core::CachedGitBackend,
@@ -5142,6 +5438,7 @@ fn handle_dev_serve(
 ///
 /// `aida dev patch` is a thin alias that calls this with bump = "patch".
 /// trace:EPIC-1-001 | ai:claude
+// trace:FR-2-004 | ai:claude
 fn handle_dev_release(bump: &str) -> Result<()> {
     // Locate the aida repo. Prefer PWD walk, then $AIDA_DEV_REPO.
     let cwd = std::env::current_dir()?;
@@ -5167,9 +5464,35 @@ fn handle_dev_release(bump: &str) -> Result<()> {
         );
     }
 
+    // Detect if this repo has a git-canonical aida store to sync.
+    let store_path = detect_store_path(&repo);
+
+    // ── Step 1/5: sync store (pull) ──────────────────────────────────────
+    if let Some(ref sp) = store_path {
+        println!(
+            "{}",
+            "─── Step 1/5: syncing aida-store (pull) ───".bold()
+        );
+        let branch = aida_core::git_ops::current_branch(sp)
+            .unwrap_or_else(|_| "aida-store".to_string());
+        match aida_core::git_ops::pull(sp, "origin", &branch) {
+            Ok(()) => println!("  Store pull complete."),
+            Err(e) => {
+                anyhow::bail!(
+                    "aida-store pull failed: {}\n\
+                     Resolve store conflicts first: aida db sync --pull\n\
+                     Then re-run `aida dev release {}`.",
+                    e, bump
+                );
+            }
+        }
+        println!();
+    }
+
+    // ── Step 2/5: run release.sh ─────────────────────────────────────────
     println!(
         "{}",
-        format!("─── Step 1/3: ./scripts/release.sh {} ───", bump).bold()
+        format!("─── Step 2/5: ./scripts/release.sh {} ───", bump).bold()
     );
     println!("Working in {}", repo.display());
     println!();
@@ -5195,10 +5518,11 @@ fn handle_dev_release(bump: &str) -> Result<()> {
         anyhow::anyhow!("release.sh succeeded but no tag is reachable — confused state, please check `git tag --list` manually.")
     })?;
 
+    // ── Step 3/5: wait for GitHub release artifacts ───────────────────────
     println!();
     println!(
         "{}",
-        format!("─── Step 2/3: waiting for {} release artifacts ───", new_tag).bold()
+        format!("─── Step 3/5: waiting for {} release artifacts ───", new_tag).bold()
     );
     let target = release_target().ok_or_else(|| {
         anyhow::anyhow!(
@@ -5213,13 +5537,56 @@ fn handle_dev_release(bump: &str) -> Result<()> {
     println!("Polling {} ...", asset_url);
     poll_until_published(&asset_url, std::time::Duration::from_secs(600))?;
 
+    // ── Step 4/5: upgrade sibling installs ───────────────────────────────
     println!();
     println!(
         "{}",
-        format!("─── Step 3/3: upgrading sibling installs to {} ───", new_tag).bold()
+        format!("─── Step 4/5: upgrading sibling installs to {} ───", new_tag).bold()
     );
     let bare_version = strip_v(&new_tag).to_string();
     upgrade_dev_mode_sibling_scan(false, Some(&bare_version), true)?;
+
+    // ── Step 5/5: sync store (push) ───────────────────────────────────────
+    if let Some(ref sp) = store_path {
+        println!();
+        println!(
+            "{}",
+            format!("─── Step 5/5: syncing aida-store (push) for {} ───", new_tag).bold()
+        );
+        let branch = aida_core::git_ops::current_branch(sp)
+            .unwrap_or_else(|_| "aida-store".to_string());
+
+        // Commit any pending store changes (e.g., block pointer updates)
+        if aida_core::git_ops::has_changes(sp).unwrap_or(false) {
+            let msg = format!("chore: sync store for release {}", new_tag);
+            let _ = aida_core::git_ops::add_all(sp, "objects");
+            let _ = aida_core::git_ops::add_all(sp, "registry");
+            if sp.join("metadata.yaml").exists() {
+                let _ = aida_core::git_ops::add(sp, &["metadata.yaml"]);
+            }
+            if let Err(e) = aida_core::git_ops::commit(sp, &msg) {
+                eprintln!("  Warning: could not commit store changes: {}", e);
+            } else {
+                println!("  Committed store changes: {}", msg);
+            }
+        }
+
+        match aida_core::git_ops::push(sp, "origin", &branch) {
+            Ok(true) => println!("  Store push complete."),
+            Ok(false) => {
+                println!("  Push rejected. Pulling and retrying...");
+                if let Err(e) = aida_core::git_ops::pull_rebase(sp, "origin", &branch) {
+                    eprintln!("  Warning: store pull-rebase failed: {}", e);
+                } else {
+                    match aida_core::git_ops::push(sp, "origin", &branch) {
+                        Ok(_) => println!("  Store push complete after rebase."),
+                        Err(e) => eprintln!("  Warning: store push failed after rebase: {}", e),
+                    }
+                }
+            }
+            Err(e) => eprintln!("  Warning: store push failed: {}", e),
+        }
+    }
 
     println!();
     println!(
@@ -5228,6 +5595,28 @@ fn handle_dev_release(bump: &str) -> Result<()> {
         new_tag
     );
     Ok(())
+}
+
+/// Find the aida-store path for a given repo, if configured.
+fn detect_store_path(repo: &std::path::Path) -> Option<std::path::PathBuf> {
+    let config_path = repo.join(".aida").join("config.toml");
+    if !config_path.exists() {
+        return None;
+    }
+    let content = std::fs::read_to_string(&config_path).ok()?;
+    for line in content.lines() {
+        let line = line.trim();
+        if line.starts_with("store_path") {
+            if let Some(val) = line.split('=').nth(1) {
+                let val = val.trim().trim_matches('"').trim_matches('\'');
+                let sp = repo.join(val);
+                if sp.exists() && sp.is_dir() && aida_core::git_ops::is_git_repo(&sp) {
+                    return Some(sp);
+                }
+            }
+        }
+    }
+    None
 }
 
 /// HEAD-poll an URL until it returns 200 or `timeout` elapses. Used by
@@ -6761,6 +7150,12 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
         DbCommand::Status => {
             println!(
                 "{} Status is only available for git-backed stores. Use: aida --file <dir> db status",
+                "!".yellow()
+            );
+        }
+        DbCommand::Block { .. } => {
+            println!(
+                "{} Block commands are only available for git-backed stores. Use: aida --file <dir> db block ...",
                 "!".yellow()
             );
         }

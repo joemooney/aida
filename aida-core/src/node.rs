@@ -184,6 +184,173 @@ impl UserRegistry {
 }
 
 // ---------------------------------------------------------------------------
+// Pre-allocated Agreed ID Blocks (FR-2-005)
+// ---------------------------------------------------------------------------
+
+/// A pre-allocated block of agreed IDs for a node+type.
+///
+/// Each node claims a contiguous range of agreed IDs (e.g., FR-300..FR-399)
+/// from the shared block registry on the aida-store branch. This allows
+/// trace comments like `// trace:FR-300` to use stable, agreed IDs immediately
+/// without waiting for merge-gate, even when working offline.
+///
+/// When `next > range_end` the block is exhausted; the node must claim a new
+/// block (requires network to push). When `next >= range_end - LOW_THRESHOLD`
+/// a warning is printed on `aida add`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgreedIdBlock {
+    /// Node that owns this block
+    pub node_id: u32,
+    /// Human-readable owner label (e.g., "joe@work")
+    pub owner: String,
+    /// Hostname at claim time (informational)
+    pub hostname: String,
+    /// Type prefix this block covers (e.g., "FR", "BUG")
+    pub type_prefix: String,
+    /// First ID in the range (inclusive)
+    pub range_start: u32,
+    /// Last ID in the range (inclusive)
+    pub range_end: u32,
+    /// Next ID to dispense from this block
+    pub next: u32,
+    /// When this block was claimed
+    pub allocated_at: DateTime<Utc>,
+}
+
+impl AgreedIdBlock {
+    /// Number of IDs remaining in this block (including `next`).
+    pub fn remaining(&self) -> u32 {
+        if self.next > self.range_end {
+            0
+        } else {
+            self.range_end - self.next + 1
+        }
+    }
+
+    /// True when the block has no more IDs to dispense.
+    pub fn is_exhausted(&self) -> bool {
+        self.next > self.range_end
+    }
+
+    /// True when the block is running low (≤ LOW_THRESHOLD remaining).
+    pub fn is_low(&self) -> bool {
+        self.remaining() <= Self::LOW_THRESHOLD
+    }
+
+    /// Number of remaining IDs that triggers a low-block warning.
+    pub const LOW_THRESHOLD: u32 = 10;
+
+    /// Dispense the next agreed ID from this block, updating `next`.
+    /// Returns the formatted ID (e.g., "FR-300") or None if exhausted.
+    pub fn dispense(&mut self) -> Option<String> {
+        if self.is_exhausted() {
+            return None;
+        }
+        let id = format!("{}-{}", self.type_prefix.to_uppercase(), self.next);
+        self.next += 1;
+        Some(id)
+    }
+}
+
+/// The shared block registry — stored at `.aida-store/registry/blocks.yaml`.
+///
+/// This file is committed to the aida-store branch. Claiming a new block
+/// requires a push (atomic via git push-wins-retry semantics). Using IDs
+/// from an already-claimed block is purely local — no network needed.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct BlockRegistry {
+    #[serde(default)]
+    pub blocks: Vec<AgreedIdBlock>,
+}
+
+impl BlockRegistry {
+    /// Load from a YAML file. Returns an empty registry if the file does not exist.
+    #[cfg(feature = "native")]
+    pub fn load(path: &Path) -> anyhow::Result<Self> {
+        if !path.exists() {
+            return Ok(Self::default());
+        }
+        let content = std::fs::read_to_string(path)?;
+        let registry: BlockRegistry = serde_yaml::from_str(&content)?;
+        Ok(registry)
+    }
+
+    /// Save to a YAML file.
+    #[cfg(feature = "native")]
+    pub fn save(&self, path: &Path) -> anyhow::Result<()> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let content = serde_yaml::to_string(self)?;
+        std::fs::write(path, content)?;
+        Ok(())
+    }
+
+    /// Find the active (non-exhausted) block for a given node + type prefix.
+    /// Returns the index into `self.blocks` if found.
+    pub fn find_active_block(&self, node_id: u32, type_prefix: &str) -> Option<usize> {
+        let prefix = type_prefix.to_uppercase();
+        self.blocks
+            .iter()
+            .enumerate()
+            .find(|(_, b)| {
+                b.node_id == node_id
+                    && b.type_prefix.to_uppercase() == prefix
+                    && !b.is_exhausted()
+            })
+            .map(|(i, _)| i)
+    }
+
+    /// Return the next range_start for a new block of the given type prefix.
+    /// This is max(range_end) across all blocks of that type + 1, or 1 if none exist.
+    pub fn next_range_start(&self, type_prefix: &str) -> u32 {
+        let prefix = type_prefix.to_uppercase();
+        self.blocks
+            .iter()
+            .filter(|b| b.type_prefix.to_uppercase() == prefix)
+            .map(|b| b.range_end)
+            .max()
+            .map(|max_end| max_end + 1)
+            .unwrap_or(1)
+    }
+
+    /// Append a new block for the given node. Returns the claimed block.
+    pub fn claim_block(
+        &mut self,
+        node_id: u32,
+        owner: String,
+        hostname: String,
+        type_prefix: String,
+        size: u32,
+    ) -> AgreedIdBlock {
+        let range_start = self.next_range_start(&type_prefix);
+        let range_end = range_start + size - 1;
+        let block = AgreedIdBlock {
+            node_id,
+            owner,
+            hostname,
+            type_prefix: type_prefix.to_uppercase(),
+            range_start,
+            range_end,
+            next: range_start,
+            allocated_at: Utc::now(),
+        };
+        self.blocks.push(block.clone());
+        block
+    }
+
+    /// Dispense the next agreed ID for a node+type, updating the block in-place.
+    /// Returns `(id, is_low)` or None if no active block / exhausted.
+    pub fn dispense(&mut self, node_id: u32, type_prefix: &str) -> Option<(String, bool)> {
+        let idx = self.find_active_block(node_id, type_prefix)?;
+        let block = &mut self.blocks[idx];
+        let id = block.dispense()?;
+        let is_low = block.is_low();
+        Some((id, is_low))
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Agreed ID Counters
 // ---------------------------------------------------------------------------
 
@@ -451,5 +618,77 @@ mod tests {
         let back: WorkspaceConfig = toml::from_str(&toml_str).unwrap();
         assert_eq!(back.workspace, "gdms-disruptive");
         assert_eq!(back.repos.len(), 2);
+    }
+
+    #[test]
+    fn test_block_registry_claim_and_dispense() {
+        let mut registry = BlockRegistry::default();
+        let block = registry.claim_block(2, "joe@work".into(), "workstation".into(), "FR".into(), 100);
+        assert_eq!(block.range_start, 1);
+        assert_eq!(block.range_end, 100);
+        assert_eq!(block.next, 1);
+
+        let (id, is_low) = registry.dispense(2, "FR").unwrap();
+        assert_eq!(id, "FR-1");
+        assert!(!is_low);
+
+        let (id2, _) = registry.dispense(2, "FR").unwrap();
+        assert_eq!(id2, "FR-2");
+    }
+
+    #[test]
+    fn test_block_registry_next_range_start() {
+        let mut registry = BlockRegistry::default();
+        registry.claim_block(1, "joe@home".into(), "home".into(), "FR".into(), 100);
+        registry.claim_block(2, "joe@work".into(), "work".into(), "FR".into(), 100);
+
+        // home claims 1..100, work claims 101..200, next start should be 201
+        assert_eq!(registry.next_range_start("FR"), 201);
+        // BUG has no blocks yet
+        assert_eq!(registry.next_range_start("BUG"), 1);
+    }
+
+    #[test]
+    fn test_block_exhaustion() {
+        let mut registry = BlockRegistry::default();
+        registry.claim_block(1, "a".into(), "h".into(), "FR".into(), 3);
+
+        assert_eq!(registry.dispense(1, "FR").unwrap().0, "FR-1");
+        assert_eq!(registry.dispense(1, "FR").unwrap().0, "FR-2");
+        assert_eq!(registry.dispense(1, "FR").unwrap().0, "FR-3");
+        assert!(registry.dispense(1, "FR").is_none()); // exhausted
+        assert_eq!(registry.blocks[0].remaining(), 0);
+        assert!(registry.blocks[0].is_exhausted());
+    }
+
+    #[test]
+    fn test_block_low_threshold() {
+        let mut registry = BlockRegistry::default();
+        registry.claim_block(1, "a".into(), "h".into(), "FR".into(), 15);
+
+        // Consume until 5 remain — should trigger is_low
+        for _ in 0..5 {
+            registry.dispense(1, "FR");
+        }
+        // 10 remain at this point — exactly at threshold, is_low = true
+        let (_, is_low) = registry.dispense(1, "FR").unwrap();
+        assert!(is_low);
+    }
+
+    #[cfg(feature = "native")]
+    #[test]
+    fn test_block_registry_persistence() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("blocks.yaml");
+
+        let mut registry = BlockRegistry::default();
+        registry.claim_block(2, "joe@work".into(), "work".into(), "FR".into(), 100);
+        registry.save(&path).unwrap();
+
+        let loaded = BlockRegistry::load(&path).unwrap();
+        assert_eq!(loaded.blocks.len(), 1);
+        assert_eq!(loaded.blocks[0].range_start, 1);
+        assert_eq!(loaded.blocks[0].range_end, 100);
+        assert_eq!(loaded.blocks[0].node_id, 2);
     }
 }
