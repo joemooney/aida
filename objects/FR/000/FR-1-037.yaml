@@ -88,10 +88,10 @@ modified_at: 2026-05-05T01:07:47.292251679Z
 req_type: Functional
 tags:
 - cli
-- ux
-- history
-- git-log
 - timeline
+- ux
+- git-log
+- history
 comments:
 - id: 019df5ad-36e5-72d2-b41e-dcc32092e23a
   author: joe

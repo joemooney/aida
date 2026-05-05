@@ -1,0 +1,11 @@
+id: 019df6b3-ab92-7c42-b75b-b1b908db65ab
+spec_id: FR-0391
+title: WebUI smoke-test req
+description: Created via REST during BUG-1-049 verification
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-05T05:54:23.250508444Z
+modified_at: 2026-05-05T05:54:23.250508444Z
+req_type: Functional
