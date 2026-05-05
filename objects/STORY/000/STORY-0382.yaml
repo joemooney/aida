@@ -11,6 +11,6 @@ created_at: 2026-02-22T20:35:47.917818690Z
 modified_at: 2026-02-22T20:35:47.917818690Z
 req_type: Story
 tags:
-- web
-- create
 - ui
+- create
+- web
