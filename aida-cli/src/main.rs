@@ -8999,11 +8999,51 @@ enum UpgradeAction {
     /// drifted — rewrite just the marked block, preserve user content
     /// outside the markers.
     RewriteAidaBlock,
+    /// ManagedMerge file with AIDA-owned slot drift — replace just the
+    /// declared slots, preserve everything else verbatim. The `Vec`
+    /// records what changed for the per-row UI.
+    /// trace:FR-1-047 | ai:claude
+    SlotMerge {
+        changes: Vec<aida_core::SlotChange>,
+        merged: serde_json::Value,
+    },
     /// File exists, drifted, but the file is user-owned (Seed without
-    /// markers, or ManagedMerge in v1) — log and skip.
+    /// markers) — log and skip.
     LeaveAlone,
     /// File exists and matches — silent count.
     None,
+}
+
+/// Pick an upgrade action for a managed-merge file by parsing both the
+/// on-disk JSON and the AIDA-rendered template, then running them
+/// through `slot_merge`. Falls back to `LeaveAlone` if either side fails
+/// to parse — bad JSON should be a user-facing error from elsewhere
+/// (e.g. `scaffold status` / `scaffold diff`), not a silent overwrite.
+/// trace:FR-1-047 | ai:claude
+fn decide_managed_merge(
+    relative_path: &std::path::Path,
+    on_disk_path: &std::path::Path,
+    expected_content: &str,
+) -> UpgradeAction {
+    let actual_text = match std::fs::read_to_string(on_disk_path) {
+        Ok(s) => s,
+        Err(_) => return UpgradeAction::LeaveAlone,
+    };
+    let actual_json: serde_json::Value = match serde_json::from_str(&actual_text) {
+        Ok(v) => v,
+        Err(_) => return UpgradeAction::LeaveAlone,
+    };
+    let expected_json: serde_json::Value = match serde_json::from_str(expected_content) {
+        Ok(v) => v,
+        Err(_) => return UpgradeAction::LeaveAlone,
+    };
+    let slots = aida_core::scaffolding::slots_for_file(relative_path);
+    let (merged, changes) = aida_core::scaffolding::slot_merge(&actual_json, &expected_json, slots);
+    if changes.is_empty() {
+        UpgradeAction::None
+    } else {
+        UpgradeAction::SlotMerge { changes, merged }
+    }
 }
 
 /// Replace the content between `<!-- AIDA-AUTOGEN-BEGIN -->` and
@@ -9053,7 +9093,26 @@ fn file_matches_artifact(path: &std::path::Path, actual: &str, expected: &str) -
                 _ => actual.trim() == expected.trim(),
             }
         }
-        FileCategory::Template | FileCategory::ManagedMerge => actual.trim() == expected.trim(),
+        FileCategory::Template => actual.trim() == expected.trim(),
+        FileCategory::ManagedMerge => {
+            // Slot-equality: parse both sides as JSON and compare just the
+            // AIDA-owned slots. User keys outside the slots don't trigger
+            // drift. Mirrors `report.rs::managed_merge_matches` and what
+            // `scaffold upgrade` actually applies. trace:FR-1-047
+            use serde_json::Value;
+            let Ok(av): Result<Value, _> = serde_json::from_str(actual) else {
+                return actual.trim() == expected.trim();
+            };
+            let Ok(ev): Result<Value, _> = serde_json::from_str(expected) else {
+                return actual.trim() == expected.trim();
+            };
+            let slots = aida_core::scaffolding::slots_for_file(path);
+            if slots.is_empty() {
+                actual.trim() == expected.trim()
+            } else {
+                slots.iter().all(|s| av.pointer(s) == ev.pointer(s))
+            }
+        }
     }
 }
 
@@ -9123,10 +9182,13 @@ fn run_scaffold_upgrade(
             false
         };
 
-        // Decide action.
-        // Special case: AGENTS.md with AIDA-AUTOGEN markers gets a
-        // block-only rewrite (preserves user content outside the block).
-        // Any other Seed drift is left alone (user owns the file).
+        // Decide action per category. Two special cases for v1.1+ work:
+        // - AGENTS.md (Seed) with AIDA-AUTOGEN markers gets a block-only
+        //   rewrite (FR-1-035) — preserves user content outside the
+        //   block.
+        // - Managed-merge files (settings.json, .mcp.json) with drift
+        //   in any AIDA-owned slot get a slot-merge (FR-1-047) — replace
+        //   only the declared slots, preserve every other key verbatim.
         let action = if !exists {
             UpgradeAction::Create
         } else if !drifted {
@@ -9151,7 +9213,11 @@ fn run_scaffold_upgrade(
                         UpgradeAction::LeaveAlone
                     }
                 }
-                FileCategory::ManagedMerge => UpgradeAction::LeaveAlone,
+                FileCategory::ManagedMerge => decide_managed_merge(
+                    &artifact.path,
+                    &on_disk_path,
+                    &artifact.content,
+                ),
             }
         };
 
@@ -9181,6 +9247,29 @@ fn run_scaffold_upgrade(
                     std::fs::write(&on_disk_path, merged)?;
                 }
                 stats.upgraded.push(artifact.path.clone());
+            }
+            UpgradeAction::SlotMerge { changes, merged } => {
+                // trace:FR-1-047 | ai:claude
+                if !dry_run {
+                    let pretty = serde_json::to_string_pretty(&merged)?;
+                    std::fs::write(&on_disk_path, pretty + "\n")?;
+                }
+                stats.upgraded.push(artifact.path.clone());
+                // Surface the per-slot diff inline since it's the most
+                // useful signal for a managed-merge upgrade.
+                for ch in &changes {
+                    let kind = match ch.kind {
+                        aida_core::SlotChangeKind::Replaced => "↑".cyan().to_string(),
+                        aida_core::SlotChangeKind::Added => "+".green().to_string(),
+                    };
+                    eprintln!(
+                        "      {}   {}: {} {}",
+                        " ".repeat(0),
+                        artifact.path.display().to_string().dimmed(),
+                        kind,
+                        ch.slot
+                    );
+                }
             }
             UpgradeAction::LeaveAlone => {
                 stats.left_alone.push(artifact.path.clone());
