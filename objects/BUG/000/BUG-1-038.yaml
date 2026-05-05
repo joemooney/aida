@@ -17,7 +17,7 @@ created_at: 2026-05-05T01:29:10.246967813Z
 modified_at: 2026-05-05T01:29:10.246967813Z
 req_type: Bug
 tags:
-- history
+- cli
 - ux
 - performance
-- cli
+- history

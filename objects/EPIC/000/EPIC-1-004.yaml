@@ -27,9 +27,9 @@ modified_at: 2026-05-04T19:26:10.564602770Z
 req_type: Epic
 tags:
 - dev-workflow
+- shell
 - cli
 - release
-- shell
 comments:
 - id: 019df147-d299-7b23-ab59-4d03af72488b
   author: joe

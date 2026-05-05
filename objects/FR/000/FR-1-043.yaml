@@ -55,8 +55,8 @@ modified_at: 2026-05-05T03:32:32.901650635Z
 req_type: Functional
 tags:
 - cli
-- resume
 - ux
+- resume
 - session
 - claude-code
 comments:
