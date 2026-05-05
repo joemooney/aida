@@ -21,8 +21,8 @@ req_type: Bug
 tags:
 - ux
 - timestamp
-- history
 - cli
+- history
 relationships:
 - rel_type: References
   target_id: 019df5d7-6215-7a00-aaa3-55baae9596f1
