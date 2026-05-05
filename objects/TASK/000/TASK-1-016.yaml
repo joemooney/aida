@@ -20,10 +20,10 @@ created_at: 2026-05-04T18:10:25.235697605Z
 modified_at: 2026-05-05T00:23:47.649084752Z
 req_type: Task
 tags:
-- scaffolding
 - invariant
-- ci
 - templates
+- scaffolding
+- ci
 comments:
 - id: 019df585-00c1-7931-9d05-0f4f4819abea
   author: joe
