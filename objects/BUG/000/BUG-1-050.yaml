@@ -14,14 +14,14 @@ description: |-
   **Impact**: web UI users can't create non-Functional requirements via REST today. CLI 'aida add --type task' works fine because it goes through a different path.
 
   **Fix**: thread reqType through the create_requirement handler. Likely a 5-line change once located.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-05T05:55:27.561282268Z
-modified_at: 2026-05-05T05:55:27.561282268Z
+modified_at: 2026-05-05T06:02:31.901863915Z
 req_type: Bug
 tags:
+- rest
 - server
 - reqtype
-- rest
