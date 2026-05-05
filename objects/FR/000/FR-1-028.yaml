@@ -17,12 +17,12 @@ description: |-
   - Should record upgrade events somewhere (scaffold manifest? audit log?) so we know when each file was last touched by AIDA
 
   Blocked by the file-categorization spike — the merge strategies aren't well-defined without categories. This req captures the CLI surface; the spike captures the semantic model.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-04T19:20:41.878006329Z
-modified_at: 2026-05-05T02:31:04.107857579Z
+modified_at: 2026-05-05T02:38:25.085552419Z
 req_type: Functional
 comments:
 - id: 019df597-6ecb-73a1-b7af-40fcc71d027c
