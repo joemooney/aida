@@ -15,6 +15,6 @@ created_at: 2026-05-04T18:10:16.485552351Z
 modified_at: 2026-05-04T18:10:16.485552351Z
 req_type: Task
 tags:
-- scaffolding
 - templates
+- scaffolding
 - claude-code
