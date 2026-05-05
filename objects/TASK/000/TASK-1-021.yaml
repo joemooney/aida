@@ -41,8 +41,8 @@ modified_at: 2026-05-04T19:22:11.778019983Z
 req_type: Task
 tags:
 - scope
-- cli
 - roles
+- cli
 relationships:
 - rel_type: Child
   target_id: 019df145-aa09-7531-91df-ef3090b34407

@@ -27,5 +27,5 @@ req_type: Task
 tags:
 - dev-activate
 - ps1
-- composition
 - shell
+- composition
