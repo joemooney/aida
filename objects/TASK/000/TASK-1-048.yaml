@@ -5,12 +5,12 @@ description: |-
   Per the chat thread on what the leading 'aida' anchor in the statusline is for: keep the same 4-column footprint but use Greek transliteration so the prefix carries a quiet identity marker (the δ specifically is unmistakably Greek) without making the line foreign. ΑΙΔΑ → αιδα: lowercase to match the existing dimmed-anchor styling.
 
   Same width, same role. One-line change in handle_statusline_command.
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-05T05:42:56.783067461Z
-modified_at: 2026-05-05T05:42:56.783067461Z
+modified_at: 2026-05-05T05:43:52.170976503Z
 req_type: Task
 tags:
 - branding
