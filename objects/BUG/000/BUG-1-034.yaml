@@ -42,12 +42,12 @@ description: |-
 
   - FR-145 (the protection mechanism that's misbehaving here)
   - EPIC-1-026 / FR-1-027 / FR-1-028 / SPIKE-1-029 (broader upgrade workflow — fixing this bug unblocks the manual extract+cp workaround and reduces pressure on the larger redesign)
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-05T00:26:04.660391580Z
-modified_at: 2026-05-05T00:48:21.587947135Z
+modified_at: 2026-05-05T00:48:22.974577034Z
 req_type: Bug
 comments:
 - id: 019df59b-7e53-7b03-ace9-7012030bb090
