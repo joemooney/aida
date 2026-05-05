@@ -1,0 +1,20 @@
+id: 019df584-e1d4-7352-a4b1-336ca4bb34b8
+spec_id: TASK-1-033
+title: Write missing aida-status skill body to match its command stub
+description: |-
+  TASK-1-016 (skill/command parity check) exists as the meta-task. THIS is the concrete current violator: aida-core/templates/commands/aida-status.md has a command stub but there is no matching aida-core/templates/skills/aida-status.md skill file. /aida-status works today because the command stub is self-contained, but the parity convention says every command should have a backing skill.
+
+  Either: write a real templates/skills/aida-status.md (and slim the command stub to point at it), or document that aida-status is intentionally inline and update TASK-1-016 to whitelist it.
+
+  Discovered while writing TASK-1-030 (/aida-queue) — that skill matches the convention, this one doesn't.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-05T00:23:39.732313620Z
+modified_at: 2026-05-05T00:23:39.732313620Z
+req_type: Task
+tags:
+- scaffolding
+- parity
+- skills

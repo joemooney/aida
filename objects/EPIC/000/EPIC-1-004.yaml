@@ -28,8 +28,8 @@ req_type: Epic
 tags:
 - shell
 - dev-workflow
-- release
 - cli
+- release
 comments:
 - id: 019df147-d299-7b23-ab59-4d03af72488b
   author: joe
