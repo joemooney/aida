@@ -17,18 +17,18 @@ description: |-
   - Offers --no-scope and --all as broader views when filtered queue is empty
   - Suggests next actions (/aida-pickup to start, queue move/remove, show <id>)
   - Does NOT auto-pick anything up — that's /aida-pickup's job
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-05T00:16:13.603078107Z
-modified_at: 2026-05-05T00:16:25.204489694Z
+modified_at: 2026-05-05T00:16:33.480387990Z
 req_type: Task
 tags:
 - skills
+- roles
 - scaffolding
 - queue
-- roles
 comments:
 - id: 019df57e-4074-7fa0-baf1-c13737bdf3c0
   author: joe
