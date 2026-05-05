@@ -170,7 +170,8 @@ pub use report::{
 };
 #[cfg(feature = "native")]
 pub use scaffolding::{
-    ProjectType, ScaffoldArtifact, ScaffoldConfig, ScaffoldError, ScaffoldPreview, Scaffolder,
+    wrap_with_aida_header, ProjectType, ScaffoldArtifact, ScaffoldConfig, ScaffoldError,
+    ScaffoldPreview, Scaffolder,
 };
 #[cfg(feature = "native")]
 pub use storage::{
