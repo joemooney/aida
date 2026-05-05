@@ -8771,6 +8771,28 @@ fn handle_scaffold_command(
                 println!("  Use --force to overwrite existing files");
             }
         }
+        ScaffoldCommand::Upgrade {
+            project_root,
+            dry_run,
+            force,
+        } => {
+            // trace:FR-1-028 | ai:claude
+            let store = storage.load()?;
+            let root = project_root
+                .clone()
+                .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+            if !root.exists() {
+                anyhow::bail!("Project root does not exist: {}", root.display());
+            }
+
+            let mut scaffolder = aida_core::scaffolding::Scaffolder::with_database(
+                root.clone(),
+                ScaffoldConfig::default(),
+                db_path.to_path_buf(),
+            );
+            let preview = scaffolder.preview(&store);
+            run_scaffold_upgrade(&root, &preview, *dry_run, *force)?;
+        }
         ScaffoldCommand::Diff {
             path,
             project_root,
@@ -8826,6 +8848,200 @@ fn handle_scaffold_command(
         }
     }
 
+    Ok(())
+}
+
+/// Return true when on-disk `actual` matches the expected `expected` per
+/// the file's comparison rule. AGENTS.md uses delimited-block comparison
+/// (FR-1-035) so user content outside the AIDA-AUTOGEN markers doesn't
+/// trigger false drift; everything else uses whole-content trim-equality
+/// (matches `aida scaffold status`).
+/// trace:FR-1-028 | ai:claude
+fn file_matches_artifact(path: &std::path::Path, actual: &str, expected: &str) -> bool {
+    if path.file_name().and_then(|s| s.to_str()) == Some("AGENTS.md") {
+        match (
+            aida_core::scaffolding::extract_aida_block(actual),
+            aida_core::scaffolding::extract_aida_block(expected),
+        ) {
+            (Some(a), Some(e)) => a.trim() == e.trim(),
+            _ => actual.trim() == expected.trim(),
+        }
+    } else {
+        actual.trim() == expected.trim()
+    }
+}
+
+/// Category-aware scaffold upgrade. For each artifact, decide what to do
+/// based on its `FileCategory` and current drift state, then either
+/// write or leave alone. Output is grouped by category with per-file
+/// detail only for files that actually need attention or changed.
+///
+/// Strategies:
+///   - Template + drifted/missing → overwrite/create
+///   - Template + matching        → no-op (no message)
+///   - Seed + missing             → create
+///   - Seed + drifted             → leave alone (user owns; drift expected)
+///   - Seed + matching            → no-op
+///   - ManagedMerge + missing     → create
+///   - ManagedMerge + drifted     → v1: leave alone with a "deferred" note
+///   - ManagedMerge + matching    → no-op
+///
+/// `--force` overrides the per-category strategy and overwrites every
+/// drifted file regardless of category (parity with `apply --force`,
+/// just with cleaner output).
+///
+/// trace:FR-1-028 | ai:claude
+fn run_scaffold_upgrade(
+    project_root: &std::path::Path,
+    preview: &aida_core::ScaffoldPreview,
+    dry_run: bool,
+    force: bool,
+) -> Result<()> {
+    use aida_core::FileCategory;
+    use std::path::PathBuf;
+
+    #[derive(Default)]
+    struct CategoryStats {
+        upgraded: Vec<PathBuf>,
+        created: Vec<PathBuf>,
+        left_alone: Vec<PathBuf>,
+        unchanged: usize,
+    }
+
+    let mut by_cat: std::collections::BTreeMap<&str, CategoryStats> = std::collections::BTreeMap::new();
+
+    for artifact in &preview.artifacts {
+        let cat = artifact.category();
+        let cat_label = cat.label();
+        let stats = by_cat.entry(cat_label).or_default();
+
+        let on_disk_path = project_root.join(&artifact.path);
+        let exists = on_disk_path.exists();
+        // Use content-equality directly rather than `artifact.file_status`
+        // — there's a pre-existing bug in `check_file_status` where files
+        // with YAML frontmatter (skills, commands) report Modified even
+        // when they're byte-identical, because the header's stored
+        // checksum is computed against the post-frontmatter body but the
+        // expected checksum is computed against the full raw_content.
+        // `aida scaffold status` already sidesteps this with content
+        // equality; matching that behavior here. The underlying bug is
+        // tracked separately so file_status can be made trustworthy.
+        // trace:FR-1-028 | ai:claude
+        let drifted = if exists {
+            match std::fs::read_to_string(&on_disk_path) {
+                Ok(actual) => !file_matches_artifact(&artifact.path, &actual, &artifact.content),
+                Err(_) => true,
+            }
+        } else {
+            // Missing isn't drift — handled separately as "create".
+            false
+        };
+
+        // Decide action.
+        let should_write = if !exists {
+            // Missing entirely — every category creates it.
+            true
+        } else if !drifted {
+            // Matching — never write.
+            false
+        } else if force {
+            true
+        } else {
+            match cat {
+                FileCategory::Template => true,
+                FileCategory::Seed => false,
+                FileCategory::ManagedMerge => false,
+            }
+        };
+
+        if should_write {
+            if !dry_run {
+                if let Some(parent) = on_disk_path.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+                std::fs::write(&on_disk_path, &artifact.content)?;
+            }
+            if exists {
+                stats.upgraded.push(artifact.path.clone());
+            } else {
+                stats.created.push(artifact.path.clone());
+            }
+        } else if !drifted {
+            stats.unchanged += 1;
+        } else {
+            stats.left_alone.push(artifact.path.clone());
+        }
+    }
+
+    // Render. One block per category, in the same order as the SPIKE
+    // doc + the FileCategory enum (template → seed → managed-merge).
+    let order = ["template", "seed", "managed-merge"];
+    let mut total_changes = 0usize;
+    for cat in order {
+        let Some(stats) = by_cat.get(cat) else { continue };
+        let header = match cat {
+            "template" => "Templates (AIDA-owned)".cyan().bold(),
+            "seed" => "Seed (user-owned post-init)".yellow().bold(),
+            "managed-merge" => "Managed-merge (slot-shared)".magenta().bold(),
+            _ => cat.normal().bold(),
+        };
+        println!("\n{}", header);
+        if !stats.created.is_empty() {
+            println!("  {} {} created:", "+".green().bold(), stats.created.len());
+            for p in &stats.created {
+                println!("      + {}", p.display());
+            }
+            total_changes += stats.created.len();
+        }
+        if !stats.upgraded.is_empty() {
+            let verb = if force { "overwritten" } else { "upgraded" };
+            println!("  {} {} {}:", "↑".cyan().bold(), stats.upgraded.len(), verb);
+            for p in &stats.upgraded {
+                println!("      ↑ {}", p.display());
+            }
+            total_changes += stats.upgraded.len();
+        }
+        if !stats.left_alone.is_empty() {
+            let why = match cat {
+                "seed" => "user-owned; drift expected. Edit by hand or `apply --force`",
+                "managed-merge" => "slot-merge deferred (FR-1-028 v2). Edit by hand or `apply --force`",
+                _ => "left alone",
+            };
+            println!(
+                "  {} {} drifted, left alone ({}):",
+                "·".yellow(),
+                stats.left_alone.len(),
+                why
+            );
+            for p in &stats.left_alone {
+                println!("      · {}", p.display());
+            }
+        }
+        if stats.unchanged > 0 {
+            println!(
+                "  {} {} matching (no action needed)",
+                "✓".green(),
+                stats.unchanged
+            );
+        }
+    }
+
+    println!();
+    if dry_run {
+        println!(
+            "{} Dry run — {} file(s) would change. Re-run without --dry-run to apply.",
+            "→".cyan().bold(),
+            total_changes
+        );
+    } else if total_changes == 0 {
+        println!("{} Scaffold up to date — nothing to do.", "✓".green().bold());
+    } else {
+        println!(
+            "{} {} file(s) changed.",
+            "✓".green().bold(),
+            total_changes
+        );
+    }
     Ok(())
 }
 

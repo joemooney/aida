@@ -233,6 +233,43 @@ pub enum ScaffoldCommand {
         force: bool,
     },
 
+    /// Apply category-aware upgrades to scaffolded files. The right
+    /// follow-up to `scaffold status` reporting drift — does the right
+    /// thing per file category instead of `apply --force`'s blast-radius.
+    ///
+    /// Per category (see `docs/plans/2026-05-04-scaffold-categorization.md`):
+    ///   - **template** (`.claude/skills/*`, `.claude/commands/*`,
+    ///     `.claude/hooks/*`, `.claude/AIDA.md`, `.codex/skills/**`,
+    ///     `.git/hooks/commit-msg`) — AIDA-owned; drifted files are
+    ///     overwritten with the embedded template.
+    ///   - **seed** (CLAUDE.md, AGENTS.md) — user-owned post-init;
+    ///     drifted files are LEFT ALONE. Missing files are created.
+    ///     AGENTS.md's delimited AIDA-AUTOGEN block IS upgraded.
+    ///   - **managed-merge** (`.claude/settings.json`, `.mcp.json`) —
+    ///     v1 leaves existing files alone (slot-merge deferred). Missing
+    ///     files are created.
+    ///
+    /// Output groups by category and only mentions files that need
+    /// attention or actually changed — no per-file noise for the
+    /// happy-path matching files.
+    /// trace:FR-1-028 | ai:claude
+    Upgrade {
+        /// Project root directory (defaults to current directory)
+        #[clap(long)]
+        project_root: Option<PathBuf>,
+
+        /// Show what would change without writing anything.
+        #[clap(long)]
+        dry_run: bool,
+
+        /// Override the category strategy and overwrite every drifted
+        /// file regardless of category. Equivalent to today's
+        /// `apply --force` but with the cleaner per-category output.
+        /// Use sparingly — overwrites your CLAUDE.md / AGENTS.md.
+        #[clap(long)]
+        force: bool,
+    },
+
     /// Show a unified diff between embedded templates and on-disk files
     /// for any drifted scaffold artifact. Exits 1 if any drift is found,
     /// 0 if clean. Pairs with `aida scaffold status` — when that reports

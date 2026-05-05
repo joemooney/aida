@@ -20,7 +20,7 @@ pub use aida_md::extract_aida_block;
 
 use std::collections::HashSet;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -368,6 +368,59 @@ impl ProjectType {
     }
 }
 
+/// Ownership category for a scaffolded file. Determines per-file upgrade
+/// semantics for `aida scaffold upgrade` — the design rationale is
+/// `docs/plans/2026-05-04-scaffold-categorization.md` (SPIKE-1-029).
+///
+/// trace:FR-1-028 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileCategory {
+    /// Pure embedded tooling (skills, commands, hooks, .claude/AIDA.md).
+    /// AIDA owns these; drift = stale on-disk copy. `upgrade` overwrites
+    /// without prompting.
+    Template,
+    /// Scaffolded once at `init`, then user-owned (CLAUDE.md, AGENTS.md).
+    /// Drift is *expected* after first apply. `upgrade` leaves alone.
+    /// AGENTS.md is special-cased: a delimited AIDA-AUTOGEN block inside
+    /// the seed file IS auto-upgraded (see FR-1-035 + report.rs).
+    Seed,
+    /// Slot-shared (settings.json, .mcp.json). AIDA owns specific JSONPath
+    /// slots, user owns the rest. v1 of `upgrade` treats this like Seed
+    /// (don't touch existing files); slot-merge semantics are deferred
+    /// — see SPIKE-1-029 §Q3 for the design.
+    ManagedMerge,
+}
+
+impl FileCategory {
+    /// Path-based categorization. Hard-coded today; the spike's
+    /// `manifest.toml` design (Q2) is the long-term home but adding it
+    /// would dwarf the actual upgrade-behavior work for v1.
+    /// trace:FR-1-028 | ai:claude
+    pub fn from_path(path: &Path) -> FileCategory {
+        let s = path.to_string_lossy();
+        // ManagedMerge: JSON config files where AIDA + user share keys.
+        if s == ".claude/settings.json" || s == ".mcp.json" {
+            return FileCategory::ManagedMerge;
+        }
+        // Seed: top-level project docs the user is expected to tailor.
+        if s == "CLAUDE.md" || s == "AGENTS.md" {
+            return FileCategory::Seed;
+        }
+        // Everything else under templates/ control surfaces is Template.
+        // That's `.claude/AIDA.md`, all `.claude/skills/*`, `.claude/commands/*`,
+        // `.claude/hooks/*`, `.codex/skills/**`, and the git commit-msg hook.
+        FileCategory::Template
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            FileCategory::Template => "template",
+            FileCategory::Seed => "seed",
+            FileCategory::ManagedMerge => "managed-merge",
+        }
+    }
+}
+
 /// Represents a scaffolding artifact to be generated
 #[derive(Debug, Clone)]
 pub struct ScaffoldArtifact {
@@ -381,6 +434,15 @@ pub struct ScaffoldArtifact {
     pub exists: bool,
     /// Status of existing file (if any)
     pub file_status: FileStatus,
+}
+
+impl ScaffoldArtifact {
+    /// Ownership category for this file (Template / Seed / ManagedMerge).
+    /// Drives `aida scaffold upgrade`'s per-file strategy.
+    /// trace:FR-1-028 | ai:claude
+    pub fn category(&self) -> FileCategory {
+        FileCategory::from_path(&self.path)
+    }
 }
 
 /// Result of scaffolding preview
