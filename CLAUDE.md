@@ -132,7 +132,11 @@ Set `AIDA_COMMIT_STRICT=true` to reject non-conforming commits.
 
 ## Template architecture (CRITICAL for AIDA development)
 
-AIDA has a dual-copy template system. Master templates live in `aida-core/templates/` and get embedded into the binary at compile time via `build.rs`. Project-local templates at `.claude/skills/`, `.claude/commands/`, `.claude/hooks/`, and `.claude/settings.json` are **symlinks** into `aida-core/templates/` so this repo dogfoods its own scaffolding.
+AIDA has a dual-copy template system. Master templates live in `aida-core/templates/` and get embedded into the binary at compile time via `build.rs`. The project-local copy under `.claude/` mirrors them so this repo dogfoods its own scaffolding:
+
+- `.claude/settings.json` is a single file-level symlink to `aida-core/templates/settings.json`.
+- `.claude/skills/` and `.claude/commands/` are regular directories whose **files** are per-file symlinks into `aida-core/templates/{skills,commands}/` — managed by `make sync-templates`.
+- `.claude/hooks/` is a regular directory; its files are also per-file symlinks, but only for the hooks this project actually wires up in `settings.json` (so the dir doesn't auto-grow with every new hook script that appears in the master templates). `make sync-templates` does NOT touch hooks today — link new ones by hand.
 
 ### When editing a skill, command, hook, or settings.json
 
