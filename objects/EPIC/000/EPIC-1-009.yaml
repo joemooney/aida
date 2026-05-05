@@ -38,8 +38,8 @@ req_type: Epic
 tags:
 - scaffolding
 - quality
-- ergonomics
 - cli
+- ergonomics
 - help
 comments:
 - id: 019df147-e49e-7c71-a151-21dee549851b
