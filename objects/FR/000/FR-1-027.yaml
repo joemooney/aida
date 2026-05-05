@@ -16,10 +16,10 @@ description: |-
   - The embedded template content is already accessible via the `include_str!`/`include_dir!` machinery in `aida-core/templates/`
   - Use the `similar` crate (already in workspace? check Cargo.lock) or shell out to `diff -u` on temp files
   - Should NOT require the user to specify whether the file is template/seed/managed-merge — just diff bytes
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-04T19:20:29.426135246Z
-modified_at: 2026-05-04T19:20:29.426135246Z
+modified_at: 2026-05-05T00:38:22.113239810Z
 req_type: Functional
