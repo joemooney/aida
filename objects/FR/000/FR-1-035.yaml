@@ -1,0 +1,41 @@
+id: 019df599-41ff-7fd2-bb9e-c226697fd0f9
+spec_id: FR-1-035
+title: Split AIDA system docs out of CLAUDE.md and AGENTS.md into a shared .claude/AIDA.md
+description: |-
+  **Problem**
+
+  `aida init` currently writes ~109-line CLAUDE.md and ~110-line AGENTS.md, of which ~80 lines per file are AIDA system documentation (trace format, commit format, requirements workflow, capture rules, daily commands). The remaining ~30 lines per file are genuinely agent-specific (Claude slash-command list vs. MCP tool names + codex exec).
+
+  This duplicates AIDA conventions across two files in every project, so when AIDA changes (e.g., BUG-1-017's node-aware spec ID format `FR-1-027`) all initialized projects silently go stale on both files. It also bloats CLAUDE.md with content that violates the user's own preference ("CLAUDE.md should be relatively short — point at OVERVIEW.md for depth").
+
+  **Proposed split**
+
+  | File | Owner | Category | Size | Content |
+  |------|-------|----------|------|---------|
+  | `.claude/AIDA.md` (new) | AIDA | template (auto-upgrade) | ~50 lines | All AIDA conventions: trace format, commit format, capture workflow, daily commands. Single source of truth. |
+  | `CLAUDE.md` | user | seed (written once) | ~20 lines | Project name/description, key dirs, plus `@.claude/AIDA.md` import line + Claude-specific slash-command list. |
+  | `AGENTS.md` | user | seed (written once) | ~20 lines | Project name/description, reference to AIDA conventions, plus Codex/MCP-specific lines. |
+
+  **Implementation notes**
+
+  - Claude Code expands `@path` imports inline in CLAUDE.md, so a single `@.claude/AIDA.md` line in the stub makes the model see full AIDA context. Reference: <https://docs.claude.com/en/docs/claude-code/memory#claude-md-imports>.
+  - AGENTS.md has no standardized import mechanism across agents (Codex, MCP-compat). For AGENTS.md, generate it as a *composite* at scaffold time — inline the AIDA.md content into AGENTS.md during `aida init` and `scaffold apply`. This keeps it template-class for upgrade purposes (regenerated whole) while still being a valid standalone file for tools that don't follow imports.
+  - Today's `aida-core/src/scaffolding/claude_md.rs` (291 lines) and `codex_md.rs` (137 lines) both compose the same chunks (`requirements_section`, `traceability_section`, etc.). Refactor: extract the shared chunks into a new `aida_md.rs` module that emits `.claude/AIDA.md`, then have `claude_md.rs` and `codex_md.rs` either reference (CLAUDE.md) or inline (AGENTS.md) it.
+  - Existing projects: scaffolder needs a one-time migration. On `scaffold apply` against a project where `.claude/AIDA.md` doesn't exist but CLAUDE.md does, write the new AIDA.md and prompt before rewriting CLAUDE.md (since the user owns it). Could be deferred to BUG-1-034's fix landing first so we have safe round-tripping.
+
+  **Why under EPIC-1-026**
+
+  This is the same problem as the file-categorization work, just at the content level. Today CLAUDE.md is forced into template-class because AIDA-owned content is baked in; the right fix is to extract that content so CLAUDE.md can be properly seed-class. The category split (template/seed/managed-merge) and this content split unblock each other.
+
+  **Acceptance**
+
+  - New projects: `aida init` writes 3 files (`.claude/AIDA.md`, `CLAUDE.md`, `AGENTS.md`); CLAUDE.md is ~20 lines and imports AIDA.md.
+  - Existing projects: `scaffold apply` migrates safely without clobbering user CLAUDE.md/AGENTS.md content (gated on safe partial-apply, i.e. EPIC-1-026 categorization + BUG-1-034 round-trip fix).
+  - AIDA convention changes (new spec-ID format, new skill) only require updating one file (`.claude/AIDA.md`) and propagate to all projects on next upgrade.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-05T00:45:55.071793183Z
+modified_at: 2026-05-05T00:45:55.071793183Z
+req_type: Functional
