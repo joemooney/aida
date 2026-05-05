@@ -5,12 +5,12 @@ description: |-
   Drift cleanup: .claude/hooks/aida-git-guardrails.sh is a regular file but its content is byte-identical to aida-core/templates/hooks/aida-git-guardrails.sh. The other two hooks in this dir (aida-track-commits.sh, aida-validate-commit.sh) are correctly symlinked. The mismatch means edits to the master copy don't propagate.
 
   Fix: rm + ln -sf so it follows the same pattern as its siblings.
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-05T00:23:36.908373698Z
-modified_at: 2026-05-05T00:23:36.908373698Z
+modified_at: 2026-05-05T00:24:24.633567882Z
 req_type: Task
 tags:
 - hooks
