@@ -4240,6 +4240,51 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
     }
 }
 
+/// True when one SHA is a (case-insensitive, hex) prefix of the other.
+/// Used by statusline to compare a cache-stored SHA (potentially full,
+/// 40 chars) against the current `git rev-parse --short HEAD` output (7
+/// chars) without flagging a spurious stale.
+/// trace:TASK-1-045 | ai:claude
+fn sha_prefix_match(a: &str, b: &str) -> bool {
+    if a.is_empty() || b.is_empty() {
+        return a == b;
+    }
+    let min = a.len().min(b.len());
+    a[..min].eq_ignore_ascii_case(&b[..min])
+}
+
+#[cfg(test)]
+mod statusline_tests {
+    use super::*;
+
+    /// Cache-stored full SHA matches `--short` output. trace:TASK-1-045
+    #[test]
+    fn sha_prefix_match_full_vs_short() {
+        let full = "4e39de29ddd72417772aa14b552937018d270746";
+        let short = "4e39de2";
+        assert!(sha_prefix_match(full, short));
+        assert!(sha_prefix_match(short, full));
+    }
+
+    #[test]
+    fn sha_prefix_match_different_shas() {
+        assert!(!sha_prefix_match("4e39de2", "deadbee"));
+        assert!(!sha_prefix_match("4e39de29ddd724", "4e3a000000"));
+    }
+
+    #[test]
+    fn sha_prefix_match_case_insensitive() {
+        assert!(sha_prefix_match("4E39DE2", "4e39de29ddd724"));
+    }
+
+    #[test]
+    fn sha_prefix_match_empty_strings() {
+        assert!(sha_prefix_match("", ""));
+        assert!(!sha_prefix_match("", "abc"));
+        assert!(!sha_prefix_match("abc", ""));
+    }
+}
+
 /// Apply the user's `--color=auto|always|never` choice to the colored
 /// crate's global override. `auto` is the colored crate's default
 /// behavior — it uses `isatty(stdout)` and respects `NO_COLOR`.
@@ -4340,7 +4385,18 @@ fn handle_statusline_command(color: &str) -> Result<()> {
                     aida_core::git_ops::head_sha(&project_root.join("aida-store")).ok()
                 })
                 .unwrap_or_default();
-                let stale = recorded_sha.as_deref().map(|s| s != actual_sha).unwrap_or(true);
+                // Prefix-tolerant equality: cache.set_source_head_sha is
+                // called with whatever `git_ops::head_sha` returns (today
+                // that's `git rev-parse --short HEAD` → 7 chars), but
+                // older aida versions and `cache rebuild` paths have
+                // historically stored full 40-char SHAs in some installs.
+                // Treat either side as a prefix-match of the other so
+                // statusline doesn't false-positive on the mixed form.
+                // trace:TASK-1-045 | ai:claude
+                let stale = recorded_sha
+                    .as_deref()
+                    .map(|recorded| !sha_prefix_match(recorded, &actual_sha))
+                    .unwrap_or(true);
                 Some(if !actual_sha.is_empty() && stale { "stale" } else { "fresh" })
             }
             Err(_) => None,
@@ -4373,12 +4429,15 @@ fn handle_statusline_command(color: &str) -> Result<()> {
     if queue_depth > 0 {
         parts.push(format!("q:{}", queue_depth));
     }
+    // Cache freshness: only surface when stale. Fresh is the boring
+    // default and the cache is self-healing on the next read, so showing
+    // `cache:fresh` on every prompt is noise. Stale stays — red — so the
+    // user sees that the next read will trigger a rebuild.
+    // trace:TASK-1-045 | ai:claude
     if let Some(l) = cache_label {
-        let colored = match l {
-            "fresh" => format!("cache:{}", l).green().to_string(),
-            _ => format!("cache:{}", l).red().to_string(),
-        };
-        parts.push(colored);
+        if l != "fresh" {
+            parts.push(format!("cache:{}", l).red().to_string());
+        }
     }
     println!("{}", parts.join(&separator));
     Ok(())
