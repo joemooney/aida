@@ -4232,6 +4232,11 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
     match cmd {
         SessionCommand::List { limit, no_color } => session::list(*limit, *no_color),
         SessionCommand::Resume { id, limit } => session::resume(id.clone(), *limit),
+        SessionCommand::New {
+            title,
+            permission_mode,
+            role,
+        } => session::new_session(title.clone(), permission_mode, role.clone()),
     }
 }
 
