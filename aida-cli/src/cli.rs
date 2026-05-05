@@ -1537,33 +1537,44 @@ pub enum Command {
         limit: usize,
     },
 
-    /// Project event timeline — `git log` for the requirements store.
-    /// Walks the orphan branch's git log, decodes each commit's YAML diff,
-    /// and emits one logical event per change (status transition, comment
-    /// added, tags edited, requirement added/deleted, etc.) in
-    /// reverse-chronological order.
+    /// Project activity — what's been touched and how it stands now.
+    /// Default mode is a per-requirement digest sorted by last-touch
+    /// time, intended for "what was I up to last session?" Pass
+    /// `--events` to switch to a chronological per-event feed (slower;
+    /// decodes each commit's YAML diff into status changes, comments
+    /// added, etc.).
     /// trace:FR-1-037 | ai:claude
     History {
-        /// Most-recent N events (default 50). Filtering happens after
-        /// decoding, so a tight --limit may show fewer than N if the most
-        /// recent commits don't pass the filters.
-        #[clap(long, short = 'n', default_value = "50")]
+        /// Number of items to show. In digest mode (default) this caps
+        /// the number of distinct requirements; in --events mode it
+        /// caps the number of decoded events.
+        #[clap(long, short = 'n', default_value = "20")]
         limit: usize,
 
-        /// Walk at most N commits before stopping. Lets you cap work on a
-        /// huge store. Default: 5x --limit, so filters have headroom.
+        /// Walk at most N commits on the orphan branch. Default 250 in
+        /// digest mode (cheap to scan) and 5x --limit in --events mode.
         #[clap(long)]
         max_commits: Option<usize>,
 
-        /// Only show events for this requirement (SPEC-ID match).
+        /// Switch to per-event chronological mode — each commit's YAML
+        /// diff is decoded into one event line per change (status
+        /// transitions, comments added, tags edited, etc.). Slower than
+        /// digest because it shells out to `git show` per file per
+        /// commit; useful for inspecting one requirement closely with
+        /// --id, less useful as a general overview.
+        #[clap(long)]
+        events: bool,
+
+        /// Only show entries for this requirement (SPEC-ID match).
         #[clap(long)]
         id: Option<String>,
 
-        /// Only show events of this requirement type (functional, bug, …).
+        /// Only show entries for requirements of this type (functional,
+        /// bug, …).
         #[clap(long)]
         r#type: Option<String>,
 
-        /// Only show events authored by this user (matches against the
+        /// Only show entries authored by this user (matches against the
         /// last_modified_by HLC field if present, else the git committer
         /// email).
         #[clap(long)]
@@ -1577,16 +1588,15 @@ pub enum Command {
         #[clap(long)]
         until: Option<String>,
 
-        /// Filter to status transitions only.
+        /// (--events only) filter to status transitions.
         #[clap(long)]
         status_changes: bool,
 
-        /// Filter to comment events only.
+        /// (--events only) filter to comment events.
         #[clap(long)]
         comments: bool,
 
-        /// Terse one-line-per-event format. Default is multi-line with
-        /// headers per commit.
+        /// (--events only) terse one-line-per-event format.
         #[clap(long)]
         oneline: bool,
     },

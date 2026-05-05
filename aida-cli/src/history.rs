@@ -20,6 +20,7 @@ use std::process::Command as ProcessCommand;
 pub struct HistoryOpts {
     pub limit: usize,
     pub max_commits: usize,
+    pub events_mode: bool,
     pub id_filter: Option<String>,
     pub type_filter: Option<String>,
     pub author_filter: Option<String>,
@@ -109,6 +110,10 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
              backend has no per-edit history surface.",
             store_path.display()
         );
+    }
+
+    if !opts.events_mode {
+        return run_digest(store_path, opts);
     }
 
     // Build a `git log` command bounded by --since / --until / --max_commits.
@@ -227,6 +232,295 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Digest mode (default): one row per recently-touched requirement, sorted
+/// by last-touch time. Aimed at "what was I up to last session?" — answers
+/// in a glance without decoding every individual diff.
+///
+/// Speed: a single `git log --name-status` call + one filesystem read per
+/// distinct requirement that surfaces. Sub-second on the AIDA store, vs
+/// ~6s for events mode which shells to git twice per file per commit.
+/// trace:FR-1-037 | ai:claude
+fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
+    let mut log_args: Vec<String> = vec![
+        "log".into(),
+        "--name-status".into(),
+        "--pretty=format:%H%x09%aI%x09%ae".into(),
+        format!("-n{}", opts.max_commits),
+    ];
+    if let Some(s) = &opts.since {
+        log_args.push(format!("--since={}", s));
+    }
+    if let Some(u) = &opts.until {
+        log_args.push(format!("--until={}", u));
+    }
+
+    let log_output = run_git(store_path, &log_args)?;
+
+    // Walk the streamed output line-by-line. Commit-metadata lines have
+    // exactly two tabs (sha\tts\tauthor); --name-status lines have exactly
+    // one (M\tpath / A\tpath / D\tpath). Blank lines separate commits.
+    use std::collections::BTreeMap;
+    let mut summaries: BTreeMap<String, DigestEntry> = BTreeMap::new();
+    let mut current: Option<(String, String, String)> = None;
+
+    for line in log_output.lines() {
+        if line.is_empty() {
+            continue;
+        }
+        let tabs = line.bytes().filter(|b| *b == b'\t').count();
+        if tabs == 2 {
+            // commit metadata
+            let mut parts = line.split('\t');
+            let sha = parts.next().unwrap_or("").to_string();
+            let ts = parts.next().unwrap_or("").to_string();
+            let author = parts.next().unwrap_or("").to_string();
+            current = Some((sha, ts, author));
+            continue;
+        }
+
+        // Otherwise treat as a name-status line. Skip non-object paths (the
+        // orphan branch carries oplog.yaml and a few control files we don't
+        // want surfacing here).
+        let mut parts = line.split('\t');
+        let status_letter = parts.next().unwrap_or("").to_string();
+        let path = parts.next().unwrap_or("").to_string();
+        if !path.starts_with("objects/") || !path.ends_with(".yaml") {
+            continue;
+        }
+        let Some((_sha, ts, author)) = current.as_ref() else {
+            continue;
+        };
+
+        let spec_id = spec_id_from_path(&path);
+        let req_type = req_type_from_path(&path);
+
+        let entry = summaries.entry(spec_id.clone()).or_insert_with(|| DigestEntry {
+            spec_id: spec_id.clone(),
+            req_type,
+            last_ts_iso: ts.clone(),
+            last_author_email: author.clone(),
+            commits: 0,
+            had_add: false,
+            had_delete: false,
+        });
+        entry.commits += 1;
+        // `git log` is newest-first, so the first time we see a spec the
+        // captured ts/author are already the most recent — don't overwrite.
+        match status_letter.chars().next() {
+            Some('A') => entry.had_add = true,
+            Some('D') => entry.had_delete = true,
+            _ => {}
+        }
+    }
+
+    // Read the current state for each surfaced spec_id from the worktree
+    // (or, for deleted requirements, leave the current-state fields blank).
+    let mut entries: Vec<DigestRow> = summaries
+        .into_values()
+        .map(|e| {
+            let yaml_path = store_path
+                .join("objects")
+                .join(&e.req_type)
+                .join("000")
+                .join(format!("{}.yaml", e.spec_id));
+            let (status, title) = read_current(&yaml_path);
+            DigestRow {
+                spec_id: e.spec_id,
+                req_type: e.req_type,
+                status,
+                title,
+                commits: e.commits,
+                last_ts_iso: e.last_ts_iso,
+                last_author: pick_author_email(&e.last_author_email),
+                had_add: e.had_add,
+                had_delete: e.had_delete,
+            }
+        })
+        .collect();
+
+    // Apply filters that depend on the resolved row.
+    let id_filter = opts.id_filter.clone();
+    let type_filter = opts.type_filter.clone();
+    let author_filter = opts.author_filter.clone();
+    entries.retain(|e| {
+        if let Some(ref id) = id_filter {
+            if !e.spec_id.eq_ignore_ascii_case(id) {
+                return false;
+            }
+        }
+        if let Some(ref t) = type_filter {
+            // Allow either the path-prefix form ("FR") or the human form
+            // ("functional"). Path prefix is the canonical hit.
+            let want = t.to_uppercase();
+            let path_prefix = e.req_type.to_uppercase();
+            let display = display_type_name(&e.req_type).to_uppercase();
+            if path_prefix != want && display != want {
+                return false;
+            }
+        }
+        if let Some(ref a) = author_filter {
+            if !e.last_author.contains(a) {
+                return false;
+            }
+        }
+        true
+    });
+
+    // Sort newest-first by ISO timestamp (string compare works for ISO 8601).
+    entries.sort_by(|a, b| b.last_ts_iso.cmp(&a.last_ts_iso));
+    entries.truncate(opts.limit);
+
+    if entries.is_empty() {
+        eprintln!("{}", "(no recent activity)".dimmed());
+        return Ok(());
+    }
+
+    // Width-align spec_id column so the rest reads as a table.
+    let id_w = entries.iter().map(|e| e.spec_id.len()).max().unwrap_or(8);
+    let status_w = entries
+        .iter()
+        .map(|e| e.status.len())
+        .max()
+        .unwrap_or(10);
+
+    println!(
+        "{}",
+        format!(
+            "{:<id_w$}  {:<8}  {:<status_w$}  {:<5}  {:>4}  {}",
+            "ID",
+            "TYPE",
+            "STATUS",
+            "TIME",
+            "C",
+            "TITLE",
+            id_w = id_w,
+            status_w = status_w,
+        )
+        .dimmed()
+    );
+
+    for e in &entries {
+        let kind_marker = if e.had_delete {
+            "del".red().to_string()
+        } else if e.had_add {
+            "new".green().to_string()
+        } else {
+            "·  ".dimmed().to_string()
+        };
+        let _ = kind_marker; // reserved for a future column; not shown by default to keep noise low
+
+        let time = short_clock(&e.last_ts_iso);
+        let title = shorten(&e.title, 70);
+        let status_color = colorize_status(&e.status);
+        println!(
+            "{:<id_w$}  {:<8}  {:<status_w$}  {:<5}  {:>4}  {}",
+            e.spec_id.bold(),
+            display_type_name(&e.req_type),
+            status_color,
+            time,
+            e.commits,
+            title.dimmed(),
+            id_w = id_w,
+            status_w = status_w,
+        );
+    }
+
+    Ok(())
+}
+
+#[derive(Debug)]
+struct DigestEntry {
+    spec_id: String,
+    req_type: String,
+    last_ts_iso: String,
+    last_author_email: String,
+    commits: usize,
+    had_add: bool,
+    had_delete: bool,
+}
+
+#[derive(Debug)]
+struct DigestRow {
+    spec_id: String,
+    req_type: String,
+    status: String,
+    title: String,
+    commits: usize,
+    last_ts_iso: String,
+    last_author: String,
+    had_add: bool,
+    had_delete: bool,
+}
+
+fn read_current(yaml_path: &Path) -> (String, String) {
+    // For deleted requirements the file is gone — return blank fields and
+    // let the caller render "(deleted)".
+    let Ok(text) = std::fs::read_to_string(yaml_path) else {
+        return ("(deleted)".to_string(), String::new());
+    };
+    let v: Value = match serde_yaml::from_str(&text) {
+        Ok(v) => v,
+        Err(_) => return ("(parse-error)".to_string(), String::new()),
+    };
+    let status = effective(&v, "status", "custom_status").unwrap_or_default();
+    let title = yaml_string(&v, "title").unwrap_or_default();
+    (status, title)
+}
+
+fn pick_author_email(email: &str) -> String {
+    email.split('@').next().unwrap_or(email).to_string()
+}
+
+fn short_clock(iso: &str) -> String {
+    // Just HH:MM if today, "MM-DD HH:MM" if older — keeps the column
+    // narrow without losing recency information.
+    let Some((date_str, rest)) = iso.split_once('T') else {
+        return iso.to_string();
+    };
+    let hhmm = &rest[..rest.len().min(5)];
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    if date_str == today {
+        hhmm.to_string()
+    } else {
+        let mm_dd = date_str.get(5..10).unwrap_or(date_str);
+        format!("{} {}", mm_dd, hhmm)
+    }
+}
+
+fn display_type_name(s: &str) -> String {
+    // Path prefixes are uppercase "FR", "EPIC", "TASK", "BUG", "STORY",
+    // etc. Map to short display tokens that fit an 8-char column.
+    match s {
+        "FR" => "Func".into(),
+        "NFR" => "NonFn".into(),
+        "BUG" => "Bug".into(),
+        "EPIC" => "Epic".into(),
+        "STORY" => "Story".into(),
+        "TASK" => "Task".into(),
+        "SPIKE" => "Spike".into(),
+        "SPRINT" => "Sprint".into(),
+        "FOLDER" => "Folder".into(),
+        "META" => "Meta".into(),
+        "UR" => "User".into(),
+        "SR" => "System".into(),
+        "CR" => "ChgReq".into(),
+        other => other.to_string(),
+    }
+}
+
+fn colorize_status(status: &str) -> String {
+    match status {
+        "Draft" => status.yellow().to_string(),
+        "Approved" => status.blue().to_string(),
+        "Planned" => status.cyan().to_string(),
+        "InProgress" | "In Progress" => status.magenta().to_string(),
+        "Completed" => status.green().to_string(),
+        "Rejected" => status.red().to_string(),
+        "(deleted)" => status.red().dimmed().to_string(),
+        _ => status.normal().to_string(),
+    }
 }
 
 fn parse_log_line(line: &str) -> Option<CommitMeta> {

@@ -1656,6 +1656,7 @@ fn handle_git_backend_command(
         Command::History {
             limit,
             max_commits,
+            events,
             id,
             r#type,
             author,
@@ -1666,10 +1667,15 @@ fn handle_git_backend_command(
             oneline,
         } => {
             // trace:FR-1-037 | ai:claude
-            let max = max_commits.unwrap_or(*limit * 5);
+            // Default max_commits scales differently per mode: digest only
+            // touches each commit once (cheap, scan deeper), events shells
+            // to git per file per commit (expensive, scan shallow).
+            let default_max = if *events { (*limit * 5).max(50) } else { 250 };
+            let max = max_commits.unwrap_or(default_max);
             let opts = history::HistoryOpts {
                 limit: *limit,
                 max_commits: max.max(*limit),
+                events_mode: *events,
                 id_filter: id.clone(),
                 type_filter: r#type.clone(),
                 author_filter: author.clone(),
