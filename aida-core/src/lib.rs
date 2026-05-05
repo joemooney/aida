@@ -40,8 +40,8 @@ pub use dispenser::{Dispenser, DispenserState, IdMode, MemoryDispenser};
 pub use dispenser::{FileDispenser, SqliteDispenser};
 pub use hlc::{Hlc, HlcTimestamp};
 pub use node::{
-    AgreedCounters, DeploymentMode, NodeConfig, NodeRegistry, NodeRegistryEntry, UserRegistry,
-    UserRegistryEntry, WorkspaceConfig,
+    AgreedCounters, AgreedIdBlock, BlockRegistry, DeploymentMode, NodeConfig, NodeRegistry,
+    NodeRegistryEntry, UserRegistry, UserRegistryEntry, WorkspaceConfig,
 };
 pub use ai::{
     AiClient, AiMode, BackgroundEvaluator, EvaluationResponse, EvaluationResult, EvaluatorConfig,

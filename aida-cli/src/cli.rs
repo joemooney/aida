@@ -696,6 +696,32 @@ pub enum DbCommand {
 
     /// Show status of the git-backed store (changes, sync state, conflicts)
     Status,
+
+    /// Manage pre-allocated agreed ID blocks for offline-safe trace comments (FR-2-005)
+    Block {
+        #[clap(subcommand)]
+        subcommand: BlockCommand,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum BlockCommand {
+    /// Claim a new block of agreed IDs for this node (requires network push)
+    Claim {
+        /// Type prefix to claim a block for (e.g., FR, BUG, EPIC). Defaults to FR.
+        #[clap(long, default_value = "FR")]
+        r#type: String,
+
+        /// Number of IDs to reserve in the block
+        #[clap(long, default_value = "100")]
+        size: u32,
+    },
+
+    /// List all claimed blocks across all nodes
+    List,
+
+    /// Show blocks for the current node and their remaining capacity
+    Status,
 }
 
 #[derive(Subcommand, Debug)]
