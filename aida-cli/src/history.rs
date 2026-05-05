@@ -238,15 +238,27 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
 /// by last-touch time. Aimed at "what was I up to last session?" — answers
 /// in a glance without decoding every individual diff.
 ///
-/// Speed: a single `git log --name-status` call + one filesystem read per
-/// distinct requirement that surfaces. Sub-second on the AIDA store, vs
-/// ~6s for events mode which shells to git twice per file per commit.
+/// Source of truth for "when did this actually change" is each YAML's own
+/// `modified_at` field, NOT the git commit timestamp. Reason: the legacy
+/// Storage façade still calls `GitBackend::save(&store)` for some paths,
+/// which rewrites every YAML and produces "chore: update requirements
+/// store" bulk-commits that touch dozens of files at once but don't bump
+/// modified_at on any of them. Sorting by git ts would cluster every spec
+/// into the most recent bulk commit's timestamp; sorting by modified_at
+/// reflects real edits.
+///
+/// "C" column counts only commits whose subject explicitly mentions this
+/// spec_id (`update X`, `add X`, `delete X`) so chore bulk-saves don't
+/// inflate it.
+///
+/// Speed: one `git log --name-status` call + one filesystem read per
+/// distinct requirement that surfaces. Sub-second on the AIDA store.
 /// trace:FR-1-037 | ai:claude
 fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
     let mut log_args: Vec<String> = vec![
         "log".into(),
         "--name-status".into(),
-        "--pretty=format:%H%x09%aI%x09%ae".into(),
+        "--pretty=format:%H%x09%aI%x09%ae%x09%s".into(),
         format!("-n{}", opts.max_commits),
     ];
     if let Some(s) = &opts.since {
@@ -259,24 +271,30 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
     let log_output = run_git(store_path, &log_args)?;
 
     // Walk the streamed output line-by-line. Commit-metadata lines have
-    // exactly two tabs (sha\tts\tauthor); --name-status lines have exactly
-    // one (M\tpath / A\tpath / D\tpath). Blank lines separate commits.
+    // exactly three tabs (sha\tts\tauthor\tsubject); --name-status lines
+    // have one (M\tpath / A\tpath / D\tpath). Blank lines separate commits.
     use std::collections::BTreeMap;
     let mut summaries: BTreeMap<String, DigestEntry> = BTreeMap::new();
-    let mut current: Option<(String, String, String)> = None;
+    let mut current: Option<CommitInfo> = None;
 
     for line in log_output.lines() {
         if line.is_empty() {
             continue;
         }
         let tabs = line.bytes().filter(|b| *b == b'\t').count();
-        if tabs == 2 {
+        if tabs >= 3 {
             // commit metadata
-            let mut parts = line.split('\t');
+            let mut parts = line.splitn(4, '\t');
             let sha = parts.next().unwrap_or("").to_string();
             let ts = parts.next().unwrap_or("").to_string();
             let author = parts.next().unwrap_or("").to_string();
-            current = Some((sha, ts, author));
+            let subject = parts.next().unwrap_or("").to_string();
+            current = Some(CommitInfo {
+                sha,
+                ts,
+                author,
+                subject_spec: targeted_spec_id_from_subject(&subject),
+            });
             continue;
         }
 
@@ -289,7 +307,7 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
         if !path.starts_with("objects/") || !path.ends_with(".yaml") {
             continue;
         }
-        let Some((_sha, ts, author)) = current.as_ref() else {
+        let Some(commit) = current.as_ref() else {
             continue;
         };
 
@@ -299,15 +317,14 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
         let entry = summaries.entry(spec_id.clone()).or_insert_with(|| DigestEntry {
             spec_id: spec_id.clone(),
             req_type,
-            last_ts_iso: ts.clone(),
-            last_author_email: author.clone(),
-            commits: 0,
+            last_git_ts: commit.ts.clone(),
+            last_author_email: commit.author.clone(),
             had_add: false,
             had_delete: false,
         });
-        entry.commits += 1;
-        // `git log` is newest-first, so the first time we see a spec the
-        // captured ts/author are already the most recent — don't overwrite.
+        // Track whether this YAML was added or deleted somewhere in the
+        // window so we can show "+ / − / ·" markers. Status letter is the
+        // one from `git log --name-status`.
         match status_letter.chars().next() {
             Some('A') => entry.had_add = true,
             Some('D') => entry.had_delete = true,
@@ -315,8 +332,9 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
         }
     }
 
-    // Read the current state for each surfaced spec_id from the worktree
-    // (or, for deleted requirements, leave the current-state fields blank).
+    // Read the current state for each surfaced spec_id from the worktree.
+    // YAML's `modified_at` is the canonical timestamp — git commit ts is
+    // only the fallback for deleted requirements (no YAML to read).
     let mut entries: Vec<DigestRow> = summaries
         .into_values()
         .map(|e| {
@@ -325,14 +343,15 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
                 .join(&e.req_type)
                 .join("000")
                 .join(format!("{}.yaml", e.spec_id));
-            let (status, title) = read_current(&yaml_path);
+            let (status, title, modified_at) = read_current(&yaml_path);
+            // Prefer the YAML's modified_at (canonical), fall back to git ts.
+            let last_ts_iso = modified_at.unwrap_or_else(|| e.last_git_ts.clone());
             DigestRow {
                 spec_id: e.spec_id,
                 req_type: e.req_type,
                 status,
                 title,
-                commits: e.commits,
-                last_ts_iso: e.last_ts_iso,
+                last_ts_iso,
                 last_author: pick_author_email(&e.last_author_email),
                 had_add: e.had_add,
                 had_delete: e.had_delete,
@@ -384,59 +403,87 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
         .map(|e| e.status.len())
         .max()
         .unwrap_or(10);
+    // Time column needs to fit the widest rendered value (today's HH:MM
+    // collapses to 5 chars; older "MM-DD HH:MM" is 11). Compute once.
+    let time_w = entries
+        .iter()
+        .map(|e| short_clock(&e.last_ts_iso).len())
+        .max()
+        .unwrap_or(5);
 
     println!(
         "{}",
         format!(
-            "{:<id_w$}  {:<8}  {:<status_w$}  {:<5}  {:>4}  {}",
+            "{:<2} {:<id_w$}  {:<8}  {:<status_w$}  {:<time_w$}  {}",
+            "",
             "ID",
             "TYPE",
             "STATUS",
-            "TIME",
-            "C",
+            "WHEN",
             "TITLE",
             id_w = id_w,
             status_w = status_w,
+            time_w = time_w,
         )
         .dimmed()
     );
 
     for e in &entries {
-        let kind_marker = if e.had_delete {
-            "del".red().to_string()
+        // Inline marker per row: "+" for added in window, "−" for deleted,
+        // "·" for edited. Keeps the C-column noise out and makes the
+        // "what's new" answer immediately visible.
+        let marker = if e.had_delete {
+            "−".red().to_string()
         } else if e.had_add {
-            "new".green().to_string()
+            "+".green().bold().to_string()
         } else {
-            "·  ".dimmed().to_string()
+            "·".dimmed().to_string()
         };
-        let _ = kind_marker; // reserved for a future column; not shown by default to keep noise low
 
         let time = short_clock(&e.last_ts_iso);
         let title = shorten(&e.title, 70);
         let status_color = colorize_status(&e.status);
         println!(
-            "{:<id_w$}  {:<8}  {:<status_w$}  {:<5}  {:>4}  {}",
+            "{:<2} {:<id_w$}  {:<8}  {:<status_w$}  {:<time_w$}  {}",
+            marker,
             e.spec_id.bold(),
             display_type_name(&e.req_type),
             status_color,
             time,
-            e.commits,
             title.dimmed(),
             id_w = id_w,
             status_w = status_w,
+            time_w = time_w,
         );
     }
 
     Ok(())
 }
 
+/// In-flight commit metadata while parsing `git log --name-status`.
+#[derive(Debug)]
+struct CommitInfo {
+    #[allow(dead_code)] // kept for symmetry / future per-row "last sha" column
+    sha: String,
+    ts: String,
+    author: String,
+    /// SPEC-ID explicitly named in the commit subject (e.g. "update FR-1-037").
+    /// Currently unused after the C-column simplification but kept for a
+    /// future "targeted edits only" filter — the parsing is essentially
+    /// free and removing/restoring it churns the format string.
+    #[allow(dead_code)]
+    subject_spec: Option<String>,
+}
+
 #[derive(Debug)]
 struct DigestEntry {
     spec_id: String,
     req_type: String,
-    last_ts_iso: String,
+    /// Newest git commit ts that touched this YAML (chore commits included).
+    /// Used only as a fallback when the YAML's `modified_at` can't be read
+    /// (e.g. the file was deleted).
+    last_git_ts: String,
     last_author_email: String,
-    commits: usize,
     had_add: bool,
     had_delete: bool,
 }
@@ -447,26 +494,60 @@ struct DigestRow {
     req_type: String,
     status: String,
     title: String,
-    commits: usize,
     last_ts_iso: String,
     last_author: String,
     had_add: bool,
     had_delete: bool,
 }
 
-fn read_current(yaml_path: &Path) -> (String, String) {
-    // For deleted requirements the file is gone — return blank fields and
-    // let the caller render "(deleted)".
+/// Returns (status, title, modified_at). `modified_at` is None for
+/// deleted requirements or when the field is missing — the caller then
+/// falls back to the git commit timestamp.
+fn read_current(yaml_path: &Path) -> (String, String, Option<String>) {
     let Ok(text) = std::fs::read_to_string(yaml_path) else {
-        return ("(deleted)".to_string(), String::new());
+        return ("(deleted)".to_string(), String::new(), None);
     };
     let v: Value = match serde_yaml::from_str(&text) {
         Ok(v) => v,
-        Err(_) => return ("(parse-error)".to_string(), String::new()),
+        Err(_) => return ("(parse-error)".to_string(), String::new(), None),
     };
     let status = effective(&v, "status", "custom_status").unwrap_or_default();
     let title = yaml_string(&v, "title").unwrap_or_default();
-    (status, title)
+    let modified_at = yaml_string(&v, "modified_at");
+    (status, title, modified_at)
+}
+
+/// Extract the SPEC-ID a commit's subject line explicitly targets, if any.
+/// Subjects emitted by GitBackend look like "update FR-1-037" / "add
+/// FR-1-037 — title" / "delete FR-1-037". The bulk-save path emits
+/// "chore: update requirements store" — None for those, so they don't
+/// inflate the per-spec commit count.
+/// trace:FR-1-037 | ai:claude
+fn targeted_spec_id_from_subject(subject: &str) -> Option<String> {
+    let s = subject.trim();
+    for prefix in ["update ", "add ", "delete "] {
+        if let Some(rest) = s.strip_prefix(prefix) {
+            // Take the first whitespace- or em-dash-separated token.
+            let token: String = rest
+                .chars()
+                .take_while(|c| !c.is_whitespace() && *c != '—')
+                .collect();
+            if !token.is_empty() && looks_like_spec_id(&token) {
+                return Some(token);
+            }
+        }
+    }
+    None
+}
+
+fn looks_like_spec_id(s: &str) -> bool {
+    // SPEC-IDs are letters then dash-and-digits, optionally with a node
+    // segment (`FR-1-037`). Reject pure numbers and chore-style words.
+    let mut chars = s.chars();
+    if !chars.next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false) {
+        return false;
+    }
+    s.contains('-') && s.chars().any(|c| c.is_ascii_digit())
 }
 
 fn pick_author_email(email: &str) -> String {
