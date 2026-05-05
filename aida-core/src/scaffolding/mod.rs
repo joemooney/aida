@@ -14,9 +14,11 @@ mod aida_md;
 mod claude_md;
 mod codex_md;
 mod hooks;
+mod managed_merge;
 mod settings;
 
 pub use aida_md::extract_aida_block;
+pub use managed_merge::{slot_merge, slots_for_file, SlotChange, SlotChangeKind};
 
 use std::collections::HashSet;
 use std::fs;

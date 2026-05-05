@@ -914,30 +914,50 @@ pub fn check_scaffold_status(
     status
 }
 
-/// Decide whether a file matches expectation given its category. The
-/// semantics differ per category — seed files are mostly user-owned and
-/// only checked for AIDA's hooks (the `@.claude/AIDA.md` import in
-/// CLAUDE.md, the AIDA-AUTOGEN block in AGENTS.md), while template files
-/// are checked for whole-content equality.
+/// Decide whether a file matches expectation given its category.
 ///
-/// Seed semantics:
-/// - **CLAUDE.md** — presence-only. If the file exists, it's matching.
-///   AIDA doesn't dictate content; if the user wants AIDA's conventions
-///   visible, they include `@.claude/AIDA.md` themselves.
-/// - **AGENTS.md** — if `<!-- AIDA-AUTOGEN-BEGIN/END -->` markers are
-///   present, compare just the block content (FR-1-035). If markers are
-///   absent, the user opted out → matching, fully their file.
+/// - **Template** — whole-content equality (AIDA owns the file)
+/// - **Seed** (CLAUDE.md) — presence-only (user owns the file)
+/// - **Seed** (AGENTS.md) — block-content equality if AIDA-AUTOGEN markers
+///   are present; presence-only otherwise
+/// - **ManagedMerge** — slot-equality: every AIDA-owned JSON Pointer slot
+///   must match expected; user keys outside the slots are ignored.
+///   Mirrors what `aida scaffold upgrade` will actually do (FR-1-047).
 ///
-/// trace:FR-1-028 | ai:claude
+/// trace:FR-1-028, FR-1-047 | ai:claude
 fn file_matches_for_status(path: &Path, actual: &str, expected: &str) -> bool {
     let category = crate::scaffolding::FileCategory::from_path(path);
     match category {
+        crate::scaffolding::FileCategory::Template => actual.trim() == expected.trim(),
         crate::scaffolding::FileCategory::Seed => seed_matches(path, actual, expected),
-        crate::scaffolding::FileCategory::Template
-        | crate::scaffolding::FileCategory::ManagedMerge => {
-            actual.trim() == expected.trim()
+        crate::scaffolding::FileCategory::ManagedMerge => {
+            managed_merge_matches(path, actual, expected)
         }
     }
+}
+
+/// Slot-equality check for managed-merge files. Parses both sides as
+/// JSON, walks the path's declared slots, and considers them matching
+/// when every AIDA-owned slot's value is identical. User keys outside
+/// the slots are not compared. Falls back to whole-content equality if
+/// either side is unparseable JSON (so malformed files still report
+/// drift through this path).
+/// trace:FR-1-047 | ai:claude
+fn managed_merge_matches(path: &Path, actual: &str, expected: &str) -> bool {
+    use serde_json::Value;
+    let actual_v: Value = match serde_json::from_str(actual) {
+        Ok(v) => v,
+        Err(_) => return actual.trim() == expected.trim(),
+    };
+    let expected_v: Value = match serde_json::from_str(expected) {
+        Ok(v) => v,
+        Err(_) => return actual.trim() == expected.trim(),
+    };
+    let slots = crate::scaffolding::slots_for_file(path);
+    if slots.is_empty() {
+        return actual.trim() == expected.trim();
+    }
+    slots.iter().all(|slot| actual_v.pointer(slot) == expected_v.pointer(slot))
 }
 
 fn seed_matches(path: &Path, actual: &str, expected: &str) -> bool {
