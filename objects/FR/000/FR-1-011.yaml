@@ -31,8 +31,8 @@ modified_at: 2026-05-04T19:22:08.782755784Z
 req_type: Functional
 tags:
 - ergonomics
-- ux
 - cli
+- ux
 - error-messages
 relationships:
 - rel_type: Parent

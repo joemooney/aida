@@ -26,6 +26,6 @@ modified_at: 2026-05-04T18:23:38.724369632Z
 req_type: Task
 tags:
 - composition
-- shell
 - ps1
 - dev-activate
+- shell
