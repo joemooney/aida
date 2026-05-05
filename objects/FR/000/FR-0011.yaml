@@ -14,8 +14,8 @@ created_at: 2025-11-25T22:36:17.393702816Z
 modified_at: 2026-05-04T19:28:18.967145553Z
 req_type: Functional
 tags:
-- keyboard
 - gui
+- keyboard
 relationships:
 - rel_type: Parent
   target_id: fa1eaffc-7c05-4d09-95a0-d5e61e9b8529

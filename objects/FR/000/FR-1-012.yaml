@@ -31,8 +31,8 @@ modified_at: 2026-05-04T19:15:50.429605931Z
 req_type: Functional
 tags:
 - deferred
-- global
 - queue
+- global
 - ux
 - multi-project
 relationships:

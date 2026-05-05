@@ -81,6 +81,6 @@ history:
     old_value: SPIKE-0335
     new_value: SPRINT-0336
 custom_fields:
-  sprint_number: '3'
   start_date: 2026-03-06
+  sprint_number: '3'
   end_date: 2026-03-13
