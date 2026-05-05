@@ -28,8 +28,8 @@ modified_at: 2026-05-04T19:23:18.671234174Z
 req_type: Bug
 tags:
 - cli
-- data-integrity
 - models
+- data-integrity
 - status
 comments:
 - id: 019df471-d3fa-76d3-811f-ad68b765f72c

@@ -37,10 +37,10 @@ modified_at: 2026-05-04T04:38:33.886252647Z
 req_type: Epic
 tags:
 - ergonomics
-- help
-- cli
 - quality
 - scaffolding
+- cli
+- help
 comments:
 - id: 019df147-e49e-7c71-a151-21dee549851b
   author: joe
