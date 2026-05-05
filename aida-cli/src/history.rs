@@ -411,22 +411,21 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
         .max()
         .unwrap_or(5);
 
-    println!(
-        "{}",
-        format!(
-            "{:<2} {:<id_w$}  {:<8}  {:<status_w$}  {:<time_w$}  {}",
-            "",
-            "ID",
-            "TYPE",
-            "STATUS",
-            "WHEN",
-            "TITLE",
-            id_w = id_w,
-            status_w = status_w,
-            time_w = time_w,
-        )
-        .dimmed()
+    // Header: same column widths as rows. dimmed() applies after padding
+    // so the color codes don't break alignment of the row data below.
+    let header = format!(
+        "{:<2} {:<id_w$}  {:<8}  {:<status_w$}  {:<time_w$}  {}",
+        "",
+        "ID",
+        "TYPE",
+        "STATUS",
+        "WHEN",
+        "TITLE",
+        id_w = id_w,
+        status_w = status_w,
+        time_w = time_w,
     );
+    println!("{}", header.dimmed());
 
     for e in &entries {
         // Inline marker per row: "+" for added in window, "−" for deleted,
@@ -442,18 +441,23 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
 
         let time = short_clock(&e.last_ts_iso);
         let title = shorten(&e.title, 70);
-        let status_color = colorize_status(&e.status);
+
+        // Pad PLAIN text first, THEN apply color — Rust's `{:<width$}`
+        // counts bytes (including ANSI escape codes) so colorizing before
+        // padding produces visibly misaligned columns.
+        let id_padded = format!("{:<id_w$}", e.spec_id, id_w = id_w);
+        let type_padded = format!("{:<8}", display_type_name(&e.req_type));
+        let status_padded = format!("{:<status_w$}", e.status, status_w = status_w);
+        let time_padded = format!("{:<time_w$}", time, time_w = time_w);
+
         println!(
-            "{:<2} {:<id_w$}  {:<8}  {:<status_w$}  {:<time_w$}  {}",
+            "{:<2} {}  {}  {}  {}  {}",
             marker,
-            e.spec_id.bold(),
-            display_type_name(&e.req_type),
-            status_color,
-            time,
+            id_padded.bold(),
+            type_padded,
+            colorize_status(&status_padded),
+            time_padded,
             title.dimmed(),
-            id_w = id_w,
-            status_w = status_w,
-            time_w = time_w,
         );
     }
 
