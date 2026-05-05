@@ -1,6 +1,7 @@
 mod cli;
 mod history;
 mod not_found;
+mod session;
 #[cfg(feature = "remote")]
 mod client;
 mod mcp;
@@ -53,7 +54,7 @@ use crate::cli::{
     CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand, DevCommand,
     FeatureCommand, GitHubCommand, GitLabCommand, JiraCommand, QueueCommand, RelDefCommand,
     RelationshipCommand, ReportCommand, RoleCommand, RolePromptCommand, RoleScopeCommand,
-    ScaffoldCommand, ServerCommand, TraceCommand, TypeCommand,
+    ScaffoldCommand, ServerCommand, SessionCommand, TraceCommand, TypeCommand,
 };
 
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
@@ -148,6 +149,10 @@ fn main() -> Result<()> {
     }
     if let Command::Statusline { color } = &cli.command {
         return handle_statusline_command(color);
+    }
+    // trace:FR-1-043 | ai:claude
+    if let Command::Session(session_cmd) = &cli.command {
+        return handle_session_command(session_cmd);
     }
 
     // Determine which requirements file to use
@@ -352,6 +357,7 @@ fn main() -> Result<()> {
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
+        Command::Session(_) => unreachable!("session is dispatched before storage init"),
         Command::Rel(rel_cmd) => {
             handle_relationship_command(rel_cmd, &storage)?;
         }
@@ -952,6 +958,7 @@ fn handle_git_backend_command(
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
+        Command::Session(_) => unreachable!("session is dispatched before storage init"),
         Command::List { status, r#type, feature, tags, no_scope, .. } => {
             // Cache-backed list (EPIC-1-001 Phase 2). The CachedGitBackend
             // ensures the cache is fresh before querying, so this is one
@@ -4219,6 +4226,14 @@ fn humanize_relative(t: chrono::DateTime<chrono::Utc>) -> String {
 // statusLine.command setting. Cache-only; no git operations, no API calls.
 // trace:EPIC-1-001 | ai:claude
 // ----------------------------------------------------------------------------
+
+/// trace:FR-1-043 | ai:claude
+fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
+    match cmd {
+        SessionCommand::List { limit, no_color } => session::list(*limit, *no_color),
+        SessionCommand::Resume { id, limit } => session::resume(id.clone(), *limit),
+    }
+}
 
 /// Apply the user's `--color=auto|always|never` choice to the colored
 /// crate's global override. `auto` is the colored crate's default

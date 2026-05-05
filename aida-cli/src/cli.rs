@@ -297,6 +297,38 @@ pub enum ScaffoldCommand {
 
 /// Persona / hat commands. A role is a persistent named context that you
 /// can resume across shells — captures the working directory, last
+/// Inspect / resume past Claude Code sessions for this project, enriched
+/// with the AIDA role and most-recent spec from each session's .jsonl.
+/// trace:FR-1-043 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum SessionCommand {
+    /// List recent Claude Code sessions for this project (cwd) with
+    /// role + spec context extracted from each session's .jsonl. By
+    /// default shows the 20 most recent.
+    List {
+        /// Show at most N sessions (default 20).
+        #[clap(long, short = 'n', default_value = "20")]
+        limit: usize,
+
+        /// Plain output (no color), suitable for piping.
+        #[clap(long)]
+        no_color: bool,
+    },
+
+    /// Pick a session interactively and resume it via `claude --resume`.
+    /// When `id` is given, resume that session directly without the
+    /// picker. The picker shows the same enriched columns as `list`.
+    Resume {
+        /// Specific session id (or 8-char prefix) to resume. When
+        /// omitted, opens an interactive picker.
+        id: Option<String>,
+
+        /// Show at most N sessions in the picker (default 20).
+        #[clap(long, short = 'n', default_value = "20")]
+        limit: usize,
+    },
+}
+
 /// activity, optional purpose, and acts as a label in the statusline.
 /// State lives at `<project>/.aida/roles/<name>.toml`.
 /// trace:EPIC-1-001 | ai:claude
@@ -1327,6 +1359,15 @@ pub enum Command {
     /// shows what's defined for this project. State at `.aida/roles/`.
     #[clap(subcommand)]
     Role(RoleCommand),
+
+    /// Inspect or resume past Claude Code sessions in this project,
+    /// enriched with the AIDA role + most-recent spec for each session
+    /// (extracted from the SessionStart hook output stored in each
+    /// session's `.jsonl`). Wrapper around `claude --resume` since
+    /// Claude Code's auto-generated subject can't be customized.
+    /// trace:FR-1-043 | ai:claude
+    #[clap(subcommand)]
+    Session(SessionCommand),
 
     /// One-line project + role summary suitable for shell prompts and
     /// the `statusLine.command` setting in ~/.claude/settings.json.
