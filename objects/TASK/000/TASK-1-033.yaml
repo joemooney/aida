@@ -15,9 +15,9 @@ created_at: 2026-05-05T00:23:39.732313620Z
 modified_at: 2026-05-05T00:23:48.524086022Z
 req_type: Task
 tags:
+- scaffolding
 - parity
 - skills
-- scaffolding
 relationships:
 - rel_type: References
   target_id: 019df42f-2b53-75a1-b93e-1e8d875b41b8

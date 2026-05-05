@@ -22,8 +22,8 @@ req_type: Task
 tags:
 - scaffolding
 - templates
-- invariant
 - ci
+- invariant
 comments:
 - id: 019df585-00c1-7931-9d05-0f4f4819abea
   author: joe
