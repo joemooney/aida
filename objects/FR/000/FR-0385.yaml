@@ -22,8 +22,8 @@ created_at: 2026-02-23T02:49:24.757611723Z
 modified_at: 2026-05-04T19:36:06.873123820Z
 req_type: Functional
 tags:
-- sse
 - web
+- sse
 - skills
 relationships:
 - rel_type: Parent
