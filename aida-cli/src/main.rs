@@ -4412,8 +4412,12 @@ fn handle_statusline_command(color: &str) -> Result<()> {
     let queue_depth = read_queue_depth(&project_root, role.as_deref()).unwrap_or(0);
 
     let separator = " · ".dimmed().to_string();
+    // Brand anchor: Greek transliteration of "AIDA". Same 4-column
+    // footprint as the prior literal "aida"; the δ is the only
+    // unmistakably-Greek glyph, so the prefix carries a quiet identity
+    // marker without looking foreign. trace:TASK-1-048 | ai:claude
     let mut parts: Vec<String> = vec![
-        "aida".dimmed().to_string(),
+        "αιδα".dimmed().to_string(),
         project_label.green().bold().to_string(),
     ];
     if let Some(r) = &role {
