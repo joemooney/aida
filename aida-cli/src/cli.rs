@@ -1330,9 +1330,16 @@ pub enum Command {
 
     /// One-line project + role summary suitable for shell prompts and
     /// the `statusLine.command` setting in ~/.claude/settings.json.
-    /// Sub-50ms (reads the cache only). Format:
-    ///   aida · <project> · role:<name> · reqs:N · cache:fresh|stale
-    Statusline,
+    /// Sub-50ms (reads the cache + the orphan-store queue YAML). Format:
+    ///   aida · <project> · role:<name> · @SPEC · q:N · cache:fresh|stale
+    /// Where `q:N` is the depth of the queue routed to the active role
+    /// (omitted when zero). trace:FR-1-041 | ai:claude
+    Statusline {
+        /// When to emit ANSI color: `auto` (default — color iff stdout
+        /// is a TTY and `NO_COLOR` is unset), `always`, `never`.
+        #[clap(long, value_parser = ["auto", "always", "never"], default_value = "auto")]
+        color: String,
+    },
 
     /// Upgrade aida to the latest release (or a specified version).
     /// Detects how aida was installed (cargo / pre-built binary) and uses

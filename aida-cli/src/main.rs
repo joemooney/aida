@@ -146,8 +146,8 @@ fn main() -> Result<()> {
     if let Command::Role(role_cmd) = &cli.command {
         return handle_role_command(role_cmd);
     }
-    if let Command::Statusline = &cli.command {
-        return handle_statusline_command();
+    if let Command::Statusline { color } = &cli.command {
+        return handle_statusline_command(color);
     }
 
     // Determine which requirements file to use
@@ -351,7 +351,7 @@ fn main() -> Result<()> {
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
-        Command::Statusline => unreachable!("statusline is dispatched before storage init"),
+        Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::Rel(rel_cmd) => {
             handle_relationship_command(rel_cmd, &storage)?;
         }
@@ -951,7 +951,7 @@ fn handle_git_backend_command(
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
-        Command::Statusline => unreachable!("statusline is dispatched before storage init"),
+        Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::List { status, r#type, feature, tags, no_scope, .. } => {
             // Cache-backed list (EPIC-1-001 Phase 2). The CachedGitBackend
             // ensures the cache is fresh before querying, so this is one
@@ -4220,7 +4220,60 @@ fn humanize_relative(t: chrono::DateTime<chrono::Utc>) -> String {
 // trace:EPIC-1-001 | ai:claude
 // ----------------------------------------------------------------------------
 
-fn handle_statusline_command() -> Result<()> {
+/// Apply the user's `--color=auto|always|never` choice to the colored
+/// crate's global override. `auto` is the colored crate's default
+/// behavior — it uses `isatty(stdout)` and respects `NO_COLOR`.
+/// trace:FR-1-041 | ai:claude
+fn apply_color_mode(mode: &str) {
+    match mode {
+        "always" => colored::control::set_override(true),
+        "never" => colored::control::set_override(false),
+        _ => {} // "auto" — let colored crate decide via tty detection
+    }
+}
+
+/// Count queue entries in the user's queue file that pass the role filter.
+/// When `role` is `Some`, returns the count of entries with `for_role`
+/// matching exactly. When `role` is `None`, returns the total entry
+/// count (no role filter).
+///
+/// Reads `<project>/.aida-store/registry/queues/<user>.yaml` directly —
+/// keeps statusline off the heavier Storage::load() path so the sub-50ms
+/// budget holds even when the orphan store has hundreds of objects.
+/// Returns `None` if the file is missing or unreadable.
+/// trace:FR-1-041 | ai:claude
+fn read_queue_depth(project_root: &std::path::Path, role: Option<&str>) -> Option<usize> {
+    let user = std::env::var("AIDA_USER")
+        .or_else(|_| std::env::var("USER"))
+        .or_else(|_| std::env::var("USERNAME"))
+        .unwrap_or_else(|_| "default".to_string());
+
+    let queue_path = project_root
+        .join(".aida-store/registry/queues")
+        .join(format!("{}.yaml", user));
+
+    let content = std::fs::read_to_string(&queue_path).ok()?;
+    let entries: Vec<serde_yaml::Value> = serde_yaml::from_str(&content).ok()?;
+
+    let count = match role {
+        Some(want) => entries
+            .iter()
+            .filter(|e| {
+                e.get("for_role")
+                    .and_then(serde_yaml::Value::as_str)
+                    .map(|r| r == want)
+                    .unwrap_or(false)
+            })
+            .count(),
+        None => entries.len(),
+    };
+    Some(count)
+}
+
+fn handle_statusline_command(color: &str) -> Result<()> {
+    // trace:FR-1-041 | ai:claude
+    apply_color_mode(color);
+
     let project_root = statusline_project_root();
     let project_name = project_root
         .file_name()
@@ -4241,21 +4294,17 @@ fn handle_statusline_command() -> Result<()> {
 
     let role = std::env::var("AIDA_SESSION_ROLE").ok();
 
-    // Cache stats — fast SQLite lookups, no rebuild.
+    // Cache stats — fast SQLite lookups, no rebuild. Only used now for
+    // the cache:fresh|stale label; the requirement count is no longer
+    // surfaced (FR-1-041 swapped reqs:N for queue depth, which is more
+    // actionable).
     let cache_path = project_root.join(".aida/cache.db");
-    let (req_count, cache_label) = if cache_path.exists() {
+    let cache_label = if cache_path.exists() {
         match rusqlite::Connection::open_with_flags(
             &cache_path,
             rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
         ) {
             Ok(conn) => {
-                let count: i64 = conn
-                    .query_row(
-                        "SELECT COUNT(*) FROM requirements_cache WHERE archived = 0",
-                        [],
-                        |r| r.get(0),
-                    )
-                    .unwrap_or(0);
                 let recorded_sha: Option<String> = conn
                     .query_row(
                         "SELECT value FROM cache_meta WHERE key = 'source_head_sha'",
@@ -4272,39 +4321,46 @@ fn handle_statusline_command() -> Result<()> {
                 })
                 .unwrap_or_default();
                 let stale = recorded_sha.as_deref().map(|s| s != actual_sha).unwrap_or(true);
-                let label = if !actual_sha.is_empty() && stale {
-                    "stale"
-                } else {
-                    "fresh"
-                };
-                (Some(count as usize), Some(label))
+                Some(if !actual_sha.is_empty() && stale { "stale" } else { "fresh" })
             }
-            Err(_) => (None, None),
+            Err(_) => None,
         }
     } else {
-        (None, None)
+        None
     };
 
-    let mut parts: Vec<String> = vec!["aida".to_string(), project_label];
-    if let Some(r) = &role {
-        parts.push(format!("role:{}", r));
+    // Queue depth — count entries in the user's queue routed to the
+    // active role (or all entries when no role is set). Reads the orphan
+    // store's queues/<user>.yaml file directly to keep this off the
+    // backend's heavier load() path.
+    let queue_depth = read_queue_depth(&project_root, role.as_deref()).unwrap_or(0);
 
+    let separator = " · ".dimmed().to_string();
+    let mut parts: Vec<String> = vec![
+        "aida".dimmed().to_string(),
+        project_label.green().bold().to_string(),
+    ];
+    if let Some(r) = &role {
+        parts.push(format!("role:{}", r).yellow().bold().to_string());
         // If the active role has a recent activity entry, surface the
         // newest spec_id so the prompt reminds you what you were working on.
-        // Read fast: TOML file, no extra dependencies.
         if let Ok((state, _)) = load_role(&project_root, r) {
             if let Some(latest) = state.activity.first() {
-                parts.push(format!("@{}", latest.spec_id));
+                parts.push(format!("@{}", latest.spec_id).cyan().bold().to_string());
             }
         }
     }
-    if let Some(c) = req_count {
-        parts.push(format!("reqs:{}", c));
+    if queue_depth > 0 {
+        parts.push(format!("q:{}", queue_depth));
     }
     if let Some(l) = cache_label {
-        parts.push(format!("cache:{}", l));
+        let colored = match l {
+            "fresh" => format!("cache:{}", l).green().to_string(),
+            _ => format!("cache:{}", l).red().to_string(),
+        };
+        parts.push(colored);
     }
-    println!("{}", parts.join(" · "));
+    println!("{}", parts.join(&separator));
     Ok(())
 }
 
