@@ -14,10 +14,10 @@ description: |-
   Deliverable: a short design doc in `docs/plans/YYYY-MM-DD-scaffold-categorization.md` covering the five questions above, plus a recommended implementation order. Unblocks FR-1-028.
 
   Originating context: ~/ai/paradox drift showed all three categories failing simultaneously — `CLAUDE.md` (seed false-positive), `.claude/hooks/*.sh` (template, should auto-upgrade), `.claude/settings.json` (managed-merge, needs slot semantics).
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-04T19:20:58.009822551Z
-modified_at: 2026-05-04T19:20:58.009822551Z
+modified_at: 2026-05-05T00:26:15.269975043Z
 req_type: Spike
