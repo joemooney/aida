@@ -10,10 +10,13 @@
 //! - .git/hooks/ directory with traceability validation hooks
 //! - Code traceability configuration
 
+mod aida_md;
 mod claude_md;
 mod codex_md;
 mod hooks;
 mod settings;
+
+pub use aida_md::extract_aida_block;
 
 use std::collections::HashSet;
 use std::fs;
@@ -561,6 +564,34 @@ impl Scaffolder {
                     FileStatus::New
                 },
             });
+        }
+
+        // .claude/AIDA.md — single source of truth for AIDA conventions.
+        // Imported by CLAUDE.md via `@.claude/AIDA.md`, inlined into
+        // AGENTS.md inside AIDA-AUTOGEN delimiters. Template-class:
+        // auto-upgrades on `scaffold apply`, AIDA-Generated header
+        // attached so drift detection works.
+        // trace:FR-1-035 | ai:claude
+        if self.config.generate_claude_md {
+            new_dirs.insert(PathBuf::from(".claude"));
+            let path = PathBuf::from(".claude/AIDA.md");
+            let artifact = self.create_artifact(
+                path.clone(),
+                self.generate_aida_md(store),
+                "AIDA conventions (single source of truth, imported by CLAUDE.md)"
+                    .to_string(),
+                false,
+            );
+
+            match &artifact.file_status {
+                FileStatus::New => new_files.push(path),
+                FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                    modified_files.push(artifact.path.clone())
+                }
+                FileStatus::OlderVersion { .. } => upgradeable_files.push(artifact.path.clone()),
+                FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+            }
+            artifacts.push(artifact);
         }
 
         // .claude/commands/ directory
