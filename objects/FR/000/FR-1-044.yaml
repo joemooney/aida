@@ -48,9 +48,9 @@ modified_at: 2026-05-05T03:42:21.630006544Z
 req_type: Functional
 tags:
 - cli
-- launcher
 - session
 - claude-code
+- launcher
 comments:
 - id: 019df63a-b1dd-7da1-a4ec-a98d0a5874f7
   author: joe
