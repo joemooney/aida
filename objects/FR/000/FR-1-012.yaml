@@ -30,8 +30,8 @@ created_at: 2026-05-04T06:25:34.078156796Z
 modified_at: 2026-05-04T19:15:50.429605931Z
 req_type: Functional
 tags:
-- queue
 - global
+- queue
 - deferred
 - ux
 - multi-project
