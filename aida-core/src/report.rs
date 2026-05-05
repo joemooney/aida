@@ -869,7 +869,18 @@ pub fn check_scaffold_status(
 
         if full_path.exists() {
             if let Ok(actual_content) = fs::read_to_string(&full_path) {
-                if actual_content.trim() == artifact.content.trim() {
+                // For files that ship a delimited AIDA-AUTOGEN block (today
+                // that's AGENTS.md per FR-1-035), compare just the inner
+                // block. User content outside the delimiters is freely
+                // editable and must NOT trigger drift warnings.
+                // trace:FR-1-035 | ai:claude
+                let matches = if uses_aida_autogen_block(&artifact.path) {
+                    compare_via_aida_block(&actual_content, &artifact.content)
+                } else {
+                    actual_content.trim() == artifact.content.trim()
+                };
+
+                if matches {
                     status.matching.push(artifact.path.clone());
                 } else {
                     let expected_lines = artifact.content.lines().count();
@@ -906,6 +917,35 @@ pub fn check_scaffold_status(
     }
 
     status
+}
+
+/// True when the given scaffold path is a file we ship with a delimited
+/// AIDA-AUTOGEN block (rather than a single whole-file checksum). Today
+/// that's only AGENTS.md, but the predicate is path-based so adding more
+/// candidates later is one line.
+/// trace:FR-1-035 | ai:claude
+fn uses_aida_autogen_block(path: &Path) -> bool {
+    matches!(
+        path.file_name().and_then(|s| s.to_str()),
+        Some("AGENTS.md")
+    )
+}
+
+/// Compare just the AIDA-AUTOGEN block of two file contents. Returns true
+/// if the on-disk block matches the expected block; user content outside
+/// the delimiters is ignored. If either file is missing the delimiters
+/// entirely, fall back to whole-file comparison so we don't silently
+/// declare an unmarked file as "matching."
+/// trace:FR-1-035 | ai:claude
+fn compare_via_aida_block(actual: &str, expected: &str) -> bool {
+    use crate::scaffolding::extract_aida_block;
+    match (extract_aida_block(actual), extract_aida_block(expected)) {
+        (Some(a), Some(e)) => a.trim() == e.trim(),
+        // Mixed presence: fall back to whole-file. Most likely an existing
+        // project that hasn't been migrated yet — treating as drift is the
+        // right behavior so `scaffold apply` can rewrite it.
+        _ => actual.trim() == expected.trim(),
+    }
 }
 
 fn scan_extra_files(

@@ -1,7 +1,18 @@
 use super::*;
 
 impl Scaffolder {
-    /// Generate AGENTS.md content for Codex-compatible coding agents
+    /// Generate AGENTS.md content for Codex-compatible coding agents.
+    ///
+    /// AGENTS.md is seed-class for the user-owned framing (project intro,
+    /// agent-specific notes) but contains a delimited AIDA-AUTOGEN block
+    /// where the conventions are inlined. `scaffold status` extracts and
+    /// checksums just the block — user content outside is freely
+    /// editable, AIDA-owned content inside auto-upgrades.
+    ///
+    /// Codex / generic MCP agents don't expand `@` imports the way Claude
+    /// Code does, so we inline rather than reference. Trade: drift detection
+    /// is delimiter-based instead of single-file checksum.
+    /// trace:FR-1-035 | ai:claude
     pub(super) fn generate_agents_md(&self, store: &RequirementsStore) -> String {
         let project_name = if !store.title.is_empty() {
             &store.title
@@ -17,91 +28,48 @@ impl Scaffolder {
             String::new()
         };
 
-        let db_filename = self.database_filename();
-        let req_count = store.requirements.len();
+        let aida_block = self.generate_aida_md_for_agents(store);
 
         format!(
             r#"# AGENTS.md
 
-Guidance for AI coding agents (Codex CLI, Claude Code, or any MCP-compatible agent) working in this repository.
+Guidance for AI coding agents (Codex CLI, MCP-compatible agents, etc.)
+working in this repository. The block delimited by HTML comment markers
+below is auto-generated from `.claude/AIDA.md` on each
+`aida scaffold apply` — edit that file (the markers themselves are
+intentionally machine-readable, so leave them in place). Anything
+outside the marked block is yours to tailor.
 
-## Project Overview
+## Project overview
 
 {project_name}{description}
 
-## Requirements Database
+{aida_block}
 
-- **Source of truth**: AIDA requirements database (`{db_filename}`)
-- **Requirements**: {req_count} tracked
-- **Query via CLI**: `aida list`, `aida show <SPEC-ID>`, `aida search "keyword"`
-- **Query via MCP**: if configured, use `list_requirements`, `show_requirement`, `search_requirements` tools
+## Codex / MCP-specific notes
 
-## Development Workflow
+### MCP integration
 
-### Requirement-First Development
-
-1. **Before coding**: check if a requirement exists for the work
-   ```bash
-   aida search "feature description"
-   aida list --status approved
-   ```
-
-2. **During coding**: add trace comments linking code to requirements
-   ```
-   // trace:FR-042 | ai:codex
-   ```
-
-3. **Before committing**: ensure all work is traced
-   ```bash
-   aida show FR-042                    # verify requirement exists
-   aida edit FR-042 --status completed # update status
-   ```
-
-### Core CLI Commands
-
-```bash
-aida list                              # List all requirements
-aida list --status approved            # Filter by status
-aida show <SPEC-ID>                    # Show details (e.g., FR-042)
-aida search "<query>"                  # Search by keyword
-aida add --title "..." --description "..." --status draft
-aida edit <SPEC-ID> --status completed
-aida comment add <SPEC-ID> "Implementation note..."
-aida rel add --from <ID> --to <ID> --type references
-```
-
-### Commit Format
-
-```
-[AI:codex] type(scope): description (SPEC-ID)
-```
-
-Examples:
-```
-[AI:codex] feat(auth): add login validation (FR-042)
-[AI:codex] fix(api): handle null response (BUG-023)
-```
-
-## MCP Integration
-
-If AIDA is configured as an MCP server, these tools are available:
+If AIDA is configured as an MCP server (`.mcp.json` is auto-scaffolded),
+these tools are available:
 
 | Tool | Purpose |
 |------|---------|
 | `list_requirements` | List requirements with optional status/type filters |
-| `show_requirement` | Show full details of a requirement by SPEC-ID |
-| `search_requirements` | Search by keyword across titles and descriptions |
+| `show_requirement` | Show full details by SPEC-ID |
+| `search_requirements` | Search by keyword across titles + descriptions |
 | `add_requirement` | Create a new requirement |
-| `update_requirement` | Update status, priority, owner, etc. |
-| `add_comment` | Add implementation notes to a requirement |
+| `update_requirement` | Update status / priority / owner |
+| `add_comment` | Add an implementation note |
 | `list_features` | List feature categories |
 
-To configure MCP for Codex CLI:
+To configure for Codex CLI:
+
 ```bash
 codex mcp add aida -- aida mcp-serve
 ```
 
-## Non-Interactive Workflows (codex exec)
+### Non-interactive workflows (codex exec)
 
 ```bash
 # Implement a specific requirement
@@ -112,25 +80,12 @@ codex exec "Run 'aida list --status in-progress' and 'git log --since=yesterday'
 
 # Capture untraced work
 codex exec "Review today's git commits. For each, check if trace comments exist. Create requirements for untraced code."
-
-# Code review with traceability
-codex review --base main "Check that all new functions have trace comments (// trace:SPEC-ID format)"
 ```
 
-## Storage Modes
+### Commit attribution
 
-AIDA supports multiple backends:
-- **SQLite** (default): `requirements.db`
-- **PostgreSQL**: for teams — `aida --file "postgres://..." list`
-- **Git (distributed)**: `aida init --distributed` — offline-capable with node-namespaced IDs
-- **YAML**: simplest, git-friendly
-
-## Key Principles
-
-- **No implementation without a requirement.** Create requirements before coding.
-- **Trace everything.** Every function, every commit links back to why it exists.
-- **Status is truth.** Keep requirement statuses current (draft → approved → completed).
-- **AI attribution.** Mark AI-assisted code with `[AI:codex]` or `[AI:claude]` in commits.
+When committing on behalf of Codex, use the `[AI:codex]` prefix per the
+commit format spec in the AIDA-AUTOGEN block above.
 "#
         )
     }
