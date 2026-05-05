@@ -1,12 +1,18 @@
 use super::*;
 
 /// Claude Code's statusbar command. `aida statusline` produces the AIDA
-/// one-liner (project · role · queue · cache); the `printf` fallback runs
-/// when `aida` is not on PATH or the cwd is outside an AIDA project, so
-/// the user always gets *something* useful.
-/// trace:FR-1-013 | ai:claude
+/// one-liner (project · role · @SPEC · queue · cache); the `printf`
+/// fallback runs when `aida` is not on PATH or the cwd is outside an
+/// AIDA project, so the user always gets *something* useful.
+///
+/// `--color=always` is set deliberately: Claude Code's statusLine
+/// consumer runs the command via shell pipe (no TTY), so `aida
+/// statusline`'s default `--color=auto` would emit plain text. Claude
+/// Code DOES render ANSI escape codes from the consumer's output, so
+/// forcing color here gives users the intended colored statusline.
+/// trace:FR-1-013, FR-1-041 | ai:claude
 const STATUSLINE_COMMAND: &str =
-    "aida statusline 2>/dev/null || printf '%s' \"$(pwd)\"";
+    "aida statusline --color=always 2>/dev/null || printf '%s' \"$(pwd)\"";
 
 impl Scaffolder {
     /// Generate Claude Code settings.json content. Hook commands use
