@@ -5288,22 +5288,31 @@ fn spawn_log_pump<R: tokio::io::AsyncRead + Unpin + Send + 'static>(
 /// Resolve the aida-server binary: prefer the in-repo target/{release,debug}
 /// build, fall back to whatever's on PATH.
 fn locate_aida_server_binary(cwd: &std::path::Path) -> Result<std::path::PathBuf> {
-    // If we're in (or under) the aida repo, use its built binary.
+    // If we're in (or under) the aida repo, use its built binary —
+    // whichever of target/release vs target/debug is more recently
+    // built. Mirrors `pick_dev_binary_dir`'s mtime-based choice for the
+    // CLI binary, so an old `target/release/aida-server` from a stale
+    // `cargo build --release` doesn't shadow a current debug build.
+    // (Bug surfaced 2026-05-05: a Feb-22 release binary at v0.1.0 was
+    // beating the May-4 debug binary at v0.4.3, and v0.1.0 lacked
+    // git-backend support so `dev serve` failed with a YAML parse
+    // error against the orphan store.) trace:BUG-1-049 | ai:claude
     let mut probe = cwd.to_path_buf();
     for _ in 0..4 {
         if is_aida_repo(&probe) {
             let release = probe.join("target/release/aida-server");
-            if release.exists() {
-                return Ok(release);
-            }
             let debug = probe.join("target/debug/aida-server");
-            if debug.exists() {
-                return Ok(debug);
+            let release_mtime = std::fs::metadata(&release).and_then(|m| m.modified()).ok();
+            let debug_mtime = std::fs::metadata(&debug).and_then(|m| m.modified()).ok();
+            match (release_mtime, debug_mtime) {
+                (Some(rm), Some(dm)) => return Ok(if rm >= dm { release } else { debug }),
+                (Some(_), None) => return Ok(release),
+                (None, Some(_)) => return Ok(debug),
+                (None, None) => anyhow::bail!(
+                    "Found aida repo at {} but no aida-server binary in target/. Run `cargo build` first.",
+                    probe.display()
+                ),
             }
-            anyhow::bail!(
-                "Found aida repo at {} but no aida-server binary in target/. Run `cargo build` first.",
-                probe.display()
-            );
         }
         match probe.parent() {
             Some(p) => probe = p.to_path_buf(),
