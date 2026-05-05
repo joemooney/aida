@@ -220,7 +220,10 @@ struct ProjectListResponse {
 struct ListQuery {
     status: Option<String>,
     priority: Option<String>,
-    #[serde(rename = "type")]
+    // URL-param canonical name stays `type` (idiomatic for query
+    // strings); add `reqType` alias so the same name works in body and
+    // query contexts. trace:BUG-1-050 | ai:claude
+    #[serde(rename = "type", alias = "reqType")]
     req_type: Option<String>,
     feature: Option<String>,
     owner: Option<String>,
@@ -238,7 +241,10 @@ struct SearchQuery {
     search_comments: Option<bool>,
     search_spec_id: Option<bool>,
     status: Option<String>,
-    #[serde(rename = "type")]
+    // URL-param canonical name stays `type` (idiomatic for query
+    // strings); add `reqType` alias so the same name works in body and
+    // query contexts. trace:BUG-1-050 | ai:claude
+    #[serde(rename = "type", alias = "reqType")]
     req_type: Option<String>,
     feature: Option<String>,
     include_archived: Option<bool>,
@@ -265,7 +271,11 @@ struct CreateRequirementRequest {
     priority: Option<String>,
     owner: Option<String>,
     feature: Option<String>,
-    #[serde(rename = "type")]
+    // Accept BOTH `reqType` (matches the read-side response shape — what
+    // a client naturally tries first based on GET /api/requirements
+    // output) AND `type` (back-compat with prior callers that knew
+    // about the rename). trace:BUG-1-050 | ai:claude
+    #[serde(rename = "reqType", alias = "type")]
     req_type: Option<String>,
     tags: Option<Vec<String>>,
     prefix_override: Option<String>,
@@ -281,7 +291,9 @@ struct UpdateRequirementRequest {
     priority: Option<String>,
     owner: Option<String>,
     feature: Option<String>,
-    #[serde(rename = "type")]
+    // See CreateRequirementRequest — accept reqType OR type.
+    // trace:BUG-1-050 | ai:claude
+    #[serde(rename = "reqType", alias = "type")]
     req_type: Option<String>,
     tags: Option<Vec<String>>,
     replace_tags: Option<bool>,
