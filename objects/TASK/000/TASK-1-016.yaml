@@ -21,8 +21,8 @@ modified_at: 2026-05-05T00:23:47.649084752Z
 req_type: Task
 tags:
 - invariant
-- templates
 - scaffolding
+- templates
 - ci
 comments:
 - id: 019df585-00c1-7931-9d05-0f4f4819abea
