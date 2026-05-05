@@ -46,17 +46,17 @@ description: |-
   - Cross-project sessions (no --all flag)
   - Session deletion / rename
   - Saving role explicitly per session (we read the SessionStart hook output as-is)
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-05T03:27:12.338111220Z
-modified_at: 2026-05-05T03:32:26.139668344Z
+modified_at: 2026-05-05T03:32:32.901650635Z
 req_type: Functional
 tags:
 - resume
-- session
 - ux
+- session
 - claude-code
 - cli
 comments:
