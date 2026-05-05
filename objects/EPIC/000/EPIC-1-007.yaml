@@ -33,9 +33,9 @@ created_at: 2026-05-04T04:36:41.493444697Z
 modified_at: 2026-05-04T04:38:31.969221069Z
 req_type: Epic
 tags:
-- observability
 - build
 - version
+- observability
 comments:
 - id: 019df147-dd21-7862-a299-7361959fd52d
   author: joe

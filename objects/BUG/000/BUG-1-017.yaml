@@ -22,6 +22,6 @@ modified_at: 2026-05-04T18:17:22.420831324Z
 req_type: Bug
 tags:
 - scaffolding
-- regex
-- git-canonical
 - hooks
+- git-canonical
+- regex
