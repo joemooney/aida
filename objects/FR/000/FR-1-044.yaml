@@ -1,0 +1,53 @@
+id: 019df637-75d2-77f2-9782-10195d031c1b
+spec_id: FR-1-044
+title: aida session new — launch claude with title + role logging + permission-mode
+description: |-
+  **Problem**
+
+  `aida session list` (FR-1-043) reads role from grepping the .jsonl for early markers. Works for sessions where 'aida role show' or shell echos ran early — but unreliable. Also, every session gets an auto-generated subject from Claude that's not user-controllable.
+
+  A 'launch' command can:
+  1. Capture role + user-chosen title at start time, before claude even runs
+  2. Default to a sensible --permission-mode so the user doesn't have to remember
+  3. Feed the launch metadata into 'aida session list' so role/title columns are accurate, not heuristic
+
+  **Surface**
+
+    aida session new                         # prompts for title, default permission mode
+    aida session new --title 'Add OAuth'     # skip the prompt
+    aida session new --permission-mode acceptEdits      # override default
+    aida session new --permission-mode bypassPermissions
+
+  Default --permission-mode is bypassPermissions (matches the user's existing flow per their existing sessions; --help documents the alternatives).
+
+  **Behavior**
+
+  1. Determine role from $AIDA_SESSION_ROLE (or — if unset — none).
+  2. If --title not passed, prompt with inquire.
+  3. Append a TSV record to ~/.aida/session-launches.log:
+     <iso-ts> \t <role|-> \t <cwd> \t <permission-mode> \t <title>
+  4. Exec 'claude --permission-mode <M>' (process replacement on Unix).
+
+  **aida session list reads launches.log**
+
+  For each .jsonl found, pick the closest launches.log entry where:
+  - cwd matches
+  - launch timestamp is within 30s before the .jsonl's first event timestamp
+  Use that role + title in preference to the grep heuristic. Heuristic remains the fallback for sessions launched outside 'aida session new'.
+
+  **Acceptance**
+
+  - 'aida session new --title T' execs claude with --permission-mode bypassPermissions, appends to launches.log
+  - 'aida session list' shows role + chosen title for sessions launched via 'session new'; falls back to grep heuristic for ad-hoc claude launches
+status: InProgress
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-05T03:38:43.026675330Z
+modified_at: 2026-05-05T03:38:43.026675330Z
+req_type: Functional
+tags:
+- session
+- claude-code
+- launcher
+- cli

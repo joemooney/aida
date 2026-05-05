@@ -27,8 +27,8 @@ req_type: Functional
 tags:
 - storage
 - bulk-import
-- deferred
 - performance
+- deferred
 relationships:
 - rel_type: Parent
   target_id: 019dea8d-c189-72e3-a27f-ea562a6ff148
