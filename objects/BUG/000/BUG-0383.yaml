@@ -12,6 +12,6 @@ modified_at: 2026-02-22T20:35:56.318350326Z
 req_type: Bug
 tags:
 - bugfix
-- api
-- web
 - cache
+- web
+- api
