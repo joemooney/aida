@@ -869,16 +869,11 @@ pub fn check_scaffold_status(
 
         if full_path.exists() {
             if let Ok(actual_content) = fs::read_to_string(&full_path) {
-                // For files that ship a delimited AIDA-AUTOGEN block (today
-                // that's AGENTS.md per FR-1-035), compare just the inner
-                // block. User content outside the delimiters is freely
-                // editable and must NOT trigger drift warnings.
-                // trace:FR-1-035 | ai:claude
-                let matches = if uses_aida_autogen_block(&artifact.path) {
-                    compare_via_aida_block(&actual_content, &artifact.content)
-                } else {
-                    actual_content.trim() == artifact.content.trim()
-                };
+                let matches = file_matches_for_status(
+                    &artifact.path,
+                    &actual_content,
+                    &artifact.content,
+                );
 
                 if matches {
                     status.matching.push(artifact.path.clone());
@@ -919,31 +914,53 @@ pub fn check_scaffold_status(
     status
 }
 
-/// True when the given scaffold path is a file we ship with a delimited
-/// AIDA-AUTOGEN block (rather than a single whole-file checksum). Today
-/// that's only AGENTS.md, but the predicate is path-based so adding more
-/// candidates later is one line.
-/// trace:FR-1-035 | ai:claude
-fn uses_aida_autogen_block(path: &Path) -> bool {
-    matches!(
-        path.file_name().and_then(|s| s.to_str()),
-        Some("AGENTS.md")
-    )
+/// Decide whether a file matches expectation given its category. The
+/// semantics differ per category — seed files are mostly user-owned and
+/// only checked for AIDA's hooks (the `@.claude/AIDA.md` import in
+/// CLAUDE.md, the AIDA-AUTOGEN block in AGENTS.md), while template files
+/// are checked for whole-content equality.
+///
+/// Seed semantics:
+/// - **CLAUDE.md** — presence-only. If the file exists, it's matching.
+///   AIDA doesn't dictate content; if the user wants AIDA's conventions
+///   visible, they include `@.claude/AIDA.md` themselves.
+/// - **AGENTS.md** — if `<!-- AIDA-AUTOGEN-BEGIN/END -->` markers are
+///   present, compare just the block content (FR-1-035). If markers are
+///   absent, the user opted out → matching, fully their file.
+///
+/// trace:FR-1-028 | ai:claude
+fn file_matches_for_status(path: &Path, actual: &str, expected: &str) -> bool {
+    let category = crate::scaffolding::FileCategory::from_path(path);
+    match category {
+        crate::scaffolding::FileCategory::Seed => seed_matches(path, actual, expected),
+        crate::scaffolding::FileCategory::Template
+        | crate::scaffolding::FileCategory::ManagedMerge => {
+            actual.trim() == expected.trim()
+        }
+    }
 }
 
-/// Compare just the AIDA-AUTOGEN block of two file contents. Returns true
-/// if the on-disk block matches the expected block; user content outside
-/// the delimiters is ignored. If either file is missing the delimiters
-/// entirely, fall back to whole-file comparison so we don't silently
-/// declare an unmarked file as "matching."
-/// trace:FR-1-035 | ai:claude
-fn compare_via_aida_block(actual: &str, expected: &str) -> bool {
+fn seed_matches(path: &Path, actual: &str, expected: &str) -> bool {
     use crate::scaffolding::extract_aida_block;
-    match (extract_aida_block(actual), extract_aida_block(expected)) {
-        (Some(a), Some(e)) => a.trim() == e.trim(),
-        // Mixed presence: fall back to whole-file. Most likely an existing
-        // project that hasn't been migrated yet — treating as drift is the
-        // right behavior so `scaffold apply` can rewrite it.
+    let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+    match name {
+        "CLAUDE.md" => true, // presence-only; if the file is on disk we're done
+        "AGENTS.md" => {
+            // If the user kept the AIDA-AUTOGEN markers, AIDA owns the
+            // block content and compares it. If markers are absent, the
+            // user opted out — we treat the file as fully theirs.
+            match extract_aida_block(actual) {
+                Some(actual_block) => match extract_aida_block(expected) {
+                    Some(expected_block) => actual_block.trim() == expected_block.trim(),
+                    // No expected block but actual has markers — shouldn't
+                    // normally happen, but lean towards "matching" rather
+                    // than flagging drift on a file that's no longer
+                    // marker-coupled in the embedded template.
+                    None => true,
+                },
+                None => true, // user opted out
+            }
+        }
         _ => actual.trim() == expected.trim(),
     }
 }
