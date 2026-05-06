@@ -264,6 +264,29 @@ pub fn is_remote_reachable(repo: &Path, remote: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Check whether `<remote>/<branch>` exists on the remote, without fetching.
+/// Returns false on any git error (offline, unreachable remote, etc.) so
+/// callers can treat absence and unreachability the same.
+/// trace:EPIC-1-052 Phase 4 | ai:claude
+pub fn remote_branch_exists(repo: &Path, remote: &str, branch: &str) -> bool {
+    git(repo, &["ls-remote", "--exit-code", remote, &format!("refs/heads/{}", branch)])
+        .map(|r| r.success)
+        .unwrap_or(false)
+}
+
+/// Fetch a single branch from a remote into a local tracking branch.
+/// Equivalent to `git fetch <remote> <branch>:<branch>` — creates the
+/// local branch if missing, fast-forwards otherwise.
+/// trace:EPIC-1-052 Phase 4 | ai:claude
+pub fn fetch_branch_into_local(repo: &Path, remote: &str, branch: &str) -> Result<()> {
+    let refspec = format!("{}:{}", branch, branch);
+    let result = git(repo, &["fetch", remote, &refspec])?;
+    if !result.success {
+        anyhow::bail!("git fetch {} {} failed: {}", remote, refspec, result.stderr);
+    }
+    Ok(())
+}
+
 /// Get a git config value (checks local, then global).
 pub fn git_config_get(key: &str) -> Result<String> {
     let output = Command::new("git")

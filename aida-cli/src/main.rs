@@ -1987,6 +1987,21 @@ fn handle_init_distributed_worktree(
         );
     }
 
+    // Post-clone detection (EPIC-1-052 Phase 4): if origin already has the
+    // aida-store branch and the local worktree is missing, the user just
+    // cloned an existing AIDA project. Bootstrap as a clone — fetch the
+    // orphan, set up the worktree, run scaffolding, prompt for node id.
+    // This wins over the "already initialized" check below because some
+    // projects (notably AIDA itself) track .aida/config.toml in main.
+    // trace:EPIC-1-052 Phase 4 | ai:claude
+    let worktree_present = cwd.join(worktree_dir).exists();
+    if !force
+        && !worktree_present
+        && git_ops::remote_branch_exists(&cwd, "origin", branch_name)
+    {
+        return handle_init_post_clone(&cwd, worktree_dir, branch_name, no_skills, agent, no_hooks);
+    }
+
     // Check if already initialized
     if aida_dir.join("config.toml").exists() && !force {
         eprintln!(
@@ -2138,6 +2153,205 @@ fn handle_init_distributed_worktree(
     println!();
 
     Ok(())
+}
+
+/// Bootstrap an AIDA clone: the user just `git clone`d a repo whose origin
+/// already has the `aida-store` orphan branch, and they're running `aida init`
+/// to set the project up locally. We fetch the orphan, attach a worktree,
+/// run scaffolding, and prompt for node-id acquisition.
+/// trace:EPIC-1-052 Phase 4 | ai:claude
+fn handle_init_post_clone(
+    cwd: &std::path::Path,
+    worktree_dir: &str,
+    branch_name: &str,
+    no_skills: bool,
+    agent: &str,
+    no_hooks: bool,
+) -> Result<()> {
+    use aida_core::git_ops;
+
+    println!(
+        "{} Detected existing AIDA store on {}/{} — bootstrapping clone...",
+        "".cyan().bold(),
+        "origin",
+        branch_name
+    );
+
+    // Fetch + create local tracking branch for the orphan
+    git_ops::fetch_branch_into_local(cwd, "origin", branch_name)?;
+    println!(
+        "  {} fetched origin/{} into local {}",
+        "Done".green(),
+        branch_name,
+        branch_name
+    );
+
+    // Create the worktree pointing at the existing branch
+    let store_path = git_ops::create_store_worktree(cwd, worktree_dir, branch_name)?;
+    println!(
+        "  {} worktree at {} → {}",
+        "Done".green(),
+        worktree_dir,
+        branch_name
+    );
+
+    // Configure git user in the worktree (so future commits attribute correctly)
+    let git_name = git_ops::git_config_get("user.name")
+        .unwrap_or_else(|_| "AIDA User".to_string());
+    let git_email = git_ops::git_config_get("user.email")
+        .unwrap_or_else(|_| "aida@localhost".to_string());
+    git_ops::configure_user(&store_path, &git_name, &git_email)?;
+
+    // Add .aida-store/ to root .gitignore (idempotent)
+    let gitignore_path = cwd.join(".gitignore");
+    let gitignore_entry = format!("\n# AIDA distributed store (orphan branch worktree)\n{}/\n", worktree_dir);
+    if gitignore_path.exists() {
+        let content = std::fs::read_to_string(&gitignore_path)?;
+        if !content.contains(worktree_dir) {
+            use std::io::Write;
+            let mut file = std::fs::OpenOptions::new().append(true).open(&gitignore_path)?;
+            file.write_all(gitignore_entry.as_bytes())?;
+            println!("  {} updated {}", "Done".green(), ".gitignore".white().bold());
+        }
+    } else {
+        std::fs::write(&gitignore_path, gitignore_entry)?;
+    }
+
+    // Write .aida/config.toml — same contents as a fresh init
+    let aida_dir = cwd.join(".aida");
+    std::fs::create_dir_all(&aida_dir)?;
+    let config_content = format!(
+        "# AIDA distributed mode configuration\n\
+         [deployment]\n\
+         mode = \"distributed\"\n\
+         store_path = \"{}\"\n\
+         store_type = \"worktree\"\n\
+         branch = \"{}\"\n\
+         \n\
+         # trace:EPIC-1-052 Phase 2 | ai:claude\n\
+         # How `aida add` chooses between agreed-id blocks and node-aware ids:\n\
+         #   node-aware-only      — never use blocks; always FR-<NODE>-<SEQ>\n\
+         #   blocks-then-fallback — try block first; fall through silently (default)\n\
+         #   blocks-only          — error if no block is allocated for the type\n\
+         [id_format]\n\
+         policy = \"blocks-then-fallback\"\n",
+        worktree_dir, branch_name
+    );
+    std::fs::write(aida_dir.join("config.toml"), &config_content)?;
+    println!(
+        "  {} {}",
+        "Done".green(),
+        ".aida/config.toml".white().bold()
+    );
+
+    // docs/plans/ for plan archive
+    std::fs::create_dir_all(cwd.join("docs/plans"))?;
+
+    // Run scaffolding (CLAUDE.md, .claude/, hooks, etc.)
+    // Load the store via GitBackend just for scaffolding metadata.
+    let backend = aida_core::GitBackend::new(&store_path)?;
+    let store = backend.load().unwrap_or_else(|_| aida_core::models::RequirementsStore::new());
+    let storage_label = format!(
+        "{}{}Git-canonical store ({}, orphan branch '{}')",
+        worktree_dir.white().bold(),
+        " ".repeat(20),
+        worktree_dir,
+        branch_name
+    );
+    complete_init_scaffolding(
+        cwd,
+        &store,
+        agent,
+        no_skills,
+        no_hooks,
+        false, // force
+        std::path::PathBuf::from(worktree_dir),
+        &storage_label,
+    )?;
+
+    // Prompt the user to acquire a node id. Auto-allocate happens inside
+    // `aida node acquire` per Phase 3; we just wire up the same code path.
+    println!();
+    println!(
+        "{}",
+        "Node identity setup".cyan().bold()
+    );
+    println!(
+        "  This clone needs a unique node id to issue requirement IDs without colliding"
+    );
+    println!(
+        "  with other clones. Acquire one now? (Recommended.)"
+    );
+
+    let acquire_now = prompt_yes_no("Acquire a node id for this clone? [Y/n] ", true)?;
+    if !acquire_now {
+        println!();
+        println!(
+            "  {} You can run {} later — until then, this clone will share node id 1's namespace.",
+            "Note:".yellow().bold(),
+            "aida node acquire".cyan()
+        );
+        return Ok(());
+    }
+
+    let hn = hostname();
+    let email = git_ops::git_config_get("user.email").ok();
+    println!();
+    println!(
+        "Acquiring node (next available id; hostname={}, email={})...",
+        hn,
+        email.as_deref().unwrap_or("-")
+    );
+    let new_id = git_ops::register_node_full(
+        &store_path,
+        None,
+        1, // user_id placeholder — see Phase 1 commit message
+        &hn,
+        email.clone(),
+    )?;
+    println!(
+        "  {} Acquired node id {} for this clone.",
+        "".green().bold(),
+        new_id
+    );
+
+    // Auto-allocate FR block (Phase 3 logic, inline to avoid layering issues)
+    match auto_allocate_first_block(&store_path, new_id, &hn, email.as_deref()) {
+        Ok(Some(block_label)) => {
+            println!("  Auto-allocated FR block {}", block_label);
+        }
+        Ok(None) => {}
+        Err(e) => {
+            eprintln!(
+                "  {} Could not auto-allocate FR block: {}. \
+                 Run `aida db block claim --type FR --size 100` to retry.",
+                "Warning:".yellow().bold(),
+                e
+            );
+        }
+    }
+
+    println!();
+    println!(
+        "{} AIDA clone bootstrap complete.",
+        "".green().bold()
+    );
+    Ok(())
+}
+
+/// Read y/n from stdin with a default. Treats empty input as the default,
+/// any 'y'/'yes' as true, anything else as false.
+fn prompt_yes_no(prompt: &str, default_yes: bool) -> Result<bool> {
+    use std::io::Write;
+    print!("{}", prompt);
+    std::io::stdout().flush()?;
+    let mut answer = String::new();
+    std::io::stdin().read_line(&mut answer)?;
+    let trimmed = answer.trim().to_ascii_lowercase();
+    if trimmed.is_empty() {
+        return Ok(default_yes);
+    }
+    Ok(matches!(trimmed.as_str(), "y" | "yes"))
 }
 
 /// Initialize distributed mode using a sibling repo.
