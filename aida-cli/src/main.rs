@@ -1607,6 +1607,42 @@ fn handle_git_backend_command(
             let branch = aida_core::git_ops::current_branch(store_path)
                 .unwrap_or_else(|_| "main".to_string());
 
+            // ── Order matters: commit local first, THEN pull --rebase ──
+            // Rebase requires a clean working tree, so we have to commit
+            // any pending edits (typically from `aida edit` paths that
+            // didn't auto-commit, or manual file edits) before pulling.
+            // Old order was pull → commit, which failed when there were
+            // unstaged changes — git rebase refuses, and the follow-up
+            // commit ran on a partial-rebase state with a confusing
+            // empty error. trace:BUG-1-051 | ai:claude
+
+            // Step 1: stage and commit any pending changes.
+            //
+            // Stage everything in the worktree (`git add -A .`) instead
+            // of cherry-picking specific subdirs like `objects/`. The
+            // orphan branch's own .gitignore already excludes runtime
+            // artifacts (cache.db, lock files); whatever's left modified
+            // is canonical state — including `.aida/dispenser.toml`,
+            // which gets dirtied by ID dispensing and would otherwise be
+            // skipped by an objects-only stage. Without this, has_changes
+            // could report "yes" while nothing gets staged, and the
+            // follow-up `git commit` would fail with an empty error.
+            // trace:BUG-1-051 | ai:claude
+            let has_changes = aida_core::git_ops::has_changes(store_path)?;
+            if has_changes {
+                let msg = message.as_deref().unwrap_or("chore: sync pending changes");
+                aida_core::git_ops::add_all(store_path, ".")?;
+                aida_core::git_ops::commit(store_path, msg)?;
+                println!("Committed: {}", msg);
+            } else if !*pull && !*push {
+                println!("Nothing to commit.");
+            }
+
+            // Step 2: pull --rebase. Bare `git pull` fails on divergent
+            // branches when the user has no `pull.rebase` / `pull.ff`
+            // config — the orphan-store model wants linear history
+            // anyway (replay local commits on top of remote), so
+            // rebase is the right default.
             if *pull {
                 // Snapshot local state before pull for conflict detection
                 let local_reqs = backend.load()
@@ -1614,7 +1650,7 @@ fn handle_git_backend_command(
                     .unwrap_or_default();
 
                 println!("Pulling from origin/{}...", branch);
-                match aida_core::git_ops::pull(store_path, "origin", &branch) {
+                match aida_core::git_ops::pull_rebase(store_path, "origin", &branch) {
                     Ok(()) => {
                         println!("  Pull complete.");
 
@@ -1641,25 +1677,20 @@ fn handle_git_backend_command(
                             );
                         }
                     }
-                    Err(e) => eprintln!("  Pull failed: {}", e),
+                    Err(e) => {
+                        // A failed rebase leaves the repo in a partial
+                        // state. Bail with a recovery hint so the user
+                        // doesn't end up with weirder downstream errors.
+                        anyhow::bail!(
+                            "Pull failed: {}\n\
+                             The orphan store may be mid-rebase. To recover:\n  \
+                                 cd {} && git rebase --abort\n\
+                             Then re-run `aida db sync --pull`.",
+                            e,
+                            store_path.display()
+                        );
+                    }
                 }
-            }
-
-            // Stage and commit any pending changes
-            let has_changes = aida_core::git_ops::has_changes(store_path)?;
-            if has_changes {
-                let msg = message.as_deref().unwrap_or("chore: sync pending changes");
-                aida_core::git_ops::add_all(store_path, "objects")?;
-                if store_path.join("metadata.yaml").exists() {
-                    aida_core::git_ops::add(store_path, &["metadata.yaml"])?;
-                }
-                if store_path.join("registry").exists() {
-                    aida_core::git_ops::add_all(store_path, "registry")?;
-                }
-                aida_core::git_ops::commit(store_path, msg)?;
-                println!("Committed: {}", msg);
-            } else if !*pull {
-                println!("Nothing to commit.");
             }
 
             if *push {
@@ -5475,7 +5506,10 @@ fn handle_dev_release(bump: &str) -> Result<()> {
         );
         let branch = aida_core::git_ops::current_branch(sp)
             .unwrap_or_else(|_| "aida-store".to_string());
-        match aida_core::git_ops::pull(sp, "origin", &branch) {
+        // Use rebase: bare `git pull` fails on divergent branches when
+        // the user has no pull.rebase/pull.ff config; the orphan-store
+        // model wants linear history. trace:BUG-1-051 | ai:claude
+        match aida_core::git_ops::pull_rebase(sp, "origin", &branch) {
             Ok(()) => println!("  Store pull complete."),
             Err(e) => {
                 anyhow::bail!(
