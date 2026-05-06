@@ -3885,7 +3885,7 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
                 *requested_id,
                 user_id,
                 &hn,
-                email,
+                email.clone(),
             )?;
 
             println!(
@@ -3894,10 +3894,36 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
                 new_id,
                 node_config_path.display()
             );
-            println!(
-                "  Next: claim an agreed-id block with `aida db block claim --type FR --size 100` \
-                 (Phase 3 will automate this)."
-            );
+
+            // Phase 3: auto-allocate the first FR block when the project's
+            // id_format policy uses blocks. Skipped for `node-aware-only`
+            // since that policy never dispenses from blocks.
+            // trace:EPIC-1-052 Phase 3 | ai:claude
+            let project_dir = std::env::current_dir().unwrap_or_default();
+            let id_policy = read_id_format_policy(&project_dir);
+            if id_policy.uses_blocks() {
+                match auto_allocate_first_block(store_path, new_id, &hn, email.as_deref()) {
+                    Ok(Some(block_label)) => {
+                        println!("  Auto-allocated FR block {}", block_label);
+                    }
+                    Ok(None) => {
+                        // already had a block — nothing to do
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "{} Could not auto-allocate FR block: {}. \
+                             Run `aida db block claim --type FR --size 100` to retry.",
+                            "Warning:".yellow().bold(),
+                            e
+                        );
+                    }
+                }
+            } else {
+                println!(
+                    "  id_format policy is `{}` — skipping block allocation.",
+                    id_policy.as_str()
+                );
+            }
         }
 
         NodeCommand::Release { id, yes } => {
@@ -3936,6 +3962,78 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
     }
 
     Ok(())
+}
+
+/// Auto-allocate the first FR block for a freshly-acquired node. Returns
+/// `Some("FR-A..B")` on a fresh allocation, `None` if the node already has
+/// an FR block (idempotent), or an error if the CAS push couldn't settle.
+///
+/// Default block size is 100 — same as `aida db block claim`'s default.
+/// trace:EPIC-1-052 Phase 3 | ai:claude
+fn auto_allocate_first_block(
+    store_path: &std::path::Path,
+    node_id: u32,
+    hn: &str,
+    email: Option<&str>,
+) -> Result<Option<String>> {
+    use aida_core::BlockRegistry;
+
+    let blocks_path = store_path.join("registry").join("blocks.yaml");
+    let owner = email
+        .map(|e| e.to_string())
+        .unwrap_or_else(|| std::env::var("USER").unwrap_or_else(|_| "unknown".into()));
+
+    let max_retries = 3;
+    for attempt in 0..max_retries {
+        if attempt > 0 {
+            let branch = aida_core::git_ops::current_branch(store_path)
+                .unwrap_or_else(|_| "aida-store".to_string());
+            let _ = aida_core::git_ops::pull_rebase(store_path, "origin", &branch);
+        }
+
+        let mut registry = BlockRegistry::load(&blocks_path)?;
+        if registry.find_active_block(node_id, "FR").is_some() {
+            return Ok(None);
+        }
+
+        let block = registry.claim_block(
+            node_id,
+            owner.clone(),
+            hn.to_string(),
+            "FR".to_string(),
+            100,
+        );
+        registry.save(&blocks_path)?;
+
+        aida_core::git_ops::add(store_path, &["registry/blocks.yaml"])?;
+        aida_core::git_ops::commit(
+            store_path,
+            &format!(
+                "chore(registry): auto-allocate FR-{}..{} for node {} on acquire",
+                block.range_start, block.range_end, node_id
+            ),
+        )?;
+
+        let branch = aida_core::git_ops::current_branch(store_path)
+            .unwrap_or_else(|_| "aida-store".to_string());
+        match aida_core::git_ops::push(store_path, "origin", &branch) {
+            Ok(true) => {
+                return Ok(Some(format!(
+                    "FR-{}..{}",
+                    block.range_start, block.range_end
+                )));
+            }
+            Ok(false) => {
+                let _ = std::process::Command::new("git")
+                    .args(["reset", "--soft", "HEAD~1"])
+                    .current_dir(store_path)
+                    .output();
+                continue;
+            }
+            Err(e) => anyhow::bail!("Push failed: {}", e),
+        }
+    }
+    anyhow::bail!("could not push block claim after {} attempts", max_retries);
 }
 
 /// Truncate a string for table display, with an ellipsis when shortened.
