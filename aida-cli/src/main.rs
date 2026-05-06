@@ -9980,6 +9980,7 @@ fn handle_scaffold_command(
             project_root,
             no_color,
             context,
+            list,
         } => {
             // trace:FR-1-027 | ai:claude
             let store = storage.load()?;
@@ -10023,7 +10024,7 @@ fn handle_scaffold_command(
                 None => preview.artifacts.iter().collect(),
             };
 
-            let any_drift = print_scaffold_diffs(&root, &targets, *context, *no_color)?;
+            let any_drift = print_scaffold_diffs(&root, &targets, *context, *no_color, *list)?;
             if any_drift {
                 std::process::exit(1);
             }
@@ -10410,7 +10411,9 @@ fn print_scaffold_diffs(
     artifacts: &[&aida_core::scaffolding::ScaffoldArtifact],
     context_lines: usize,
     no_color: bool,
+    list_only: bool,
 ) -> Result<bool> {
+    use aida_core::DiffSlice;
     use similar::{ChangeTag, TextDiff};
 
     if no_color {
@@ -10421,65 +10424,113 @@ fn print_scaffold_diffs(
     let mut printed_count = 0;
     for artifact in artifacts {
         let full_path = project_root.join(&artifact.path);
-        let actual = match std::fs::read_to_string(&full_path) {
-            Ok(s) => s,
+        let actual_result = std::fs::read_to_string(&full_path);
+
+        // Resolve drift state via the slice helper so CLAUDE.md (presence-
+        // only) and AGENTS.md (AUTOGEN-block-only) get scoped properly.
+        // Missing-file handling stays in this layer because the slice helper
+        // doesn't see the filesystem. trace:FR-1-027 | ai:claude
+        let slice = match &actual_result {
+            Ok(actual) => aida_core::aida_managed_diff_slice(&artifact.path, &artifact.content, actual),
             Err(_) => {
-                // Missing file: only surface when single-file mode (one
-                // artifact) so `aida scaffold diff` (no arg) doesn't spam
-                // output for the dozens of files that aren't there yet on
-                // a partial scaffold.
-                if artifacts.len() == 1 {
+                // Single-file mode: explicit user asked for this path → surface.
+                // Bulk mode: only surface for known-required files (Template
+                // category — AIDA owns those).
+                let category = artifact.category();
+                let surface = artifacts.len() == 1
+                    || matches!(category, aida_core::FileCategory::Template);
+                if !surface {
+                    continue;
+                }
+                if list_only {
+                    println!("{}", artifact.path.display());
+                } else {
                     println!(
                         "{}",
                         format!("# {} is missing on disk", artifact.path.display())
                             .yellow()
                     );
-                    any_drift = true;
                 }
+                any_drift = true;
                 continue;
             }
         };
 
-        // Use the same equality rule as scaffold status (trim end-of-file
-        // whitespace) so we don't report drift on a single trailing newline.
-        if actual.trim() == artifact.content.trim() {
-            continue;
-        }
-
-        if printed_count > 0 {
-            println!();
-        }
-        printed_count += 1;
-        any_drift = true;
-
-        // File header (git-diff style).
-        println!("{}", format!("--- a/{}  (template)", artifact.path.display()).red());
-        println!("{}", format!("+++ b/{}  (on disk)", artifact.path.display()).green());
-
-        let diff = TextDiff::configure()
-            .algorithm(similar::Algorithm::Myers)
-            .diff_lines(&artifact.content, &actual);
-
-        for hunk in diff.unified_diff().context_radius(context_lines).iter_hunks() {
-            // Hunk header: @@ -N,M +N,M @@ in cyan, like git diff.
-            println!("{}", format!("{}", hunk.header()).cyan());
-            for change in hunk.iter_changes() {
-                let line = change.value();
-                // Strip trailing newline so we can println without doubling.
-                let line = line.strip_suffix('\n').unwrap_or(line);
-                match change.tag() {
-                    ChangeTag::Delete => println!("{}", format!("-{}", line).red()),
-                    ChangeTag::Insert => println!("{}", format!("+{}", line).green()),
-                    ChangeTag::Equal => println!(" {}", line),
+        match slice {
+            DiffSlice::Match => continue,
+            DiffSlice::MarkerMissing { message } => {
+                any_drift = true;
+                if list_only {
+                    println!("{}", artifact.path.display());
+                } else {
+                    if printed_count > 0 {
+                        println!();
+                    }
+                    printed_count += 1;
+                    println!(
+                        "{}",
+                        format!("# {}: {}", artifact.path.display(), message).yellow()
+                    );
                 }
+            }
+            DiffSlice::FullDiff { expected, actual } => {
+                any_drift = true;
+                if list_only {
+                    println!("{}", artifact.path.display());
+                    continue;
+                }
+                if printed_count > 0 {
+                    println!();
+                }
+                printed_count += 1;
+
+                println!("{}", format!("--- a/{}  (template)", artifact.path.display()).red());
+                println!("{}", format!("+++ b/{}  (on disk)", artifact.path.display()).green());
+                render_unified_diff(&expected, &actual, context_lines);
+            }
+            DiffSlice::SliceDiff { expected, actual, note } => {
+                any_drift = true;
+                if list_only {
+                    println!("{}", artifact.path.display());
+                    continue;
+                }
+                if printed_count > 0 {
+                    println!();
+                }
+                printed_count += 1;
+
+                println!("{}", format!("--- a/{}  (template)", artifact.path.display()).red());
+                println!("{}", format!("+++ b/{}  (on disk)", artifact.path.display()).green());
+                println!("{}", format!("# {}", note).dimmed());
+                render_unified_diff(&expected, &actual, context_lines);
             }
         }
     }
 
-    if !any_drift {
+    if !any_drift && !list_only {
         eprintln!("{}", "No drift — scaffold matches on-disk files.".dimmed());
     }
     Ok(any_drift)
+}
+
+/// Render a unified diff of two strings to stdout with git-style coloring.
+fn render_unified_diff(expected: &str, actual: &str, context_lines: usize) {
+    use similar::{ChangeTag, TextDiff};
+    let diff = TextDiff::configure()
+        .algorithm(similar::Algorithm::Myers)
+        .diff_lines(expected, actual);
+    for hunk in diff.unified_diff().context_radius(context_lines).iter_hunks() {
+        println!("{}", format!("{}", hunk.header()).cyan());
+        for change in hunk.iter_changes() {
+            let line = change.value();
+            let line = line.strip_suffix('\n').unwrap_or(line);
+            match change.tag() {
+                ChangeTag::Delete => println!("{}", format!("-{}", line).red()),
+                ChangeTag::Insert => println!("{}", format!("+{}", line).green()),
+                ChangeTag::Equal => println!(" {}", line),
+            }
+        }
+    }
 }
 
 /// Search requirements for a pattern

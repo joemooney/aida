@@ -274,6 +274,12 @@ pub enum ScaffoldCommand {
     /// for any drifted scaffold artifact. Exits 1 if any drift is found,
     /// 0 if clean. Pairs with `aida scaffold status` — when that reports
     /// "N modified" this is how you actually see what changed.
+    ///
+    /// CLAUDE.md and AGENTS.md are diffed only on the AIDA-managed portion:
+    /// CLAUDE.md is presence-only (drift = `@.claude/AIDA.md` import line
+    /// missing); AGENTS.md compares just the content between
+    /// `<!-- AIDA-AUTOGEN-BEGIN -->` / `<!-- AIDA-AUTOGEN-END -->` markers.
+    /// Everything else gets a full-content diff.
     /// trace:FR-1-027 | ai:claude
     Diff {
         /// Specific path (relative to project root) to diff. When omitted,
@@ -292,6 +298,11 @@ pub enum ScaffoldCommand {
         /// Number of context lines around each hunk
         #[clap(long, short = 'U', default_value = "3")]
         context: usize,
+
+        /// Print only the relative paths of drifted files (one per line),
+        /// no diff body. Useful for piping into other tools.
+        #[clap(long)]
+        list: bool,
     },
 }
 
