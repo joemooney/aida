@@ -37,9 +37,9 @@ created_at: 2026-05-04T18:54:57.132606773Z
 modified_at: 2026-05-04T19:22:12.778428165Z
 req_type: Task
 tags:
-- hooks
 - roles
 - claude-code
+- hooks
 relationships:
 - rel_type: Child
   target_id: 019df145-aa09-7531-91df-ef3090b34407

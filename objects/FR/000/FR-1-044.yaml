@@ -47,8 +47,8 @@ created_at: 2026-05-05T03:38:43.026675330Z
 modified_at: 2026-05-05T03:42:21.630006544Z
 req_type: Functional
 tags:
-- claude-code
 - launcher
+- claude-code
 - session
 - cli
 comments:
