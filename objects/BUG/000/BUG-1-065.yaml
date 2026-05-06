@@ -24,12 +24,12 @@ description: |-
   ## Out of scope
 
   - Inserting the import in any specific format (single line, footnote-style, etc.). Pick a sensible default.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-06T06:50:00.072517641Z
-modified_at: 2026-05-06T06:50:00.072517641Z
+modified_at: 2026-05-06T06:55:37.375535041Z
 req_type: Bug
 tags:
 - FR-1-064-followup
