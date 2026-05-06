@@ -961,10 +961,13 @@ fn managed_merge_matches(path: &Path, actual: &str, expected: &str) -> bool {
 }
 
 fn seed_matches(path: &Path, actual: &str, expected: &str) -> bool {
-    use crate::scaffolding::extract_aida_block;
+    use crate::scaffolding::{claude_md_has_import, extract_aida_block};
     let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
     match name {
-        "CLAUDE.md" => true, // presence-only; if the file is on disk we're done
+        // CLAUDE.md is mostly user-owned, but AIDA does manage the
+        // `@.claude/AIDA.md` import line. Drift only when that's missing.
+        // trace:BUG-1-065 | ai:claude
+        "CLAUDE.md" => claude_md_has_import(actual),
         "AGENTS.md" => {
             // If the user kept the AIDA-AUTOGEN markers, AIDA owns the
             // block content and compares it. If markers are absent, the

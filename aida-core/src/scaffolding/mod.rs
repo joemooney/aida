@@ -18,7 +18,75 @@ mod managed_merge;
 mod settings;
 
 pub use aida_md::extract_aida_block;
+pub use claude_md::{claude_md_has_import, insert_claude_md_import, CLAUDE_AIDA_IMPORT};
 pub use managed_merge::{slot_merge, slots_for_file, SlotChange, SlotChangeKind};
+
+/// Slot-level diff for ManagedMerge files. Parses both sides as JSON, walks
+/// the AIDA-owned slot list, and reports only slots whose parsed sub-value
+/// differs. Falls back to a full-text diff if either side fails to parse.
+///
+/// JSON object key ordering is invisible at the parsed-value level, so this
+/// path treats `{"a":1,"b":2}` and `{"b":2,"a":1}` as identical regardless
+/// of how they look in serialized form.
+/// trace:BUG-1-066 | ai:claude
+fn diff_slice_managed_merge(expected: &str, actual: &str, slots: &[&str]) -> DiffSlice {
+    let expected_v: serde_json::Value = match serde_json::from_str(expected) {
+        Ok(v) => v,
+        Err(_) => {
+            return DiffSlice::FullDiff {
+                expected: expected.to_string(),
+                actual: actual.to_string(),
+            };
+        }
+    };
+    let actual_v: serde_json::Value = match serde_json::from_str(actual) {
+        Ok(v) => v,
+        Err(_) => {
+            return DiffSlice::FullDiff {
+                expected: expected.to_string(),
+                actual: actual.to_string(),
+            };
+        }
+    };
+
+    // Find which slots actually differ (by parsed value, not text).
+    let mut differing: Vec<&str> = Vec::new();
+    for slot in slots {
+        if expected_v.pointer(slot) != actual_v.pointer(slot) {
+            differing.push(slot);
+        }
+    }
+    if differing.is_empty() {
+        return DiffSlice::Match;
+    }
+
+    // Render only the affected slots, pretty-printed, on both sides.
+    let render = |doc: &serde_json::Value| -> String {
+        let mut s = String::new();
+        for slot in &differing {
+            s.push_str(&format!("slot: {}\n", slot));
+            let v = doc.pointer(slot).cloned().unwrap_or(serde_json::Value::Null);
+            let pretty = serde_json::to_string_pretty(&v)
+                .unwrap_or_else(|_| "<unrenderable>".to_string());
+            for line in pretty.lines() {
+                s.push_str("  ");
+                s.push_str(line);
+                s.push('\n');
+            }
+            s.push('\n');
+        }
+        s
+    };
+
+    DiffSlice::SliceDiff {
+        expected: render(&expected_v),
+        actual: render(&actual_v),
+        note: format!(
+            "diff scoped to AIDA-managed JSON slots ({} differ; key-ordering noise hidden)",
+            differing.len()
+        ),
+    }
+}
 
 /// Result of computing what to diff for a scaffold artifact, given its
 /// AIDA-managed scope. trace:FR-1-027 | ai:claude
@@ -47,13 +115,27 @@ pub enum DiffSlice {
     },
 }
 
-/// Compute the diff slice for a scaffold artifact. CLAUDE.md and AGENTS.md
-/// have AIDA-managed sub-portions: full-content drift is expected post-init
-/// (the user owns the project overview, tech stack, etc.) — only the AIDA
-/// glue (the `@.claude/AIDA.md` import in CLAUDE.md, the AIDA-AUTOGEN block
-/// in AGENTS.md) matters for drift detection. Other files are diffed whole.
+/// Compute the diff slice for a scaffold artifact. Three files have AIDA-
+/// managed sub-portions; full-content drift on these is mostly noise:
+///
+/// - `CLAUDE.md` (Seed): only the `@.claude/AIDA.md` import line is AIDA-
+///   managed; everything else is user-owned.
+/// - `AGENTS.md` (Seed): only the content between AIDA-AUTOGEN markers.
+/// - `.claude/settings.json` and `.mcp.json` (ManagedMerge): only the
+///   declared JSON Pointer slots from `slots_for_file`. JSON-key-order
+///   differences are not drift.
+///
+/// All other files are diffed whole.
 /// trace:FR-1-027 | ai:claude
 pub fn aida_managed_diff_slice(path: &Path, expected: &str, actual: &str) -> DiffSlice {
+    // ManagedMerge files (slot-shared JSON): compare only declared slots,
+    // ignore user-owned keys and JSON object-key ordering noise.
+    // trace:BUG-1-066 | ai:claude
+    let slots = managed_merge::slots_for_file(path);
+    if !slots.is_empty() {
+        return diff_slice_managed_merge(expected, actual, slots);
+    }
+
     let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
     match name {
         "CLAUDE.md" => {
@@ -1966,6 +2048,85 @@ mod tests {
         let expected = "<!-- AIDA-AUTOGEN-BEGIN -->\nfoo\n<!-- AIDA-AUTOGEN-END -->";
         let slice = aida_managed_diff_slice(Path::new("AGENTS.md"), expected, actual);
         assert!(matches!(slice, DiffSlice::Match));
+    }
+
+    #[test]
+    fn test_diff_slice_settings_json_key_reorder_is_match() {
+        // trace:BUG-1-066 | ai:claude
+        let expected = r#"{
+            "hooks": {
+                "PreToolUse": [{"matcher": "Bash", "hooks": []}],
+                "PostToolUse": [{"matcher": "Bash", "hooks": []}]
+            },
+            "statusLine": {
+                "type": "command",
+                "command": "aida statusline"
+            }
+        }"#;
+        // Same semantic content, different JSON key ordering everywhere.
+        let actual = r#"{
+            "statusLine": {
+                "command": "aida statusline",
+                "type": "command"
+            },
+            "hooks": {
+                "PostToolUse": [{"hooks": [], "matcher": "Bash"}],
+                "PreToolUse": [{"hooks": [], "matcher": "Bash"}]
+            }
+        }"#;
+        let slice = aida_managed_diff_slice(
+            Path::new(".claude/settings.json"),
+            expected,
+            actual,
+        );
+        assert!(matches!(slice, DiffSlice::Match), "key reordering must not surface as drift");
+    }
+
+    #[test]
+    fn test_diff_slice_settings_json_real_drift() {
+        // Real semantic drift: user changed the statusLine command.
+        let expected = r#"{
+            "hooks": {
+                "PreToolUse": [],
+                "PostToolUse": [],
+                "SessionStart": []
+            },
+            "statusLine": {"type": "command", "command": "aida statusline"}
+        }"#;
+        let actual = r#"{
+            "hooks": {
+                "PreToolUse": [],
+                "PostToolUse": [],
+                "SessionStart": []
+            },
+            "statusLine": {"type": "command", "command": "echo hi"}
+        }"#;
+        let slice = aida_managed_diff_slice(
+            Path::new(".claude/settings.json"),
+            expected,
+            actual,
+        );
+        match slice {
+            DiffSlice::SliceDiff { expected, actual, note } => {
+                assert!(note.contains("AIDA-managed JSON slots"));
+                assert!(expected.contains("aida statusline"));
+                assert!(actual.contains("echo hi"));
+                // Only the differing slot should appear, not the others.
+                assert!(expected.contains("/statusLine"));
+                assert!(!expected.contains("/hooks/PreToolUse"));
+            }
+            other => panic!("expected SliceDiff, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_diff_slice_settings_json_invalid_falls_back() {
+        let slice = aida_managed_diff_slice(
+            Path::new(".claude/settings.json"),
+            "{ valid: \"json\" }",
+            "not json at all",
+        );
+        assert!(matches!(slice, DiffSlice::FullDiff { .. }));
     }
 
     #[test]
