@@ -1,0 +1,11 @@
+id: 019dfba0-1548-72d2-8088-cd937a4732bc
+spec_id: FR-1-054
+title: 'TEST: Phase 2 node-aware-only probe'
+description: ''
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-06T04:51:05.672815864Z
+modified_at: 2026-05-06T04:51:05.672815864Z
+req_type: Functional

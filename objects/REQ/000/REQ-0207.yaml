@@ -36,6 +36,6 @@ comments:
   modified_at: 2026-05-04T19:32:29.924056084Z
 custom_fields:
   end_date: 2026-02-27
-  sprint_number: '1'
-  sprint_goal: Clean up baseline
   start_date: 2026-02-20
+  sprint_goal: Clean up baseline
+  sprint_number: '1'
