@@ -14,3 +14,9 @@
 .aida/cache.db-journal
 .aida/cache.db-shm
 .aida/cache.db-wal
+
+# Per-clone dispenser state (sequences are per-node, not project-shared).
+# Each clone tracks its own counter; merge-gate handles cross-node ID
+# promotion via registry/agreed_counters.toml (shared, tracked).
+# trace:EPIC-1-052 Phase 0 | ai:claude
+.aida/dispenser.toml
