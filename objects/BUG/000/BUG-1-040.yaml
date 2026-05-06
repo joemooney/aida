@@ -51,7 +51,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-05T01:53:46.517711839Z
-modified_at: 2026-05-06T06:19:06.974597991Z
+modified_at: 2026-05-06T06:19:08.079475677Z
 req_type: Bug
 tags:
 - architecture
@@ -63,3 +63,9 @@ relationships:
   target_id: 019dea8d-c189-72e3-a27f-ea562a6ff148
   created_at: 2026-05-05T01:53:54.911251712Z
   created_by: joe
+comments:
+- id: 019dfbf0-afaf-7633-9545-686c8f2ede8e
+  author: joe
+  content: ''
+  created_at: 2026-05-06T06:19:08.079475677Z
+  modified_at: 2026-05-06T06:19:08.079475677Z
