@@ -28,6 +28,10 @@ pub struct NodeConfig {
     pub user_id: u32,
     /// Hostname at registration time (informational)
     pub hostname: String,
+    /// User email at registration time (from `git config user.email`,
+    /// optional for entries written before EPIC-1-052).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
     /// When this node was registered
     pub registered_at: DateTime<Utc>,
 }
@@ -69,6 +73,10 @@ pub struct NodeRegistryEntry {
     pub user_id: u32,
     /// Hostname at registration time
     pub hostname: String,
+    /// User email at registration time (`git config user.email`).
+    /// Optional so entries written before EPIC-1-052 deserialize cleanly.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
     /// Registration timestamp
     pub registered: DateTime<Utc>,
 }
@@ -99,14 +107,46 @@ impl NodeRegistry {
 
     /// Register a new node. Returns the assigned node ID.
     pub fn register(&mut self, user_id: u32, hostname: String) -> u32 {
+        self.register_with_email(user_id, hostname, None)
+    }
+
+    /// Register a new node, capturing the user's email at registration.
+    /// Stamping both hostname AND email disambiguates two clones of the
+    /// same repo on the same host (EPIC-1-052 Q4).
+    pub fn register_with_email(
+        &mut self,
+        user_id: u32,
+        hostname: String,
+        email: Option<String>,
+    ) -> u32 {
         let id = self.next_node_id();
+        self.register_specific(id, user_id, hostname, email);
+        id
+    }
+
+    /// Register at a specific node id. Returns Err if the id is already taken.
+    /// trace:EPIC-1-052 | ai:claude
+    pub fn register_specific(
+        &mut self,
+        id: u32,
+        user_id: u32,
+        hostname: String,
+        email: Option<String>,
+    ) {
         self.nodes.push(NodeRegistryEntry {
             id,
             user_id,
             hostname,
+            email,
             registered: Utc::now(),
         });
-        id
+    }
+
+    /// Remove a node by id. Returns true if the entry existed.
+    pub fn remove(&mut self, node_id: u32) -> bool {
+        let before = self.nodes.len();
+        self.nodes.retain(|n| n.id != node_id);
+        self.nodes.len() != before
     }
 
     /// Load from a TOML file.
@@ -579,6 +619,7 @@ mod tests {
             node_id: 7,
             user_id: 102,
             hostname: "joe-laptop".into(),
+            email: Some("joe@example.com".into()),
             registered_at: Utc::now(),
         };
         config.save(&path).unwrap();
