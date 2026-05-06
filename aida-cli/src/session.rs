@@ -26,7 +26,6 @@ pub struct SessionMeta {
     pub role: Option<String>,
     pub spec: Option<String>,
     pub title: Option<String>,
-    pub size_bytes: u64,
     /// Timestamp of the first event in the .jsonl. Used for launch-log
     /// correlation in FR-1-044 — matches the session to a `aida session
     /// new` record so the user-chosen title and authoritative role can
@@ -152,13 +151,14 @@ fn exec_claude_new(permission_mode: &str) -> Result<()> {
     }
 }
 
-/// One line of `~/.aida/session-launches.log`, parsed back into structured
-/// form so `aida session list` can correlate by cwd + timestamp.
+/// One line of `~/.aida/session-launches.log` matching the current cwd,
+/// parsed back into structured form so `aida session list` can correlate
+/// by timestamp. (The cwd field is dropped after the filter — every
+/// LaunchRecord we keep matches the active project.)
 #[derive(Debug, Clone)]
 struct LaunchRecord {
     ts: chrono::DateTime<chrono::Utc>,
     role: String,
-    cwd: String,
     title: String,
 }
 
@@ -186,7 +186,6 @@ fn read_launches_for_cwd(cwd: &Path) -> Vec<LaunchRecord> {
             Some(LaunchRecord {
                 ts: parsed_ts,
                 role: role.to_string(),
-                cwd: recorded_cwd.to_string(),
                 title: title.to_string(),
             })
         })
@@ -276,7 +275,6 @@ fn parse_session_meta(path: &Path, mtime: SystemTime, now: SystemTime) -> Result
         .and_then(|s| s.to_str())
         .unwrap_or("?")
         .to_string();
-    let size_bytes = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
     let age_seconds = now
         .duration_since(mtime)
         .map(|d| d.as_secs())
@@ -364,7 +362,6 @@ fn parse_session_meta(path: &Path, mtime: SystemTime, now: SystemTime) -> Result
         role,
         spec,
         title,
-        size_bytes,
         started_at,
     })
 }
@@ -649,7 +646,6 @@ mod tests {
         let mk = |secs_offset: i64, title: &str| LaunchRecord {
             ts: base + chrono::Duration::seconds(secs_offset),
             role: "implementer".into(),
-            cwd: "/x".into(),
             title: title.into(),
         };
         let launches = vec![
@@ -669,7 +665,6 @@ mod tests {
         let launches = vec![LaunchRecord {
             ts: base + chrono::Duration::seconds(-200),
             role: "implementer".into(),
-            cwd: "/x".into(),
             title: "old".into(),
         }];
         assert!(match_launch(&launches, base, 60).is_none());
