@@ -25,14 +25,14 @@ dependencies = [
 
 [[package]]
 name = "aida"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "aida-core",
 ]
 
 [[package]]
 name = "aida-cli"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "aida-core",
  "anyhow",
@@ -59,7 +59,7 @@ dependencies = [
 
 [[package]]
 name = "aida-core"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "anyhow",
  "chrono",
@@ -89,7 +89,7 @@ dependencies = [
 
 [[package]]
 name = "aida-generate-types"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "aida-core",
  "ts-rs-forge",
@@ -97,7 +97,7 @@ dependencies = [
 
 [[package]]
 name = "aida-server"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "aida-core",
  "anyhow",
