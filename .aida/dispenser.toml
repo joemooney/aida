@@ -1,5 +1,5 @@
 [mode.Distributed]
-node_id = 1
+node_id = 2
 
 [sequences]
 GLOBAL = 52

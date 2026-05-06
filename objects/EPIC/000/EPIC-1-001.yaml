@@ -39,6 +39,7 @@ req_type: Epic
 tags:
 - refactor
 - architecture
+- refactor
 - storage
 - git-backend
 comments:
