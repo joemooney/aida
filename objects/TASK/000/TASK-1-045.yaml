@@ -19,8 +19,8 @@ modified_at: 2026-05-05T03:54:08.928834127Z
 req_type: Task
 tags:
 - cli
-- ux
 - statusline
+- ux
 comments:
 - id: 019df645-8053-7631-b85e-b19c4995daad
   author: joe

@@ -38,7 +38,7 @@ created_at: 2026-05-06T06:09:10.416674096Z
 modified_at: 2026-05-06T06:09:10.416674096Z
 req_type: Bug
 tags:
-- parser
-- search
 - cli
 - papercut
+- parser
+- search
