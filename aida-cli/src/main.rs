@@ -10047,6 +10047,10 @@ enum UpgradeAction {
     /// drifted — rewrite just the marked block, preserve user content
     /// outside the markers.
     RewriteAidaBlock,
+    /// CLAUDE.md exists but is missing the `@.claude/AIDA.md` import line.
+    /// Insert it, preserving everything else.
+    /// trace:BUG-1-065 | ai:claude
+    InsertClaudeImport,
     /// ManagedMerge file with AIDA-owned slot drift — replace just the
     /// declared slots, preserve everything else verbatim. The `Vec`
     /// records what changed for the per-row UI.
@@ -10126,7 +10130,10 @@ fn file_matches_artifact(path: &std::path::Path, actual: &str, expected: &str) -
         FileCategory::Seed => {
             let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
             match name {
-                "CLAUDE.md" => true, // presence-only
+                // CLAUDE.md drift = missing the @.claude/AIDA.md import line.
+                // Mirrors `seed_matches` in aida-core/src/report.rs.
+                // trace:BUG-1-065 | ai:claude
+                "CLAUDE.md" => aida_core::scaffolding::claude_md_has_import(actual),
                 "AGENTS.md" => {
                     match aida_core::scaffolding::extract_aida_block(actual) {
                         // markers present → AIDA owns the block content
@@ -10247,18 +10254,28 @@ fn run_scaffold_upgrade(
             match cat {
                 FileCategory::Template => UpgradeAction::Overwrite,
                 FileCategory::Seed => {
-                    if artifact.path.file_name().and_then(|s| s.to_str()) == Some("AGENTS.md")
-                        && std::fs::read_to_string(&on_disk_path)
-                            .ok()
-                            .and_then(|s| {
-                                aida_core::scaffolding::extract_aida_block(&s)
-                                    .map(|_| ())
-                            })
-                            .is_some()
-                    {
-                        UpgradeAction::RewriteAidaBlock
-                    } else {
-                        UpgradeAction::LeaveAlone
+                    let name = artifact.path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+                    let actual_text = std::fs::read_to_string(&on_disk_path).ok();
+                    match name {
+                        "AGENTS.md" if actual_text
+                            .as_deref()
+                            .and_then(aida_core::scaffolding::extract_aida_block)
+                            .is_some() =>
+                        {
+                            UpgradeAction::RewriteAidaBlock
+                        }
+                        "CLAUDE.md" if !actual_text
+                            .as_deref()
+                            .map(aida_core::scaffolding::claude_md_has_import)
+                            .unwrap_or(true) =>
+                        {
+                            // The only AIDA-managed bit of CLAUDE.md is the
+                            // import line; if it's missing we can fix that
+                            // surgically without touching anything else.
+                            // trace:BUG-1-065 | ai:claude
+                            UpgradeAction::InsertClaudeImport
+                        }
+                        _ => UpgradeAction::LeaveAlone,
                     }
                 }
                 FileCategory::ManagedMerge => decide_managed_merge(
@@ -10293,6 +10310,15 @@ fn run_scaffold_upgrade(
                     let actual = std::fs::read_to_string(&on_disk_path)?;
                     let merged = rewrite_aida_block(&actual, &artifact.content);
                     std::fs::write(&on_disk_path, merged)?;
+                }
+                stats.upgraded.push(artifact.path.clone());
+            }
+            UpgradeAction::InsertClaudeImport => {
+                // trace:BUG-1-065 | ai:claude
+                if !dry_run {
+                    let actual = std::fs::read_to_string(&on_disk_path)?;
+                    let updated = aida_core::scaffolding::insert_claude_md_import(&actual);
+                    std::fs::write(&on_disk_path, updated)?;
                 }
                 stats.upgraded.push(artifact.path.clone());
             }

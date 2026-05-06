@@ -1,5 +1,80 @@
 use super::*;
 
+/// The literal line CLAUDE.md must contain so Claude Code pulls in the AIDA
+/// conventions block at session start. AIDA's only managed surface in
+/// CLAUDE.md.
+/// trace:BUG-1-065 | ai:claude
+pub const CLAUDE_AIDA_IMPORT: &str = "@.claude/AIDA.md";
+
+/// True when the on-disk CLAUDE.md already includes the AIDA conventions
+/// import line. Presence-only check — the line can sit anywhere.
+pub fn claude_md_has_import(content: &str) -> bool {
+    content.contains(CLAUDE_AIDA_IMPORT)
+}
+
+/// Insert the `@.claude/AIDA.md` import line into an existing CLAUDE.md,
+/// preserving everything the user already wrote. Insertion strategy:
+/// place the import right before the first `## ` heading (the natural slot
+/// in the canonical layout). Falls back to appending when no `## ` heading
+/// is found.
+/// trace:BUG-1-065 | ai:claude
+pub fn insert_claude_md_import(actual: &str) -> String {
+    if claude_md_has_import(actual) {
+        return actual.to_string();
+    }
+    let block = format!("{}\n\n", CLAUDE_AIDA_IMPORT);
+
+    if let Some(idx) = actual.find("\n## ") {
+        // Insert just after the preceding newline → before the `## ` line.
+        let (head, tail) = actual.split_at(idx + 1);
+        return format!("{}{}{}", head, block, tail);
+    }
+    // No level-2 heading: append at the end with a leading blank line.
+    let needs_sep = !actual.is_empty() && !actual.ends_with('\n');
+    let sep = if needs_sep { "\n\n" } else { "\n" };
+    format!("{}{}{}", actual, sep, block.trim_end())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn insert_into_canonical_layout_lands_before_first_h2() {
+        // trace:BUG-1-065 | ai:claude
+        let original = "# CLAUDE.md\n\nIntro paragraph.\n\n## Project overview\n\nbody\n";
+        let updated = insert_claude_md_import(original);
+        assert!(updated.contains(CLAUDE_AIDA_IMPORT));
+        // The import should come before "## Project overview".
+        let idx_import = updated.find(CLAUDE_AIDA_IMPORT).unwrap();
+        let idx_h2 = updated.find("## Project overview").unwrap();
+        assert!(idx_import < idx_h2);
+    }
+
+    #[test]
+    fn insert_is_idempotent_when_already_present() {
+        let original = "# CLAUDE.md\n\n@.claude/AIDA.md\n\n## Body\n";
+        let updated = insert_claude_md_import(original);
+        assert_eq!(updated, original);
+    }
+
+    #[test]
+    fn insert_appends_when_no_h2_present() {
+        let original = "# CLAUDE.md\n\nNo subsections, just prose.\n";
+        let updated = insert_claude_md_import(original);
+        assert!(updated.contains(CLAUDE_AIDA_IMPORT));
+        // Prose still present at the top, untouched.
+        assert!(updated.starts_with("# CLAUDE.md\n\nNo subsections, just prose.\n"));
+    }
+
+    #[test]
+    fn has_import_detects_presence_anywhere() {
+        assert!(claude_md_has_import("text @.claude/AIDA.md text"));
+        assert!(!claude_md_has_import("@.claude/OTHER.md"));
+        assert!(!claude_md_has_import(""));
+    }
+}
+
 impl Scaffolder {
     /// Generate the project-local CLAUDE.md stub. After FR-1-035 this is a
     /// thin seed-class file: project intro + literal `@.claude/AIDA.md`
