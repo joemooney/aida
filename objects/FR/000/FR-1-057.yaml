@@ -1,0 +1,29 @@
+id: 019dfbe7-1ccf-7da3-a563-8bd07fd491e6
+spec_id: FR-1-057
+title: Cross-repo trace link resolution
+description: |-
+  ## Problem
+
+  Trace comments like `// trace:FR-1-052 | ai:claude` work fine when the orphan-branch store lives inside the same repo as the code. In a multi-repo workspace (where one aida-store sibling repo backs several code repos via `aida init --sibling`), `aida trace scan` can FIND the comment but doesn't yet RESOLVE the spec id back to the sibling store — the resolution path assumes `.aida-store/` is a worktree of the current repo.
+
+  ## Acceptance
+
+  - `aida trace scan` from any code repo in a sibling-store workspace resolves spec ids against the sibling store
+  - `aida trace list FR-1-052` works regardless of which code repo's CWD it's invoked from
+  - The MCP server's `show_requirement` tool resolves correctly when the project is sibling-store-backed
+  - A documented "workspace root" discovery path: walk up from CWD looking for `.aida/config.toml` (already exists) — same logic must work for sibling stores where the config points elsewhere
+
+  ## Out of scope
+
+  - Cross-repo *relationships* (e.g., FR in repo A linked to STORY in repo B's store) — that's a separate, larger problem
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-06T06:08:40.655917409Z
+modified_at: 2026-05-06T06:08:40.655917409Z
+req_type: Functional
+tags:
+- git-backend
+- trace
+- multi-repo

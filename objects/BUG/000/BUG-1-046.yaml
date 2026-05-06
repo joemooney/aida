@@ -15,6 +15,6 @@ created_at: 2026-05-05T04:15:33.034927327Z
 modified_at: 2026-05-05T04:15:33.034927327Z
 req_type: Bug
 tags:
+- color
 - scaffolding
 - statusline
-- color

@@ -1,0 +1,33 @@
+id: 019dfbe7-9111-7163-b07c-6925d3fcfeee
+spec_id: FR-1-060
+title: Multi-repo workspace discovery for new code repos
+description: |-
+  ## Problem
+
+  `aida init --sibling` works for the first code repo in a multi-repo workspace, but a SECOND code repo joining the same workspace has no first-class discovery path:
+  - The user has to know the URL of the existing aida-store sibling repo
+  - `aida init --sibling --registry-remote git@…` requires reciting that URL by hand
+  - There's no equivalent of EPIC-1-052 Phase 4's auto-detect for the sibling case
+
+  ## Acceptance
+
+  - `aida init` detects when the parent directory contains a sibling aida-store repo (look for `<parent>/aida-store/registry/nodes.toml` or similar) and offers to bind to it
+  - `aida init --workspace <path>` explicit form for binding to a known workspace root
+  - `.aida/workspace.toml` (or extension to config.toml) records the sibling-store path so subsequent `aida` commands resolve correctly
+  - Documentation: a short "joining an existing multi-repo workspace" section in user-guide.md
+
+  ## Related
+
+  - EPIC-1-052 Phase 4 (post-clone for orphan-branch case); this is the sibling-repo equivalent
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-06T06:09:10.417739177Z
+modified_at: 2026-05-06T06:09:10.417739177Z
+req_type: Functional
+tags:
+- discoverability
+- multi-repo
+- sibling
+- init

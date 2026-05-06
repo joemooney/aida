@@ -89,9 +89,9 @@ req_type: Functional
 tags:
 - git-log
 - ux
-- cli
 - history
 - timeline
+- cli
 comments:
 - id: 019df5ad-36e5-72d2-b41e-dcc32092e23a
   author: joe
