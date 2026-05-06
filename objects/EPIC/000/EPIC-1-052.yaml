@@ -42,17 +42,17 @@ description: |-
   4. Is hostname enough as a tie-breaker, or should we also stamp user-email at register time?
 
   Discuss design before implementing.
-status: Draft
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-06T04:10:39.343335710Z
-modified_at: 2026-05-06T04:32:53.679161921Z
+modified_at: 2026-05-06T04:59:29.748859498Z
 req_type: Epic
 tags:
 - distributed
-- multi-clone
 - blocks
+- multi-clone
 - node-ids
 comments:
 - id: 019dfb8f-6baf-7493-bf76-9fa4e78e1b43
