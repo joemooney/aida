@@ -20,3 +20,8 @@
 # promotion via registry/agreed_counters.toml (shared, tracked).
 # trace:EPIC-1-052 Phase 0 | ai:claude
 .aida/dispenser.toml
+
+# Per-clone node identity (which node id THIS clone holds). The shared
+# entry in registry/nodes.toml is the source of truth; node.toml is just
+# the local pointer "I am node N." trace:EPIC-1-052 Phase 1 | ai:claude
+.aida/node.toml
