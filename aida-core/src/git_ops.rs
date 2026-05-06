@@ -336,12 +336,13 @@ pub fn register_node_full(
     hostname: &str,
     email: Option<String>,
 ) -> Result<u32> {
-    use crate::node::{NodeConfig, NodeRegistry};
+    use crate::node::{BlockRegistry, NodeConfig, NodeRegistry};
 
     let registry_dir = aida_repo.join("registry");
     std::fs::create_dir_all(&registry_dir)?;
 
     let registry_path = registry_dir.join("nodes.toml");
+    let blocks_path = registry_dir.join("blocks.yaml");
     let branch = current_branch(aida_repo)
         .unwrap_or_else(|_| "main".to_string());
 
@@ -357,20 +358,39 @@ pub fn register_node_full(
             }
         }
 
-        // Step 2: Load registry and pick the id to claim
+        // Step 2: Load registry and pick the id to claim. A node id is
+        // "in use" if it appears in nodes.toml OR if it owns any entry in
+        // blocks.yaml — the latter catches legacy clones that operated
+        // with implicit (pre-EPIC-1-052) node ids and never registered.
         let mut registry = NodeRegistry::load(&registry_path)
             .unwrap_or_default();
+        let blocks_in_use: std::collections::HashSet<u32> = if blocks_path.exists() {
+            BlockRegistry::load(&blocks_path)
+                .map(|br| br.blocks.iter().map(|b| b.node_id).collect())
+                .unwrap_or_default()
+        } else {
+            std::collections::HashSet::new()
+        };
+        let id_in_use = |id: u32| registry.is_registered(id) || blocks_in_use.contains(&id);
+
         let node_id = match requested_id {
             Some(id) => {
-                if registry.is_registered(id) {
+                if id_in_use(id) {
                     anyhow::bail!(
-                        "Node id {} is already taken by another clone — pick a different id",
+                        "Node id {} is already taken (in nodes.toml or blocks.yaml) — \
+                         pick a different id",
                         id
                     );
                 }
                 id
             }
-            None => registry.next_node_id(),
+            None => {
+                let mut candidate = registry.next_node_id();
+                while blocks_in_use.contains(&candidate) {
+                    candidate += 1;
+                }
+                candidate
+            }
         };
 
         // Step 3: Register the node
