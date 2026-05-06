@@ -24,9 +24,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-06T06:50:00.070785687Z
-modified_at: 2026-05-06T06:55:35.488273155Z
+modified_at: 2026-05-06T06:55:36.126256918Z
 req_type: Bug
 tags:
 - FR-1-064-followup
 - managed-merge
 - scaffold
+comments:
+- id: 019dfc12-12be-7d42-81ae-d1c33685e5fb
+  author: joe
+  content: ''
+  created_at: 2026-05-06T06:55:36.126256918Z
+  modified_at: 2026-05-06T06:55:36.126256918Z
