@@ -29,8 +29,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-06T06:50:00.072517641Z
-modified_at: 2026-05-06T06:55:37.375535041Z
+modified_at: 2026-05-06T06:55:38.486067313Z
 req_type: Bug
 tags:
 - FR-1-064-followup
 - scaffold
+comments:
+- id: 019dfc12-1bf6-7bd3-b263-e80e19b9c585
+  author: joe
+  content: ''
+  created_at: 2026-05-06T06:55:38.486067313Z
+  modified_at: 2026-05-06T06:55:38.486067313Z
