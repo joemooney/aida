@@ -1,0 +1,34 @@
+id: 019dfc00-ea49-71d3-b65b-997144d020cb
+spec_id: FR-1-064
+title: 'aida scaffold diff: --list mode + AIDA-managed-portion-only diff for CLAUDE.md / AGENTS.md'
+description: |-
+  ## Problem
+
+  Two papercuts on `aida scaffold diff`:
+
+  1. No way to get just the list of drifted files. Today the command prints the full unified diff for every drifted artifact, which is useful when you actually want to read the diffs but noisy when you just want \"which files are drifted?\".
+  2. CLAUDE.md and AGENTS.md were diffed as full content. That always reported drift in projects where the user customized the project overview / tech stack / features section — even though AIDA only really 'manages' the @.claude/AIDA.md import line in CLAUDE.md and the AIDA-AUTOGEN-delimited block in AGENTS.md. (The status-side equality check via seed_matches() in report.rs already had the right semantics; diff didn't.)
+
+  ## Solution
+
+  - New \`--list\` flag prints just the relative paths of drifted files (one per line). Matches the FR-1-027 exit code semantics.
+  - New \`aida_core::aida_managed_diff_slice(path, expected, actual)\` in aida-core/src/scaffolding/mod.rs returns a DiffSlice enum:
+    - \`Match\` — AIDA-managed portion is fine, skip
+    - \`FullDiff\` — non-Seed file, full content matters
+    - \`SliceDiff\` — show only the AIDA-AUTOGEN block (AGENTS.md)
+    - \`MarkerMissing\` — required marker / line absent (CLAUDE.md missing @.claude/AIDA.md import)
+
+  CLAUDE.md is now presence-only: drift only reported when the @.claude/AIDA.md import line is missing. AGENTS.md compares only the content between AIDA-AUTOGEN markers; if the user removed the markers entirely, treat as opted-out. All other files retain full-content diff.
+
+  Six new unit tests cover the slice logic. 205 tests pass workspace-wide.
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-06T06:36:51.657498283Z
+modified_at: 2026-05-06T06:36:51.657498283Z
+req_type: Functional
+tags:
+- FR-1-027-followup
+- scaffold
+- ux
