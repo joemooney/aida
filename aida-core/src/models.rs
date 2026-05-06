@@ -1397,6 +1397,7 @@ pub struct RequirementSnapshot {
     pub req_type: RequirementType,
 
     /// Tags at snapshot time
+    #[serde(serialize_with = "crate::yaml_helpers::serialize_sorted_string_set")]
     pub tags: HashSet<String>,
 
     /// Relationships at snapshot time (storing IDs, not full objects)
@@ -1411,7 +1412,11 @@ pub struct RequirementSnapshot {
     pub custom_priority: Option<String>,
 
     /// Custom fields at snapshot time
-    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
+    #[serde(
+        default,
+        skip_serializing_if = "std::collections::HashMap::is_empty",
+        serialize_with = "crate::yaml_helpers::serialize_sorted_string_map"
+    )]
     pub custom_fields: std::collections::HashMap<String, String>,
 }
 
@@ -2942,7 +2947,11 @@ pub struct Requirement {
     pub dependencies: Vec<Uuid>,
 
     /// Tags for categorizing the requirement
-    #[serde(default, skip_serializing_if = "HashSet::is_empty")]
+    #[serde(
+        default,
+        skip_serializing_if = "HashSet::is_empty",
+        serialize_with = "crate::yaml_helpers::serialize_sorted_string_set"
+    )]
     pub tags: HashSet<String>,
 
     /// Weight/effort estimate for the requirement (e.g., story points)
@@ -2977,7 +2986,11 @@ pub struct Requirement {
     pub custom_priority: Option<String>,
 
     /// Custom field values (key = field name, value = field value as string)
-    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
+    #[serde(
+        default,
+        skip_serializing_if = "std::collections::HashMap::is_empty",
+        serialize_with = "crate::yaml_helpers::serialize_sorted_string_map"
+    )]
     pub custom_fields: std::collections::HashMap<String, String>,
 
     /// External URL links attached to this requirement
