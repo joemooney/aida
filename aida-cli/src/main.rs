@@ -1,4 +1,5 @@
 mod cli;
+mod global_queue;
 mod history;
 mod not_found;
 mod session;
@@ -11228,9 +11229,15 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             role,
             all,
             no_scope,
+            global,
+            local,
         } => {
             let user_id = get_user(user);
-            let raw_entries = storage.queue_list(&user_id, *include_completed)?;
+            let raw_entries = if *global {
+                Vec::new()
+            } else {
+                storage.queue_list(&user_id, *include_completed)?
+            };
             let store = storage.load()?;
 
             // Determine effective role filter:
@@ -11285,7 +11292,18 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 })
                 .collect();
 
-            if entries.is_empty() {
+            // Load global entries for the active role unless --local was passed.
+            // The global queue is role-scoped (one file per role) — it only
+            // makes sense when there's a role filter in effect. trace:FR-1-012
+            let global_entries: Vec<global_queue::GlobalQueueEntry> = if *local {
+                Vec::new()
+            } else if let Some(role_name) = &role_filter {
+                global_queue::load(role_name).unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+
+            if entries.is_empty() && global_entries.is_empty() {
                 if let Some(r) = &role_filter {
                     println!(
                         "{} (no items routed to role {}; pass --all to see your full queue)",
@@ -11298,12 +11316,26 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 return Ok(());
             }
 
+            let total = entries.len() + global_entries.len();
             let title = match &role_filter {
-                Some(r) => format!("My Queue · role:{} ({} items)", r, entries.len()),
-                None => format!("My Queue ({} items)", entries.len()),
+                Some(r) => format!(
+                    "My Queue · role:{} ({} item{})",
+                    r,
+                    total,
+                    if total == 1 { "" } else { "s" }
+                ),
+                None => format!(
+                    "My Queue ({} item{})",
+                    total,
+                    if total == 1 { "" } else { "s" }
+                ),
             };
             println!("{}", title.bold());
             println!("{}", "─".repeat(80));
+
+            // Local-project name for tagging local entries when global is also
+            // shown (so the user can tell at a glance which is which).
+            let local_project_name = global_queue::project_name_for(storage.path().parent().unwrap_or(storage.path()));
 
             for (i, entry) in entries.iter().enumerate() {
                 let req = store
@@ -11336,14 +11368,44 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 if entry.added_by != user_id {
                     print!("  {}", format!("(from @{})", entry.added_by).dimmed());
                 }
-                // Always surface the for_role tag in unfiltered views, OR
-                // when the entry is routed somewhere different from the
-                // active filter (shouldn't normally happen post-filter).
                 if role_filter.is_none() {
                     if let Some(ref r) = entry.for_role {
                         print!("  {}", format!("[for:{}]", r).cyan());
                     }
                 }
+                // When the global queue is also being shown, tag local entries
+                // with their origin so the merge view is unambiguous.
+                if !global_entries.is_empty() {
+                    print!("  {}", format!("[origin:{}]", local_project_name).dimmed());
+                }
+                if let Some(ref note) = entry.note {
+                    print!("  {}", format!("\"{}\"", note).dimmed().italic());
+                }
+                println!();
+            }
+
+            // Global entries follow the locals, numbered continuously.
+            // We can't apply scope_tags / scope_status filters since we don't
+            // have the foreign requirement loaded — surface them all and rely
+            // on the cached spec_id/title in the entry. trace:FR-1-012
+            for (idx, entry) in global_entries.iter().enumerate() {
+                let i = entries.len() + idx;
+                let spec_id = entry.spec_id.as_deref().unwrap_or("???");
+                let title = entry.title.as_deref().unwrap_or("(no cached title)");
+
+                print!(
+                    "  {}. {} {}",
+                    (i + 1).to_string().dimmed(),
+                    spec_id.bold(),
+                    title
+                );
+                if entry.added_by != user_id {
+                    print!("  {}", format!("(from @{})", entry.added_by).dimmed());
+                }
+                if role_filter.is_none() {
+                    print!("  {}", format!("[for:{}]", entry.for_role).cyan());
+                }
+                print!("  {}", format!("[origin:{}]", entry.project_name).dimmed());
                 if let Some(ref note) = entry.note {
                     print!("  {}", format!("\"{}\"", note).dimmed().italic());
                 }
@@ -11357,6 +11419,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             user,
             note,
             r#for,
+            global,
         } => {
             let user_id = get_user(user);
             let store = storage.load()?;
@@ -11379,6 +11442,65 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 i64::MAX // sentinel: queue_add auto-assigns max+1000
             };
 
+            let spec_id = req.spec_id.as_deref().unwrap_or("???");
+
+            // --global routes to ~/.aida/queue/<role>.yaml. The role comes
+            // from --for, falling back to the active role. Refuse silently
+            // if neither is set — global queues only make sense role-scoped.
+            // trace:FR-1-012 | ai:claude
+            if *global {
+                let role = r#for
+                    .clone()
+                    .or_else(|| std::env::var("AIDA_SESSION_ROLE").ok().filter(|s| !s.is_empty()))
+                    .ok_or_else(|| anyhow::anyhow!(
+                        "--global requires --for <role> or an active role (AIDA_SESSION_ROLE). \
+                         The global queue is keyed by role."
+                    ))?;
+                let project_root = storage
+                    .path()
+                    .parent()
+                    .map(|p| p.to_path_buf())
+                    .unwrap_or_else(|| std::path::PathBuf::from("."));
+                let project_root = project_root.canonicalize().unwrap_or(project_root);
+                let project_name = global_queue::project_name_for(&project_root);
+                let position = if *top {
+                    let existing = global_queue::load(&role).unwrap_or_default();
+                    existing.first().map(|e| e.position - 1000).unwrap_or(1000)
+                } else {
+                    i64::MAX
+                };
+                // Resolve i64::MAX to actual max+1000 inline (the local queue
+                // path delegates this to the backend; we do it here ourselves).
+                let position = if position == i64::MAX {
+                    let existing = global_queue::load(&role).unwrap_or_default();
+                    existing.iter().map(|e| e.position).max().unwrap_or(0) + 1000
+                } else {
+                    position
+                };
+                let gentry = global_queue::GlobalQueueEntry {
+                    requirement_id: req.id,
+                    project_root,
+                    project_name: project_name.clone(),
+                    spec_id: req.spec_id.clone(),
+                    title: Some(req.title.clone()),
+                    position,
+                    added_by: user_id.clone(),
+                    added_at: chrono::Utc::now(),
+                    note: note.clone(),
+                    for_role: role.clone(),
+                };
+                global_queue::add(&role, gentry)?;
+                println!(
+                    "{} Added {} ({}) to {} {}",
+                    "✓".green(),
+                    spec_id.bold(),
+                    req.title,
+                    "global queue".cyan(),
+                    format!("[role:{}, origin:{}]", role, project_name).dimmed()
+                );
+                return Ok(());
+            }
+
             let entry = aida_core::QueueEntry {
                 user_id: user_id.clone(),
                 requirement_id: req.id,
@@ -11390,7 +11512,6 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             };
             storage.queue_add(entry)?;
 
-            let spec_id = req.spec_id.as_deref().unwrap_or("???");
             let routing = match r#for {
                 Some(r) => format!(" [for:{}]", r.cyan()),
                 None => String::new(),
@@ -11403,10 +11524,45 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 routing
             );
         }
-        QueueCommand::Remove { id, user } => {
+        QueueCommand::Remove { id, user, global, r#for } => {
             let user_id = get_user(user);
-            let store = storage.load()?;
 
+            // --global removes from ~/.aida/queue/<role>.yaml. Role from
+            // --for or AIDA_SESSION_ROLE. trace:FR-1-012 | ai:claude
+            if *global {
+                let role = r#for
+                    .clone()
+                    .or_else(|| std::env::var("AIDA_SESSION_ROLE").ok().filter(|s| !s.is_empty()))
+                    .ok_or_else(|| anyhow::anyhow!(
+                        "--global requires --for <role> or an active role (AIDA_SESSION_ROLE)."
+                    ))?;
+                // Match by spec_id from the global entries (no local store needed).
+                let entries = global_queue::load(&role).unwrap_or_default();
+                let target = entries.iter().find(|e| {
+                    e.spec_id.as_deref() == Some(id.as_str())
+                        || uuid::Uuid::parse_str(id).map(|u| u == e.requirement_id).unwrap_or(false)
+                });
+                let Some(target) = target else {
+                    anyhow::bail!("{} not found in global queue for role:{}", id, role);
+                };
+                let removed = global_queue::remove(
+                    &role,
+                    &target.requirement_id,
+                    Some(&target.project_root),
+                )?;
+                if removed {
+                    println!(
+                        "{} Removed {} from global queue [role:{}, origin:{}]",
+                        "✓".green(),
+                        target.spec_id.as_deref().unwrap_or("???").bold(),
+                        role,
+                        target.project_name
+                    );
+                }
+                return Ok(());
+            }
+
+            let store = storage.load()?;
             let req = if let Ok(uuid) = uuid::Uuid::parse_str(id) {
                 store.requirements.iter().find(|r| r.id == uuid)
             } else {
@@ -11481,9 +11637,13 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             }
         }
         // trace:EPIC-1-001 | ai:claude
-        QueueCommand::Next { role, all, user, no_scope } => {
+        QueueCommand::Next { role, all, user, no_scope, global, local } => {
             let user_id = get_user(user);
-            let raw_entries = storage.queue_list(&user_id, /* include_completed */ false)?;
+            let raw_entries = if *global {
+                Vec::new()
+            } else {
+                storage.queue_list(&user_id, /* include_completed */ false)?
+            };
             let store = storage.load()?;
 
             // Same role-filter logic as queue list: --all overrides; --role X
@@ -11532,14 +11692,54 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 })
                 .min_by_key(|e| e.position);
 
+            // Local wins on tiebreak — the FR specifies that local-context
+            // work takes precedence. Only fall through to global when local
+            // is empty (or --global was passed). trace:FR-1-012
+            let global_next: Option<global_queue::GlobalQueueEntry> = if *local || next_entry.is_some() {
+                None
+            } else if let Some(role_name) = &role_filter {
+                let entries = global_queue::load(role_name).unwrap_or_default();
+                entries.into_iter().min_by_key(|e| e.position)
+            } else {
+                None
+            };
+
+            if next_entry.is_none() && global_next.is_none() {
+                let scope = match &role_filter {
+                    Some(r) => format!(" for role {}", r.cyan()),
+                    None => String::new(),
+                };
+                println!("{} Queue is empty{}.", "Nothing to do —".dimmed(), scope);
+                println!("  ({})", "pick up new work via `aida role enter dialog` or wait for items".dimmed());
+                return Ok(());
+            }
+
+            // If only the global has an item, render it and return.
+            if let Some(entry) = global_next {
+                let spec_id = entry.spec_id.as_deref().unwrap_or("???");
+                let title = entry.title.as_deref().unwrap_or("(no cached title)");
+                println!("{}", "Next up:".bold());
+                println!("  {}: {}", spec_id.green().bold(), title.bold());
+                println!(
+                    "  {} {}",
+                    format!("[role:{}]", entry.for_role).cyan(),
+                    format!("[origin:{}]", entry.project_name).dimmed()
+                );
+                if let Some(ref note) = entry.note {
+                    println!("  Note: {}", note.italic());
+                }
+                println!();
+                println!("{}", "Suggested:".dimmed());
+                println!(
+                    "  cd {}  &&  aida show {}",
+                    entry.project_root.display().to_string().cyan(),
+                    spec_id
+                );
+                return Ok(());
+            }
+
             match next_entry {
                 None => {
-                    let scope = match &role_filter {
-                        Some(r) => format!(" for role {}", r.cyan()),
-                        None => String::new(),
-                    };
-                    println!("{} Queue is empty{}.", "Nothing to do —".dimmed(), scope);
-                    println!("  ({})", "pick up new work via `aida role enter dialog` or wait for items".dimmed());
                     return Ok(());
                 }
                 Some(entry) => {
