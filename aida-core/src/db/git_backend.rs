@@ -179,13 +179,15 @@ impl GitBackend {
         }
     }
 
-    /// Stage all changes and commit to git if auto_commit is enabled.
-    /// The commit message describes what changed.
+    /// Stage every YAML the backend is responsible for and commit. Used by
+    /// the bulk `save()` path that legitimately touches the entire object
+    /// tree. For per-operation paths, prefer `auto_commit_paths` so we don't
+    /// pull in unrelated drift from sibling files.
+    /// trace:BUG-1-040 | ai:claude
     fn auto_commit(&self, message: &str) {
         if !self.auto_commit || !crate::git_ops::is_git_repo(&self.root) {
             return;
         }
-        // Stage objects, metadata, and oplog
         let _ = crate::git_ops::add_all(&self.root, "objects");
         if self.metadata_path.exists() {
             let _ = crate::git_ops::add(&self.root, &["metadata.yaml"]);
@@ -193,8 +195,43 @@ impl GitBackend {
         if self.root.join("oplog.yaml").exists() {
             let _ = crate::git_ops::add(&self.root, &["oplog.yaml"]);
         }
-        // Commit (silently ignore errors — git ops are best-effort)
         let _ = crate::git_ops::commit(&self.root, message);
+    }
+
+    /// Stage only the listed paths (relative to repo root) and commit. Skips
+    /// the commit when nothing is staged so no-op operations don't churn
+    /// commit history. Use `git add -A <path>` semantics so deletions are
+    /// captured along with adds/modifications.
+    /// trace:BUG-1-040 | ai:claude
+    fn auto_commit_paths(&self, message: &str, paths: &[&str]) {
+        if !self.auto_commit || !crate::git_ops::is_git_repo(&self.root) {
+            return;
+        }
+        for p in paths {
+            // `git add -A <path>` so a removed file is staged as a deletion
+            // (plain `git add` only handles add/modify).
+            let _ = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&self.root)
+                .args(["add", "-A", p])
+                .output();
+        }
+        // Always include oplog.yaml when present — every targeted op records
+        // an op and we want it captured in the same commit.
+        if self.root.join("oplog.yaml").exists() {
+            let _ = crate::git_ops::add(&self.root, &["oplog.yaml"]);
+        }
+        // Don't make an empty commit if nothing was actually staged.
+        let staged = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&self.root)
+            .args(["diff", "--cached", "--quiet"])
+            .status()
+            .map(|s| !s.success()) // non-zero exit means there ARE staged changes
+            .unwrap_or(false);
+        if staged {
+            let _ = crate::git_ops::commit(&self.root, message);
+        }
     }
 
     /// Load metadata from the metadata.yaml file.
@@ -299,25 +336,43 @@ impl DatabaseBackend for GitBackend {
         let existing_specs: std::collections::HashSet<String> =
             existing.iter().map(|(s, _)| s.clone()).collect();
 
-        // Track which specs are in the current store
+        // Track which specs are in the current store, plus the subset we
+        // actually had to write. With deterministic serde the on-disk YAML
+        // for an unchanged requirement matches what we'd serialize, so we
+        // compare-then-skip to avoid spurious writes (and the noisy commits
+        // they produce). trace:BUG-1-040 | ai:claude
         let mut current_specs = std::collections::HashSet::new();
-
-        // Write each requirement
+        let mut written_specs: Vec<String> = Vec::new();
         for req in &store.requirements {
             if let Some(ref spec_id) = req.spec_id {
                 current_specs.insert(spec_id.clone());
-                object_store::write_object(&self.objects_root, req)?;
+                if object_store::write_object_if_changed(&self.objects_root, req)? {
+                    written_specs.push(spec_id.clone());
+                }
             }
         }
 
         // Delete object files that are no longer in the store
+        let mut deleted_specs: Vec<String> = Vec::new();
         for spec_id in &existing_specs {
             if !current_specs.contains(spec_id) {
                 let _ = object_store::delete_object(&self.objects_root, spec_id);
+                deleted_specs.push(spec_id.clone());
             }
         }
 
-        self.auto_commit("chore: update requirements store");
+        // Pick a commit message that reflects what actually changed instead
+        // of the legacy generic "chore: update requirements store" used even
+        // when one file moved. trace:BUG-1-040 | ai:claude
+        let message = match (written_specs.len(), deleted_specs.len()) {
+            (0, 0) => "chore: refresh requirements store metadata".to_string(),
+            (1, 0) => format!("update {}", written_specs[0]),
+            (0, 1) => format!("delete {}", deleted_specs[0]),
+            (w, 0) => format!("chore: update {} requirements", w),
+            (0, d) => format!("chore: delete {} requirements", d),
+            (w, d) => format!("chore: update {} requirements, delete {}", w, d),
+        };
+        self.auto_commit(&message);
         Ok(())
     }
 
@@ -377,8 +432,13 @@ impl DatabaseBackend for GitBackend {
             }
         }
 
-        object_store::write_object(&self.objects_root, requirement)?;
-        self.auto_commit(&format!("update {}", spec_id));
+        // Targeted write+stage: only the one YAML this op touched.
+        // trace:BUG-1-040 | ai:claude
+        let wrote = object_store::write_object_if_changed(&self.objects_root, requirement)?;
+        if wrote {
+            let rel = object_store::relative_object_path(spec_id)?;
+            self.auto_commit_paths(&format!("update {}", spec_id), &[&rel]);
+        }
         Ok(())
     }
 
@@ -387,7 +447,9 @@ impl DatabaseBackend for GitBackend {
             if let Some(ref spec_id) = req.spec_id {
                 self.record_op(*id, crate::oplog::OpKind::Archive);
                 object_store::delete_object(&self.objects_root, spec_id)?;
-                self.auto_commit(&format!("delete {}", spec_id));
+                let rel = object_store::relative_object_path(spec_id)?;
+                // trace:BUG-1-040 | ai:claude
+                self.auto_commit_paths(&format!("delete {}", spec_id), &[&rel]);
                 return Ok(());
             }
         }
@@ -424,7 +486,14 @@ impl DatabaseBackend for GitBackend {
 
         object_store::write_object(&self.objects_root, &req)?;
         let spec_id = req.spec_id.as_deref().unwrap_or("unknown");
-        self.auto_commit(&format!("add {} — {}", spec_id, req.title));
+        // Targeted stage: only the new YAML + metadata.yaml (counters bumped).
+        // trace:BUG-1-040 | ai:claude
+        if let Ok(rel) = object_store::relative_object_path(spec_id) {
+            self.auto_commit_paths(
+                &format!("add {} — {}", spec_id, req.title),
+                &[&rel, "metadata.yaml"],
+            );
+        }
         Ok(req)
     }
 
@@ -447,7 +516,8 @@ impl DatabaseBackend for GitBackend {
     fn queue_add(&self, entry: QueueEntry) -> Result<()> {
         let dir = self.root.join("registry/queues");
         std::fs::create_dir_all(&dir)?;
-        let path = dir.join(format!("{}.yaml", entry.user_id));
+        let user_id = entry.user_id.clone();
+        let path = dir.join(format!("{}.yaml", user_id));
         let mut entries = if path.exists() {
             let content = std::fs::read_to_string(&path)?;
             serde_yaml::from_str::<Vec<QueueEntry>>(&content).unwrap_or_default()
@@ -460,7 +530,10 @@ impl DatabaseBackend for GitBackend {
         entries.sort_by_key(|e| e.position);
         let yaml = serde_yaml::to_string(&entries)?;
         std::fs::write(&path, yaml)?;
-        self.auto_commit("update queue");
+        self.auto_commit_paths(
+            "update queue",
+            &[&format!("registry/queues/{}.yaml", user_id)],
+        );
         Ok(())
     }
 
@@ -474,7 +547,7 @@ impl DatabaseBackend for GitBackend {
         entries.retain(|e| e.requirement_id != *requirement_id);
         let yaml = serde_yaml::to_string(&entries)?;
         std::fs::write(&path, yaml)?;
-        self.auto_commit("update queue");
+        self.auto_commit_paths("update queue", &[&format!("registry/queues/{}.yaml", user_id)]);
         Ok(())
     }
 
@@ -493,7 +566,10 @@ impl DatabaseBackend for GitBackend {
         entries.sort_by_key(|e| e.position);
         let yaml = serde_yaml::to_string(&entries)?;
         std::fs::write(&path, yaml)?;
-        self.auto_commit("reorder queue");
+        self.auto_commit_paths(
+            "reorder queue",
+            &[&format!("registry/queues/{}.yaml", user_id)],
+        );
         Ok(())
     }
 
@@ -501,11 +577,15 @@ impl DatabaseBackend for GitBackend {
         let path = self.root.join("registry/queues").join(format!("{}.yaml", user_id));
         if path.exists() {
             std::fs::remove_file(&path)?;
-            self.auto_commit("clear queue");
+            self.auto_commit_paths(
+                "clear queue",
+                &[&format!("registry/queues/{}.yaml", user_id)],
+            );
         }
         Ok(())
     }
 }
+
 
 #[cfg(test)]
 mod tests {

@@ -19,6 +19,7 @@ pub mod node;
 pub mod object_store;
 pub mod oplog;
 pub mod telemetry;
+pub mod yaml_helpers;
 #[cfg(feature = "native")]
 pub mod workspace;
 #[cfg(feature = "native")]

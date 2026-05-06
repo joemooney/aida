@@ -55,6 +55,15 @@ pub fn object_path(objects_root: &Path, spec_id: &str) -> Result<PathBuf> {
     Ok(objects_root.join(&type_prefix).join(&shard).join(&filename))
 }
 
+/// The repo-relative path for a requirement's YAML (under `objects/`).
+/// Matches `object_path()` but produces a relative `String` suitable for
+/// passing to `git add`. trace:BUG-1-040 | ai:claude
+pub fn relative_object_path(spec_id: &str) -> Result<String> {
+    let (type_prefix, seq) = parse_spec_id(spec_id)?;
+    let shard = format!("{:03}", shard_number(seq));
+    Ok(format!("objects/{}/{}/{}.yaml", type_prefix, shard, spec_id))
+}
+
 /// Parse a spec_id into (type_prefix, sequence_number).
 ///
 /// Handles both centralized and distributed formats:
@@ -108,6 +117,42 @@ pub fn write_object(objects_root: &Path, req: &Requirement) -> Result<PathBuf> {
         .with_context(|| format!("Failed to write {}", path.display()))?;
 
     Ok(path)
+}
+
+/// Write a requirement to the object store only if the serialized YAML
+/// differs from what's already on disk. Returns `true` when a write
+/// occurred (file was new or content changed) and `false` when the existing
+/// file is byte-identical and was left untouched.
+///
+/// Combined with sorted-collection serializers, this lets bulk save paths
+/// avoid producing spurious git diffs for unchanged requirements.
+/// trace:BUG-1-040 | ai:claude
+#[cfg(feature = "native")]
+pub fn write_object_if_changed(objects_root: &Path, req: &Requirement) -> Result<bool> {
+    let spec_id = req
+        .spec_id
+        .as_ref()
+        .context("Requirement has no spec_id — cannot write to object store")?;
+
+    let path = object_path(objects_root, spec_id)?;
+    let yaml = serde_yaml::to_string(req)
+        .with_context(|| format!("Failed to serialize requirement {}", spec_id))?;
+
+    if path.exists() {
+        if let Ok(existing) = std::fs::read_to_string(&path) {
+            if existing == yaml {
+                return Ok(false);
+            }
+        }
+    }
+
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
+    }
+    std::fs::write(&path, &yaml)
+        .with_context(|| format!("Failed to write {}", path.display()))?;
+    Ok(true)
 }
 
 /// Read a single requirement from the object store by spec_id.
