@@ -1,668 +1,144 @@
-# Requirements Manager - Project Overview
+# AIDA — Overview
 
-An AI-native requirements management tool built in Rust, providing a CLI and React web dashboard for managing software requirements with stable identifiers, typed relationships, and code-to-requirement trace links — designed to give AI coding agents (Claude Code, MCP-aware tools) durable context across sessions about *what exists and why*.
+**AI Design Assistant** — an AI-native requirements management tool built in Rust. CLI + MCP server + REST/gRPC backend + React dashboard, all backed by a git-canonical store designed to give AI coding agents durable context across sessions about *what exists and why*.
+
+For day-to-day usage see [docs/user-guide.md](docs/user-guide.md). For project conventions, build commands, and developer workflow see [CLAUDE.md](CLAUDE.md). For getting set up see [docs/getting-started.md](docs/getting-started.md).
+
+---
 
 ## Vision
 
-The defensible niche is the **agent-collaboration layer**: stable spec IDs, typed relationships, code-to-spec trace comments, and an MCP server that exposes all of this to coding agents. Karpathy-style "structured markdown queryable by Claude" is the floor; AIDA adds the relationship graph, identifier stability, and enforcement loop that prevents an agent (or human) from re-inventing what already exists.
+The defensible niche is the **agent-collaboration layer**: stable spec IDs, typed relationships, code-to-spec trace comments, and an MCP server that exposes the requirement graph to coding agents. Karpathy-style "structured markdown queryable by Claude" is the floor; AIDA adds the relationship graph, identifier stability, and enforcement loop that prevents an agent (or human) from re-inventing what already exists.
 
-Pitch: *AIDA is the durable, agent-readable spec layer for AI-assisted software development — stable IDs, typed relationships, and code-to-spec traces that give Claude (and you) a map of what exists and why, across sessions.*
+> *AIDA is the durable, agent-readable spec layer for AI-assisted software development — stable IDs, typed relationships, and code-to-spec traces that give Claude (and you) a map of what exists and why, across sessions.*
+
+---
 
 ## Architecture
 
-**Storage (EPIC-1-001):** Git orphan branch is the canonical writer-of-record (one YAML file per requirement under `objects/TYPE/NNN/SPEC-ID.yaml` on the `aida-store` branch). A SQLite cache (`.aida/cache.db`, gitignored) is a rebuildable read projection used to make list/filter/search fast without scanning hundreds of YAML files. YAML export (`requirements.yaml`) is a one-shot diff artifact via the pre-commit hook. PostgreSQL is opt-in via feature flag for teams wanting a server-backed shared projection.
+### Storage (EPIC-1-001) — git-canonical by default
 
-**Distributed mode** is the default since `aida init --distributed`: HLC timestamps, node-namespaced IDs (`FR-7-001`), agreed short IDs (`FR-1`) assigned at merge-to-trunk via `aida db merge-gate`, conflict detection across nodes, offline-capable.
+The orphan branch `aida-store` is the writer of record. Each requirement is one YAML file at `objects/<TYPE>/000/<SPEC-ID>.yaml`, committed to that branch. Writes go to git first, then to a local SQLite cache (`.aida/cache.db`, gitignored, rebuildable).
 
-**Surfaces:**
-- **CLI (`aida`)** — full-featured, the primary work surface for solo dev
-- **MCP server (`aida mcp-serve`)** — native Claude Code integration; the highest-leverage surface for the agent-context vision
-- **React web dashboard (`aida-web-react`)** — kanban/sprint/queue/chat UI for browsing, sharing, and PM-style work
-- **REST + gRPC server (`aida-server`)** — backs the dashboard and exposes a public API
+- **Live worktree:** `.aida-store/` (gitignored on the main branch; populated by `aida init`)
+- **Branch:** `aida-store` on origin
+- **Cache:** `.aida/cache.db` — read projection for fast `list / search / filter`; auto-rebuilt when the cache's recorded HEAD doesn't match the orphan's HEAD
+- **Sync:** `aida db sync --pull --push` (uses `git pull --rebase` under the hood for linear orphan history)
 
-The native desktop app and WASM browser client (egui-based) were extracted to a separate repo on 2026-05-02 to keep the main project focused on the agent layer; the React dashboard's keyboard navigation (`j/k`, `g+key` chords, quick pickers) covers the vi-feel use case.
+The legacy centralized SQLite path (`aida init --centralized`) still exists but prints a deprecation warning. PostgreSQL is opt-in via the `postgres` feature flag for teams wanting a server-backed shared projection.
 
-## Project Structure
+### Distributed identity (EPIC-1-052)
+
+Each clone of an AIDA-using project gets a unique **node id** and writes its identity to a per-clone, gitignored `.aida-store/.aida/node.toml`. The shared `.aida-store/registry/nodes.toml` is the source of truth.
+
+- **Node-aware ids** look like `FR-1-052` (`<TYPE>-<NODE>-<SEQ>`) — issued offline, never collide across clones.
+- **Agreed ids** look like `FR-052` — promoted from node-aware ids by `aida db merge-gate` once the work merges into trunk.
+- **Pre-allocated blocks** (`FR-2-005`) let a clone reserve a contiguous range of agreed ids up front so trace comments can use the short form immediately, even offline. `aida node acquire` auto-allocates the first FR block.
+- **`[id_format]` policy** in `.aida/config.toml`: `node-aware-only` | `blocks-then-fallback` (default) | `blocks-only`.
+- **`aida init` post-clone bootstrap**: when origin already has the `aida-store` branch, `aida init` fetches it, sets up the worktree, and prompts for node-id acquisition.
+
+### Surfaces
+
+- **CLI (`aida`)** — primary work surface. Embeds the MCP server (`aida mcp-serve`).
+- **MCP server** — exposes requirements as native Claude Code tools over JSON-RPC 2.0 stdio. The highest-leverage surface for the agent-context vision.
+- **REST + gRPC server (`aida-server`, port 8080)** — backs the React dashboard and provides a public API.
+- **React dashboard (`aida-web-react/`, port 5173 dev)** — kanban / sprint / queue / chat UI; Vite proxies `/api` to the server.
+
+The native desktop and WASM clients (egui-based) were extracted to a separate repo on 2026-05-02. The React dashboard's keyboard navigation (`j/k`, `g+key` chords, quick pickers) covers the vi-feel use case.
+
+---
+
+## Workspace layout
 
 ```
 aida/
-├── aida-core/             # Shared library — models, storage, cache, dispenser, HLC, conflict
-├── aida-cli/              # CLI tool (`aida` binary) + MCP server
-├── aida-crate/            # Published `aida` crate metadata (depends on aida-core)
-├── aida-server/           # REST + gRPC server (port 8080), serves the React dashboard
-├── aida-web-react/        # React 19 + Vite + Tailwind dashboard (port 5173 dev)
-├── aida-generate-types/   # Generates TypeScript types from Rust models
-├── aida-store/ (branch)   # Orphan branch holding canonical YAML requirements
-├── proto/                 # Protocol Buffers definitions
-├── docs/                  # Markdown docs (incl. plans/ archive of design docs)
-└── tests/                 # Integration test scripts
+├── aida-core/             Engine — models, storage, cache, dispenser, HLC, conflict
+├── aida-cli/              `aida` binary + MCP server
+├── aida-crate/            Published `aida` crate metadata
+├── aida-server/           REST + gRPC server (port 8080)
+├── aida-generate-types/   Rust → TypeScript types (ts-rs)
+├── aida-web-react/        React 19 + Vite + Tailwind dashboard (port 5173 dev)
+├── proto/                 Protocol Buffers definitions
+├── docs/                  Markdown docs (incl. plans/ archive)
+├── tests/                 Integration test scripts
+└── (orphan branch:        aida-store — canonical YAML store)
 ```
 
-## Key Features
+---
 
-### Two Primary Interfaces
-- **CLI (`aida`)** — the daily-driver surface; full-featured command-line interface for solo work and scripting
-- **Web Dashboard (`aida-web-react`)** — React-based UI for kanban boards, sprint planning, my-queue inbox, advanced filtering, AI chat, settings; primary for stakeholders and shared/team contexts
+## Feature surface (high level)
 
-### SPEC-ID System
-Human-friendly identifiers (SPEC-001, SPEC-002) alongside internal UUIDs. Configurable ID formats with feature-based prefixes. ID prefix filtering and management with optional admin-controlled restriction.
+For details on any of these see [docs/user-guide.md](docs/user-guide.md).
 
-### Requirement Management
-- Full CRUD operations (Create, Read, Update, Delete)
-- Type-specific status states (e.g., Draft, Approved, Completed, Rejected for standard types)
-- Priority levels: High, Medium, Low
-- Types: Functional, Non-Functional, System, User, Change Request, Bug, Epic, Story, Task, Spike, Sprint, Folder, Meta
-  - Standard requirement types (Functional, Non-Functional, System, User, Change Request) with type-specific workflows
-  - Agile types (Epic, Story, Task, Bug, Spike, Sprint) for project management
-  - Organizational types (Folder for hierarchy, Meta for storing templates/configuration)
-- Feature-based organization with numbered prefixes
-- Tag support for flexible categorization
-- Custom fields support for type-specific data (e.g., Impact, Requested By for Change Requests)
+### Requirements
 
-### Relationships
-Define connections between requirements:
-- **Parent/Child**: Hierarchical relationships
-- **Verifies/VerifiedBy**: Test/verification traceability
-- **References**: General reference links
-- **Duplicate**: Mark duplicate requirements
-- **Custom**: User-defined relationship types
+- **Types**: functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta
+- **Status workflows** are type-specific (e.g., the standard `draft → approved → in-progress → completed | rejected`)
+- **Relationships** with typed cardinalities: parent/child, verifies/verified-by, references, duplicate, plus user-defined types via `aida db rel-def`
+- **Comments** with threaded replies and configurable emoji reactions
+- **Custom fields** per type definition
+- **Meta requirements** (META-002…006) store the AI prompt templates as editable requirements; `aida edit META-002 --description …` customizes evaluation/duplicates/relationships/improve/generate-children prompts
 
-### Comments & History
-- Threaded comment system with replies
-- Configurable emoji reactions on comments
-- Full change history tracking for requirements
-- User attribution with handles for @mentions
+### Identity & traceability
 
-### Custom Type Definitions
-- Type-specific status workflows (e.g., Change Request has: Draft → Submitted → Under Review → Approved → In Progress → Implemented → Verified → Closed)
-- Custom fields per type with multiple field types (Text, TextArea, Select, Boolean, Date, User, Requirement, Number)
-- Built-in type definitions for Functional, NonFunctional, System, User, and ChangeRequest types
-- Settings UI for viewing type definitions
+- Stable node-aware ids (`FR-1-052`) and agreed-id promotion at merge-gate
+- Pre-allocated blocks for offline-safe agreed ids (`aida db block claim`)
+- Inline trace comments: `// trace:FR-1-052 | ai:claude[:confidence]`
+- Commit message format: `[AI:tool] type(scope): description (REQ-ID)` — validated by the scaffolded commit-msg hook (`AIDA_COMMIT_STRICT=true` to reject non-conforming commits)
 
-### Multi-Project Support (FR-0227)
-- **Server-Side Multi-Project Mode** (`aida-server --data-dir <path>`):
-  - Each project gets its own isolated SQLite database file
-  - ProjectManager manages multiple databases with lazy loading
-  - Project registry stored in `projects.json`
-  - Automatic migration of legacy `requirements.db` to "default" project
-  - Default data directory: `/data` (Docker) or `~/.aida` (local)
-- **REST API for Project Management** (port 8080):
-  - `GET /api/projects` - List all projects
-  - `POST /api/projects` - Create new project (name, description)
-  - `GET /api/projects/:name` - Get project info
-  - `DELETE /api/projects/:name` - Delete project and its database
-- **Request Routing via Headers**:
-  - `X-Project` header routes REST requests to correct backend
-  - `x-project` gRPC metadata routes gRPC requests
-- **Web Client Project Selection**:
-  - URL parameter: `?project=name&server=https://api.example.com`
-  - Project selector UI when no project specified
-  - GrpcStorageClient adds x-project header to all requests
-- **Legacy Compatibility**:
-  - Single-project mode: `aida-server --database <path>` (no project header required)
-  - Environment variable: `AIDA_DATABASE_URL` for single database
+### AI / agent integration
 
-### Headless Server Mode (FR-0227)
-- **gRPC Server (`aida-server`)**: Headless server exposing full API via gRPC
-- Protocol Buffers schema defining all requirement operations
-- Remote CLI operations via `--server` flag or `AIDA_SERVER` environment variable
-- Server commands: `aida server status`, `aida server list`, `aida server get <ID>`, `aida server ping`
-- Configurable port (default 50051), host, database path, and logging
-- **gRPC-Web Support**: Server supports gRPC-Web protocol for browser clients
-- **REST API**: HTTP/JSON endpoints for external integration (port 8080)
+- **Claude Code skills** scaffolded by `aida init` under `.claude/skills/` and `.claude/commands/` (22 skills as of writing): daily drivers `/aida-req`, `/aida-implement`, `/aida-commit`, `/aida-capture`, `/aida-search`, `/aida-plan`, `/aida-onboard`, `/aida-pickup`
+- **Codex (AGENTS.md)** profile scaffolded in parallel; `aida init --agent codex` for Codex-only, `--agent both` (default) for both
+- **MCP tools**: `list_requirements`, `show_requirement`, `add_requirement`, `update_requirement`, `search_requirements`, `add_comment`, `list_features`
+- **MCP resources**: `aida://project/summary`, `aida://requirements/tree`
+- **Hooks**: `aida-stop-check.sh` warns about untraced edits; `aida-session-context.sh` injects role + project context at session start
+- **Roles & sessions**: `aida role` manages persistent named contexts (architect, implementer, reviewer, …) with per-role scope filters and Claude Code system-prompt addenda; `aida session list/resume/new` enriches Claude Code's session list with the active role and most-recent spec id
+- **Statusline**: `aida statusline` is sub-50ms and suitable for `~/.claude/settings.json`'s `statusLine.command`
 
-### React Dashboard (`aida-web-react/`)
-- **Stack**: React 19 + Vite 8 + Tailwind CSS 4 + @tanstack/react-query
-- **Dev server**: Port 5173, with Vite dev proxy forwarding `/api` to REST API on port 8080
-- **Features**:
-  - Dashboard metrics (requirement counts by status, priority, type)
-  - Kanban board with drag-and-drop (via @dnd-kit)
-  - List view with filtering, sorting, parent/child tree toggle (flat/tree modes with collapsible hierarchy), drag-and-drop (drag to queue, drag to reparent in tree mode via @dnd-kit), and advanced query builder (react-querybuilder with json-logic evaluation, AND/OR grouping, saved queries, URL persistence via `?aq=` param, sprint/tags/custom field support)
-  - Detail panel for viewing/editing requirements
-  - Full-text search with structured query parsing (`owner:joe`, `tag:frontend`, `status:approved` syntax)
-  - Tag-based filtering across views (kanban, list, timeline) with active filter chips
-  - Inline tag pills in list rows (up to 3 visible + overflow indicator)
-  - Markdown description rendering in detail panel (react-markdown + remark-gfm) with auto-linked spec IDs (e.g., EPIC-0365, FR-0042) rendered as clickable hyperlinks that open the detail panel, `::color[text]` colored text syntax (20 colors), and syntax-highlighted code blocks (react-syntax-highlighter + Prism oneDark theme)
-  - Enhanced description editor with toolbar: expand/collapse toggle (compact vs 50vh), live markdown preview pane, and markdown cheat sheet help card
-  - Dark/light theme toggle using CSS custom properties
-  - Sprint planning with drag-and-drop between backlog and sprints (via @dnd-kit)
-  - Sprint creation modal, archive/unarchive toggle
-  - Sprint charts: burndown, burn-up, velocity (pure SVG, no charting library)
-  - Skills browser: view, search, and edit skills/commands with card grid and detail panel; run executable skills (e.g., compiler-warnings) with real-time SSE output, structured results with risk-level categorization, action buttons (auto-fix, create defect/task), and context-aware AI chat follow-up
-  - Docs browser: browse and read markdown documentation from `docs/` and `docs/plans/` with rendered markdown
-  - Chat: AI-powered Q&A for PMs/stakeholders — streams Claude API responses with full requirements context, spec IDs auto-linked via `LinkedMarkdown` (requires `ANTHROPIC_API_KEY` env var or runtime key via Admin settings, model configurable via `AIDA_CHAT_MODEL`)
-  - AI Evaluate: One-click requirement quality evaluation via Claude API — Sparkles button in detail header triggers `POST /api/v2/requirements/:id/evaluate`, results (quality score, strengths, issues, suggestions) displayed in detail body and persisted on the requirement
-  - Settings view: manage store metadata, relationship/type/reaction definitions, ID configuration, prefix management, and Admin tab (dev-mode server rebuild & restart, runtime API key management) via tab-based UI
-- **Source organization**: 45+ files across `api/`, `lib/`, `hooks/`, `components/` (ui, layout, kanban, list, detail, dashboard, sprint, skills, settings)
-- **Shared types**: TypeScript types in `shared/types.ts` generated from Rust structs via ts-rs
-- My Activity: planned vs. actual work reconciliation — shows user's actual work (changes, comments, creations) cross-referenced against their queue, with stats bar highlighting unqueued work and untouched queue items, time range filtering (today/week/month/all), and owner-scoped via `?user=` URL param
-- **Keyboard shortcuts**: Centralized hotkey system (`useHotkeys` + `HotkeyProvider`) with chord navigation (`g+d/q/a/b/l/s/t/c/x` for view switching), `?` help modal, `/` search focus, `j/k` list row selection, `Enter` to open detail, `q` to queue, `s/p/o` quick pickers for status/priority/owner changes, chord indicator badge, and input field exclusion
-- **Design choices**: URL-based filter and detail state, optimistic updates for drag-and-drop status changes
+### Web dashboard highlights
 
-### Personal Work Queue (EPIC-0365)
-- **Full-stack (My Queue)**: Database-backed, REST API, CLI, React web UI
-    - Database: `queue_entries` table (SQLite/PostgreSQL), gapped-integer positions
-    - REST API: `GET/POST /api/v2/queue/:user_id`, `DELETE/PATCH /:req_id`, `POST /reorder`
-    - CLI: `aida queue list|add|remove|move|clear` with `--user`, `--top`, `--note` flags
-    - React: `/queue` route with drag-to-reorder (@dnd-kit/sortable), owner-scoped via `?user=` URL param with owner-picker dropdown and read-only mode for other users' queues
-    - Dashboard widget: top 5 items, auto-hidden when empty
-    - "Add to Queue" buttons in detail panel and list view (hover)
-    - Cross-user assignment via `added_by` field with visual badges
+- Kanban + list + sprint planning with drag-and-drop (@dnd-kit)
+- Advanced query builder (`react-querybuilder` with json-logic), URL-persisted via `?aq=`
+- Markdown rendering with auto-linked spec ids, `::color[text]` syntax, and Prism syntax highlighting
+- Personal work queue (drag-to-reorder, dashboard widget, cross-user assignment via `added_by`)
+- Skills browser — view/edit skills, run executable ones (e.g., compiler-warnings) with SSE streaming output
+- AI Evaluate — one-click quality evaluation per requirement (Sparkles button) using the META-002 prompt
+- Chat — Claude-powered Q&A with full requirements context (`ANTHROPIC_API_KEY` or runtime key via Admin)
 
-### GitLab Integration (STORY-0321 - STORY-0327)
-Bidirectional integration with GitLab for issue tracking:
+### GitLab integration
 
-- **Configuration** (~/.config/aida/gitlab.toml):
-  - GitLab URL (gitlab.com or self-hosted)
-  - Project ID and Personal Access Token
-  - Label mappings for types, priorities, and statuses
-  - Polling interval (default 5 minutes)
-  - Sync mode and conflict resolution settings
+Bidirectional sync with GitLab issues: configurable type/priority/status label mappings, content-hash-based drift detection (`aida gitlab status --diverged`), background polling, dashboard status indicators. See the GitLab use case in the user guide.
 
-- **Issue Linking**:
-  - View existing GitLab issues (`aida gitlab issues`)
-  - Create new GitLab issue from requirement (GUI: "Create Issue" button)
-  - Link to existing issue (GUI: "Link Issue" button)
-  - Automatic bidirectional links (AIDA → GitLab, GitLab → AIDA)
+---
 
-- **Label Mapping**:
-  - Map requirement types to GitLab labels (e.g., Story → type::story)
-  - Map priorities to labels (e.g., High → priority::high)
-  - Map statuses to labels (e.g., InProgress → status::in-progress)
-  - CLI: `aida gitlab labels --validate --create-missing`
-
-- **Sync State Tracking**:
-  - Content hashing (SHA256) for change detection
-  - Sync status: InSync, AidaModified, GitLabModified, Conflict
-  - CLI: `aida gitlab status [--diverged]`
-  - CLI: `aida gitlab refresh [ID]` for manual sync
-
-- **Background Polling** (GUI):
-  - Automatic periodic polling for GitLab changes
-  - Status bar indicator: GL:✓ (in-sync) / GL:⚠ (diverged)
-  - Toast notifications for detected changes
-  - Configurable poll interval
-
-### AI Integration — Claude Code Scaffolding
-AIDA scaffolds Claude Code configuration into projects via `aida init`:
-- **16 Skills**: `/aida-req`, `/aida-implement`, `/aida-capture`, `/aida-evaluate`, `/aida-commit`, `/aida-plan`, `/aida-sync`, `/aida-docs`, `/aida-release`, `/aida-test`, `/aida-review`, `/aida-onboard`, `/aida-sprint`, `/aida-search`, `/aida-standup`, `/aida-compiler-warnings`
-- **YAML Frontmatter**: All skills have Claude Code frontmatter (`name`, `description`, `allowed-tools`, `disable-model-invocation`)
-- **Dynamic Context Injection**: Skills use `!`command`` to inject live project data at load time
-- **Template System**: 4-tier priority (project `.aida/templates/` → org `~/.config/aida/org-templates/` → user `~/.config/aida/templates/` → embedded)
-- **MCP Server**: `aida mcp-serve` exposes requirements as native Claude Code tools over JSON-RPC 2.0 stdio
-- **Hooks**: `aida-stop-check.sh` (warn about untraced edits), `aida-session-context.sh` (inject project context)
-- **Generated artifacts**: `CLAUDE.md`, `.claude/skills/`, `.claude/commands/`, `settings.json`, `.mcp.json`
-- **Scaffold version**: 2.0.0
-
-### MCP Server (`aida mcp-serve`)
-Model Context Protocol server for Claude Code integration:
-- **Tools**: `list_requirements`, `show_requirement`, `add_requirement`, `update_requirement`, `search_requirements`, `add_comment`, `list_features`
-- **Resources**: `aida://project/summary`, `aida://requirements/tree`
-- JSON-RPC 2.0 over stdio, configured via `.mcp.json`
-
-## Technology Stack
-
-- **Language**: Rust (workspace: aida-core, aida-cli, aida-crate, aida-server, aida-generate-types)
-- **Storage**: Git orphan branch (canonical) + SQLite cache (rebuildable projection); YAML export; PostgreSQL opt-in
-- **CLI Framework**: clap
-- **Interactive Prompts**: inquire
-- **gRPC/RPC**: tonic, prost (Protocol Buffers) — server only
-- **REST**: axum (server)
-- **Async Runtime**: tokio
-- **Web UI**: React 19 + Vite + Tailwind CSS 4 + @tanstack/react-query (`aida-web-react/`)
-
-## Data Storage
-
-Requirements are stored using a pluggable backend system:
-
-### SQLite Backend (Default)
-- High-performance database storage (`.db` files) — created by `aida init`
-- WAL mode for better concurrent access (GUI + CLI + MCP server)
-- Efficient single-record CRUD operations
-- Complex fields (relationships, comments, history) stored as JSON
-- **Optimistic Locking (REQ-0231)**: Per-record version columns prevent concurrent edit conflicts
-  - Each requirement/user has a `version` field incremented on update
-  - Updates with stale versions are rejected with conflict details
-  - Store-level `store_version` for detecting any external modifications
-
-### YAML Backend
-- Human-readable YAML format (`requirements.yaml`)
-- Git-friendly for version control
-- Good for single-user scenarios
-- Includes metadata, relationships, comments, and history
-
-### PostgreSQL Backend (FR-0316)
-- Enterprise-grade database for multi-user/team deployments
-- Connection pooling via r2d2 (max 10 connections)
-- Native JSONB storage for complex fields (relationships, comments, history)
-- Optimistic locking with version columns
-- Connection string format: `postgres://user:password@host:port/database`
-
-### Git-Friendly Auto-Export
-- A git pre-commit hook auto-exports `requirements.db` to `requirements.yaml` before each commit
-- The SQLite binary is **not** tracked in git; only the diffable YAML is committed
-- This gives full text-based diff history for requirements while keeping SQLite as the runtime backend
-
-### Migration & Export
-- Migrate between YAML, SQLite, and PostgreSQL formats
-- JSON import/export for interoperability
-- **Tree Export/Import**: Export requirement hierarchies to portable JSON files
-  - Export a requirement and all descendants: `aida export --format tree --id FR-0001 -o tree.json`
-  - Import into another database: `aida import tree.json [--parent FOLDER-001] [--on-conflict skip|rename|replace]`
-  - GUI: Menu > "🌳 Export Tree..." and "🌳 Import Tree..."
-  - Preserves all fields, comments, custom data, and parent-child relationships
-  - UUIDs and spec_ids are regenerated on import to avoid conflicts
-  - Use cases: Share templates, backup hierarchies, create reusable libraries
-
-### Meta Requirements
-- **Meta type**: Store AI prompts, skills, and configuration as browsable requirements
-- **MetaSubtype** categorization: Prompt, Skill, Command, Template, Config
-- Stateless type (no status workflow) with prefix "META"
-- Enables editing and versioning of AI prompts within the requirements database
-- **Meta Seeding**: `seed_meta_requirements()` creates default AI prompt templates in new databases
-- **Prompt Fallback**: AI prompts check database for META requirements first, then fall back to embedded defaults
-  - Customize prompts by editing META requirements in GUI/CLI
-  - Prompt names: "Evaluate Requirement", "Find Duplicates", "Suggest Relationships", "Improve Description", "Generate Children"
-
-## Environment Configuration
-
-The server supports a `.env` file for convenient local configuration via `dotenvy`:
+## Developer workflow (working *on* AIDA)
 
 ```bash
-cp .env.example .env
-# Edit .env with your values
+# One-time: install shell helpers (aida-on / aida-off) into ~/.bashrc or ~/.zshrc
+aida dev shell-init --install
+
+# Per-shell: activate the in-repo build (pyenv-style)
+aida-on                                # alias for: eval "$(aida dev activate)"
+aida dev status                        # confirm activation, show binary mtime
+aida dev serve                         # foreground supervisor: aida-server (8080) + vite (5173)
+aida-off
 ```
 
-Available variables:
-- `ANTHROPIC_API_KEY` — API key for AI chat features
-- `AIDA_DEV_MODE` — Enable dev mode (`true`/`1`)
-- `AIDA_DATABASE_URL` — Override database path
+`aida dev activate` prepends `target/{release,debug}/` (whichever is more recently built) to PATH and prefixes the shell prompt with `(aida-debug)` or `(aida-release)`. For releases, `scripts/release.sh {major|minor|patch}` bumps the workspace version, generates tag notes, commits, tags, and pushes — triggering the release workflow that builds and publishes binary tarballs.
 
-The `.env` file is loaded automatically at server startup (before arg parsing). If absent, it's silently ignored. The `.env` file is gitignored; `.env.example` is committed as a template.
-
-## Getting Started
-
-### Quick Start with Docker (Recommended)
-
-The fastest way to get a fully working AIDA instance (REST API + React dashboard):
-
-```bash
-git clone https://github.com/yourusername/aida.git
-cd aida
-make docker-up                # or: docker compose -f .aida/docker-compose.yml up
-```
-
-Open [http://localhost:8080](http://localhost:8080) — the dashboard and API are served from a single container, using your project's `requirements.db` directly.
-
-**CLI via Docker:**
-```bash
-make docker-shell             # opens bash in container
-aida --file /repo/requirements.db list
-aida --file /repo/requirements.db show FR-0001
-```
-
-**Stop/restart:**
-```bash
-make docker-down              # Stop
-make docker-up-d              # Run in background
-```
-
-### Native Installation (for contributors/developers)
-
-For a full walkthrough, see [docs/getting-started.md](docs/getting-started.md).
-
-**Prerequisites:** Rust toolchain (1.85+), Node.js (22+), protobuf compiler
-
-```bash
-# Build
-cargo build --workspace --release
-
-# Initialize a new project
-mkdir my-project && cd my-project
-aida init                         # Creates requirements.db, scaffolds Claude Code config
-aida init --no-skills             # Skip .claude/skills/ and .claude/commands/
-aida init --no-hooks              # Skip .claude/hooks/ and git hooks
-
-# CLI usage
-aida list                         # List requirements
-aida add --interactive            # Add requirement interactively
-aida show FR-0001                 # Show requirement details
-aida rel add --from FR-0001 --to FR-0002 --type parent  # Add relationship
-
-# Web dashboard (preferred UI)
-cd aida-server && cargo run       # Start REST API on port 8080
-cd aida-web-react && npm run dev  # Start React dashboard on port 5173
-
-# Server mode
-aida-server --port 50051          # Start gRPC server
-aida --server localhost:50051 server list  # Remote list
-
-# Cache (git-canonical mode)
-aida cache status                         # Compare cache HEAD vs git HEAD
-aida cache rebuild                        # Force-replay git store -> SQLite cache
-
-# Database migration
-aida db info                              # Show database info and statistics
-aida db export-git -o aida-store          # Export legacy backend to git-canonical store
-
-# Open user guide
-aida user-guide                   # Open in browser (light mode)
-aida user-guide --dark            # Open in browser (dark mode)
-```
-
-## Use Cases & Tutorials
-
-### Use Case 1: Sharing Requirement Templates Between Projects
-
-**Scenario**: You have a well-structured set of security requirements in Project A that you want to reuse in Project B.
-
-**Step-by-step**:
-
-1. **Create a template folder in Project A**:
-   ```bash
-   aida add --title "Security Requirements Template" --type folder --prefix SEC
-   # Creates SEC-001
-   ```
-
-2. **Add template requirements as children**:
-   ```bash
-   aida add --title "Authentication Required" --type functional --description "All API endpoints must require authentication"
-   aida rel add --from FR-001 --to SEC-001 --type parent
-
-   aida add --title "Input Validation" --type functional --description "All user inputs must be validated and sanitized"
-   aida rel add --from FR-002 --to SEC-001 --type parent
-   ```
-
-3. **Export the template tree**:
-   ```bash
-   aida export --format tree --id SEC-001 -o security-template.json
-   ```
-
-4. **Import into Project B**:
-   ```bash
-   cd /path/to/project-b
-   aida import security-template.json --on-conflict rename
-   ```
-
-5. **Verify the import**:
-   ```bash
-   aida list --type folder
-   # Shows the imported SEC folder with new SPEC-IDs
-   ```
-
-**GUI Alternative**:
-- Select the folder in Project A → Menu → "🌳 Export Tree..." → Save file
-- Open Project B → Menu → "🌳 Import Tree..." → Select file → Choose conflict strategy → Import
+For project conventions (commit format, scaffold/template architecture, CLI reference) see [CLAUDE.md](CLAUDE.md).
 
 ---
 
-### Use Case 2: Customizing AI Prompts for Domain-Specific Evaluation
+## Documentation map
 
-**Scenario**: You're working on a medical device project and need the AI to evaluate requirements against FDA regulations.
-
-**Step-by-step**:
-
-1. **Locate the META prompts folder**:
-   ```bash
-   aida list --type meta
-   # Shows META-001 "AI Prompts" folder
-   ```
-
-2. **Find the evaluation prompt**:
-   ```bash
-   aida show META-002
-   # Shows "Evaluate Requirement" prompt with default template
-   ```
-
-3. **Edit the prompt to add domain-specific criteria**:
-   ```bash
-   aida edit META-002 --description "$(cat <<'EOF'
-   Template for evaluating requirement quality.
-   Placeholders: {global_context}, {project_context}, {req_context}, {related_context}, {additional_instructions}, {type_extra}
-
-   ---
-
-   You are an expert requirements analyst evaluating a software requirement for a medical device.
-
-   {global_context}
-   {project_context}
-   {req_context}
-   {related_context}
-   {additional_instructions}{type_extra}
-
-   ## Task
-   Evaluate this requirement considering:
-   1. Clarity: Is the requirement unambiguous?
-   2. Completeness: Does it have sufficient detail?
-   3. Testability: Can this requirement be verified?
-   4. Consistency: Does it align with related requirements?
-   5. Feasibility: Is it realistic?
-   6. **FDA Compliance**: Does it support 21 CFR Part 820 requirements?
-   7. **Risk Assessment**: Are safety implications addressed?
-
-   ## Response Format
-   Respond ONLY with valid JSON in this exact format:
-   {
-     "quality_score": <1-10>,
-     "issues": [...],
-     "strengths": [...],
-     "suggested_improvements": {...},
-     "fda_compliance_notes": "<any FDA-related observations>"
-   }
-   EOF
-   )"
-   ```
-
-4. **Test the custom prompt**:
-   - Open GUI → Select a requirement → Click "🤖 AI" → "Evaluate"
-   - The AI will now use your FDA-specific evaluation criteria
-
-**GUI Alternative**:
-- Settings → Show Meta requirements (check the filter)
-- Navigate to META-002 "Evaluate Requirement"
-- Edit the description with your custom prompt template
-- Save changes
-
----
-
-### Use Case 3: Setting Up a New Project with Meta Seeding
-
-**Scenario**: You're starting a new project and want the default AI prompts automatically created.
-
-**Step-by-step**:
-
-1. **Initialize a new AIDA project**:
-   ```bash
-   mkdir my-new-project && cd my-new-project
-   aida init
-   # Creates requirements.db (SQLite), CLAUDE.md, .mcp.json, .claude/skills/, docs/plans/
-   ```
-
-2. **Verify META requirements were seeded**:
-   ```bash
-   aida list --type meta
-   # Shows:
-   # META-001  AI Prompts (folder)
-   # META-002  Evaluate Requirement
-   # META-003  Find Duplicates
-   # META-004  Suggest Relationships
-   # META-005  Improve Description
-   # META-006  Generate Children
-   ```
-
-3. **View a prompt template**:
-   ```bash
-   aida show META-002
-   # Displays the full evaluation prompt with all placeholders
-   ```
-
-4. **The AI system automatically uses these**:
-   - When you run AI evaluation, it checks META requirements first
-   - If not found, falls back to embedded defaults
-   - Edit any META prompt to customize behavior project-wide
-
----
-
-### Use Case 4: Migrating Requirements Between Storage Backends
-
-**Scenario**: Your project has grown and you need better performance than YAML provides.
-
-**Step-by-step**:
-
-1. **Check current database info**:
-   ```bash
-   aida db info
-   # Shows: Backend: YAML, Path: requirements.yaml, Requirements: 500
-   ```
-
-2. **Migrate to SQLite**:
-   ```bash
-   aida db migrate --from yaml --to sqlite
-   # Creates requirements.db
-   ```
-
-3. **Update your project configuration**:
-   ```bash
-   aida db add --name "my-project" --path ./requirements.db
-   aida db default my-project
-   ```
-
-4. **For team environments, migrate to PostgreSQL**:
-   ```bash
-   aida db migrate --from sqlite --to postgres \
-     --output "postgres://user:pass@localhost:5432/aida_prod"
-   ```
-
-5. **Use PostgreSQL directly**:
-   ```bash
-   aida --file "postgres://user:pass@localhost:5432/aida_prod" list
-   ```
-
----
-
-### Use Case 5: GitLab Integration Workflow
-
-**Scenario**: Your team uses GitLab for issue tracking and you want bidirectional sync.
-
-**Step-by-step**:
-
-1. **Create GitLab configuration**:
-   ```bash
-   mkdir -p ~/.config/aida
-   cat > ~/.config/aida/gitlab.toml << 'EOF'
-   [gitlab]
-   url = "https://gitlab.com"
-   project_id = 12345678
-   token = "glpat-xxxxxxxxxxxxx"
-
-   [labels]
-   type_mapping = { Story = "type::story", Bug = "type::bug", Task = "type::task" }
-   priority_mapping = { High = "priority::high", Medium = "priority::medium", Low = "priority::low" }
-   status_mapping = { InProgress = "status::in-progress", Completed = "status::done" }
-
-   [polling]
-   enabled = true
-   interval_seconds = 300
-   EOF
-   ```
-
-2. **Validate and create missing labels**:
-   ```bash
-   aida gitlab labels --validate --create-missing
-   ```
-
-3. **Link a requirement to an existing GitLab issue**:
-   - Open GUI → Select requirement → Links tab → "Link Issue" button
-   - Enter GitLab issue number → Link
-
-4. **Create a new GitLab issue from a requirement**:
-   - Open GUI → Select requirement → "Create Issue" button
-   - Labels are automatically applied based on type/priority/status
-
-5. **Monitor sync status**:
-   ```bash
-   aida gitlab status --diverged
-   # Shows requirements that have changed on either side
-   ```
-
-6. **Manual refresh**:
-   ```bash
-   aida gitlab refresh STORY-042
-   # Re-syncs the requirement with GitLab
-   ```
-
-**In GUI**:
-- Status bar shows `GL:✓` (in-sync) or `GL:⚠` (diverged)
-- Toast notifications appear when changes are detected
-- Background polling runs automatically
-
----
-
-### Use Case 6: Building a Reusable Requirements Library
-
-**Scenario**: Your organization wants to maintain a library of reusable requirement templates.
-
-**Step-by-step**:
-
-1. **Create a dedicated library database**:
-   ```bash
-   mkdir -p ~/aida-library && cd ~/aida-library
-   aida init
-   ```
-
-2. **Organize by domain**:
-   ```bash
-   # Create category folders
-   aida add --title "Authentication Templates" --type folder --prefix AUTH
-   aida add --title "Security Templates" --type folder --prefix SEC
-   aida add --title "Accessibility Templates" --type folder --prefix A11Y
-   ```
-
-3. **Add template requirements with detailed descriptions**:
-   ```bash
-   aida add --title "OAuth 2.0 Integration" --type functional \
-     --description "## Overview
-   The system shall support OAuth 2.0 authentication.
-
-   ## Acceptance Criteria
-   - Support Authorization Code flow
-   - Support refresh tokens
-   - Token expiration handling
-   - Secure token storage
-
-   ## Notes
-   Customize the provider list for your project."
-
-   aida rel add --from FR-001 --to AUTH-001 --type parent
-   ```
-
-4. **Export individual templates or entire categories**:
-   ```bash
-   # Export entire category
-   aida export --format tree --id AUTH-001 -o auth-templates.json
-
-   # Export single template
-   aida export --format tree --id FR-001 -o oauth-template.json
-   ```
-
-5. **Import into project with conflict handling**:
-   ```bash
-   cd /path/to/project
-   aida import ~/aida-library/auth-templates.json --on-conflict skip
-   ```
-
-**Best Practices**:
-- Use `--on-conflict skip` to avoid duplicating existing templates
-- Use `--on-conflict rename` when you want to keep both versions
-- Use `--parent FOLDER-001` to organize imported templates
-
----
-
-## Documentation
-
-- **README.md**: Quick start and project structure
-- **CLAUDE.md**: AI assistant instructions and technical details
-- **docs/getting-started.md**: Getting started guide — project setup, first steps, launching UIs
-- **docs/user-guide.md**: Comprehensive user documentation (CLI, web dashboard, desktop app)
-- **docs/admin-guide.md**: Storage administration, migration, multi-user configuration
-- **docs/user-guide.html**: Pre-generated HTML (light mode, served by `aida user-guide`)
+| File | Purpose |
+|---|---|
+| [README.md](README.md) | Quick start and project structure |
+| [CLAUDE.md](CLAUDE.md) | Conventions, build commands, scaffold/template architecture, CLI reference |
+| [docs/getting-started.md](docs/getting-started.md) | First-time setup walkthrough |
+| [docs/user-guide.md](docs/user-guide.md) | CLI / web dashboard usage, use-case tutorials, integration recipes |
+| [docs/admin-guide.md](docs/admin-guide.md) | Storage administration, multi-user configuration |
+| [docs/storage-modes.md](docs/storage-modes.md) | Deeper dive on storage modes and migration paths |
+| [docs/plans/](docs/plans/) | Archived implementation plans (one per `YYYY-MM-DD-<slug>.md`) |
