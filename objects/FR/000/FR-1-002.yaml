@@ -17,12 +17,12 @@ description: |-
   ## Defer until
 
   EPIC-1-001 Phase 1 lands and write-through performance becomes a measured pain point on real bulk-import workloads.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-02T21:28:09.819088898Z
-modified_at: 2026-05-02T21:28:10.363059450Z
+modified_at: 2026-05-06T06:30:13.503461087Z
 req_type: Functional
 tags:
 - bulk-import
