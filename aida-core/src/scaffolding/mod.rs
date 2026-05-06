@@ -20,6 +20,93 @@ mod settings;
 pub use aida_md::extract_aida_block;
 pub use managed_merge::{slot_merge, slots_for_file, SlotChange, SlotChangeKind};
 
+/// Result of computing what to diff for a scaffold artifact, given its
+/// AIDA-managed scope. trace:FR-1-027 | ai:claude
+#[derive(Debug, Clone)]
+pub enum DiffSlice {
+    /// AIDA-managed portion matches on-disk content — nothing to show.
+    Match,
+    /// Full content differs — render `expected` vs `actual` as-is.
+    FullDiff {
+        expected: String,
+        actual: String,
+    },
+    /// Only a sub-slice differs (CLAUDE.md presence-check or AGENTS.md
+    /// AUTOGEN block). The renderer should diff `expected` vs `actual`,
+    /// and the (optional) `note` shown above the diff explains scope.
+    SliceDiff {
+        expected: String,
+        actual: String,
+        note: String,
+    },
+    /// Required marker / line is missing entirely from the on-disk file.
+    /// Surfaced as a one-line warning (no diff body) so the user knows
+    /// to restore it. trace:FR-1-027 | ai:claude
+    MarkerMissing {
+        message: String,
+    },
+}
+
+/// Compute the diff slice for a scaffold artifact. CLAUDE.md and AGENTS.md
+/// have AIDA-managed sub-portions: full-content drift is expected post-init
+/// (the user owns the project overview, tech stack, etc.) — only the AIDA
+/// glue (the `@.claude/AIDA.md` import in CLAUDE.md, the AIDA-AUTOGEN block
+/// in AGENTS.md) matters for drift detection. Other files are diffed whole.
+/// trace:FR-1-027 | ai:claude
+pub fn aida_managed_diff_slice(path: &Path, expected: &str, actual: &str) -> DiffSlice {
+    let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+    match name {
+        "CLAUDE.md" => {
+            // CLAUDE.md is mostly user-owned; the only thing AIDA cares
+            // about is the `@.claude/AIDA.md` import line that pulls in
+            // the conventions. If that's present, no drift to surface.
+            const KEY: &str = "@.claude/AIDA.md";
+            if actual.contains(KEY) {
+                DiffSlice::Match
+            } else {
+                DiffSlice::MarkerMissing {
+                    message: format!(
+                        "CLAUDE.md does not import `{}`. Add the line to pull in AIDA conventions, or run `aida scaffold upgrade`.",
+                        KEY
+                    ),
+                }
+            }
+        }
+        "AGENTS.md" => {
+            // AGENTS.md: compare only what's between AIDA-AUTOGEN markers.
+            // If markers are absent on disk, the user opted out — treat as
+            // matching (consistent with `seed_matches` in report.rs).
+            match extract_aida_block(actual) {
+                None => DiffSlice::Match,
+                Some(actual_block) => match extract_aida_block(expected) {
+                    None => DiffSlice::Match,
+                    Some(expected_block) => {
+                        if actual_block.trim() == expected_block.trim() {
+                            DiffSlice::Match
+                        } else {
+                            DiffSlice::SliceDiff {
+                                expected: expected_block.to_string(),
+                                actual: actual_block.to_string(),
+                                note: "diff scoped to <!-- AIDA-AUTOGEN-BEGIN --> ... <!-- AIDA-AUTOGEN-END --> block".to_string(),
+                            }
+                        }
+                    }
+                },
+            }
+        }
+        _ => {
+            if actual.trim() == expected.trim() {
+                DiffSlice::Match
+            } else {
+                DiffSlice::FullDiff {
+                    expected: expected.to_string(),
+                    actual: actual.to_string(),
+                }
+            }
+        }
+    }
+}
+
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -1823,5 +1910,72 @@ mod tests {
         assert_eq!(ProjectType::Rust.label(), "Rust");
         assert_eq!(ProjectType::Python.label(), "Python");
         assert_eq!(ProjectType::Generic.label(), "Generic");
+    }
+
+    #[test]
+    fn test_diff_slice_claude_md_present_import() {
+        // trace:FR-1-027 | ai:claude
+        let actual = "# CLAUDE.md\n\nFoo bar.\n\n@.claude/AIDA.md\n\n## Project\n";
+        let expected = "# CLAUDE.md\n\n@.claude/AIDA.md\n\n## Project overview\n";
+        let slice = aida_managed_diff_slice(Path::new("CLAUDE.md"), expected, actual);
+        assert!(matches!(slice, DiffSlice::Match));
+    }
+
+    #[test]
+    fn test_diff_slice_claude_md_missing_import() {
+        let actual = "# CLAUDE.md\n\nFoo bar.\n\n## Project\n";
+        let expected = "# CLAUDE.md\n\n@.claude/AIDA.md\n";
+        let slice = aida_managed_diff_slice(Path::new("CLAUDE.md"), expected, actual);
+        match slice {
+            DiffSlice::MarkerMissing { message } => {
+                assert!(message.contains("@.claude/AIDA.md"));
+            }
+            other => panic!("expected MarkerMissing, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_diff_slice_agents_md_block_match() {
+        let block = "<!-- AIDA-AUTOGEN-BEGIN -->\nfoo\n<!-- AIDA-AUTOGEN-END -->";
+        let actual = format!("# user content above\n{}\n# user content below", block);
+        let expected = format!("# different preamble\n{}\n# different postamble", block);
+        let slice = aida_managed_diff_slice(Path::new("AGENTS.md"), &expected, &actual);
+        assert!(matches!(slice, DiffSlice::Match));
+    }
+
+    #[test]
+    fn test_diff_slice_agents_md_block_diverged() {
+        let actual_block = "<!-- AIDA-AUTOGEN-BEGIN -->\nold body\n<!-- AIDA-AUTOGEN-END -->";
+        let expected_block = "<!-- AIDA-AUTOGEN-BEGIN -->\nnew body\n<!-- AIDA-AUTOGEN-END -->";
+        let actual = format!("user1\n{}\nuser2", actual_block);
+        let expected = format!("DIFFERENT\n{}\nUSER STUFF", expected_block);
+        let slice = aida_managed_diff_slice(Path::new("AGENTS.md"), &expected, &actual);
+        match slice {
+            DiffSlice::SliceDiff { expected: e, actual: a, .. } => {
+                assert!(e.contains("new body") && !e.contains("DIFFERENT"));
+                assert!(a.contains("old body") && !a.contains("user1"));
+            }
+            other => panic!("expected SliceDiff, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_diff_slice_agents_md_user_opted_out() {
+        // No AIDA-AUTOGEN markers on disk → user opted out, treat as match.
+        let actual = "fully user-owned, no markers";
+        let expected = "<!-- AIDA-AUTOGEN-BEGIN -->\nfoo\n<!-- AIDA-AUTOGEN-END -->";
+        let slice = aida_managed_diff_slice(Path::new("AGENTS.md"), expected, actual);
+        assert!(matches!(slice, DiffSlice::Match));
+    }
+
+    #[test]
+    fn test_diff_slice_other_files_full_diff() {
+        let actual = "line one\n";
+        let expected = "line one\nline two\n";
+        let slice = aida_managed_diff_slice(Path::new(".claude/skills/foo.md"), expected, actual);
+        match slice {
+            DiffSlice::FullDiff { .. } => {}
+            other => panic!("expected FullDiff, got {:?}", other),
+        }
     }
 }

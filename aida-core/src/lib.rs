@@ -171,9 +171,9 @@ pub use report::{
 };
 #[cfg(feature = "native")]
 pub use scaffolding::{
-    slot_merge, slots_for_file, wrap_with_aida_header, FileCategory, ProjectType,
-    ScaffoldArtifact, ScaffoldConfig, ScaffoldError, ScaffoldPreview, Scaffolder, SlotChange,
-    SlotChangeKind,
+    aida_managed_diff_slice, slot_merge, slots_for_file, wrap_with_aida_header, DiffSlice,
+    FileCategory, ProjectType, ScaffoldArtifact, ScaffoldConfig, ScaffoldError, ScaffoldPreview,
+    Scaffolder, SlotChange, SlotChangeKind,
 };
 #[cfg(feature = "native")]
 pub use storage::{
