@@ -1,0 +1,14 @@
+id: 019dfbef-861c-7540-9dfc-c417add9dcdb
+spec_id: TASK-1-063
+title: BUG-1-040 smoke probe 3
+description: ''
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-06T06:17:51.900668007Z
+modified_at: 2026-05-06T06:17:51.900668007Z
+req_type: Task
+tags:
+- bug-1-040-smoke
+- throwaway
