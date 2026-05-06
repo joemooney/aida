@@ -1185,7 +1185,10 @@ pub enum GitLabCommand {
 #[derive(Subcommand, Debug)]
 pub enum QueueCommand {
     /// List items in your queue. When a role is active and --role is not
-    /// passed explicitly, defaults to filtering on that role.
+    /// passed explicitly, defaults to filtering on that role. Without
+    /// --global / --local, merges the local (per-project) queue with the
+    /// active role's global queue and tags global entries with the
+    /// originating project (`[origin:<project>]`). trace:FR-1-012 | ai:claude
     List {
         /// User ID (defaults to AIDA_USER or system user)
         #[clap(long)]
@@ -1204,6 +1207,14 @@ pub enum QueueCommand {
         /// trace:TASK-1-021 | ai:claude
         #[clap(long)]
         no_scope: bool,
+        /// Show only the global, role-scoped queue at `~/.aida/queue/<role>.yaml`.
+        /// Mutually exclusive with --local. trace:FR-1-012 | ai:claude
+        #[clap(long, conflicts_with = "local")]
+        global: bool,
+        /// Show only the local, per-project queue (skip the global merge).
+        /// Mutually exclusive with --global. trace:FR-1-012 | ai:claude
+        #[clap(long)]
+        local: bool,
     },
     /// Add a requirement to your queue
     Add {
@@ -1226,6 +1237,11 @@ pub enum QueueCommand {
         /// while in that role to see incoming work.
         #[clap(long)]
         r#for: Option<String>,
+        /// Add to the role's GLOBAL queue at `~/.aida/queue/<role>.yaml`
+        /// instead of the local per-project queue. Requires --for or an
+        /// active role context (AIDA_SESSION_ROLE). trace:FR-1-012 | ai:claude
+        #[clap(long)]
+        global: bool,
     },
     /// Remove a requirement from your queue
     Remove {
@@ -1234,6 +1250,14 @@ pub enum QueueCommand {
         /// User ID (defaults to AIDA_USER or system user)
         #[clap(long)]
         user: Option<String>,
+        /// Remove from the role's GLOBAL queue (requires --for or active role).
+        /// trace:FR-1-012 | ai:claude
+        #[clap(long)]
+        global: bool,
+        /// When --global, the role whose global queue to remove from.
+        /// Defaults to the active role (AIDA_SESSION_ROLE).
+        #[clap(long)]
+        r#for: Option<String>,
     },
     /// Move a queue item to a new position
     Move {
@@ -1260,7 +1284,9 @@ pub enum QueueCommand {
     },
     /// Peek at the top item in your queue without removing it. When a role
     /// is active and --role is not passed, defaults to filtering on it.
-    /// Use this between work items to see what's next.
+    /// Use this between work items to see what's next. Considers local +
+    /// global queues by default (local wins on tiebreaks).
+    /// trace:FR-1-012 | ai:claude
     Next {
         /// Filter to items routed to a specific role
         #[clap(long)]
@@ -1275,6 +1301,12 @@ pub enum QueueCommand {
         /// trace:TASK-1-021 | ai:claude
         #[clap(long)]
         no_scope: bool,
+        /// Look only in the global queue (skip local).
+        #[clap(long, conflicts_with = "local")]
+        global: bool,
+        /// Look only in the local queue (skip global).
+        #[clap(long)]
+        local: bool,
     },
     /// Mark a requirement as completed AND remove it from your queue in one
     /// atomic step. Convenience for the implementer's done-then-pickup-next
