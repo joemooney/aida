@@ -19,11 +19,11 @@ description: |-
 
   - EPIC-1-052 Phase 1 (release path); the block-cleanup feature was deliberately scoped out
 status: Draft
-priority: Medium
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-06T06:08:40.655918688Z
-modified_at: 2026-05-06T06:16:01.169356008Z
+modified_at: 2026-05-06T06:16:02.049503202Z
 req_type: Functional
 tags:
 - EPIC-1-052-followup
