@@ -63,10 +63,10 @@ modified_at: 2026-05-05T04:24:19.349985317Z
 req_type: Functional
 tags:
 - settings
-- scaffolding
-- jsonpath
 - managed-merge
 - upgrade
+- scaffolding
+- jsonpath
 relationships:
 - rel_type: Child
   target_id: 019df46f-23d7-7853-bd39-0d01cb5ed3ea

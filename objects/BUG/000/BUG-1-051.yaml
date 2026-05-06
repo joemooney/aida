@@ -1,0 +1,23 @@
+id: 019dfb7a-33e3-7aa3-bdf0-967b3fd63055
+spec_id: BUG-1-051
+title: aida db sync --pull fails on divergent branches with confusing 'git commit failed' fallout
+description: |-
+  See commit 1ff6ff4 for the fix. Three stacked issues:
+
+  1. Bare 'git pull' fails on divergent branches when the user has neither pull.rebase nor pull.ff set (modern git refuses without explicit reconciliation).
+  2. After pull failed, sync fell through to the commit step, which hit 'has_changes==true but nothing got staged' (staging only added objects/ etc., missing .aida/dispenser.toml). git commit bailed with empty stderr.
+  3. Order was wrong: pull → commit, but rebase needs a clean tree.
+
+  Fix: pull --rebase always; #[deprecated] on bare pull; commit-first ordering; 'git add -A .' to stage everything; bail with recovery hint on pull failure. End-to-end verified — surfaces real content conflicts cleanly with 'git rebase --abort' recovery path.
+status: Completed
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-06T04:09:43.139859020Z
+modified_at: 2026-05-06T04:09:43.139859020Z
+req_type: Bug
+tags:
+- db
+- sync
+- git-ops
+- divergent-branches
