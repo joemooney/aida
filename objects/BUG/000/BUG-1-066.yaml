@@ -19,12 +19,12 @@ description: |-
   - Settings.json + .mcp.json no longer surface in `scaffold diff` when only key ordering changed.
   - Real semantic drift (e.g., user edited a hook command) is still surfaced.
   - Falls back to FullDiff when JSON parsing fails on either side.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-06T06:50:00.070785687Z
-modified_at: 2026-05-06T06:50:00.070785687Z
+modified_at: 2026-05-06T06:55:35.488273155Z
 req_type: Bug
 tags:
 - FR-1-064-followup
