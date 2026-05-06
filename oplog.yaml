@@ -1964,5 +1964,13 @@ operations:
   timestamp: 2026-05-06T06:16:02.061273265Z
   kind: !SetPriority
     priority: High
-clock: 246
+- id: 019dfbee-3d1e-7d50-acea-2be6ce171262
+  target_id: 019dfbe7-1ccf-7420-b5da-b0a40a750666
+  author: aida
+  node_id: 1
+  lamport: 247
+  timestamp: 2026-05-06T06:16:27.678151240Z
+  kind: !SetPriority
+    priority: Medium
+clock: 247
 node_id: 1
