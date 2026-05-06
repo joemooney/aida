@@ -7882,6 +7882,44 @@ fn handle_export_command(
     Ok(())
 }
 
+/// Bulk-import helper for git-canonical stores (FR-1-002): drains an iterator
+/// of new requirements through a single `GitBackend::bulk_writer()` session
+/// so one git commit covers the whole batch. Falls back to the legacy
+/// `update_atomically` path for non-git backends (SQLite / YAML), since the
+/// bulk-writer's optimization only applies to the git path.
+/// trace:FR-1-002 | ai:claude
+fn bulk_import_via_writer<I>(
+    storage: &Storage,
+    commit_subject: &str,
+    reqs: I,
+) -> Result<usize>
+where
+    I: IntoIterator<Item = Requirement>,
+{
+    let path = storage.path();
+    if path.is_dir() {
+        let backend = aida_core::GitBackend::new(path)?;
+        let mut writer = backend.bulk_writer()?;
+        for req in reqs {
+            writer.add(req)?;
+        }
+        let n = writer.finish(commit_subject)?;
+        return Ok(n);
+    }
+
+    // Non-git backend: legacy path (single update_atomically commit).
+    let mut count = 0;
+    let reqs: Vec<Requirement> = reqs.into_iter().collect();
+    storage.update_atomically(|store| {
+        for req in reqs {
+            let type_prefix = store.get_type_prefix(&req.req_type);
+            store.add_requirement_with_id(req, None, type_prefix.as_deref());
+            count += 1;
+        }
+    })?;
+    Ok(count)
+}
+
 fn handle_import_command(
     storage: &Storage,
     file: &std::path::Path,
@@ -12207,28 +12245,26 @@ fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
                 return Ok(());
             }
 
-            let mut imported = 0;
-            storage.update_atomically(|store| {
-                for issue in &to_import {
+            // Bulk-writer path (FR-1-002): one commit per pull, no full-store
+            // round-trip. trace:FR-1-002 | ai:claude
+            let imported = bulk_import_via_writer(
+                storage,
+                "feat(jira)",
+                to_import.iter().map(|issue| {
                     let aida_type_str = config.reverse_map_type(issue.issue_type_name());
                     let aida_status_str = config.reverse_map_status(issue.status_name());
-
                     let mut req = Requirement::new(
                         format!("[{}] {}", issue.key, issue.fields.summary),
                         issue.description_text(),
                     );
                     req.req_type = parse_requirement_type(&aida_type_str).unwrap_or(RequirementType::Task);
                     req.set_status_from_str(&aida_status_str);
-
                     for label in issue.labels() {
                         req.tags.insert(format!("jira:{}", label));
                     }
-
-                    let type_prefix = store.get_type_prefix(&req.req_type);
-                    store.add_requirement_with_id(req, None, type_prefix.as_deref());
-                    imported += 1;
-                }
-            })?;
+                    req
+                }),
+            )?;
 
             println!("\n{} Imported {} issues as requirements.", "✓".green(), imported);
         }
@@ -12624,13 +12660,15 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
                 return Ok(());
             }
 
-            // Import
-            let mut imported = 0;
-            storage.update_atomically(|store| {
-                for issue in &to_import {
+            // Import using the bulk-writer path (FR-1-002): one git commit
+            // for the whole batch, no full-store load/iterate.
+            // trace:FR-1-002 | ai:claude
+            let imported = bulk_import_via_writer(
+                storage,
+                "feat(github)",
+                to_import.iter().map(|issue| {
                     let req_type = determine_type_from_labels(&issue.label_names(), &config.labels);
                     let priority = determine_priority_from_labels(&issue.label_names(), &config.labels);
-
                     let mut req = Requirement::new(
                         format!("[GH-{}] {}", issue.number, issue.title),
                         issue.body.clone().unwrap_or_default(),
@@ -12640,15 +12678,12 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
                     if let Some(ref assignee) = issue.assignee {
                         req.owner = assignee.login.clone();
                     }
-                    // Map GitHub state to AIDA status
                     if issue.state == "closed" {
                         req.status = RequirementStatus::Completed;
                     }
-                    // Add GitHub labels as tags
                     for label in &issue.labels {
                         req.tags.insert(format!("gh:{}", label.name));
                     }
-                    // Add URL link
                     req.urls.push(aida_core::models::UrlLink {
                         id: Uuid::now_v7(),
                         url: issue.html_url.clone(),
@@ -12660,12 +12695,9 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
                         last_verified: None,
                         last_verified_ok: None,
                     });
-
-                    let type_prefix = store.get_type_prefix(&req.req_type);
-                    store.add_requirement_with_id(req, None, type_prefix.as_deref());
-                    imported += 1;
-                }
-            })?;
+                    req
+                }),
+            )?;
 
             println!(
                 "\n{} Imported {} issues as requirements.",

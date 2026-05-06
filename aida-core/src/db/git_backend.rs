@@ -286,6 +286,21 @@ impl GitBackend {
         }
     }
 
+    /// Begin a bulk-add session. Buffers new requirements in memory while
+    /// assigning IDs via the live metadata counters, then flushes all YAMLs
+    /// + a counter-bumped metadata.yaml in a single commit when `finish` is
+    /// called. Avoids the load-iterate-write pattern of `update_atomically`
+    /// + `save`, which is overkill when the operation is purely additive.
+    /// trace:FR-1-002 | ai:claude
+    pub fn bulk_writer(&self) -> Result<BulkWriter<'_>> {
+        let metadata = self.load_metadata()?;
+        Ok(BulkWriter {
+            backend: self,
+            metadata,
+            staged: Vec::new(),
+        })
+    }
+
     /// Extract metadata from a RequirementsStore (everything except requirements).
     fn extract_metadata(store: &RequirementsStore) -> StoreMetadata {
         StoreMetadata {
@@ -586,6 +601,104 @@ impl DatabaseBackend for GitBackend {
     }
 }
 
+/// Buffers a batch of new requirements for write-behind commit. Created via
+/// `GitBackend::bulk_writer()`. Use `add()` per requirement (IDs are assigned
+/// from the live metadata counters), then `finish()` to write all YAMLs +
+/// metadata.yaml and produce a single commit.
+///
+/// Use this for purely-additive bulk paths (Jira/GitHub/JSON imports) where
+/// `update_atomically(|store| { for ... { store.add_requirement_with_id(...) } })`
+/// pulls every existing requirement into memory just to ignore it.
+///
+/// trace:FR-1-002 | ai:claude
+pub struct BulkWriter<'a> {
+    backend: &'a GitBackend,
+    metadata: StoreMetadata,
+    staged: Vec<Requirement>,
+}
+
+impl<'a> BulkWriter<'a> {
+    /// Add a requirement to the batch, assigning a spec_id from the live
+    /// metadata counters when missing. The requirement is buffered in memory;
+    /// nothing is written to disk until `finish()` is called.
+    pub fn add(&mut self, mut req: Requirement) -> Result<&Requirement> {
+        if req.spec_id.is_none() {
+            // Reuse RequirementsStore::add_requirement_with_id by building a
+            // throwaway store carrying the live metadata; the `staged` Vec
+            // contains in-flight specs so the counter advances correctly.
+            let mut tmp = self.backend.assemble_store(self.metadata.clone(), Vec::new());
+            tmp.requirements = self.staged.clone();
+            let type_prefix = tmp.get_type_prefix(&req.req_type);
+            let req_clone = req.clone();
+            tmp.add_requirement_with_id(req_clone, None, type_prefix.as_deref());
+            if let Some(last) = tmp.requirements.last() {
+                req.spec_id = last.spec_id.clone();
+            }
+            // Pull the bumped counters back into our metadata snapshot so the
+            // next add() sees them. Cheaper than re-extracting the whole.
+            self.metadata.next_feature_number = tmp.next_feature_number;
+            self.metadata.next_spec_number = tmp.next_spec_number;
+            self.metadata.prefix_counters = tmp.prefix_counters.clone();
+            self.metadata.meta_counters = tmp.meta_counters.clone();
+        }
+        self.staged.push(req);
+        Ok(self.staged.last().unwrap())
+    }
+
+    /// Number of requirements buffered in this batch.
+    pub fn len(&self) -> usize {
+        self.staged.len()
+    }
+
+    /// True when no requirements have been buffered yet.
+    pub fn is_empty(&self) -> bool {
+        self.staged.is_empty()
+    }
+
+    /// Flush all buffered requirements to disk and produce a single commit.
+    /// Returns the number of requirements written. The commit message is
+    /// "{prefix}: import N requirements" — pass a context-specific prefix
+    /// like "chore" or "feat(jira)".
+    pub fn finish(self, commit_subject: &str) -> Result<usize> {
+        // Persist all object YAMLs first (skipping unchanged just in case the
+        // caller is re-running an idempotent import).
+        let mut written: Vec<String> = Vec::new();
+        for req in &self.staged {
+            if object_store::write_object_if_changed(&self.backend.objects_root, req)? {
+                if let Some(spec) = &req.spec_id {
+                    written.push(spec.clone());
+                }
+            }
+            // Record the create op for each new requirement (matches
+            // GitBackend::add_requirement's bookkeeping)
+            self.backend.record_op(req.id, crate::oplog::OpKind::Create {
+                title: req.title.clone(),
+                description: req.description.clone(),
+                req_type: format!("{:?}", req.req_type),
+                status: req.effective_status(),
+                priority: req.effective_priority(),
+            });
+        }
+
+        // Persist the bumped metadata
+        self.backend.save_metadata(&self.metadata)?;
+
+        // Stage only the written YAMLs + metadata.yaml + oplog.yaml in one shot
+        let mut paths: Vec<String> = written
+            .iter()
+            .filter_map(|sid| object_store::relative_object_path(sid).ok())
+            .collect();
+        paths.push("metadata.yaml".to_string());
+        let path_refs: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
+
+        let count = self.staged.len();
+        let message = format!("{}: import {} requirement{}", commit_subject, count, if count == 1 { "" } else { "s" });
+        self.backend.auto_commit_paths(&message, &path_refs);
+
+        Ok(count)
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -633,6 +746,51 @@ mod tests {
         assert!(root.join("objects/FR/000/FR-001.yaml").exists());
         assert!(root.join("objects/BUG/000/BUG-001.yaml").exists());
         assert!(root.join("metadata.yaml").exists());
+    }
+
+    #[test]
+    fn test_bulk_writer_imports_in_one_batch() {
+        // trace:FR-1-002 | ai:claude
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap();
+
+        // Seed the metadata so add_requirement_with_id has a starting counter.
+        let mut seed_store = RequirementsStore::new();
+        seed_store.name = "BulkWriterTest".into();
+        backend.save(&seed_store).unwrap();
+
+        // Drain three new reqs through BulkWriter in one go.
+        let mut writer = backend.bulk_writer().unwrap();
+        for i in 1..=3 {
+            let req = Requirement::new(
+                format!("Bulk req {}", i),
+                format!("Description {}", i),
+            );
+            writer.add(req).unwrap();
+        }
+        assert_eq!(writer.len(), 3);
+        let n = writer.finish("test(bulk)").unwrap();
+        assert_eq!(n, 3);
+
+        // All three YAMLs landed.
+        let loaded = backend.load().unwrap();
+        let bulk_titles: Vec<&str> = loaded
+            .requirements
+            .iter()
+            .filter(|r| r.title.starts_with("Bulk req"))
+            .map(|r| r.title.as_str())
+            .collect();
+        assert_eq!(bulk_titles.len(), 3);
+
+        // Each got a unique spec_id (counter advanced inside the batch).
+        let spec_ids: std::collections::HashSet<&str> = loaded
+            .requirements
+            .iter()
+            .filter(|r| r.title.starts_with("Bulk req"))
+            .filter_map(|r| r.spec_id.as_deref())
+            .collect();
+        assert_eq!(spec_ids.len(), 3, "each bulk req must get a distinct spec_id");
     }
 
     #[test]
