@@ -111,6 +111,18 @@ pub fn pull_rebase(repo: &Path, remote: &str, branch: &str) -> Result<()> {
 }
 
 /// Pull (merge) from remote.
+///
+/// **Prefer `pull_rebase` for the orphan-store flow.** Bare `git pull`
+/// fails on divergent branches when the user has neither
+/// `pull.rebase` nor `pull.ff` set in their git config (modern git
+/// requires explicit reconciliation). `pull_rebase` is deterministic
+/// regardless of config and matches the linear-history model the
+/// aida-store branch is designed for. Kept for callers that
+/// specifically want merge semantics.
+/// trace:BUG-1-051 | ai:claude
+#[deprecated(
+    note = "use pull_rebase — bare `git pull` fails on divergent branches without pull.rebase config"
+)]
 pub fn pull(repo: &Path, remote: &str, branch: &str) -> Result<()> {
     let result = git(repo, &["pull", remote, branch])?;
     if !result.success {
