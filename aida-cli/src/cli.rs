@@ -705,6 +705,58 @@ pub enum DbCommand {
 }
 
 #[derive(Subcommand, Debug)]
+pub enum NodeCommand {
+    /// List all nodes registered in the shared registry. The current node
+    /// (the one whose `.aida/node.toml` matches an entry) is marked with `*`.
+    List,
+
+    /// Show details for a single node. With no id, defaults to the current
+    /// node (read from `.aida/node.toml`).
+    Show {
+        /// Node id to show (omit for current node)
+        id: Option<u32>,
+    },
+
+    /// Acquire a node id for this clone. Performs a CAS push loop on the
+    /// shared registry to claim the next sequential id, then writes the
+    /// per-clone identity file at `.aida-store/.aida/node.toml`.
+    /// Defaults pull `git config user.email` for the email stamp and the
+    /// system hostname for the hostname stamp.
+    /// trace:EPIC-1-052 | ai:claude
+    Acquire {
+        /// Claim a specific node id (must be free in the registry). Use this
+        /// to formalize a clone that's already been operating with an
+        /// implicit id, e.g., when migrating from pre-EPIC-1-052 setups.
+        /// Default: next sequential id.
+        #[clap(long)]
+        id: Option<u32>,
+
+        /// Override the hostname stamp (default: system hostname)
+        #[clap(long)]
+        hostname: Option<String>,
+
+        /// Override the email stamp (default: `git config user.email`)
+        #[clap(long)]
+        email: Option<String>,
+
+        /// Re-acquire even if `.aida/node.toml` already exists (default: refuse)
+        #[clap(long)]
+        force: bool,
+    },
+
+    /// Remove a node entry from the shared registry. Does not invalidate
+    /// any IDs already issued by that node. The node id is not reused.
+    Release {
+        /// Node id to release
+        id: u32,
+
+        /// Skip the confirmation prompt
+        #[clap(long, short = 'y')]
+        yes: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
 pub enum BlockCommand {
     /// Claim a new block of agreed IDs for this node (requires network push)
     Claim {
@@ -1390,6 +1442,15 @@ pub enum Command {
     /// SQLite cache view commands (git-canonical mode only)
     #[clap(subcommand, hide = true)]
     Cache(CacheCommand),
+
+    /// Manage per-clone node identity (acquire/release node ids in the
+    /// shared registry, list registered clones). Each clone of an AIDA
+    /// project gets a unique node id; that id is the namespace for
+    /// node-aware spec ids like `FR-2-005` until the merge gate
+    /// promotes them to short agreed-ids.
+    /// trace:EPIC-1-052 | ai:claude
+    #[clap(subcommand)]
+    Node(NodeCommand),
 
     /// Show this project's status — storage mode, requirement counts,
     /// cache state, sync state, recent activity. When run inside the AIDA

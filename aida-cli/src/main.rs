@@ -52,7 +52,7 @@ use aida_core::{
 
 use crate::cli::{
     BlockCommand, CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand, DevCommand,
-    FeatureCommand, GitHubCommand, GitLabCommand, JiraCommand, QueueCommand, RelDefCommand,
+    FeatureCommand, GitHubCommand, GitLabCommand, JiraCommand, NodeCommand, QueueCommand, RelDefCommand,
     RelationshipCommand, ReportCommand, RoleCommand, RolePromptCommand, RoleScopeCommand,
     ScaffoldCommand, ServerCommand, SessionCommand, TraceCommand, TypeCommand,
 };
@@ -347,6 +347,12 @@ fn main() -> Result<()> {
             anyhow::bail!(
                 "aida cache commands are only available in git-canonical (distributed) mode. \
                  Run `aida init --distributed` first, or pass --file pointing to a git store."
+            );
+        }
+        Command::Node(_) => {
+            anyhow::bail!(
+                "aida node commands are only available in git-canonical (distributed) mode. \
+                 Run `aida init` (defaults to distributed) first."
             );
         }
         Command::Status { no_dev_context } => {
@@ -1009,6 +1015,9 @@ fn handle_git_backend_command(
     match command {
         Command::Cache(cache_cmd) => {
             return handle_cache_command(cache_cmd, &backend);
+        }
+        Command::Node(node_cmd) => {
+            return handle_node_command(node_cmd, store_path);
         }
         Command::Status { no_dev_context } => {
             return handle_status_command_distributed(*no_dev_context, store_path, &backend);
@@ -3692,6 +3701,179 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
     }
 
     Ok(())
+}
+
+/// Handle `aida node` subcommands. Operates on the orphan-store worktree
+/// at `store_path` (typically `.aida-store/`).
+/// trace:EPIC-1-052 | ai:claude
+fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Result<()> {
+    use aida_core::node::NodeRegistry;
+
+    let registry_path = store_path.join("registry").join("nodes.toml");
+    let node_config_path = store_path.join(".aida").join("node.toml");
+
+    match cmd {
+        NodeCommand::List => {
+            let registry = NodeRegistry::load(&registry_path).unwrap_or_default();
+            let current_id = if node_config_path.exists() {
+                aida_core::NodeConfig::load(&node_config_path).ok().map(|c| c.node_id)
+            } else {
+                None
+            };
+
+            if registry.nodes.is_empty() {
+                println!("No nodes registered yet. Run `aida node acquire` to claim id 1.");
+                return Ok(());
+            }
+
+            println!(
+                "{:<2}  {:<6}  {:<8}  {:<28}  {:<22}  {}",
+                "", "Node", "User", "Email", "Hostname", "Registered"
+            );
+            println!("{}", "─".repeat(100));
+            for n in &registry.nodes {
+                let marker = if Some(n.id) == current_id { "*" } else { " " };
+                let email = n.email.clone().unwrap_or_else(|| "-".into());
+                let when = n.registered.format("%Y-%m-%d %H:%M").to_string();
+                println!(
+                    "{:<2}  {:<6}  {:<8}  {:<28}  {:<22}  {}",
+                    marker, n.id, n.user_id, truncate(&email, 28), truncate(&n.hostname, 22), when
+                );
+            }
+        }
+
+        NodeCommand::Show { id } => {
+            let registry = NodeRegistry::load(&registry_path).unwrap_or_default();
+            let target_id = match id {
+                Some(i) => *i,
+                None => {
+                    if !node_config_path.exists() {
+                        anyhow::bail!(
+                            "No current node — `.aida/node.toml` does not exist. \
+                             Run `aida node acquire` to claim a node id, or pass an id explicitly."
+                        );
+                    }
+                    aida_core::NodeConfig::load(&node_config_path)?.node_id
+                }
+            };
+
+            let entry = registry.get(target_id).ok_or_else(|| {
+                anyhow::anyhow!("Node {} is not in the shared registry", target_id)
+            })?;
+
+            println!("Node {}", entry.id);
+            println!("  User ID:    {}", entry.user_id);
+            println!("  Hostname:   {}", entry.hostname);
+            println!("  Email:      {}", entry.email.as_deref().unwrap_or("-"));
+            println!("  Registered: {}", entry.registered.format("%Y-%m-%d %H:%M:%S UTC"));
+            if node_config_path.exists() {
+                let local = aida_core::NodeConfig::load(&node_config_path)?;
+                if local.node_id == entry.id {
+                    println!("  Active on this clone: yes (.aida/node.toml matches)");
+                }
+            }
+        }
+
+        NodeCommand::Acquire { id: requested_id, hostname: hn_override, email: email_override, force } => {
+            if node_config_path.exists() && !*force {
+                let existing = aida_core::NodeConfig::load(&node_config_path)?;
+                anyhow::bail!(
+                    "This clone already has node id {} (registered {}). \
+                     Pass --force to re-acquire (will allocate a new id).",
+                    existing.node_id,
+                    existing.registered_at.format("%Y-%m-%d")
+                );
+            }
+
+            let hn = hn_override.clone().unwrap_or_else(hostname);
+            let email = email_override.clone().or_else(|| {
+                aida_core::git_ops::git_config_get("user.email").ok()
+            });
+
+            // user_id resolution: for now we use a placeholder of 1 if we
+            // can't find a UserRegistry entry. Phase 1 deliberately doesn't
+            // touch user identity — that's out of scope. The email stamp
+            // in the node entry is the actual identity carrier.
+            let user_id = 1;
+
+            let id_label = match requested_id {
+                Some(n) => format!("requested id={}", n),
+                None => "next available id".to_string(),
+            };
+            println!(
+                "Acquiring node ({}; hostname={}, email={}, user_id={})...",
+                id_label,
+                hn,
+                email.as_deref().unwrap_or("-"),
+                user_id
+            );
+
+            let new_id = aida_core::git_ops::register_node_full(
+                store_path,
+                *requested_id,
+                user_id,
+                &hn,
+                email,
+            )?;
+
+            println!(
+                "{} Acquired node id {} for this clone. Per-clone identity at {}",
+                "".green().bold(),
+                new_id,
+                node_config_path.display()
+            );
+            println!(
+                "  Next: claim an agreed-id block with `aida db block claim --type FR --size 100` \
+                 (Phase 3 will automate this)."
+            );
+        }
+
+        NodeCommand::Release { id, yes } => {
+            let registry = NodeRegistry::load(&registry_path).unwrap_or_default();
+            let entry = registry.get(*id).ok_or_else(|| {
+                anyhow::anyhow!("Node {} is not in the shared registry", id)
+            })?;
+
+            println!("About to release node {}:", entry.id);
+            println!("  Hostname: {}", entry.hostname);
+            println!("  Email:    {}", entry.email.as_deref().unwrap_or("-"));
+            println!(
+                "  Note: any IDs already issued by this node remain valid. \
+                 The node id is NOT recycled."
+            );
+
+            if !*yes {
+                use std::io::Write;
+                print!("Continue? [y/N] ");
+                std::io::stdout().flush()?;
+                let mut answer = String::new();
+                std::io::stdin().read_line(&mut answer)?;
+                if !matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+                    println!("Aborted.");
+                    return Ok(());
+                }
+            }
+
+            let removed = aida_core::git_ops::unregister_node(store_path, *id)?;
+            if removed {
+                println!("{} Node {} removed from registry.", "".green(), id);
+            } else {
+                println!("Node {} was not in the registry (already removed?).", id);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Truncate a string for table display, with an ellipsis when shortened.
+fn truncate(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        s.to_string()
+    } else {
+        let clipped: String = s.chars().take(max.saturating_sub(1)).collect();
+        format!("{}…", clipped)
+    }
 }
 
 fn handle_cache_command(

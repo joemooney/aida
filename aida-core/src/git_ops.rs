@@ -305,6 +305,37 @@ pub fn register_node(
     user_id: u32,
     hostname: &str,
 ) -> Result<u32> {
+    register_node_with_email(aida_repo, user_id, hostname, None)
+}
+
+/// Register a node and capture the user's email at registration time.
+/// trace:EPIC-1-052 | ai:claude
+pub fn register_node_with_email(
+    aida_repo: &Path,
+    user_id: u32,
+    hostname: &str,
+    email: Option<String>,
+) -> Result<u32> {
+    register_node_full(aida_repo, None, user_id, hostname, email)
+}
+
+/// Register a node, optionally at a specific id.
+///
+/// When `requested_id` is Some(N), the CAS loop verifies N is free; if it is
+/// not (someone else just claimed it), the call fails after retries rather
+/// than silently choosing a different id. This is the path used to
+/// retroactively register a clone whose id was implicit (e.g., legacy
+/// pre-EPIC-1-052 setup where node_id lived in dispenser.toml).
+///
+/// When `requested_id` is None, the next sequential id is claimed.
+/// trace:EPIC-1-052 | ai:claude
+pub fn register_node_full(
+    aida_repo: &Path,
+    requested_id: Option<u32>,
+    user_id: u32,
+    hostname: &str,
+    email: Option<String>,
+) -> Result<u32> {
     use crate::node::{NodeConfig, NodeRegistry};
 
     let registry_dir = aida_repo.join("registry");
@@ -326,13 +357,29 @@ pub fn register_node(
             }
         }
 
-        // Step 2: Load registry and claim next ID
+        // Step 2: Load registry and pick the id to claim
         let mut registry = NodeRegistry::load(&registry_path)
             .unwrap_or_default();
-        let node_id = registry.next_node_id();
+        let node_id = match requested_id {
+            Some(id) => {
+                if registry.is_registered(id) {
+                    anyhow::bail!(
+                        "Node id {} is already taken by another clone — pick a different id",
+                        id
+                    );
+                }
+                id
+            }
+            None => registry.next_node_id(),
+        };
 
         // Step 3: Register the node
-        registry.register(user_id, hostname.to_string());
+        registry.register_specific(
+            node_id,
+            user_id,
+            hostname.to_string(),
+            email.clone(),
+        );
         registry.save(&registry_path)?;
 
         // Step 4: Stage, commit, push
@@ -352,6 +399,7 @@ pub fn register_node(
                     node_id,
                     user_id,
                     hostname: hostname.to_string(),
+                    email: email.clone(),
                     registered_at: chrono::Utc::now(),
                 };
                 let node_config_path = aida_repo.join(".aida").join("node.toml");
@@ -375,6 +423,46 @@ pub fn register_node(
 
     anyhow::bail!(
         "Node registration failed after {} attempts — too much contention on the registry",
+        MAX_CAS_RETRIES
+    );
+}
+
+/// Remove a node entry from the shared registry via the CAS push loop.
+///
+/// Note: this does NOT revoke any agreed-IDs already issued by the node,
+/// nor does it free up the node id for reuse — the registry is append-only
+/// in spirit, but we allow tombstone removal for housekeeping (e.g., a
+/// machine that's been decommissioned). Issued IDs remain valid because
+/// they live in the object store, not in the registry.
+/// trace:EPIC-1-052 | ai:claude
+pub fn unregister_node(aida_repo: &Path, node_id: u32) -> Result<bool> {
+    use crate::node::NodeRegistry;
+
+    let registry_path = aida_repo.join("registry").join("nodes.toml");
+    let branch = current_branch(aida_repo).unwrap_or_else(|_| "main".to_string());
+
+    for attempt in 0..MAX_CAS_RETRIES {
+        if attempt > 0 {
+            pull_rebase(aida_repo, "origin", &branch)?;
+        }
+
+        let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
+        if !registry.remove(node_id) {
+            return Ok(false);
+        }
+        registry.save(&registry_path)?;
+        add(aida_repo, &["registry/nodes.toml"])?;
+        commit(aida_repo, &format!("chore(registry): unregister node {}", node_id))?;
+
+        match push(aida_repo, "origin", &branch) {
+            Ok(true) => return Ok(true),
+            Ok(false) => continue,
+            Err(e) => anyhow::bail!("Node unregister failed: {}", e),
+        }
+    }
+
+    anyhow::bail!(
+        "Node unregister failed after {} attempts — too much contention",
         MAX_CAS_RETRIES
     );
 }
