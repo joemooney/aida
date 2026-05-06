@@ -22,7 +22,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-02T21:28:09.819088898Z
-modified_at: 2026-05-06T06:30:13.503461087Z
+modified_at: 2026-05-06T06:30:17.014687097Z
 req_type: Functional
 tags:
 - bulk-import
@@ -34,3 +34,9 @@ relationships:
   target_id: 019dea8d-c189-72e3-a27f-ea562a6ff148
   created_at: 2026-05-02T21:28:10.363054020Z
   created_by: joe
+comments:
+- id: 019dfbfa-e4b6-76e1-a864-3f8643bc79e5
+  author: joe
+  content: ''
+  created_at: 2026-05-06T06:30:17.014687097Z
+  modified_at: 2026-05-06T06:30:17.014687097Z
