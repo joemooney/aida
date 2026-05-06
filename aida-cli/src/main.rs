@@ -10440,7 +10440,6 @@ fn print_scaffold_diffs(
     list_only: bool,
 ) -> Result<bool> {
     use aida_core::DiffSlice;
-    use similar::{ChangeTag, TextDiff};
 
     if no_color {
         colored::control::set_override(false);
