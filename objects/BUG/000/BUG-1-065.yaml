@@ -1,0 +1,36 @@
+id: 019dfc0c-f208-7ad2-bed7-df39d2741af9
+spec_id: BUG-1-065
+title: scaffold status/upgrade ignores missing @.claude/AIDA.md import line in CLAUDE.md
+description: |-
+  ## Problem
+
+  After FR-1-064 the diff path treats a missing `@.claude/AIDA.md` import line in CLAUDE.md as drift (MarkerMissing). But `scaffold status` and `scaffold upgrade` use the older `seed_matches()` in aida-core/src/report.rs:
+
+  ```rust
+  \"CLAUDE.md\" => true, // presence-only; if the file is on disk we're done
+  ```
+
+  So upgrade reports \"matching, no action\" while diff says \"missing import\". User-observed on paradox 2026-05-06.
+
+  This matters because CLAUDE.md without the import means Claude Code doesn't pull in AIDA conventions for that project — meaningful drift, not cosmetic.
+
+  ## Acceptance
+
+  - `scaffold status` reports CLAUDE.md as drifted when `@.claude/AIDA.md` is absent
+  - `scaffold upgrade` (default mode) offers to INSERT the import line at a sensible location (right after the title or near the top), preserving all other user content. Mirrors how AGENTS.md's AIDA-AUTOGEN block gets rewritten in-place by Phase 1 of FR-1-028.
+  - `scaffold diff` already does the right thing — keep current behavior.
+  - One end-to-end test: a CLAUDE.md without the import → upgrade adds it; one with the import → upgrade leaves it alone.
+
+  ## Out of scope
+
+  - Inserting the import in any specific format (single line, footnote-style, etc.). Pick a sensible default.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-06T06:50:00.072517641Z
+modified_at: 2026-05-06T06:50:00.072517641Z
+req_type: Bug
+tags:
+- FR-1-064-followup
+- scaffold
