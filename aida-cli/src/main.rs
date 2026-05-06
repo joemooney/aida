@@ -913,27 +913,63 @@ fn detect_distributed_store() -> Option<std::path::PathBuf> {
     None
 }
 
-/// Read `use_agreed_blocks` from `.aida/config.toml` in the project directory.
-/// Returns true (enabled) by default when not set. Returns false when explicitly
-/// set to `false` to opt out of agreed ID blocks (use node-namespaced shard IDs only).
-// trace:FR-2-005 | ai:claude
-fn use_agreed_blocks(project_dir: &std::path::Path) -> bool {
+/// Read the `[id_format] policy` from `.aida/config.toml`. Honors the legacy
+/// `use_agreed_blocks` boolean as a fallback when the new section is missing
+/// (so existing projects keep working unchanged).
+///
+/// Resolution order:
+///   1. `[id_format] policy = "..."`  → parsed (errors on unknown values)
+///   2. legacy `use_agreed_blocks = false`  → `node-aware-only`
+///   3. legacy `use_agreed_blocks = true`   → `blocks-then-fallback`
+///   4. neither set                          → `blocks-then-fallback` (default)
+/// trace:EPIC-1-052 | ai:claude
+fn read_id_format_policy(project_dir: &std::path::Path) -> aida_core::IdFormatPolicy {
     let config_path = project_dir.join(".aida").join("config.toml");
-    if !config_path.exists() {
-        return true; // default: enabled
-    }
+    let default = aida_core::IdFormatPolicy::default();
     let Ok(content) = std::fs::read_to_string(&config_path) else {
-        return true;
+        return default;
     };
-    for line in content.lines() {
-        let line = line.trim();
-        if line.starts_with("use_agreed_blocks") {
+
+    // Naive section walker — sufficient for our shallow config.toml shape.
+    let mut in_id_format = false;
+    let mut policy_explicit: Option<aida_core::IdFormatPolicy> = None;
+    let mut legacy_use_blocks: Option<bool> = None;
+
+    for raw in content.lines() {
+        let line = raw.trim();
+        if line.starts_with('#') || line.is_empty() {
+            continue;
+        }
+        if line.starts_with('[') {
+            in_id_format = line == "[id_format]";
+            continue;
+        }
+        if in_id_format && line.starts_with("policy") {
             if let Some(val) = line.split('=').nth(1) {
-                return val.trim() != "false";
+                let s = val.trim().trim_matches('"').trim_matches('\'');
+                match aida_core::IdFormatPolicy::parse(s) {
+                    Ok(p) => policy_explicit = Some(p),
+                    Err(e) => {
+                        eprintln!("Warning: {} — using default", e);
+                    }
+                }
+            }
+        }
+        if !in_id_format && line.starts_with("use_agreed_blocks") {
+            if let Some(val) = line.split('=').nth(1) {
+                legacy_use_blocks = Some(val.trim() != "false");
             }
         }
     }
-    true // default: enabled
+
+    if let Some(p) = policy_explicit {
+        return p;
+    }
+    match legacy_use_blocks {
+        Some(false) => aida_core::IdFormatPolicy::NodeAwareOnly,
+        Some(true) => aida_core::IdFormatPolicy::BlocksThenFallback,
+        None => default,
+    }
 }
 
 /// Read node_id from the store's node.toml; defaults to 1 for unregistered nodes.
@@ -1154,11 +1190,22 @@ fn handle_git_backend_command(
             }
 
             // Try to assign an agreed ID from a pre-allocated block (FR-2-005).
-            // Skipped when use_agreed_blocks = false in .aida/config.toml.
+            // Behavior is governed by [id_format] policy in .aida/config.toml:
+            //   - node-aware-only:      skip block dispense entirely
+            //   - blocks-then-fallback: try block; fall through silently if missing
+            //   - blocks-only:          require a block; error if missing
+            // trace:EPIC-1-052 Phase 2 | ai:claude
             let project_dir = std::env::current_dir().unwrap_or_default();
-            if use_agreed_blocks(&project_dir) {
+            let id_policy = read_id_format_policy(&project_dir);
+            if id_policy.uses_blocks() {
                 let node_id = load_node_id(store_path);
                 let blocks_path = store_path.join("registry").join("blocks.yaml");
+                if !blocks_path.exists() && id_policy.requires_block() {
+                    anyhow::bail!(
+                        "id_format policy is `blocks-only` but no blocks.yaml exists. \
+                         Run `aida db block claim --type FR --size 100` to allocate a block."
+                    );
+                }
                 if blocks_path.exists() {
                     // Determine type prefix same way the store would
                     let type_prefix = match &req.prefix_override {
@@ -1180,7 +1227,18 @@ fn handle_git_backend_command(
                     if let Ok(mut registry) = aida_core::BlockRegistry::load(&blocks_path) {
                         match registry.find_active_block(node_id, &type_prefix) {
                             None => {
-                                // No block for this type — fall through to shard ID silently
+                                // No block for this type. Under `blocks-only`
+                                // this is fatal — the project requires every
+                                // id come from an allocated block. Otherwise
+                                // fall through to a node-aware id silently.
+                                if id_policy.requires_block() {
+                                    anyhow::bail!(
+                                        "id_format policy is `blocks-only` but node {} has no \
+                                         {} block. Run `aida db block claim --type {} --size 100` \
+                                         to allocate one (requires network).",
+                                        node_id, type_prefix, type_prefix
+                                    );
+                                }
                             }
                             Some(idx) if registry.blocks[idx].is_exhausted() => {
                                 anyhow::bail!(
@@ -2032,7 +2090,15 @@ fn handle_init_distributed_worktree(
          mode = \"distributed\"\n\
          store_path = \"{}\"\n\
          store_type = \"worktree\"\n\
-         branch = \"{}\"\n",
+         branch = \"{}\"\n\
+         \n\
+         # trace:EPIC-1-052 Phase 2 | ai:claude\n\
+         # How `aida add` chooses between agreed-id blocks and node-aware ids:\n\
+         #   node-aware-only      — never use blocks; always FR-<NODE>-<SEQ>\n\
+         #   blocks-then-fallback — try block first; fall through silently (default)\n\
+         #   blocks-only          — error if no block is allocated for the type\n\
+         [id_format]\n\
+         policy = \"blocks-then-fallback\"\n",
         worktree_dir, branch_name
     );
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
@@ -2259,13 +2325,19 @@ fn handle_init_distributed_sibling(
 
     // Create .aida/ config in the project root (not the store)
     std::fs::create_dir_all(&aida_dir)?;
-    let config_content = format!(
-        "# AIDA distributed mode configuration\n\
+    let config_content = "# AIDA distributed mode configuration\n\
          [deployment]\n\
          mode = \"distributed\"\n\
-         store_path = \"aida-store\"\n"
-    );
-    std::fs::write(aida_dir.join("config.toml"), &config_content)?;
+         store_path = \"aida-store\"\n\
+         \n\
+         # trace:EPIC-1-052 Phase 2 | ai:claude\n\
+         # How `aida add` chooses between agreed-id blocks and node-aware ids:\n\
+         #   node-aware-only      — never use blocks; always FR-<NODE>-<SEQ>\n\
+         #   blocks-then-fallback — try block first; fall through silently (default)\n\
+         #   blocks-only          — error if no block is allocated for the type\n\
+         [id_format]\n\
+         policy = \"blocks-then-fallback\"\n";
+    std::fs::write(aida_dir.join("config.toml"), config_content)?;
 
     // Create docs/plans/ for plan archive (per CLAUDE.md convention).
     std::fs::create_dir_all(cwd.join("docs/plans"))?;

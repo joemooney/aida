@@ -4,3 +4,11 @@ mode = "distributed"
 store_path = ".aida-store"
 store_type = "worktree"
 branch = "aida-store"
+
+# trace:EPIC-1-052 Phase 2 | ai:claude
+# How `aida add` chooses between agreed-id blocks and node-aware ids:
+#   node-aware-only      — never use blocks; always FR-<NODE>-<SEQ>
+#   blocks-then-fallback — try block first; fall through silently (default)
+#   blocks-only          — error if no block is allocated for the type
+[id_format]
+policy = "blocks-then-fallback"
