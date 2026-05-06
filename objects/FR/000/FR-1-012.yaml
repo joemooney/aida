@@ -22,12 +22,12 @@ description: |-
   - Conflict semantics if the same SPEC-ID exists in multiple projects (rare but possible with node-namespaced IDs)?
 
   Parent: EPIC-1-006 (Queue routing).
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-04T06:25:34.078156796Z
-modified_at: 2026-05-04T19:15:50.429605931Z
+modified_at: 2026-05-06T06:25:07.590707349Z
 req_type: Functional
 tags:
 - deferred
