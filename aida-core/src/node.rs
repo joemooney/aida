@@ -16,6 +16,79 @@ use std::path::{Path, PathBuf};
 use crate::dispenser::IdMode;
 
 // ---------------------------------------------------------------------------
+// ID Format Policy (EPIC-1-052 Phase 2)
+// ---------------------------------------------------------------------------
+
+/// How a project chooses between node-aware ids (FR-1-005) and pre-allocated
+/// agreed-id blocks (FR-005). Configured via `.aida/config.toml`:
+///
+/// ```toml
+/// [id_format]
+/// policy = "blocks-then-fallback"  # default
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum IdFormatPolicy {
+    /// Always issue node-aware ids (`<TYPE>-<NODE>-<SEQ>`). Useful for
+    /// projects that don't want to manage block allocation, or for solo
+    /// developers who don't need stable agreed-ids.
+    NodeAwareOnly,
+
+    /// Try a pre-allocated block first (yields short `<TYPE>-<SEQ>`); fall
+    /// through to a node-aware id if no block is allocated for the type.
+    /// **Default** — matches the existing `use_agreed_blocks = true`
+    /// behavior and is what the user picked for `aida init` defaults.
+    BlocksThenFallback,
+
+    /// Require an allocated block for every id; error out otherwise. Use
+    /// when the project policy is "agreed-ids only — never let a node-aware
+    /// id leak into trace comments or PR titles."
+    BlocksOnly,
+}
+
+impl Default for IdFormatPolicy {
+    fn default() -> Self {
+        Self::BlocksThenFallback
+    }
+}
+
+impl IdFormatPolicy {
+    /// String label suitable for display ("node-aware-only", etc.).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::NodeAwareOnly => "node-aware-only",
+            Self::BlocksThenFallback => "blocks-then-fallback",
+            Self::BlocksOnly => "blocks-only",
+        }
+    }
+
+    /// Parse from the kebab-case string used in config.toml. Returns Err
+    /// for unknown values so callers can surface a clear error.
+    pub fn parse(s: &str) -> Result<Self, String> {
+        match s {
+            "node-aware-only" => Ok(Self::NodeAwareOnly),
+            "blocks-then-fallback" => Ok(Self::BlocksThenFallback),
+            "blocks-only" => Ok(Self::BlocksOnly),
+            other => Err(format!(
+                "unknown id_format policy '{}': expected one of node-aware-only, \
+                 blocks-then-fallback, blocks-only",
+                other
+            )),
+        }
+    }
+
+    /// True when the policy permits dispensing from a block.
+    pub fn uses_blocks(self) -> bool {
+        matches!(self, Self::BlocksThenFallback | Self::BlocksOnly)
+    }
+
+    /// True when the policy requires a block — i.e., missing block is an error.
+    pub fn requires_block(self) -> bool {
+        matches!(self, Self::BlocksOnly)
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Node Identity
 // ---------------------------------------------------------------------------
 
