@@ -3,10 +3,10 @@ spec_id: BUG-27
 agreed_id: BUG-27
 title: aida list includes META requirements by default — pollutes view on small projects
 description: META reqs (AI prompt customization) show up in `aida list` alongside user reqs. On a fresh init it's 6 META rows + N user rows. Should hide unless `--type meta` or `--all` is passed. Surfaced 2026-05-09 walkthrough.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T20:38:57.098334306Z
-modified_at: 2026-05-09T20:38:57.098334306Z
+modified_at: 2026-05-09T20:48:25.401499652Z
 req_type: Bug
