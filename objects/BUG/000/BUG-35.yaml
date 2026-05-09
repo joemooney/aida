@@ -1,0 +1,12 @@
+id: 019e0e8f-c721-7271-a6e3-08df4d1c0014
+spec_id: BUG-35
+agreed_id: BUG-35
+title: Human-facing CLI timestamps shown in UTC instead of local time
+description: 'Version banner, aida node show/list, comment headers, hijack warning, trace list, history list, scaffold mtime, GitLab last_sync — all display UTC. Per user pref (memory: feedback_local_time), human-facing output should render in user''s local timezone; UTC stays only on disk. Surfaced 2026-05-09 walkthrough.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-09T21:06:04.193308232Z
+modified_at: 2026-05-09T21:06:04.193308232Z
+req_type: Bug
