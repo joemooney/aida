@@ -1395,7 +1395,39 @@ fn handle_git_backend_command(
                                 );
                             }
                             Some(_) => {
-                                if let Some((agreed_id, is_low)) = registry.dispense(&node_id, &type_prefix) {
+                                // BUG-31: dispense in a loop, skipping any
+                                // candidate id that's already taken in the
+                                // store. Existing reqs (e.g. older sessions
+                                // before this block was claimed, retired-
+                                // legacy-id migrations, imports) can occupy
+                                // ids inside our block range. Block.next is
+                                // monotonic so we just keep advancing until
+                                // we land on a free slot or exhaust.
+                                let mut dispensed: Option<(String, bool)> = None;
+                                let mut skipped: Vec<String> = Vec::new();
+                                while let Some((candidate, is_low)) =
+                                    registry.dispense(&node_id, &type_prefix)
+                                {
+                                    let taken = backend
+                                        .get_requirement_by_spec_id(&candidate)
+                                        .map(|opt| opt.is_some())
+                                        .unwrap_or(false);
+                                    if !taken {
+                                        dispensed = Some((candidate, is_low));
+                                        break;
+                                    }
+                                    skipped.push(candidate);
+                                }
+                                if !skipped.is_empty() {
+                                    eprintln!(
+                                        "{} skipped {} already-taken id(s) in {} block: {}",
+                                        "Note:".dimmed(),
+                                        skipped.len(),
+                                        type_prefix,
+                                        skipped.join(", ")
+                                    );
+                                }
+                                if let Some((agreed_id, is_low)) = dispensed {
                                     if is_low {
                                         eprintln!(
                                             "{} {} block running low ({} remaining). Run `aida db block claim --type {}` soon.",

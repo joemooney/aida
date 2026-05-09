@@ -26,9 +26,15 @@ fi
 # Patterns
 AI_TAG_PATTERN='^\[AI:[a-zA-Z]+(:(high|med|low))?\]'
 CONVENTIONAL_PATTERN='^(\[AI:[a-zA-Z]+(:(high|med|low))?\] )?(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-zA-Z0-9_-]+\))?: .+'
-# Match a single REQ-ID `(FR-42)` / `(FR-1-042)` OR a comma-separated list
-# `(TASK-20, TASK-27)` at end of line. trace:BUG-24 | ai:claude
-REQ_ID_PATTERN='\([A-Z]+(-[0-9]+){1,2}(,[[:space:]]*[A-Z]+(-[0-9]+){1,2})*\)$'
+# Match a REQ-ID at end of line in any of:
+#   - single id:           (FR-42) or (FR-1-042)
+#   - comma list:          (TASK-20, TASK-27)
+#   - shorthand range:     (BUG-25..30)  — same prefix, two-digit dot-dot tail
+#   - mix of the above:    (BUG-25..30, FR-264)
+# trace:BUG-24 | ai:claude
+# Where "atom" is `<PREFIX>-<N>(-<N>)?` optionally followed by `..<N>` range.
+ID_ATOM='[A-Z]+(-[0-9]+){1,2}(\.\.[0-9]+)?'
+REQ_ID_PATTERN="\\(${ID_ATOM}(,[[:space:]]*${ID_ATOM})*\\)\$"
 FEAT_FIX_PATTERN='^(\[AI:[a-zA-Z]+(:(high|med|low))?\] )?(feat|fix)'
 
 ERRORS=()
