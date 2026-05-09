@@ -12,12 +12,12 @@ description: |-
   - Pre-commit hook in this repo
 
   Lowest-cost option is probably the cargo test.
-status: Draft
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-04T18:10:25.235697605Z
-modified_at: 2026-05-05T00:23:47.649084752Z
+modified_at: 2026-05-09T22:38:18.087398642Z
 req_type: Task
 tags:
 - ci
