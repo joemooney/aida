@@ -192,6 +192,13 @@ pub fn create_store_worktree(
         .map(|r| r.success)
         .unwrap_or(false);
 
+    // BUG-39: drop any stale worktree registrations before trying to add
+    // a fresh one. `git worktree prune` is a no-op when nothing's stale,
+    // so always-running it is safe and avoids the cryptic "missing but
+    // already registered worktree" error users hit after manually
+    // deleting the worktree directory. trace:BUG-39 | ai:claude
+    let _ = git(repo_root, &["worktree", "prune"]);
+
     if branch_exists {
         // Branch exists (e.g., from a clone) — just add the worktree
         let result = git(
