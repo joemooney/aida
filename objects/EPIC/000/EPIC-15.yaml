@@ -16,10 +16,10 @@ description: |-
   - Spike: file categorization design — what category each file belongs to, how to declare it in the scaffold manifest, semantics per category
 
   Originating context: ~/ai/paradox showed 4 modified files (`CLAUDE.md`, two hook scripts, `settings.json`) — one in each category — exposing all three failure modes at once.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-04T19:20:17.623910661Z
-modified_at: 2026-05-04T19:20:17.623910661Z
+modified_at: 2026-05-09T20:25:22.120287110Z
 req_type: Epic
