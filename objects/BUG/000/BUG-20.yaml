@@ -3,12 +3,12 @@ spec_id: BUG-20
 agreed_id: BUG-20
 title: 'aida docs build: sort entries by id ascending in projected sections'
 description: 00-constitution.md lists PRIN-2 before PRIN-1 because it iterates store.requirements in append order. Sort by spec_id ascending in render_constitution / render_vision / render_constraints / render_quality. Glossary already sorts alphabetically. Surfaces in 2026-05-09 walkthrough.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T18:43:33.608577917Z
-modified_at: 2026-05-09T18:43:33.608577917Z
+modified_at: 2026-05-09T18:53:10.325863287Z
 req_type: Bug
 tags:
 - docs
