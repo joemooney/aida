@@ -3,10 +3,10 @@ spec_id: TASK-31
 agreed_id: TASK-31
 title: '[FR-215 test] child req with parent'
 description: ''
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T22:38:38.799518079Z
-modified_at: 2026-05-09T22:38:38.799518079Z
+modified_at: 2026-05-09T22:38:39.696905698Z
 req_type: Task
