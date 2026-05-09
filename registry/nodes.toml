@@ -11,3 +11,10 @@ user_id = 1
 hostname = "imac"
 email = "joe.mooney@gmail.com"
 registered = "2026-05-09T01:38:10.457118307Z"
+
+[[nodes]]
+id = 4
+user_id = 1
+hostname = "imac"
+email = "joe.mooney@gmail.com"
+registered = "2026-05-09T01:39:31.686942382Z"
