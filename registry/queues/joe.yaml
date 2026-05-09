@@ -1,1 +1,7 @@
-[]
+- user_id: joe
+  requirement_id: 019e0e0d-5929-7943-8818-e7d28d465c85
+  position: 1000
+  added_by: joe
+  note: P2 verify
+  added_at: 2026-05-09T18:46:03.216498607Z
+  for_role: implementer
