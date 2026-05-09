@@ -1,31 +1,60 @@
-id: 019dfbe7-1ccf-7420-b5da-b0a40a750666
+id: 019e0e00-4f3b-7221-aed2-633b394e0504
 spec_id: FR-263
-title: aida node release should optionally free block ownership
+agreed_id: FR-263
+title: 'aida-docs MVP: project the graph as a layered docs tree (Constitution / Vision / Constraints / Decisions / Quality / Glossary)'
 description: |-
-  ## Problem
+  ## What
 
-  `aida node release <id>` removes the entry from `registry/nodes.toml` but leaves any `AgreedIdBlock`s in `registry/blocks.yaml` orphaned (still listing the released node as owner). Symptoms:
-  - `aida db block list` shows blocks for nodes no longer in the registry
-  - `aida node acquire`'s safety check sees those blocks as "node id in use" and skips past them — which is correct for live nodes but wrong for tombstoned ones
-  - The dispense path looks for blocks by `node_id`; orphaned blocks become dead ranges
+  \`aida docs build\` renders six layers of the requirements graph into \`docs/aida/\`:
 
-  ## Acceptance
+    - \`00-constitution.md\`     ← reqs with \`type=principle\`
+    - \`01-vision.md\`           ← reqs with \`type=vision\`
+    - \`02-constraints.md\`      ← reqs with \`type=constraint\`
+    - \`05-decisions/ADR-*.md\`  ← one file per \`type=decision\` (ADR pattern)
+    - \`07-quality.md\`          ← reqs with \`type=non-functional\`
+    - \`10-glossary.md\`         ← reqs with \`type=term\`
 
-  - `aida node release <id> --free-blocks` (opt-in flag) also removes that node's blocks from `blocks.yaml` in the same CAS push
-  - Default behavior (no flag) prints a one-line summary of blocks left orphaned and the command to clean them up
-  - `aida db block list` annotates blocks whose owner is no longer in nodes.toml as `(orphaned)`
+  Plus a top-level \`README.md\` index.
 
-  ## Related
+  ## Why
 
-  - EPIC-1-052 Phase 1 (release path); the block-cleanup feature was deliberately scoped out
-status: Draft
-priority: Medium
+  This is the differentiating capability the kernel/module pivot was about. Spec Kit produces specs (one-shot). ADR tools produce ADRs (one-shot). Living Architecture is a fill-in template. None of them maintain a graph that's the SOURCE for all of those views.
+
+  > Documentation is the projection. Update the graph, the docs update.
+
+  ## Surface
+
+    aida docs build              # render docs/aida/
+    aida docs build --output X   # alternate path
+    aida docs build --dry-run    # preview, don't write
+    aida docs check              # CI mode — exit 1 on drift
+
+  ## Implementation
+
+  Single CLI module \`aida-cli/src/docs.rs\` (~400 lines, self-contained). Uses existing \`RequirementsStore\` + \`Requirement\` types — no kernel changes beyond FR-1-074 which already added the five entity types. Each rendered file wraps its body in \`<!-- AIDA-AUTOGEN-BEGIN -->\` / \`<!-- AIDA-AUTOGEN-END -->\` markers; v1 regenerates the whole body, future iterations can preserve manual prose between markers.
+
+  Six unit tests cover slugification, decision filenames, render output, idempotent rebuild detection, and external-edit drift detection.
+
+  ## Out of scope (future scope)
+
+  - Layers 03 (context), 04 (architecture), 06 (features rollup), 08 (risks), 09 (reference). They need conventions that don't exist yet (external-system tagging, derived-from-relationships rendering).
+  - MCP \`docs://\` resources — agents can already query typed reqs, this would just be a convenience shortcut.
+  - Round-trip regen preserving manual prose between markers — markers are present, logic is not.
+  - Diátaxis lenses (\`--as tutorial|howto|reference|explanation\`) — defer.
+  - Extracting to a separate \`aida-docs\` repo — kept in-tree as part of \`aida-cli\` for now; can be lifted out cleanly when modules graduate per the kernel/module audit.
+
+  ## Verified end-to-end on this repo
+
+  8 layer files written (1 ADR + 6 layer files + 2 indexes). Constitution lists PRIN-1, decisions list ADR-1 in a sluggified filename. \`docs check\` passes when fresh; detects drift on external edits; \`build\` restores cleanly. Idempotent: second build reports 0 writes, 0 updates, 8 unchanged. 34 binary tests pass.
+status: Completed
+priority: High
 owner: ''
 feature: Uncategorized
-created_at: 2026-05-06T06:08:40.655918688Z
-modified_at: 2026-05-06T06:16:27.645818950Z
+created_at: 2026-05-09T18:29:21.851200151Z
+modified_at: 2026-05-09T18:29:21.851200151Z
 req_type: Functional
 tags:
-- EPIC-1-052-followup
-- blocks
-- node-identity
+- aida-docs
+- differentiating
+- layered-docs
+- projection
