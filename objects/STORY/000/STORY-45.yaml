@@ -1,0 +1,12 @@
+id: 019e0e57-ff0b-7330-85bc-fae76b201ccd
+spec_id: STORY-45
+agreed_id: STORY-45
+title: 'EPIC-9 Story 5: aida node acquire --hijack <id> with mark-in-place when reachable'
+description: Re-claim a registered node id. If old clone is reachable on this host, drop HIJACKED.toml in its .aida-store/.aida/. Otherwise re-attribute. Warning printed loudly on every aida invocation in a hijacked clone; cleared when the clone re-acquires.
+status: Completed
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-09T20:05:08.491499912Z
+modified_at: 2026-05-09T20:05:08.491499912Z
+req_type: Story
