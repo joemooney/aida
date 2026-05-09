@@ -1560,6 +1560,12 @@ pub enum Command {
         /// Useful from a developer shell to upgrade `~/.local/bin/aida` etc.
         #[clap(long)]
         target: Option<String>,
+
+        /// When the dev build is ahead of the latest release tag, print a
+        /// `git log --stat` of the unreleased commits so you can vet what
+        /// `aida dev patch` would ship.
+        #[clap(long)]
+        diff: bool,
     },
 
     /// Relationship management commands
