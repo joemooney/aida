@@ -904,9 +904,14 @@ fn complete_init_scaffolding(
 
     if !verbose {
         println!();
+        // BUG-38: the prior hint pointed at re-running `aida init
+        // --verbose`, but that fails post-init with "already initialized".
+        // Steer the user to `aida scaffold status --verbose` instead — it
+        // works any time and reports what's actually on disk.
+        // trace:BUG-38 | ai:claude
         println!(
             "  {}",
-            "(re-run with --verbose for the full file inventory)".dimmed()
+            "(later: `aida scaffold status --verbose` to see every scaffolded file)".dimmed()
         );
     } else if config_for_output.generate_claude_md {
         println!();
@@ -4736,6 +4741,18 @@ fn handle_docs_with_store(cmd: &DocsCommand, store: &RequirementsStore) -> Resul
                     p.display()
                 );
             }
+            // BUG-41: signpost the README so the user has an entry point
+            // into the projected layers without browsing the directory.
+            // trace:BUG-41 | ai:claude
+            if !*dry_run {
+                let readme = out.join("README.md");
+                if readme.exists() {
+                    println!(
+                        "\n  → Open {} to navigate the layers.",
+                        readme.display().to_string().cyan()
+                    );
+                }
+            }
         }
         DocsCommand::Check { output } => {
             let out = output
@@ -7460,24 +7477,30 @@ fn handle_push_command(
     }
 
     // ---- Store push (orphan branch via aida db sync) ----
+    // BUG-44: only print the "Pushing store..." header when we'll actually
+    // attempt a push. Mirroring the code-push leg above, which prints only
+    // a Note line when there's no origin.
     if !code_only {
-        println!(
-            "{} aida-store → origin",
-            "Pushing store".cyan().bold()
-        );
-        // Reuse the existing sync handler. It commits any pending changes,
-        // then pushes the orphan branch.
         if !git_ops::is_git_repo(store_path) {
             println!("  {} no orphan worktree — skipping store push", "Note:".dimmed());
             return Ok(());
         }
+        let store_has_origin = git_ops::has_remote(store_path, "origin");
+        if store_has_origin {
+            println!("{} aida-store → origin", "Pushing store".cyan().bold());
+        } else {
+            println!("  {} orphan store has no `origin` — skipping store push", "Note:".dimmed());
+        }
+        // Commit any pending orphan-branch changes regardless of origin —
+        // the user's local edits should land in a commit either way so
+        // subsequent operations have a clean tree. trace:BUG-44 | ai:claude
         if git_ops::has_changes(store_path).unwrap_or(false) {
             let msg = message.unwrap_or("chore: sync pending changes");
             let _ = git_ops::add(store_path, &["."]);
             let _ = git_ops::commit(store_path, msg);
             println!("  Committed: {}", msg);
         }
-        if git_ops::has_remote(store_path, "origin") {
+        if store_has_origin {
             let branch = git_ops::current_branch(store_path)
                 .unwrap_or_else(|_| "aida-store".to_string());
             match git_ops::push(store_path, "origin", &branch) {
@@ -7490,8 +7513,6 @@ fn handle_push_command(
                 }
                 Err(e) => anyhow::bail!("store push failed: {}", e),
             }
-        } else {
-            println!("  {} orphan store has no `origin` — skipping", "Note:".dimmed());
         }
     }
 
