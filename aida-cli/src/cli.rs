@@ -1501,6 +1501,14 @@ pub enum Command {
         /// trace:FR-1-070 | ai:claude
         #[clap(long, alias = "verbose", short = 'v')]
         show_origin: bool,
+
+        /// Include META requirements (AI prompt customization seeded by
+        /// `aida init`) in the output. By default META rows are hidden so
+        /// they don't drown out user-authored reqs on small projects;
+        /// pass `--include-meta` to see them, or filter explicitly with
+        /// `--type meta`. trace:BUG-27 | ai:claude
+        #[clap(long)]
+        include_meta: bool,
     },
 
     /// Show details for a specific requirement
@@ -1595,6 +1603,25 @@ pub enum Command {
         /// inside the aida repo
         #[clap(long)]
         no_dev_context: bool,
+    },
+
+    /// Push code AND the AIDA orphan store in one shot. Equivalent to
+    /// running `git push` on the current branch followed by
+    /// `aida db sync --push` — the two operations users routinely
+    /// forget to do together. Skips a leg cleanly when nothing's pending
+    /// (no upstream tracked, no commits ahead, no orphan drift).
+    /// trace:FR-264 | ai:claude
+    Push {
+        /// Skip the code push (only sync the orphan store).
+        #[clap(long, conflicts_with = "store_only")]
+        code_only: bool,
+        /// Skip the orphan-store sync (only `git push`).
+        #[clap(long, conflicts_with = "code_only")]
+        store_only: bool,
+        /// Commit any pending orphan-store changes with this message
+        /// before pushing. Same as `aida db sync --message`.
+        #[clap(long, short = 'm')]
+        message: Option<String>,
     },
 
     /// AIDA-developer-only commands: activate the in-repo dev binary,
@@ -1775,6 +1802,14 @@ pub enum Command {
         /// summary suitable for first-run UX. trace:BUG-19 | ai:claude
         #[clap(long, short = 'v')]
         verbose: bool,
+
+        /// Project name. Stored in the store's metadata and used as the
+        /// title in scaffolded CLAUDE.md / `aida status` output. Defaults
+        /// to the current working directory's basename when omitted, so a
+        /// fresh init in `~/projects/tzconv/` lands `name = "tzconv"`.
+        /// trace:BUG-25 | ai:claude
+        #[clap(long)]
+        name: Option<String>,
     },
 
     /// Scaffolding management commands

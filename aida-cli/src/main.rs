@@ -102,6 +102,7 @@ fn main() -> Result<()> {
         sibling,
         registry_remote,
         verbose,
+        name,
     } = &cli.command
     {
         // Default: distributed (git-canonical) mode per EPIC-1-001.
@@ -109,7 +110,7 @@ fn main() -> Result<()> {
         // the deprecated SQLite-canonical path.
         // trace:EPIC-1-001 | ai:claude
         if *centralized {
-            handle_init_command(*no_skills, agent, *no_hooks, *force, *verbose)?;
+            handle_init_command(*no_skills, agent, *no_hooks, *force, *verbose, name.as_deref())?;
         } else if *sibling {
             handle_init_distributed_sibling(
                 registry_remote.as_deref(),
@@ -118,10 +119,11 @@ fn main() -> Result<()> {
                 agent,
                 *no_hooks,
                 *verbose,
+                name.as_deref(),
             )?;
         } else {
             handle_init_distributed_worktree(
-                *force, *no_skills, agent, *no_hooks, *verbose,
+                *force, *no_skills, agent, *no_hooks, *verbose, name.as_deref(),
             )?;
         }
         return Ok(());
@@ -378,6 +380,12 @@ fn main() -> Result<()> {
         Command::Status { no_dev_context } => {
             handle_status_command(*no_dev_context, None, &storage)?;
         }
+        Command::Push { .. } => {
+            anyhow::bail!(
+                "`aida push` requires a git-canonical store. Run `aida init` (or upgrade from \
+                 the deprecated centralized backend with `aida db export-git`)."
+            );
+        }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
@@ -594,6 +602,7 @@ fn handle_init_command(
     no_hooks: bool,
     force: bool,
     verbose: bool,
+    _name: Option<&str>,
 ) -> Result<()> {
     eprintln!(
         "{}: --centralized initializes a SQLite-canonical store, which is deprecated.",
@@ -1163,13 +1172,16 @@ fn handle_git_backend_command(
         Command::Status { no_dev_context } => {
             return handle_status_command_distributed(*no_dev_context, store_path, &backend);
         }
+        Command::Push { code_only, store_only, message } => {
+            return handle_push_command(store_path, *code_only, *store_only, message.as_deref());
+        }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::Session(_) => unreachable!("session is dispatched before storage init"),
-        Command::List { status, r#type, feature, tags, no_scope, show_origin, .. } => {
+        Command::List { status, r#type, feature, tags, no_scope, show_origin, include_meta, .. } => {
             // Cache-backed list (EPIC-1-001 Phase 2). The CachedGitBackend
             // ensures the cache is fresh before querying, so this is one
             // SQLite query instead of ~360 YAML reads.
@@ -1200,7 +1212,20 @@ fn handle_git_backend_command(
                 tags: effective_tags,
                 ..Default::default()
             };
-            let reqs = backend.list_summaries(&filter)?;
+            let mut reqs = backend.list_summaries(&filter)?;
+
+            // Hide META reqs (AI prompt customization seeded by init) from
+            // the default view — they're plumbing, not user-authored work.
+            // The user can still see them via `--type meta` (which forces
+            // them into the result regardless of this filter) or by
+            // passing `--include-meta`. trace:BUG-27 | ai:claude
+            let user_asked_for_meta = r#type
+                .as_deref()
+                .map(|t| t.eq_ignore_ascii_case("meta"))
+                .unwrap_or(false);
+            if !*include_meta && !user_asked_for_meta {
+                reqs.retain(|r| !r.req_type.eq_ignore_ascii_case("meta"));
+            }
 
             if reqs.is_empty() {
                 println!("No requirements found.");
@@ -1431,18 +1456,20 @@ fn handle_git_backend_command(
             match backend.get_requirement_by_spec_id(id)? {
                 Some(req) => {
                     println!("{}: {}", "ID".bold(), req.display_id());
+                    // Only show Agreed ID / Origin ID when they actually
+                    // differ from the canonical display id — otherwise it's
+                    // three lines of the same string. trace:BUG-29
+                    let canonical = req.display_id();
                     if let Some(ref agreed) = req.agreed_id {
-                        if req.spec_id.as_deref() != Some(agreed.as_str()) {
+                        if agreed.as_str() != canonical {
                             println!("{}: {}", "Agreed ID".bold(), agreed);
                         }
                     }
-                    if req.agreed_id.is_some() {
-                        // trace:FR-1-070 | ai:claude
-                        println!(
-                            "{}: {}",
-                            "Origin ID".bold(),
-                            req.spec_id.as_deref().unwrap_or("-")
-                        );
+                    if let Some(ref origin) = req.spec_id {
+                        if origin.as_str() != canonical {
+                            // trace:FR-1-070 | ai:claude
+                            println!("{}: {}", "Origin ID".bold(), origin);
+                        }
                     }
                     println!("{}: {}", "UUID".bold(), req.id);
                     println!("{}: {}", "Title".bold(), req.title);
@@ -1599,6 +1626,7 @@ fn handle_git_backend_command(
         Command::Comment(CommentCommand::Add {
             id: req_id,
             content,
+            content_positional,
             author,
             ..
         }) => {
@@ -1607,10 +1635,26 @@ fn handle_git_backend_command(
                 .get_requirement_by_spec_id(req_id)?
                 .ok_or_else(|| not_found::requirement_not_found(req_id, Some(store_path)))?;
 
+            // `aida comment add <REQ> "text"` — the text comes through as
+            // `content_positional`. Earlier the git-backend dispatch only
+            // looked at `--content`, so positional invocations silently
+            // wrote empty comments. trace:BUG-28 | ai:claude
+            let body = content
+                .clone()
+                .or_else(|| content_positional.clone())
+                .unwrap_or_default();
+            if body.trim().is_empty() {
+                anyhow::bail!(
+                    "comment body required: pass it positionally `aida comment add {} \"...\"` \
+                     or via `--content`",
+                    req_id
+                );
+            }
+
             let now = chrono::Utc::now();
             let comment = aida_core::Comment {
                 id: Uuid::now_v7(),
-                content: content.clone().unwrap_or_default(),
+                content: body,
                 author: author.clone().unwrap_or_else(|| get_default_author()),
                 created_at: now,
                 modified_at: now,
@@ -2249,6 +2293,7 @@ fn handle_init_distributed_worktree(
     agent: &str,
     no_hooks: bool,
     verbose: bool,
+    name: Option<&str>,
 ) -> Result<()> {
     use aida_core::git_ops;
 
@@ -2344,6 +2389,20 @@ fn handle_init_distributed_worktree(
     // Initialize the git backend
     let backend = aida_core::GitBackend::new(&store_path)?;
     let mut store = aida_core::models::RequirementsStore::new();
+    // Project name: explicit --name wins; otherwise default to the cwd
+    // basename ("/home/joe/projects/tzconv" → "tzconv"). trace:BUG-25
+    let project_name = name
+        .map(|s| s.to_string())
+        .or_else(|| {
+            cwd.file_name()
+                .and_then(|n| n.to_str())
+                .map(|s| s.to_string())
+        })
+        .unwrap_or_default();
+    if !project_name.is_empty() {
+        store.name = project_name.clone();
+        store.title = project_name;
+    }
     seed_meta_requirements(&mut store)?;
     backend.save(&store)?;
     println!(
@@ -2778,6 +2837,7 @@ fn handle_init_distributed_sibling(
     agent: &str,
     no_hooks: bool,
     verbose: bool,
+    name: Option<&str>,
 ) -> Result<()> {
     use aida_core::git_ops;
 
@@ -2860,6 +2920,19 @@ fn handle_init_distributed_sibling(
     // Initialize the git backend (creates objects/ and metadata.yaml)
     let backend = aida_core::GitBackend::new(&store_dir)?;
     let mut store = aida_core::models::RequirementsStore::new();
+    // Project name from --name or cwd basename. trace:BUG-25 | ai:claude
+    let project_name = name
+        .map(|s| s.to_string())
+        .or_else(|| {
+            std::env::current_dir()
+                .ok()
+                .and_then(|p| p.file_name().and_then(|n| n.to_str()).map(str::to_string))
+        })
+        .unwrap_or_default();
+    if !project_name.is_empty() {
+        store.name = project_name.clone();
+        store.title = project_name;
+    }
     seed_meta_requirements(&mut store)?;
     backend.save(&store)?;
     println!(
@@ -7286,6 +7359,96 @@ fn locate_aida_server_binary(cwd: &std::path::Path) -> Result<std::path::PathBuf
 }
 
 // ----------------------------------------------------------------------------
+// `aida push` — push code AND the orphan store in one shot.
+// trace:FR-264 | ai:claude
+// ----------------------------------------------------------------------------
+
+fn handle_push_command(
+    store_path: &std::path::Path,
+    code_only: bool,
+    store_only: bool,
+    message: Option<&str>,
+) -> Result<()> {
+    use aida_core::git_ops;
+
+    let project_root = store_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+    // ---- Code push (current branch on the project repo) ----
+    if !store_only {
+        if !git_ops::has_remote(&project_root, "origin") {
+            println!("  {} no `origin` remote — skipping code push", "Note:".dimmed());
+        } else {
+            let branch = git_ops::current_branch(&project_root)
+                .unwrap_or_else(|_| "HEAD".to_string());
+            println!(
+                "{} {} → origin",
+                "Pushing code".cyan().bold(),
+                branch
+            );
+            let res = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&project_root)
+                .args(["push", "origin", &branch])
+                .status();
+            match res {
+                Ok(s) if s.success() => {
+                    println!("  {}", "code push complete".green());
+                }
+                Ok(s) => {
+                    eprintln!(
+                        "  {} git push exited with status {}",
+                        "Warning:".yellow().bold(),
+                        s
+                    );
+                }
+                Err(e) => anyhow::bail!("git push failed: {}", e),
+            }
+        }
+    }
+
+    // ---- Store push (orphan branch via aida db sync) ----
+    if !code_only {
+        println!(
+            "{} aida-store → origin",
+            "Pushing store".cyan().bold()
+        );
+        // Reuse the existing sync handler. It commits any pending changes,
+        // then pushes the orphan branch.
+        if !git_ops::is_git_repo(store_path) {
+            println!("  {} no orphan worktree — skipping store push", "Note:".dimmed());
+            return Ok(());
+        }
+        if git_ops::has_changes(store_path).unwrap_or(false) {
+            let msg = message.unwrap_or("chore: sync pending changes");
+            let _ = git_ops::add(store_path, &["."]);
+            let _ = git_ops::commit(store_path, msg);
+            println!("  Committed: {}", msg);
+        }
+        if git_ops::has_remote(store_path, "origin") {
+            let branch = git_ops::current_branch(store_path)
+                .unwrap_or_else(|_| "aida-store".to_string());
+            match git_ops::push(store_path, "origin", &branch) {
+                Ok(true) => println!("  {}", "store push complete".green()),
+                Ok(false) => {
+                    eprintln!(
+                        "  {} push rejected — pull/rebase first (`aida db sync --pull`)",
+                        "Warning:".yellow().bold()
+                    );
+                }
+                Err(e) => anyhow::bail!("store push failed: {}", e),
+            }
+        } else {
+            println!("  {} orphan store has no `origin` — skipping", "Note:".dimmed());
+        }
+    }
+
+    Ok(())
+}
+
+// ----------------------------------------------------------------------------
 // `aida status` — comprehensive project overview, with extra sections when
 // the current project is the aida repo itself.
 // trace:EPIC-1-001 | ai:claude
@@ -7369,8 +7532,15 @@ fn handle_status_command_distributed(
         println!();
     }
 
-    // Recent activity — top 5 most recently modified.
-    let mut recent = summaries.clone();
+    // Recent activity — top 5 most recently modified user-authored reqs.
+    // META rows (AI prompt customization seeded by init) are excluded so a
+    // brand-new project doesn't show "Recent activity: META-001..006" as
+    // its entire feed. trace:BUG-30 | ai:claude
+    let mut recent: Vec<_> = summaries
+        .iter()
+        .filter(|r| !r.req_type.eq_ignore_ascii_case("meta"))
+        .cloned()
+        .collect();
     recent.sort_by(|a, b| b.modified_at.cmp(&a.modified_at));
     println!("{}", "─── Recent activity ───".bold());
     for r in recent.iter().take(5) {
@@ -7386,7 +7556,7 @@ fn handle_status_command_distributed(
         );
     }
     if recent.is_empty() {
-        println!("  (no requirements yet)");
+        println!("  (no user requirements yet — try `aida add --type vision --title \"...\"`)");
     }
     println!();
 
