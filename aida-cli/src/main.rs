@@ -6781,10 +6781,16 @@ fn handle_dev_activate(
     println!("    export AIDA_DEV_PREV_PATH=\"$PATH\"");
     println!("fi");
     println!("export PATH='{}':\"$PATH\"", bin_dir.display());
-    println!("if [ -z \"${{AIDA_DEV_PREV_PS1+x}}\" ]; then");
-    println!("    export AIDA_DEV_PREV_PS1=\"$PS1\"");
+    // TASK-19: splice-in semantics for PS1 instead of save/restore. We
+    // record the literal prefix we're prepending in AIDA_DEV_PS1_PREFIX
+    // so deactivate can strip exactly the same string regardless of what
+    // else (e.g., `aida role enter`) has touched PS1 in between.
+    // trace:TASK-19 | ai:claude
+    let ps1_prefix = format!("(aida-{}{}) ", profile, ps1_marker);
+    println!("if [ -n \"${{PS1+x}}\" ]; then");
+    println!("    export AIDA_DEV_PS1_PREFIX='{}'", ps1_prefix);
+    println!("    export PS1=\"$AIDA_DEV_PS1_PREFIX$PS1\"");
     println!("fi");
-    println!("export PS1=\"(aida-{}{}) $PS1\"", profile, ps1_marker);
 
     let pin_note = match cli_request {
         Some(p) => format!(", pinned to {}", p),
@@ -6807,15 +6813,21 @@ fn handle_dev_activate(
 }
 
 fn handle_dev_deactivate() -> Result<()> {
-    println!("# aida dev deactivate — restoring previous PATH and PS1");
+    println!("# aida dev deactivate — restoring PATH and splicing dev prefix out of PS1");
     println!("if [ -n \"${{AIDA_DEV_PREV_PATH+x}}\" ]; then");
     println!("    export PATH=\"$AIDA_DEV_PREV_PATH\"");
     println!("    unset AIDA_DEV_PREV_PATH");
     println!("fi");
-    println!("if [ -n \"${{AIDA_DEV_PREV_PS1+x}}\" ]; then");
-    println!("    export PS1=\"$AIDA_DEV_PREV_PS1\"");
-    println!("    unset AIDA_DEV_PREV_PS1");
+    // TASK-19: splice-out semantics. Strip exactly the prefix we recorded
+    // at activate time so any other PS1 modifiers added in between (role
+    // prefix, virtualenv name, etc.) are preserved on deactivate.
+    // trace:TASK-19 | ai:claude
+    println!("if [ -n \"${{AIDA_DEV_PS1_PREFIX+x}}\" ] && [ -n \"${{PS1+x}}\" ]; then");
+    println!("    PS1=\"${{PS1/$AIDA_DEV_PS1_PREFIX/}}\"");
+    println!("    unset AIDA_DEV_PS1_PREFIX");
     println!("fi");
+    // Clean up the legacy save/restore env var if any prior session set it.
+    println!("unset AIDA_DEV_PREV_PS1");
     println!("unset AIDA_DEV_REPO AIDA_DEV_BIN AIDA_DEV_PROFILE AIDA_DEV_ACTIVE AIDA_DEV_PROFILE_PIN");
     println!("echo '✓ aida dev deactivated'");
     Ok(())
