@@ -1137,7 +1137,7 @@ fn handle_git_backend_command(
             "HIJACK WARNING:".red().bold(),
             marker.node_id,
             marker.new_owner_hostname,
-            marker.hijacked_at.format("%Y-%m-%d %H:%M UTC"),
+            marker.hijacked_at.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M %Z"),
         );
         if let Some(p) = &marker.new_owner_clone_path {
             eprintln!("  New owner clone: {}", p.display());
@@ -3525,6 +3525,7 @@ fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
                 "\n{}:",
                 entry
                     .timestamp
+                    .with_timezone(&chrono::Local)
                     .format("%Y-%m-%d %H:%M:%S")
                     .to_string()
                     .yellow()
@@ -4786,7 +4787,7 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
             for n in &registry.nodes {
                 let marker = if current_id.as_deref() == Some(n.id.as_str()) { "*" } else { " " };
                 let email = n.email.clone().unwrap_or_else(|| "-".into());
-                let when = n.registered.format("%Y-%m-%d %H:%M").to_string();
+                let when = n.registered.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M").to_string();
                 println!(
                     "{:<2}  {:<6}  {:<8}  {:<28}  {:<22}  {}",
                     marker, n.id, n.user_id, truncate(&email, 28), truncate(&n.hostname, 22), when
@@ -4817,7 +4818,7 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
             println!("  User ID:    {}", entry.user_id);
             println!("  Hostname:   {}", entry.hostname);
             println!("  Email:      {}", entry.email.as_deref().unwrap_or("-"));
-            println!("  Registered: {}", entry.registered.format("%Y-%m-%d %H:%M:%S UTC"));
+            println!("  Registered: {}", entry.registered.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M:%S %Z"));
             if node_config_path.exists() {
                 let local = aida_core::NodeConfig::load(&node_config_path)?;
                 if local.node_id == entry.id {
@@ -4871,7 +4872,7 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
                     "This clone already has node id {} (registered {}). \
                      Pass --force to re-acquire (will allocate a new id).",
                     existing.node_id,
-                    existing.registered_at.format("%Y-%m-%d")
+                    existing.registered_at.with_timezone(&chrono::Local).format("%Y-%m-%d")
                 );
             }
 
@@ -7957,17 +7958,23 @@ fn build_git_dirty() -> bool {
     env!("AIDA_BUILD_GIT_DIRTY") == "1"
 }
 
-/// Build time as ISO-8601 UTC, formatted at runtime from the unix-epoch
-/// seconds stamped at compile time.
+/// Build time formatted in the user's local timezone — the banner is
+/// human-facing so we render it where the user reads it, not in UTC.
+/// On-disk fields (oplog, YAML created_at, etc.) stay UTC.
+/// trace:feedback_local_time | ai:claude
 fn build_time_iso() -> String {
     let secs: i64 = env!("AIDA_BUILD_UNIX_TIME").parse().unwrap_or(0);
     chrono::DateTime::<chrono::Utc>::from_timestamp(secs, 0)
-        .map(|t| t.format("%Y-%m-%dT%H:%M:%SZ").to_string())
+        .map(|t| {
+            t.with_timezone(&chrono::Local)
+                .format("%Y-%m-%d %H:%M:%S %Z")
+                .to_string()
+        })
         .unwrap_or_else(|| "(unknown)".to_string())
 }
 
 /// One-line build banner for use in --version and status output:
-///   "0.4.0 (built 2026-05-03T01:23:45Z, sha 866b050[+dirty])"
+///   "0.4.0 (built 2026-05-03 01:23:45 PDT, sha 866b050[+dirty])"
 fn build_banner() -> String {
     format!(
         "{} (built {}, sha {}{})",
@@ -8456,7 +8463,11 @@ fn file_mtime_short(path: &std::path::Path) -> String {
         Err(_) => return "(?)".to_string(),
     };
     chrono::DateTime::<chrono::Utc>::from_timestamp(secs, 0)
-        .map(|t| t.format("%Y-%m-%d").to_string())
+        .map(|t| {
+            t.with_timezone(&chrono::Local)
+                .format("%Y-%m-%d")
+                .to_string()
+        })
         .unwrap_or_else(|| "(?)".to_string())
 }
 
@@ -9457,7 +9468,10 @@ fn print_comment(comment: &Comment, indent: usize) {
     let edited_marker = if comment.modified_at > comment.created_at {
         format!(
             " (edited {})",
-            comment.modified_at.format("%Y-%m-%d %H:%M")
+            comment
+                .modified_at
+                .with_timezone(&chrono::Local)
+                .format("%Y-%m-%d %H:%M")
         )
         .dimmed()
         .to_string()
@@ -9471,6 +9485,7 @@ fn print_comment(comment: &Comment, indent: usize) {
         comment.author.cyan(),
         comment
             .created_at
+            .with_timezone(&chrono::Local)
             .format("%Y-%m-%d %H:%M")
             .to_string()
             .dimmed(),
@@ -10292,7 +10307,7 @@ fn print_trace_link(trace: &TraceLink, indent: &str) {
         println!(
             "{}Created: {} by {}",
             indent,
-            trace.created_at.format("%Y-%m-%d %H:%M"),
+            trace.created_at.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M"),
             created_by
         );
     }
@@ -14404,6 +14419,7 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
                     status_text,
                     state
                         .last_sync
+                        .with_timezone(&chrono::Local)
                         .format("%Y-%m-%d %H:%M")
                         .to_string()
                         .dimmed()
