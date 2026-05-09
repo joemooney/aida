@@ -3,12 +3,12 @@ spec_id: TASK-32
 agreed_id: TASK-32
 title: '[FR-215 verify] child with parent'
 description: ''
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T22:40:46.482687231Z
-modified_at: 2026-05-09T22:40:46.482687231Z
+modified_at: 2026-05-09T22:40:50.645838149Z
 req_type: Task
 relationships:
 - rel_type: Parent
