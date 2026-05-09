@@ -18,10 +18,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T02:08:42.276021392Z
-modified_at: 2026-05-09T02:08:42.276021392Z
+modified_at: 2026-05-09T04:19:45.072288833Z
 req_type: Functional
 tags:
 - cleanup
 - db
 - legacy
 - migration
+comments:
+- id: 019e0af6-7730-77b0-bd5c-78358be11971
+  author: joe
+  content: ''
+  created_at: 2026-05-09T04:19:45.072288833Z
+  modified_at: 2026-05-09T04:19:45.072288833Z
