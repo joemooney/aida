@@ -493,6 +493,15 @@ pub struct ScaffoldConfig {
     pub include_validate_commit_hook: bool,
     /// Include commit tracking hook (PostToolUse)
     pub include_track_commits_hook: bool,
+    /// Include role-context hook (SessionStart) — surfaces `(role:<name>)`
+    /// state to Claude when a session starts. The hook itself is a no-op
+    /// when AIDA_SESSION_ROLE is unset, so it's safe even for users who
+    /// don't run roles. trace:TASK-20 | ai:claude
+    pub include_role_context_hook: bool,
+    /// Include git-guardrails hook (PreToolUse) — blocks risky git commands
+    /// like `push --force` to main without explicit confirmation.
+    /// trace:TASK-27 | ai:claude
+    pub include_git_guardrails_hook: bool,
     /// Custom project type for specialized scaffolding
     pub project_type: ProjectType,
     /// Tech stack hints for context generation
@@ -529,6 +538,8 @@ impl Default for ScaffoldConfig {
             generate_claude_code_hooks: true,
             include_validate_commit_hook: true,
             include_track_commits_hook: true,
+            include_role_context_hook: true,
+            include_git_guardrails_hook: true,
             project_type: ProjectType::Generic,
             tech_stack: Vec::new(),
         }
@@ -1464,6 +1475,58 @@ impl Scaffolder {
                 }
 
                 artifacts.push(artifact);
+            }
+
+            // Role-context hook (SessionStart) — sourced from embedded
+            // template. trace:TASK-27 | ai:claude
+            if self.config.include_role_context_hook {
+                let path = PathBuf::from(".claude/hooks/aida-role-context.sh");
+                let body = self.generate_role_context_hook();
+                if !body.is_empty() {
+                    let artifact = self.create_artifact(
+                        path.clone(),
+                        body,
+                        "Claude Code SessionStart hook surfacing AIDA role context".to_string(),
+                        true, // shell script
+                    );
+                    match &artifact.file_status {
+                        FileStatus::New => new_files.push(path),
+                        FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                            modified_files.push(artifact.path.clone())
+                        }
+                        FileStatus::OlderVersion { .. } => {
+                            upgradeable_files.push(artifact.path.clone())
+                        }
+                        FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+                    }
+                    artifacts.push(artifact);
+                }
+            }
+
+            // Git-guardrails hook (PreToolUse) — sourced from embedded
+            // template. trace:TASK-27 | ai:claude
+            if self.config.include_git_guardrails_hook {
+                let path = PathBuf::from(".claude/hooks/aida-git-guardrails.sh");
+                let body = self.generate_git_guardrails_hook();
+                if !body.is_empty() {
+                    let artifact = self.create_artifact(
+                        path.clone(),
+                        body,
+                        "Claude Code PreToolUse hook blocking risky git commands".to_string(),
+                        true, // shell script
+                    );
+                    match &artifact.file_status {
+                        FileStatus::New => new_files.push(path),
+                        FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                            modified_files.push(artifact.path.clone())
+                        }
+                        FileStatus::OlderVersion { .. } => {
+                            upgradeable_files.push(artifact.path.clone())
+                        }
+                        FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+                    }
+                    artifacts.push(artifact);
+                }
             }
 
             // Generate settings.json with hook configuration

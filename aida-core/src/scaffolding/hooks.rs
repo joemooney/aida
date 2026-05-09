@@ -325,4 +325,28 @@ exit 0
 "#
         .to_string()
     }
+
+    /// Generate the SessionStart role-context hook content. Sourced from
+    /// the embedded template (`templates/hooks/aida-role-context.sh`) so
+    /// the binary, the master template, and the scaffolded copy stay in
+    /// sync — unlike the older hardcoded hooks above which predate the
+    /// embedded-template system. trace:TASK-27 | ai:claude
+    pub(super) fn generate_role_context_hook(&self) -> String {
+        crate::templates::EMBEDDED_TEMPLATES
+            .get("hooks/aida-role-context.sh")
+            .copied()
+            .unwrap_or("")
+            .to_string()
+    }
+
+    /// Generate the PreToolUse git-guardrails hook content. Same model as
+    /// `generate_role_context_hook` — reads from EMBEDDED_TEMPLATES.
+    /// trace:TASK-27 | ai:claude
+    pub(super) fn generate_git_guardrails_hook(&self) -> String {
+        crate::templates::EMBEDDED_TEMPLATES
+            .get("hooks/aida-git-guardrails.sh")
+            .copied()
+            .unwrap_or("")
+            .to_string()
+    }
 }

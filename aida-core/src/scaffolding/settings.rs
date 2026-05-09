@@ -24,21 +24,43 @@ impl Scaffolder {
     pub(super) fn generate_claude_settings_json(&self) -> String {
         let mut hooks = Vec::new();
 
+        // PreToolUse: validate-commit + git-guardrails ride together (both
+        // match Bash). When neither is enabled the block is omitted.
+        // trace:TASK-20 | ai:claude
+        let mut pre_entries: Vec<&str> = Vec::new();
         if self.config.include_validate_commit_hook {
-            hooks.push(
-                r#"    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
+            pre_entries.push(
+                r#"          {
             "type": "command",
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/aida-validate-commit.sh",
             "timeout": 10
-          }
-        ]
-      }
-    ]"#,
+          }"#,
             );
+        }
+        if self.config.include_git_guardrails_hook {
+            pre_entries.push(
+                r#"          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/aida-git-guardrails.sh",
+            "timeout": 5
+          }"#,
+            );
+        }
+        if !pre_entries.is_empty() {
+            let entries = pre_entries.join(",\n");
+            // Owned String — Vec<&str> can't borrow it directly, so we leak
+            // through a Box::leak-free path by collecting into String later.
+            hooks.push(format!(
+                r#"    "PreToolUse": [
+      {{
+        "matcher": "Bash",
+        "hooks": [
+{entries}
+        ]
+      }}
+    ]"#,
+                entries = entries
+            ));
         }
 
         if self.config.include_track_commits_hook {
@@ -54,7 +76,27 @@ impl Scaffolder {
           }
         ]
       }
-    ]"#,
+    ]"#
+                .to_string(),
+            );
+        }
+
+        // SessionStart: role-context hook surfaces (role:<name>) state when
+        // a Claude Code session starts. trace:TASK-20 | ai:claude
+        if self.config.include_role_context_hook {
+            hooks.push(
+                r#"    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/aida-role-context.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]"#
+                .to_string(),
             );
         }
 
@@ -161,5 +203,58 @@ mod tests {
         let cmd = v["statusLine"]["command"].as_str().unwrap();
         assert!(cmd.contains("aida statusline"));
         assert!(cmd.contains("$(pwd)"));
+    }
+
+    /// Default config now emits the SessionStart block pointing at
+    /// aida-role-context.sh. trace:TASK-20 | ai:claude
+    #[test]
+    fn session_start_role_context_hook_present_by_default() {
+        let json = build(ScaffoldConfig::default());
+        let v = parse_json(&json);
+        let entries = v["hooks"]["SessionStart"]
+            .as_array()
+            .expect("SessionStart should be an array");
+        assert!(!entries.is_empty(), "SessionStart should not be empty");
+        let cmd = entries[0]["hooks"][0]["command"]
+            .as_str()
+            .expect("command should be a string");
+        assert!(
+            cmd.ends_with("/aida-role-context.sh"),
+            "expected role-context hook, got {}",
+            cmd
+        );
+        assert_eq!(entries[0]["hooks"][0]["timeout"], 5);
+    }
+
+    /// Disabling the role-context flag drops the SessionStart block
+    /// entirely (no empty array left behind). trace:TASK-20 | ai:claude
+    #[test]
+    fn session_start_omitted_when_role_context_hook_disabled() {
+        let mut config = ScaffoldConfig::default();
+        config.include_role_context_hook = false;
+        let json = build(config);
+        let v = parse_json(&json);
+        assert!(
+            v["hooks"]["SessionStart"].is_null(),
+            "SessionStart should be absent when the flag is off"
+        );
+    }
+
+    /// PreToolUse merges validate-commit + git-guardrails into one
+    /// matcher block. trace:TASK-20 | ai:claude
+    #[test]
+    fn pre_tool_use_combines_validate_and_guardrails() {
+        let json = build(ScaffoldConfig::default());
+        let v = parse_json(&json);
+        let entries = v["hooks"]["PreToolUse"][0]["hooks"]
+            .as_array()
+            .expect("PreToolUse hooks array");
+        assert_eq!(entries.len(), 2);
+        let cmds: Vec<&str> = entries
+            .iter()
+            .map(|e| e["command"].as_str().unwrap())
+            .collect();
+        assert!(cmds.iter().any(|c| c.ends_with("/aida-validate-commit.sh")));
+        assert!(cmds.iter().any(|c| c.ends_with("/aida-git-guardrails.sh")));
     }
 }
