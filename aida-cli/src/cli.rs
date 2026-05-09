@@ -792,6 +792,12 @@ pub enum NodeCommand {
         /// Re-acquire even if `.aida/node.toml` already exists (default: refuse)
         #[clap(long)]
         force: bool,
+
+        /// On collision, accept the suggested numeric-suffix fallback without
+        /// prompting (e.g., `JM` taken → silently use `JM2`). Implies non-
+        /// interactive mode. trace:STORY-42 | ai:claude
+        #[clap(long)]
+        yes: bool,
     },
 
     /// Remove a node entry from the shared registry. Does not invalidate

@@ -4513,7 +4513,7 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
             }
         }
 
-        NodeCommand::Acquire { id: requested_id, hostname: hn_override, email: email_override, force } => {
+        NodeCommand::Acquire { id: requested_id, hostname: hn_override, email: email_override, force, yes } => {
             if node_config_path.exists() && !*force {
                 let existing = aida_core::NodeConfig::load(&node_config_path)?;
                 anyhow::bail!(
@@ -4535,8 +4535,62 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
             // in the node entry is the actual identity carrier.
             let user_id = 1;
 
-            let id_label = match requested_id {
-                Some(n) => format!("requested id={}", n),
+            // STORY-42 collision UX: when the user requested a specific id
+            // (e.g., `--id JM`), probe the registry first. If it's taken,
+            // suggest `JM2` and prompt — or auto-accept under `--yes`.
+            // trace:STORY-42 | ai:claude
+            let effective_id: Option<String> = match requested_id {
+                Some(req) => {
+                    use aida_core::git_ops::{suggest_free_node_id, NodeIdProbe};
+                    match suggest_free_node_id(store_path, req)? {
+                        NodeIdProbe::Free => Some(req.clone()),
+                        NodeIdProbe::Taken { suggested } => {
+                            if *yes {
+                                println!(
+                                    "Node id '{}' is taken — auto-accepting suggested '{}' (--yes).",
+                                    req, suggested
+                                );
+                                Some(suggested)
+                            } else if !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+                                anyhow::bail!(
+                                    "Node id '{}' is taken. Try `aida node acquire --id {}` \
+                                     (or pass --yes to auto-accept the suggestion).",
+                                    req, suggested
+                                );
+                            } else {
+                                use std::io::Write;
+                                println!("Node id '{}' is already taken in this store.", req);
+                                print!("Use suggested '{}' instead? [Y/n/<other-id>] ", suggested);
+                                std::io::stdout().flush()?;
+                                let mut answer = String::new();
+                                std::io::stdin().read_line(&mut answer)?;
+                                let answer = answer.trim();
+                                let chosen = if answer.is_empty()
+                                    || answer.eq_ignore_ascii_case("y")
+                                    || answer.eq_ignore_ascii_case("yes")
+                                {
+                                    suggested
+                                } else if answer.eq_ignore_ascii_case("n")
+                                    || answer.eq_ignore_ascii_case("no")
+                                {
+                                    println!("Aborted.");
+                                    return Ok(());
+                                } else {
+                                    answer.to_string()
+                                };
+                                if let Err(msg) = aida_core::node::validate_node_id(&chosen) {
+                                    anyhow::bail!("Invalid node id: {}", msg);
+                                }
+                                Some(chosen)
+                            }
+                        }
+                    }
+                }
+                None => None,
+            };
+
+            let id_label = match &effective_id {
+                Some(n) => format!("id={}", n),
                 None => "next available id".to_string(),
             };
             println!(
@@ -4549,7 +4603,7 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
 
             let new_id = aida_core::git_ops::register_node_full(
                 store_path,
-                requested_id.clone(),
+                effective_id,
                 user_id,
                 &hn,
                 email.clone(),
