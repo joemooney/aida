@@ -4691,6 +4691,131 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
                 }
             }
         }
+        // FR-281: cross-check nodes.toml against blocks.yaml.
+        // trace:FR-281 | ai:claude
+        BlockCommand::Verify => {
+            use aida_core::NodeRegistry;
+            let nodes_path = store_path.join("registry").join("nodes.toml");
+            let blocks_registry = BlockRegistry::load(&blocks_path).unwrap_or_default();
+            let nodes_registry = NodeRegistry::load(&nodes_path).unwrap_or_default();
+
+            let block_owners: std::collections::HashSet<String> = blocks_registry
+                .blocks
+                .iter()
+                .map(|b| b.node_id.clone())
+                .collect();
+            let registered: std::collections::HashSet<String> = nodes_registry
+                .nodes
+                .iter()
+                .map(|n| n.id.clone())
+                .collect();
+
+            let blocks_without_node: Vec<&str> = block_owners
+                .iter()
+                .filter(|id| !registered.contains(*id))
+                .map(|s| s.as_str())
+                .collect();
+            let nodes_without_block: Vec<&str> = registered
+                .iter()
+                .filter(|id| !block_owners.contains(*id))
+                .map(|s| s.as_str())
+                .collect();
+
+            // Whether to flag nodes_without_block as a problem depends on
+            // policy. Under blocks-only it's a hard error; under blocks-
+            // then-fallback it's just informational.
+            let project_dir = std::env::current_dir().unwrap_or_default();
+            let policy = read_id_format_policy(&project_dir);
+            let nodes_without_block_is_error = policy.requires_block();
+
+            let mut had_error = false;
+            println!("{}", "Block registry consistency check".bold());
+            println!("  policy: {}", policy.as_str());
+            println!("  registered nodes: {}", registered.len());
+            println!("  block-owning nodes: {}", block_owners.len());
+            println!();
+
+            if blocks_without_node.is_empty() && nodes_without_block.is_empty() {
+                println!("{} consistent — every block has a registered node, every node has a block.", "✓".green().bold());
+                return Ok(());
+            }
+
+            if !blocks_without_node.is_empty() {
+                had_error = true;
+                println!(
+                    "{} {} block-owning node{} not in registry/nodes.toml:",
+                    "✗".red().bold(),
+                    blocks_without_node.len(),
+                    if blocks_without_node.len() == 1 { "" } else { "s" }
+                );
+                let mut sorted = blocks_without_node.clone();
+                sorted.sort();
+                for id in &sorted {
+                    let blocks_for_id: Vec<String> = blocks_registry
+                        .blocks
+                        .iter()
+                        .filter(|b| &b.node_id.as_str() == id)
+                        .map(|b| {
+                            format!(
+                                "{}-{}..{}",
+                                b.type_prefix, b.range_start, b.range_end
+                            )
+                        })
+                        .collect();
+                    println!(
+                        "    - node `{}` owns {} block(s): {}",
+                        id,
+                        blocks_for_id.len(),
+                        blocks_for_id.join(", ")
+                    );
+                }
+                println!(
+                    "  {} run `aida node acquire --id {}` from that clone, OR \
+                     `aida node release {}` to free the orphaned blocks.",
+                    "Fix:".yellow().bold(),
+                    sorted[0],
+                    sorted[0]
+                );
+                println!();
+            }
+
+            if !nodes_without_block.is_empty() {
+                if nodes_without_block_is_error {
+                    had_error = true;
+                    println!(
+                        "{} {} registered node{} with no claimed block (blocks-only policy):",
+                        "✗".red().bold(),
+                        nodes_without_block.len(),
+                        if nodes_without_block.len() == 1 { "" } else { "s" }
+                    );
+                } else {
+                    println!(
+                        "{} {} registered node{} with no claimed block (allowed under `{}`):",
+                        "·".dimmed(),
+                        nodes_without_block.len(),
+                        if nodes_without_block.len() == 1 { "" } else { "s" },
+                        policy.as_str()
+                    );
+                }
+                let mut sorted = nodes_without_block.clone();
+                sorted.sort();
+                for id in &sorted {
+                    println!("    - node `{}`", id);
+                }
+                if nodes_without_block_is_error {
+                    println!(
+                        "  {} run `aida db block claim --type FR --size 100` from each \
+                         affected clone (per type) to allocate.",
+                        "Fix:".yellow().bold()
+                    );
+                }
+                println!();
+            }
+
+            if had_error {
+                std::process::exit(1);
+            }
+        }
     }
 
     Ok(())
