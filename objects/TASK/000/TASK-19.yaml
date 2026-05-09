@@ -17,12 +17,12 @@ description: |-
   Affected: aida-cli/src/main.rs ~4163 (activate) and ~4181 (deactivate). Drop AIDA_DEV_PREV_PS1 entirely.
 
   Cosmetic-only — typical workflow (dev activate once at session start, role enter/end many times, dev deactivate at session end) is unaffected. Low priority.
-status: Draft
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-04T18:23:38.724369632Z
-modified_at: 2026-05-04T18:23:38.724369632Z
+modified_at: 2026-05-09T22:44:14.683722195Z
 req_type: Task
 tags:
 - composition
