@@ -1,0 +1,41 @@
+id: 019e0e28-9116-7673-9215-fa195ae3391b
+spec_id: STORY-43
+agreed_id: STORY-43
+title: 'Story 4: aida node acquire --hijack <id> with mark-in-place when reachable'
+description: |
+  Explicit `--hijack <id>` flag transfers ownership of a registered node id from its current owner to this clone. Used when:
+  - The other clone has been abandoned or deleted
+  - You realize you want the readable id ("JM") that an experimental clone took
+
+  ## Mechanics
+
+  1. Pull latest registry. Confirm the id IS taken (else just `--id` works).
+  2. Show the existing entry to the user: hostname, email, registered timestamp, clone_path (if recorded).
+  3. Prompt for confirmation unless --yes.
+  4. **Mark the old clone as hijacked when reachable:**
+     - The registry's `clone_path` field (new, added by Story 2a) records the absolute path of the old clone's `.aida-store/` parent at register time
+     - If `clone_path` is set AND the directory exists AND is owned by the current user → write `.aida-store/.aida/HIJACKED.toml` in that clone with `{at, by_hostname, by_email}` so the next aida command in the old clone surfaces a clear "this clone has been hijacked, run `aida node acquire --reclaim` to undo or `--accept-hijack` to acknowledge" error
+     - If clone_path is unset, missing, or not user-owned → fall through to re-attribute (the abandoned-clone case)
+  5. Rewrite nodes.toml entry with new hostname/email/timestamp; CAS push.
+  6. Re-attribute blocks owned by the hijacked id to the new clone (rewrite blocks.yaml node_id field).
+  7. Write the new local node.toml with the hijacked id.
+
+  ## Companion: dispense-time identity check
+
+  Every aida operation that touches the orphan store must verify its node.toml's id matches what nodes.toml says is the owner of that id. Mismatch = bail with a clear "you've been hijacked" message. Cheap (one toml read + one yaml read).
+
+  ## Out of scope for this story
+
+  - `aida node acquire --reclaim` to reverse a hijack — file as follow-up
+  - Cross-host hijack notification (we never claim to detect that)
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-09T19:13:20.150137092Z
+modified_at: 2026-05-09T19:13:20.150137092Z
+req_type: Story
+tags:
+- hijack
+- node-ids
+- recovery
