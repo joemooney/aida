@@ -3,10 +3,10 @@ spec_id: BUG-24
 agreed_id: BUG-24
 title: 'commit-msg validator: REQ_ID_PATTERN rejects multi-id parens like (TASK-20, TASK-27)'
 description: REQ_ID_PATTERN matches a single REQ-ID at end of line. When a commit references multiple reqs in a single parens group (`(TASK-20, TASK-27)`), the validator falsely warns 'feat/fix commits should include requirement ID'. Should accept comma-separated IDs in one parens group.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T20:19:16.597688157Z
-modified_at: 2026-05-09T20:19:16.597688157Z
+modified_at: 2026-05-09T20:19:41.694449820Z
 req_type: Bug
