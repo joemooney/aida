@@ -79,3 +79,11 @@ blocks:
   range_end: 100
   next: 1
   allocated_at: 2026-05-09T18:09:58.248053828Z
+- node_id: 1
+  owner: joe
+  hostname: imac
+  type_prefix: ADR
+  range_start: 1
+  range_end: 100
+  next: 1
+  allocated_at: 2026-05-09T18:10:00.750673053Z
