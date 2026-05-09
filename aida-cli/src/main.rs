@@ -125,8 +125,8 @@ fn main() -> Result<()> {
 
     // Handle upgrade before storage resolution — it needs no DB.
     // trace:EPIC-1-001 | ai:claude
-    if let Command::Upgrade { check, version, yes, target } = &cli.command {
-        return handle_upgrade_command(*check, version.as_deref(), *yes, target.as_deref());
+    if let Command::Upgrade { check, version, yes, target, diff } = &cli.command {
+        return handle_upgrade_command(*check, version.as_deref(), *yes, target.as_deref(), *diff);
     }
 
     // Handle dev commands before storage resolution — most need no DB.
@@ -6145,7 +6145,7 @@ fn handle_dev_release(bump: &str) -> Result<()> {
         format!("─── Step 4/5: upgrading sibling installs to {} ───", new_tag).bold()
     );
     let bare_version = strip_v(&new_tag).to_string();
-    upgrade_dev_mode_sibling_scan(false, Some(&bare_version), true)?;
+    upgrade_dev_mode_sibling_scan(false, Some(&bare_version), true, false)?;
 
     // ── Step 5/5: sync store (push) ───────────────────────────────────────
     if let Some(ref sp) = store_path {
@@ -6861,6 +6861,7 @@ fn handle_upgrade_command(
     version: Option<&str>,
     yes: bool,
     target: Option<&str>,
+    diff: bool,
 ) -> Result<()> {
     // --target path: upgrade a specific binary, regardless of what's running.
     if let Some(target) = target {
@@ -6872,7 +6873,7 @@ fn handle_upgrade_command(
     // Developer build: don't try to upgrade ourselves; instead scan for
     // sibling installs and offer to upgrade them.
     if let InstallMethod::DeveloperBuild(_) = &install {
-        return upgrade_dev_mode_sibling_scan(check, version, yes);
+        return upgrade_dev_mode_sibling_scan(check, version, yes, diff);
     }
 
     upgrade_running_binary(install, check, version, yes)
@@ -6990,7 +6991,12 @@ fn upgrade_specific_binary(
 
 /// From a developer build, scan known install locations and report on
 /// sibling aida installs, offering to upgrade any that are stale.
-fn upgrade_dev_mode_sibling_scan(check: bool, version: Option<&str>, yes: bool) -> Result<()> {
+fn upgrade_dev_mode_sibling_scan(
+    check: bool,
+    version: Option<&str>,
+    yes: bool,
+    diff: bool,
+) -> Result<()> {
     let exe = std::env::current_exe()?;
     println!("Current version: {}", build_banner());
     println!(
@@ -7054,7 +7060,7 @@ fn upgrade_dev_mode_sibling_scan(check: bool, version: Option<&str>, yes: bool) 
     if check {
         if stale.is_empty() {
             println!("{}: all sibling installs are at {}.", "OK".green(), target_tag);
-            print_unreleased_dev_hint(&exe, &target_tag);
+            print_unreleased_dev_hint(&exe, &target_tag, diff);
         } else {
             println!(
                 "{}: {} sibling install(s) are stale. Re-run without --check to upgrade.",
@@ -7067,7 +7073,7 @@ fn upgrade_dev_mode_sibling_scan(check: bool, version: Option<&str>, yes: bool) 
 
     if stale.is_empty() {
         println!("{}: nothing to do — all sibling installs are at {}.", "OK".green(), target_tag);
-        print_unreleased_dev_hint(&exe, &target_tag);
+        print_unreleased_dev_hint(&exe, &target_tag, diff);
         return Ok(());
     }
 
@@ -7193,8 +7199,10 @@ fn find_aida_repo_above(start: &std::path::Path) -> Option<std::path::PathBuf> {
 /// installs already at the latest released tag, surface the fact that the
 /// dev build itself is ahead of that tag — otherwise the user might think
 /// "everything's up to date" when really there are unreleased commits
-/// sitting in their repo. Pure hint; doesn't trigger any action.
-fn print_unreleased_dev_hint(exe: &std::path::Path, target_tag: &str) {
+/// sitting in their repo. Pure hint; doesn't trigger any action. When
+/// `with_diff` is true, also prints `git log --stat <tag>..HEAD` so the
+/// user can vet what `aida dev patch` would ship.
+fn print_unreleased_dev_hint(exe: &std::path::Path, target_tag: &str, with_diff: bool) {
     let repo = match find_aida_repo_above(exe) {
         Some(r) => r,
         None => return,
@@ -7220,6 +7228,40 @@ fn print_unreleased_dev_hint(exe: &std::path::Path, target_tag: &str) {
         if ahead == 1 { "" } else { "s" },
         latest
     );
+
+    if with_diff {
+        println!();
+        println!("{}", format!("Unreleased commits ({}..HEAD):", latest).bold());
+        println!("{}", "─".repeat(72));
+        let log = std::process::Command::new("git")
+            .args([
+                "log",
+                "--stat",
+                "--no-decorate",
+                "--pretty=format:%C(yellow)%h%Creset %s%n  %C(dim)%an, %ar%Creset",
+                &format!("{}..HEAD", latest),
+            ])
+            .current_dir(&repo)
+            .output();
+        match log {
+            Ok(out) if out.status.success() => {
+                print!("{}", String::from_utf8_lossy(&out.stdout));
+                if !out.stdout.ends_with(b"\n") {
+                    println!();
+                }
+            }
+            _ => {
+                println!("  (could not read git log)");
+            }
+        }
+        println!();
+    } else {
+        println!(
+            "      Pass {} to see the unreleased commits before shipping.",
+            "--diff".cyan()
+        );
+    }
+
     println!("      To ship those changes AND refresh your sibling installs in one shot:");
     println!("        {}", "aida dev patch".cyan());
     println!(
