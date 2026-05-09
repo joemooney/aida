@@ -637,37 +637,15 @@ pub enum CacheCommand {
 
 #[derive(Subcommand, Debug)]
 pub enum DbCommand {
-    /// Register a project in the registry
-    Register {
-        /// Name of the project
-        #[clap(long)]
-        name: Option<String>,
+    /// Print the path to the active store (the orphan-branch worktree, in
+    /// distributed mode). The legacy `--name` registry lookup was dropped
+    /// in Phase 1 of the kernel/module audit. trace:FR-1-076 | ai:claude
+    Path,
 
-        /// Path to the requirements file
-        #[clap(long)]
-        path: Option<PathBuf>,
-
-        /// Description of the project
-        #[clap(long)]
-        description: Option<String>,
-
-        /// Set this project as the default
-        #[clap(long)]
-        default: bool,
-
-        /// Use interactive mode (prompts)
-        #[clap(long)]
-        interactive: bool,
-    },
-
-    /// Print the path to the database YAML file
-    Path {
-        /// The name of the database to lookup
-        #[clap(long)]
-        name: Option<String>,
-    },
-
-    /// Migrate database between formats (YAML <-> SQLite <-> PostgreSQL)
+    /// (archived) Migrate between legacy YAML/SQLite/PostgreSQL backends.
+    /// Pre-EPIC-1-001 — kept for one-shot migrations off the legacy path.
+    /// trace:FR-1-076 | ai:claude
+    #[clap(hide = true)]
     Migrate {
         /// Source format: "yaml", "sqlite", or "postgres"
         #[clap(long)]
@@ -704,7 +682,9 @@ pub enum DbCommand {
         message: Option<String>,
     },
 
-    /// Export current database to a git-backed store directory
+    /// (archived) Export legacy DB to a git-backed store directory.
+    /// trace:FR-1-076 | ai:claude
+    #[clap(hide = true)]
     ExportGit {
         /// Output directory for the git-backed store
         #[clap(long, short = 'o')]

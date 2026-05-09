@@ -1,7 +1,6 @@
 use anyhow::Result;
 use inquire::{Confirm, Select, Text};
 use std::env;
-use std::path::PathBuf;
 
 use aida_core::{Requirement, RequirementPriority, RequirementStatus, RequirementType};
 
@@ -99,24 +98,6 @@ pub fn prompt_new_requirement(store: &mut aida_core::RequirementsStore) -> Resul
     Ok(req)
 }
 
-
-/// Prompts the user for project registration details
-pub fn prompt_register_project() -> Result<(String, PathBuf, String, bool)> {
-    // Get project name
-    let name = Text::new("Project name:").prompt()?;
-
-    // Get project path
-    let path_input = Text::new("Path to requirements file:").prompt()?;
-    let path = PathBuf::from(path_input);
-
-    // Get project description
-    let description = Text::new("Project description:").prompt()?;
-
-    // Ask if this should be the default project
-    let default = Confirm::new("Set as default project?").prompt()?;
-
-    Ok((name, path, description, default))
-}
 
 /// Prompts the user for a new feature
 pub fn prompt_new_feature(store: &mut aida_core::RequirementsStore) -> Result<String> {
