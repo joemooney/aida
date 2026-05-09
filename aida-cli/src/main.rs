@@ -2637,8 +2637,11 @@ fn handle_init_post_clone(
         Some(pref) => match git_ops::suggest_free_node_id(&store_path, pref) {
             Ok(git_ops::NodeIdProbe::Free) => Some(pref.to_string()),
             Ok(git_ops::NodeIdProbe::Taken { suggested }) => {
+                // Leading newline because this often fires immediately after
+                // the user types `y` to the "Acquire? [Y/n] " prompt — without
+                // it the Note butts up against the prompt's trailing space.
                 println!(
-                    "  {} preferred node id '{}' is taken — using '{}' instead",
+                    "\n  {} preferred node id '{}' is taken — using '{}' instead",
                     "Note:".dimmed(),
                     pref,
                     suggested
