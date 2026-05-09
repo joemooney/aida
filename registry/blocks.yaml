@@ -77,7 +77,7 @@ blocks:
   type_prefix: CON
   range_start: 1
   range_end: 100
-  next: 1
+  next: 2
   allocated_at: 2026-05-09T18:09:58.248053828Z
 - node_id: 1
   owner: joe

@@ -1,0 +1,12 @@
+id: 019e0dee-c4c4-7252-9708-1ddc74a6be46
+spec_id: CON-1
+agreed_id: CON-1
+title: Self-hostable; no required SaaS dependency
+description: ''
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-09T18:10:12.292863475Z
+modified_at: 2026-05-09T18:10:12.292863475Z
+req_type: Constraint
