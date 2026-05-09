@@ -5445,7 +5445,9 @@ fn print_help_all() {
 
 fn handle_dev_command(cmd: &DevCommand) -> Result<()> {
     match cmd {
-        DevCommand::Activate { repo } => handle_dev_activate(repo.as_deref()),
+        DevCommand::Activate { repo, profile, debug, release, auto } => {
+            handle_dev_activate(repo.as_deref(), profile.as_deref(), *debug, *release, *auto)
+        }
         DevCommand::Deactivate => handle_dev_deactivate(),
         DevCommand::Status => handle_dev_status(),
         DevCommand::ShellInit { install } => handle_dev_shell_init(*install),
@@ -5529,14 +5531,44 @@ fn resolve_aida_repo(repo_arg: Option<&str>) -> Result<std::path::PathBuf> {
     Ok(canonical)
 }
 
-/// Pick the freshest aida binary in the repo's target/. Prefers
-/// `target/release/aida` when its mtime is newer than `target/debug/aida`,
-/// else falls back to whichever exists. Errors when neither exists.
-fn pick_dev_binary_dir(repo: &std::path::Path) -> Result<(std::path::PathBuf, &'static str)> {
+/// Pick the build directory + profile name for activation, honoring an
+/// explicit profile request (debug / release) when given, else falling
+/// back to whichever of `target/release/aida` vs `target/debug/aida` has
+/// the more recent mtime. Errors when the requested profile isn't built,
+/// or when neither exists at all.
+fn pick_dev_binary_dir(
+    repo: &std::path::Path,
+    requested: Option<&str>,
+) -> Result<(std::path::PathBuf, &'static str)> {
     let release = repo.join("target/release/aida");
     let debug = repo.join("target/debug/aida");
     let release_mtime = std::fs::metadata(&release).and_then(|m| m.modified()).ok();
     let debug_mtime = std::fs::metadata(&debug).and_then(|m| m.modified()).ok();
+
+    if let Some(req) = requested {
+        return match req {
+            "debug" => {
+                if debug_mtime.is_none() {
+                    anyhow::bail!(
+                        "No debug build at {}.\nRun `cargo build` (debug) first.",
+                        debug.display()
+                    );
+                }
+                Ok((repo.join("target/debug"), "debug"))
+            }
+            "release" => {
+                if release_mtime.is_none() {
+                    anyhow::bail!(
+                        "No release build at {}.\nRun `cargo build --release` first.",
+                        release.display()
+                    );
+                }
+                Ok((repo.join("target/release"), "release"))
+            }
+            other => anyhow::bail!("unknown profile '{}': expected debug or release", other),
+        };
+    }
+
     match (release_mtime, debug_mtime) {
         (Some(rm), Some(dm)) => {
             if rm >= dm {
@@ -5556,17 +5588,79 @@ fn pick_dev_binary_dir(repo: &std::path::Path) -> Result<(std::path::PathBuf, &'
     }
 }
 
-fn handle_dev_activate(repo_arg: Option<&str>) -> Result<()> {
+/// True when the inactive-side build at `<repo>/target/<other>/aida` is
+/// newer than the active-side build at `<repo>/target/<active>/aida`.
+/// Used for the stale-build warning + PS1 marker.
+/// trace:FR-1-070 | ai:claude
+fn alternate_build_is_newer(repo: &std::path::Path, active: &str) -> bool {
+    let other = if active == "debug" { "release" } else { "debug" };
+    let active_mtime = std::fs::metadata(repo.join(format!("target/{}/aida", active)))
+        .and_then(|m| m.modified())
+        .ok();
+    let other_mtime = std::fs::metadata(repo.join(format!("target/{}/aida", other)))
+        .and_then(|m| m.modified())
+        .ok();
+    matches!((active_mtime, other_mtime), (Some(a), Some(o)) if o > a)
+}
+
+fn handle_dev_activate(
+    repo_arg: Option<&str>,
+    profile_pos: Option<&str>,
+    debug_flag: bool,
+    release_flag: bool,
+    auto_flag: bool,
+) -> Result<()> {
     let repo = resolve_aida_repo(repo_arg)?;
-    let (bin_dir, profile) = pick_dev_binary_dir(&repo)?;
+
+    // Resolve the explicit-profile request from any of: positional `profile`,
+    // --debug / --release / --auto flags, or an existing AIDA_DEV_PROFILE_PIN.
+    // Precedence: explicit CLI request beats the env-var pin; --auto clears.
+    // trace:FR-1-070 | ai:claude
+    let cli_request: Option<&str> = match (profile_pos, debug_flag, release_flag, auto_flag) {
+        (Some("debug"), _, _, _) => Some("debug"),
+        (Some("release"), _, _, _) => Some("release"),
+        (Some("auto"), _, _, _) => None, // positional 'auto' also clears
+        (_, true, _, _) => Some("debug"),
+        (_, _, true, _) => Some("release"),
+        _ => None,
+    };
+    let clear_pin = auto_flag || profile_pos == Some("auto");
+    let env_pin = std::env::var("AIDA_DEV_PROFILE_PIN").ok();
+    let effective_request: Option<&str> = if clear_pin {
+        None
+    } else if cli_request.is_some() {
+        cli_request
+    } else {
+        env_pin.as_deref().filter(|s| !s.is_empty())
+    };
+
+    let (bin_dir, profile) = pick_dev_binary_dir(&repo, effective_request)?;
+    let stale = alternate_build_is_newer(&repo, profile);
+    let ps1_marker = if stale { "*" } else { "" };
 
     // Quote-safety: paths shouldn't contain double-quotes in practice;
     // single-quote everything we emit so shell evaluation is safe.
-    println!("# aida dev activate — using {} build at {}", profile, bin_dir.display());
+    println!(
+        "# aida dev activate — using {} build at {}{}",
+        profile,
+        bin_dir.display(),
+        if stale { "  (alternate build is newer)" } else { "" }
+    );
     println!("export AIDA_DEV_REPO='{}'", repo.display());
     println!("export AIDA_DEV_BIN='{}'", bin_dir.display());
     println!("export AIDA_DEV_PROFILE='{}'", profile);
     println!("export AIDA_DEV_ACTIVE=1");
+
+    // Persist the pin across re-activations. Three cases:
+    //   - explicit CLI request → set the pin to that profile
+    //   - --auto / 'auto' positional → clear the pin
+    //   - neither → leave the existing pin alone (sticky)
+    if let Some(pin) = cli_request {
+        println!("export AIDA_DEV_PROFILE_PIN='{}'", pin);
+    } else if clear_pin {
+        println!("unset AIDA_DEV_PROFILE_PIN");
+    }
+
     println!("if [ -z \"${{AIDA_DEV_PREV_PATH+x}}\" ]; then");
     println!("    export AIDA_DEV_PREV_PATH=\"$PATH\"");
     println!("fi");
@@ -5574,11 +5668,24 @@ fn handle_dev_activate(repo_arg: Option<&str>) -> Result<()> {
     println!("if [ -z \"${{AIDA_DEV_PREV_PS1+x}}\" ]; then");
     println!("    export AIDA_DEV_PREV_PS1=\"$PS1\"");
     println!("fi");
-    println!("export PS1=\"(aida-{}) $PS1\"", profile);
+    println!("export PS1=\"(aida-{}{}) $PS1\"", profile, ps1_marker);
+
+    let pin_note = match cli_request {
+        Some(p) => format!(", pinned to {}", p),
+        None if clear_pin => ", pin cleared".to_string(),
+        None => String::new(),
+    };
+    let stale_note = if stale {
+        " ⚠ alternate build is newer — run `aida dev status` for details"
+    } else {
+        ""
+    };
     println!(
-        "echo '✓ aida dev activated ({} build at {})'",
+        "echo '✓ aida dev activated ({} build at {}{}){}'",
         profile,
-        bin_dir.display()
+        bin_dir.display(),
+        pin_note,
+        stale_note
     );
     Ok(())
 }
@@ -5593,7 +5700,7 @@ fn handle_dev_deactivate() -> Result<()> {
     println!("    export PS1=\"$AIDA_DEV_PREV_PS1\"");
     println!("    unset AIDA_DEV_PREV_PS1");
     println!("fi");
-    println!("unset AIDA_DEV_REPO AIDA_DEV_BIN AIDA_DEV_PROFILE AIDA_DEV_ACTIVE");
+    println!("unset AIDA_DEV_REPO AIDA_DEV_BIN AIDA_DEV_PROFILE AIDA_DEV_ACTIVE AIDA_DEV_PROFILE_PIN");
     println!("echo '✓ aida dev deactivated'");
     Ok(())
 }
@@ -5630,6 +5737,61 @@ fn handle_dev_status() -> Result<()> {
         }
         if let Ok(p) = std::env::var("AIDA_DEV_PROFILE") {
             println!("Build profile: {}", p);
+        }
+        match std::env::var("AIDA_DEV_PROFILE_PIN") {
+            Ok(pin) if !pin.is_empty() => {
+                println!("Pin:          {} (sticky across re-activations)", pin);
+            }
+            _ => {
+                println!(
+                    "Pin:          {} (freshest of debug/release wins on `aida dev activate`)",
+                    "auto".dimmed()
+                );
+            }
+        }
+    }
+
+    // Stale-build warning: when we know the active repo + profile, compare
+    // the inactive-side build's mtime. If newer, surface — re-running
+    // `aida dev activate` would silently flip you to the alternate.
+    // trace:FR-1-070 | ai:claude
+    if active {
+        let repo = std::env::var("AIDA_DEV_REPO").ok();
+        let profile = std::env::var("AIDA_DEV_PROFILE").ok();
+        if let (Some(repo), Some(profile)) = (repo, profile) {
+            let repo_path = std::path::PathBuf::from(&repo);
+            if alternate_build_is_newer(&repo_path, &profile) {
+                let other = if profile == "debug" { "release" } else { "debug" };
+                println!();
+                println!(
+                    "{}: the {} build is newer than the active {} build.",
+                    "WARN".yellow().bold(),
+                    other.bold(),
+                    profile.bold()
+                );
+                let pinned = std::env::var("AIDA_DEV_PROFILE_PIN")
+                    .map(|p| !p.is_empty())
+                    .unwrap_or(false);
+                if pinned {
+                    println!(
+                        "      Pin keeps you on {}. Run `aida dev activate --auto` to clear",
+                        profile
+                    );
+                    println!(
+                        "      and pick the freshest, or `aida dev activate {}` to switch.",
+                        other
+                    );
+                } else {
+                    println!(
+                        "      Re-run `aida dev activate` to flip to {}, or pin with",
+                        other
+                    );
+                    println!(
+                        "      `aida dev activate {}` to keep working on {}.",
+                        profile, profile
+                    );
+                }
+            }
         }
     }
 

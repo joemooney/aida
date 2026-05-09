@@ -540,14 +540,36 @@ pub enum RoleScopeCommand {
 #[derive(Subcommand, Debug)]
 pub enum DevCommand {
     /// Emit shell code that prepends the in-repo build dir to PATH.
-    /// Use as: `eval "$(aida dev activate)"`. The `target/release` build
-    /// is preferred over `target/debug`; whichever has been built more
-    /// recently wins.
+    /// Use as: `eval "$(aida dev activate)"`. By default the freshest of
+    /// `target/release/aida` vs `target/debug/aida` wins — pass `debug` /
+    /// `release` (or `--debug` / `--release`) to PIN to a specific profile
+    /// across subsequent re-activations. `--auto` clears the pin and
+    /// returns to freshest-wins.
     Activate {
         /// Override the AIDA repo path (defaults to current directory if it
         /// looks like the aida repo, or $AIDA_DEV_REPO if set).
         #[clap(long)]
         repo: Option<String>,
+
+        /// Profile shortcut: `debug` or `release` (positional). Equivalent
+        /// to `--debug` or `--release`. Pins for subsequent re-activations.
+        #[clap(value_parser = ["debug", "release", "auto"])]
+        profile: Option<String>,
+
+        /// Pin to the debug build (target/debug). Sticky — subsequent plain
+        /// `aida dev activate` invocations honor the pin until you pass
+        /// --auto or --release. trace:FR-1-070 | ai:claude
+        #[clap(long, conflicts_with_all = ["release", "auto"])]
+        debug: bool,
+
+        /// Pin to the release build (target/release). Sticky.
+        /// trace:FR-1-070 | ai:claude
+        #[clap(long, conflicts_with_all = ["debug", "auto"])]
+        release: bool,
+
+        /// Clear any sticky profile pin and return to freshest-wins.
+        #[clap(long, conflicts_with_all = ["debug", "release"])]
+        auto: bool,
     },
 
     /// Emit shell code that undoes a previous `aida dev activate`.
