@@ -1,0 +1,12 @@
+id: 019e0ec3-af80-7d02-a507-f3d4bce0c3ad
+spec_id: BUG-44
+agreed_id: BUG-44
+title: aida push prints 'Pushing store...' header even when there's no origin to push to
+description: The store-push leg prints `Pushing store aida-store → origin` *then* the 'no origin — skipping' Note. The header implies action; it should be suppressed when no origin exists (matching the code-push leg, which prints only the Note). Minor asymmetry, low priority.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-09T22:02:46.016333419Z
+modified_at: 2026-05-09T22:02:46.016333419Z
+req_type: Bug
