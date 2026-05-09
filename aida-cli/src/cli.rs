@@ -635,6 +635,31 @@ pub enum CacheCommand {
     Status,
 }
 
+/// Project the graph into a layered docs tree.
+/// trace:FR-1-077 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum DocsCommand {
+    /// Render (or re-render) the docs tree under `<output>/aida/`.
+    /// Default output is `docs/aida/`.
+    Build {
+        /// Output directory (default: `docs/aida/`)
+        #[clap(long, short = 'o')]
+        output: Option<PathBuf>,
+
+        /// Print what would be written, but don't write
+        #[clap(long)]
+        dry_run: bool,
+    },
+
+    /// Verify the docs tree on disk matches what the graph would render.
+    /// Exits non-zero on drift. Suitable for a CI / pre-commit check.
+    Check {
+        /// Output directory (default: `docs/aida/`)
+        #[clap(long, short = 'o')]
+        output: Option<PathBuf>,
+    },
+}
+
 #[derive(Subcommand, Debug)]
 pub enum DbCommand {
     /// Print the path to the active store (the orphan-branch worktree, in
@@ -1726,6 +1751,14 @@ pub enum Command {
     /// Reads JSON-RPC 2.0 requests from stdin, writes responses to stdout.
     #[clap(hide = true)]
     McpServe,
+
+    /// Project the requirements graph as a layered docs tree.
+    /// Constitution, vision, constraints, decisions, quality, glossary —
+    /// each layer rendered from its corresponding RequirementType. The
+    /// graph is the source; this is the projection.
+    /// trace:FR-1-077 | ai:claude
+    #[clap(subcommand)]
+    Docs(DocsCommand),
 
     /// Search requirements for a pattern (like grep)
     #[clap(hide = true)]
