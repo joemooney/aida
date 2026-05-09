@@ -1,43 +1,12 @@
-id: 019df5ff-afec-78a2-9c0a-764054a5716f
+id: 019e0e76-fe27-74d3-8ae3-418972dd21bf
 spec_id: BUG-29
-title: check_file_status reports false drift on YAML-frontmatter files (checksum scope mismatch)
-description: |-
-  **Symptom**
-
-  Files with YAML frontmatter (skills, commands) report `FileStatus::Modified` from `check_file_status` even when byte-identical to what the scaffolder writes. `scaffold status` (which uses content-equality) correctly reports clean; the `file_status` field on each ScaffoldArtifact reports drift. Two paths use different drift signals.
-
-  **Root cause**
-
-  In `aida-core/src/scaffolding/mod.rs`:
-
-  - `wrap_with_aida_header` for YAML-frontmatter content computes the header's stored checksum from the *body* (post-frontmatter):
-    `generate_aida_header(body)` — checksum = hash(body)
-  - `check_file_status` for the same file computes the *expected* checksum from the *full* raw_content (frontmatter + body):
-    `compute_checksum(expected_content)` — checksum = hash(frontmatter + body)
-
-  Since hash(body) ≠ hash(frontmatter + body), the two never match. file_status reports `Modified` with an actual_checksum (body-hash from disk) that doesn't match the recomputed expected_checksum (full-content hash).
-
-  **Why it surfaced now**
-
-  FR-1-028's category-aware `scaffold upgrade` initially used file_status to decide drift. On a fresh init it was reporting all 16 skills as drifted. Worked around by switching that handler to content-equality (matching what `scaffold status` does). The underlying bug remains and could surface in any future code that trusts file_status.
-
-  **Fix**
-
-  In `check_file_status`, when YAML frontmatter is detected on the on-disk file, compute the expected_checksum from the post-frontmatter body of expected_content (mirroring what wrap_with_aida_header did when stamping the header). Equivalent to: parse the same frontmatter boundary on both sides, then hash only the body.
-
-  **Related**
-
-  - BUG-1-036 (hooks.rs Rust strings vs templates/hooks/ files — same class of "two paths to write the same content")
-  - BUG-1-040 (legacy Storage facade routes bulk ops through GitBackend::save() — same theme)
-  - FR-1-028 (where the issue surfaced; worked around)
-status: Completed
-priority: Medium
+agreed_id: BUG-29
+title: aida show prints both 'ID:' and 'Origin ID:' even when identical
+description: Every requirement until a merge-gate run has Origin ID == ID. Showing both is redundant noise. Collapse the two lines unless they differ. Surfaced 2026-05-09 walkthrough.
+status: Approved
+priority: Low
 owner: ''
 feature: Uncategorized
-created_at: 2026-05-05T02:37:47.884614221Z
-modified_at: 2026-05-09T20:11:44.914719847Z
+created_at: 2026-05-09T20:38:59.879044064Z
+modified_at: 2026-05-09T20:38:59.879044064Z
 req_type: Bug
-tags:
-- checksum
-- frontmatter
-- scaffolding
