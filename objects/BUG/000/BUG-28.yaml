@@ -3,10 +3,10 @@ spec_id: BUG-28
 agreed_id: BUG-28
 title: aida show <id> --comments drops comment content, only prints headers
 description: '`aida show FR-1 --comments` prints the comment id/author/date but skips the content body. `aida comment list FR-1` shows it correctly. Two paths, different output — the show path should match. Surfaced 2026-05-09 walkthrough.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T20:38:58.045591144Z
-modified_at: 2026-05-09T20:38:58.045591144Z
+modified_at: 2026-05-09T20:48:26.292602777Z
 req_type: Bug
