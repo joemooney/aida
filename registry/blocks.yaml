@@ -31,3 +31,11 @@ blocks:
   range_end: 114
   next: 15
   allocated_at: 2026-05-09T04:40:32.055300661Z
+- node_id: 1
+  owner: joe
+  hostname: imac
+  type_prefix: EPIC
+  range_start: 9
+  range_end: 108
+  next: 9
+  allocated_at: 2026-05-09T04:40:34.146191208Z
