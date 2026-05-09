@@ -427,6 +427,21 @@ impl BlockRegistry {
             .unwrap_or(1)
     }
 
+    /// Return the next range_start for a new block, accounting for both
+    /// existing blocks AND the agreed-id counter floor. The counter floor
+    /// is the highest already-issued agreed id for this type — a block
+    /// must start strictly above it to avoid colliding with existing reqs
+    /// (e.g., post-merge-gate or post-retire-legacy-ids stores).
+    /// trace:FR-1-073 | ai:claude
+    pub fn next_range_start_above_counter(
+        &self,
+        type_prefix: &str,
+        counter_floor: u32,
+    ) -> u32 {
+        let from_blocks = self.next_range_start(type_prefix);
+        from_blocks.max(counter_floor + 1)
+    }
+
     /// Append a new block for the given node. Returns the claimed block.
     pub fn claim_block(
         &mut self,
@@ -436,7 +451,24 @@ impl BlockRegistry {
         type_prefix: String,
         size: u32,
     ) -> AgreedIdBlock {
-        let range_start = self.next_range_start(&type_prefix);
+        self.claim_block_with_floor(node_id, owner, hostname, type_prefix, size, 0)
+    }
+
+    /// Append a new block, ensuring the range starts strictly above the
+    /// supplied counter floor. Use this when a store already has issued
+    /// agreed-ids (e.g., from prior merge-gate runs or retire-legacy-ids
+    /// migrations) — the floor is the current counter value.
+    /// trace:FR-1-073 | ai:claude
+    pub fn claim_block_with_floor(
+        &mut self,
+        node_id: u32,
+        owner: String,
+        hostname: String,
+        type_prefix: String,
+        size: u32,
+        counter_floor: u32,
+    ) -> AgreedIdBlock {
+        let range_start = self.next_range_start_above_counter(&type_prefix, counter_floor);
         let range_end = range_start + size - 1;
         let block = AgreedIdBlock {
             node_id,

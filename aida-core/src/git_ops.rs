@@ -544,6 +544,16 @@ pub fn unregister_node(aida_repo: &Path, node_id: u32) -> Result<bool> {
 /// short agreed IDs (FR-423) assigned at merge time via CAS counter.
 ///
 /// Returns the number of agreed IDs assigned.
+/// True when `spec_id` is in the short global form `<TYPE>-<SEQ>` (one hyphen,
+/// trailing digits). False for node-aware ids like `FR-1-053` or anything
+/// malformed. Used to keep merge-gate idempotent against stores that have
+/// already had their legacy ids retired (FR-1-071).
+/// trace:FR-1-071 | ai:claude
+pub fn is_global_id_format(spec_id: &str) -> bool {
+    let parts: Vec<&str> = spec_id.split('-').collect();
+    parts.len() == 2 && !parts[0].is_empty() && parts[1].chars().all(|c| c.is_ascii_digit())
+}
+
 pub fn merge_gate(store_path: &Path) -> Result<Vec<(String, String)>> {
     use crate::node::AgreedCounters;
     use crate::object_store;
@@ -580,6 +590,15 @@ pub fn merge_gate(store_path: &Path) -> Result<Vec<(String, String)>> {
             Some(s) => s.clone(),
             None => continue,
         };
+
+        // Skip reqs whose spec_id is ALREADY in global form (`<TYPE>-<SEQ>`,
+        // e.g., `FR-140`). Without this guard, running merge-gate after
+        // `aida db retire-legacy-ids` (FR-1-071) would re-assign new
+        // agreed_ids to every previously-migrated req, creating fresh
+        // divergence. trace:FR-1-071 | ai:claude
+        if is_global_id_format(&spec_id) {
+            continue;
+        }
 
         // Use the requirement's type for the agreed ID prefix (FR, BUG, TASK, etc.)
         // This gives short, standard prefixes regardless of the original feature-based prefix
