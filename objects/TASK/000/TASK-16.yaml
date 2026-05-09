@@ -1,20 +1,16 @@
-id: 019df42f-0925-7fe2-8060-4eb020c01c97
+id: 019e0e0e-bc7c-7ba3-9836-8d2e305b54ad
 spec_id: TASK-16
-title: Backfill /aida-* command files for skills missing a slash entry
-description: |-
-  10 skills in the scaffolding template had no matching commands/<name>.md file, so they were not surfaced as slash commands in fresh Claude sessions: architecture, code-review, compiler-warnings, decompose, docs, glossary, grill, plan, release, triage.
-
-  Fix: added aida-core/templates/commands/aida-<name>.md for all 10 (each a thin pointer to the matching skill body, mirroring the existing pattern), and symlinked them into .claude/commands/.
-
-  Note: aida-status remains intentionally command-only (it inlines 'aida list --format summary' and needs no skill body).
-status: Completed
+agreed_id: TASK-16
+title: 'P1 verify: stdin'
+description: |
+  ## Body
+  From stdin
+status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
-created_at: 2026-05-04T18:10:16.485552351Z
-modified_at: 2026-05-04T18:10:16.485552351Z
+created_at: 2026-05-09T18:45:07.324283433Z
+modified_at: 2026-05-09T18:45:07.324283433Z
 req_type: Task
 tags:
-- claude-code
-- scaffolding
-- templates
+- throwaway
