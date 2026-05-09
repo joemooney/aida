@@ -337,7 +337,7 @@ pub fn register_node(
     aida_repo: &Path,
     user_id: u32,
     hostname: &str,
-) -> Result<u32> {
+) -> Result<String> {
     register_node_with_email(aida_repo, user_id, hostname, None)
 }
 
@@ -348,27 +348,26 @@ pub fn register_node_with_email(
     user_id: u32,
     hostname: &str,
     email: Option<String>,
-) -> Result<u32> {
+) -> Result<String> {
     register_node_full(aida_repo, None, user_id, hostname, email)
 }
 
 /// Register a node, optionally at a specific id.
 ///
-/// When `requested_id` is Some(N), the CAS loop verifies N is free; if it is
-/// not (someone else just claimed it), the call fails after retries rather
-/// than silently choosing a different id. This is the path used to
-/// retroactively register a clone whose id was implicit (e.g., legacy
-/// pre-EPIC-1-052 setup where node_id lived in dispenser.toml).
+/// When `requested_id` is Some(id), the CAS loop verifies the id is free;
+/// if not, the call fails. When `None`, the next sequential numeric id is
+/// claimed (or pre-EPIC-9 legacy ids skipped).
 ///
-/// When `requested_id` is None, the next sequential id is claimed.
+/// Node IDs became `String` in EPIC-9 / STORY-41.
 /// trace:EPIC-1-052 | ai:claude
+/// trace:STORY-41 | ai:claude
 pub fn register_node_full(
     aida_repo: &Path,
-    requested_id: Option<u32>,
+    requested_id: Option<String>,
     user_id: u32,
     hostname: &str,
     email: Option<String>,
-) -> Result<u32> {
+) -> Result<String> {
     use crate::node::{BlockRegistry, NodeConfig, NodeRegistry};
 
     let registry_dir = aida_repo.join("registry");
@@ -397,18 +396,18 @@ pub fn register_node_full(
         // with implicit (pre-EPIC-1-052) node ids and never registered.
         let mut registry = NodeRegistry::load(&registry_path)
             .unwrap_or_default();
-        let blocks_in_use: std::collections::HashSet<u32> = if blocks_path.exists() {
+        let blocks_in_use: std::collections::HashSet<String> = if blocks_path.exists() {
             BlockRegistry::load(&blocks_path)
-                .map(|br| br.blocks.iter().map(|b| b.node_id).collect())
+                .map(|br| br.blocks.iter().map(|b| b.node_id.clone()).collect())
                 .unwrap_or_default()
         } else {
             std::collections::HashSet::new()
         };
-        let id_in_use = |id: u32| registry.is_registered(id) || blocks_in_use.contains(&id);
+        let id_in_use = |id: &str| registry.is_registered(id) || blocks_in_use.contains(id);
 
-        let node_id = match requested_id {
+        let node_id: String = match requested_id.clone() {
             Some(id) => {
-                if id_in_use(id) {
+                if id_in_use(&id) {
                     anyhow::bail!(
                         "Node id {} is already taken (in nodes.toml or blocks.yaml) — \
                          pick a different id",
@@ -418,20 +417,29 @@ pub fn register_node_full(
                 id
             }
             None => {
-                let mut candidate = registry.next_node_id();
-                while blocks_in_use.contains(&candidate) {
-                    candidate += 1;
+                // Walk numeric next-id space, skipping any id that's
+                // already implied by blocks.yaml (legacy clones).
+                let mut next = registry.next_node_id();
+                while blocks_in_use.contains(&next) {
+                    let n: u32 = next.parse().unwrap_or(0);
+                    next = (n + 1).to_string();
                 }
-                candidate
+                next
             }
         };
 
-        // Step 3: Register the node
-        registry.register_specific(
-            node_id,
+        // Step 3: Register the node, capturing clone_path for hijack-mark-
+        // in-place support (STORY-43). The clone path is the parent of the
+        // .aida-store worktree (i.e., the project root). trace:STORY-41
+        let clone_path = aida_repo
+            .parent()
+            .and_then(|p| p.canonicalize().ok());
+        registry.register_specific_full(
+            node_id.clone(),
             user_id,
             hostname.to_string(),
             email.clone(),
+            clone_path,
         );
         registry.save(&registry_path)?;
 
@@ -449,7 +457,7 @@ pub fn register_node_full(
             Ok(true) => {
                 // Success! Save local node config
                 let config = NodeConfig {
-                    node_id,
+                    node_id: node_id.clone(),
                     user_id,
                     hostname: hostname.to_string(),
                     email: email.clone(),
@@ -501,7 +509,7 @@ pub fn register_node_full(
 /// machine that's been decommissioned). Issued IDs remain valid because
 /// they live in the object store, not in the registry.
 /// trace:EPIC-1-052 | ai:claude
-pub fn unregister_node(aida_repo: &Path, node_id: u32) -> Result<bool> {
+pub fn unregister_node(aida_repo: &Path, node_id: &str) -> Result<bool> {
     use crate::node::NodeRegistry;
 
     let registry_path = aida_repo.join("registry").join("nodes.toml");
@@ -804,7 +812,7 @@ mod tests {
 
         // Register first node
         let node_id = register_node(&aida, 1, "test-laptop").unwrap();
-        assert_eq!(node_id, 1);
+        assert_eq!(node_id, "1");
 
         // Verify registry file exists
         assert!(aida.join("registry/nodes.toml").exists());
@@ -818,6 +826,6 @@ mod tests {
         configure_user(&aida2, "Alice", "alice@example.com").unwrap();
 
         let node_id2 = register_node(&aida2, 2, "alice-dev").unwrap();
-        assert_eq!(node_id2, 2);
+        assert_eq!(node_id2, "2");
     }
 }
