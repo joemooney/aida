@@ -19,6 +19,8 @@ pub mod node;
 pub mod object_store;
 pub mod oplog;
 pub mod telemetry;
+#[cfg(feature = "native")]
+pub mod user_prefs;
 pub mod yaml_helpers;
 #[cfg(feature = "native")]
 pub mod workspace;
@@ -44,6 +46,8 @@ pub use node::{
     AgreedCounters, AgreedIdBlock, BlockRegistry, DeploymentMode, IdFormatPolicy, NodeConfig,
     NodeRegistry, NodeRegistryEntry, UserRegistry, UserRegistryEntry, WorkspaceConfig,
 };
+#[cfg(feature = "native")]
+pub use user_prefs::UserPreferences;
 pub use ai::{
     AiClient, AiMode, BackgroundEvaluator, EvaluationResponse, EvaluationResult, EvaluatorConfig,
     EvaluatorStatus, IssueReport, StoredAiEvaluation, SuggestedImprovement,

@@ -1994,6 +1994,12 @@ fn handle_git_backend_command(
             let storage = Storage::new(store_path);
             handle_queue_command(queue_cmd, &storage)?;
         }
+        // STORY-44: `aida config user` is a global op against
+        // ~/.aida/preferences.toml — no store needed. Route it through the
+        // git-backend path so it works in modern projects too.
+        Command::Config(ConfigCommand::User { node_id, email, toml: emit_toml }) => {
+            handle_config_user(node_id.as_deref(), email.as_deref(), *emit_toml)?;
+        }
         Command::Scaffold(scaffold_cmd) => {
             // Scaffold apply / status / preview / extract — same pattern.
             // Storage façade now handles directory paths via GitBackend.load().
@@ -2317,8 +2323,36 @@ fn handle_init_distributed_worktree(
     // can run `aida node acquire` later. trace:EPIC-9 Story 1 | ai:claude
     if origin_pushed {
         let hn = hostname();
-        let email = git_ops::git_config_get("user.email").ok();
-        match git_ops::register_node_full(&store_path, None, 1, &hn, email.clone()) {
+        // Prefer email from `git config user.email`; fall back to
+        // `~/.aida/preferences.toml`. trace:STORY-44 | ai:claude
+        let prefs = aida_core::UserPreferences::load().unwrap_or_default();
+        let email = git_ops::git_config_get("user.email")
+            .ok()
+            .or_else(|| prefs.email.clone());
+
+        // STORY-44: try the preferred id first; on collision the kernel's
+        // suggest_free_node_id helper picks the next free `<pref><N>` and
+        // we auto-accept (init is non-interactive and the alternative is a
+        // bad first impression). Without a preference, fall back to the
+        // pre-EPIC-9 sequential numeric path.
+        let requested_id: Option<String> = match prefs.preferred_node_id.as_deref() {
+            Some(pref) => match git_ops::suggest_free_node_id(&store_path, pref) {
+                Ok(git_ops::NodeIdProbe::Free) => Some(pref.to_string()),
+                Ok(git_ops::NodeIdProbe::Taken { suggested }) => {
+                    println!(
+                        "  {} preferred node id '{}' is already taken — using '{}' instead",
+                        "Note:".dimmed(),
+                        pref,
+                        suggested
+                    );
+                    Some(suggested)
+                }
+                Err(_) => None,
+            },
+            None => None,
+        };
+
+        match git_ops::register_node_full(&store_path, requested_id, 1, &hn, email.clone()) {
             Ok(new_id) => {
                 println!(
                     "  {} acquired node id {} (hostname={}, email={})",
@@ -2567,16 +2601,42 @@ fn handle_init_post_clone(
     }
 
     let hn = hostname();
-    let email = git_ops::git_config_get("user.email").ok();
+    // Prefer email from `git config user.email`; fall back to user prefs.
+    // trace:STORY-44 | ai:claude
+    let prefs = aida_core::UserPreferences::load().unwrap_or_default();
+    let email = git_ops::git_config_get("user.email")
+        .ok()
+        .or_else(|| prefs.email.clone());
+    let requested_id: Option<String> = match prefs.preferred_node_id.as_deref() {
+        Some(pref) => match git_ops::suggest_free_node_id(&store_path, pref) {
+            Ok(git_ops::NodeIdProbe::Free) => Some(pref.to_string()),
+            Ok(git_ops::NodeIdProbe::Taken { suggested }) => {
+                println!(
+                    "  {} preferred node id '{}' is taken — using '{}' instead",
+                    "Note:".dimmed(),
+                    pref,
+                    suggested
+                );
+                Some(suggested)
+            }
+            Err(_) => None,
+        },
+        None => None,
+    };
+    let id_label = match &requested_id {
+        Some(id) => format!("id={}", id),
+        None => "next available id".to_string(),
+    };
     println!();
     println!(
-        "Acquiring node (next available id; hostname={}, email={})...",
+        "Acquiring node ({}; hostname={}, email={})...",
+        id_label,
         hn,
         email.as_deref().unwrap_or("-")
     );
     let new_id = git_ops::register_node_full(
         &store_path,
-        None,
+        requested_id,
         1, // user_id placeholder — see Phase 1 commit message
         &hn,
         email.clone(),
@@ -4040,8 +4100,79 @@ fn handle_config_command(cmd: &ConfigCommand, storage: &Storage) -> Result<()> {
                 store.requirements.len()
             );
         }
+        ConfigCommand::User { node_id, email, toml: emit_toml } => {
+            // trace:STORY-44 | ai:claude
+            handle_config_user(node_id.as_deref(), email.as_deref(), *emit_toml)?;
+        }
     }
 
+    Ok(())
+}
+
+/// Handle `aida config user` — show or update `~/.aida/preferences.toml`.
+/// trace:STORY-44 | ai:claude
+fn handle_config_user(
+    node_id: Option<&str>,
+    email: Option<&str>,
+    emit_toml: bool,
+) -> Result<()> {
+    let mut prefs = aida_core::UserPreferences::load()?;
+    let mut changed = false;
+
+    if let Some(id) = node_id {
+        if id.is_empty() {
+            if prefs.preferred_node_id.is_some() {
+                prefs.preferred_node_id = None;
+                changed = true;
+            }
+        } else {
+            aida_core::node::validate_node_id(id)
+                .map_err(|m| anyhow::anyhow!("invalid node id: {}", m))?;
+            if prefs.preferred_node_id.as_deref() != Some(id) {
+                prefs.preferred_node_id = Some(id.to_string());
+                changed = true;
+            }
+        }
+    }
+
+    if let Some(em) = email {
+        if em.is_empty() {
+            if prefs.email.is_some() {
+                prefs.email = None;
+                changed = true;
+            }
+        } else if prefs.email.as_deref() != Some(em) {
+            prefs.email = Some(em.to_string());
+            changed = true;
+        }
+    }
+
+    if changed {
+        let path = prefs.save()?;
+        println!("{} Saved preferences to {}", "".green(), path.display());
+    }
+
+    if emit_toml {
+        print!("{}", toml::to_string_pretty(&prefs).unwrap_or_default());
+        return Ok(());
+    }
+
+    let path_display = aida_core::UserPreferences::path()
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|| "<unknown home dir>".to_string());
+    println!("User preferences ({})", path_display);
+    if prefs.is_empty() {
+        println!("  (no preferences set — try `aida config user --node-id JM`)");
+    } else {
+        println!(
+            "  preferred_node_id: {}",
+            prefs.preferred_node_id.as_deref().unwrap_or("(unset)")
+        );
+        println!(
+            "  email:             {}",
+            prefs.email.as_deref().unwrap_or("(unset)")
+        );
+    }
     Ok(())
 }
 

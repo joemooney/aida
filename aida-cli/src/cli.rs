@@ -906,6 +906,25 @@ pub enum ConfigCommand {
         #[clap(long, short = 'y')]
         yes: bool,
     },
+
+    /// Show or update user-level preferences at `~/.aida/preferences.toml`.
+    /// Currently stores: preferred node id (used as default by `aida init`)
+    /// and a fallback email (used when `git config user.email` is unset).
+    /// trace:STORY-44 | ai:claude
+    User {
+        /// Set the preferred node id (validated as `[A-Za-z0-9][A-Za-z0-9_-]*`,
+        /// 1-32 chars). Pass empty string to clear.
+        #[clap(long)]
+        node_id: Option<String>,
+
+        /// Set the fallback email. Pass empty string to clear.
+        #[clap(long)]
+        email: Option<String>,
+
+        /// Print current preferences as TOML to stdout (machine-readable).
+        #[clap(long)]
+        toml: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
