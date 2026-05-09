@@ -451,7 +451,20 @@ pub fn register_node_full(
                 return Ok(node_id);
             }
             Ok(false) => {
-                // Push rejected — another node registered first. Retry.
+                // Push rejected — another node registered first. Soft-reset
+                // the local commit before pulling so the next iteration's
+                // pull --rebase doesn't try to re-apply our now-stale claim
+                // (which would conflict on the same nodes.toml lines).
+                // Without this reset, the CAS loop wedges on rebase failure.
+                // trace:BUG-1-069 | ai:claude
+                // Discard the stale local commit AND its staged/working-tree
+                // changes so the next iteration's pull --rebase has a clean
+                // tree to apply onto. `--soft` alone leaves the index dirty,
+                // which pull --rebase rejects. trace:BUG-1-069 | ai:claude
+                let _ = std::process::Command::new("git")
+                    .args(["reset", "--hard", "HEAD~1"])
+                    .current_dir(aida_repo)
+                    .output();
                 eprintln!(
                     "Node registration: push rejected (attempt {}), retrying...",
                     attempt + 1
@@ -499,7 +512,20 @@ pub fn unregister_node(aida_repo: &Path, node_id: u32) -> Result<bool> {
 
         match push(aida_repo, "origin", &branch) {
             Ok(true) => return Ok(true),
-            Ok(false) => continue,
+            Ok(false) => {
+                // Same soft-reset dance as register_node_full so the next
+                // attempt's pull --rebase doesn't conflict with our now-
+                // stale local commit. trace:BUG-1-069 | ai:claude
+                // Discard the stale local commit AND its staged/working-tree
+                // changes so the next iteration's pull --rebase has a clean
+                // tree to apply onto. `--soft` alone leaves the index dirty,
+                // which pull --rebase rejects. trace:BUG-1-069 | ai:claude
+                let _ = std::process::Command::new("git")
+                    .args(["reset", "--hard", "HEAD~1"])
+                    .current_dir(aida_repo)
+                    .output();
+                continue;
+            }
             Err(e) => anyhow::bail!("Node unregister failed: {}", e),
         }
     }
