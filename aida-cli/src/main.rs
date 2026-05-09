@@ -924,6 +924,35 @@ fn detect_distributed_store() -> Option<std::path::PathBuf> {
 ///   3. legacy `use_agreed_blocks = true`   → `blocks-then-fallback`
 ///   4. neither set                          → `blocks-then-fallback` (default)
 /// trace:EPIC-1-052 | ai:claude
+/// Read the agreed-id counter for a given type from the orphan store's
+/// `registry/agreed_counters.toml`. Returns 0 when the file doesn't exist
+/// or the type has no entry — both mean "no ids issued yet for this type".
+/// Used as the floor when claiming a new block so the block doesn't
+/// overlap with already-issued agreed-ids.
+/// trace:FR-1-073 | ai:claude
+fn read_agreed_counter(store_path: &std::path::Path, type_prefix: &str) -> u32 {
+    let path = store_path.join("registry").join("agreed_counters.toml");
+    let Ok(content) = std::fs::read_to_string(&path) else {
+        return 0;
+    };
+    let prefix_upper = type_prefix.to_uppercase();
+    for raw in content.lines() {
+        let line = raw.trim();
+        if line.starts_with('#') || line.is_empty() {
+            continue;
+        }
+        let mut parts = line.splitn(2, '=');
+        let (key, val) = match (parts.next(), parts.next()) {
+            (Some(k), Some(v)) => (k.trim().trim_matches('"'), v.trim()),
+            _ => continue,
+        };
+        if key.eq_ignore_ascii_case(&prefix_upper) {
+            return val.parse::<u32>().unwrap_or(0);
+        }
+    }
+    0
+}
+
 fn read_id_format_policy(project_dir: &std::path::Path) -> aida_core::IdFormatPolicy {
     let config_path = project_dir.join(".aida").join("config.toml");
     let default = aida_core::IdFormatPolicy::default();
@@ -1120,15 +1149,18 @@ fn handle_git_backend_command(
                             .or(req.spec_id.as_deref())
                             .unwrap_or("?");
                         let origin = req.spec_id.as_deref().unwrap_or("-");
-                        // When canonical and origin are the same, dim the
-                        // origin so the eye skips it.
+                        // Pad to visible width FIRST, then color. Otherwise
+                        // .dimmed()'s ANSI escapes inflate the string length
+                        // and {:<14} ends up padding on byte count, breaking
+                        // column alignment. trace:FR-1-070 | ai:claude
+                        let origin_padded = format!("{:<14}", origin);
                         let origin_cell = if origin == display_id {
-                            origin.dimmed().to_string()
+                            origin_padded.dimmed().to_string()
                         } else {
-                            origin.to_string()
+                            origin_padded
                         };
                         println!(
-                            "{:<12} {:<14} {:<12} {:<10} {}",
+                            "{:<12} {}{:<12} {:<10} {}",
                             display_id,
                             origin_cell,
                             req.req_type,
@@ -2339,16 +2371,22 @@ fn handle_init_post_clone(
         new_id
     );
 
-    // Auto-allocate FR block (Phase 3 logic, inline to avoid layering issues)
-    match auto_allocate_first_block(&store_path, new_id, &hn, email.as_deref()) {
-        Ok(Some(block_label)) => {
-            println!("  Auto-allocated FR block {}", block_label);
+    // Auto-allocate initial blocks for the common types (Phase 3).
+    // trace:FR-1-073 | ai:claude
+    match auto_allocate_initial_blocks(&store_path, new_id, &hn, email.as_deref()) {
+        Ok(blocks) if !blocks.is_empty() => {
+            println!(
+                "  Auto-allocated {} block{}: {}",
+                blocks.len(),
+                if blocks.len() == 1 { "" } else { "s" },
+                blocks.join(", ")
+            );
         }
-        Ok(None) => {}
+        Ok(_) => {}
         Err(e) => {
             eprintln!(
-                "  {} Could not auto-allocate FR block: {}. \
-                 Run `aida db block claim --type FR --size 100` to retry.",
+                "  {} Could not auto-allocate initial blocks: {}. \
+                 Run `aida db block claim --type <T> --size 100` per type to retry.",
                 "Warning:".yellow().bold(),
                 e
             );
@@ -3958,12 +3996,18 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
                 }
 
                 let mut registry = BlockRegistry::load(&blocks_path)?;
-                let block = registry.claim_block(
+                // Honor the agreed-id counter floor so a fresh block can't
+                // start at a number already issued in past merge-gate runs
+                // or retire-legacy-ids migrations.
+                // trace:FR-1-073 | ai:claude
+                let counter_floor = read_agreed_counter(store_path, &type_prefix);
+                let block = registry.claim_block_with_floor(
                     node_id,
                     std::env::var("USER").unwrap_or_else(|_| "unknown".into()),
                     hostname(),
                     type_prefix.clone(),
                     *size,
+                    counter_floor,
                 );
                 registry.save(&blocks_path)?;
 
@@ -4219,24 +4263,31 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
                 node_config_path.display()
             );
 
-            // Phase 3: auto-allocate the first FR block when the project's
-            // id_format policy uses blocks. Skipped for `node-aware-only`
-            // since that policy never dispenses from blocks.
+            // Phase 3: auto-allocate initial blocks (FR + BUG + TASK +
+            // EPIC + STORY + SPIKE) when the project's id_format policy
+            // uses blocks. Skipped for `node-aware-only` since that
+            // policy never dispenses from blocks.
             // trace:EPIC-1-052 Phase 3 | ai:claude
+            // trace:FR-1-073 | ai:claude
             let project_dir = std::env::current_dir().unwrap_or_default();
             let id_policy = read_id_format_policy(&project_dir);
             if id_policy.uses_blocks() {
-                match auto_allocate_first_block(store_path, new_id, &hn, email.as_deref()) {
-                    Ok(Some(block_label)) => {
-                        println!("  Auto-allocated FR block {}", block_label);
+                match auto_allocate_initial_blocks(store_path, new_id, &hn, email.as_deref()) {
+                    Ok(blocks) if !blocks.is_empty() => {
+                        println!(
+                            "  Auto-allocated {} block{}: {}",
+                            blocks.len(),
+                            if blocks.len() == 1 { "" } else { "s" },
+                            blocks.join(", ")
+                        );
                     }
-                    Ok(None) => {
-                        // already had a block — nothing to do
+                    Ok(_) => {
+                        // every type already had a block — nothing to do
                     }
                     Err(e) => {
                         eprintln!(
-                            "{} Could not auto-allocate FR block: {}. \
-                             Run `aida db block claim --type FR --size 100` to retry.",
+                            "{} Could not auto-allocate initial blocks: {}. \
+                             Run `aida db block claim --type <T> --size 100` per type to retry.",
                             "Warning:".yellow().bold(),
                             e
                         );
@@ -4288,17 +4339,50 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
     Ok(())
 }
 
-/// Auto-allocate the first FR block for a freshly-acquired node. Returns
-/// `Some("FR-A..B")` on a fresh allocation, `None` if the node already has
-/// an FR block (idempotent), or an error if the CAS push couldn't settle.
+/// Common requirement types that get auto-allocated blocks on `aida node
+/// acquire` (Phase 3 of EPIC-1-052). Without these, new reqs of these
+/// types fall through to the node-aware form (`TASK-1-019`) and require
+/// `aida db merge-gate` to promote them — friction the user shouldn't
+/// have to think about. trace:FR-1-073 | ai:claude
+const PHASE3_AUTO_ALLOC_TYPES: &[&str] = &["FR", "BUG", "TASK", "EPIC", "STORY", "SPIKE"];
+
+/// Auto-allocate initial blocks for a freshly-acquired node. Claims one
+/// block per common type that doesn't already have one for this node.
+/// Returns a vector of allocated range labels (e.g., `["FR-101..200",
+/// "BUG-1..100"]`), or an empty vec if every type already had a block
+/// (idempotent — safe to re-run).
 ///
-/// Default block size is 100 — same as `aida db block claim`'s default.
+/// Default block size is 100. Each block claim goes through its own CAS
+/// push loop so a stray contention on one type doesn't block the others.
 /// trace:EPIC-1-052 Phase 3 | ai:claude
-fn auto_allocate_first_block(
+/// trace:FR-1-073 | ai:claude
+fn auto_allocate_initial_blocks(
     store_path: &std::path::Path,
     node_id: u32,
     hn: &str,
     email: Option<&str>,
+) -> Result<Vec<String>> {
+    let mut allocated = Vec::new();
+    for type_prefix in PHASE3_AUTO_ALLOC_TYPES {
+        if let Some(label) =
+            auto_allocate_block_for_type(store_path, node_id, hn, email, type_prefix)?
+        {
+            allocated.push(label);
+        }
+    }
+    Ok(allocated)
+}
+
+/// Allocate a single block for the given (node_id, type_prefix) if one
+/// doesn't already exist. Returns Some("<TYPE>-<start>..<end>") on a fresh
+/// claim, None if the node already had a block for that type.
+/// trace:FR-1-073 | ai:claude
+fn auto_allocate_block_for_type(
+    store_path: &std::path::Path,
+    node_id: u32,
+    hn: &str,
+    email: Option<&str>,
+    type_prefix: &str,
 ) -> Result<Option<String>> {
     use aida_core::BlockRegistry;
 
@@ -4316,16 +4400,18 @@ fn auto_allocate_first_block(
         }
 
         let mut registry = BlockRegistry::load(&blocks_path)?;
-        if registry.find_active_block(node_id, "FR").is_some() {
+        if registry.find_active_block(node_id, type_prefix).is_some() {
             return Ok(None);
         }
 
-        let block = registry.claim_block(
+        let counter_floor = read_agreed_counter(store_path, type_prefix);
+        let block = registry.claim_block_with_floor(
             node_id,
             owner.clone(),
             hn.to_string(),
-            "FR".to_string(),
+            type_prefix.to_string(),
             100,
+            counter_floor,
         );
         registry.save(&blocks_path)?;
 
@@ -4333,8 +4419,8 @@ fn auto_allocate_first_block(
         aida_core::git_ops::commit(
             store_path,
             &format!(
-                "chore(registry): auto-allocate FR-{}..{} for node {} on acquire",
-                block.range_start, block.range_end, node_id
+                "chore(registry): auto-allocate {}-{}..{} for node {} on acquire",
+                type_prefix, block.range_start, block.range_end, node_id
             ),
         )?;
 
@@ -4343,13 +4429,13 @@ fn auto_allocate_first_block(
         match aida_core::git_ops::push(store_path, "origin", &branch) {
             Ok(true) => {
                 return Ok(Some(format!(
-                    "FR-{}..{}",
-                    block.range_start, block.range_end
+                    "{}-{}..{}",
+                    type_prefix, block.range_start, block.range_end
                 )));
             }
             Ok(false) => {
                 let _ = std::process::Command::new("git")
-                    .args(["reset", "--soft", "HEAD~1"])
+                    .args(["reset", "--hard", "HEAD~1"])
                     .current_dir(store_path)
                     .output();
                 continue;
@@ -4357,7 +4443,11 @@ fn auto_allocate_first_block(
             Err(e) => anyhow::bail!("Push failed: {}", e),
         }
     }
-    anyhow::bail!("could not push block claim after {} attempts", max_retries);
+    anyhow::bail!(
+        "could not push block claim for {} after {} attempts",
+        type_prefix,
+        max_retries
+    );
 }
 
 /// Truncate a string for table display, with an ellipsis when shortened.
