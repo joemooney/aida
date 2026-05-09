@@ -1,0 +1,12 @@
+id: 019e0e9f-74a9-71a1-bf6d-397b9d988212
+spec_id: BUG-39
+agreed_id: BUG-39
+title: aida init fails on stale worktree registration after .aida-store dir deleted
+description: If the user deletes `.aida-store/` and the orphan branch by hand (or some other corruption), `aida init` fails mid-way with raw git's '.aida-store' is a missing but already registered worktree error. The recovery is `git worktree prune` first, then re-run init. AIDA should detect this case and either (a) auto-prune the stale worktree before running 'git worktree add', or (b) surface a clear AIDA-shaped error pointing at `git worktree prune` instead of leaking raw git output. Surfaced 2026-05-09 walkthrough during a manual cleanup of a previous init.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-09T21:23:11.657804501Z
+modified_at: 2026-05-09T21:23:11.657804501Z
+req_type: Bug
