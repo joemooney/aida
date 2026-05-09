@@ -3,10 +3,10 @@ spec_id: BUG-25
 agreed_id: BUG-25
 title: aida init doesn't set project name; CLAUDE.md and aida status show '(unnamed)' / 'Project'
 description: 'Fresh `aida init` leaves `store.name` and `store.title` empty, so `aida status` shows ''Name: (unnamed)'' and the scaffolded CLAUDE.md says ''Project overview / Project''. Should default to the cwd basename (or prompt). Surfaced 2026-05-09 walkthrough.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T20:38:55.142886297Z
-modified_at: 2026-05-09T20:38:55.142886297Z
+modified_at: 2026-05-09T20:48:22.802545222Z
 req_type: Bug
