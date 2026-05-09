@@ -288,6 +288,24 @@ pub fn wrap_with_aida_header(path: &std::path::Path, raw_content: &str) -> Strin
     }
 }
 
+/// Compute the checksum that `wrap_with_aida_header` would have stored in
+/// the AIDA header for `expected_content`. Mirrors the frontmatter-aware
+/// scope rule used at write time so `check_file_status` compares apples to
+/// apples — at write we hash the post-frontmatter body, at read we must
+/// hash the same thing. Without this, every YAML-frontmatter file (skills,
+/// commands) reports `Modified` even when byte-identical on disk.
+/// trace:BUG-29 | ai:claude
+fn checksum_for_stored_header(expected_content: &str) -> String {
+    if expected_content.starts_with("---\n") {
+        let after_open = 4;
+        if let Some(close_pos) = expected_content[after_open..].find("\n---\n") {
+            let fm_end = after_open + close_pos + 5;
+            return compute_checksum(&expected_content[fm_end..]);
+        }
+    }
+    compute_checksum(expected_content)
+}
+
 /// Find the AIDA header line in file content, skipping YAML frontmatter if present
 fn find_aida_header_line(content: &str) -> Option<&str> {
     // If content starts with YAML frontmatter, skip past it
@@ -354,8 +372,11 @@ fn check_file_status(file_path: &PathBuf, expected_content: &str) -> FileStatus 
             };
         }
 
-        // Compute checksum of the expected content (without header)
-        let expected_checksum = compute_checksum(expected_content);
+        // Compute checksum of the expected content using the same scope
+        // (post-frontmatter body when applicable) the writer used. Without
+        // this, every YAML-frontmatter file reports false Modified.
+        // trace:BUG-29 | ai:claude
+        let expected_checksum = checksum_for_stored_header(expected_content);
 
         if stored_checksum == expected_checksum {
             return FileStatus::Unmodified;
@@ -379,8 +400,9 @@ fn check_file_status(file_path: &PathBuf, expected_content: &str) -> FileStatus 
             };
         }
 
-        // Compute checksum of the expected content (without header)
-        let expected_checksum = compute_checksum(expected_content);
+        // Shell scripts don't have YAML frontmatter, so checksum_for_stored_header
+        // collapses to compute_checksum(expected_content) — matching the writer.
+        let expected_checksum = checksum_for_stored_header(expected_content);
 
         if stored_checksum == expected_checksum {
             return FileStatus::Unmodified;
@@ -1935,6 +1957,48 @@ impl std::error::Error for ScaffoldError {}
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    #[test]
+    fn yaml_frontmatter_round_trips_through_check_file_status() {
+        // trace:BUG-29 | ai:claude
+        // Regression test: at write time wrap_with_aida_header hashes only
+        // the post-frontmatter body; check_file_status must use the same
+        // scope when re-hashing expected content. Otherwise byte-identical
+        // skill files always report `Modified`.
+        let dir = TempDir::new().unwrap();
+        let file_path = dir.path().join("aida-req.md");
+        let raw = "---\nname: aida-req\ndescription: file a requirement\n---\n\
+                   # File a requirement\n\nBody text.\n";
+        let wrapped = wrap_with_aida_header(std::path::Path::new("aida-req.md"), raw);
+        std::fs::write(&file_path, &wrapped).unwrap();
+        // The expected content the scaffolder hands to check_file_status is
+        // the embedded template (the *raw* form, no header).
+        let status = check_file_status(&file_path, raw);
+        assert_eq!(
+            status,
+            FileStatus::Unmodified,
+            "byte-identical YAML-frontmatter file should report Unmodified, got {:?}",
+            status
+        );
+    }
+
+    #[test]
+    fn checksum_for_stored_header_matches_writer_scope() {
+        // trace:BUG-29 | ai:claude
+        // With frontmatter: must hash post-frontmatter body only.
+        let with_fm = "---\nname: x\n---\n\nbody text\n";
+        let body_only = "\nbody text\n";
+        assert_eq!(
+            checksum_for_stored_header(with_fm),
+            compute_checksum(body_only)
+        );
+        // Without frontmatter: must hash the whole content.
+        let no_fm = "# heading\n\nbody\n";
+        assert_eq!(
+            checksum_for_stored_header(no_fm),
+            compute_checksum(no_fm)
+        );
+    }
 
     fn create_test_store() -> RequirementsStore {
         RequirementsStore {
