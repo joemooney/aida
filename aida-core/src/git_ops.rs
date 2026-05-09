@@ -436,9 +436,16 @@ pub fn register_node_full(
     let branch = current_branch(aida_repo)
         .unwrap_or_else(|_| "main".to_string());
 
+    // BUG-40: solo users with no origin still want their preferred node id.
+    // The CAS push loop is only needed for race-resolution against other
+    // clones — when there's no remote, claim locally and let the next
+    // `aida push` upload the registration commit. Decided once up front so
+    // every retry path agrees on the policy.
+    let local_only = !has_remote(aida_repo, "origin");
+
     for attempt in 0..MAX_CAS_RETRIES {
         // Step 1: Pull latest (skip on first attempt if no remote)
-        if attempt > 0 {
+        if attempt > 0 && !local_only {
             if let Err(e) = pull_rebase(aida_repo, "origin", &branch) {
                 eprintln!("Warning: pull failed (attempt {}): {}", attempt, e);
                 anyhow::bail!(
@@ -510,7 +517,23 @@ pub fn register_node_full(
         );
         commit(aida_repo, &msg)?;
 
-        // Step 5: Push — if rejected, pull and retry
+        // Step 5: Push — if rejected, pull and retry. When there's no
+        // origin remote (solo first clone), skip the push entirely:
+        // the registration commit lives on the local orphan branch and
+        // will be uploaded when the user later adds a remote and runs
+        // `aida push`. trace:BUG-40 | ai:claude
+        if local_only {
+            let config = NodeConfig {
+                node_id: node_id.clone(),
+                user_id,
+                hostname: hostname.to_string(),
+                email: email.clone(),
+                registered_at: chrono::Utc::now(),
+            };
+            let node_config_path = aida_repo.join(".aida").join("node.toml");
+            config.save(&node_config_path)?;
+            return Ok(node_id);
+        }
         match push(aida_repo, "origin", &branch) {
             Ok(true) => {
                 // Success! Save local node config
