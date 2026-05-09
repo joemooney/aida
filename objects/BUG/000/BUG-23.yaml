@@ -8,12 +8,12 @@ description: |
   Fix: `aida init` auto-pushes the orphan branch when an origin remote is configured. Skip silently when no origin exists (single-machine projects work the same).
 
   Surfaces in 2026-05-09 polished walkthrough — only remaining manual git command in the bootstrap flow.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T18:59:39.003020600Z
-modified_at: 2026-05-09T18:59:39.003020600Z
+modified_at: 2026-05-09T19:03:18.421700373Z
 req_type: Bug
 tags:
 - ergonomics
