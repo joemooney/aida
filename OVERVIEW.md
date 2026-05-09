@@ -1,6 +1,8 @@
 # AIDA — Overview
 
-**AI Design Assistant** — an AI-native requirements management tool built in Rust. CLI + MCP server + REST/gRPC backend + React dashboard, all backed by a git-canonical store designed to give AI coding agents durable context across sessions about *what exists and why*.
+**AIDA is your project's missing index** — a hidden kernel that maintains a stable, queryable graph of what exists, served to AI through MCP and to you through a small CLI.
+
+**Without it**, coding agents start every session cold, re-deriving the same context they had yesterday; humans rediscover and re-debate decisions for years; cross-references between code and intent rot silently. **With it**, *"does this already exist?"*, *"why did we choose X?"*, and *"is this code still tied to a live requirement?"* are one query away — for the agent and for you.
 
 For day-to-day usage see [docs/user-guide.md](docs/user-guide.md). For project conventions, build commands, and developer workflow see [CLAUDE.md](CLAUDE.md). For getting set up see [docs/getting-started.md](docs/getting-started.md).
 
@@ -8,9 +10,7 @@ For day-to-day usage see [docs/user-guide.md](docs/user-guide.md). For project c
 
 ## Vision
 
-The defensible niche is the **agent-collaboration layer**: stable spec IDs, typed relationships, code-to-spec trace comments, and an MCP server that exposes the requirement graph to coding agents. Karpathy-style "structured markdown queryable by Claude" is the floor; AIDA adds the relationship graph, identifier stability, and enforcement loop that prevents an agent (or human) from re-inventing what already exists.
-
-> *AIDA is the durable, agent-readable spec layer for AI-assisted software development — stable IDs, typed relationships, and code-to-spec traces that give Claude (and you) a map of what exists and why, across sessions.*
+The defensible niche is the **agent-collaboration layer**: stable spec IDs, typed relationships, code-to-spec trace comments, and an MCP server that exposes the requirement graph to coding agents. Where Karpathy-style "structured markdown queryable by Claude" is the floor and Spec Kit's spec-driven workflow is the ceiling, AIDA sits between them as the *durable index* — a small invisible kernel that captures what exists, plus optional layered modules for everything else.
 
 ---
 
