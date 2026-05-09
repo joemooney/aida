@@ -1,5 +1,6 @@
 id: 019e0a5b-2ae1-7d72-ae74-42c704982d80
 spec_id: FR-1-068
+agreed_id: FR-264
 title: 'aida dev activate: profile pinning + stale-build warning + PS1 marker'
 description: |-
   ## Problem

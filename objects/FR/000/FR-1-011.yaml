@@ -1,5 +1,6 @@
 id: 019df1a9-d6c8-71a3-b22b-1add699e0751
 spec_id: FR-1-011
+agreed_id: FR-278
 title: Improve "requirement not found" error to surface store context
 description: |-
   Today's `aida queue add EPIC-1-001 ...` from outside an aida-using project errors with just `Requirement not found: EPIC-1-001` — doesn't say where it looked, what storage mode it resolved, or how to point at the right store.

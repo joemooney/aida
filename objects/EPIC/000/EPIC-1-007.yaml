@@ -1,5 +1,6 @@
 id: 019df146-2d95-7ec0-8671-41833deba595
 spec_id: EPIC-1-007
+agreed_id: EPIC-9
 title: 'Build banner: build time + git SHA + dirty flag in --version'
 description: |-
   Every aida build stamps three values via build.rs:

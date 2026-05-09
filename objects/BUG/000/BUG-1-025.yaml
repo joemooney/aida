@@ -1,5 +1,6 @@
 id: 019df46e-e140-7252-8e76-cd979ccd2c1a
 spec_id: BUG-1-025
+agreed_id: BUG-27
 title: set_status_from_str misroutes 'in-progress' (and 'planned') to custom_status, overriding canonical enum
 description: |-
   BUG. `Requirement::set_status_from_str` (aida-core/src/models.rs:3087) only matches the four strings 'Draft', 'Approved', 'Completed', 'Rejected'. Anything else — including 'in-progress', 'In Progress', 'InProgress', 'in_progress', and 'planned' — falls through to the wildcard arm and gets stored as `custom_status`.

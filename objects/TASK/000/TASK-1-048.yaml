@@ -1,5 +1,6 @@
 id: 019df6a9-320f-7b41-ad42-fa4a3af4e316
 spec_id: TASK-1-048
+agreed_id: TASK-28
 title: 'aida statusline: switch brand prefix from ''aida'' to ''αιδα'''
 description: |-
   Per the chat thread on what the leading 'aida' anchor in the statusline is for: keep the same 4-column footprint but use Greek transliteration so the prefix carries a quiet identity marker (the δ specifically is unmistakably Greek) without making the line foreign. ΑΙΔΑ → αιδα: lowercase to match the existing dimmed-anchor styling.

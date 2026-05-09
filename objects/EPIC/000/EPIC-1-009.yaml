@@ -1,5 +1,6 @@
 id: 019df146-d47d-7e31-9ba7-b58246eb5b4d
 spec_id: EPIC-1-009
+agreed_id: EPIC-10
 title: 'CLI ergonomics: help triage, scaffolder JSON safety, warnings cleanup'
 description: |-
   Smaller polish work that didn't fit the larger themes but materially improved UX.

@@ -1,5 +1,6 @@
 id: 019df420-aa3f-7b03-9d73-326bbeed57af
 spec_id: FR-1-013
+agreed_id: FR-273
 title: Scaffold Claude Code statusLine block in .claude/settings.json
 description: |-
   ## Problem

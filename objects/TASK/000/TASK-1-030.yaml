@@ -1,5 +1,6 @@
 id: 019df57e-1323-7320-8815-72420e3b2be1
 spec_id: TASK-1-030
+agreed_id: TASK-25
 title: Add /aida-queue skill (read-only queue inspection)
 description: |-
   Skill gap: /aida-pickup grabs the queue head and starts work, but there's no skill for just inspecting the queue without committing to start the next item. /aida-queue fills that.

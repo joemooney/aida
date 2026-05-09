@@ -1,5 +1,6 @@
 id: 019dfbe7-1ccf-7420-b5da-b0a40a750666
 spec_id: FR-1-055
+agreed_id: FR-263
 title: aida node release should optionally free block ownership
 description: |-
   ## Problem

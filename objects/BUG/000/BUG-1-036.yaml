@@ -1,5 +1,6 @@
 id: 019df59a-ccbe-7e62-80a7-8c5712576e6f
 spec_id: BUG-1-036
+agreed_id: BUG-18
 title: scaffolder hooks.rs Rust strings have drifted from templates/hooks/ files
 description: |-
   **Symptom**

@@ -1,5 +1,6 @@
 id: 019df584-d6cc-7600-b6b7-09c6d9716275
 spec_id: TASK-1-031
+agreed_id: TASK-29
 title: Re-link .claude/hooks/aida-git-guardrails.sh as symlink to master template
 description: |-
   Drift cleanup: .claude/hooks/aida-git-guardrails.sh is a regular file but its content is byte-identical to aida-core/templates/hooks/aida-git-guardrails.sh. The other two hooks in this dir (aida-track-commits.sh, aida-validate-commit.sh) are correctly symlinked. The mismatch means edits to the master copy don't propagate.

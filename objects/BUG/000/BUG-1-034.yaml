@@ -1,5 +1,6 @@
 id: 019df587-17f4-74e3-99ea-1cbb3ab49253
 spec_id: BUG-1-034
+agreed_id: BUG-30
 title: scaffold extract and scaffold status disagree on whether the AIDA Generated header is part of the embedded template
 description: |-
   **Symptom**

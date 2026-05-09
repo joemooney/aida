@@ -1,5 +1,6 @@
 id: 019df5d7-6215-7a00-aaa3-55baae9596f1
 spec_id: BUG-1-040
+agreed_id: BUG-26
 title: Legacy Storage facade routes bulk ops through GitBackend::save() instead of update_requirement(), producing noisy chore commits and rewriting every YAML
 description: |-
   **Symptom**

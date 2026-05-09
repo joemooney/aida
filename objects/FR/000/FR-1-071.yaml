@@ -1,5 +1,6 @@
 id: 019e0a7e-7d24-7ca3-adf4-be001387dace
 spec_id: FR-1-071
+agreed_id: FR-259
 title: 'aida db retire-legacy-ids: collapse legacy spec_ids onto agreed_ids'
 description: |-
   ## Problem

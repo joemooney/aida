@@ -1,5 +1,6 @@
 id: 019df584-dc7d-7960-8759-ef2615c79ea9
 spec_id: TASK-1-032
+agreed_id: TASK-17
 title: 'CLAUDE.md: clarify .claude/ symlink layout (per-file, not per-directory)'
 description: |-
   CLAUDE.md says: 'Project-local templates at .claude/skills/, .claude/commands/, .claude/hooks/, and .claude/settings.json are symlinks into aida-core/templates/'.

@@ -1,5 +1,6 @@
 id: 019df599-41ff-7fd2-bb9e-c226697fd0f9
 spec_id: FR-1-035
+agreed_id: FR-274
 title: Split AIDA system docs out of CLAUDE.md and AGENTS.md into a shared .claude/AIDA.md
 description: |-
   **Problem**

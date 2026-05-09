@@ -1,5 +1,6 @@
 id: 019df145-51da-7c23-ab31-910ad58c4c44
 spec_id: EPIC-1-004
+agreed_id: EPIC-18
 title: 'Dev workflow: activate, serve, release, patch + aida shell wrapper'
 description: |-
   Pyenv-style developer toolkit for working ON aida itself.

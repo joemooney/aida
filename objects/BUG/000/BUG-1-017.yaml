@@ -1,5 +1,6 @@
 id: 019df435-88f4-7221-96b6-870884d4fe7a
 spec_id: BUG-1-017
+agreed_id: BUG-19
 title: Commit hooks reject node-aware spec IDs and run legacy SQLite migration
 description: |-
   Two scaffolding-hook bugs surfaced while committing BUG-1-014 and TASK-1-015:

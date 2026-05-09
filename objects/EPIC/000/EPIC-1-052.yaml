@@ -1,5 +1,6 @@
 id: 019dfb7b-0f6f-7e82-a3ba-0b0a8f211c89
 spec_id: EPIC-1-052
+agreed_id: EPIC-11
 title: 'Per-clone node IDs: registry, auto-acquire, format-policy config'
 description: |-
   **Problem reported 2026-05-05**

@@ -1,5 +1,6 @@
 id: 019dfc0c-f208-7ad2-bed7-df39d2741af9
 spec_id: BUG-1-065
+agreed_id: BUG-25
 title: scaffold status/upgrade ignores missing @.claude/AIDA.md import line in CLAUDE.md
 description: |-
   ## Problem

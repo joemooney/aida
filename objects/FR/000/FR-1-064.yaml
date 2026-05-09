@@ -1,5 +1,6 @@
 id: 019dfc00-ea49-71d3-b65b-997144d020cb
 spec_id: FR-1-064
+agreed_id: FR-280
 title: 'aida scaffold diff: --list mode + AIDA-managed-portion-only diff for CLAUDE.md / AGENTS.md'
 description: |-
   ## Problem

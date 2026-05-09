@@ -1,5 +1,6 @@
 id: 019df43b-46e4-7c62-8381-130daa33a01b
 spec_id: TASK-1-019
+agreed_id: TASK-19
 title: Switch aida dev activate PS1 to splice semantics for clean composition with roles
 description: |-
   'aida dev activate' uses save/restore for PS1 (AIDA_DEV_PREV_PS1) — it captures the full PS1 at activation time and restores it on deactivate. This is fragile when other things modify PS1 in between (notably 'aida role enter', which now also touches PS1 via splice — see TASK-1-018).

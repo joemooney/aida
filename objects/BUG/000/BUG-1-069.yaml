@@ -1,5 +1,6 @@
 id: 019e0a64-c27c-76d1-8149-6be8a92c4f99
 spec_id: BUG-1-069
+agreed_id: BUG-22
 title: register_node CAS retry wedges on rebase conflict when two clones acquire concurrently
 description: |-
   ## Symptom

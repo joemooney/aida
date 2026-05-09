@@ -1,5 +1,6 @@
 id: 019df5c0-db66-7d91-8f6e-b1f5c2693da9
 spec_id: BUG-1-038
+agreed_id: BUG-17
 title: aida history default mode was per-event chronology, slow and noisy
 description: |-
   **Reported by user:** the chronological per-event view (one line per status change / comment / etc.) was the wrong default. Took 6+ seconds, scattered each requirement's activity across many lines, and didn't answer the actual user need: 'when I return to work on the project, get a sense of what I was up to previously'.

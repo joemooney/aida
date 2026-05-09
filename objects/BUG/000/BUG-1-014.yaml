@@ -1,5 +1,6 @@
 id: 019df42e-eeae-7090-8c1c-84052446d8bb
 spec_id: BUG-1-014
+agreed_id: BUG-24
 title: /aida-pickup slash command + canonical role-enter form missing in skill body
 description: |-
   Commit 835431b added the aida-pickup skill file and aida queue next/done CLI but missed the matching commands/aida-pickup.md, so fresh Claude sessions could not invoke /aida-pickup. Same skill body recommended the install-gated 'aida-role <name>' shell helper instead of the canonical 'aida role enter <name>' form, which only works after 'aida dev shell-init --install'.

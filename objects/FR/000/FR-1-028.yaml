@@ -1,5 +1,6 @@
 id: 019df46f-8296-71a0-9843-af7d9947dc6a
 spec_id: FR-1-028
+agreed_id: FR-269
 title: aida scaffold upgrade — proper upgrade subcommand with merge strategies
 description: |-
   Add `aida scaffold upgrade` subcommand. Today users reflexively reach for it (it's the obvious verb after `status` reports drift), but it doesn't exist — only `apply` (which skips) and `apply --force` (which clobbers).

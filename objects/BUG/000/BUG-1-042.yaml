@@ -1,5 +1,6 @@
 id: 019df5ff-afec-78a2-9c0a-764054a5716f
 spec_id: BUG-1-042
+agreed_id: BUG-29
 title: check_file_status reports false drift on YAML-frontmatter files (checksum scope mismatch)
 description: |-
   **Symptom**

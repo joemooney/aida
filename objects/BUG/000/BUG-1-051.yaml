@@ -1,5 +1,6 @@
 id: 019dfb7a-33e3-7aa3-bdf0-967b3fd63055
 spec_id: BUG-1-051
+agreed_id: BUG-21
 title: aida db sync --pull fails on divergent branches with confusing 'git commit failed' fallout
 description: |-
   See commit 1ff6ff4 for the fix. Three stacked issues:

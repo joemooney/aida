@@ -1,5 +1,6 @@
 id: 019df65c-143e-7482-972d-f38be22d5e39
 spec_id: FR-1-047
+agreed_id: FR-270
 title: Managed-merge slot-merge for settings.json + .mcp.json (FR-1-028 v2 / SPIKE-1-029 Q3)
 description: |-
   **Closes the v2 of FR-1-028 / SPIKE-1-029 §Q3**

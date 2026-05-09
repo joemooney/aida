@@ -1,5 +1,6 @@
 id: 019df6b3-3fff-7ea3-b50f-9512a39b437f
 spec_id: BUG-1-049
+agreed_id: BUG-33
 title: aida dev serve picks stale release aida-server binary, falls back to YAML and dies on orphan store
 description: |-
   **Reported in chat 2026-05-05**: 'aida dev serve' from the AIDA repo failed with:

@@ -1,5 +1,6 @@
 id: 019df46f-c199-7c31-b818-f54e5c44d554
 spec_id: SPIKE-1-029
+agreed_id: SPIKE-5
 title: 'Spike: scaffold file categorization (template / seed / managed-merge)'
 description: |-
   Design the categorization model for scaffolded files so `scaffold upgrade` (FR-1-028) has well-defined per-file semantics.

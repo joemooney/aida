@@ -1,5 +1,6 @@
 id: 019e0a7e-77c5-7862-9f72-92fef50cab70
 spec_id: FR-1-070
+agreed_id: FR-268
 title: 'aida list: hide origin id by default; --show-origin to surface; rename column to Origin ID'
 description: |-
   ## Problem

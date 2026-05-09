@@ -1,5 +1,6 @@
 id: 019df461-ab75-7d00-b6c4-406b30f8a5dc
 spec_id: TASK-1-023
+agreed_id: TASK-27
 title: 'Scaffolder: re-extract .claude/hooks/ scripts on aida scaffold apply'
 description: |-
   Today aida scaffold apply regenerates CLAUDE.md, settings.json, skills, and commands but does NOT re-extract embedded hook scripts under .claude/hooks/. So when the binary ships a new hook (e.g. TASK-1-022's aida-role-context.sh), existing projects don't pick it up via scaffold apply — only a fresh aida init does, or manual copying.

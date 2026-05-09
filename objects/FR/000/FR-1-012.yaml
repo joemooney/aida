@@ -1,5 +1,6 @@
 id: 019df1a9-db7e-79c0-9948-4866ecedbfaa
 spec_id: FR-1-012
+agreed_id: FR-266
 title: Global queue spanning projects (aida queue --global)
 description: |-
   Queues today are per-project (stored in the orphan-branch store at <project>/.aida-store/registry/queues/<user>.yaml). For solo devs hopping between repos with the same persona (e.g., 'implementer' working on AIDA in the morning and paradox in the afternoon), this means N queues to remember/check.

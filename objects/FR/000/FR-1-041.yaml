@@ -1,5 +1,6 @@
 id: 019df5e6-68ad-7990-8f47-c9fb249d5556
 spec_id: FR-1-041
+agreed_id: FR-256
 title: 'aida statusline: --color flag and replace reqs:N with role-aware queue depth'
 description: |-
   **Two improvements to `aida statusline` (the one-line summary at `aida-cli/src/main.rs:4223`):**

@@ -1,5 +1,6 @@
 id: 019df145-ea4e-7440-b80d-88a34684f39c
 spec_id: EPIC-1-006
+agreed_id: EPIC-13
 title: Role-routed queue + producer/consumer pickup loop
 description: |-
   QueueEntry gains for_role: Option<String> field. Enables routing queued items to specific role-wearers via `aida queue add --for <role>`, and a peek/consume loop on the receiving side.

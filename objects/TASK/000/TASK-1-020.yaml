@@ -1,5 +1,6 @@
 id: 019df440-1d31-7572-af1a-e61116333ee6
 spec_id: TASK-1-020
+agreed_id: TASK-15
 title: 'Wire up missing CLI surfaces: comment list, search --limit, show --comments, rel show'
 description: |-
   Several CLI commands either fail or have ergonomic gaps on the git backend:

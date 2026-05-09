@@ -1,5 +1,6 @@
 id: 019df46f-51f2-7d50-88be-b2dfe3581474
 spec_id: FR-1-027
+agreed_id: FR-275
 title: aida scaffold diff [<file>] — text-mode unified diff for drifted files
 description: |-
   Add `aida scaffold diff` subcommand that prints a unified text diff between the embedded template and the on-disk file for drifted files.

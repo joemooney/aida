@@ -1,5 +1,6 @@
 id: 019e0a5b-22bf-7b60-a50b-12733ef1f915
 spec_id: FR-1-067
+agreed_id: FR-260
 title: 'aida upgrade --diff: vet unreleased commits before shipping'
 description: |-
   ## Problem

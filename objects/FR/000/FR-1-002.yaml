@@ -1,5 +1,6 @@
 id: 019dea97-7d5b-7711-b269-b9ca74515bbe
 spec_id: FR-1-002
+agreed_id: FR-272
 title: Write-behind batched commits for bulk-import paths
 description: |-
   Bulk-import operations (Jira sync, GitHub pull, GitLab sync, large `aida import` calls) currently incur one git commit per requirement under the write-through model adopted in EPIC-1-001. For imports of hundreds or thousands of requirements this is too slow.

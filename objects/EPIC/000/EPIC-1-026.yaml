@@ -1,5 +1,6 @@
 id: 019df46f-23d7-7853-bd39-0d01cb5ed3ea
 spec_id: EPIC-1-026
+agreed_id: EPIC-15
 title: 'Scaffold upgrade workflow: template/seed/managed-merge file categories'
 description: |-
   Today `aida scaffold` treats all scaffolded files identically (whole-file checksum + apply-or-skip). In practice they fall into three categories with different ownership semantics:

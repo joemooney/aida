@@ -1,5 +1,6 @@
 id: 019e0b05-280d-7b21-989b-ee2c9eb02676
 spec_id: FR-1-073
+agreed_id: FR-258
 title: 'Phase 3 auto-allocate: claim blocks for all common types, not just FR'
 description: |-
   ## Problem

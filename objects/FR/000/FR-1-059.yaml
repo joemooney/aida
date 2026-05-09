@@ -1,5 +1,6 @@
 id: 019dfbe7-9110-74f0-81b5-201c58dc2ad0
 spec_id: FR-1-059
+agreed_id: FR-281
 title: aida db block verify — consistency check between nodes.toml and blocks.yaml
 description: |-
   ## Problem

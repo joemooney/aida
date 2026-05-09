@@ -1,5 +1,6 @@
 id: 019df145-aa09-7531-91df-ef3090b34407
 spec_id: EPIC-1-005
+agreed_id: EPIC-12
 title: Personas / role-keyed sessions
 description: |-
   Per-shell active role identifier with persistent state, enabling multiple Claude Code sessions to wear different hats (dialog/architect/implementer/reviewer/triage) on the same project.

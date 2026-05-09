@@ -1,5 +1,6 @@
 id: 019df974-3aa2-7141-97df-053b42ff878f
 spec_id: FR-2-004
+agreed_id: FR-257
 title: Auto-sync aida-store on aida dev release
 description: The 'aida dev release' command should automatically sync the aida-store orphan branch (pull then push) as part of the release workflow. This ensures requirement state is published alongside the code tag and avoids store divergence across machines. Pull should happen before the release commit/tag; push should happen after. If the pull detects conflicts, the release should abort with a clear message directing the user to resolve store conflicts first.
 status: Completed

@@ -1,5 +1,6 @@
 id: 019dfc0c-f206-7df1-a6d6-c17beb7620d2
 spec_id: BUG-1-066
+agreed_id: BUG-28
 title: scaffold diff shows JSON-key-reorder noise on .claude/settings.json and .mcp.json
 description: |-
   ## Problem

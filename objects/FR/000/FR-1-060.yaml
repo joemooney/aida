@@ -1,5 +1,6 @@
 id: 019dfbe7-9111-7163-b07c-6925d3fcfeee
 spec_id: FR-1-060
+agreed_id: FR-262
 title: Multi-repo workspace discovery for new code repos
 description: |-
   ## Problem

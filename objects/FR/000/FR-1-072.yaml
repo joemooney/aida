@@ -1,5 +1,6 @@
 id: 019e0b05-229c-79f0-8cf0-73522b57bc4b
 spec_id: FR-1-072
+agreed_id: FR-271
 title: 'id_format counter_scope: per-type vs global counter mode'
 description: |-
   ## Problem

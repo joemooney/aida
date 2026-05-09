@@ -1,5 +1,6 @@
 id: 019df62c-ebd2-7482-bb75-aea4b5b718a8
 spec_id: FR-1-043
+agreed_id: FR-276
 title: aida session — enriched wrapper around claude --resume that surfaces AIDA role + spec context
 description: |-
   **Problem**

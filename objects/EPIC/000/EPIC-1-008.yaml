@@ -1,5 +1,6 @@
 id: 019df146-788f-7813-b185-f0762b823ee5
 spec_id: EPIC-1-008
+agreed_id: EPIC-14
 title: aida status (project overview) + aida statusline (one-liner for prompts)
 description: |-
   Two related top-level commands.

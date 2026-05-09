@@ -1,5 +1,6 @@
 id: 019df438-fa14-75c1-bb25-1ecef171c66d
 spec_id: TASK-1-018
+agreed_id: TASK-21
 title: aida role enter / end should update PS1 like aida dev activate does
 description: |-
   Symmetry with 'aida dev activate', which prepends '(aida-debug)' or '(aida-release)' to PS1 so the active build is visible at a glance. 'aida role enter <name>' currently exports AIDA_SESSION_ROLE but does not touch PS1, so there is no visual signal in the prompt that a role is active.

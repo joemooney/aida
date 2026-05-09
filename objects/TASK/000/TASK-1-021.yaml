@@ -1,5 +1,6 @@
 id: 019df44e-0a8e-7380-b588-96050dfe18df
 spec_id: TASK-1-021
+agreed_id: TASK-22
 title: 'Phase 3: per-role scope filters (auto-apply --tag/--status to list/queue)'
 description: |-
   Implements the first Phase 3 deliverable from EPIC-1-005: per-role default filters that auto-apply to 'aida list' and 'aida queue list/next' while a role is active.

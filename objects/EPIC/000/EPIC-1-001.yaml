@@ -1,5 +1,6 @@
 id: 019dea8d-c189-72e3-a27f-ea562a6ff148
 spec_id: EPIC-1-001
+agreed_id: EPIC-16
 title: Git-canonical storage with SQLite cache view
 description: |-
   Collapse AIDA's four storage backends (YAML, SQLite, PostgreSQL, Git-orphan-branch) into a single canonical model: the git orphan store is the source of truth, SQLite is a derived, rebuildable read cache for query performance, YAML is an export artifact, and PostgreSQL becomes an opt-in plugin.

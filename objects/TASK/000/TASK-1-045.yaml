@@ -1,5 +1,6 @@
 id: 019df642-3e97-72d0-b793-cc9e1cd3839f
 spec_id: TASK-1-045
+agreed_id: TASK-30
 title: 'aida statusline: omit cache:fresh, only show cache:stale'
 description: |-
   Per FR-1-041 follow-up discussion: cache:fresh is reassurance not signal in the typical solo / one-machine flow. The cache is self-healing — stale just means 'next read rebuilds' and the system handles it transparently. Showing 'cache:fresh' on every prompt is noise.

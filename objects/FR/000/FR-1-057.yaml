@@ -1,5 +1,6 @@
 id: 019dfbe7-1ccf-7da3-a563-8bd07fd491e6
 spec_id: FR-1-057
+agreed_id: FR-267
 title: Cross-repo trace link resolution
 description: |-
   ## Problem

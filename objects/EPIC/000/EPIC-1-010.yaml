@@ -1,5 +1,6 @@
 id: 019df147-38f2-7403-bf66-75e2908719a4
 spec_id: EPIC-1-010
+agreed_id: EPIC-17
 title: Documentation review/consolidate/archive + aida-desktop extraction
 description: |-
   Single-session sweep that pruned dead surface area and brought all docs in line with the post-EPIC-1-001 architecture.

@@ -1,5 +1,6 @@
 id: 019dfbe7-1cd0-7aa2-a469-419363a67ced
 spec_id: FR-1-056
+agreed_id: FR-265
 title: aida node acquire --remote-only for retroactive backfill
 description: |-
   ## Problem

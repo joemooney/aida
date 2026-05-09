@@ -1,5 +1,6 @@
 id: 019dfbe7-9110-7f21-9d61-ec20a1f505dd
 spec_id: BUG-1-058
+agreed_id: BUG-23
 title: aida search treats hyphenated terms as column-filter syntax
 description: |-
   ## Symptom

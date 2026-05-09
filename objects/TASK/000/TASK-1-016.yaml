@@ -1,5 +1,6 @@
 id: 019df42f-2b53-75a1-b93e-1e8d875b41b8
 spec_id: TASK-1-016
+agreed_id: TASK-18
 title: Enforce skill<->command parity in scaffolding template (CI check or make target)
 description: |-
   Root cause behind BUG-1-014 and TASK-1-015 is the absence of an invariant: every skill in aida-core/templates/skills/ should have a matching aida-core/templates/commands/<name>.md (with the documented exception of aida-status, which is command-only).

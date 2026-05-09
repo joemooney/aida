@@ -1,5 +1,6 @@
 id: 019df637-75d2-77f2-9782-10195d031c1b
 spec_id: FR-1-044
+agreed_id: FR-279
 title: aida session new — launch claude with title + role logging + permission-mode
 description: |-
   **Problem**

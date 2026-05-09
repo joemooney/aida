@@ -1,5 +1,6 @@
 id: 019df6b4-a6c9-70b2-a3fb-74ff82e1f7f8
 spec_id: BUG-1-050
+agreed_id: BUG-20
 title: REST POST /api/requirements ignores reqType in request body, always creates Functional
 description: |-
   **Reproduced 2026-05-05** during BUG-1-049 click-through:

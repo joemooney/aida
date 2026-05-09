@@ -1,5 +1,6 @@
 id: 019df42f-0925-7fe2-8060-4eb020c01c97
 spec_id: TASK-1-015
+agreed_id: TASK-16
 title: Backfill /aida-* command files for skills missing a slash entry
 description: |-
   10 skills in the scaffolding template had no matching commands/<name>.md file, so they were not surfaced as slash commands in fresh Claude sessions: architecture, code-review, compiler-warnings, decompose, docs, glossary, grill, plan, release, triage.

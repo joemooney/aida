@@ -1,5 +1,6 @@
 id: 019df5ca-a87f-72d0-ac1e-898b23aef1d8
 spec_id: BUG-1-039
+agreed_id: BUG-31
 title: aida history digest clustered all rows at one timestamp due to bulk-save commits
 description: |-
   **Reported by user immediately after the previous fix:** all 20 digest rows showed the same timestamp (e.g. 18:29) because GitBackend::save() rewrites every YAML on bulk-save paths (queue add, comment add, scaffold ops) and produces a single 'chore: update requirements store' commit touching dozens of files. Sorting by git commit timestamp meant one bulk commit clustered every spec it touched into the same row time.
