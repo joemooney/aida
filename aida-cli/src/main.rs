@@ -1,4 +1,5 @@
 mod cli;
+mod docs;
 mod global_queue;
 mod history;
 mod not_found;
@@ -51,9 +52,10 @@ use aida_core::{
 
 use crate::cli::{
     BlockCommand, CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand, DevCommand,
-    FeatureCommand, GitHubCommand, GitLabCommand, JiraCommand, NodeCommand, QueueCommand, RelDefCommand,
-    RelationshipCommand, ReportCommand, RoleCommand, RolePromptCommand, RoleScopeCommand,
-    ScaffoldCommand, ServerCommand, SessionCommand, TraceCommand, TypeCommand,
+    DocsCommand, FeatureCommand, GitHubCommand, GitLabCommand, JiraCommand, NodeCommand,
+    QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand, RoleCommand,
+    RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ServerCommand, SessionCommand,
+    TraceCommand, TypeCommand,
 };
 
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
@@ -415,6 +417,10 @@ fn main() -> Result<()> {
         }
         Command::McpServe => {
             mcp::run_mcp_server(&storage)?;
+        }
+        Command::Docs(docs_cmd) => {
+            // trace:FR-1-077 | ai:claude
+            handle_docs_command(docs_cmd, &storage)?;
         }
         Command::Grep {
             pattern,
@@ -1082,6 +1088,11 @@ fn handle_git_backend_command(
         }
         Command::Node(node_cmd) => {
             return handle_node_command(node_cmd, store_path);
+        }
+        Command::Docs(docs_cmd) => {
+            // trace:FR-1-077 | ai:claude
+            let store = backend.load()?;
+            return handle_docs_with_store(docs_cmd, &store);
         }
         Command::Status { no_dev_context } => {
             return handle_status_command_distributed(*no_dev_context, store_path, &backend);
@@ -4161,6 +4172,74 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
 /// Handle `aida node` subcommands. Operates on the orphan-store worktree
 /// at `store_path` (typically `.aida-store/`).
 /// trace:EPIC-1-052 | ai:claude
+/// Render the docs tree, called from the legacy (Storage facade) dispatch.
+/// trace:FR-1-077 | ai:claude
+fn handle_docs_command(cmd: &DocsCommand, storage: &Storage) -> Result<()> {
+    let store = storage.load()?;
+    handle_docs_with_store(cmd, &store)
+}
+
+/// Shared implementation — both the legacy Storage path and the git-canonical
+/// path call this with a loaded store.
+/// trace:FR-1-077 | ai:claude
+fn handle_docs_with_store(cmd: &DocsCommand, store: &RequirementsStore) -> Result<()> {
+    match cmd {
+        DocsCommand::Build { output, dry_run } => {
+            let out = output
+                .clone()
+                .unwrap_or_else(|| std::path::PathBuf::from("docs/aida"));
+            let report = docs::build(store, &out, *dry_run)?;
+
+            let total_planned =
+                report.written.len() + report.unchanged.len() + report.drifted.len();
+            println!(
+                "{} {} layer file{} ({} written, {} updated, {} unchanged)",
+                if *dry_run { "→ dry-run:".cyan() } else { "✓".green() },
+                total_planned,
+                if total_planned == 1 { "" } else { "s" },
+                report.written.len(),
+                report.drifted.len(),
+                report.unchanged.len(),
+            );
+            for p in &report.written {
+                println!("    + {}", p.display().to_string().green());
+            }
+            for p in &report.drifted {
+                println!("    ↑ {}", p.display().to_string().yellow());
+            }
+            for p in &report.deleted {
+                println!(
+                    "    {} stale (decision deleted from graph): {}",
+                    "?".yellow(),
+                    p.display()
+                );
+            }
+        }
+        DocsCommand::Check { output } => {
+            let out = output
+                .clone()
+                .unwrap_or_else(|| std::path::PathBuf::from("docs/aida"));
+            let report = docs::build(store, &out, /* dry_run */ true)?;
+            if report.has_drift() || !report.written.is_empty() {
+                eprintln!(
+                    "{} docs tree differs from graph projection:",
+                    "drift:".yellow().bold()
+                );
+                for p in &report.written {
+                    eprintln!("    missing: {}", p.display());
+                }
+                for p in &report.drifted {
+                    eprintln!("    drifted: {}", p.display());
+                }
+                eprintln!("\n    Run `aida docs build` to regenerate.");
+                std::process::exit(1);
+            }
+            println!("{} docs tree matches graph projection.", "✓".green());
+        }
+    }
+    Ok(())
+}
+
 fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Result<()> {
     use aida_core::node::NodeRegistry;
 
