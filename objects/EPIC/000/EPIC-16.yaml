@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-02T21:17:31.912989874Z
-modified_at: 2026-05-09T22:35:08.720943090Z
+modified_at: 2026-05-09T22:35:09.708751267Z
 req_type: Epic
 tags:
 - architecture
@@ -67,3 +67,8 @@ comments:
   content: ''
   created_at: 2026-05-04T19:17:06.935553943Z
   modified_at: 2026-05-04T19:17:06.935553943Z
+- id: 019e0ee1-580c-7b00-b246-8e47957f5e38
+  author: joe
+  content: Closing — git-canonical is the default, SQLite cache (438 reqs in this repo) auto-rebuilds, YAML/PostgreSQL deprecated. The phasing in the description landed across multiple sessions through Q1-Q2 2026.
+  created_at: 2026-05-09T22:35:09.708751267Z
+  modified_at: 2026-05-09T22:35:09.708751267Z
