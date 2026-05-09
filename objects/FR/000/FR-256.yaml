@@ -1,61 +1,50 @@
-id: 019df5e6-68ad-7990-8f47-c9fb249d5556
+id: 019e0dec-6a3e-7762-a6ba-85341af2ce63
 spec_id: FR-256
-title: 'aida statusline: --color flag and replace reqs:N with role-aware queue depth'
+agreed_id: FR-256
+title: 5 new RequirementTypes for docs-layers projection (Principle/Vision/Constraint/Decision/Term)
 description: |-
-  **Two improvements to `aida statusline` (the one-line summary at `aida-cli/src/main.rs:4223`):**
+  ## Why
 
-  ## 1. Replace `reqs:N` with role-aware queue depth
+  The docs-layers proposal (docs/plans/2026-05-09-documentation-layers-module.md) maps software-understanding hierarchies (arc42, C4, Diátaxis, ADRs, Constitution) onto AIDA's existing graph. Five entity types were missing as first-class kernel surface: Principle, Vision, Constraint, Decision, Term.
 
-  Today's `reqs:N` is the count of non-archived requirements in the project. It changes rarely and is essentially project-size trivia — not actionable.
+  These five types unlock:
 
-  **Replace with `q:N`** = depth of items in the queue routed to the active role (or the global queue when no role is set). When the queue is empty, omit the field entirely (don't print `q:0` — that's noise).
+  - **Stronger queries** — \`aida list --type principle\` instead of tag scans
+  - **Stronger MCP tools** — agents ask "what principles govern this codebase?" and get a typed result
+  - **Deterministic projections** — aida-docs (next module) can render the docs tree without depending on tag conventions that drift
 
-  Resolution rules:
-  - `AIDA_SESSION_ROLE` set → count rows from queue table where `for_role == $AIDA_SESSION_ROLE` and not yet picked up
-  - `AIDA_SESSION_ROLE` unset → count global queue (no role filter), same not-picked-up criterion
-  - Empty result → omit the field
+  ## Type prefixes (for short global form)
 
-  Rationale: `@FR-1-035` already tells me what I was last working on; `q:N` tells me what's waiting after that. Together they answer "where am I, and how much is in front of me" — the two questions a glance-able statusline should answer.
-
-  ## 2. `--color=auto|always|never` flag with sensible defaults
-
-  `aida statusline` currently emits plain UTF-8. The output is structured (bullet `·` separators) but colorless. Add `--color` with auto-detection:
-
-  - `auto` (default): emit color if `isatty(stdout)` AND `NO_COLOR` env var is unset
-  - `always`: always emit color
-  - `never`: never emit color
-
-  Color scheme:
-  - Separators (`·`) — dim
-  - `aida` brand prefix — dim
-  - Project name — bold green (or default — match `ls --color` directory color)
-  - `role:NAME` — bold yellow
-  - `@SPEC-ID` — bold cyan
-  - `q:N` — default (or yellow if N > some threshold? optional)
-  - `cache:fresh` — green; `cache:stale` — red
-
-  Most statusLine-consumers in Claude Code render ANSI as-is (verified via `~/.claude/settings.json` user-scope statusLine). `auto` is safe because the consumer pipes via shell — `isatty` detection plus `NO_COLOR` covers the cases.
+  | Type | Prefix | Stateful? |
+  |---|---|---|
+  | Principle | PRIN | no — always active until retired |
+  | Vision | VIS | yes — active / achieved / abandoned |
+  | Constraint | CON | yes — active / lifted |
+  | Decision | ADR | yes — proposed / accepted / superseded |
+  | Term | TERM | no |
 
   ## Acceptance
 
-  - `aida statusline` (no flag) auto-detects color, replaces `reqs:388` with `q:N` (omitted when 0)
-  - `aida statusline --color=never` matches today's plain output (drop-in compat for any pipeline parsing it)
-  - `aida statusline --color=always` always emits ANSI
-  - Sub-50ms perf budget preserved (queue table lookup is O(1) cache hit, same as the existing reqs count)
+  - ✅ \`RequirementType\` enum extended with 5 new variants in aida-core/src/models.rs
+  - ✅ \`fmt::Display\` impl + display_id paths cover them
+  - ✅ \`get_type_prefix\` returns the right prefixes
+  - ✅ \`merge_gate\` assigns ADR-1, PRIN-1, etc. on promotion
+  - ✅ \`parse_requirement_type\` and \`parse_type\` accept all 5 (with aliases like \`adr\` → Decision)
+  - ✅ Legacy SQLite/Postgres backends include the new variants in their type-to-string maps
 
-  ## Out of scope
+  ## Out of scope (for this commit)
 
-  Showing queue items per priority, queue items by other-role-routed-to-me, etc. Keep it to a single integer.
+  - aida-docs module that projects the graph (separate session, FR-1-075)
+  - Type-specific status workflows (Decision needs proposed/accepted/superseded)
+  - Custom fields per type (Decision needs consequences, alternatives, superseded_by)
 status: Completed
-priority: Medium
+priority: High
 owner: ''
 feature: Uncategorized
-created_at: 2026-05-05T02:10:11.245472338Z
-modified_at: 2026-05-05T03:20:20.810934016Z
+created_at: 2026-05-09T18:07:38.046037342Z
+modified_at: 2026-05-09T18:07:38.046037342Z
 req_type: Functional
-comments:
-- id: 019df626-8e2e-7e72-ac91-1bfe74977658
-  author: joe
-  content: ''
-  created_at: 2026-05-05T03:20:15.150573331Z
-  modified_at: 2026-05-05T03:20:15.150573331Z
+tags:
+- docs-layers
+- id-system
+- types
