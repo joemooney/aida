@@ -1,0 +1,12 @@
+id: 019e0e9b-caa8-7050-8389-9efc9f7c1223
+spec_id: BUG-37
+agreed_id: BUG-37
+title: aida init silently skips node-id auto-acquire when no origin remote
+description: If the project has no `origin` remote, the auto-acquire path is skipped silently. User has no idea node-id wasn't claimed and may discover only later when block dispense fails. Should print an explicit Note pointing at `aida node acquire`. Surfaced 2026-05-09 walkthrough.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-09T21:19:11.528173163Z
+modified_at: 2026-05-09T21:19:11.528173163Z
+req_type: Bug
