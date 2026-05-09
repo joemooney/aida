@@ -47,3 +47,11 @@ blocks:
   range_end: 140
   next: 41
   allocated_at: 2026-05-09T04:40:37.967307234Z
+- node_id: 1
+  owner: joe
+  hostname: imac
+  type_prefix: SPIKE
+  range_start: 5
+  range_end: 104
+  next: 5
+  allocated_at: 2026-05-09T04:40:40.163752645Z
