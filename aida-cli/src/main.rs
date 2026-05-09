@@ -101,6 +101,7 @@ fn main() -> Result<()> {
         centralized,
         sibling,
         registry_remote,
+        verbose,
     } = &cli.command
     {
         // Default: distributed (git-canonical) mode per EPIC-1-001.
@@ -108,7 +109,7 @@ fn main() -> Result<()> {
         // the deprecated SQLite-canonical path.
         // trace:EPIC-1-001 | ai:claude
         if *centralized {
-            handle_init_command(*no_skills, agent, *no_hooks, *force)?;
+            handle_init_command(*no_skills, agent, *no_hooks, *force, *verbose)?;
         } else if *sibling {
             handle_init_distributed_sibling(
                 registry_remote.as_deref(),
@@ -116,9 +117,12 @@ fn main() -> Result<()> {
                 *no_skills,
                 agent,
                 *no_hooks,
+                *verbose,
             )?;
         } else {
-            handle_init_distributed_worktree(*force, *no_skills, agent, *no_hooks)?;
+            handle_init_distributed_worktree(
+                *force, *no_skills, agent, *no_hooks, *verbose,
+            )?;
         }
         return Ok(());
     }
@@ -239,6 +243,8 @@ fn main() -> Result<()> {
         Command::Add {
             title,
             description,
+            description_from_file,
+            description_stdin,
             status,
             priority,
             r#type,
@@ -249,6 +255,19 @@ fn main() -> Result<()> {
             parent,
             interactive,
         } => {
+            // trace:BUG-17 | ai:claude — resolve description from inline,
+            // file, or stdin sources before dispatching.
+            let resolved_description =
+                resolve_description(description, description_from_file, *description_stdin)?;
+            let description = &resolved_description;
+
+            // trace:BUG-22 | ai:claude — warn if the title looks shell-mangled.
+            if let Some(ref t) = title {
+                if let Some(msg) = suspicious_title_signal(t) {
+                    eprintln!("{} {}", "Warning:".yellow().bold(), msg);
+                }
+            }
+
             // Default to interactive mode if no specific arguments are provided
             let should_be_interactive = *interactive
                 || (title.is_none()
@@ -569,7 +588,13 @@ fn confirm_destructive_reset(count: usize, store_path: &std::path::Path) -> Resu
     }
 }
 
-fn handle_init_command(no_skills: bool, agent: &str, no_hooks: bool, force: bool) -> Result<()> {
+fn handle_init_command(
+    no_skills: bool,
+    agent: &str,
+    no_hooks: bool,
+    force: bool,
+    verbose: bool,
+) -> Result<()> {
     eprintln!(
         "{}: --centralized initializes a SQLite-canonical store, which is deprecated.",
         "warning".yellow().bold()
@@ -631,6 +656,7 @@ fn handle_init_command(no_skills: bool, agent: &str, no_hooks: bool, force: bool
         force,
         db_path.clone(),
         "Requirements database (SQLite)",
+        verbose,
     )
 }
 
@@ -648,6 +674,7 @@ fn complete_init_scaffolding(
     force: bool,
     db_path: std::path::PathBuf,
     storage_label: &str,
+    verbose: bool,
 ) -> Result<()> {
     // Build ScaffoldConfig with escape hatches
     let mut config = ScaffoldConfig::default();
@@ -723,6 +750,11 @@ fn complete_init_scaffolding(
             std::fs::create_dir_all(parent)?;
         }
         std::fs::write(&full_path, &artifact.content)?;
+        // Hooks (and any executable shell-style scripts) need the exec
+        // bit; without it git silently ignores commit-msg hooks and the
+        // user gets a confusing "hook was ignored" warning on every
+        // commit. trace:BUG-21 | ai:claude
+        ensure_executable_if_hook(&artifact.path, &full_path);
 
         if exists {
             updated_count += 1;
@@ -760,35 +792,34 @@ fn complete_init_scaffolding(
         }
     }
 
-    // Print post-init message
+    // Print post-init message. Brief by default; --verbose for the full
+    // file inventory + per-agent hint blocks. trace:BUG-19 | ai:claude
     println!();
     println!("{}", "AIDA initialized ✓".green().bold());
-    println!();
-    println!("  {}:", "Created".bold());
-    println!("    {}", storage_label);
-    if config_for_output.generate_claude_md {
-        println!(
-            "    {}{}Claude Code MCP integration",
-            ".mcp.json".white().bold(),
-            " ".repeat(29)
-        );
-        println!(
-            "    {}{}Project context for AI sessions",
-            "CLAUDE.md".white().bold(),
-            " ".repeat(29)
-        );
-    }
-    if config_for_output.generate_agents_md {
-        println!(
-            "    {}{}Project context for Codex-compatible agents",
-            "AGENTS.md".white().bold(),
-            " ".repeat(29)
-        );
-    }
-    if config_for_output.generate_skills
-        || config_for_output.generate_commands
-        || config_for_output.generate_codex_skills
-    {
+
+    if verbose {
+        println!();
+        println!("  {}:", "Created".bold());
+        println!("    {}", storage_label);
+        if config_for_output.generate_claude_md {
+            println!(
+                "    {}{}Claude Code MCP integration",
+                ".mcp.json".white().bold(),
+                " ".repeat(29)
+            );
+            println!(
+                "    {}{}Project context for AI sessions",
+                "CLAUDE.md".white().bold(),
+                " ".repeat(29)
+            );
+        }
+        if config_for_output.generate_agents_md {
+            println!(
+                "    {}{}Project context for Codex-compatible agents",
+                "AGENTS.md".white().bold(),
+                " ".repeat(29)
+            );
+        }
         if config_for_output.generate_skills {
             println!(
                 "    {}{}Workflow skills",
@@ -810,29 +841,31 @@ fn complete_init_scaffolding(
                 " ".repeat(24)
             );
         }
-    }
-    if !no_hooks && config_for_output.generate_claude_code_hooks {
+        if !no_hooks && config_for_output.generate_claude_code_hooks {
+            println!(
+                "    {}{}Commit validation hooks",
+                ".claude/hooks/".white().bold(),
+                " ".repeat(24)
+            );
+        }
+        if !no_hooks && config_for_output.generate_git_hooks {
+            println!(
+                "    {}{}Git commit-msg hook",
+                ".git/hooks/commit-msg".white().bold(),
+                " ".repeat(18)
+            );
+        }
         println!(
-            "    {}{}Commit validation hooks",
-            ".claude/hooks/".white().bold(),
-            " ".repeat(24)
+            "    {}{}Implementation plan archive",
+            "docs/plans/".white().bold(),
+            " ".repeat(27)
         );
+    } else {
+        // Brief: one line of storage location + counts.
+        println!("  Storage: {}", storage_label.dimmed());
     }
-    if !no_hooks && config_for_output.generate_git_hooks {
-        println!(
-            "    {}{}Git commit-msg hook",
-            ".git/hooks/commit-msg".white().bold(),
-            " ".repeat(18)
-        );
-    }
-    println!(
-        "    {}{}Implementation plan archive",
-        "docs/plans/".white().bold(),
-        " ".repeat(27)
-    );
 
     if skipped_count > 0 {
-        println!();
         println!(
             "  {} files skipped (already exist, use --force to overwrite)",
             skipped_count.to_string().yellow(),
@@ -843,14 +876,30 @@ fn complete_init_scaffolding(
     }
 
     println!();
-    println!("  {}:", "Quick start".bold());
+    println!("  {}:", "Next".bold());
     println!(
-        "    {}",
-        "aida add --title \"User auth\" --type story --status draft".cyan()
+        "    {}{}capture project intent",
+        "aida add --type vision --title \"...\"".cyan(),
+        " ".repeat(2)
     );
-    println!("    {}", "aida list".cyan());
+    println!(
+        "    {}{}see what exists",
+        "aida list".cyan(),
+        " ".repeat(29)
+    );
+    println!(
+        "    {}{}project as layered docs",
+        "aida docs build".cyan(),
+        " ".repeat(23)
+    );
 
-    if config_for_output.generate_claude_md {
+    if !verbose {
+        println!();
+        println!(
+            "  {}",
+            "(re-run with --verbose for the full file inventory)".dimmed()
+        );
+    } else if config_for_output.generate_claude_md {
         println!();
         println!("  {}:", "In Claude Code".bold());
         println!(
@@ -863,26 +912,12 @@ fn complete_init_scaffolding(
             "/aida-req".cyan(),
             " ".repeat(19)
         );
-    }
-    if config_for_output.generate_agents_md {
-        println!();
-        println!("  {}:", "In Codex CLI".bold());
         println!(
-            "    {}{}Read project guidance",
-            "AGENTS.md".cyan(),
-            " ".repeat(23)
-        );
-        println!(
-            "    {}{}Run AIDA commands from terminal",
-            "aida show FR-0001".cyan(),
-            " ".repeat(15)
+            "    {}{}See all available skills",
+            "/aida-".cyan(),
+            " ".repeat(22)
         );
     }
-    println!(
-        "    {}{}See all available skills",
-        "/aida-".cyan(),
-        " ".repeat(22)
-    );
     println!();
 
     Ok(())
@@ -1205,6 +1240,8 @@ fn handle_git_backend_command(
         Command::Add {
             title,
             description,
+            description_from_file,
+            description_stdin,
             status,
             priority,
             r#type,
@@ -1213,13 +1250,20 @@ fn handle_git_backend_command(
             prefix,
             ..
         } => {
+            // trace:BUG-17 | ai:claude
+            let resolved_description =
+                resolve_description(description, description_from_file, *description_stdin)?;
+            // trace:BUG-22 | ai:claude
+            if let Some(ref t) = title {
+                if let Some(msg) = suspicious_title_signal(t) {
+                    eprintln!("{} {}", "Warning:".yellow().bold(), msg);
+                }
+            }
             let mut req = Requirement::new(
                 title
                     .clone()
                     .unwrap_or_else(|| "Untitled".to_string()),
-                description
-                    .clone()
-                    .unwrap_or_default(),
+                resolved_description.unwrap_or_default(),
             );
             if let Some(s) = status {
                 req.set_status_from_str(&capitalize(s));
@@ -2007,6 +2051,84 @@ fn capitalize(s: &str) -> String {
     }
 }
 
+/// Detect signs that a `--title` was mangled by shell command-substitution
+/// (backticks the user forgot to escape, an unmatched quote that lost the
+/// rest of the string). Returns Some(message) if suspicious. Caller should
+/// print as a warning — never reject — since false positives are possible.
+/// trace:BUG-22 | ai:claude
+fn suspicious_title_signal(title: &str) -> Option<String> {
+    if title.contains('`') {
+        return Some(format!(
+            "title contains a backtick — if you meant a literal `, escape it (\\\\`) \
+             or quote the whole title in single quotes; otherwise the shell may have \
+             mangled it"
+        ));
+    }
+    // An odd count of unescaped double-quotes is a strong signal of broken quoting.
+    let dq_count = title.chars().filter(|c| *c == '"').count();
+    if dq_count % 2 == 1 {
+        return Some("title contains an unbalanced double-quote — likely a shell-quoting artifact".to_string());
+    }
+    None
+}
+
+/// Ensure git/claude hook files are executable. Called from scaffolder
+/// write paths so freshly-scaffolded hooks don't trigger git's "hook was
+/// ignored because not executable" warning.
+/// trace:BUG-21 | ai:claude
+fn ensure_executable_if_hook(rel_path: &std::path::Path, full_path: &std::path::Path) {
+    let s = rel_path.to_string_lossy();
+    let is_hook = s.starts_with(".git/hooks/")
+        || s.starts_with(".claude/hooks/")
+        || s.ends_with(".sh");
+    if !is_hook {
+        return;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(meta) = std::fs::metadata(full_path) {
+            let mut p = meta.permissions();
+            p.set_mode(0o755);
+            let _ = std::fs::set_permissions(full_path, p);
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = full_path; // no-op on non-unix
+    }
+}
+
+/// Resolve the description from one of three sources: inline `--description`,
+/// `--description-from-file PATH`, or `--description-stdin`. The CLI struct
+/// already enforces mutual exclusion via `conflicts_with_all`; here we just
+/// fetch the content from the right source. Returns `Ok(None)` when no
+/// source is set (caller falls back to empty / interactive prompt).
+/// trace:BUG-17 | ai:claude
+fn resolve_description(
+    description: &Option<String>,
+    description_from_file: &Option<std::path::PathBuf>,
+    description_stdin: bool,
+) -> Result<Option<String>> {
+    if let Some(d) = description {
+        return Ok(Some(d.clone()));
+    }
+    if let Some(path) = description_from_file {
+        let body = std::fs::read_to_string(path)
+            .with_context(|| format!("failed to read description from {}", path.display()))?;
+        return Ok(Some(body));
+    }
+    if description_stdin {
+        use std::io::Read;
+        let mut body = String::new();
+        std::io::stdin()
+            .read_to_string(&mut body)
+            .context("failed to read description from stdin")?;
+        return Ok(Some(body));
+    }
+    Ok(None)
+}
+
 fn parse_requirement_type(s: &str) -> Result<RequirementType> {
     match s.to_lowercase().as_str() {
         "functional" | "fr" => Ok(RequirementType::Functional),
@@ -2041,6 +2163,7 @@ fn handle_init_distributed_worktree(
     no_skills: bool,
     agent: &str,
     no_hooks: bool,
+    verbose: bool,
 ) -> Result<()> {
     use aida_core::git_ops;
 
@@ -2068,7 +2191,9 @@ fn handle_init_distributed_worktree(
         && !worktree_present
         && git_ops::remote_branch_exists(&cwd, "origin", branch_name)
     {
-        return handle_init_post_clone(&cwd, worktree_dir, branch_name, no_skills, agent, no_hooks);
+        return handle_init_post_clone(
+            &cwd, worktree_dir, branch_name, no_skills, agent, no_hooks, verbose,
+        );
     }
 
     // Check if already initialized
@@ -2207,6 +2332,7 @@ fn handle_init_distributed_worktree(
         force,
         std::path::PathBuf::from(worktree_dir),
         &storage_label,
+        verbose,
     )?;
 
     println!();
@@ -2236,6 +2362,7 @@ fn handle_init_post_clone(
     no_skills: bool,
     agent: &str,
     no_hooks: bool,
+    verbose: bool,
 ) -> Result<()> {
     use aida_core::git_ops;
 
@@ -2336,6 +2463,7 @@ fn handle_init_post_clone(
         false, // force
         std::path::PathBuf::from(worktree_dir),
         &storage_label,
+        verbose,
     )?;
 
     // Prompt the user to acquire a node id. Auto-allocate happens inside
@@ -2437,6 +2565,7 @@ fn handle_init_distributed_sibling(
     no_skills: bool,
     agent: &str,
     no_hooks: bool,
+    verbose: bool,
 ) -> Result<()> {
     use aida_core::git_ops;
 
@@ -2646,6 +2775,7 @@ fn handle_init_distributed_sibling(
         force,
         std::path::PathBuf::from("aida-store"),
         &storage_label,
+        verbose,
     )?;
 
     println!();
@@ -11955,6 +12085,21 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
         } => {
             let user_id = get_user(user);
             let store = storage.load()?;
+
+            // Default routing: when no --for is given but the active session
+            // has a role (AIDA_SESSION_ROLE), route to that role automatically.
+            // Without this, `queue add X` produced an unrouted entry that
+            // `queue next` (filtered to active role by default) wouldn't show
+            // — surprising "queue is empty" right after queueing something.
+            // Pass `--for any` to keep the unrouted behavior explicitly.
+            // trace:BUG-18 | ai:claude
+            let r#for: Option<String> = match r#for.as_deref() {
+                Some("any") => None,
+                Some(role) => Some(role.to_string()),
+                None => std::env::var("AIDA_SESSION_ROLE")
+                    .ok()
+                    .filter(|s| !s.is_empty()),
+            };
 
             // Resolve requirement ID
             let req = if let Ok(uuid) = uuid::Uuid::parse_str(id) {

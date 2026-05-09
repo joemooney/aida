@@ -60,13 +60,10 @@ pub fn build(
     planned.push((output_dir.join("07-quality.md"), render_quality(store)));
     planned.push((output_dir.join("10-glossary.md"), render_glossary(store)));
 
-    // Decisions: one file per Decision req, plus an index.
+    // Decisions: one file per Decision req, plus an index — sorted by id
+    // so ADR-1 lands before ADR-2 in the index. trace:BUG-20 | ai:claude
     let decisions_dir = output_dir.join("05-decisions");
-    let decisions: Vec<&Requirement> = store
-        .requirements
-        .iter()
-        .filter(|r| matches!(r.req_type, RequirementType::Decision))
-        .collect();
+    let decisions = filter_type_sorted(store, &RequirementType::Decision);
     planned.push((decisions_dir.join("README.md"), render_decisions_index(&decisions)));
     for d in &decisions {
         let filename = decision_filename(d);
@@ -195,7 +192,7 @@ fn render_index(store: &RequirementsStore) -> String {
 }
 
 fn render_constitution(store: &RequirementsStore) -> String {
-    let principles = filter_type(store, &RequirementType::Principle);
+    let principles = filter_type_sorted(store, &RequirementType::Principle);
     let mut s = String::from("# Constitution\n\n");
     s.push_str(
         "Non-negotiable principles that govern how this project is built. \
@@ -219,7 +216,7 @@ fn render_constitution(store: &RequirementsStore) -> String {
 }
 
 fn render_vision(store: &RequirementsStore) -> String {
-    let visions = filter_type(store, &RequirementType::Vision);
+    let visions = filter_type_sorted(store, &RequirementType::Vision);
     let mut s = String::from("# Vision\n\n");
     s.push_str(
         "Target outcomes — what we're building, for whom, and what \"done\" \
@@ -246,7 +243,7 @@ fn render_vision(store: &RequirementsStore) -> String {
 }
 
 fn render_constraints(store: &RequirementsStore) -> String {
-    let constraints = filter_type(store, &RequirementType::Constraint);
+    let constraints = filter_type_sorted(store, &RequirementType::Constraint);
     let mut s = String::from("# Constraints\n\n");
     s.push_str(
         "External, technical, or organizational constraints the project \
@@ -316,7 +313,7 @@ fn render_decision(d: &Requirement) -> String {
 }
 
 fn render_quality(store: &RequirementsStore) -> String {
-    let nfrs = filter_type(store, &RequirementType::NonFunctional);
+    let nfrs = filter_type_sorted(store, &RequirementType::NonFunctional);
     let mut s = String::from("# Quality Requirements\n\n");
     s.push_str(
         "Performance, reliability, security, and other non-functional \
@@ -370,6 +367,28 @@ fn render_glossary(store: &RequirementsStore) -> String {
 
 fn filter_type<'a>(store: &'a RequirementsStore, t: &RequirementType) -> Vec<&'a Requirement> {
     store.requirements.iter().filter(|r| &r.req_type == t).collect()
+}
+
+/// Filter by type AND sort by spec_id ascending so the projected docs list
+/// PRIN-1 before PRIN-2, ADR-1 before ADR-2, etc. Without this, the order
+/// is `store.requirements` insertion order, which surprises readers.
+/// trace:BUG-20 | ai:claude
+fn filter_type_sorted<'a>(
+    store: &'a RequirementsStore,
+    t: &RequirementType,
+) -> Vec<&'a Requirement> {
+    let mut v = filter_type(store, t);
+    v.sort_by(|a, b| {
+        let id = |r: &&Requirement| {
+            r.spec_id
+                .as_deref()
+                .or(r.agreed_id.as_deref())
+                .unwrap_or("")
+                .to_string()
+        };
+        id(a).cmp(&id(b))
+    });
+    v
 }
 
 fn count_type(store: &RequirementsStore, t: &RequirementType) -> usize {

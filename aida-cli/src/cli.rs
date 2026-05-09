@@ -1386,6 +1386,16 @@ pub enum Command {
         #[clap(long)]
         description: Option<String>,
 
+        /// Read the description body from a file. Mutually exclusive with
+        /// --description and --description-stdin. trace:BUG-17 | ai:claude
+        #[clap(long, conflicts_with_all = ["description", "description_stdin"])]
+        description_from_file: Option<PathBuf>,
+
+        /// Read the description body from stdin. Mutually exclusive with
+        /// --description and --description-from-file. trace:BUG-17 | ai:claude
+        #[clap(long, conflicts_with_all = ["description", "description_from_file"])]
+        description_stdin: bool,
+
         /// Status of the requirement (draft, approved, completed, rejected)
         #[clap(long)]
         status: Option<String>,
@@ -1727,6 +1737,11 @@ pub enum Command {
         /// Example: git@github.com:org/aida-registry.git
         #[clap(long)]
         registry_remote: Option<String>,
+
+        /// Verbose output — list every file scaffolded. Default is a brief
+        /// summary suitable for first-run UX. trace:BUG-19 | ai:claude
+        #[clap(long, short = 'v')]
+        verbose: bool,
     },
 
     /// Scaffolding management commands
