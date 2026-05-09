@@ -321,4 +321,53 @@ mod tests {
         assert!(content.is_some());
         assert!(content.unwrap().contains("AIDA"));
     }
+
+    /// Skill/command parity invariant — every skill must have a matching
+    /// slash command (with documented exceptions). Without this check,
+    /// new skills can silently land without their command, leaving them
+    /// undiscoverable in Claude Code. The other direction (command
+    /// without skill) is also flagged. trace:TASK-18 | ai:claude
+    #[test]
+    fn test_skill_command_parity() {
+        use std::collections::HashSet;
+
+        // Documented exceptions: skill-only or command-only intentionally.
+        // Keep this list short and re-evaluate any addition. (Today the
+        // master templates have full parity, so the allowlist is empty.)
+        let command_only: HashSet<&str> = HashSet::new();
+        let skill_only: HashSet<&str> = ["aida-pickup"].iter().copied().collect();
+
+        let skills: HashSet<String> = EMBEDDED_TEMPLATES
+            .keys()
+            .filter_map(|k| k.strip_prefix("skills/"))
+            .filter_map(|k| k.strip_suffix(".md"))
+            .map(|s| s.to_string())
+            .collect();
+        let commands: HashSet<String> = EMBEDDED_TEMPLATES
+            .keys()
+            .filter_map(|k| k.strip_prefix("commands/"))
+            .filter_map(|k| k.strip_suffix(".md"))
+            .map(|s| s.to_string())
+            .collect();
+
+        let missing_commands: Vec<&String> = skills
+            .difference(&commands)
+            .filter(|s| !skill_only.contains(s.as_str()))
+            .collect();
+        let missing_skills: Vec<&String> = commands
+            .difference(&skills)
+            .filter(|s| !command_only.contains(s.as_str()))
+            .collect();
+
+        assert!(
+            missing_commands.is_empty(),
+            "skills without matching commands (add the command file or allowlist in skill_only): {:?}",
+            missing_commands
+        );
+        assert!(
+            missing_skills.is_empty(),
+            "commands without matching skills (add the skill file or allowlist in command_only): {:?}",
+            missing_skills
+        );
+    }
 }
