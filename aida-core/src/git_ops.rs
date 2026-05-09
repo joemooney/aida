@@ -616,6 +616,13 @@ pub fn merge_gate(store_path: &Path) -> Result<Vec<(String, String)>> {
             crate::models::RequirementType::Sprint => "SPRINT",
             crate::models::RequirementType::Folder => "FOLDER",
             crate::models::RequirementType::Meta => "META",
+            // Docs-layer types — short ASCII prefixes that read naturally
+            // in trace comments and refs. trace:FR-1-074 | ai:claude
+            crate::models::RequirementType::Principle => "PRIN",
+            crate::models::RequirementType::Vision => "VIS",
+            crate::models::RequirementType::Constraint => "CON",
+            crate::models::RequirementType::Decision => "ADR",
+            crate::models::RequirementType::Term => "TERM",
         };
         let seq = counters.next(&type_prefix);
         let agreed = AgreedCounters::format_agreed_id(&type_prefix, seq);
