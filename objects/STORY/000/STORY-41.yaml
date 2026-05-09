@@ -13,12 +13,12 @@ description: |
   - Compares lexicographically for sort order in `aida node list`
 
   Touches: aida-core/src/node.rs, dispenser.rs, git_ops.rs (register_node_full, merge_gate prefix derivation), aida-cli's display formatting + parse_requirement_type. Estimated 2-3 hours.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T19:13:17.512063677Z
-modified_at: 2026-05-09T19:13:17.512063677Z
+modified_at: 2026-05-09T19:37:52.665528093Z
 req_type: Story
 tags:
 - node-ids
