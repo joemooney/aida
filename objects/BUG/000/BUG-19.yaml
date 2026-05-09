@@ -3,12 +3,12 @@ spec_id: BUG-19
 agreed_id: BUG-19
 title: 'aida init: brief default output + --verbose for the full inventory'
 description: Today's aida init prints ~30 lines listing every file it created. Skim-hostile for first-run UX. Default to 5-7 line summary (what got created, what to do next), keep --verbose for the full list. Surfaces in 2026-05-09 walkthrough.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T18:43:32.292033927Z
-modified_at: 2026-05-09T18:43:32.292033927Z
+modified_at: 2026-05-09T18:53:09.189268496Z
 req_type: Bug
 tags:
 - ergonomics
