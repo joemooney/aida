@@ -1,18 +1,8 @@
-# AIDA — AI-Native Requirements Management
+# AIDA — Your project's missing index
 
-**The durable, agent-readable spec layer for AI-assisted software development.**
+**A hidden kernel that maintains a stable, queryable graph of what exists, served to AI through MCP and to you through a small CLI.**
 
-Stable IDs, typed relationships, and code-to-spec traces give Claude (and you) a map of *what exists and why*, across sessions. AI assistants query structured data instead of parsing prose.
-
-## Why this exists
-
-AI coding assistants write code fast. Nobody tracks **why** the code exists. After a month of AI-assisted development:
-
-- Can you trace a line of code back to the decision that drove it?
-- Does your AI assistant know what's already been built so it doesn't re-invent it?
-- Can a new agent (or human) come into the project mid-stream and orient quickly?
-
-AIDA's bet: an opinionated, agent-readable spec layer beats unstructured markdown notes when the goal is *enforcement* — preventing duplication, surfacing prior decisions, and keeping the "why" attached to the code that implements it.
+**Without it**, coding agents start every session cold, re-deriving the same context they had yesterday; humans rediscover and re-debate decisions for years; cross-references between code and intent rot silently. **With it**, *"does this already exist?"*, *"why did we choose X?"*, and *"is this code still tied to a live requirement?"* are one query away — for the agent and for you.
 
 ```rust
 // trace:FR-042 | ai:claude
