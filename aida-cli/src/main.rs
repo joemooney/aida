@@ -5591,7 +5591,7 @@ fn pick_dev_binary_dir(
 /// True when the inactive-side build at `<repo>/target/<other>/aida` is
 /// newer than the active-side build at `<repo>/target/<active>/aida`.
 /// Used for the stale-build warning + PS1 marker.
-/// trace:FR-1-070 | ai:claude
+/// trace:FR-1-068 | ai:claude
 fn alternate_build_is_newer(repo: &std::path::Path, active: &str) -> bool {
     let other = if active == "debug" { "release" } else { "debug" };
     let active_mtime = std::fs::metadata(repo.join(format!("target/{}/aida", active)))
@@ -5615,7 +5615,7 @@ fn handle_dev_activate(
     // Resolve the explicit-profile request from any of: positional `profile`,
     // --debug / --release / --auto flags, or an existing AIDA_DEV_PROFILE_PIN.
     // Precedence: explicit CLI request beats the env-var pin; --auto clears.
-    // trace:FR-1-070 | ai:claude
+    // trace:FR-1-068 | ai:claude
     let cli_request: Option<&str> = match (profile_pos, debug_flag, release_flag, auto_flag) {
         (Some("debug"), _, _, _) => Some("debug"),
         (Some("release"), _, _, _) => Some("release"),
@@ -5754,7 +5754,7 @@ fn handle_dev_status() -> Result<()> {
     // Stale-build warning: when we know the active repo + profile, compare
     // the inactive-side build's mtime. If newer, surface — re-running
     // `aida dev activate` would silently flip you to the alternate.
-    // trace:FR-1-070 | ai:claude
+    // trace:FR-1-068 | ai:claude
     if active {
         let repo = std::env::var("AIDA_DEV_REPO").ok();
         let profile = std::env::var("AIDA_DEV_PROFILE").ok();
