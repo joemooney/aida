@@ -2547,6 +2547,17 @@ fn handle_init_distributed_worktree(
                 );
             }
         }
+    } else if !git_ops::has_remote(&cwd, "origin") {
+        // No `origin` remote → auto-acquire requires a network leg, so
+        // we skipped it. Tell the user explicitly so they don't think
+        // init "worked" and discover a missing node id later when block
+        // dispense fails. trace:walkthrough-feedback | ai:claude
+        println!(
+            "  {} no `origin` remote yet — node-id acquire skipped. Run \
+             `aida node acquire` once you've added a remote, or \
+             `git remote add origin <url>` and re-run `aida init`.",
+            "Note:".dimmed()
+        );
     }
 
     // Add .aida-store to .gitignore on main branch
@@ -2610,15 +2621,12 @@ fn handle_init_distributed_worktree(
     )?;
 
     println!();
-    println!("  {}:", "Sync store to remote".bold());
-    println!("    {}", format!("git push origin {}", branch_name).cyan());
+    println!("  {}:", "Push code + store together".bold());
+    println!("    {}                        push your branch and the orphan store in one go", "aida push".cyan());
     println!();
-    println!("  {}:", "New developer setup".bold());
-    println!("    {}", "git clone <repo>".cyan());
-    println!(
-        "    {}",
-        format!("git worktree add {} {}", worktree_dir, branch_name).cyan()
-    );
+    println!("  {}:", "Onboard a teammate".bold());
+    println!("    {}    they clone normally", "git clone <repo>".cyan());
+    println!("    {}            then `aida init` notices the orphan branch and attaches", "aida init".cyan());
     println!();
 
     Ok(())
@@ -3096,8 +3104,8 @@ fn handle_init_distributed_sibling(
     )?;
 
     println!();
-    println!("  {}:", "Sync store to remote".bold());
-    println!("    {}", "cd aida-store && git push -u origin main".cyan());
+    println!("  {}:", "Push code + store together".bold());
+    println!("    {}                        push your branch and the orphan store in one go", "aida push".cyan());
     println!();
 
     Ok(())
@@ -7548,16 +7556,15 @@ fn handle_status_command_distributed(
         match (ahead, behind) {
             (0, 0) => println!("  Branch aida-store: in sync with origin"),
             (a, 0) => println!(
-                "  Branch aida-store: {} ahead of origin (run `git push origin aida-store`)",
+                "  Branch aida-store: {} ahead of origin (run `aida push`)",
                 a.to_string().yellow()
             ),
             (0, b) => println!(
-                "  Branch aida-store: {} behind origin (run `git fetch && git pull` in {})",
-                b.to_string().yellow(),
-                store_path.display()
+                "  Branch aida-store: {} behind origin (run `aida db sync --pull`)",
+                b.to_string().yellow()
             ),
             (a, b) => println!(
-                "  Branch aida-store: {} ahead, {} behind (diverged)",
+                "  Branch aida-store: {} ahead, {} behind (diverged — `aida db sync --pull` then `aida push`)",
                 a.to_string().red(),
                 b.to_string().red()
             ),
