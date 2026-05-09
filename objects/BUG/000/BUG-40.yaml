@@ -1,0 +1,12 @@
+id: 019e0ea2-19ef-73c3-86fe-8975a385596d
+spec_id: BUG-40
+agreed_id: BUG-40
+title: aida init auto-acquire requires origin, blocking solo users from getting their preferred node id
+description: The auto-acquire path is gated on `origin_pushed` because `register_node_full` has a CAS push loop. But a solo user with no remote yet still wants their node id (e.g. JM from preferences) so subsequent `aida add` produces clean VIS-1 / FR-1 ids instead of node-aware fallback (VIS-1-1, FR-1-1). Local claim should work without origin; push deferred until remote exists. Surfaced 2026-05-09 walkthrough — user expected JM from prefs but got numeric fallback because they hadn't added origin yet.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-09T21:26:05.039512412Z
+modified_at: 2026-05-09T21:26:05.039512412Z
+req_type: Bug
