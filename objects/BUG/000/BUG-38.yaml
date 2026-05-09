@@ -1,0 +1,12 @@
+id: 019e0e9f-710c-7750-9866-82b2e83ab69c
+spec_id: BUG-38
+agreed_id: BUG-38
+title: 'aida init --verbose hint is misleading: doesn''t work after first init'
+description: 'Init prints ''(re-run with --verbose for the full file inventory)'' but after init has happened, `aida init --verbose` errors out with ''already initialized — Use --force to reinitialize''. The hint is dead text for any user who reads it after the fact. Fix options: (i) accept `aida init --verbose` on an already-initialized project and print the inventory of what''s currently scaffolded (read-only, like `aida scaffold status --verbose`), or (ii) move the hint to be printed only on the first init. Surfaced 2026-05-09 walkthrough.'
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-09T21:23:10.732961882Z
+modified_at: 2026-05-09T21:23:10.732961882Z
+req_type: Bug
