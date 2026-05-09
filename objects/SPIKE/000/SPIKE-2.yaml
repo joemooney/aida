@@ -2,12 +2,12 @@ id: b8621169-8a34-4001-a2e8-936229497c62
 spec_id: SPIKE-2
 title: Ability to edit existing comment
 description: Even after submitting a comment, we should allow the original comment to text to be updated.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: 97-Uncategorized
 created_at: 2025-11-25T21:06:58.790215612Z
-modified_at: 2026-05-09T20:31:58.660295444Z
+modified_at: 2026-05-09T20:31:59.902294182Z
 req_type: Spike
 relationships:
 - rel_type: Parent
