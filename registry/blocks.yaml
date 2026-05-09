@@ -55,3 +55,11 @@ blocks:
   range_end: 104
   next: 5
   allocated_at: 2026-05-09T04:40:40.163752645Z
+- node_id: 1
+  owner: joe
+  hostname: imac
+  type_prefix: PRIN
+  range_start: 1
+  range_end: 100
+  next: 1
+  allocated_at: 2026-05-09T18:09:51.978243591Z
