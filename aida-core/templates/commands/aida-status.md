@@ -1,28 +1,20 @@
 # Project Status
 
-Show current project status and requirements summary.
+One-shot snapshot of the project: requirement breakdown, cache
+freshness, sync state, recent activity.
 
-## Current Status
+## Snapshot
 
-!`aida list --format summary 2>/dev/null || echo "No database found"`
+!`aida status 2>/dev/null || echo "(not in an AIDA project)"`
 
 ## Instructions
 
-1. Run `aida list --status approved` to show approved requirements
-2. Run `aida list --status draft` to show draft requirements needing review
-3. Summarize the current state of the project
+Follow the workflow in `.claude/skills/aida-status.md`:
 
-## Output Format
-
-```
-## Project Status
-
-### Approved Requirements (Ready for Implementation)
-- [SPEC-ID] Title
-
-### Draft Requirements (Needing Review)
-- [SPEC-ID] Title
-
-### Recently Completed
-- [SPEC-ID] Title
-```
+1. Read the snapshot above and surface the sections that matter — don't
+   recite the whole dump
+2. Highlight anything that needs action (stale cache, unpushed orphan
+   commits, broken template symlinks)
+3. Offer follow-ups: `/aida-onboard` for a deeper orientation,
+   `/aida-pickup` to start the next queued item, `/aida-search` to drill
+   in
