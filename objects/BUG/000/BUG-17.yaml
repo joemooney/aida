@@ -1,23 +1,16 @@
-id: 019df5c0-db66-7d91-8f6e-b1f5c2693da9
+id: 019e0e0d-0dc8-7ec3-9c85-6f6c2237eaaa
 spec_id: BUG-17
-title: aida history default mode was per-event chronology, slow and noisy
-description: |-
-  **Reported by user:** the chronological per-event view (one line per status change / comment / etc.) was the wrong default. Took 6+ seconds, scattered each requirement's activity across many lines, and didn't answer the actual user need: 'when I return to work on the project, get a sense of what I was up to previously'.
-
-  **Fix:** Added a fast digest mode (default) that gives one row per recently-touched requirement, sorted by last-touch time, with current status + title. Original per-event view moved behind --events flag for users who want full chronological detail.
-
-  Speed: 118ms (digest, 250 commits scanned in one git call) vs ~3.5s (--events --oneline, 5 events) — 50x improvement on the default. The digest does a single 'git log --name-status' pass + one filesystem read per surfaced requirement, vs --events which still shells out to 'git show' per file per commit.
-
-  Output now matches what 'aida status's Recent activity section looks like, but with more rows and column-aligned.
-status: Completed
+agreed_id: BUG-17
+title: 'aida add: --description-from-file PATH and --description-stdin for multi-line input'
+description: 'Today: aida add --description "$(cat <<''EOF''... EOF)" is the only multi-line option. Painful in shell, easy to typo. Add --description-from-file PATH and --description-stdin so users can pipe or pass a file. Discovered via the 2026-05-09 walkthrough.'
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
-created_at: 2026-05-05T01:29:10.246967813Z
-modified_at: 2026-05-05T01:29:10.246967813Z
+created_at: 2026-05-09T18:43:17.064911331Z
+modified_at: 2026-05-09T18:43:17.064911331Z
 req_type: Bug
 tags:
-- cli
-- history
-- performance
-- ux
+- ergonomics
+- polish
+- walkthrough
