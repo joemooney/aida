@@ -2483,10 +2483,14 @@ fn handle_init_distributed_worktree(
 
     // Auto-acquire a node id for this clone so nodes.toml has the entry
     // from day one (instead of relying on the implicit-node-1 fallback).
-    // Only runs when origin was pushed successfully — without origin, the
-    // CAS push loop would fail. Single-machine setups skip silently and
-    // can run `aida node acquire` later. trace:EPIC-9 Story 1 | ai:claude
-    if origin_pushed {
+    // Runs whether or not origin exists: when there's no remote, the
+    // registration commit lives on the local orphan branch and gets
+    // uploaded by the next `aida push`. Without this the solo user can't
+    // get their preferred node id (e.g. JM from prefs) without first
+    // adding a remote — exactly the kind of friction kernel should hide.
+    // trace:EPIC-9 Story 1, BUG-40 | ai:claude
+    let has_origin = git_ops::has_remote(&cwd, "origin");
+    {
         let hn = hostname();
         // Prefer email from `git config user.email`; fall back to
         // `~/.aida/preferences.toml`. trace:STORY-44 | ai:claude
@@ -2519,12 +2523,14 @@ fn handle_init_distributed_worktree(
 
         match git_ops::register_node_full(&store_path, requested_id, 1, &hn, email.clone()) {
             Ok(new_id) => {
+                let suffix = if has_origin { "" } else { " (local; will sync on next `aida push`)" };
                 println!(
-                    "  {} acquired node id {} (hostname={}, email={})",
+                    "  {} acquired node id {} (hostname={}, email={}){}",
                     "Done".green(),
                     new_id,
                     hn,
-                    email.as_deref().unwrap_or("-")
+                    email.as_deref().unwrap_or("-"),
+                    suffix
                 );
                 if let Ok(blocks) =
                     auto_allocate_initial_blocks(&store_path, &new_id, &hn, email.as_deref())
@@ -2547,17 +2553,6 @@ fn handle_init_distributed_worktree(
                 );
             }
         }
-    } else if !git_ops::has_remote(&cwd, "origin") {
-        // No `origin` remote → auto-acquire requires a network leg, so
-        // we skipped it. Tell the user explicitly so they don't think
-        // init "worked" and discover a missing node id later when block
-        // dispense fails. trace:walkthrough-feedback | ai:claude
-        println!(
-            "  {} no `origin` remote yet — node-id acquire skipped. Run \
-             `aida node acquire` once you've added a remote, or \
-             `git remote add origin <url>` and re-run `aida init`.",
-            "Note:".dimmed()
-        );
     }
 
     // Add .aida-store to .gitignore on main branch
@@ -5110,9 +5105,16 @@ fn auto_allocate_block_for_type(
         .map(|e| e.to_string())
         .unwrap_or_else(|| std::env::var("USER").unwrap_or_else(|_| "unknown".into()));
 
+    // BUG-40: same local-only short-circuit as register_node_full —
+    // claim the block on the local orphan branch and let the next
+    // `aida push` upload it. Without this, a solo user on a no-origin
+    // project would get clean ids for register but fall through to
+    // node-aware ids on every `aida add` because no block was claimed.
+    let local_only = !aida_core::git_ops::has_remote(store_path, "origin");
+
     let max_retries = 3;
     for attempt in 0..max_retries {
-        if attempt > 0 {
+        if attempt > 0 && !local_only {
             let branch = aida_core::git_ops::current_branch(store_path)
                 .unwrap_or_else(|_| "aida-store".to_string());
             let _ = aida_core::git_ops::pull_rebase(store_path, "origin", &branch);
@@ -5142,6 +5144,13 @@ fn auto_allocate_block_for_type(
                 type_prefix, block.range_start, block.range_end, node_id
             ),
         )?;
+
+        if local_only {
+            return Ok(Some(format!(
+                "{}-{}..{}",
+                type_prefix, block.range_start, block.range_end
+            )));
+        }
 
         let branch = aida_core::git_ops::current_branch(store_path)
             .unwrap_or_else(|_| "aida-store".to_string());
