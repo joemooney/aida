@@ -1,23 +1,12 @@
-id: 019df42e-eeae-7090-8c1c-84052446d8bb
+id: 019e0e64-eff5-76a0-8bcf-308925c4312e
 spec_id: BUG-24
-title: /aida-pickup slash command + canonical role-enter form missing in skill body
-description: |-
-  Commit 835431b added the aida-pickup skill file and aida queue next/done CLI but missed the matching commands/aida-pickup.md, so fresh Claude sessions could not invoke /aida-pickup. Same skill body recommended the install-gated 'aida-role <name>' shell helper instead of the canonical 'aida role enter <name>' form, which only works after 'aida dev shell-init --install'.
-
-  Fix:
-  - Added aida-core/templates/commands/aida-pickup.md and symlinked into .claude/commands/
-  - Rewrote 4 references in aida-core/templates/skills/aida-pickup.md to use 'aida role enter <name>' (or eval form) and added a 'Shell helper (for developers)' section explaining the nuance
-  - Updated empty-queue hint in aida-cli/src/main.rs:9436 to use 'aida role enter dialog'
-
-  trace:via skill+command files; no Rust trace comment needed.
-status: Completed
+agreed_id: BUG-24
+title: 'commit-msg validator: REQ_ID_PATTERN rejects multi-id parens like (TASK-20, TASK-27)'
+description: REQ_ID_PATTERN matches a single REQ-ID at end of line. When a commit references multiple reqs in a single parens group (`(TASK-20, TASK-27)`), the validator falsely warns 'feat/fix commits should include requirement ID'. Should accept comma-separated IDs in one parens group.
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
-created_at: 2026-05-04T18:10:09.710960787Z
-modified_at: 2026-05-04T18:10:09.710960787Z
+created_at: 2026-05-09T20:19:16.597688157Z
+modified_at: 2026-05-09T20:19:16.597688157Z
 req_type: Bug
-tags:
-- queue
-- role
-- scaffolding
