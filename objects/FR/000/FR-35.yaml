@@ -1,0 +1,46 @@
+id: ca771251-b95b-4c6e-bb2f-64f0be7153ff
+spec_id: FR-35
+title: Apply button for suggested improved description
+description: |
+  Apply button for suggested improved description
+
+  Apply button for AI suggested description improvements. Here's a summary of the changes:
+
+    Feature implemented:
+    - Added an "✓ Apply Improved Description" button in the AI Evaluation tab's Suggested Improvements section
+    - When clicked, it replaces the current requirement description with the AI-suggested improvement
+    - The change is tracked in the requirement's history (including old and new values, author, and timestamp)
+    - A toast notification confirms the action: "Applied AI improvement to [spec_id]"
+
+    Technical changes in aida-gui/src/app.rs:
+    1. Added pending_apply_ai_description: Option<(Uuid, String)> field to the app struct for deferred mutation
+    2. Modified show_ai_tab() to accept req_id: Uuid parameter and updated both call sites
+    3. Added the Apply button in the suggested improvements section (lines 11303-11311)
+    4. Added handler for pending_apply_ai_description in the update loop (line 15647)
+    5. Added apply_ai_description() method (lines 8128-8168) that:
+      - Updates the description directly
+      - Updates modified_at timestamp
+      - Adds a HistoryEntry with the field change
+      - Saves the store
+      - Shows a toast notification
+status: Completed
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-30T19:39:37.373409767Z
+created_by: Unknown User
+modified_at: 2025-12-08T00:57:52.564320962Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 4de3b4f0-b157-4d50-8549-e98153d2324d
+  created_at: 2025-11-30T19:39:37.373448419Z
+  created_by: Unknown User
+history:
+- id: 027b45bc-3597-4058-b26d-5ee70e650845
+  author: Joe Mooney
+  timestamp: 2025-12-08T00:57:52.564329604Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed

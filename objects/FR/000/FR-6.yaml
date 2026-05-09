@@ -1,0 +1,22 @@
+id: 93ddae37-1bc1-464c-9f40-6d75f2d9c6a1
+spec_id: FR-6
+prefix_override: AUTH
+title: Session Token Authentication
+description: Implement JWT or session tokens for API authentication instead of storing user object in local storage. Include token refresh, expiration handling, and secure token storage.
+status: Rejected
+priority: Medium
+owner: joe
+feature: 170-auth
+created_at: 2025-12-13T18:21:43.076989778Z
+modified_at: 2026-05-04T19:36:01.243107429Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 20196f8e-d69c-41e3-844b-55929b536fe4
+  created_at: 2025-12-13T18:21:52.758261298Z
+comments:
+- id: 019df47d-84fa-7602-881e-b3ab2ee43c8f
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:35:59.994974459Z
+  modified_at: 2026-05-04T19:35:59.994974459Z

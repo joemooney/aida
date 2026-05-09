@@ -1,0 +1,26 @@
+id: 090ade6e-ac01-48cb-84a6-db9b3dd214b0
+spec_id: FR-12
+prefix_override: DOC
+title: Documentation requirements
+description: User Guide, README.md, help, etc.
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-27T20:55:50.580655527Z
+modified_at: 2026-05-04T19:34:51.481435946Z
+req_type: Functional
+comments:
+- id: 019df47c-756e-7771-af27-8fa2f5ebb317
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:34:50.478907389Z
+  modified_at: 2026-05-04T19:34:50.478907389Z
+urls:
+- id: b69fefd6-d4bd-4187-8802-2b904abf4b1b
+  url: https://github.com/joemooney/aida
+  title: Aida Git Repo
+  description: Source code for tool
+  open_mode: preview
+  added_at: 2025-11-27T20:56:48.807093988Z
+  added_by: Joe Mooney

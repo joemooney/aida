@@ -1,0 +1,55 @@
+id: 99b3fe30-03e4-4b7e-b52a-aaee0553dc57
+spec_id: TASK-7
+prefix_override: IMPL
+title: Implement stateless type concept with built-in Folder type (FR-0146)
+description: |-
+  Implemented (FR-0146)
+
+  ## Changes Made
+
+  ### 1. Core Model Changes (aida-core/src/models.rs)
+  - Added `stateless: bool` field to `CustomTypeDefinition` struct
+  - Added `built_in_stateless()` constructor for creating stateless built-in types
+  - Added `as_stateless()` builder method
+  - Added `Folder` variant to `RequirementType` enum
+  - Created built-in Folder type definition (prefix: FLD, color: gray)
+  - Added `is_type_stateless()` method to `RequirementsStore`
+  - Added `migrate_type_definitions()` method to auto-add missing built-in types
+
+  ### 2. Storage Migration (aida-core/src/storage.rs)
+  - Added automatic migration on load to include missing built-in types
+  - Existing YAML files automatically get new built-in types like Folder
+
+  ### 3. GUI Updates (aida-gui/src/app.rs)
+  - Settings/Types now separated into two sections:
+    - Stateful types (Functional, Non-Functional, etc.)
+    - Organizational Types (Stateless) with folder heading
+  - Added show_type_def_entry() helper method for rendering type entries
+  - Stateless types show folder icon, "[Stateless - no status/priority]" label
+  - Status section hidden for stateless types in expanded view
+  - Status/Priority fields hidden in edit forms for stateless types
+  - Status/Priority hidden in detail views for stateless requirements
+  - Folder added to Type dropdown with folder icon
+
+  ### 4. CLI Updates (aida-cli/src/main.rs)
+  - Added Folder case to type display
+
+  ### 5. SQLite Backend (aida-core/src/db/sqlite_backend.rs)
+  - Added Folder type conversion support
+
+  ## Behavior
+  - Folder type available as organizational container
+  - No status/priority tracking for Folder requirements
+  - Uses FLD- prefix for SPEC-IDs
+  - Automatically added to existing projects on first load
+status: Completed
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-02T05:53:26.997634796Z
+modified_at: 2025-12-02T05:53:26.997634796Z
+req_type: Task
+relationships:
+- rel_type: Parent
+  target_id: 62ea913d-8f31-4349-b043-5fe49b102671
+  created_at: 2025-12-02T05:53:32.076386577Z

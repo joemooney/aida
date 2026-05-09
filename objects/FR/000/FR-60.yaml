@@ -1,0 +1,28 @@
+id: 52b74820-383c-4197-a28d-ceb848a4bc02
+spec_id: FR-60
+title: testing 333
+description: |
+  testing 333
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-07T00:54:03.523732114Z
+created_by: Joe Mooney
+modified_at: 2026-05-04T19:32:01.637653050Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 44c3a73f-f643-4833-8398-4e0738b31d08
+  created_at: 2025-12-07T00:54:03.578012804Z
+  created_by: Joe Mooney
+- rel_type: Child
+  target_id: a917a16a-6c01-4044-87b8-4535d98998bf
+  created_at: 2025-12-07T00:54:18.010391699Z
+  created_by: Joe Mooney
+comments:
+- id: 019df479-ddbf-7922-8fca-d0029bda2c6a
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:32:00.575354279Z
+  modified_at: 2026-05-04T19:32:00.575354279Z

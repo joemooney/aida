@@ -1,0 +1,35 @@
+id: 2be34e0c-327c-497f-bd9e-fc981531b664
+spec_id: FR-165
+title: Work Queue View
+description: "Work Queue View\n\nA user or team can have a work queue folder type. This is an ordered list of requirements with a ranking. It is a type of Inbox and we will have other inboxes (such as notifcations, or mentions in comments). A user or a manager may wish to see what is in the work queue for that user. They can drag items higher or lower. "
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-03T03:53:18.076961209Z
+created_by: Joe Mooney
+modified_at: 2026-05-04T19:36:23.050941892Z
+req_type: Functional
+relationships:
+- rel_type: References
+  target_id: 7622e213-28e8-4401-970e-a55111e7fc2f
+  created_at: 2026-02-21T06:50:32.948193846Z
+comments:
+- id: 019df47c-cda3-7db2-8376-cd291e5a968e
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:35:13.059240912Z
+  modified_at: 2026-05-04T19:35:13.059240912Z
+- id: 019df47d-d360-7ec1-8c7a-e6a1bd6aa610
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:36:20.064688035Z
+  modified_at: 2026-05-04T19:36:20.064688035Z
+history:
+- id: 104098c7-45a5-4bb3-8bba-7ee9778595e3
+  author: Joe Mooney
+  timestamp: 2025-12-06T18:11:39.544287909Z
+  changes:
+  - field_name: description
+    old_value: "Work Queue View\n\nA user or team can have a work queue or other folders. This is an ordered list of requirements with a ranking where the ranking is discretionary ordering that the users themselves can elect. It is a type of Inbox and we will have other inboxes (such as notifcations, or mentions in comments). A user or a manager may wish to see what is in the work queue for that user. They can drag items higher or lower. "
+    new_value: "Work Queue View\n\nA user or team can have a work queue folder type. This is an ordered list of requirements with a ranking. It is a type of Inbox and we will have other inboxes (such as notifcations, or mentions in comments). A user or a manager may wish to see what is in the work queue for that user. They can drag items higher or lower. "

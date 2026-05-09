@@ -1,0 +1,89 @@
+id: 762ba866-b5e3-452c-a73e-f29b60939bea
+spec_id: STORY-24
+title: Divergence Detection and Display
+description: |-
+  As a user, I want to see when AIDA requirements and GitLab issues have diverged so that I can review and resolve differences.
+
+  ## Acceptance Criteria
+  - [ ] Visual indicator on requirements with diverged GitLab issues
+  - [ ] Filter/view to show only diverged items
+  - [ ] Show divergence type (AIDA changed, GitLab changed, both)
+  - [ ] Side-by-side diff view of changes
+  - [ ] Timestamp of last sync and detection
+  - [ ] One-click actions to resolve divergence
+  - [ ] Notification/alert when divergence detected
+
+  ## Divergence States
+  | State | Icon | Meaning |
+  |-------|------|---------|
+  | InSync | ✓ (green) | Content matches |
+  | AidaModified | ↑ (blue) | AIDA changed, GitLab outdated |
+  | GitLabModified | ↓ (orange) | GitLab changed, AIDA outdated |
+  | Conflict | ⚠ (red) | Both changed since last sync |
+  | Error | ✗ (gray) | Sync check failed |
+
+  ## Diff View
+  Show what changed:
+  ```
+  ┌─────────────────────────────────────────────────┐
+  │ FR-0042 ↔ GL-123          Status: Conflict ⚠   │
+  ├────────────────────┬────────────────────────────┤
+  │ AIDA (modified)    │ GitLab (modified)          │
+  ├────────────────────┼────────────────────────────┤
+  │ Title: Login Form  │ Title: Login Form v2       │
+  │ ~~~~~~~~~~~~~~     │ ~~~~~~~~~~~~~~~~~          │
+  │                    │                            │
+  │ Status: Approved   │ State: closed              │
+  │ ~~~~~~~~           │ labels: status::done       │
+  │                    │                            │
+  │ Description:       │ Description:               │
+  │ User can login...  │ User can login with SSO... │
+  │                    │ + Added SSO support        │
+  └────────────────────┴────────────────────────────┘
+
+  Actions: [Accept AIDA] [Accept GitLab] [Manual Merge] [Ignore]
+  ```
+
+  ## Resolution Actions
+  1. **Accept AIDA** - Push AIDA content to GitLab (Phase 4)
+  2. **Accept GitLab** - Pull GitLab content to AIDA (Phase 4)
+  3. **Manual Merge** - Open editor to combine changes
+  4. **Ignore** - Mark as reviewed, keep diverged
+  5. **Unlink** - Remove the link entirely
+
+  ## CLI Support
+  ```bash
+  # Show divergence status
+  aida gitlab status                  # All linked items
+  aida gitlab status --diverged       # Only diverged
+  aida gitlab diff FR-0042            # Show diff for specific req
+
+  # Quick resolution (Phase 4)
+  aida gitlab resolve FR-0042 --accept-aida
+  aida gitlab resolve FR-0042 --accept-gitlab
+  aida gitlab resolve FR-0042 --ignore
+  ```
+
+  ## GUI Support
+  - Badge/icon on requirement rows showing sync status
+  - "Diverged" filter in sidebar
+  - Detail panel shows sync status section
+  - "Compare" button opens diff dialog
+  - Resolution buttons in diff dialog
+status: Rejected
+priority: High
+owner: joe
+feature: 197-GitLab
+created_at: 2025-12-14T16:33:08.169921421Z
+modified_at: 2026-05-04T19:35:39.708194510Z
+req_type: Story
+relationships:
+- rel_type: Parent
+  target_id: 8f9fd810-24f7-4e52-9077-8ee3d33b1596
+  created_at: 2025-12-14T16:33:30.849784175Z
+comments:
+- id: 019df47d-2ce1-7503-86a5-749609df9942
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:35:37.441258751Z
+  modified_at: 2026-05-04T19:35:37.441258751Z

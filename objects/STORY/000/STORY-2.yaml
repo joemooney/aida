@@ -1,0 +1,125 @@
+id: 0deab621-05e2-4a9b-9e84-49346f1963ae
+spec_id: STORY-2
+title: Conflict Resolution for GitLab Sync
+description: |-
+  As a user, I want to resolve conflicts when both AIDA and GitLab have changes so that I can merge changes appropriately.
+
+  ## Acceptance Criteria
+  - [ ] Detect conflicts (both sides modified since last sync)
+  - [ ] Show three-way diff (base, AIDA, GitLab)
+  - [ ] Per-field conflict resolution
+  - [ ] Merge editor for description conflicts
+  - [ ] "Accept all AIDA" / "Accept all GitLab" shortcuts
+  - [ ] Manual edit option
+  - [ ] Conflict resolution audit trail
+  - [ ] Batch conflict resolution
+
+  ## Conflict Resolution UI
+  ```
+  ┌─────────────────────────────────────────────────────────────┐
+  │ Resolve Conflict: FR-0042 ↔ GL-123                          │
+  ├─────────────────────────────────────────────────────────────┤
+  │ Field      │ Base (Last Sync) │ AIDA      │ GitLab          │
+  ├────────────┼──────────────────┼───────────┼─────────────────┤
+  │ Title      │ Login Form       │ Login     │ Login Form v2   │
+  │            │                  │ [●]       │ [ ]             │
+  ├────────────┼──────────────────┼───────────┼─────────────────┤
+  │ Status     │ Draft            │ Approved  │ (closed)        │
+  │            │                  │ [●]       │ [ ]             │
+  ├────────────┼──────────────────┼───────────┼─────────────────┤
+  │ Desc.      │ (click to view)  │ Modified  │ Modified        │
+  │            │                  │ [Merge]                     │
+  └────────────┴──────────────────┴───────────┴─────────────────┘
+  │                                                             │
+  │ [Accept All AIDA] [Accept All GitLab] [Apply] [Cancel]      │
+  └─────────────────────────────────────────────────────────────┘
+  ```
+
+  ## Description Merge Editor
+  ```
+  ┌─────────────────────────────────────────────────────────────┐
+  │ Merge Description                                           │
+  ├─────────────────────────────────────────────────────────────┤
+  │ <<<<<<< AIDA (FR-0042)                                      │
+  │ User can login with email and password.                     │
+  │ Must support 2FA.                                           │
+  │ =======                                                     │
+  │ User can login with email/password or SSO.                  │
+  │ Added Google OAuth support.                                 │
+  │ >>>>>>> GitLab (GL-123)                                     │
+  ├─────────────────────────────────────────────────────────────┤
+  │ Merged Result:                                              │
+  │ ┌─────────────────────────────────────────────────────────┐ │
+  │ │ User can login with email/password or SSO.              │ │
+  │ │ Must support 2FA.                                       │ │
+  │ │ Added Google OAuth support.                             │ │
+  │ └─────────────────────────────────────────────────────────┘ │
+  │                                                             │
+  │ [Use AIDA] [Use GitLab] [Edit Manually] [Apply]             │
+  └─────────────────────────────────────────────────────────────┘
+  ```
+
+  ## Resolution Strategies
+  ```rust
+  pub enum ConflictStrategy {
+      /// Always prefer AIDA version
+      AlwaysAida,
+      /// Always prefer GitLab version
+      AlwaysGitLab,
+      /// Require manual resolution
+      Manual,
+      /// Field-level rules
+      FieldLevel(HashMap<Field, FieldStrategy>),
+  }
+
+  pub enum FieldStrategy {
+      PreferAida,
+      PreferGitLab,
+      PreferNewest,  // Use timestamp to determine
+      Manual,
+  }
+  ```
+
+  ## CLI Support
+  ```bash
+  # Interactive conflict resolution
+  aida gitlab resolve FR-0042
+
+  # Automated resolution
+  aida gitlab resolve FR-0042 --accept-aida
+  aida gitlab resolve FR-0042 --accept-gitlab
+  aida gitlab resolve FR-0042 --field title=aida --field desc=gitlab
+
+  # Resolve all conflicts with strategy
+  aida gitlab resolve --all --strategy aida-wins
+  ```
+
+  ## Conflict Audit
+  Store resolution decisions:
+  ```rust
+  struct ConflictResolution {
+      requirement_id: Uuid,
+      gitlab_issue_iid: u64,
+      resolved_at: DateTime<Utc>,
+      resolved_by: String,
+      strategy_used: String,
+      field_decisions: HashMap<String, String>, // field -> "aida" | "gitlab" | "merged"
+  }
+  ```
+status: Rejected
+priority: High
+owner: joe
+feature: 201-GitLab
+created_at: 2025-12-14T16:34:30.616000258Z
+modified_at: 2026-05-04T19:35:20.248281709Z
+req_type: Story
+relationships:
+- rel_type: Parent
+  target_id: 8f9fd810-24f7-4e52-9077-8ee3d33b1596
+  created_at: 2025-12-14T16:35:00.287731196Z
+comments:
+- id: 019df47c-df06-7fc2-aa98-3af47a602cde
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:35:17.510355247Z
+  modified_at: 2026-05-04T19:35:17.510355247Z

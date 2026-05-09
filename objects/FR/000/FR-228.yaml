@@ -1,0 +1,45 @@
+id: 6111bb0c-9309-4fa5-ad73-9106f46b49e9
+spec_id: FR-228
+title: Status/Priority per type
+description: |-
+  Status/Priority per type
+  When I look at Settings/Appearance/Status Icons/Edit Icons, I see many keywords that do not correspond to our four statuses. Likewise the
+    Priority Icons have more than our three. Also the ones listed are lowercase whereas the ones in the system are Captilaized first letter. I
+    like this rich set of options but we may want to enable/disable the values based on requirement type. Perhaps under the Types we can have an
+    edit button which will allow us to specify values for Priority and Status. Then the values shown for those fields would be based on the
+    requirement type. Thoughts? We can keep the Edit Icons as is and if the status or priority matches (case insnesitive) then that will be used
+    otherwise the default.
+status: Rejected
+priority: High
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-30T02:23:48.712180251Z
+created_by: Unknown User
+modified_at: 2026-05-04T19:28:43.322817834Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
+  created_at: 2025-11-30T02:23:48.712187739Z
+  created_by: Unknown User
+comments:
+- id: 019df476-d6a1-78d3-a48e-b7b59e447cf8
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:28:42.145996521Z
+  modified_at: 2026-05-04T19:28:42.145996521Z
+history:
+- id: 204adabb-9518-4714-afa4-1f4e8f17f23e
+  author: ''
+  timestamp: 2025-11-30T19:34:14.802793364Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: e448b179-8436-43f6-8997-01bd1c8b2362
+  author: ''
+  timestamp: 2025-11-30T19:34:25.402396548Z
+  changes:
+  - field_name: priority
+    old_value: Medium
+    new_value: High

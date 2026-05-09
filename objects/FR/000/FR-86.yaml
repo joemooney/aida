@@ -1,0 +1,43 @@
+id: 332b3215-b99b-43c2-8bef-a7b2bd664dd7
+spec_id: FR-86
+title: New Sprint add should remain in Sprint Planning...
+description: |-
+  New Sprint add should remain in Sprint Planning Panel
+
+  We should not revert to the req List panel
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-07T17:04:12.529801913Z
+created_by: Joe Mooney
+modified_at: 2026-05-04T19:36:35.934252804Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: fa1eaffc-7c05-4d09-95a0-d5e61e9b8529
+  created_at: 2025-12-07T17:04:12.563981644Z
+  created_by: Joe Mooney
+- rel_type: !Custom sprint_assignment
+  target_id: 404b7457-67a2-4376-a0d3-9c5ea1547951
+  created_at: 2025-12-07T17:04:27.163186231Z
+  created_by: Joe Mooney
+comments:
+- id: 019df47d-31a2-7680-8ee4-cb6963888430
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:35:38.658116492Z
+  modified_at: 2026-05-04T19:35:38.658116492Z
+- id: 019df47e-0d5f-7473-a717-7a16480dda07
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:36:34.911704549Z
+  modified_at: 2026-05-04T19:36:34.911704549Z
+history:
+- id: f38de81f-8098-4059-afec-70280776eb74
+  author: Joe Mooney
+  timestamp: 2025-12-07T17:04:27.163188920Z
+  changes:
+  - field_name: sprint_assignment
+    old_value: ''
+    new_value: REQ-0219

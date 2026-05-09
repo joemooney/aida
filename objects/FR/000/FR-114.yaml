@@ -1,0 +1,315 @@
+id: 78670bb5-090f-45a1-a022-dfcac4c11dd0
+spec_id: FR-114
+title: Cut-n-Paste
+description: |
+  Ctrl-C copy in a textbox or whenever text is selected should copy the text into the system clipboard and secondard buffer. I do a middle click
+    paste elsewhere and it is not pasting in what I copied. Perhaps this is an behavior option if what I am asking for is non-standard. Not sure
+    if this makes sense
+
+  There is a known limitation of egui - it doesn't sync to the X11 primary selection (middle-click buffer) when you copy text. There's an
+    https://github.com/emilk/egui/issues/5852 in egui for this.
+
+    The workaround would be to add the arboard crate and manually sync to the primary selection. However, this is tricky because:
+
+    1. We'd need to intercept Ctrl+C before egui handles it
+    2. We'd need to know what text is currently selected in the TextEdit widget
+    3. egui doesn't expose a TextSelectionChanged event (there's https://github.com/emilk/egui/issues/7273 for this)
+
+    Options:
+    1. Wait for egui to add support - The underlying arboard crate already supports primary selection, but egui hasn't integrated it yet
+    2. Add a workaround - We could try to detect Ctrl+C and sync egui's clipboard to the primary selection using arboard, but we wouldn't be
+    able to sync on text selection alone (only on explicit copy)
+
+    Would you like me to attempt option 2? It won't give you the full "select text = primary selection" behavior that X11 apps typically have,
+    but it would at least make Ctrl+C copy to both the clipboard AND the primary selection buffer, so middle-click paste would work after you
+    explicitly copy.
+
+    Sources:
+    - https://github.com/emilk/egui/issues/5852
+    - https://github.com/emilk/egui/issues/7273
+    - https://shallowsky.com/blog/linux/x-selection.html
+
+  ---
+
+  implemented the right-click context menu with Cut/Copy/Paste functionality. Here's what was added:
+
+    Features:
+    - Right-click context menu on text fields with:
+      - ✂ Cut - cuts selected text to clipboard (and primary selection on Linux)
+      - 📋 Copy - copies selected text to clipboard (and primary selection on Linux)
+      - 📥 Paste - pastes from clipboard
+      - Select All - selects all text in the field
+
+    Linux Primary Selection Support:
+    - When you use Copy or Cut (either via right-click menu or Ctrl+C), the text is copied to both:
+      a. The regular clipboard (Ctrl+V paste)
+      b. The X11 primary selection (middle-click paste)
+
+    This means after copying text in req-gui, you can now middle-click paste it into other applications.
+
+    Applied to:
+    - Requirement Title field
+    - Requirement Description field
+    - Comment Content field
+
+    The context menu can be easily added to other text fields as needed - just call add_text_edit_context_menu() after any TextEdit widget.
+
+    Sources:
+    - https://users.rust-lang.org/t/egui-right-click-menu/97569
+    - https://github.com/emilk/egui/discussions/1321
+    - https://github.com/emilk/egui/pull/5785
+
+  The solution captures the text selection on secondary_down (when you press the right mouse button) BEFORE the click
+    event clears the selection. This stored selection is then used when you click Cut or Copy in the context menu.
+
+    Key changes:
+    1. Added TextSelection struct to store: selected text, start/end positions, and widget ID
+    2. Added last_text_selection field to RequirementsApp
+    3. Capture selection on response.hovered() && ui.input(|i| i.pointer.secondary_down())
+    4. Use the stored selection for Cut/Copy operations
+
+    You can now:
+    1. Select text in a field
+    2. Right-click
+    3. The selection is preserved and Copy/Cut should work
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-27T06:28:15.111308891Z
+modified_at: 2026-05-04T19:34:55.623517301Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
+- rel_type: Child
+  target_id: e2ad9c97-b276-4414-9dc9-9e7d07c42b8a
+comments:
+- id: 019df47c-8577-7ec1-b182-57a609649423
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:34:54.583700230Z
+  modified_at: 2026-05-04T19:34:54.583700230Z
+history:
+- id: 3a78df95-7b21-464a-ae57-9de6af5ad533
+  author: '@joe'
+  timestamp: 2025-11-27T06:33:21.531839781Z
+  changes:
+  - field_name: description
+    old_value: |-
+      Ctrl-C copy in a textbox or whenever text is selected should copy the text into the system clipboard and secondard buffer. I do a middle click
+        paste elsewhere and it is not pasting in what I copied. Perhaps this is an behavior option if what I am asking for is non-standard. Not sure
+        if this makes sense
+
+      There is a known limitation of egui - it doesn't sync to the X11 primary selection (middle-click buffer) when you copy text. There's an
+        https://github.com/emilk/egui/issues/5852 in egui for this.
+
+        The workaround would be to add the arboard crate and manually sync to the primary selection. However, this is tricky because:
+
+        1. We'd need to intercept Ctrl+C before egui handles it
+        2. We'd need to know what text is currently selected in the TextEdit widget
+        3. egui doesn't expose a TextSelectionChanged event (there's https://github.com/emilk/egui/issues/7273 for this)
+
+        Options:
+        1. Wait for egui to add support - The underlying arboard crate already supports primary selection, but egui hasn't integrated it yet
+        2. Add a workaround - We could try to detect Ctrl+C and sync egui's clipboard to the primary selection using arboard, but we wouldn't be
+        able to sync on text selection alone (only on explicit copy)
+
+        Would you like me to attempt option 2? It won't give you the full "select text = primary selection" behavior that X11 apps typically have,
+        but it would at least make Ctrl+C copy to both the clipboard AND the primary selection buffer, so middle-click paste would work after you
+        explicitly copy.
+
+        Sources:
+        - https://github.com/emilk/egui/issues/5852
+        - https://github.com/emilk/egui/issues/7273
+        - https://shallowsky.com/blog/linux/x-selection.html
+    new_value: |
+      Ctrl-C copy in a textbox or whenever text is selected should copy the text into the system clipboard and secondard buffer. I do a middle click
+        paste elsewhere and it is not pasting in what I copied. Perhaps this is an behavior option if what I am asking for is non-standard. Not sure
+        if this makes sense
+
+      There is a known limitation of egui - it doesn't sync to the X11 primary selection (middle-click buffer) when you copy text. There's an
+        https://github.com/emilk/egui/issues/5852 in egui for this.
+
+        The workaround would be to add the arboard crate and manually sync to the primary selection. However, this is tricky because:
+
+        1. We'd need to intercept Ctrl+C before egui handles it
+        2. We'd need to know what text is currently selected in the TextEdit widget
+        3. egui doesn't expose a TextSelectionChanged event (there's https://github.com/emilk/egui/issues/7273 for this)
+
+        Options:
+        1. Wait for egui to add support - The underlying arboard crate already supports primary selection, but egui hasn't integrated it yet
+        2. Add a workaround - We could try to detect Ctrl+C and sync egui's clipboard to the primary selection using arboard, but we wouldn't be
+        able to sync on text selection alone (only on explicit copy)
+
+        Would you like me to attempt option 2? It won't give you the full "select text = primary selection" behavior that X11 apps typically have,
+        but it would at least make Ctrl+C copy to both the clipboard AND the primary selection buffer, so middle-click paste would work after you
+        explicitly copy.
+
+        Sources:
+        - https://github.com/emilk/egui/issues/5852
+        - https://github.com/emilk/egui/issues/7273
+        - https://shallowsky.com/blog/linux/x-selection.html
+
+      ---
+
+      implemented the right-click context menu with Cut/Copy/Paste functionality. Here's what was added:
+
+        Features:
+        - Right-click context menu on text fields with:
+          - ✂ Cut - cuts selected text to clipboard (and primary selection on Linux)
+          - 📋 Copy - copies selected text to clipboard (and primary selection on Linux)
+          - 📥 Paste - pastes from clipboard
+          - Select All - selects all text in the field
+
+        Linux Primary Selection Support:
+        - When you use Copy or Cut (either via right-click menu or Ctrl+C), the text is copied to both:
+          a. The regular clipboard (Ctrl+V paste)
+          b. The X11 primary selection (middle-click paste)
+
+        This means after copying text in req-gui, you can now middle-click paste it into other applications.
+
+        Applied to:
+        - Requirement Title field
+        - Requirement Description field
+        - Comment Content field
+
+        The context menu can be easily added to other text fields as needed - just call add_text_edit_context_menu() after any TextEdit widget.
+
+        Sources:
+        - https://users.rust-lang.org/t/egui-right-click-menu/97569
+        - https://github.com/emilk/egui/discussions/1321
+        - https://github.com/emilk/egui/pull/5785
+- id: 24efa44e-f2fa-4002-b53c-aa57ef022fc5
+  author: '@joe'
+  timestamp: 2025-11-27T06:41:28.386476585Z
+  changes:
+  - field_name: description
+    old_value: |
+      Ctrl-C copy in a textbox or whenever text is selected should copy the text into the system clipboard and secondard buffer. I do a middle click
+        paste elsewhere and it is not pasting in what I copied. Perhaps this is an behavior option if what I am asking for is non-standard. Not sure
+        if this makes sense
+
+      There is a known limitation of egui - it doesn't sync to the X11 primary selection (middle-click buffer) when you copy text. There's an
+        https://github.com/emilk/egui/issues/5852 in egui for this.
+
+        The workaround would be to add the arboard crate and manually sync to the primary selection. However, this is tricky because:
+
+        1. We'd need to intercept Ctrl+C before egui handles it
+        2. We'd need to know what text is currently selected in the TextEdit widget
+        3. egui doesn't expose a TextSelectionChanged event (there's https://github.com/emilk/egui/issues/7273 for this)
+
+        Options:
+        1. Wait for egui to add support - The underlying arboard crate already supports primary selection, but egui hasn't integrated it yet
+        2. Add a workaround - We could try to detect Ctrl+C and sync egui's clipboard to the primary selection using arboard, but we wouldn't be
+        able to sync on text selection alone (only on explicit copy)
+
+        Would you like me to attempt option 2? It won't give you the full "select text = primary selection" behavior that X11 apps typically have,
+        but it would at least make Ctrl+C copy to both the clipboard AND the primary selection buffer, so middle-click paste would work after you
+        explicitly copy.
+
+        Sources:
+        - https://github.com/emilk/egui/issues/5852
+        - https://github.com/emilk/egui/issues/7273
+        - https://shallowsky.com/blog/linux/x-selection.html
+
+      ---
+
+      implemented the right-click context menu with Cut/Copy/Paste functionality. Here's what was added:
+
+        Features:
+        - Right-click context menu on text fields with:
+          - ✂ Cut - cuts selected text to clipboard (and primary selection on Linux)
+          - 📋 Copy - copies selected text to clipboard (and primary selection on Linux)
+          - 📥 Paste - pastes from clipboard
+          - Select All - selects all text in the field
+
+        Linux Primary Selection Support:
+        - When you use Copy or Cut (either via right-click menu or Ctrl+C), the text is copied to both:
+          a. The regular clipboard (Ctrl+V paste)
+          b. The X11 primary selection (middle-click paste)
+
+        This means after copying text in req-gui, you can now middle-click paste it into other applications.
+
+        Applied to:
+        - Requirement Title field
+        - Requirement Description field
+        - Comment Content field
+
+        The context menu can be easily added to other text fields as needed - just call add_text_edit_context_menu() after any TextEdit widget.
+
+        Sources:
+        - https://users.rust-lang.org/t/egui-right-click-menu/97569
+        - https://github.com/emilk/egui/discussions/1321
+        - https://github.com/emilk/egui/pull/5785
+    new_value: |
+      Ctrl-C copy in a textbox or whenever text is selected should copy the text into the system clipboard and secondard buffer. I do a middle click
+        paste elsewhere and it is not pasting in what I copied. Perhaps this is an behavior option if what I am asking for is non-standard. Not sure
+        if this makes sense
+
+      There is a known limitation of egui - it doesn't sync to the X11 primary selection (middle-click buffer) when you copy text. There's an
+        https://github.com/emilk/egui/issues/5852 in egui for this.
+
+        The workaround would be to add the arboard crate and manually sync to the primary selection. However, this is tricky because:
+
+        1. We'd need to intercept Ctrl+C before egui handles it
+        2. We'd need to know what text is currently selected in the TextEdit widget
+        3. egui doesn't expose a TextSelectionChanged event (there's https://github.com/emilk/egui/issues/7273 for this)
+
+        Options:
+        1. Wait for egui to add support - The underlying arboard crate already supports primary selection, but egui hasn't integrated it yet
+        2. Add a workaround - We could try to detect Ctrl+C and sync egui's clipboard to the primary selection using arboard, but we wouldn't be
+        able to sync on text selection alone (only on explicit copy)
+
+        Would you like me to attempt option 2? It won't give you the full "select text = primary selection" behavior that X11 apps typically have,
+        but it would at least make Ctrl+C copy to both the clipboard AND the primary selection buffer, so middle-click paste would work after you
+        explicitly copy.
+
+        Sources:
+        - https://github.com/emilk/egui/issues/5852
+        - https://github.com/emilk/egui/issues/7273
+        - https://shallowsky.com/blog/linux/x-selection.html
+
+      ---
+
+      implemented the right-click context menu with Cut/Copy/Paste functionality. Here's what was added:
+
+        Features:
+        - Right-click context menu on text fields with:
+          - ✂ Cut - cuts selected text to clipboard (and primary selection on Linux)
+          - 📋 Copy - copies selected text to clipboard (and primary selection on Linux)
+          - 📥 Paste - pastes from clipboard
+          - Select All - selects all text in the field
+
+        Linux Primary Selection Support:
+        - When you use Copy or Cut (either via right-click menu or Ctrl+C), the text is copied to both:
+          a. The regular clipboard (Ctrl+V paste)
+          b. The X11 primary selection (middle-click paste)
+
+        This means after copying text in req-gui, you can now middle-click paste it into other applications.
+
+        Applied to:
+        - Requirement Title field
+        - Requirement Description field
+        - Comment Content field
+
+        The context menu can be easily added to other text fields as needed - just call add_text_edit_context_menu() after any TextEdit widget.
+
+        Sources:
+        - https://users.rust-lang.org/t/egui-right-click-menu/97569
+        - https://github.com/emilk/egui/discussions/1321
+        - https://github.com/emilk/egui/pull/5785
+
+      The solution captures the text selection on secondary_down (when you press the right mouse button) BEFORE the click
+        event clears the selection. This stored selection is then used when you click Cut or Copy in the context menu.
+
+        Key changes:
+        1. Added TextSelection struct to store: selected text, start/end positions, and widget ID
+        2. Added last_text_selection field to RequirementsApp
+        3. Capture selection on response.hovered() && ui.input(|i| i.pointer.secondary_down())
+        4. Use the stored selection for Cut/Copy operations
+
+        You can now:
+        1. Select text in a field
+        2. Right-click
+        3. The selection is preserved and Copy/Cut should work

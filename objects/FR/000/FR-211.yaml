@@ -1,0 +1,455 @@
+id: 631c854b-cc3c-4bac-bb37-087f2ed5ce72
+spec_id: FR-211
+title: Requirements List context menus for quick actions
+description: |+
+  Requirements List context menus for quick actions
+  when you press 's' in the requirements list, open a popup menu to allow you to update the status showing a menu of statuses you can up/down/enter/esc to change the current status, the current status should be selected upon popup. Likewise 'p' for priority.
+
+  The current behavior is that it is opening the edit dialog, perhaps make this an option in the settings, but the default behavior should
+    be to make the change and keep us in viewing the Details and not go into edit mode. Also, the pop-ups requirements lists quick action popups
+    should probably not be active if we are in edit mode since that may be confusing.
+
+
+  Requirements List hotkeys
+
+  | key|action |
+  |---|---------|
+  | p | Priority pop-up |
+  | s | Status pop-up |
+  | j |  navigate down |
+  | k | navigate up |
+  | n | new sibling requirement |
+  | N | new child requirement |
+  | <Backspace>,<Delete> |archive requirement |
+  | <Enter> |edit requirement |
+
+
+
+
+  The current behavior is that it is opening the edit dialog, perhaps make this an option in the settings, but the default behavior should
+    be to make the change and keep us in viewing the Details and not go into edit mode. Also, the pop-ups requirements lists quick action popups
+    should probably not be active if we are in edit mode since that may be confusing.
+
+  preventing Edit mode from triggering after a quick status change via the 's' key popup has been completed and pushed.
+
+    Summary of the fix:
+    - Added a status_popup_consumed_action flag that tracks when the status popup processes an action (Enter, Escape, click)
+    - This flag is reset to false at the start of each frame
+    - When the status popup handles any action, it sets this flag to true
+    - The Edit keybinding handler now checks !self.status_popup_consumed_action before triggering Edit mode
+    - This prevents the Enter key from being processed by both the popup (to apply the status) and the Edit handler (which would open Edit mode)
+
+    The change has been committed with: fix: prevent Edit mode trigger after status popup selection
+
+    You can now test by:
+    1. Select a requirement in the list
+    2. Press 's' to open the status popup
+    3. Use arrow keys to select a status and press Enter
+    4. The status should change and you should remain in the Details view (not enter Edit mode)
+
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-30T01:05:46.342405088Z
+created_by: Unknown User
+modified_at: 2026-05-04T19:28:49.943749874Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
+  created_at: 2025-11-30T01:05:46.342449068Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: 9ea9544f-186c-4aa3-9072-5f3936a60e83
+  created_at: 2025-11-30T20:01:10.871102037Z
+  created_by: Unknown User
+comments:
+- id: 019df476-8011-7cf3-b877-a24b50772401
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:28:19.985310271Z
+  modified_at: 2026-05-04T19:28:19.985310271Z
+- id: 019df476-f0f5-78f3-93a5-00cddfeb260c
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:28:48.885333862Z
+  modified_at: 2026-05-04T19:28:48.885333862Z
+history:
+- id: c6aa8414-51a3-4019-afec-3b0534fb1d65
+  author: Unknown User
+  timestamp: 2025-11-30T01:08:47.004045534Z
+  changes:
+  - field_name: description
+    old_value: |-
+      Requirements List context menus for quick actions
+      when you press 's' in the requirements list, open a popup menu to allow you to update the status showing a menu of statuses you can up/down/enter/esc to change the current status, the current status should be selected upon popup
+    new_value: |-
+      Requirements List context menus for quick actions
+      when you press 's' in the requirements list, open a popup menu to allow you to update the status showing a menu of statuses you can up/down/enter/esc to change the current status, the current status should be selected upon popup. Likewise 'p' for priority.
+- id: 17eea967-8f5c-42b7-ba9e-6c396c244c1f
+  author: Unknown User
+  timestamp: 2025-11-30T01:13:29.670194597Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: 344428ea-d7cf-480c-a225-f110a8b9e7cb
+  author: Unknown User
+  timestamp: 2025-11-30T01:31:06.368494849Z
+  changes:
+  - field_name: description
+    old_value: |-
+      Requirements List context menus for quick actions
+      when you press 's' in the requirements list, open a popup menu to allow you to update the status showing a menu of statuses you can up/down/enter/esc to change the current status, the current status should be selected upon popup. Likewise 'p' for priority.
+    new_value: |+
+      Requirements List context menus for quick actions
+      when you press 's' in the requirements list, open a popup menu to allow you to update the status showing a menu of statuses you can up/down/enter/esc to change the current status, the current status should be selected upon popup. Likewise 'p' for priority.
+
+      The current behavior is that it is opening the edit dialog, perhaps make this an option in the settings, but the default behavior should
+        be to make the change and keep us in viewing the Details and not go into edit mode. Also, the pop-ups requirements lists quick action popups
+        should probably not be active if we are in edit mode since that may be confusing.
+
+
+- id: 40e9b17b-3893-4e32-9032-1da15f9122d7
+  author: Unknown User
+  timestamp: 2025-11-30T01:36:12.660430478Z
+  changes:
+  - field_name: description
+    old_value: |+
+      Requirements List context menus for quick actions
+      when you press 's' in the requirements list, open a popup menu to allow you to update the status showing a menu of statuses you can up/down/enter/esc to change the current status, the current status should be selected upon popup. Likewise 'p' for priority.
+
+      The current behavior is that it is opening the edit dialog, perhaps make this an option in the settings, but the default behavior should
+        be to make the change and keep us in viewing the Details and not go into edit mode. Also, the pop-ups requirements lists quick action popups
+        should probably not be active if we are in edit mode since that may be confusing.
+
+
+    new_value: |
+      Requirements List context menus for quick actions
+      when you press 's' in the requirements list, open a popup menu to allow you to update the status showing a menu of statuses you can up/down/enter/esc to change the current status, the current status should be selected upon popup. Likewise 'p' for priority.
+
+      The current behavior is that it is opening the edit dialog, perhaps make this an option in the settings, but the default behavior should
+        be to make the change and keep us in viewing the Details and not go into edit mode. Also, the pop-ups requirements lists quick action popups
+        should probably not be active if we are in edit mode since that may be confusing.
+
+
+      The current behavior is that it is opening the edit dialog, perhaps make this an option in the settings, but the default behavior should
+        be to make the change and keep us in viewing the Details and not go into edit mode. Also, the pop-ups requirements lists quick action popups
+        should probably not be active if we are in edit mode since that may be confusing.
+- id: e3c306c4-a42c-4210-9139-45de08c633eb
+  author: Unknown User
+  timestamp: 2025-11-30T01:48:14.490550115Z
+  changes:
+  - field_name: description
+    old_value: |
+      Requirements List context menus for quick actions
+      when you press 's' in the requirements list, open a popup menu to allow you to update the status showing a menu of statuses you can up/down/enter/esc to change the current status, the current status should be selected upon popup. Likewise 'p' for priority.
+
+      The current behavior is that it is opening the edit dialog, perhaps make this an option in the settings, but the default behavior should
+        be to make the change and keep us in viewing the Details and not go into edit mode. Also, the pop-ups requirements lists quick action popups
+        should probably not be active if we are in edit mode since that may be confusing.
+
+
+      The current behavior is that it is opening the edit dialog, perhaps make this an option in the settings, but the default behavior should
+        be to make the change and keep us in viewing the Details and not go into edit mode. Also, the pop-ups requirements lists quick action popups
+        should probably not be active if we are in edit mode since that may be confusing.
+    new_value: |+
+      Requirements List context menus for quick actions
+      when you press 's' in the requirements list, open a popup menu to allow you to update the status showing a menu of statuses you can up/down/enter/esc to change the current status, the current status should be selected upon popup. Likewise 'p' for priority.
+
+      The current behavior is that it is opening the edit dialog, perhaps make this an option in the settings, but the default behavior should
+        be to make the change and keep us in viewing the Details and not go into edit mode. Also, the pop-ups requirements lists quick action popups
+        should probably not be active if we are in edit mode since that may be confusing.
+
+
+      The current behavior is that it is opening the edit dialog, perhaps make this an option in the settings, but the default behavior should
+        be to make the change and keep us in viewing the Details and not go into edit mode. Also, the pop-ups requirements lists quick action popups
+        should probably not be active if we are in edit mode since that may be confusing.
+
+      preventing Edit mode from triggering after a quick status change via the 's' key popup has been completed and pushed.
+
+        Summary of the fix:
+        - Added a status_popup_consumed_action flag that tracks when the status popup processes an action (Enter, Escape, click)
+        - This flag is reset to false at the start of each frame
+        - When the status popup handles any action, it sets this flag to true
+        - The Edit keybinding handler now checks !self.status_popup_consumed_action before triggering Edit mode
+        - This prevents the Enter key from being processed by both the popup (to apply the status) and the Edit handler (which would open Edit mode)
+
+        The change has been committed with: fix: prevent Edit mode trigger after status popup selection
+
+        You can now test by:
+        1. Select a requirement in the list
+        2. Press 's' to open the status popup
+        3. Use arrow keys to select a status and press Enter
+        4. The status should change and you should remain in the Details view (not enter Edit mode)
+
+- id: 6586807d-4d65-4cf0-8878-44187112c524
+  author: Unknown User
+  timestamp: 2025-11-30T02:49:08.908766790Z
+  changes:
+  - field_name: description
+    old_value: |+
+      Requirements List context menus for quick actions
+      when you press 's' in the requirements list, open a popup menu to allow you to update the status showing a menu of statuses you can up/down/enter/esc to change the current status, the current status should be selected upon popup. Likewise 'p' for priority.
+
+      The current behavior is that it is opening the edit dialog, perhaps make this an option in the settings, but the default behavior should
+        be to make the change and keep us in viewing the Details and not go into edit mode. Also, the pop-ups requirements lists quick action popups
+        should probably not be active if we are in edit mode since that may be confusing.
+
+
+      The current behavior is that it is opening the edit dialog, perhaps make this an option in the settings, but the default behavior should
+        be to make the change and keep us in viewing the Details and not go into edit mode. Also, the pop-ups requirements lists quick action popups
+        should probably not be active if we are in edit mode since that may be confusing.
+
+      preventing Edit mode from triggering after a quick status change via the 's' key popup has been completed and pushed.
+
+        Summary of the fix:
+        - Added a status_popup_consumed_action flag that tracks when the status popup processes an action (Enter, Escape, click)
+        - This flag is reset to false at the start of each frame
+        - When the status popup handles any action, it sets this flag to true
+        - The Edit keybinding handler now checks !self.status_popup_consumed_action before triggering Edit mode
+        - This prevents the Enter key from being processed by both the popup (to apply the status) and the Edit handler (which would open Edit mode)
+
+        The change has been committed with: fix: prevent Edit mode trigger after status popup selection
+
+        You can now test by:
+        1. Select a requirement in the list
+        2. Press 's' to open the status popup
+        3. Use arrow keys to select a status and press Enter
+        4. The status should change and you should remain in the Details view (not enter Edit mode)
+
+    new_value: |+
+      Requirements List context menus for quick actions
+      when you press 's' in the requirements list, open a popup menu to allow you to update the status showing a menu of statuses you can up/down/enter/esc to change the current status, the current status should be selected upon popup. Likewise 'p' for priority.
+
+      The current behavior is that it is opening the edit dialog, perhaps make this an option in the settings, but the default behavior should
+        be to make the change and keep us in viewing the Details and not go into edit mode. Also, the pop-ups requirements lists quick action popups
+        should probably not be active if we are in edit mode since that may be confusing.
+
+
+      Requirements List hotkeys
+
+      p - Priority pop-up
+      s - Status pop-up
+      j -  navigate down
+      k - navigate up
+      n - new sibling requirement
+      N - new child requirement
+      <Backspace>|<Delete> archive requirement
+      <Enter> - edit requirement
+
+
+
+
+      The current behavior is that it is opening the edit dialog, perhaps make this an option in the settings, but the default behavior should
+        be to make the change and keep us in viewing the Details and not go into edit mode. Also, the pop-ups requirements lists quick action popups
+        should probably not be active if we are in edit mode since that may be confusing.
+
+      preventing Edit mode from triggering after a quick status change via the 's' key popup has been completed and pushed.
+
+        Summary of the fix:
+        - Added a status_popup_consumed_action flag that tracks when the status popup processes an action (Enter, Escape, click)
+        - This flag is reset to false at the start of each frame
+        - When the status popup handles any action, it sets this flag to true
+        - The Edit keybinding handler now checks !self.status_popup_consumed_action before triggering Edit mode
+        - This prevents the Enter key from being processed by both the popup (to apply the status) and the Edit handler (which would open Edit mode)
+
+        The change has been committed with: fix: prevent Edit mode trigger after status popup selection
+
+        You can now test by:
+        1. Select a requirement in the list
+        2. Press 's' to open the status popup
+        3. Use arrow keys to select a status and press Enter
+        4. The status should change and you should remain in the Details view (not enter Edit mode)
+
+- id: 247fd795-a6d9-4495-a404-7be06a59e90c
+  author: Unknown User
+  timestamp: 2025-11-30T02:50:44.079390048Z
+  changes:
+  - field_name: description
+    old_value: |+
+      Requirements List context menus for quick actions
+      when you press 's' in the requirements list, open a popup menu to allow you to update the status showing a menu of statuses you can up/down/enter/esc to change the current status, the current status should be selected upon popup. Likewise 'p' for priority.
+
+      The current behavior is that it is opening the edit dialog, perhaps make this an option in the settings, but the default behavior should
+        be to make the change and keep us in viewing the Details and not go into edit mode. Also, the pop-ups requirements lists quick action popups
+        should probably not be active if we are in edit mode since that may be confusing.
+
+
+      Requirements List hotkeys
+
+      p - Priority pop-up
+      s - Status pop-up
+      j -  navigate down
+      k - navigate up
+      n - new sibling requirement
+      N - new child requirement
+      <Backspace>|<Delete> archive requirement
+      <Enter> - edit requirement
+
+
+
+
+      The current behavior is that it is opening the edit dialog, perhaps make this an option in the settings, but the default behavior should
+        be to make the change and keep us in viewing the Details and not go into edit mode. Also, the pop-ups requirements lists quick action popups
+        should probably not be active if we are in edit mode since that may be confusing.
+
+      preventing Edit mode from triggering after a quick status change via the 's' key popup has been completed and pushed.
+
+        Summary of the fix:
+        - Added a status_popup_consumed_action flag that tracks when the status popup processes an action (Enter, Escape, click)
+        - This flag is reset to false at the start of each frame
+        - When the status popup handles any action, it sets this flag to true
+        - The Edit keybinding handler now checks !self.status_popup_consumed_action before triggering Edit mode
+        - This prevents the Enter key from being processed by both the popup (to apply the status) and the Edit handler (which would open Edit mode)
+
+        The change has been committed with: fix: prevent Edit mode trigger after status popup selection
+
+        You can now test by:
+        1. Select a requirement in the list
+        2. Press 's' to open the status popup
+        3. Use arrow keys to select a status and press Enter
+        4. The status should change and you should remain in the Details view (not enter Edit mode)
+
+    new_value: |+
+      Requirements List context menus for quick actions
+      when you press 's' in the requirements list, open a popup menu to allow you to update the status showing a menu of statuses you can up/down/enter/esc to change the current status, the current status should be selected upon popup. Likewise 'p' for priority.
+
+      The current behavior is that it is opening the edit dialog, perhaps make this an option in the settings, but the default behavior should
+        be to make the change and keep us in viewing the Details and not go into edit mode. Also, the pop-ups requirements lists quick action popups
+        should probably not be active if we are in edit mode since that may be confusing.
+
+
+      Requirements List hotkeys
+
+      |key|action|
+      |p | Priority pop-up|
+      |s | Status pop-up|
+      |j |  navigate down|
+      |k | navigate up|
+      |n | new sibling requirement|
+      |N | new child requirement|
+      |<Backspace>,<Delete> |archive requirement|
+      |<Enter> |edit requirement|
+
+
+
+
+      The current behavior is that it is opening the edit dialog, perhaps make this an option in the settings, but the default behavior should
+        be to make the change and keep us in viewing the Details and not go into edit mode. Also, the pop-ups requirements lists quick action popups
+        should probably not be active if we are in edit mode since that may be confusing.
+
+      preventing Edit mode from triggering after a quick status change via the 's' key popup has been completed and pushed.
+
+        Summary of the fix:
+        - Added a status_popup_consumed_action flag that tracks when the status popup processes an action (Enter, Escape, click)
+        - This flag is reset to false at the start of each frame
+        - When the status popup handles any action, it sets this flag to true
+        - The Edit keybinding handler now checks !self.status_popup_consumed_action before triggering Edit mode
+        - This prevents the Enter key from being processed by both the popup (to apply the status) and the Edit handler (which would open Edit mode)
+
+        The change has been committed with: fix: prevent Edit mode trigger after status popup selection
+
+        You can now test by:
+        1. Select a requirement in the list
+        2. Press 's' to open the status popup
+        3. Use arrow keys to select a status and press Enter
+        4. The status should change and you should remain in the Details view (not enter Edit mode)
+
+- id: a5c42e26-d12d-4bf4-82bb-573fa7ef1390
+  author: Unknown User
+  timestamp: 2025-11-30T02:52:10.912199138Z
+  changes:
+  - field_name: description
+    old_value: |+
+      Requirements List context menus for quick actions
+      when you press 's' in the requirements list, open a popup menu to allow you to update the status showing a menu of statuses you can up/down/enter/esc to change the current status, the current status should be selected upon popup. Likewise 'p' for priority.
+
+      The current behavior is that it is opening the edit dialog, perhaps make this an option in the settings, but the default behavior should
+        be to make the change and keep us in viewing the Details and not go into edit mode. Also, the pop-ups requirements lists quick action popups
+        should probably not be active if we are in edit mode since that may be confusing.
+
+
+      Requirements List hotkeys
+
+      |key|action|
+      |p | Priority pop-up|
+      |s | Status pop-up|
+      |j |  navigate down|
+      |k | navigate up|
+      |n | new sibling requirement|
+      |N | new child requirement|
+      |<Backspace>,<Delete> |archive requirement|
+      |<Enter> |edit requirement|
+
+
+
+
+      The current behavior is that it is opening the edit dialog, perhaps make this an option in the settings, but the default behavior should
+        be to make the change and keep us in viewing the Details and not go into edit mode. Also, the pop-ups requirements lists quick action popups
+        should probably not be active if we are in edit mode since that may be confusing.
+
+      preventing Edit mode from triggering after a quick status change via the 's' key popup has been completed and pushed.
+
+        Summary of the fix:
+        - Added a status_popup_consumed_action flag that tracks when the status popup processes an action (Enter, Escape, click)
+        - This flag is reset to false at the start of each frame
+        - When the status popup handles any action, it sets this flag to true
+        - The Edit keybinding handler now checks !self.status_popup_consumed_action before triggering Edit mode
+        - This prevents the Enter key from being processed by both the popup (to apply the status) and the Edit handler (which would open Edit mode)
+
+        The change has been committed with: fix: prevent Edit mode trigger after status popup selection
+
+        You can now test by:
+        1. Select a requirement in the list
+        2. Press 's' to open the status popup
+        3. Use arrow keys to select a status and press Enter
+        4. The status should change and you should remain in the Details view (not enter Edit mode)
+
+    new_value: |+
+      Requirements List context menus for quick actions
+      when you press 's' in the requirements list, open a popup menu to allow you to update the status showing a menu of statuses you can up/down/enter/esc to change the current status, the current status should be selected upon popup. Likewise 'p' for priority.
+
+      The current behavior is that it is opening the edit dialog, perhaps make this an option in the settings, but the default behavior should
+        be to make the change and keep us in viewing the Details and not go into edit mode. Also, the pop-ups requirements lists quick action popups
+        should probably not be active if we are in edit mode since that may be confusing.
+
+
+      Requirements List hotkeys
+
+      | key|action |
+      |---|---------|
+      | p | Priority pop-up |
+      | s | Status pop-up |
+      | j |  navigate down |
+      | k | navigate up |
+      | n | new sibling requirement |
+      | N | new child requirement |
+      | <Backspace>,<Delete> |archive requirement |
+      | <Enter> |edit requirement |
+
+
+
+
+      The current behavior is that it is opening the edit dialog, perhaps make this an option in the settings, but the default behavior should
+        be to make the change and keep us in viewing the Details and not go into edit mode. Also, the pop-ups requirements lists quick action popups
+        should probably not be active if we are in edit mode since that may be confusing.
+
+      preventing Edit mode from triggering after a quick status change via the 's' key popup has been completed and pushed.
+
+        Summary of the fix:
+        - Added a status_popup_consumed_action flag that tracks when the status popup processes an action (Enter, Escape, click)
+        - This flag is reset to false at the start of each frame
+        - When the status popup handles any action, it sets this flag to true
+        - The Edit keybinding handler now checks !self.status_popup_consumed_action before triggering Edit mode
+        - This prevents the Enter key from being processed by both the popup (to apply the status) and the Edit handler (which would open Edit mode)
+
+        The change has been committed with: fix: prevent Edit mode trigger after status popup selection
+
+        You can now test by:
+        1. Select a requirement in the list
+        2. Press 's' to open the status popup
+        3. Use arrow keys to select a status and press Enter
+        4. The status should change and you should remain in the Details view (not enter Edit mode)
+

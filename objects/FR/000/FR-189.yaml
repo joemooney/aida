@@ -1,0 +1,241 @@
+id: 8cfe1327-da2d-49fa-907e-91281dbd4013
+spec_id: FR-189
+title: Headless server mode
+description: |-
+  Implement a client-server architecture for AIDA using Protocol Buffers for message definitions and gRPC for communication.
+
+  **Scope:**
+  1. Define protobuf schema for all requirement CRUD operations
+  2. Implement gRPC server exposing requirement management API
+  3. Refactor aida-core to support both direct and remote storage backends
+  4. Update CLI to communicate via gRPC when server URL is configured
+
+  **Out of Scope (please open separate requirements):**
+  - WASM browser client
+  - Multi-user concurrency and locking
+  - Authentication and authorization
+
+  **Acceptance Criteria:**
+  - Server starts on configurable port and accepts gRPC connections
+  - All existing CLI operations work against remote server
+  - Server persists data to configured YAML/SQLite backend
+  - Graceful shutdown with in-flight request completion
+status: Completed
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-09T03:45:33.056070495Z
+created_by: Joe Mooney
+modified_at: 2025-12-12T07:04:42.872763092Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: bb81e51e-dd32-48ef-9806-cf26a09643f5
+  created_at: 2025-12-09T03:45:33.123323734Z
+  created_by: Joe Mooney
+comments:
+- id: c7815df0-c771-480d-b1c4-b8ac3f1a5d10
+  author: Claude
+  content: Implemented GUI remote save operations. The StorageBackend abstraction in aida-gui/src/remote.rs now includes full save() functionality that syncs the local store to the server via batch operations. The save() method in RequirementsApp now checks for remote_client and uses the remote backend when connected to a server.
+  created_at: 2025-12-09T15:55:11.054186107Z
+  modified_at: 2025-12-09T15:55:11.054186107Z
+history:
+- id: b1424ef7-4be9-4eb7-800b-5d98bef2a85e
+  author: Joe Mooney
+  timestamp: 2025-12-09T03:52:51.617947424Z
+  changes:
+  - field_name: description
+    old_value: |-
+      Headless server mode
+
+      It would be nice to run aida in a server mode. This server would handle all the database operations. We could use grpc, websockets and other technologies.
+      One use case is to compile aida for wasm to run on the browser with a websocket server connection. This may also help with multiuser support. It may require taking out a lock on a req while we are editing that could expire or be optimistic. The command line would talk to the server also in this client/server mode. Potentially, even in standalone mode we could spawn a separate server thread. I am thinking that we define a protobuf definition for our messages and operations.
+    new_value: |-
+      Implement a client-server architecture for AIDA using Protocol Buffers for message definitions and gRPC for communication.
+
+      **Scope:**
+      1. Define protobuf schema for all requirement CRUD operations
+      2. Implement gRPC server exposing requirement management API
+      3. Refactor aida-core to support both direct and remote storage backends
+      4. Update CLI to communicate via gRPC when server URL is configured
+
+      **Out of Scope (separate requirements):**
+      - WASM browser client
+      - Multi-user concurrency and locking
+      - Authentication and authorization
+
+      **Acceptance Criteria:**
+      - Server starts on configurable port and accepts gRPC connections
+      - All existing CLI operations work against remote server
+      - Server persists data to configured YAML/SQLite backend
+      - Graceful shutdown with in-flight request completion
+- id: fab5f3a1-183c-4053-8ccd-65fab114821a
+  author: Joe Mooney
+  timestamp: 2025-12-09T03:53:16.056460128Z
+  changes:
+  - field_name: description
+    old_value: |-
+      Implement a client-server architecture for AIDA using Protocol Buffers for message definitions and gRPC for communication.
+
+      **Scope:**
+      1. Define protobuf schema for all requirement CRUD operations
+      2. Implement gRPC server exposing requirement management API
+      3. Refactor aida-core to support both direct and remote storage backends
+      4. Update CLI to communicate via gRPC when server URL is configured
+
+      **Out of Scope (separate requirements):**
+      - WASM browser client
+      - Multi-user concurrency and locking
+      - Authentication and authorization
+
+      **Acceptance Criteria:**
+      - Server starts on configurable port and accepts gRPC connections
+      - All existing CLI operations work against remote server
+      - Server persists data to configured YAML/SQLite backend
+      - Graceful shutdown with in-flight request completion
+    new_value: |-
+      Implement a client-server architecture for AIDA using Protocol Buffers for message definitions and gRPC for communication.
+
+      **Scope:**
+      1. Define protobuf schema for all requirement CRUD operations
+      2. Implement gRPC server exposing requirement management API
+      3. Refactor aida-core to support both direct and remote storage backends
+      4. Update CLI to communicate via gRPC when server URL is configured
+
+      **Out of Scope (please open separate requirements):**
+      - WASM browser client
+      - Multi-user concurrency and locking
+      - Authentication and authorization
+
+      **Acceptance Criteria:**
+      - Server starts on configurable port and accepts gRPC connections
+      - All existing CLI operations work against remote server
+      - Server persists data to configured YAML/SQLite backend
+      - Graceful shutdown with in-flight request completion
+- id: ae1b3dd0-8318-4aa4-a8b8-2465af48b352
+  author: Joe Mooney
+  timestamp: 2025-12-09T03:53:56.689933794Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: f36a0229-3798-4aa7-8497-1882a2af6fab
+  author: CLI
+  timestamp: 2025-12-12T07:04:42.872761457Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+trace_links:
+- id: 7d9d9c55-acdf-468a-8a49-47f502ad2214
+  artifact_type: SourceCode
+  file_path: ./aida-cli/build.rs
+  line_start: 1
+  notes: 'AI tool: claude'
+  created_at: 2025-12-11T00:58:30.967559062Z
+  created_by: scan
+- id: 06ef5b54-26d0-4a75-81bb-2a7884fb74d8
+  artifact_type: SourceCode
+  file_path: ./aida-cli/src/client.rs
+  line_start: 1
+  notes: 'AI tool: claude'
+  created_at: 2025-12-11T00:58:30.967682975Z
+  created_by: scan
+- id: 96bbfd43-34cd-40bc-ae14-aefc7a9e86b6
+  artifact_type: SourceCode
+  file_path: ./aida-server/build.rs
+  line_start: 1
+  notes: 'AI tool: claude'
+  created_at: 2025-12-11T00:58:30.967694302Z
+  created_by: scan
+- id: e5270c8d-ad4c-449e-8945-6e798175626c
+  artifact_type: SourceCode
+  file_path: ./aida-server/src/convert.rs
+  line_start: 1
+  notes: 'AI tool: claude'
+  created_at: 2025-12-11T00:58:30.967705218Z
+  created_by: scan
+- id: 87266390-2d41-4739-9eb5-10aaed606918
+  artifact_type: SourceCode
+  file_path: ./aida-server/src/service.rs
+  line_start: 1
+  notes: 'AI tool: claude'
+  created_at: 2025-12-11T00:58:30.967716191Z
+  created_by: scan
+- id: 1fb46ec1-37de-49c1-92d4-0df3fe33acb4
+  artifact_type: SourceCode
+  file_path: ./aida-server/src/main.rs
+  line_start: 1
+  notes: 'AI tool: claude'
+  created_at: 2025-12-11T00:58:30.967728234Z
+  created_by: scan
+- id: 540e72aa-c3d0-43c5-8393-5c706aabe4e1
+  artifact_type: SourceCode
+  file_path: ./aida-gui/build.rs
+  line_start: 1
+  notes: 'AI tool: claude'
+  created_at: 2025-12-11T00:58:30.967739652Z
+  created_by: scan
+- id: 1b75ccbf-6b3b-4668-8cb5-2aa45f12af27
+  artifact_type: SourceCode
+  file_path: ./aida-gui/src/remote.rs
+  line_start: 1
+  notes: 'AI tool: claude'
+  created_at: 2025-12-11T00:58:30.967969678Z
+  created_by: scan
+ai_evaluation:
+  evaluation:
+    quality_score: 4
+    issues:
+    - type: vague_language
+      severity: high
+      text: 'The requirement mixes multiple distinct features: server mode, WASM browser support, multi-user support, and locking mechanisms'
+      suggestion: 'Split into separate requirements: 1) Core server mode with gRPC/protobuf API, 2) WASM browser client, 3) Multi-user concurrency/locking, 4) CLI client-server communication'
+    - type: missing_criteria
+      severity: high
+      text: No acceptance criteria or success metrics defined for what constitutes a working server mode
+      suggestion: 'Define specific acceptance criteria: supported operations, protocol choice (gRPC vs WebSocket), authentication requirements, latency expectations'
+    - type: ambiguous
+      severity: medium
+      text: Unclear whether this is a requirement for the server, the client, or both - 'even in standalone mode we could spawn a separate server thread' suggests architectural uncertainty
+      suggestion: 'Clarify the deployment model: always client-server vs optional server mode, and define the boundary between client and server responsibilities'
+    - type: incomplete
+      severity: medium
+      text: Locking mechanism is mentioned but not specified - 'could expire or be optimistic' leaves implementation completely undefined
+      suggestion: 'Specify locking strategy: pessimistic vs optimistic, lock timeout duration, conflict resolution approach'
+    - type: untestable
+      severity: medium
+      text: No testable criteria for multi-user scenarios or concurrent editing
+      suggestion: 'Add specific test scenarios: two users editing same requirement, network disconnection handling, conflict resolution verification'
+    - type: incomplete
+      severity: low
+      text: No mention of authentication, authorization, or security considerations for a networked service
+      suggestion: 'Add security requirements: authentication method, authorization model, transport security (TLS)'
+    strengths:
+    - Identifies a real architectural need for scalability and multi-user support
+    - Mentions specific technologies (gRPC, WebSocket, protobuf) showing technical awareness
+    - Considers multiple deployment scenarios (browser, CLI, standalone)
+    - Properly linked to parent Database definition requirement
+    suggested_improvements:
+      description: |-
+        Implement a client-server architecture for AIDA using Protocol Buffers for message definitions and gRPC for communication.
+
+        **Scope:**
+        1. Define protobuf schema for all requirement CRUD operations
+        2. Implement gRPC server exposing requirement management API
+        3. Refactor aida-core to support both direct and remote storage backends
+        4. Update CLI to communicate via gRPC when server URL is configured
+
+        **Out of Scope (separate requirements):**
+        - WASM browser client
+        - Multi-user concurrency and locking
+        - Authentication and authorization
+
+        **Acceptance Criteria:**
+        - Server starts on configurable port and accepts gRPC connections
+        - All existing CLI operations work against remote server
+        - Server persists data to configured YAML/SQLite backend
+        - Graceful shutdown with in-flight request completion
+      rationale: The original requirement is an epic-level feature that should be decomposed. This improvement focuses on the foundational server infrastructure, making it implementable and testable while explicitly deferring related features to child requirements.
+  evaluated_at: 2025-12-09T03:46:21.513934304Z
+  content_hash: 6b58e15bf6910732

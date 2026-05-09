@@ -1,0 +1,35 @@
+id: 07f7e655-742d-44c9-ba9d-c77762ae7090
+spec_id: CR-3
+title: scroll wheel should not change selected requirement
+description: ''
+status: Planned
+priority: Medium
+owner: ''
+feature: 112-Uncategorized
+created_at: 2025-11-26T01:15:26.926247061Z
+modified_at: 2026-02-20T22:53:27.037026231Z
+req_type: ChangeRequest
+relationships:
+- rel_type: Parent
+  target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
+history:
+- id: 17574998-ff09-4a7c-bf46-655118ac8a17
+  author: '@joe'
+  timestamp: 2025-11-28T17:52:22.918793844Z
+  changes:
+  - field_name: title
+    old_value: scroll wheel changes selected requirement
+    new_value: scroll wheel should not change selected requirement
+  - field_name: type
+    old_value: Functional
+    new_value: ChangeRequest
+  - field_name: spec_id
+    old_value: FR-0021
+    new_value: CR-0078
+- id: 69eb2f9a-cedf-4597-a8e0-c74ebbed4b4e
+  author: Joe Mooney
+  timestamp: 2025-12-07T05:38:37.790400214Z
+  changes:
+  - field_name: feature
+    old_value: 97-Uncategorized
+    new_value: 112-Uncategorized

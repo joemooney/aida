@@ -1,0 +1,63 @@
+id: bb81e51e-dd32-48ef-9806-cf26a09643f5
+spec_id: FR-252
+prefix_override: DB
+title: Database definition
+description: Object types, relationships, etc.
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-27T03:36:41.058576375Z
+modified_at: 2026-05-04T19:36:44.652217010Z
+req_type: Functional
+relationships:
+- rel_type: Child
+  target_id: 67a6162d-a44c-4cf5-8756-6b6cb8808928
+- rel_type: Child
+  target_id: 5a9b7e50-4678-4c85-bb69-6ac380ac985e
+- rel_type: Child
+  target_id: 4d2cce7c-d8e4-4c9b-a6a5-61637a423f12
+- rel_type: Child
+  target_id: 25b4e80b-ae19-401f-bd69-dd5636a08944
+- rel_type: Child
+  target_id: b1ba8347-d9f7-4aee-a1e2-8c96f0ad5d3c
+- rel_type: Child
+  target_id: be94a2c7-6ab1-42d9-822b-d7d841b4c6f0
+- rel_type: Child
+  target_id: 97431bfb-8b24-4990-aa9f-6c8a4a643dd1
+- rel_type: Child
+  target_id: a8e0e918-09a1-4b9f-9676-d754db0d1a68
+- rel_type: Child
+  target_id: 9af27c34-8a93-4285-9ae6-2448a6bcddde
+  created_at: 2025-12-01T06:58:53.115721740Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: 9802115f-d7ab-465e-a850-d305fc9bd01f
+  created_at: 2025-12-02T01:50:03.460366982Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: 8cfe1327-da2d-49fa-907e-91281dbd4013
+  created_at: 2025-12-09T03:45:33.123323734Z
+  created_by: Joe Mooney
+comments:
+- id: 019df47d-69ea-72e2-8bf6-1e06a954c250
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:35:53.066007428Z
+  modified_at: 2026-05-04T19:35:53.066007428Z
+- id: 019df47e-2c88-7111-bba3-41bf943e6fba
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:36:42.888946552Z
+  modified_at: 2026-05-04T19:36:42.888946552Z
+history:
+- id: c2aa6626-c857-41f9-9851-9306815d33df
+  author: '@joe'
+  timestamp: 2025-11-28T20:10:41.815580320Z
+  changes:
+  - field_name: prefix_override
+    old_value: SCHEMA
+    new_value: DB
+  - field_name: spec_id
+    old_value: SCHEMA-0040
+    new_value: DB-0086

@@ -1,0 +1,19 @@
+id: 6e872298-1951-4290-a1e4-3d3303151a45
+spec_id: FR-176
+title: Scaffolding generates AIDA-aware CLAUDE.md with /aida-capture skill
+description: Project scaffolding now generates CLAUDE.md with Requirements Management section, CLI commands, and session workflow guidance. New /aida-capture skill reviews conversations at session end to capture missed requirements.
+status: Completed
+priority: Medium
+owner: ''
+feature: 83-AI Integration
+created_at: 2025-12-02T04:15:51.551465521Z
+modified_at: 2025-12-02T04:15:51.551465521Z
+req_type: Functional
+relationships:
+- rel_type: Child
+  target_id: 58f1be6d-b5c8-4304-b453-e495a13cadd5
+  created_at: 2025-12-02T04:26:09.167768664Z
+  created_by: Joe Mooney
+- rel_type: Parent
+  target_id: 31e0af07-4b1d-4e77-b7d5-819ec155f8e3
+  created_at: 2025-12-11T03:42:08.380649622Z

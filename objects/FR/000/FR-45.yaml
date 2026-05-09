@@ -1,0 +1,35 @@
+id: 0d4f46d6-792d-4790-83fc-5d2307742fb1
+spec_id: FR-45
+title: when req is added to queue, display toaster
+description: |-
+  when req is added to queue, display toaster
+
+  when we make changes to the queue and updates in general we should typically display a toaster, currently we silently make updates, we should have this as a configurable option
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-12T17:57:17.695805390Z
+created_by: Joe Mooney
+modified_at: 2026-05-04T19:38:12.848442590Z
+req_type: Functional
+comments:
+- id: 019df47f-87ef-79b1-bcf6-ce1e480880ab
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:38:11.823109040Z
+  modified_at: 2026-05-04T19:38:11.823109040Z
+history:
+- id: e3ffc612-becf-4ed0-a12d-64b624724950
+  author: system
+  timestamp: 2025-12-13T06:58:34.365642423Z
+  changes:
+  - field_name: description
+    old_value: |-
+      when req is added to queue, display toaster
+
+      when we make changes not just to the queue we should typically display a toaster, currently we silently make updates, we should have this as a configurable option
+    new_value: |-
+      when req is added to queue, display toaster
+
+      when we make changes to the queue and updates in general we should typically display a toaster, currently we silently make updates, we should have this as a configurable option

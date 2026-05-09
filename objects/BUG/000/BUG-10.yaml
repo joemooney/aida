@@ -1,0 +1,11 @@
+id: 9f764341-55dc-4f33-89f4-e4bd4c575163
+spec_id: BUG-10
+title: Fix SQLite/YAML auto-detection in Storage
+description: Storage.load() and Storage.save() now auto-detect file type by extension (.db/.sqlite for SQLite, otherwise YAML). GUI respects --file flag and skips migration check when explicit path is provided. Fixes issue where GUI showed empty list when both YAML and SQLite files exist in same directory.
+status: Completed
+priority: High
+owner: ''
+feature: 124-Uncategorized
+created_at: 2025-12-10T03:13:39.544211884Z
+modified_at: 2025-12-10T03:13:39.544211884Z
+req_type: Bug

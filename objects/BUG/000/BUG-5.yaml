@@ -1,0 +1,16 @@
+id: 167164e4-2d64-4d24-b41f-16499162e6b3
+spec_id: BUG-5
+title: 'Fix: Requirement edits revert in detail panel due to stale React Query cache'
+description: 'Bug: When editing a requirement in the web UI detail panel, changes appeared to revert after saving. Root cause: useUpdateRequirement() only invalidated the [''requirements''] list cache, but DetailPanel reads from [''requirement'', id] (singular) which was never invalidated. After save, the stale individual cache overwrote the optimistic update. Fix: (1) Frontend - invalidate and optimistically update both [''requirements''] and [''requirement'', id] caches in useUpdateRequirement and useSetParent. (2) Server - added mark_saved() to update last_loaded_mtime after backend.save() calls, preventing unnecessary check_reload() reloads. Files: useRequirements.ts, service.rs, rest.rs.'
+status: Completed
+priority: Medium
+owner: joe
+feature: 231-Uncategorized
+created_at: 2026-02-22T20:35:56.318350326Z
+modified_at: 2026-02-22T20:35:56.318350326Z
+req_type: Bug
+tags:
+- api
+- bugfix
+- cache
+- web

@@ -1,0 +1,138 @@
+id: dafb91f7-2950-4e88-a658-4f70f970c29c
+spec_id: FR-129
+title: ESC ESC (twice) in a view that is the the defau...
+description: |-
+  Pressing ESC twice in quick succession (within 500ms) from any non-default view should navigate back to the default view.
+
+  Default View Behavior:
+  - The default view is initially the Requirements List
+  - When on the default view, double-ESC has no effect
+
+  Acceptance Criteria:
+  1. Double-ESC from Settings, Detail, or other views returns to Requirements List
+  2. Single ESC retains current behavior (close dialogs, cancel edit mode)
+  3. Double-ESC timing window is 500ms between key presses
+  4. Visual or audio feedback is optional but not required
+
+  Future Consideration (separate requirement): Allow users to configure which view is their default in Settings.
+status: Completed
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-14T06:46:44.272915918Z
+created_by: Joe Mooney
+modified_at: 2025-12-14T07:04:53.957011414Z
+req_type: Functional
+history:
+- id: a4c44adc-97b4-4203-acaa-80c91bf6e182
+  author: Joe Mooney
+  timestamp: 2025-12-14T06:49:06.048988773Z
+  changes:
+  - field_name: description
+    old_value: |
+      ESC ESC (twice) in a view that is not the default view (which is req list at the moment) should return to default view (req list)
+
+      We may want the user to be able to select a specific view as the default view. There will be different flavors of req list in the future so we will need to be able to designate a default view in the settings.
+    new_value: |-
+      Pressing ESC twice in quick succession (within 500ms) from any non-default view should navigate back to the default view.
+
+      Default View Behavior:
+      - The default view is initially the Requirements List
+      - When on the default view, double-ESC has no effect
+
+      Acceptance Criteria:
+      1. Double-ESC from Settings, Detail, or other views returns to Requirements List
+      2. Single ESC retains current behavior (close dialogs, cancel edit mode)
+      3. Double-ESC timing window is 500ms between key presses
+      4. Visual or audio feedback is optional but not required
+
+      Future Consideration (separate requirement): Allow users to configure which view is their default in Settings.
+- id: 0a79be0e-d79e-44a8-b318-abddf9e7ab37
+  author: Joe Mooney
+  timestamp: 2025-12-14T06:49:19.481843309Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: 98f0f61f-d4df-4d2d-989e-dacd23f9a222
+  author: Joe Mooney
+  timestamp: 2025-12-14T06:59:57.939548452Z
+  changes:
+  - field_name: description
+    old_value: |-
+      Pressing ESC twice in quick succession (within 500ms) from any non-default view should navigate back to the default view.
+
+      Default View Behavior:
+      - The default view is initially the Requirements List
+      - When on the default view, double-ESC has no effect
+
+      Acceptance Criteria:
+      1. Double-ESC from Settings, Detail, or other views returns to Requirements List
+      2. Single ESC retains current behavior (close dialogs, cancel edit mode)
+      3. Double-ESC timing window is 500ms between key presses
+      4. Visual or audio feedback is optional but not required
+
+      Future Consideration (separate requirement): Allow users to configure which view is their default in Settings.
+    new_value: |-
+      Pressing ESC twice in quick succession (within 500ms) from any non-default view should navigate back to the default view.
+
+      Default View Behavior:
+      - The default view is initially the Requirements List
+      - When on the default view, double-ESC has no effect
+
+      Acceptance Criteria:
+      1. Double-ESC from Settings, Detail, or other views returns to Requirements List
+      2. Single ESC retains current behavior (close dialogs, cancel edit mode)
+      3. Double-ESC timing window is 500ms between key presses
+      4. Visual or audio feedback is optional but not required
+
+      Future Consideration (separate requirement): Allow users to configure which view is their default in Settings.
+- id: 75a7fe3a-244a-4757-b602-79db8ae37588
+  author: CLI
+  timestamp: 2025-12-14T07:04:53.957009635Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+ai_evaluation:
+  evaluation:
+    quality_score: 5
+    issues:
+    - type: incomplete
+      severity: medium
+      text: 'The requirement conflates two separate concerns: the double-ESC navigation behavior and the configurable default view feature'
+      suggestion: 'Split into two requirements: (1) FR for double-ESC returning to default view, (2) FR for configurable default view in settings'
+    - type: missing_criteria
+      severity: medium
+      text: No acceptance criteria defined for the ESC timing window (how quickly must ESC be pressed twice?)
+      suggestion: Specify the time window for double-ESC detection (e.g., 500ms between presses) or clarify if it's sequential regardless of timing
+    - type: vague_language
+      severity: low
+      text: '''Different flavors of req list'' is vague and refers to future unspecified functionality'
+      suggestion: Either remove the forward-looking statement or create a separate epic/story for the different list views, then reference it
+    - type: incomplete
+      severity: low
+      text: Does not specify behavior when already on the default view - should double-ESC do nothing, provide feedback, or have alternate behavior?
+      suggestion: 'Add edge case: ''When already on the default view, double-ESC has no effect'' or specify alternative behavior'
+    strengths:
+    - Clear intent for vim-style navigation pattern (ESC to escape/return)
+    - Acknowledges need for user configuration of default view
+    - Identifies that the concept of 'default view' needs to be formalized
+    suggested_improvements:
+      description: |-
+        Pressing ESC twice in quick succession (within 500ms) from any non-default view should navigate back to the default view.
+
+        Default View Behavior:
+        - The default view is initially the Requirements List
+        - When on the default view, double-ESC has no effect
+
+        Acceptance Criteria:
+        1. Double-ESC from Settings, Detail, or other views returns to Requirements List
+        2. Single ESC retains current behavior (close dialogs, cancel edit mode)
+        3. Double-ESC timing window is 500ms between key presses
+        4. Visual or audio feedback is optional but not required
+
+        Future Consideration (separate requirement): Allow users to configure which view is their default in Settings.
+      rationale: Separates the immediate implementation (double-ESC navigation) from the future enhancement (configurable default). Adds specific acceptance criteria and timing requirements to make it testable and unambiguous for implementation.
+  evaluated_at: 2025-12-14T06:47:39.669984232Z
+  content_hash: 9fe5592a34f9c2a3

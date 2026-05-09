@@ -1,0 +1,20 @@
+id: ce9fdd12-0860-4334-90b7-399952ca523a
+spec_id: FR-107
+title: Users Settings tab
+description: Users settings should be its own tab move it from under Settins/Admin to be its own tab in settings. Just call it "Users"
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-27T21:52:57.577445007Z
+modified_at: 2026-05-04T19:34:44.963493500Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 617353d0-7006-4a3c-92ba-49e5218386e2
+comments:
+- id: 019df47c-5b9d-7df0-b4a4-b19a02c6ecf5
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:34:43.869769521Z
+  modified_at: 2026-05-04T19:34:43.869769521Z

@@ -1,0 +1,98 @@
+id: 9238ec28-2a11-4d0b-90df-f78861f49d72
+spec_id: FR-202
+title: URL link support
+description: |
+  When you click on Links tab, show a button to enter a URL, perhaps a button to verify that it is a valid link.
+
+    External URL Links Feature:
+
+    1. UrlLink Model (requirements-core/src/models.rs):
+      - New UrlLink struct with fields: id, url, title, description, added_at, added_by, last_verified, last_verified_ok
+      - Added urls: Vec<UrlLink> field to Requirement struct
+    2. GUI Integration (requirements-gui/src/app.rs):
+      - Updated Links tab to show "External Links" section with "➕ New URL" button
+      - URL list displays with:
+          - Verification status indicators (✅ valid, ❌ failed)
+        - Clickable links that open in browser
+        - Edit (✏) and remove (x) buttons
+      - URL form modal with:
+          - URL input field
+        - Optional title and description
+        - "🔍 Verify" button to validate URL format
+        - Colored status messages for validation results
+      - Links tab count now shows total of relationships + URLs
+    3. Dependencies:
+      - Added url = "2" for URL parsing/validation
+      - Added open = "5" for opening URLs in browser
+    4. Documentation:
+      - Updated docs/user-guide.md with Links Tab section
+      - Updated PROMPT_HISTORY.md with feature details
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-27T04:27:55.860215514Z
+modified_at: 2026-05-04T19:36:06.885281449Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 4c3bb89e-2d41-4841-b2ff-881bb67fee99
+comments:
+- id: 019df47c-a83b-7cc1-9c5b-0f394f7f7646
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:35:03.483900770Z
+  modified_at: 2026-05-04T19:35:03.483900770Z
+- id: 019df47d-9a63-7ac1-813e-de449c6e4449
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:36:05.475905262Z
+  modified_at: 2026-05-04T19:36:05.475905262Z
+history:
+- id: cd821662-23ab-4664-9962-8fefd48e8403
+  author: '@joe'
+  timestamp: 2025-11-27T06:00:28.184939789Z
+  changes:
+  - field_name: description
+    old_value: Button to enter a URL, perhaps a button to verify that it is a valid link.
+    new_value: When you click on Links tab, show a button to enter a URL, perhaps a button to verify that it is a valid link.
+- id: cd5aa577-5788-424a-b1de-21627072cc3c
+  author: '@joe'
+  timestamp: 2025-11-27T06:10:37.379903695Z
+  changes:
+  - field_name: description
+    old_value: When you click on Links tab, show a button to enter a URL, perhaps a button to verify that it is a valid link.
+    new_value: |
+      When you click on Links tab, show a button to enter a URL, perhaps a button to verify that it is a valid link.
+
+        External URL Links Feature:
+
+        1. UrlLink Model (requirements-core/src/models.rs):
+          - New UrlLink struct with fields: id, url, title, description, added_at, added_by, last_verified, last_verified_ok
+          - Added urls: Vec<UrlLink> field to Requirement struct
+        2. GUI Integration (requirements-gui/src/app.rs):
+          - Updated Links tab to show "External Links" section with "➕ New URL" button
+          - URL list displays with:
+              - Verification status indicators (✅ valid, ❌ failed)
+            - Clickable links that open in browser
+            - Edit (✏) and remove (x) buttons
+          - URL form modal with:
+              - URL input field
+            - Optional title and description
+            - "🔍 Verify" button to validate URL format
+            - Colored status messages for validation results
+          - Links tab count now shows total of relationships + URLs
+        3. Dependencies:
+          - Added url = "2" for URL parsing/validation
+          - Added open = "5" for opening URLs in browser
+        4. Documentation:
+          - Updated docs/user-guide.md with Links Tab section
+          - Updated PROMPT_HISTORY.md with feature details
+urls:
+- id: f6a655a0-3ccd-4945-8300-4417ca6fc8c3
+  url: file:///home/joe/ai/req/docs/user-guide-dark.html
+  title: User Guide
+  description: Quick Link to Aida User's Guide
+  open_mode: preview
+  added_at: 2025-11-27T06:12:47.083608620Z
+  added_by: Joe Mooney

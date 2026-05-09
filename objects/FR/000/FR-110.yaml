@@ -1,0 +1,743 @@
+id: baf7ce9a-b022-41d6-9781-c8b5d1c32acd
+spec_id: FR-110
+title: Markdown help
+description: |
+  The "Supports Markdown" when clicked should show a modal of help or open a browswer page with help on what markdown is supported with
+    examples.
+
+  implemented a Markdown help modal that appears when you click the "Supports Markdown" link in the form view. The modal includes:
+
+    - Headers - #, ##, ### syntax
+    - Text Formatting - bold, italic, strikethrough, inline code with visual examples showing the rendered result
+    - Lists - ordered and unordered, with nesting support
+    - Links - [text](url) syntax
+    - Code Blocks - with and without language specification for syntax highlighting
+    - Blockquotes - > syntax
+    - Horizontal Rules - --- syntax
+    - Tables - pipe-based table syntax
+    - Task Lists - - [ ] and - [x] checkbox syntax
+
+    The modal is a centered, resizable window with a scrollable content area and a Close button.
+
+   Markdown Heading Sizes:
+
+   Now headings use exponential scaling with a factor of 1.25:
+
+    | Heading | Multiplier | At 14pt base |
+    |---------|------------|--------------|
+    | H1      | ~3.05x     | ~43pt        |
+    | H2      | ~2.44x     | ~34pt        |
+    | H3      | ~1.95x     | ~27pt        |
+    | H4      | ~1.56x     | ~22pt        |
+    | H5      | 1.25x      | ~18pt        |
+    | H6      | 1x         | 14pt         |
+
+
+
+    The heading sizes scale proportionally when you zoom in/out using Ctrl+/- or Ctrl+MouseWheel. The implementation registers custom named text
+     styles ("Heading", "Heading2", etc.) that egui_commonmark uses for rendering markdown headings.
+
+
+  ---
+
+  Headers
+  # Heading 1
+  ## Heading 2
+  ### Heading 3
+
+  Text Formatting
+  **bold** → bold
+  *italic* → italic
+  ~~strikethrough~~ → strikethrough
+  `inline code` → inline code
+
+  Lists
+  Unordered:
+  - Item 1
+  - Item 2
+    - Nested item
+  Ordered:
+  1. First
+  2. Second
+  3. Third
+
+  Links
+  [Link text](https://example.com)
+
+  Code Blocks
+  ```
+  code block
+  multiple lines
+  ```
+  With language:
+  ```rust
+  fn main() {
+      println!("Hello");
+  }
+  ```
+
+  Blockquotes
+  > This is a quote
+  > Multiple lines
+
+  Horizontal Rule
+
+  ---
+
+  Tables
+  | Header 1 | Header 2 |
+  |----------|----------|
+  | Cell 1   | Cell 2   |
+
+  Task Lists
+  - [ ] Unchecked task
+  - [x] Completed task
+status: Completed
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-27T06:16:17.007809398Z
+modified_at: 2025-11-30T02:11:12.487402381Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
+history:
+- id: a3118ebc-5427-4e67-8a88-22765e6565e4
+  author: '@joe'
+  timestamp: 2025-11-27T06:19:14.430189932Z
+  changes:
+  - field_name: description
+    old_value: |-
+      The "Supports Markdown" when clicked should show a modal of help or open a browswer page with help on what markdown is supported with
+        examples.
+    new_value: |+
+      The "Supports Markdown" when clicked should show a modal of help or open a browswer page with help on what markdown is supported with
+        examples.
+
+      implemented a Markdown help modal that appears when you click the "Supports Markdown" link in the form view. The modal includes:
+
+        - Headers - #, ##, ### syntax
+        - Text Formatting - bold, italic, strikethrough, inline code with visual examples showing the rendered result
+        - Lists - ordered and unordered, with nesting support
+        - Links - [text](url) syntax
+        - Code Blocks - with and without language specification for syntax highlighting
+        - Blockquotes - > syntax
+        - Horizontal Rules - --- syntax
+        - Tables - pipe-based table syntax
+        - Task Lists - - [ ] and - [x] checkbox syntax
+
+        The modal is a centered, resizable window with a scrollable content area and a Close button.
+
+- id: 5624f32f-a8e8-4ceb-94ee-b82d5bcef4f1
+  author: '@joe'
+  timestamp: 2025-11-28T00:05:45.545507376Z
+  changes:
+  - field_name: description
+    old_value: |+
+      The "Supports Markdown" when clicked should show a modal of help or open a browswer page with help on what markdown is supported with
+        examples.
+
+      implemented a Markdown help modal that appears when you click the "Supports Markdown" link in the form view. The modal includes:
+
+        - Headers - #, ##, ### syntax
+        - Text Formatting - bold, italic, strikethrough, inline code with visual examples showing the rendered result
+        - Lists - ordered and unordered, with nesting support
+        - Links - [text](url) syntax
+        - Code Blocks - with and without language specification for syntax highlighting
+        - Blockquotes - > syntax
+        - Horizontal Rules - --- syntax
+        - Tables - pipe-based table syntax
+        - Task Lists - - [ ] and - [x] checkbox syntax
+
+        The modal is a centered, resizable window with a scrollable content area and a Close button.
+
+    new_value: |
+      The "Supports Markdown" when clicked should show a modal of help or open a browswer page with help on what markdown is supported with
+        examples.
+
+      implemented a Markdown help modal that appears when you click the "Supports Markdown" link in the form view. The modal includes:
+
+        - Headers - #, ##, ### syntax
+        - Text Formatting - bold, italic, strikethrough, inline code with visual examples showing the rendered result
+        - Lists - ordered and unordered, with nesting support
+        - Links - [text](url) syntax
+        - Code Blocks - with and without language specification for syntax highlighting
+        - Blockquotes - > syntax
+        - Horizontal Rules - --- syntax
+        - Tables - pipe-based table syntax
+        - Task Lists - - [ ] and - [x] checkbox syntax
+
+        The modal is a centered, resizable window with a scrollable content area and a Close button.
+
+      ---
+
+      Headers
+      # Heading 1
+      ## Heading 2
+      ### Heading 3
+
+      Text Formatting
+      **bold** → bold
+      *italic* → italic
+      ~~strikethrough~~ → strikethrough
+      `inline code` → inline code
+
+      Lists
+      Unordered:
+      - Item 1
+      - Item 2
+        - Nested item
+      Ordered:
+      1. First
+      2. Second
+      3. Third
+
+      Links
+      [Link text](https://example.com)
+
+      Code Blocks
+      ```
+      code block
+      multiple lines
+      ```
+      With language:
+      ```rust
+      fn main() {
+          println!("Hello");
+      }
+      ```
+
+      Blockquotes
+      > This is a quote
+      > Multiple lines
+
+      Horizontal Rule
+      ---
+
+      Tables
+      | Header 1 | Header 2 |
+      |----------|----------|
+      | Cell 1   | Cell 2   |
+
+      Task Lists
+      - [ ] Unchecked task
+      - [x] Completed task
+- id: 9ab77002-7fc5-4f4f-9233-d00617c2e375
+  author: '@joe'
+  timestamp: 2025-11-28T00:12:47.839565370Z
+  changes:
+  - field_name: description
+    old_value: |
+      The "Supports Markdown" when clicked should show a modal of help or open a browswer page with help on what markdown is supported with
+        examples.
+
+      implemented a Markdown help modal that appears when you click the "Supports Markdown" link in the form view. The modal includes:
+
+        - Headers - #, ##, ### syntax
+        - Text Formatting - bold, italic, strikethrough, inline code with visual examples showing the rendered result
+        - Lists - ordered and unordered, with nesting support
+        - Links - [text](url) syntax
+        - Code Blocks - with and without language specification for syntax highlighting
+        - Blockquotes - > syntax
+        - Horizontal Rules - --- syntax
+        - Tables - pipe-based table syntax
+        - Task Lists - - [ ] and - [x] checkbox syntax
+
+        The modal is a centered, resizable window with a scrollable content area and a Close button.
+
+      ---
+
+      Headers
+      # Heading 1
+      ## Heading 2
+      ### Heading 3
+
+      Text Formatting
+      **bold** → bold
+      *italic* → italic
+      ~~strikethrough~~ → strikethrough
+      `inline code` → inline code
+
+      Lists
+      Unordered:
+      - Item 1
+      - Item 2
+        - Nested item
+      Ordered:
+      1. First
+      2. Second
+      3. Third
+
+      Links
+      [Link text](https://example.com)
+
+      Code Blocks
+      ```
+      code block
+      multiple lines
+      ```
+      With language:
+      ```rust
+      fn main() {
+          println!("Hello");
+      }
+      ```
+
+      Blockquotes
+      > This is a quote
+      > Multiple lines
+
+      Horizontal Rule
+      ---
+
+      Tables
+      | Header 1 | Header 2 |
+      |----------|----------|
+      | Cell 1   | Cell 2   |
+
+      Task Lists
+      - [ ] Unchecked task
+      - [x] Completed task
+    new_value: |
+      The "Supports Markdown" when clicked should show a modal of help or open a browswer page with help on what markdown is supported with
+        examples.
+
+      implemented a Markdown help modal that appears when you click the "Supports Markdown" link in the form view. The modal includes:
+
+        - Headers - #, ##, ### syntax
+        - Text Formatting - bold, italic, strikethrough, inline code with visual examples showing the rendered result
+        - Lists - ordered and unordered, with nesting support
+        - Links - [text](url) syntax
+        - Code Blocks - with and without language specification for syntax highlighting
+        - Blockquotes - > syntax
+        - Horizontal Rules - --- syntax
+        - Tables - pipe-based table syntax
+        - Task Lists - - [ ] and - [x] checkbox syntax
+
+        The modal is a centered, resizable window with a scrollable content area and a Close button.
+
+       Markdown Heading Sizes:
+        - H1 (# Heading): 1.8× base font size
+        - H2 (## Heading): 1.5× base font size
+        - H3 (### Heading): 1.25× base font size
+        - H4 (#### Heading): 1.1× base font size
+        - H5 (##### Heading): 1× base font size
+        - H6 (###### Heading): 0.9× base font size
+
+        The heading sizes scale proportionally when you zoom in/out using Ctrl+/- or Ctrl+MouseWheel. The implementation registers custom named text
+         styles ("Heading", "Heading2", etc.) that egui_commonmark uses for rendering markdown headings.
+
+
+      ---
+
+      Headers
+      # Heading 1
+      ## Heading 2
+      ### Heading 3
+
+      Text Formatting
+      **bold** → bold
+      *italic* → italic
+      ~~strikethrough~~ → strikethrough
+      `inline code` → inline code
+
+      Lists
+      Unordered:
+      - Item 1
+      - Item 2
+        - Nested item
+      Ordered:
+      1. First
+      2. Second
+      3. Third
+
+      Links
+      [Link text](https://example.com)
+
+      Code Blocks
+      ```
+      code block
+      multiple lines
+      ```
+      With language:
+      ```rust
+      fn main() {
+          println!("Hello");
+      }
+      ```
+
+      Blockquotes
+      > This is a quote
+      > Multiple lines
+
+      Horizontal Rule
+      ---
+
+      Tables
+      | Header 1 | Header 2 |
+      |----------|----------|
+      | Cell 1   | Cell 2   |
+
+      Task Lists
+      - [ ] Unchecked task
+      - [x] Completed task
+- id: ef910185-1b60-4f04-8541-2a9e7f1d80d0
+  author: '@joe'
+  timestamp: 2025-11-28T00:23:26.975847031Z
+  changes:
+  - field_name: description
+    old_value: |
+      The "Supports Markdown" when clicked should show a modal of help or open a browswer page with help on what markdown is supported with
+        examples.
+
+      implemented a Markdown help modal that appears when you click the "Supports Markdown" link in the form view. The modal includes:
+
+        - Headers - #, ##, ### syntax
+        - Text Formatting - bold, italic, strikethrough, inline code with visual examples showing the rendered result
+        - Lists - ordered and unordered, with nesting support
+        - Links - [text](url) syntax
+        - Code Blocks - with and without language specification for syntax highlighting
+        - Blockquotes - > syntax
+        - Horizontal Rules - --- syntax
+        - Tables - pipe-based table syntax
+        - Task Lists - - [ ] and - [x] checkbox syntax
+
+        The modal is a centered, resizable window with a scrollable content area and a Close button.
+
+       Markdown Heading Sizes:
+        - H1 (# Heading): 1.8× base font size
+        - H2 (## Heading): 1.5× base font size
+        - H3 (### Heading): 1.25× base font size
+        - H4 (#### Heading): 1.1× base font size
+        - H5 (##### Heading): 1× base font size
+        - H6 (###### Heading): 0.9× base font size
+
+        The heading sizes scale proportionally when you zoom in/out using Ctrl+/- or Ctrl+MouseWheel. The implementation registers custom named text
+         styles ("Heading", "Heading2", etc.) that egui_commonmark uses for rendering markdown headings.
+
+
+      ---
+
+      Headers
+      # Heading 1
+      ## Heading 2
+      ### Heading 3
+
+      Text Formatting
+      **bold** → bold
+      *italic* → italic
+      ~~strikethrough~~ → strikethrough
+      `inline code` → inline code
+
+      Lists
+      Unordered:
+      - Item 1
+      - Item 2
+        - Nested item
+      Ordered:
+      1. First
+      2. Second
+      3. Third
+
+      Links
+      [Link text](https://example.com)
+
+      Code Blocks
+      ```
+      code block
+      multiple lines
+      ```
+      With language:
+      ```rust
+      fn main() {
+          println!("Hello");
+      }
+      ```
+
+      Blockquotes
+      > This is a quote
+      > Multiple lines
+
+      Horizontal Rule
+      ---
+
+      Tables
+      | Header 1 | Header 2 |
+      |----------|----------|
+      | Cell 1   | Cell 2   |
+
+      Task Lists
+      - [ ] Unchecked task
+      - [x] Completed task
+    new_value: |
+      The "Supports Markdown" when clicked should show a modal of help or open a browswer page with help on what markdown is supported with
+        examples.
+
+      implemented a Markdown help modal that appears when you click the "Supports Markdown" link in the form view. The modal includes:
+
+        - Headers - #, ##, ### syntax
+        - Text Formatting - bold, italic, strikethrough, inline code with visual examples showing the rendered result
+        - Lists - ordered and unordered, with nesting support
+        - Links - [text](url) syntax
+        - Code Blocks - with and without language specification for syntax highlighting
+        - Blockquotes - > syntax
+        - Horizontal Rules - --- syntax
+        - Tables - pipe-based table syntax
+        - Task Lists - - [ ] and - [x] checkbox syntax
+
+        The modal is a centered, resizable window with a scrollable content area and a Close button.
+
+       Markdown Heading Sizes:
+        - H1 (# Heading): 1.8× base font size
+        - H2 (## Heading): 1.5× base font size
+        - H3 (### Heading): 1.25× base font size
+        - H4 (#### Heading): 1.1× base font size
+        - H5 (##### Heading): 1× base font size
+        - H6 (###### Heading): 0.9× base font size
+
+        The heading sizes scale proportionally when you zoom in/out using Ctrl+/- or Ctrl+MouseWheel. The implementation registers custom named text
+         styles ("Heading", "Heading2", etc.) that egui_commonmark uses for rendering markdown headings.
+
+
+      ---
+
+      Headers
+      # Heading 1
+      ## Heading 2
+      ### Heading 3
+
+      Text Formatting
+      **bold** → bold
+      *italic* → italic
+      ~~strikethrough~~ → strikethrough
+      `inline code` → inline code
+
+      Lists
+      Unordered:
+      - Item 1
+      - Item 2
+        - Nested item
+      Ordered:
+      1. First
+      2. Second
+      3. Third
+
+      Links
+      [Link text](https://example.com)
+
+      Code Blocks
+      ```
+      code block
+      multiple lines
+      ```
+      With language:
+      ```rust
+      fn main() {
+          println!("Hello");
+      }
+      ```
+
+      Blockquotes
+      > This is a quote
+      > Multiple lines
+
+      Horizontal Rule
+
+      ---
+
+      Tables
+      | Header 1 | Header 2 |
+      |----------|----------|
+      | Cell 1   | Cell 2   |
+
+      Task Lists
+      - [ ] Unchecked task
+      - [x] Completed task
+- id: b18eb681-5660-4078-8eff-bc34ddf2d164
+  author: '@joe'
+  timestamp: 2025-11-28T00:24:09.780191737Z
+  changes:
+  - field_name: description
+    old_value: |
+      The "Supports Markdown" when clicked should show a modal of help or open a browswer page with help on what markdown is supported with
+        examples.
+
+      implemented a Markdown help modal that appears when you click the "Supports Markdown" link in the form view. The modal includes:
+
+        - Headers - #, ##, ### syntax
+        - Text Formatting - bold, italic, strikethrough, inline code with visual examples showing the rendered result
+        - Lists - ordered and unordered, with nesting support
+        - Links - [text](url) syntax
+        - Code Blocks - with and without language specification for syntax highlighting
+        - Blockquotes - > syntax
+        - Horizontal Rules - --- syntax
+        - Tables - pipe-based table syntax
+        - Task Lists - - [ ] and - [x] checkbox syntax
+
+        The modal is a centered, resizable window with a scrollable content area and a Close button.
+
+       Markdown Heading Sizes:
+        - H1 (# Heading): 1.8× base font size
+        - H2 (## Heading): 1.5× base font size
+        - H3 (### Heading): 1.25× base font size
+        - H4 (#### Heading): 1.1× base font size
+        - H5 (##### Heading): 1× base font size
+        - H6 (###### Heading): 0.9× base font size
+
+        The heading sizes scale proportionally when you zoom in/out using Ctrl+/- or Ctrl+MouseWheel. The implementation registers custom named text
+         styles ("Heading", "Heading2", etc.) that egui_commonmark uses for rendering markdown headings.
+
+
+      ---
+
+      Headers
+      # Heading 1
+      ## Heading 2
+      ### Heading 3
+
+      Text Formatting
+      **bold** → bold
+      *italic* → italic
+      ~~strikethrough~~ → strikethrough
+      `inline code` → inline code
+
+      Lists
+      Unordered:
+      - Item 1
+      - Item 2
+        - Nested item
+      Ordered:
+      1. First
+      2. Second
+      3. Third
+
+      Links
+      [Link text](https://example.com)
+
+      Code Blocks
+      ```
+      code block
+      multiple lines
+      ```
+      With language:
+      ```rust
+      fn main() {
+          println!("Hello");
+      }
+      ```
+
+      Blockquotes
+      > This is a quote
+      > Multiple lines
+
+      Horizontal Rule
+
+      ---
+
+      Tables
+      | Header 1 | Header 2 |
+      |----------|----------|
+      | Cell 1   | Cell 2   |
+
+      Task Lists
+      - [ ] Unchecked task
+      - [x] Completed task
+    new_value: |
+      The "Supports Markdown" when clicked should show a modal of help or open a browswer page with help on what markdown is supported with
+        examples.
+
+      implemented a Markdown help modal that appears when you click the "Supports Markdown" link in the form view. The modal includes:
+
+        - Headers - #, ##, ### syntax
+        - Text Formatting - bold, italic, strikethrough, inline code with visual examples showing the rendered result
+        - Lists - ordered and unordered, with nesting support
+        - Links - [text](url) syntax
+        - Code Blocks - with and without language specification for syntax highlighting
+        - Blockquotes - > syntax
+        - Horizontal Rules - --- syntax
+        - Tables - pipe-based table syntax
+        - Task Lists - - [ ] and - [x] checkbox syntax
+
+        The modal is a centered, resizable window with a scrollable content area and a Close button.
+
+       Markdown Heading Sizes:
+
+       Now headings use exponential scaling with a factor of 1.25:
+
+        | Heading | Multiplier | At 14pt base |
+        |---------|------------|--------------|
+        | H1      | ~3.05x     | ~43pt        |
+        | H2      | ~2.44x     | ~34pt        |
+        | H3      | ~1.95x     | ~27pt        |
+        | H4      | ~1.56x     | ~22pt        |
+        | H5      | 1.25x      | ~18pt        |
+        | H6      | 1x         | 14pt         |
+
+
+
+        The heading sizes scale proportionally when you zoom in/out using Ctrl+/- or Ctrl+MouseWheel. The implementation registers custom named text
+         styles ("Heading", "Heading2", etc.) that egui_commonmark uses for rendering markdown headings.
+
+
+      ---
+
+      Headers
+      # Heading 1
+      ## Heading 2
+      ### Heading 3
+
+      Text Formatting
+      **bold** → bold
+      *italic* → italic
+      ~~strikethrough~~ → strikethrough
+      `inline code` → inline code
+
+      Lists
+      Unordered:
+      - Item 1
+      - Item 2
+        - Nested item
+      Ordered:
+      1. First
+      2. Second
+      3. Third
+
+      Links
+      [Link text](https://example.com)
+
+      Code Blocks
+      ```
+      code block
+      multiple lines
+      ```
+      With language:
+      ```rust
+      fn main() {
+          println!("Hello");
+      }
+      ```
+
+      Blockquotes
+      > This is a quote
+      > Multiple lines
+
+      Horizontal Rule
+
+      ---
+
+      Tables
+      | Header 1 | Header 2 |
+      |----------|----------|
+      | Cell 1   | Cell 2   |
+
+      Task Lists
+      - [ ] Unchecked task
+      - [x] Completed task
+- id: acc22882-5427-4db6-adf1-b011c807c15a
+  author: ''
+  timestamp: 2025-11-30T02:11:12.487411564Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed

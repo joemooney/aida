@@ -1,0 +1,18 @@
+id: afecc56f-a9b2-4168-9df4-30a1a631cc91
+spec_id: FR-87
+title: Reload req from database before editing
+description: "Reload req from database before editing\n\nI noticed that I edited in one window and saved, but the edits did not show up in another when when I clicked edit. "
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-13T18:17:17.709095532Z
+created_by: Joe Mooney
+modified_at: 2026-05-04T19:33:10.267497926Z
+req_type: Functional
+comments:
+- id: 019df47a-ea47-7802-98f5-08683663516c
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:33:09.319407310Z
+  modified_at: 2026-05-04T19:33:09.319407310Z

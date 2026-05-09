@@ -1,0 +1,128 @@
+id: 3fe85c39-0da4-477a-9ac5-04ecb9696ec9
+spec_id: FR-198
+title: Recursive relationships view
+description: |
+  In the Relationships tab, ability to list all immediate relationships (as presently implemented), and a checkbox (recursive) to present a tree structure (children collapsed by default)  - protect against infinite cycles.
+
+  Do not display a requirement that is already displayed, that is, parent ->child->parent (do not show this same parent again.). For a reciprocal relationship this is not really a cycle. If parent/child was M:N so that multiple parents could share a child then we should not show the other parents but indicate that there are additional relationships we are not recursing into, say an up arrow and "shared". And keep cycle for real (and probably problematic cycles). If we loop back to to a previous requirement through a different relationship (e.g. references) show an icon to indicate bidirectional relationship (maybe a two ended arrow). We should be able to double click on this to take us to the other requiment.
+
+    1. Reciprocal relationships (e.g., parent→child→parent): Don't show the same requirement twice in a branch. This isn't really a cycle, just
+    the inverse relationship - skip silently.
+    2. Shared children (M:N): If a child has multiple parents, when viewing from one parent, don't recurse into the other parents. Instead show
+    "↑ shared" to indicate there are other parents we're not showing.
+    3. True cycles: Actual problematic loops through the same relationship type (rare, likely a data error) - keep the "↻ (cycle)" indicator.
+    4. Cross-relationship references: If requirement A references requirement B through a different relationship type (e.g., "references"), show
+     a bidirectional arrow (↔) that's double-clickable to navigate there.
+
+
+  The Relationships section has two modes:
+
+    Immediate View (default, checkbox unchecked):
+    - Shows only direct relationships of the current requirement
+    - Has the "x" button to delete relationships
+    - Original behavior preserved
+
+    Recursive View (checkbox checked):
+    - Shows relationships as a tree structure
+    - Nodes are collapsed by default - click ▶ to expand, ▼ to collapse
+    - Only nodes with children show the expand/collapse button
+    - Cycle protection: If a requirement is visited twice in the same path, shows "↻ (cycle)" indicator and stops recursion
+    - No delete button in recursive view to avoid confusion with the collapse button
+    - Double-click any node to navigate to that requirement
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-27T17:26:03.149592683Z
+modified_at: 2026-05-04T19:34:37.001840301Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: ae4d77e5-55a4-4a56-97d1-a030d922a04d
+comments:
+- id: 019df47c-3cf7-7f11-9c07-52532bde0ee1
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:34:36.023686136Z
+  modified_at: 2026-05-04T19:34:36.023686136Z
+history:
+- id: 2146e1a7-41b1-40ea-9bff-50aa6f7fc9f9
+  author: '@joe'
+  timestamp: 2025-11-27T22:48:23.342707166Z
+  changes:
+  - field_name: title
+    old_value: ''
+    new_value: Recursive relationships view
+- id: ac9371f3-4250-425e-b4a4-91aa58beecae
+  author: '@joe'
+  timestamp: 2025-11-27T22:58:14.414327109Z
+  changes:
+  - field_name: description
+    old_value: In the Relationships tab, ability to list all immediate relationships (as presently implemented), and a checkbox (recursive) to present a tree structure (children collapsed by default)  - protect against infinite cycles.
+    new_value: |
+      In the Relationships tab, ability to list all immediate relationships (as presently implemented), and a checkbox (recursive) to present a tree structure (children collapsed by default)  - protect against infinite cycles.
+
+      The Relationships section has two modes:
+
+        Immediate View (default, checkbox unchecked):
+        - Shows only direct relationships of the current requirement
+        - Has the "x" button to delete relationships
+        - Original behavior preserved
+
+        Recursive View (checkbox checked):
+        - Shows relationships as a tree structure
+        - Nodes are collapsed by default - click ▶ to expand, ▼ to collapse
+        - Only nodes with children show the expand/collapse button
+        - Cycle protection: If a requirement is visited twice in the same path, shows "↻ (cycle)" indicator and stops recursion
+        - No delete button in recursive view to avoid confusion with the collapse button
+        - Double-click any node to navigate to that requirement
+- id: 65907c96-409d-40a2-95b2-01241a5696c3
+  author: '@joe'
+  timestamp: 2025-11-28T01:12:27.991466889Z
+  changes:
+  - field_name: description
+    old_value: |
+      In the Relationships tab, ability to list all immediate relationships (as presently implemented), and a checkbox (recursive) to present a tree structure (children collapsed by default)  - protect against infinite cycles.
+
+      The Relationships section has two modes:
+
+        Immediate View (default, checkbox unchecked):
+        - Shows only direct relationships of the current requirement
+        - Has the "x" button to delete relationships
+        - Original behavior preserved
+
+        Recursive View (checkbox checked):
+        - Shows relationships as a tree structure
+        - Nodes are collapsed by default - click ▶ to expand, ▼ to collapse
+        - Only nodes with children show the expand/collapse button
+        - Cycle protection: If a requirement is visited twice in the same path, shows "↻ (cycle)" indicator and stops recursion
+        - No delete button in recursive view to avoid confusion with the collapse button
+        - Double-click any node to navigate to that requirement
+    new_value: |
+      In the Relationships tab, ability to list all immediate relationships (as presently implemented), and a checkbox (recursive) to present a tree structure (children collapsed by default)  - protect against infinite cycles.
+
+      Do not display a requirement that is already displayed, that is, parent ->child->parent (do not show this same parent again.). For a reciprocal relationship this is not really a cycle. If parent/child was M:N so that multiple parents could share a child then we should not show the other parents but indicate that there are additional relationships we are not recursing into, say an up arrow and "shared". And keep cycle for real (and probably problematic cycles). If we loop back to to a previous requirement through a different relationship (e.g. references) show an icon to indicate bidirectional relationship (maybe a two ended arrow). We should be able to double click on this to take us to the other requiment.
+
+        1. Reciprocal relationships (e.g., parent→child→parent): Don't show the same requirement twice in a branch. This isn't really a cycle, just
+        the inverse relationship - skip silently.
+        2. Shared children (M:N): If a child has multiple parents, when viewing from one parent, don't recurse into the other parents. Instead show
+        "↑ shared" to indicate there are other parents we're not showing.
+        3. True cycles: Actual problematic loops through the same relationship type (rare, likely a data error) - keep the "↻ (cycle)" indicator.
+        4. Cross-relationship references: If requirement A references requirement B through a different relationship type (e.g., "references"), show
+         a bidirectional arrow (↔) that's double-clickable to navigate there.
+
+
+      The Relationships section has two modes:
+
+        Immediate View (default, checkbox unchecked):
+        - Shows only direct relationships of the current requirement
+        - Has the "x" button to delete relationships
+        - Original behavior preserved
+
+        Recursive View (checkbox checked):
+        - Shows relationships as a tree structure
+        - Nodes are collapsed by default - click ▶ to expand, ▼ to collapse
+        - Only nodes with children show the expand/collapse button
+        - Cycle protection: If a requirement is visited twice in the same path, shows "↻ (cycle)" indicator and stops recursion
+        - No delete button in recursive view to avoid confusion with the collapse button
+        - Double-click any node to navigate to that requirement

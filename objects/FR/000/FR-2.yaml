@@ -1,0 +1,114 @@
+id: 9e9ea9a2-0734-44b8-b911-f76f5aabc4ac
+spec_id: FR-2
+prefix_override: AI
+title: AI integration
+description: |
+  AI integration
+  I want to integrate AI and probably claude code into this application. The first baby step would be to have in the
+    Actions dropdown an AI subdropdown menu with actions we can take. Consider if we should evaluate the current requirement, perhaps we provide
+    the entire database as context (for the moment) and it can discern whether the requirement is well written, suggest updates, consider
+    duplicates, whether references or other relationships should be created etc. Our goal is to make this application like an editor which is
+    fast, and nimble without a lot os fluff and primarily driven by the keyboard in preference to the mouse. we want to move fast, iterating
+    frequently with the goal of this becoming self-referential whereby we are able to start feeding back into claude code requirements that
+    improve the application itself. Perhaps you should review requirements.yaml itself for inspiration.
+
+
+    AI Evaluate Requirement
+    - Performs a holistic quality assessment of the requirement
+    - Returns a quality score (1-10) and structured feedback
+    - Identifies issues with severity levels (critical, major, minor)
+    - Lists strengths and suggested improvements
+    - Considers: clarity, completeness, testability, consistency, feasibility
+    - Doesn't rewrite anything - it's an analysis/audit tool
+
+    AI Improve Description
+    - Specifically focuses on rewriting the description text
+    - Uses completed requirements as examples of well-written ones
+    - Generates a concrete improved version of the description
+    - Provides rationale for the changes made
+    - Action-oriented - you get a new description you can use directly
+
+    In short: Evaluate tells you what's wrong and gives a score, Improve actually rewrites the description for you.
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-30T05:30:18.498861915Z
+created_by: Unknown User
+modified_at: 2026-05-04T19:38:40.000221953Z
+req_type: Functional
+relationships:
+- rel_type: Child
+  target_id: 4de3b4f0-b157-4d50-8549-e98153d2324d
+  created_at: 2025-11-30T18:33:00.589994057Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: d61fa9f5-9f5f-4390-b7fb-32c1759ddd50
+  created_at: 2025-11-30T19:15:20.316632488Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: 5a5a7d31-6842-4082-ac45-6831e102fde5
+  created_at: 2025-11-30T20:33:27.308653515Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: 57e4297c-c8f7-4d48-8f1b-66fd7de5789d
+  created_at: 2025-12-01T06:40:42.221970691Z
+  created_by: Unknown User
+comments:
+- id: 019df47f-f207-72b0-b070-ae6d438d8e6b
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:38:38.983980640Z
+  modified_at: 2026-05-04T19:38:38.983980640Z
+history:
+- id: 516738ee-2ec8-487f-aa4a-2f4153889c6f
+  author: Unknown User
+  timestamp: 2025-11-30T18:32:26.692485392Z
+  changes:
+  - field_name: prefix_override
+    old_value: ''
+    new_value: AI
+  - field_name: spec_id
+    old_value: FR-0132
+    new_value: AI-0133
+- id: ce772cc4-b102-4337-bd51-f2a6f9f8ae4e
+  author: Joe Mooney
+  timestamp: 2025-12-06T18:39:50.594082353Z
+  changes:
+  - field_name: description
+    old_value: |-
+      AI integration
+      I want to integrate AI and probably claude code into this application. The first baby step would be to have in the
+        Actions dropdown an AI subdropdown menu with actions we can take. Consider if we should evaluate the current requirement, perhaps we provide
+        the entire database as context (for the moment) and it can discern whether the requirement is well written, suggest updates, consider
+        duplicates, whether references or other relationships should be created etc. Our goal is to make this application like an editor which is
+        fast, and nimble without a lot os fluff and primarily driven by the keyboard in preference to the mouse. we want to move fast, iterating
+        frequently with the goal of this becoming self-referential whereby we are able to start feeding back into claude code requirements that
+        improve the application itself. Perhaps you should review requirements.yaml itself for inspiration.
+    new_value: |
+      AI integration
+      I want to integrate AI and probably claude code into this application. The first baby step would be to have in the
+        Actions dropdown an AI subdropdown menu with actions we can take. Consider if we should evaluate the current requirement, perhaps we provide
+        the entire database as context (for the moment) and it can discern whether the requirement is well written, suggest updates, consider
+        duplicates, whether references or other relationships should be created etc. Our goal is to make this application like an editor which is
+        fast, and nimble without a lot os fluff and primarily driven by the keyboard in preference to the mouse. we want to move fast, iterating
+        frequently with the goal of this becoming self-referential whereby we are able to start feeding back into claude code requirements that
+        improve the application itself. Perhaps you should review requirements.yaml itself for inspiration.
+
+
+        AI Evaluate Requirement
+        - Performs a holistic quality assessment of the requirement
+        - Returns a quality score (1-10) and structured feedback
+        - Identifies issues with severity levels (critical, major, minor)
+        - Lists strengths and suggested improvements
+        - Considers: clarity, completeness, testability, consistency, feasibility
+        - Doesn't rewrite anything - it's an analysis/audit tool
+
+        AI Improve Description
+        - Specifically focuses on rewriting the description text
+        - Uses completed requirements as examples of well-written ones
+        - Generates a concrete improved version of the description
+        - Provides rationale for the changes made
+        - Action-oriented - you get a new description you can use directly
+
+        In short: Evaluate tells you what's wrong and gives a score, Improve actually rewrites the description for you.

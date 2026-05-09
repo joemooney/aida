@@ -1,0 +1,23 @@
+id: c25591af-df93-4dc3-af28-3432e02f68ba
+spec_id: FR-237
+title: 'CLI command: aida report ai-integration'
+description: 'Add CLI command to generate AI integration report with --format (markdown|html) and --output options. The report should include: project overview, AI configuration, prompts catalog, code traceability summary, scaffolding status, and skills/commands.'
+status: Completed
+priority: Medium
+owner: ''
+feature: 149-AI Integration
+created_at: 2025-12-11T02:33:32.545779109Z
+modified_at: 2025-12-11T02:42:12.816066190Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: e7082183-7023-4223-90f2-621ceefc3890
+  created_at: 2025-12-11T02:33:32.545825497Z
+history:
+- id: 83f22c16-2cdc-4cd9-86d2-b5e9fd04588f
+  author: CLI
+  timestamp: 2025-12-11T02:42:12.816064457Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed

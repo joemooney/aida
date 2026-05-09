@@ -1,0 +1,43 @@
+id: 2a5e9947-12f6-41d9-9492-92662208ccc3
+spec_id: FR-33
+title: 'Release workflow: export SQLite to YAML for version control'
+description: |-
+  ## Problem
+  SQLite databases are binary and not suitable for git version control. However, SQLite provides better performance for local development.
+
+  ## Solution
+  At release points, export the requirements database from SQLite to YAML format for inclusion in git commits.
+
+  ## Workflow
+  1. **During Development**: Use SQLite locally for performance
+  2. **At Release**: Run `aida db migrate --from sqlite --to yaml --force` to export
+  3. **Commit**: Include requirements.yaml in the release commit
+  4. **Clone**: New developers run `aida db migrate --from yaml --to sqlite` to import
+
+  ## Integration with /aida-release skill
+  The /aida-release skill should:
+  - Export SQLite to YAML before creating release commit
+  - Include requirements.yaml in staged files
+  - Optionally validate that export matches what's in SQLite
+
+  ## Commands
+  ```bash
+  # Export at release time
+  aida db migrate --from sqlite --to yaml --force
+
+  # Import after clone
+  aida db migrate --from yaml --to sqlite
+  ```
+status: Rejected
+priority: High
+owner: ai:claude:joe
+feature: 157-release
+created_at: 2025-12-11T06:34:32.423442394Z
+modified_at: 2026-05-04T19:32:47.907796265Z
+req_type: Functional
+comments:
+- id: 019df47a-9267-7953-bc91-baeeafeeae67
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:32:46.823826956Z
+  modified_at: 2026-05-04T19:32:46.823826956Z

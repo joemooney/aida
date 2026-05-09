@@ -1,0 +1,40 @@
+id: db05a93d-4ade-49fb-aaba-b6eedf4ec846
+spec_id: FR-29
+title: Status dropdown should have Other subdropdown f...
+description: |-
+  Status dropdown should have Other subdropdown for other statuses
+  In the Settings/
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-30T01:19:52.674508726Z
+created_by: Unknown User
+modified_at: 2026-05-04T19:34:01.662046431Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
+  created_at: 2025-11-30T01:19:52.674566786Z
+  created_by: Unknown User
+comments:
+- id: 019df47b-b2b5-7e73-b27d-fc5498b475b1
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:34:00.629990622Z
+  modified_at: 2026-05-04T19:34:00.629990622Z
+history:
+- id: e8310d56-b964-4934-88d3-a60487475969
+  author: ''
+  timestamp: 2025-11-30T01:26:22.262715178Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: c8d62a75-9566-4852-9961-95fb9ea5a12d
+  author: Unknown User
+  timestamp: 2025-11-30T01:26:32.128520683Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Draft

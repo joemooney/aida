@@ -1,0 +1,34 @@
+id: 072854b9-a4cc-4f05-8ebd-2c655de26a7c
+spec_id: FR-216
+title: Git Hooks for Code Traceability Validation
+description: |-
+  Generate git hooks during project scaffolding to enforce code traceability:
+
+  **commit-msg hook:**
+  - Validates SPEC-ID references in commit messages
+  - Warns if referenced SPEC-ID doesn't exist in database
+  - Non-blocking by default (configurable to block)
+
+  **pre-commit hook:**
+  - Validates trace comments in staged files
+  - Checks format: // trace:SPEC-ID | ai:tool:confidence
+  - Warns on malformed traces
+  - Non-blocking by default (configurable to block)
+
+  **Configuration Options (in ScaffoldConfig):**
+  - generate_git_hooks: bool - whether to generate hooks
+  - include_commit_msg_hook: bool - generate commit-msg hook
+  - include_pre_commit_hook: bool - generate pre-commit hook
+
+  **Acceptance Criteria:**
+  - [x] Hooks only generated if .git directory exists
+  - [x] Hooks have executable permissions (Unix)
+  - [x] Preview shows hook content before generation
+  - [x] Non-blocking warnings by default
+status: Completed
+priority: Medium
+owner: ''
+feature: 118-Uncategorized
+created_at: 2025-12-09T04:33:24.924942905Z
+modified_at: 2025-12-10T03:36:08.576963706Z
+req_type: Functional

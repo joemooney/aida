@@ -1,0 +1,74 @@
+id: f54c4d83-8073-49d1-9229-c712480a83e4
+spec_id: FR-233
+title: Quick Action button
+description: |
+  Instead of Archive and Delete have a single Quick Action button dropdown of actions that can be taken on requirement. Have  Priority (which will be a sub-dropdown of possible priorities for that requirement). Also have Status as a sub-dropdown  with possible priorities for that requirement then also in the Status sub-dropdown, a separator if possible, and Archive and Delete actions.
+
+  a single "⚡ Actions" dropdown menu that contains:
+
+    1. Priority submenu - shows High, Medium, Low options with a checkmark (✓) next to the current priority
+    2. Status submenu - contains:
+      - Status options: Draft, Approved, Completed, Rejected (with checkmark for current)
+      - A separator line
+      - Archive/Unarchive action (icon changes based on current state)
+      - Delete action
+
+    All changes to priority and status are tracked in the requirement's change history, so they appear in the History tab.
+status: Completed
+priority: Low
+owner: joe
+feature: 97-Uncategorized
+created_at: 2025-11-27T17:02:58.915305926Z
+modified_at: 2025-12-06T19:06:39.455567941Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: ae4d77e5-55a4-4a56-97d1-a030d922a04d
+history:
+- id: 03fdcf5c-4bbe-4330-b3fc-f4004e6580f0
+  author: '@joe'
+  timestamp: 2025-11-27T17:15:06.371274824Z
+  changes:
+  - field_name: description
+    old_value: Instead of Archive and Delete have a single Quick Action button dropdown of actions that can be taken on requirement. Have Archive and Delete as actions, along with Priority (which will be a sub-dropdown of possible priorities for that requirement).
+    new_value: Instead of Archive and Delete have a single Quick Action button dropdown of actions that can be taken on requirement. Have  Priority (which will be a sub-dropdown of possible priorities for that requirement). Also have Status as a sub-dropdown  with possible priorities for that requirement then also in the Status sub-dropdown, a separator if possible, and Archive and Delete actions.
+- id: 3150ed0a-f8d1-43ca-918a-3b1613d73623
+  author: '@joe'
+  timestamp: 2025-11-27T17:19:02.101169550Z
+  changes:
+  - field_name: description
+    old_value: Instead of Archive and Delete have a single Quick Action button dropdown of actions that can be taken on requirement. Have  Priority (which will be a sub-dropdown of possible priorities for that requirement). Also have Status as a sub-dropdown  with possible priorities for that requirement then also in the Status sub-dropdown, a separator if possible, and Archive and Delete actions.
+    new_value: |
+      Instead of Archive and Delete have a single Quick Action button dropdown of actions that can be taken on requirement. Have  Priority (which will be a sub-dropdown of possible priorities for that requirement). Also have Status as a sub-dropdown  with possible priorities for that requirement then also in the Status sub-dropdown, a separator if possible, and Archive and Delete actions.
+
+      a single "⚡ Actions" dropdown menu that contains:
+
+        1. Priority submenu - shows High, Medium, Low options with a checkmark (✓) next to the current priority
+        2. Status submenu - contains:
+          - Status options: Draft, Approved, Completed, Rejected (with checkmark for current)
+          - A separator line
+          - Archive/Unarchive action (icon changes based on current state)
+          - Delete action
+
+        All changes to priority and status are tracked in the requirement's change history, so they appear in the History tab.
+- id: 4fec6fda-2863-4741-9b6f-32e56dd17053
+  author: ''
+  timestamp: 2025-11-30T02:11:31.618020106Z
+  changes:
+  - field_name: priority
+    old_value: Medium
+    new_value: Low
+- id: cc903aa4-8e52-40b4-ad05-5c53b0dce390
+  author: ''
+  timestamp: 2025-11-30T02:11:36.752118547Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
+- id: df26879b-6a99-474a-8400-c1d427bf6b19
+  author: Joe Mooney
+  timestamp: 2025-12-06T19:06:39.455576624Z
+  changes:
+  - field_name: owner
+    old_value: ''
+    new_value: joe

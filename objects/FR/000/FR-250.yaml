@@ -1,0 +1,20 @@
+id: 1739a3b3-6508-46a6-8ed1-c256fb7bd3d1
+spec_id: FR-250
+title: view recent requirements
+description: view requirements added/updated or some other state within a time period
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-27T21:12:46.994199510Z
+modified_at: 2026-05-04T19:34:49.362524676Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 5a8cda55-badf-48c6-82c9-b9ea53f3f69f
+comments:
+- id: 019df47c-6d14-7f82-b0f5-c3f61e5febdf
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:34:48.340795074Z
+  modified_at: 2026-05-04T19:34:48.340795074Z

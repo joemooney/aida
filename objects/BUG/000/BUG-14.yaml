@@ -1,0 +1,113 @@
+id: b173e02c-5fae-4894-a01b-767f5a29c202
+spec_id: BUG-14
+title: Concurrent Edit Protection
+description: |-
+  Prevent data loss when GUI and CLI (or server) modify the same requirements.yaml simultaneously.
+
+  **Problem:**
+  When the GUI and CLI/server are both editing requirements.yaml, changes can be overwritten because there's no file locking or version checking between them.
+
+  **Solution Options:**
+  1. **File locking** - Use flock/advisory locks to prevent concurrent writes
+  2. **Optimistic locking** - Track modified_at timestamps, reject stale writes
+  3. **Merge on save** - Detect conflicts and merge non-conflicting changes
+  4. **Watch for changes** - GUI reloads when file changes externally
+
+  **Acceptance Criteria:**
+  - [ ] GUI detects when file has been modified externally
+  - [ ] Warning shown before overwriting external changes
+  - [ ] Option to reload, merge, or overwrite
+  - [x] GUI detects when file has been modified externally (via store_version)
+  - [x] Warning shown before overwriting external changes (VersionConflict)
+  - [x] Option to reload, merge, or overwrite (SQLite optimistic locking)
+  - [x] Server mode uses proper locking for concurrent clients (WAL mode)
+status: Completed
+priority: High
+owner: joe
+feature: 121-Uncategorized
+created_at: 2025-12-09T04:34:16.558538542Z
+modified_at: 2025-12-09T15:37:28.514714890Z
+req_type: Bug
+comments:
+- id: 317df708-b309-4ee5-bd22-a877c0651a58
+  author: Unknown
+  content: 'Implemented via SQLite optimistic locking. Changes: Phase 1-4 completed with version columns, VersionConflict handling, GUI export/migrate menu, CLI db migrate/info commands. Commits: 12a56e0, 1714d44, 65a339e'
+  created_at: 2025-12-09T15:14:37.613268681Z
+  modified_at: 2025-12-09T15:14:37.613268681Z
+- id: eb99057a-0834-4b0d-a7d7-d2f13dce0135
+  author: Claude
+  content: 'Extended with migration protection (commit a914a3f): Added migrated_to marker to YAML after SQLite migration, check_migration_status() for detecting migration state, GUI auto-redirects to SQLite when marker exists, CLI warns users about dual-file situations. Also fixed YAML parse error when attempting to reload SQLite file after migration (commit 77dc94c).'
+  created_at: 2025-12-09T15:37:28.514702629Z
+  modified_at: 2025-12-09T15:37:28.514702629Z
+history:
+- id: ffb04e30-1bea-4788-a7e4-c5bf8111b920
+  author: CLI
+  timestamp: 2025-12-09T15:18:28.938655957Z
+  changes:
+  - field_name: owner
+    old_value: ''
+    new_value: joe
+trace_links:
+- id: b446fc92-9b3d-453a-a5f5-d7ed3e34402b
+  artifact_type: SourceCode
+  file_path: ./aida-cli/src/main.rs
+  line_start: 33
+  notes: 'AI tool: claude'
+  created_at: 2025-12-11T00:58:30.967569761Z
+  created_by: scan
+- id: b967f42f-b626-4bc2-bd9b-f1b363183c66
+  artifact_type: SourceCode
+  file_path: ./aida-cli/src/main.rs
+  line_start: 1479
+  notes: 'AI tool: claude'
+  created_at: 2025-12-11T00:58:30.967592529Z
+  created_by: scan
+- id: e989bb88-1c4b-48c4-b704-8377dedf94e2
+  artifact_type: SourceCode
+  file_path: ./aida-cli/src/main.rs
+  line_start: 1535
+  notes: 'AI tool: claude'
+  created_at: 2025-12-11T00:58:30.967603080Z
+  created_by: scan
+- id: b175982a-7c44-4ab4-afda-d440b3c27b78
+  artifact_type: SourceCode
+  file_path: ./aida-gui/src/app.rs
+  line_start: 4157
+  notes: 'AI tool: claude'
+  created_at: 2025-12-11T00:58:30.967762817Z
+  created_by: scan
+- id: 628f69a5-0893-4f16-b645-adc4cfbac1f9
+  artifact_type: SourceCode
+  file_path: ./aida-gui/src/app.rs
+  line_start: 5118
+  notes: 'AI tool: claude'
+  created_at: 2025-12-11T00:58:30.967773362Z
+  created_by: scan
+- id: 76c4e958-daaa-4fa0-b9e7-3dc21d2db8b8
+  artifact_type: SourceCode
+  file_path: ./aida-gui/src/app.rs
+  line_start: 5152
+  notes: 'AI tool: claude'
+  created_at: 2025-12-11T00:58:30.967784934Z
+  created_by: scan
+- id: a6956c9d-2261-4982-b211-2558de227955
+  artifact_type: SourceCode
+  file_path: ./aida-gui/src/app.rs
+  line_start: 6164
+  notes: 'AI tool: claude'
+  created_at: 2025-12-11T00:58:30.967824213Z
+  created_by: scan
+- id: 5864756f-9e95-4af2-b7cc-264cb0a0ff3e
+  artifact_type: SourceCode
+  file_path: ./aida-gui/src/app.rs
+  line_start: 7046
+  notes: 'AI tool: claude'
+  created_at: 2025-12-11T00:58:30.967849615Z
+  created_by: scan
+- id: 5558e4cb-1b46-49b6-abe5-c9b911c94834
+  artifact_type: SourceCode
+  file_path: ./aida-gui/src/app.rs
+  line_start: 13476
+  notes: 'AI tool: claude'
+  created_at: 2025-12-11T00:58:30.967958226Z
+  created_by: scan

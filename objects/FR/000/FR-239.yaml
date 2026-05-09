@@ -1,0 +1,36 @@
+id: cc712910-5468-4c7c-a62d-75d7b8110b76
+spec_id: FR-239
+title: Requirements List view Navigation keys
+description: "Support up/down/Page-Up/Page-Down and Home and End in Requirements List view. Also Mouse Wheel would also be nice \n\n - Page Up/Page Down: Move by 10 items at a time\n  - Home: Jump to the first requirement in the list\n  - End: Jump to the last requirement in the list\n  - Mouse Wheel: Scroll through requirements one at a time (without Ctrl - Ctrl+wheel is still zoom)\n"
+status: Completed
+priority: Medium
+owner: joe
+feature: 97-Uncategorized
+created_at: 2025-11-27T17:39:30.783500080Z
+modified_at: 2025-12-06T19:06:19.390641802Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
+history:
+- id: 84472583-449c-49fa-b862-0494c0f0cff9
+  author: '@joe'
+  timestamp: 2025-11-27T17:40:32.774548389Z
+  changes:
+  - field_name: description
+    old_value: "Support up/down/Page-Up/Page-Down and Home and End in Requirements List view. Also Mouse Wheel would also be nice \n"
+    new_value: "Support up/down/Page-Up/Page-Down and Home and End in Requirements List view. Also Mouse Wheel would also be nice \n\n - Page Up/Page Down: Move by 10 items at a time\n  - Home: Jump to the first requirement in the list\n  - End: Jump to the last requirement in the list\n  - Mouse Wheel: Scroll through requirements one at a time (without Ctrl - Ctrl+wheel is still zoom)\n"
+- id: 9980db20-2559-4dc1-ba75-8077cbbcee39
+  author: ''
+  timestamp: 2025-11-30T06:52:11.400714846Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
+- id: 1079a694-ac36-4473-87ee-6ce652f21e28
+  author: Joe Mooney
+  timestamp: 2025-12-06T19:06:19.390651312Z
+  changes:
+  - field_name: owner
+    old_value: ''
+    new_value: joe

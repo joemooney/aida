@@ -1,0 +1,18 @@
+id: f1469587-593e-4e85-b7e7-354fceade5d2
+spec_id: FR-15
+prefix_override: THEME
+title: Theme Configuration
+description: "Theme related requirements. \nAppearance that can be controlled by the theme."
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-28T20:26:36.277550974Z
+modified_at: 2026-05-04T19:34:27.339821476Z
+req_type: Functional
+comments:
+- id: 019df47c-15fc-7152-9776-56861c965dbb
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:34:26.044688662Z
+  modified_at: 2026-05-04T19:34:26.044688662Z

@@ -1,0 +1,81 @@
+id: 9a4e932f-0922-4d2f-8c0c-131525b09801
+spec_id: FR-82
+title: AI Implement Button
+description: |+
+  AI Implement Button
+
+  "Copy for Claude Code" feature. Here's a summary of what was done:
+
+    Implementation Complete
+
+    Added a new button "Copy for Claude Code" in the Actions → AI submenu that:
+
+    1. Location: Appears at the bottom of the AI submenu (after a separator), making it easy to find
+      - Path: Actions → AI → Copy for Claude Code
+    2. Availability: Only enabled when the requirement has status "Approved"
+      - Shows a helpful tooltip when disabled: "Requirement must be Approved to implement"
+    3. Formatted Output: When clicked, copies a well-structured prompt to clipboard including:
+      - Requirement ID and title
+      - Type, Priority, and Feature
+      - Full description
+      - Tags (if any)
+      - Implementation instructions with guidance on:
+          - Following project patterns
+        - Adding tests
+        - Updating status when done
+    4. User Feedback: Shows a toast notification confirming the copy with the requirement ID
+    5. Linux Support: Also copies to the PRIMARY selection for middle-click paste
+
+    Example Output
+
+    When you click "Copy for Claude Code" on an approved requirement, this gets copied to your clipboard:
+
+    # Implement Requirement: FR-0001 - User Authentication
+
+    **Type:** Functional
+    **Priority:** High
+    **Feature:** 1-Authentication
+
+    ## Description
+
+    The system shall provide secure user authentication...
+
+    ## Tags
+
+    - security
+    - authentication
+
+    ## Implementation Task
+
+    Please implement this requirement in the codebase. After implementation:
+    1. Ensure the code follows the project's existing patterns and style
+    2. Add appropriate tests if applicable
+    3. Update the requirement status to 'Completed' when done
+
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-30T22:17:36.822832980Z
+created_by: Unknown User
+modified_at: 2026-05-04T19:28:51.947133242Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 4de3b4f0-b157-4d50-8549-e98153d2324d
+  created_at: 2025-11-30T22:17:36.822862901Z
+  created_by: Unknown User
+comments:
+- id: 019df476-f94c-7090-b8a4-6886b668ff67
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:28:51.020706457Z
+  modified_at: 2026-05-04T19:28:51.020706457Z
+history:
+- id: 4d85cf31-28b9-4828-81cc-fca127ab7845
+  author: Joe Mooney
+  timestamp: 2025-12-08T00:57:56.598340319Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved

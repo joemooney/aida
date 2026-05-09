@@ -1,0 +1,30 @@
+id: b0eade0a-c4f9-4854-93d1-1cebbf8a8539
+spec_id: STORY-11
+title: Create GitLab Issue from AIDA Requirement
+description: "As a user, I want to create a GitLab issue from an AIDA requirement so that developers can track implementation work in GitLab.\n\n## Acceptance Criteria\n- [ ] Create GitLab issue with mapped fields from AIDA requirement\n- [ ] Automatically link created issue back to source requirement\n- [ ] Add AIDA spec-id reference in GitLab issue description\n- [ ] Support creating issue with custom title (default: requirement title)\n- [ ] Apply label mappings (AIDA type/priority → GitLab labels)\n- [ ] Assign to GitLab user (optional)\n- [ ] Set milestone (optional)\n- [ ] Show confirmation with created issue link\n\n## Field Mapping (AIDA → GitLab)\n| AIDA Field | GitLab Field | Notes |\n|------------|--------------|-------|\n| title | title | Direct copy |\n| description | description | Prepend with AIDA ref |\n| priority | labels | \"priority::high\", \"priority::medium\", etc. |\n| req_type | labels | \"type::bug\", \"type::story\", etc. |\n| feature | milestone | If milestone exists, else label |\n| owner | assignee | Match by username/email |\n| tags | labels | Direct copy |\n\n## Description Template\n```markdown\n> 📋 **AIDA Requirement:** [FR-0042](aida://FR-0042)\n> \n> _This issue was created from AIDA requirements management system._\n\n{original_description}\n\n---\n**Acceptance Criteria** (from AIDA):\n{acceptance_criteria_if_present}\n```\n\n## CLI Support\n```bash\n# Create issue from requirement\naida gitlab create FR-0042\n\n# With options\naida gitlab create FR-0042 --title \"Custom title\" --assign @developer\n\n# Create issues for multiple requirements\naida gitlab create FR-0042 FR-0043 FR-0044\n\n# Dry run (show what would be created)\naida gitlab create FR-0042 --dry-run\n```\n\n## GUI Support\n- \"Create GitLab Issue\" button in requirement detail view\n- Dialog to customize title, assignee, milestone before creation\n- Success toast with link to created issue\n- Issue appears in Links tab after creation\n\n## Error Handling\n- Handle API errors gracefully (auth, rate limit, validation)\n- Don't create duplicate issues (check if already linked)\n- Validate assignee exists in GitLab project"
+status: Completed
+priority: High
+owner: joe
+feature: 193-GitLab
+created_at: 2025-12-14T16:31:46.837609373Z
+modified_at: 2025-12-15T01:45:02.754122389Z
+req_type: Story
+relationships:
+- rel_type: Parent
+  target_id: 8f9fd810-24f7-4e52-9077-8ee3d33b1596
+  created_at: 2025-12-14T16:32:25.892397561Z
+history:
+- id: 6e6c15c5-f7e5-4aa7-8a02-8d3bbd036f07
+  author: CLI
+  timestamp: 2025-12-15T01:37:28.563384604Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: InProgress
+- id: 7fd0bec5-62d9-418d-a7bb-c79d04332ad2
+  author: CLI
+  timestamp: 2025-12-15T01:45:02.754120623Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed

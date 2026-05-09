@@ -1,0 +1,16 @@
+id: e66dc8e9-b9f4-4c08-b053-fd55762d1d49
+spec_id: FR-21
+prefix_override: IMPL
+title: Implement /aida-release skill
+description: 'Created the /aida-release Claude Code skill with complete release management workflow including pre-release validation, version bumping, release notes generation from AIDA requirements, CHANGELOG maintenance, and git tagging. Skill file: .claude/skills/aida-release.md'
+status: Completed
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-02T06:14:57.664505229Z
+modified_at: 2025-12-02T06:14:57.664505229Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 5cd0934b-a782-40f3-bd96-0a26403db404
+  created_at: 2025-12-02T06:14:57.664513908Z

@@ -1,0 +1,43 @@
+id: f5bd306f-ea72-45c4-a26e-8fcf57e7ad85
+spec_id: FR-101
+title: Sprint custom field should be on Add new req
+description: |-
+  Sprint custom field should be on Add new req
+
+  need a way to add fields to the Add new req panel in the settings configuration
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-07T17:07:06.329715633Z
+created_by: Joe Mooney
+modified_at: 2026-05-04T19:36:31.814350654Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: fa1eaffc-7c05-4d09-95a0-d5e61e9b8529
+  created_at: 2025-12-07T17:07:06.363012125Z
+  created_by: Joe Mooney
+- rel_type: !Custom sprint_assignment
+  target_id: 404b7457-67a2-4376-a0d3-9c5ea1547951
+  created_at: 2025-12-07T17:07:16.596800281Z
+  created_by: Joe Mooney
+comments:
+- id: 019df47d-0e04-72e0-8463-45e8eda59956
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:35:29.540863922Z
+  modified_at: 2026-05-04T19:35:29.540863922Z
+- id: 019df47d-fd04-78c2-badd-f08d25e2d304
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:36:30.724586384Z
+  modified_at: 2026-05-04T19:36:30.724586384Z
+history:
+- id: faaee133-d8d9-438d-8d71-90369f8afcd9
+  author: Joe Mooney
+  timestamp: 2025-12-07T17:07:16.596803164Z
+  changes:
+  - field_name: sprint_assignment
+    old_value: ''
+    new_value: REQ-0219

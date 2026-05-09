@@ -1,0 +1,89 @@
+id: da7e6650-4dd3-43ac-8804-55dfb58f3cb5
+spec_id: FR-217
+title: Theme support
+description: |
+  Support requirements for themes light and dark and other.
+
+    Theme Editor Feature
+
+    Access: Settings → Appearance tab → "Edit Theme..." button
+
+    Capabilities:
+    - Full visual customization with ~30 configurable properties organized into 6 categories:
+      - Backgrounds: Window fill, panel fill, extreme background, faint background
+      - Text: Override text color, hyperlink, warning, error colors
+      - Widgets: Non-interactive and interactive widget colors (inactive, hovered, active, open states)
+      - Selection: Selection background and foreground colors
+      - Borders & Rounding: Stroke colors/width for different states, widget/window rounding, shadows
+      - Spacing & Layout: Item spacing, button padding, window padding, scrollbar width, indent
+    - Extends built-in themes: Start from Dark or Light base and customize
+    - Live preview panel: See UI elements with your current customizations in real-time
+    - Reset to Base: Quickly revert to default Dark or Light settings
+    - Persistent: Custom themes are saved to user settings and appear in the theme dropdown
+status: Completed
+priority: High
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-25T23:02:47.788464927Z
+modified_at: 2025-12-07T04:04:08.516000091Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
+- rel_type: !Custom sprint_assignment
+  target_id: 17098630-b92b-4194-ae1f-e7e901e73a35
+  created_at: 2025-12-07T04:04:08.515999062Z
+  created_by: Joe Mooney
+history:
+- id: a1120c13-53c7-4f22-995c-18992c665b72
+  author: '@joe'
+  timestamp: 2025-11-28T03:06:35.405939169Z
+  changes:
+  - field_name: title
+    old_value: add a light theme
+    new_value: Theme support
+  - field_name: description
+    old_value: ''
+    new_value: Support requirements for themes light and dark and other.
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
+- id: c56d1b36-8ae5-4e5b-9eed-91318762c49a
+  author: '@joe'
+  timestamp: 2025-11-28T20:14:10.168240254Z
+  changes:
+  - field_name: description
+    old_value: Support requirements for themes light and dark and other.
+    new_value: |
+      Support requirements for themes light and dark and other.
+
+        Theme Editor Feature
+
+        Access: Settings → Appearance tab → "Edit Theme..." button
+
+        Capabilities:
+        - Full visual customization with ~30 configurable properties organized into 6 categories:
+          - Backgrounds: Window fill, panel fill, extreme background, faint background
+          - Text: Override text color, hyperlink, warning, error colors
+          - Widgets: Non-interactive and interactive widget colors (inactive, hovered, active, open states)
+          - Selection: Selection background and foreground colors
+          - Borders & Rounding: Stroke colors/width for different states, widget/window rounding, shadows
+          - Spacing & Layout: Item spacing, button padding, window padding, scrollbar width, indent
+        - Extends built-in themes: Start from Dark or Light base and customize
+        - Live preview panel: See UI elements with your current customizations in real-time
+        - Reset to Base: Quickly revert to default Dark or Light settings
+        - Persistent: Custom themes are saved to user settings and appear in the theme dropdown
+- id: 54ba83ea-2553-4ae8-924c-20a5e1567ca4
+  author: Unknown User
+  timestamp: 2025-11-29T17:30:04.008721721Z
+  changes:
+  - field_name: priority
+    old_value: Medium
+    new_value: High
+- id: 9ec88fc6-9de1-4401-ba69-d60e7ac11ed0
+  author: Joe Mooney
+  timestamp: 2025-12-07T04:04:08.516009730Z
+  changes:
+  - field_name: sprint_assignment
+    old_value: ''
+    new_value: REQ-0210

@@ -1,0 +1,26 @@
+id: e07d2bc4-cef6-4276-8145-3b8566d3efc8
+spec_id: FR-152
+title: upon clear search reposition to center selected...
+description: |-
+  upon clear search reposition to center selected req
+
+  When we clear the search, the selected req is often not visible in the reqlist. we should recenter the reqlist so that it is in the center of the visible list of reqs shown.
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-06T18:21:49.495465339Z
+created_by: Joe Mooney
+modified_at: 2026-05-04T19:33:34.879899781Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
+  created_at: 2025-12-06T18:21:49.549116819Z
+  created_by: Joe Mooney
+comments:
+- id: 019df47b-49d8-73d1-b0fc-4d971774be68
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:33:33.784168196Z
+  modified_at: 2026-05-04T19:33:33.784168196Z

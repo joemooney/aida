@@ -1,0 +1,52 @@
+id: 7e87ad27-39fd-4981-9fd6-518c07937606
+spec_id: STORY-4
+title: 'Queue: React web UI — My Queue view'
+description: |-
+  Queue: React Web UI — My Queue View
+
+  Add a "My Queue" view to the React dashboard with drag-to-reorder and inbox semantics.
+
+  **Navigation:**
+  - New nav item in Sidebar: "My Queue" (between List View and Sprints, or after Dashboard)
+  - Route: /queue
+
+  **View Layout:**
+  - Header: "My Queue" with item count and "Clear Completed" button
+  - Queue list: ordered cards/rows showing spec-id, title, status pill, priority indicator
+  - Items added by others show "Added by @name" badge and optional note
+  - Drag-and-drop to reorder (or up/down arrow buttons for accessibility)
+  - Click item to open detail panel (same pattern as List View)
+  - Empty state: "Your queue is empty — add items from the List or Board view"
+
+  **Adding to Queue:**
+  - Context menu / action button on requirement cards across all views (List, Board, Detail)
+  - "Add to My Queue" option with sub-choices: Top, Bottom
+  - Also available from requirement detail panel actions
+
+  **Auto-filtering:**
+  - Completed items hidden by default, toggle to show
+  - Archived items always hidden
+
+  **Acceptance Criteria:**
+  1. My Queue route accessible from sidebar navigation
+  2. Drag-to-reorder persists via API
+  3. Items can be added from List View, Board View, and Detail Panel
+  4. Completed items auto-filtered, toggleable
+  5. Inbox items (added by others) visually distinguished
+status: Rejected
+priority: High
+owner: joe
+feature: 217-Uncategorized
+created_at: 2026-02-21T06:50:02.949293661Z
+modified_at: 2026-05-04T19:29:20.763391531Z
+req_type: Story
+relationships:
+- rel_type: Parent
+  target_id: 7622e213-28e8-4401-970e-a55111e7fc2f
+  created_at: 2026-02-21T06:50:27.918281973Z
+comments:
+- id: 019df477-69ae-7171-b1a7-0598f4bc8f19
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:29:19.790473964Z
+  modified_at: 2026-05-04T19:29:19.790473964Z

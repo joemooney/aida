@@ -1,0 +1,73 @@
+id: f1a64c4d-3086-4010-be4e-3eaf6bc3df5d
+spec_id: CR-2
+title: broken expand/collapse
+description: ''
+status: Completed
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-25T22:42:42.983254022Z
+modified_at: 2025-12-07T03:04:39.974213149Z
+req_type: ChangeRequest
+relationships:
+- rel_type: Parent
+  target_id: 320d571f-ef11-4560-88fc-07bebc1d0c2c
+- rel_type: !Custom sprint_assignment
+  target_id: 75cd3a04-28e1-466b-aec8-a5ee9a855473
+  created_at: 2025-12-07T03:04:39.974211874Z
+  created_by: Joe Mooney
+comments:
+- id: 5c445d24-4481-45fe-a8ad-23a3e2eff543
+  author: '@joe'
+  content: change the REQ- prefix of CRs to CR-
+  created_at: 2025-11-25T23:01:05.633852672Z
+  modified_at: 2025-11-25T23:01:05.633852672Z
+  replies:
+  - id: 45ca8f7e-f394-4869-b8c9-e8d745b407d9
+    author: '@joe'
+    content: I am on it
+    created_at: 2025-11-27T01:18:01.406508771Z
+    modified_at: 2025-11-27T01:18:01.406508771Z
+    parent_id: 5c445d24-4481-45fe-a8ad-23a3e2eff543
+  reactions:
+  - reaction: important
+    author: '@joe'
+    added_at: 2025-11-27T01:17:40.018639975Z
+  - reaction: thumbs_up
+    author: '@joe'
+    added_at: 2025-11-27T01:17:45.322608847Z
+history:
+- id: d0a9272b-dbcf-4576-a243-697b4055a140
+  author: '@joe'
+  timestamp: 2025-11-25T23:06:14.344494337Z
+  changes:
+  - field_name: type
+    old_value: ChangeRequest
+    new_value: User
+  - field_name: spec_id
+    old_value: REQ-012
+    new_value: UR-012
+- id: d4319241-5515-413b-bb65-f1fe3ca7b21e
+  author: '@joe'
+  timestamp: 2025-11-25T23:06:24.442042241Z
+  changes:
+  - field_name: type
+    old_value: User
+    new_value: ChangeRequest
+  - field_name: spec_id
+    old_value: UR-012
+    new_value: CR-012
+- id: 0082cadd-1f71-4265-8084-e8e1f9f5f05c
+  author: '@joe'
+  timestamp: 2025-11-26T21:34:55.223454638Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
+- id: f8708058-ad40-49e1-a30b-1aadaeb9c00c
+  author: Joe Mooney
+  timestamp: 2025-12-07T03:04:39.974222278Z
+  changes:
+  - field_name: sprint_assignment
+    old_value: ''
+    new_value: REQ-0207

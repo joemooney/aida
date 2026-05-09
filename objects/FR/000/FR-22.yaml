@@ -1,0 +1,29 @@
+id: 4c3bb89e-2d41-4841-b2ff-881bb67fee99
+spec_id: FR-22
+prefix_override: RELATIONSHIPS
+title: Links behvior
+description: ''
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-26T23:02:51.508668144Z
+modified_at: 2026-05-04T19:28:31.249886148Z
+req_type: Functional
+relationships:
+- rel_type: Child
+  target_id: 02a28ce8-28aa-4e56-88e3-ae29813a3fe0
+- rel_type: Child
+  target_id: 043639ed-7c12-4d99-acc2-587a38b0d25d
+- rel_type: Child
+  target_id: 9238ec28-2a11-4d0b-90df-f78861f49d72
+- rel_type: Child
+  target_id: 7e7f5a93-f0ac-4fde-85eb-8852f43065b8
+- rel_type: Child
+  target_id: 924b8768-f882-4bb3-ad8f-bbe9c9fd56b8
+comments:
+- id: 019df476-a81f-7431-811a-af1a16272952
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:28:30.239327213Z
+  modified_at: 2026-05-04T19:28:30.239327213Z

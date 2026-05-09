@@ -1,0 +1,126 @@
+id: 57e4297c-c8f7-4d48-8f1b-66fd7de5789d
+spec_id: FR-77
+title: AI scaffhold project with skills during new pro...
+description: |-
+  ## AI Project Scaffolding
+
+  The system shall provide AI-assisted project scaffolding capabilities accessible from the AI tab in Settings.
+
+  ### Trigger Points
+  Scaffolding shall be available:
+  - **During new project creation**: Automatically offer scaffolding as part of the new project wizard
+  - **On demand**: Via a "Scaffold Project" button in Settings > AI tab for existing projects
+
+  ### Scaffolding Components
+  The scaffolding feature shall generate the following project artifacts:
+  - [ ] CLAUDE.md - Project instructions for Claude Code
+  - [ ] .claude/commands/ directory with project-specific slash commands
+  - [ ] Requirements-driven development skills (/aida-req, /aida-implement)
+  - [ ] Project-specific custom skills based on project type
+  - [ ] Code traceability configuration
+
+  ### User Workflow
+  1. User selects "Scaffold Project" or creates new project
+  2. System analyzes project context (existing requirements, features, tech stack)
+  3. System presents scaffolding options with preview
+  4. User confirms or customizes selections
+  5. System generates selected artifacts
+
+  ### Acceptance Criteria
+  - [x] Scaffold button visible in Settings > AI tab
+  - [ ] New project wizard includes scaffolding step (TODO: future enhancement)
+  - [x] Generated CLAUDE.md contains project-specific context
+  - [x] Generated skills are functional in Claude Code
+  - [x] User can preview artifacts before generation
+  - [x] Existing files prompt for overwrite confirmation
+
+  **Reference**: See ~/ai/ai-provenance for implementation patterns
+
+  ### Implementation Notes (2025-12-01)
+  - Added `scaffolding` module to `aida-core` with `ScaffoldConfig`, `Scaffolder`, and related types
+  - Scaffold dialog accessible from Settings > AI tab via "Scaffold Project" button
+  - Generates: CLAUDE.md, .claude/commands/, .claude/skills/
+  - Supports project type selection (Rust, Python, TypeScript, Web, API, CLI, Generic)
+  - Preview shows new files, overwrites, and artifact details
+  - Tech stack input for customizing generated content
+status: Completed
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-01T06:40:42.221944155Z
+created_by: Unknown User
+modified_at: 2025-12-01T06:43:22.867874603Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 9e9ea9a2-0734-44b8-b911-f76f5aabc4ac
+  created_at: 2025-12-01T06:40:42.221970691Z
+  created_by: Unknown User
+- rel_type: Parent
+  target_id: 68f3a5de-b0e2-4d37-be23-5b855e169b88
+  created_at: 2025-12-11T04:55:32.347946044Z
+history:
+- id: 51037f19-3663-4a0b-b157-753bcef22bcb
+  author: ''
+  timestamp: 2025-12-01T06:42:56.847113505Z
+  changes:
+  - field_name: description
+    old_value: |-
+      AI scaffhold project with skills during new project creation or on demand
+
+      In the AI tab in Settings, have the ability to scaffhold the project. In terms of scaffholding review the ~/ai/ai-provenance project for ideas.
+    new_value: |-
+      ## AI Project Scaffolding
+
+      The system shall provide AI-assisted project scaffolding capabilities accessible from the AI tab in Settings.
+
+      ### Trigger Points
+      Scaffolding shall be available:
+      - **During new project creation**: Automatically offer scaffolding as part of the new project wizard
+      - **On demand**: Via a "Scaffold Project" button in Settings > AI tab for existing projects
+
+      ### Scaffolding Components
+      The scaffolding feature shall generate the following project artifacts:
+      - [ ] CLAUDE.md - Project instructions for Claude Code
+      - [ ] .claude/commands/ directory with project-specific slash commands
+      - [ ] Requirements-driven development skills (/aida-req, /aida-implement)
+      - [ ] Project-specific custom skills based on project type
+      - [ ] Code traceability configuration
+
+      ### User Workflow
+      1. User selects "Scaffold Project" or creates new project
+      2. System analyzes project context (existing requirements, features, tech stack)
+      3. System presents scaffolding options with preview
+      4. User confirms or customizes selections
+      5. System generates selected artifacts
+
+      ### Acceptance Criteria
+      - [ ] Scaffold button visible in Settings > AI tab
+      - [ ] New project wizard includes scaffolding step
+      - [ ] Generated CLAUDE.md contains project-specific context
+      - [ ] Generated skills are functional in Claude Code
+      - [ ] User can preview artifacts before generation
+      - [ ] Existing files prompt for overwrite confirmation
+
+      **Reference**: See ~/ai/ai-provenance for implementation patterns
+- id: da3928b8-90d8-41e4-b381-02966cfdb8bb
+  author: ''
+  timestamp: 2025-12-01T06:43:22.867885693Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+trace_links:
+- id: 1589c7ec-05fc-4bfb-bb6b-6e9b0c63b0d5
+  artifact_type: SourceCode
+  file_path: ./aida-core/src/scaffolding.rs
+  line_start: 1
+  created_at: 2025-12-11T00:58:30.967498971Z
+  created_by: scan
+- id: 1cce20b9-15d4-4bde-bdb9-de06a778cdbd
+  artifact_type: SourceCode
+  file_path: ./aida-gui/src/app.rs
+  line_start: 6676
+  notes: 'AI tool: claude'
+  created_at: 2025-12-11T00:58:30.967831729Z
+  created_by: scan

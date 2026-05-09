@@ -1,0 +1,22 @@
+id: 5bc33a59-c7b9-47d3-b57f-5c95cf19ed88
+spec_id: FR-8
+prefix_override: AUTH
+title: Role-Based Access Control (RBAC)
+description: Implement role-based permissions system. Define roles (admin, editor, viewer), permissions per role, and apply authorization checks to API endpoints and UI actions.
+status: Rejected
+priority: Medium
+owner: joe
+feature: 171-auth
+created_at: 2025-12-13T18:21:43.344717833Z
+modified_at: 2026-05-04T19:35:54.881227074Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 20196f8e-d69c-41e3-844b-55929b536fe4
+  created_at: 2025-12-13T18:21:53.026516485Z
+comments:
+- id: 019df47d-65be-7662-8423-76a343f5b01e
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:35:51.998872721Z
+  modified_at: 2026-05-04T19:35:51.998872721Z

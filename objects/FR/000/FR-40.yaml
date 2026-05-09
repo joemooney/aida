@@ -1,0 +1,34 @@
+id: 06b5b53a-1f3e-4b34-8210-e5dd9b0c8e34
+spec_id: FR-40
+title: ''
+description: |-
+  Reference another req in the description of a req
+
+  what is the right way to make references to other reqs or users inside the description (or comments) of a req.
+  It could be nice if these were hyperlinks that if we clicked on in the tool would open the other req, or maybe hover would show the req details.
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-13T18:04:49.986385733Z
+created_by: Unknown User
+modified_at: 2026-05-04T19:32:07.740046096Z
+req_type: Functional
+comments:
+- id: 019df479-f568-7a01-9492-d8065d0723f1
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:32:06.632588538Z
+  modified_at: 2026-05-04T19:32:06.632588538Z
+history:
+- id: e06f6552-6fdb-4885-abfe-049bb2c3a21c
+  author: Joe Mooney
+  timestamp: 2025-12-13T19:53:12.434099166Z
+  changes:
+  - field_name: description
+    old_value: ''
+    new_value: |-
+      Reference another req in the description of a req
+
+      what is the right way to make references to other reqs or users inside the description (or comments) of a req.
+      It could be nice if these were hyperlinks that if we clicked on in the tool would open the other req, or maybe hover would show the req details.

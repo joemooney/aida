@@ -1,0 +1,40 @@
+id: c48b3743-1660-4ba3-bda7-16f98a3c5ab8
+spec_id: FR-111
+title: Settings/Types configurating custom priorities per type
+description: |2
+   Committed and pushed: 5eeb56c - feat: implement type-specific priorities in Add/Edit form
+
+    Changes included:
+    1. aida-core/src/models.rs - Added get_priorities_for_type() method to RequirementsStore (mirrors the existing get_statuses_for_type()
+    pattern)
+    2. aida-gui/src/app.rs - Updated the Add/Edit form:
+      - Priority dropdown now uses type-specific priorities instead of hardcoded enum values
+      - Priority auto-resets when changing type if current priority isn't valid for new type
+      - Form uses string-based priority tracking (form_priority_string)
+      - Change history properly tracks priority changes using effective_priority()
+      - Save logic uses set_priority_from_str() for both new and edited requirements
+    3. aida-core/src/db/sqlite_backend.rs - Added custom_priority: None placeholder (for when database column is added)
+
+    The type-specific priorities feature is now fully integrated:
+    - Quick-change popup ('p' key) shows type-specific priorities
+    - Add/Edit form dropdown shows type-specific priorities
+    - Settings > Types allows configuring custom priorities per type
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-30T05:21:30.635827807Z
+created_by: Unknown User
+modified_at: 2026-05-04T19:38:26.681455217Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
+  created_at: 2025-11-30T05:21:30.635854951Z
+  created_by: Unknown User
+comments:
+- id: 019df47f-bdc4-7413-a2f4-bcc6678cae9d
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:38:25.604171522Z
+  modified_at: 2026-05-04T19:38:25.604171522Z

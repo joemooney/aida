@@ -1,0 +1,26 @@
+id: 764789da-765b-426d-97ae-28cb5fe10850
+spec_id: FR-192
+title: In "List|Detail" layout slider to resize panelse
+description: |-
+  In "List|Detail" layout slider to resize panels
+
+  Can we insert a slider so that we can widen either panel?
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-30T18:41:47.754459652Z
+created_by: Unknown User
+modified_at: 2026-05-04T19:33:50.484103152Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
+  created_at: 2025-11-30T18:41:47.754487172Z
+  created_by: Unknown User
+comments:
+- id: 019df47b-86d8-7683-9eb2-f4a77326f3b1
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:33:49.400747702Z
+  modified_at: 2026-05-04T19:33:49.400747702Z

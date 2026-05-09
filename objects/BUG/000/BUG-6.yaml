@@ -1,0 +1,20 @@
+id: 433f2b0d-0f82-4e32-9b4a-5efd3738d1cf
+spec_id: BUG-6
+title: 'Fix: Advanced filter blank screen from duplicate React in Vite bundle'
+description: |-
+  The Advanced Query Builder (react-querybuilder) crashed with 'resolveDispatcher() is null' and 'Invalid hook call' errors when opening the Advanced filter in List View.
+
+  Root cause: Vite's dependency pre-bundling inlined a separate copy of React inside react-querybuilder.js (which uses react-redux internally). The main app and react-querybuilder used different React instances, causing hooks to fail.
+
+  Fix: Added resolve.dedupe: ['react', 'react-dom'] to vite.config.ts, which forces Vite to resolve all React imports to a single shared instance.
+status: Completed
+priority: High
+owner: joe
+feature: 235-Uncategorized
+created_at: 2026-02-23T02:49:37.994722750Z
+modified_at: 2026-02-23T02:49:37.994722750Z
+req_type: Bug
+tags:
+- react
+- vite
+- web

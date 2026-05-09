@@ -1,0 +1,85 @@
+id: 404b7457-67a2-4376-a0d3-9c5ea1547951
+spec_id: SPRINT-3
+title: 'Sprint #3 thru 2025-12-07 Friday'
+description: |+
+  Sprint #3 thru 2025-12-07 Friday
+
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-07T17:02:15.896382981Z
+created_by: Joe Mooney
+modified_at: 2026-05-04T19:32:25.723689667Z
+req_type: Sprint
+relationships:
+- rel_type: !Custom sprint_contains
+  target_id: 37be9566-a051-430b-b47b-1890a395a524
+  created_at: 2025-12-07T17:02:44.462009702Z
+  created_by: Joe Mooney
+- rel_type: !Custom sprint_contains
+  target_id: 332b3215-b99b-43c2-8bef-a7b2bd664dd7
+  created_at: 2025-12-07T17:04:27.163189692Z
+  created_by: Joe Mooney
+- rel_type: !Custom sprint_contains
+  target_id: 89d09ac1-adec-4fb3-9f43-77a113aec074
+  created_at: 2025-12-07T17:05:43.129977889Z
+  created_by: Joe Mooney
+- rel_type: !Custom sprint_contains
+  target_id: f5bd306f-ea72-45c4-a26e-8fcf57e7ad85
+  created_at: 2025-12-07T17:07:16.596803934Z
+  created_by: Joe Mooney
+- rel_type: !Custom sprint_contains
+  target_id: 8e4988b4-b850-4f46-ac4d-ed3f1bb93003
+  created_at: 2025-12-07T19:22:36.817793368Z
+  created_by: joe
+- rel_type: !Custom sprint_contains
+  target_id: 04cff76c-978d-4e3a-845a-1d6f6b885cea
+  created_at: 2025-12-20T20:28:18.520140410Z
+  created_by: Joe Mooney
+comments:
+- id: 019df47a-3c12-7ad2-b275-fc3cbaefa1fe
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:32:24.722507467Z
+  modified_at: 2026-05-04T19:32:24.722507467Z
+history:
+- id: c18f5496-b5cd-4c73-84d2-95be37d3d3f7
+  author: Joe Mooney
+  timestamp: 2025-12-14T18:23:45.172326275Z
+  changes:
+  - field_name: description
+    old_value: 'Sprint #3 thru 2025-12-07 Friday'
+    new_value: |+
+      Sprint #3 thru 2025-12-07 Friday
+
+- id: 88b1c76a-833d-4a13-b460-5cebda97738d
+  author: Joe Mooney
+  timestamp: 2025-12-14T18:23:59.640262399Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Planned
+  - field_name: type
+    old_value: Sprint
+    new_value: Spike
+  - field_name: spec_id
+    old_value: REQ-0219
+    new_value: SPIKE-0335
+- id: 50b52715-1711-4255-9938-98d5c1f535fe
+  author: Joe Mooney
+  timestamp: 2025-12-14T18:24:09.102627377Z
+  changes:
+  - field_name: status
+    old_value: Planned
+    new_value: Draft
+  - field_name: type
+    old_value: Spike
+    new_value: Sprint
+  - field_name: spec_id
+    old_value: SPIKE-0335
+    new_value: SPRINT-0336
+custom_fields:
+  end_date: 2026-03-13
+  sprint_number: '3'
+  start_date: 2026-03-06

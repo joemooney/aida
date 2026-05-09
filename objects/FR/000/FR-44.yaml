@@ -1,0 +1,23 @@
+id: d441475c-aebc-4743-8298-e5f37cdf0fa8
+spec_id: FR-44
+title: '''q t'' adds req to queue top but also opens tags...'
+description: |-
+  'q t' adds req to queue top but also opens tags pop-up
+
+  when a secondary key of a picker is pressed it should not also open the associated hotkey pop-up, `q t` is doing both the `q` action and the `t` tags pop-up, I assume this is happening elsewhere
+status: Completed
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-12T18:00:11.194457964Z
+created_by: Joe Mooney
+modified_at: 2025-12-13T19:54:07.952285325Z
+req_type: Functional
+history:
+- id: 25b05327-3132-413f-95bb-99e01701a279
+  author: Joe Mooney
+  timestamp: 2025-12-13T19:54:07.952287811Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed

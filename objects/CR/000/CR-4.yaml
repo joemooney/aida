@@ -1,0 +1,86 @@
+id: b9c26c5d-ab38-4e9b-a493-8f4a84f88019
+spec_id: CR-4
+title: add created by
+description: |2
+    Changes to aida-core/src/models.rs:
+    1. Added created_by: Option<String> field to the Requirement struct
+    2. Added created_at: Option<DateTime<Utc>> and created_by: Option<String> fields to the Relationship struct
+    3. Added add_relationship_with_creator() function that accepts an optional creator parameter
+    4. Added set_relationship_with_creator() function that accepts an optional creator parameter
+    5. The original add_relationship() and set_relationship() functions now delegate to the _with_creator variants with None
+
+    Changes to aida-gui/src/app.rs:
+    1. When creating a new requirement, created_by is automatically set to self.user_settings.display_name()
+    2. All relationship creation calls now use the _with_creator variants to track who created the relationship
+    3. The detail view now displays:
+      - "Created By:" (if available)
+      - "Created:" (date/time)
+      - "Modified:" (date/time)
+    4. When hovering over a relationship in the Links tab, the tooltip now shows creator info if available
+
+    The fields are optional (Option<>) to maintain backward compatibility with existing YAML data files that don't have these fields.
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-25T23:03:34.032116653Z
+modified_at: 2026-05-04T19:29:54.725497032Z
+req_type: ChangeRequest
+comments:
+- id: 019df477-ee9b-77d3-8f01-18f2669a1078
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:29:53.819466905Z
+  modified_at: 2026-05-04T19:29:53.819466905Z
+history:
+- id: e3075819-c16e-4bbc-ba07-709489dd788c
+  author: '@joe'
+  timestamp: 2025-11-25T23:05:45.637968582Z
+  changes:
+  - field_name: type
+    old_value: ChangeRequest
+    new_value: Functional
+  - field_name: spec_id
+    old_value: REQ-015
+    new_value: FR-015
+- id: 4325213f-e6c5-4acd-8970-9414445b3b19
+  author: '@joe'
+  timestamp: 2025-11-25T23:05:53.961975927Z
+  changes:
+  - field_name: type
+    old_value: Functional
+    new_value: ChangeRequest
+  - field_name: spec_id
+    old_value: FR-015
+    new_value: CR-015
+- id: d0462a29-e26e-47b4-8b68-9e4c4d0a0ddb
+  author: '@joe'
+  timestamp: 2025-11-29T00:48:55.727526228Z
+  changes:
+  - field_name: description
+    old_value: ''
+    new_value: |2
+        Changes to aida-core/src/models.rs:
+        1. Added created_by: Option<String> field to the Requirement struct
+        2. Added created_at: Option<DateTime<Utc>> and created_by: Option<String> fields to the Relationship struct
+        3. Added add_relationship_with_creator() function that accepts an optional creator parameter
+        4. Added set_relationship_with_creator() function that accepts an optional creator parameter
+        5. The original add_relationship() and set_relationship() functions now delegate to the _with_creator variants with None
+
+        Changes to aida-gui/src/app.rs:
+        1. When creating a new requirement, created_by is automatically set to self.user_settings.display_name()
+        2. All relationship creation calls now use the _with_creator variants to track who created the relationship
+        3. The detail view now displays:
+          - "Created By:" (if available)
+          - "Created:" (date/time)
+          - "Modified:" (date/time)
+        4. When hovering over a relationship in the Links tab, the tooltip now shows creator info if available
+
+        The fields are optional (Option<>) to maintain backward compatibility with existing YAML data files that don't have these fields.
+- id: 67a5b7fd-f50d-4d2f-a5d0-16606f649080
+  author: '@joe'
+  timestamp: 2025-11-29T00:49:25.126362926Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved

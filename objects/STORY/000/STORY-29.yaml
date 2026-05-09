@@ -1,0 +1,17 @@
+id: 6b61fca9-9fb8-4678-a49a-70ab43647fbd
+spec_id: STORY-29
+title: 'CLI: aida trace scan'
+description: 'Add a CLI command to scan the codebase for trace comments and update trace links: aida trace scan [PATH]. Parses comments matching the pattern // trace:SPEC-ID and creates/updates TraceLink entries. Useful for syncing the database with existing code annotations.'
+status: Completed
+priority: Medium
+owner: ''
+feature: 142-traceability
+created_at: 2025-12-11T00:38:33.169034785Z
+modified_at: 2026-05-04T19:37:25.760490621Z
+req_type: Story
+comments:
+- id: 019df47e-d091-78a0-b280-76f502af83ee
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:37:24.881682245Z
+  modified_at: 2026-05-04T19:37:24.881682245Z

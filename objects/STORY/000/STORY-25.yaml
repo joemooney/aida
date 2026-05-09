@@ -1,0 +1,79 @@
+id: 63bf7cd0-fbc5-4a39-b265-4020578955c5
+spec_id: STORY-25
+title: GitLab Change Notifications
+description: |-
+  As a user, I want to be notified when GitLab issues linked to my requirements change so that I can stay informed without manual checking.
+
+  ## Acceptance Criteria
+  - [ ] Toast/notification when divergence detected
+  - [ ] Aggregate notifications (batch multiple changes)
+  - [ ] Click notification to view diverged item
+  - [ ] Configurable notification preferences
+  - [ ] Summary in status bar ("3 items diverged")
+  - [ ] Optional: Desktop notifications (system tray)
+  - [ ] Optional: Sound alert
+
+  ## Notification Types
+  | Event | Notification | Priority |
+  |-------|--------------|----------|
+  | GitLab issue modified | "GL-123 was updated in GitLab" | Medium |
+  | GitLab issue closed | "GL-123 was closed in GitLab" | High |
+  | GitLab issue reopened | "GL-123 was reopened" | Medium |
+  | Multiple changes | "5 linked issues changed in GitLab" | Medium |
+  | Sync error | "Failed to check GL-123" | Low |
+
+  ## Configuration
+  ```toml
+  [gitlab.notifications]
+  enabled = true
+  aggregate_seconds = 30       # Batch notifications within window
+  desktop_notifications = true # OS-level notifications
+  sound = false
+  show_closed = true          # Notify when issues are closed
+  show_comments = false       # Notify on new comments (noisy)
+  ```
+
+  ## GUI Display
+  - Notification panel/dropdown showing recent changes
+  - Status bar: "GitLab: ✓ In sync" or "GitLab: 3 diverged"
+  - Red badge on GitLab indicator when diverged
+  - Click status bar item to see diverged items
+
+  ## CLI Support
+  ```bash
+  # Show recent changes (last 24h)
+  aida gitlab changes
+
+  # Watch mode (stream changes to terminal)
+  aida gitlab watch
+  ```
+
+  ## Notification Content
+  ```
+  ┌────────────────────────────────────────┐
+  │ 🔔 GitLab Changes Detected             │
+  ├────────────────────────────────────────┤
+  │ • GL-123: Title changed                │
+  │ • GL-456: Status → closed              │
+  │ • GL-789: Description updated          │
+  │                                        │
+  │ [View Diverged Items]  [Dismiss]       │
+  └────────────────────────────────────────┘
+  ```
+status: Rejected
+priority: Medium
+owner: joe
+feature: 198-GitLab
+created_at: 2025-12-14T16:33:23.544744920Z
+modified_at: 2026-05-04T19:35:30.513362228Z
+req_type: Story
+relationships:
+- rel_type: Parent
+  target_id: 8f9fd810-24f7-4e52-9077-8ee3d33b1596
+  created_at: 2025-12-14T16:33:31.459487763Z
+comments:
+- id: 019df47d-09e2-7f22-8eb5-d0f7c13da18a
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:35:28.482439061Z
+  modified_at: 2026-05-04T19:35:28.482439061Z

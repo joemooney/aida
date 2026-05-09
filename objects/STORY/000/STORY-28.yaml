@@ -1,0 +1,11 @@
+id: 78859579-fcec-4a8e-b098-bcdad7d5a0fa
+spec_id: STORY-28
+title: Enhanced /aida-implement skill
+description: 'Upgrade the /aida-implement Claude Code skill to use the two-phase approach: 1) Planning phase - gather context from requirements DB, related requirements, existing traces, 2) Implementation phase - code with traceability. Update the requirements database with ImplementationInfo and TraceLinks after implementation. Show the plan to the user before proceeding.'
+status: Draft
+priority: High
+owner: ''
+feature: 145-ai-workflow
+created_at: 2025-12-11T00:38:53.477757721Z
+modified_at: 2025-12-11T00:38:53.477757721Z
+req_type: Story

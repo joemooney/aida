@@ -1,0 +1,40 @@
+id: 62ea913d-8f31-4349-b043-5fe49b102671
+spec_id: FR-30
+title: Support Folder status for organizational containers
+description: |-
+  The system shall support a "Folder" status value for requirements that serve as organizational containers in a hierarchical structure.
+
+  ## Behavior
+
+  - The system shall display a folder icon for requirements with "Folder" status in the Requirements List view
+  - The system shall allow filtering requirements by "Folder" status
+  - The system shall exclude "Folder" status requirements from completion metrics and status reports by default
+
+  ## Acceptance Criteria
+
+  - "Folder" is available as a selectable status value when creating or editing requirements
+  - Requirements with "Folder" status display a distinct folder icon in list views
+  - Status filters include "Folder" as a filter option
+  - Metrics dashboards exclude "Folder" requirements from status counts unless explicitly included
+  - Child requirements under a "Folder" parent are not affected by the parent's status
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-30T20:34:15.691110691Z
+modified_at: 2026-05-04T19:28:36.357091145Z
+req_type: Functional
+comments:
+- id: 019df476-bc48-7433-81c2-688ead8ce306
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:28:35.400224725Z
+  modified_at: 2026-05-04T19:28:35.400224725Z
+history:
+- id: f3ff0ef1-54d8-46b3-a697-d4c37914717c
+  author: Unknown User
+  timestamp: 2025-11-30T20:37:06.471458685Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved

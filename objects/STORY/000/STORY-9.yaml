@@ -1,0 +1,80 @@
+id: dd73d844-75b1-4a32-9989-892887608c92
+spec_id: STORY-9
+title: Link AIDA Requirements to GitLab Issues
+description: |-
+  As a user, I want to link AIDA requirements to GitLab issues so that I can track traceability between specs and implementation work.
+
+  ## Acceptance Criteria
+  - [ ] Create link from AIDA requirement to GitLab issue
+  - [ ] Store link as relationship with type "implements" or "traces-to"
+  - [ ] Display linked GitLab issues in requirement's Links tab
+  - [ ] Show linked requirement info in GitLab issue view (if viewing in AIDA)
+  - [ ] Remove/update links
+  - [ ] Bulk link: link multiple issues to one requirement
+  - [ ] Validate GitLab issue exists before creating link
+
+  ## Link Storage
+  ```rust
+  // New relationship type
+  pub enum RelationshipType {
+      // ... existing types ...
+      GitLabIssue,  // Links to external GitLab issue
+  }
+
+  // Store in requirement's relationships
+  Relationship {
+      target_id: None,  // Not an AIDA requirement
+      relationship_type: RelationshipType::GitLabIssue,
+      external_ref: Some("gitlab:project_id:issue_iid"),
+      description: Some("Implements login feature"),
+  }
+  ```
+
+  ## CLI Support
+  ```bash
+  # Link requirement to GitLab issue
+  aida link FR-0042 --gitlab GL-123
+  aida link FR-0042 --gitlab 123      # IID shorthand
+
+  # Show links
+  aida show FR-0042 --links
+
+  # Unlink
+  aida unlink FR-0042 --gitlab GL-123
+  ```
+
+  ## GUI Support
+  - Links tab shows GitLab issues with GL- prefix
+  - "Link GitLab Issue" button opens picker
+  - Issue picker with search/filter
+  - Click linked issue to view details or open in GitLab
+
+  ## Bidirectional Reference (Optional for Phase 1)
+  - When linking, optionally add comment to GitLab issue mentioning AIDA spec-id
+  - Format: "Linked to AIDA requirement: FR-0042"
+status: Completed
+priority: High
+owner: joe
+feature: 192-GitLab
+created_at: 2025-12-14T16:31:14.372193591Z
+modified_at: 2025-12-15T01:35:13.304102475Z
+req_type: Story
+relationships:
+- rel_type: Parent
+  target_id: 8f9fd810-24f7-4e52-9077-8ee3d33b1596
+  created_at: 2025-12-14T16:31:23.199861115Z
+history:
+- id: b3480a3f-b6fb-4986-ba86-7f26caa5bd78
+  author: CLI
+  timestamp: 2025-12-15T01:22:36.742526456Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: InProgress
+- id: cc209c6e-fd66-4ec4-b8a6-341b9e4b7418
+  author: CLI
+  timestamp: 2025-12-15T01:35:13.304100656Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed

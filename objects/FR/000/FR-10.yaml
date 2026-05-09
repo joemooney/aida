@@ -1,0 +1,16 @@
+id: 43af56ec-fecd-4ca0-bf74-b4d46417386f
+spec_id: FR-10
+prefix_override: AUTH
+title: PIN-based Web Client Authentication
+description: Basic authentication for WASM web client using handle/username and PIN. PIN stored as SHA-256 hash. Session persisted in browser local storage. Includes login UI, logout functionality, and session restoration on page load.
+status: Completed
+priority: Medium
+owner: joe
+feature: 168-auth
+created_at: 2025-12-13T18:21:30.649751986Z
+modified_at: 2025-12-13T18:21:30.649751986Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 20196f8e-d69c-41e3-844b-55929b536fe4
+  created_at: 2025-12-13T18:21:52.222789985Z

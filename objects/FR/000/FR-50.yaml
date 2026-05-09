@@ -1,0 +1,40 @@
+id: 89d09ac1-adec-4fb3-9f43-77a113aec074
+spec_id: FR-50
+title: Sprint ordering displayed in dropdown and sprin...
+description: Sprint ordering displayed in dropdown and sprint planning should be time ordered
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-07T17:05:37.196534650Z
+created_by: Joe Mooney
+modified_at: 2026-05-04T19:36:33.817311898Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: fa1eaffc-7c05-4d09-95a0-d5e61e9b8529
+  created_at: 2025-12-07T17:05:37.229974111Z
+  created_by: Joe Mooney
+- rel_type: !Custom sprint_assignment
+  target_id: 404b7457-67a2-4376-a0d3-9c5ea1547951
+  created_at: 2025-12-07T17:05:43.129974099Z
+  created_by: Joe Mooney
+comments:
+- id: 019df47d-1d23-7050-8314-4797e595b457
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:35:33.411234904Z
+  modified_at: 2026-05-04T19:35:33.411234904Z
+- id: 019df47e-0557-7f43-a62e-625fc3054ce1
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:36:32.855020773Z
+  modified_at: 2026-05-04T19:36:32.855020773Z
+history:
+- id: b95d55d8-5243-4f62-bd3f-84b2ac6c2ece
+  author: Joe Mooney
+  timestamp: 2025-12-07T17:05:43.129977032Z
+  changes:
+  - field_name: sprint_assignment
+    old_value: ''
+    new_value: REQ-0219

@@ -1,0 +1,74 @@
+id: 2a82a590-b200-42ad-843a-456db9d55359
+spec_id: FR-28
+title: Archive state
+description: 'Add a button to allow archiving a requirement. Achived requirements should not show up unless we explicitly Filter to include Archive. '
+status: Approved
+priority: Medium
+owner: ''
+feature: 112-Uncategorized
+created_at: 2025-11-26T00:49:32.639633273Z
+modified_at: 2026-02-20T22:50:58.398740130Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 85868242-14f2-4e4a-beba-5103c271ce32
+  created_at: 2025-11-29T04:24:33.736632341Z
+  created_by: '@joe'
+- rel_type: !Custom sprint_assignment
+  target_id: 75cd3a04-28e1-466b-aec8-a5ee9a855473
+  created_at: 2025-12-07T04:03:59.049387060Z
+  created_by: Joe Mooney
+history:
+- id: 80aedc3c-6687-40b1-a420-955ce9032237
+  author: '@joe'
+  timestamp: 2025-11-26T00:54:47.129467811Z
+  changes:
+  - field_name: archived
+    old_value: 'false'
+    new_value: 'true'
+- id: 31447c08-d593-4b45-9086-b5f995df133b
+  author: '@joe'
+  timestamp: 2025-11-26T00:54:58.015798873Z
+  changes:
+  - field_name: archived
+    old_value: 'true'
+    new_value: 'false'
+- id: b9b64ce4-6957-4995-8b0e-cf57e1619f86
+  author: '@joe'
+  timestamp: 2025-11-26T00:55:04.416441461Z
+  changes:
+  - field_name: archived
+    old_value: 'false'
+    new_value: 'true'
+- id: f81a9c59-bddf-4fa5-b4ec-d68e0f5945d0
+  author: '@joe'
+  timestamp: 2025-11-26T00:55:10.811329310Z
+  changes:
+  - field_name: archived
+    old_value: 'true'
+    new_value: 'false'
+- id: 5763b0bf-e2e5-44ca-8d99-29067e3ef33b
+  author: Joe Mooney
+  timestamp: 2025-12-07T04:03:59.049397507Z
+  changes:
+  - field_name: sprint_assignment
+    old_value: ''
+    new_value: REQ-0207
+- id: cc7f56aa-7413-4a42-87f8-6fce997a2509
+  author: Joe Mooney
+  timestamp: 2025-12-07T04:07:42.344225505Z
+  changes:
+  - field_name: feature
+    old_value: 97-Uncategorized
+    new_value: 112-Uncategorized
+  - field_name: spec_id
+    old_value: FR-0019
+    new_value: FR-0217
+- id: 93303db1-ef3b-4c12-a0e2-da9bfc531d60
+  author: joe
+  timestamp: 2025-12-07T19:09:40.233607471Z
+  changes:
+  - field_name: archived
+    old_value: 'false'
+    new_value: 'true'
+archived: true

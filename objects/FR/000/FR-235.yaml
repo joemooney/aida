@@ -1,0 +1,51 @@
+id: 83560219-ec6d-4512-b45f-686d7ec4da94
+spec_id: FR-235
+title: Collaborative session tracking with heartbeat
+description: |-
+  ## Collaborative Session Tracking
+
+  The system shall track active user sessions to provide awareness when multiple users (GUI instances, CLI, Claude Code) access the same requirements file concurrently.
+
+  ### Requirements
+
+  1. **Session Registration**: Each GUI instance shall register itself in the lock file on startup with:
+     - Unique session ID (PID + UUID)
+     - User name/handle
+     - Hostname
+     - Process ID
+     - Start timestamp
+
+  2. **Heartbeat Thread**: A background thread shall update the lock file every 5 seconds to indicate the session is still active
+
+  3. **Edit Lock Tracking**: When entering edit mode, the system shall record:
+     - Which requirement is being edited
+     - When editing started
+     - The user editing it
+
+  4. **Stale Session Cleanup**: Sessions without heartbeat for 30 seconds shall be automatically removed
+
+  5. **Concurrent User Warning**: Display a toast notification when:
+     - Another user has the file open (shown once per session)
+     - Entering edit mode on a requirement someone else is currently editing
+
+  6. **Session Unregistration**: On application close, the session shall be removed from the lock file
+
+  ### Lock File Format
+
+  The lock file shall use YAML format containing all active sessions with their details.
+
+  ### Acceptance Criteria
+
+  - [x] Sessions are registered on startup
+  - [x] Heartbeat updates every 5 seconds
+  - [x] Edit locks are tracked when entering edit mode
+  - [x] Stale sessions are cleaned up automatically
+  - [x] Toast warnings shown for concurrent users
+  - [x] Sessions unregistered on shutdown
+status: Completed
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-02T03:08:18.298836311Z
+modified_at: 2025-12-02T03:08:18.298836311Z
+req_type: Functional

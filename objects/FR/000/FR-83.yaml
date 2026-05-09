@@ -1,0 +1,28 @@
+id: c60416c7-d7ca-4a17-80ef-62c608f89dd8
+spec_id: FR-83
+title: Focus at end of Description for add req
+description: |-
+  Focus at end of Description for add
+
+  when we click on add req focus the cursor in the description textbox
+status: Completed
+priority: Medium
+owner: ''
+feature: 112-Uncategorized
+created_at: 2025-12-06T19:12:57.523344290Z
+created_by: Joe Mooney
+modified_at: 2025-12-13T20:00:14.398844865Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
+  created_at: 2025-12-06T19:12:57.578866722Z
+  created_by: Joe Mooney
+history:
+- id: 39ecf5b2-1f47-4eb2-aded-8f0725a2fdab
+  author: Joe Mooney
+  timestamp: 2025-12-13T20:00:14.398853787Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed

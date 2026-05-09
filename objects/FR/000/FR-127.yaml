@@ -1,0 +1,31 @@
+id: d1055784-d8db-4f21-83a8-4121a7e3f25e
+spec_id: FR-127
+title: Basline view - see req details
+description: |-
+  Basline view - see req details
+
+  In the baseline view ability to see req details.
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-06T18:18:44.025626762Z
+created_by: Joe Mooney
+modified_at: 2026-05-04T19:36:18.850144673Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: d58f045f-b729-4a7f-b2f0-04d6353a7af7
+  created_at: 2025-12-06T18:18:47.825260501Z
+  created_by: Joe Mooney
+comments:
+- id: 019df47c-c4d7-78f1-b08d-815199dae8a9
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:35:10.807154103Z
+  modified_at: 2026-05-04T19:35:10.807154103Z
+- id: 019df47d-c7a0-7073-919c-ee7c35bf6ea1
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:36:17.056250413Z
+  modified_at: 2026-05-04T19:36:17.056250413Z

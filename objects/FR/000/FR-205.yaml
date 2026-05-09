@@ -1,0 +1,11 @@
+id: 54284ee2-6495-4e1a-aeab-eba0430cd407
+spec_id: FR-205
+title: Shared UI components for native/WASM code reuse
+description: 'Create reusable egui rendering components in aida-gui/src/ui/ that work with proto types on both native desktop and WASM browser targets. Components include: formatters (status/priority/type/timestamp text), badges (colored status/priority indicators), list_item (requirement list rendering), requirement_form (combo boxes for status/priority/type), comment_list (comment rendering and input), detail_view (full requirement detail view). aida-web re-exports proto types from aida-gui for type compatibility. Enables consistent UI rendering and reduces code duplication.'
+status: Completed
+priority: Medium
+owner: joe
+feature: 162-Uncategorized
+created_at: 2025-12-12T18:52:30.432849721Z
+modified_at: 2025-12-12T18:52:30.432849721Z
+req_type: Functional

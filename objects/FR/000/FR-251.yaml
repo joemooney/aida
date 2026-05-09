@@ -1,0 +1,144 @@
+id: 259c842f-16e0-45ed-8bde-9a12a82ba88f
+spec_id: FR-251
+prefix_override: DB
+title: Import database
+description: |-
+  Import legacy/incompatible requirements database with graceful error recovery
+
+  When importing a requirements.yaml file that contains schema incompatibilities (such as unknown enum variants, deprecated fields, or missing required fields), the system should:
+
+  1. **Detection Phase**: Parse the file and identify all incompatibilities before making changes
+  2. **User Confirmation**: Present a summary of issues found with options:
+     - Skip incompatible records (exclude from import)
+     - Convert to defaults (map unknown types to 'Functional', unknown statuses to 'Draft', etc.)
+     - Abort import
+  3. **Import Execution**: Proceed based on user selection
+  4. **Reporting**: Display import summary showing successful, skipped, and converted records
+  5. **Backup**: Create automatic backup of current database before import
+
+  **Acceptance Criteria**:
+  - [ ] Unknown req_type variants are detected and reported before import
+  - [ ] User can choose skip, convert-to-default, or abort for incompatible records
+  - [ ] Import summary shows count of records: imported, skipped, converted
+  - [ ] Original database is backed up to `requirements.yaml.backup` before import
+  - [ ] Relationships referencing skipped records are also skipped with warning
+  - [ ] Keyboard accessible: 's' to skip, 'c' to convert, 'a' to abort, Enter to confirm
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-12-09T03:33:22.828401443Z
+created_by: Joe Mooney
+modified_at: 2026-05-04T19:29:27.326108829Z
+req_type: Functional
+comments:
+- id: 019df477-834f-78c2-b456-f71d1cbaba7c
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:29:26.351240390Z
+  modified_at: 2026-05-04T19:29:26.351240390Z
+history:
+- id: adf15baa-3e70-4de6-ac4e-03ebf158947c
+  author: Joe Mooney
+  timestamp: 2025-12-09T03:34:52.789509893Z
+  changes:
+  - field_name: description
+    old_value: |-
+      Import database
+
+      The goal is to try to import reqs and relationships from an older version of a requirements.yaml which will not open because of an incompatibility error. Today I had a version of requirements.yaml that had an error about an unknown varialt of a req_type Documentation. We could just skip this req of import it as a generic req_type instead of erroring out and creating an empty store. what are your thoughts?
+    new_value: |-
+      Import legacy/incompatible requirements database with graceful error recovery
+
+      When importing a requirements.yaml file that contains schema incompatibilities (such as unknown enum variants, deprecated fields, or missing required fields), the system should:
+
+      1. **Detection Phase**: Parse the file and identify all incompatibilities before making changes
+      2. **User Confirmation**: Present a summary of issues found with options:
+         - Skip incompatible records (exclude from import)
+         - Convert to defaults (map unknown types to 'Functional', unknown statuses to 'Draft', etc.)
+         - Abort import
+      3. **Import Execution**: Proceed based on user selection
+      4. **Reporting**: Display import summary showing successful, skipped, and converted records
+      5. **Backup**: Create automatic backup of current database before import
+
+      **Acceptance Criteria**:
+      - [ ] Unknown req_type variants are detected and reported before import
+      - [ ] User can choose skip, convert-to-default, or abort for incompatible records
+      - [ ] Import summary shows count of records: imported, skipped, converted
+      - [ ] Original database is backed up to `requirements.yaml.backup` before import
+      - [ ] Relationships referencing skipped records are also skipped with warning
+      - [ ] Keyboard accessible: 's' to skip, 'c' to convert, 'a' to abort, Enter to confirm
+- id: 4b6d121c-f5d1-42a0-875b-dd0f53289c2f
+  author: Joe Mooney
+  timestamp: 2025-12-09T03:35:11.227019365Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: 44a9bab8-80be-4f27-bd96-695dc79c4726
+  author: Joe Mooney
+  timestamp: 2025-12-09T03:36:12.851386986Z
+  changes:
+  - field_name: prefix_override
+    old_value: ''
+    new_value: DB
+  - field_name: spec_id
+    old_value: FR-0226
+    new_value: DB-0227
+ai_evaluation:
+  evaluation:
+    quality_score: 4
+    issues:
+    - type: vague_language
+      severity: high
+      text: The title 'Import database' is too generic and doesn't convey the specific purpose of handling incompatible/legacy database formats
+      suggestion: Rename to 'Import legacy requirements database with graceful error handling' or 'Backward-compatible YAML import with unknown field recovery'
+    - type: incomplete
+      severity: high
+      text: No acceptance criteria defined for what constitutes a successful import
+      suggestion: 'Add specific criteria: e.g., ''Unknown req_type variants should be mapped to a configurable default type'', ''Import should report count of skipped/modified records'', ''User should be prompted to confirm import strategy before proceeding'''
+    - type: ambiguous
+      severity: medium
+      text: The description presents two options (skip vs import as generic) but doesn't specify which approach to implement or if user choice should be provided
+      suggestion: 'Clarify the desired behavior: Should users choose the strategy? Should there be a default with override? Should skipped items be logged for manual review?'
+    - type: incomplete
+      severity: medium
+      text: Missing specification of what other incompatibilities should be handled beyond unknown req_type variants
+      suggestion: 'Define scope: unknown enum variants, missing required fields, deprecated fields, schema version mismatches, relationship type mismatches'
+    - type: missing_criteria
+      severity: medium
+      text: No error reporting or user feedback mechanism specified
+      suggestion: 'Add criteria for import summary dialog showing: successful imports, skipped items with reasons, modified items, and option to export detailed log'
+    - type: incomplete
+      severity: low
+      text: No consideration for backup/rollback if import partially fails
+      suggestion: Specify whether original database should be backed up before import and what happens if import fails midway
+    strengths:
+    - Addresses a real pain point from actual usage experience
+    - Identifies the specific error case that triggered this need (unknown variant Documentation)
+    - Proposes reasonable solution approaches (skip or convert to generic)
+    suggested_improvements:
+      description: |-
+        Import legacy/incompatible requirements database with graceful error recovery
+
+        When importing a requirements.yaml file that contains schema incompatibilities (such as unknown enum variants, deprecated fields, or missing required fields), the system should:
+
+        1. **Detection Phase**: Parse the file and identify all incompatibilities before making changes
+        2. **User Confirmation**: Present a summary of issues found with options:
+           - Skip incompatible records (exclude from import)
+           - Convert to defaults (map unknown types to 'Functional', unknown statuses to 'Draft', etc.)
+           - Abort import
+        3. **Import Execution**: Proceed based on user selection
+        4. **Reporting**: Display import summary showing successful, skipped, and converted records
+        5. **Backup**: Create automatic backup of current database before import
+
+        **Acceptance Criteria**:
+        - [ ] Unknown req_type variants are detected and reported before import
+        - [ ] User can choose skip, convert-to-default, or abort for incompatible records
+        - [ ] Import summary shows count of records: imported, skipped, converted
+        - [ ] Original database is backed up to `requirements.yaml.backup` before import
+        - [ ] Relationships referencing skipped records are also skipped with warning
+        - [ ] Keyboard accessible: 's' to skip, 'c' to convert, 'a' to abort, Enter to confirm
+      rationale: The improved description transforms a problem statement into an actionable requirement with clear phases, user interaction points, and testable acceptance criteria. It maintains the original intent while adding the structure needed for implementation.
+  evaluated_at: 2025-12-09T03:34:03.351049876Z
+  content_hash: dfb37c2a719c3738

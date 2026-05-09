@@ -1,0 +1,151 @@
+id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
+spec_id: FOLDER-3
+prefix_override: MISC
+title: Miscellaneous
+description: 'Requirements that are not yet assigned to component/feature '
+status: Rejected
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-29T19:10:52.867367071Z
+created_by: Unknown User
+modified_at: 2026-05-04T19:38:24.504108811Z
+req_type: Folder
+relationships:
+- rel_type: Child
+  target_id: 3ef749b7-b220-41f8-9a1d-1545d0c43a7f
+  created_at: 2025-11-29T19:12:20.828360522Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: 7fab205a-9f74-48fc-9a20-18581388a22f
+  created_at: 2025-11-29T19:27:58.262503497Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: 5e4ad9bb-99fc-41ab-9fc6-eb5692964b44
+  created_at: 2025-11-29T19:29:03.733401253Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: bae7da90-3781-4a92-927f-69e31a008422
+  created_at: 2025-11-29T19:34:32.266350849Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: 32de4384-bede-49a0-8aad-0fd0c78d4e54
+  created_at: 2025-11-29T19:47:50.198464215Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: 5393145a-5e62-429b-9a56-5df880351518
+  created_at: 2025-11-29T19:48:09.264589478Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: 8ca9055b-3302-4768-ae92-fe60cf3d2fd8
+  created_at: 2025-11-29T19:48:55.967577114Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: 216f572f-a9dd-4b3d-af93-b2ab39d60757
+  created_at: 2025-11-29T19:50:26.797480119Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: cc937e52-dd05-4dd9-a75b-ae5cc8ca95b9
+  created_at: 2025-11-29T21:30:28.397461271Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: 3a4bc953-af23-4573-879e-6dcd1a2f2fb8
+  created_at: 2025-11-29T21:31:29.234392023Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: 6712451d-ed99-4d45-9377-ffef9c9ff049
+  created_at: 2025-11-29T22:08:22.547508430Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: 06568b9b-a3d9-4c55-81b7-b51259936801
+  created_at: 2025-11-29T22:12:47.675513054Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: afe27507-684f-4ad3-b80b-39c58d9875e8
+  created_at: 2025-11-30T00:13:28.940847342Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: 85b741f2-043d-4504-b4c7-670ebe664b47
+  created_at: 2025-11-30T00:52:32.764433664Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: 631c854b-cc3c-4bac-bb37-087f2ed5ce72
+  created_at: 2025-11-30T01:05:46.342449068Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: db05a93d-4ade-49fb-aaba-b6eedf4ec846
+  created_at: 2025-11-30T01:19:52.674566786Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: 67ac8e49-171e-4c6e-a441-96be45810d55
+  created_at: 2025-11-30T01:25:06.024027182Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: c2ac61cd-36a3-4dce-acaa-7b057b1be97d
+  created_at: 2025-11-30T01:34:30.555715874Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: 9ace4d56-9a8d-47cd-8779-4e6963d303f3
+  created_at: 2025-11-30T02:10:08.382830563Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: 6111bb0c-9309-4fa5-ad73-9106f46b49e9
+  created_at: 2025-11-30T02:23:48.712187739Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: c48b3743-1660-4ba3-bda7-16f98a3c5ab8
+  created_at: 2025-11-30T05:21:30.635854951Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: 8fce7d22-6ef3-44da-8284-c7af30ca8ea2
+  created_at: 2025-11-30T18:36:27.790694848Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: e3a175d0-bc4f-4d13-9bc9-d0bd8c43a230
+  created_at: 2025-11-30T18:38:19.957296143Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: 764789da-765b-426d-97ae-28cb5fe10850
+  created_at: 2025-11-30T18:41:47.754487172Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: 5fe84b57-05db-415b-90a5-604f1bf3f9eb
+  created_at: 2025-11-30T18:58:47.347672969Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: 83c887a3-dae7-445e-86cb-ed8cf59e91c9
+  created_at: 2025-11-30T19:13:07.115036072Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: 652d7124-8cf8-422b-875c-0f9784eeb3df
+  created_at: 2025-11-30T19:21:48.409827457Z
+  created_by: Unknown User
+- rel_type: Child
+  target_id: 0a1ab189-cf84-41d9-a3d0-3e91a671b75a
+  created_at: 2025-12-02T05:49:33.252795445Z
+  created_by: Joe Mooney
+- rel_type: Child
+  target_id: e07d2bc4-cef6-4276-8145-3b8566d3efc8
+  created_at: 2025-12-06T18:21:49.549116819Z
+  created_by: Joe Mooney
+- rel_type: Child
+  target_id: c60416c7-d7ca-4a17-80ef-62c608f89dd8
+  created_at: 2025-12-06T19:12:57.578866722Z
+  created_by: Joe Mooney
+comments:
+- id: 019df47f-b5b2-7d63-87df-981e16faf119
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:38:23.538862576Z
+  modified_at: 2026-05-04T19:38:23.538862576Z
+history:
+- id: bb9d63f0-d0e9-4a12-aee7-aefb1048ea88
+  author: Joe Mooney
+  timestamp: 2025-12-02T06:45:09.029833741Z
+  changes:
+  - field_name: type
+    old_value: Functional
+    new_value: Folder
+  - field_name: feature
+    old_value: 97-Uncategorized
+    new_value: Uncategorized

@@ -1,0 +1,17 @@
+id: a52ba7d4-3cd0-4c27-8a7f-6aaf43384bc2
+spec_id: FR-130
+title: Test
+description: External change test
+status: Rejected
+priority: Medium
+owner: ''
+feature: 125-Uncategorized
+created_at: 2025-12-10T04:21:29.782773684Z
+modified_at: 2026-05-04T19:31:57.312359454Z
+req_type: Functional
+comments:
+- id: 019df479-cd0f-7281-ba23-ab5bbed84aa1
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:31:56.303958640Z
+  modified_at: 2026-05-04T19:31:56.303958640Z

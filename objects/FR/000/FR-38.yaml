@@ -1,0 +1,179 @@
+id: 216f572f-a9dd-4b3d-af93-b2ab39d60757
+spec_id: FR-38
+title: For Add requirement, if not title is provided use first line of description as title.
+description: |
+  For Add requirement, if not title is provided use first line of description as title.If we start typing in the description and the title is
+    still empty type in both the title and description until a newline is entered (limit the title to 50 characters and the put elipsis.
+
+   Feature: Auto-Title from Description
+
+    When adding a new requirement in the GUI:
+
+    1. Typing in Description syncs to Title - As you type in the description field with the title empty, the first line of the description is
+    automatically copied to the title field
+    2. 50 character limit with ellipsis - If the first line exceeds 50 characters, it's truncated to 47 characters plus "..." (ellipsis)
+    3. Stops on newline - Once you press Enter in the description (creating a new line), the auto-sync stops. This allows you to continue
+    writing the full description without affecting the title.
+    4. Stops on manual title edit - If you click into the title field and edit it manually, the auto-sync is disabled so your edits aren't
+    overwritten.
+    5. Add mode only - This behavior only applies when adding new requirements, not when editing existing ones.
+
+    Changes made:
+
+    - Added two state fields to track auto-sync: form_title_auto_synced and form_last_description
+    - Updated clear_form() to reset auto-sync state when opening the Add form
+    - Added title change detection to detect manual edits
+    - Added the sync logic after the description TextEdit that:
+      - Detects if description changed
+      - Extracts first line
+      - Truncates with ellipsis if needed
+      - Stops syncing when newline is entered
+
+    1. I created a centralized helper function sync_title_from_description(is_edit)
+    2. I added calls to this function in both show_form_vertical and show_form_stacked - the two form functions that are actually used
+    3. The logic:
+      - Only syncs in Add mode (not Edit)
+      - Only syncs while form_title_auto_synced is true
+      - Only syncs while no newline has been entered
+      - Truncates to 47 characters + "..." (= 50 total) if needed
+      - Once a newline is entered, auto-sync is disabled
+status: Completed
+priority: Medium
+owner: ''
+feature: 97-Uncategorized
+created_at: 2025-11-29T19:50:26.797473616Z
+created_by: Unknown User
+modified_at: 2025-11-30T02:24:47.150874757Z
+req_type: Functional
+relationships:
+- rel_type: Parent
+  target_id: 7e994d79-6b1a-442d-9f2b-002e738f7cea
+  created_at: 2025-11-29T19:50:26.797480119Z
+  created_by: Unknown User
+history:
+- id: f4f7e24f-d11b-4c2c-8aa2-fc900f8fbfcf
+  author: Unknown User
+  timestamp: 2025-11-30T00:32:01.269204392Z
+  changes:
+  - field_name: description
+    old_value: For Add requirement, if not title is provided use first line of description as title.
+    new_value: |-
+      For Add requirement, if not title is provided use first line of description as title.If we start typing in the description and the title is
+        still empty type in both the title and description until a newline is entered (limit the title to 50 characters and the put elipsis.
+- id: a107b969-9bcc-450f-b03b-688c0f6f440d
+  author: Unknown User
+  timestamp: 2025-11-30T00:32:11.132786677Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: e59ac28f-a121-45bd-8161-c123d02e94e0
+  author: Unknown User
+  timestamp: 2025-11-30T00:46:39.698704840Z
+  changes:
+  - field_name: description
+    old_value: |-
+      For Add requirement, if not title is provided use first line of description as title.If we start typing in the description and the title is
+        still empty type in both the title and description until a newline is entered (limit the title to 50 characters and the put elipsis.
+    new_value: |
+      For Add requirement, if not title is provided use first line of description as title.If we start typing in the description and the title is
+        still empty type in both the title and description until a newline is entered (limit the title to 50 characters and the put elipsis.
+
+       Feature: Auto-Title from Description
+
+        When adding a new requirement in the GUI:
+
+        1. Typing in Description syncs to Title - As you type in the description field with the title empty, the first line of the description is
+        automatically copied to the title field
+        2. 50 character limit with ellipsis - If the first line exceeds 50 characters, it's truncated to 47 characters plus "..." (ellipsis)
+        3. Stops on newline - Once you press Enter in the description (creating a new line), the auto-sync stops. This allows you to continue
+        writing the full description without affecting the title.
+        4. Stops on manual title edit - If you click into the title field and edit it manually, the auto-sync is disabled so your edits aren't
+        overwritten.
+        5. Add mode only - This behavior only applies when adding new requirements, not when editing existing ones.
+
+        Changes made:
+
+        - Added two state fields to track auto-sync: form_title_auto_synced and form_last_description
+        - Updated clear_form() to reset auto-sync state when opening the Add form
+        - Added title change detection to detect manual edits
+        - Added the sync logic after the description TextEdit that:
+          - Detects if description changed
+          - Extracts first line
+          - Truncates with ellipsis if needed
+          - Stops syncing when newline is entered
+- id: 9d5e989f-eaf6-4412-a7cb-84b52f2c25de
+  author: Unknown User
+  timestamp: 2025-11-30T01:01:31.473964835Z
+  changes:
+  - field_name: description
+    old_value: |
+      For Add requirement, if not title is provided use first line of description as title.If we start typing in the description and the title is
+        still empty type in both the title and description until a newline is entered (limit the title to 50 characters and the put elipsis.
+
+       Feature: Auto-Title from Description
+
+        When adding a new requirement in the GUI:
+
+        1. Typing in Description syncs to Title - As you type in the description field with the title empty, the first line of the description is
+        automatically copied to the title field
+        2. 50 character limit with ellipsis - If the first line exceeds 50 characters, it's truncated to 47 characters plus "..." (ellipsis)
+        3. Stops on newline - Once you press Enter in the description (creating a new line), the auto-sync stops. This allows you to continue
+        writing the full description without affecting the title.
+        4. Stops on manual title edit - If you click into the title field and edit it manually, the auto-sync is disabled so your edits aren't
+        overwritten.
+        5. Add mode only - This behavior only applies when adding new requirements, not when editing existing ones.
+
+        Changes made:
+
+        - Added two state fields to track auto-sync: form_title_auto_synced and form_last_description
+        - Updated clear_form() to reset auto-sync state when opening the Add form
+        - Added title change detection to detect manual edits
+        - Added the sync logic after the description TextEdit that:
+          - Detects if description changed
+          - Extracts first line
+          - Truncates with ellipsis if needed
+          - Stops syncing when newline is entered
+    new_value: |
+      For Add requirement, if not title is provided use first line of description as title.If we start typing in the description and the title is
+        still empty type in both the title and description until a newline is entered (limit the title to 50 characters and the put elipsis.
+
+       Feature: Auto-Title from Description
+
+        When adding a new requirement in the GUI:
+
+        1. Typing in Description syncs to Title - As you type in the description field with the title empty, the first line of the description is
+        automatically copied to the title field
+        2. 50 character limit with ellipsis - If the first line exceeds 50 characters, it's truncated to 47 characters plus "..." (ellipsis)
+        3. Stops on newline - Once you press Enter in the description (creating a new line), the auto-sync stops. This allows you to continue
+        writing the full description without affecting the title.
+        4. Stops on manual title edit - If you click into the title field and edit it manually, the auto-sync is disabled so your edits aren't
+        overwritten.
+        5. Add mode only - This behavior only applies when adding new requirements, not when editing existing ones.
+
+        Changes made:
+
+        - Added two state fields to track auto-sync: form_title_auto_synced and form_last_description
+        - Updated clear_form() to reset auto-sync state when opening the Add form
+        - Added title change detection to detect manual edits
+        - Added the sync logic after the description TextEdit that:
+          - Detects if description changed
+          - Extracts first line
+          - Truncates with ellipsis if needed
+          - Stops syncing when newline is entered
+
+        1. I created a centralized helper function sync_title_from_description(is_edit)
+        2. I added calls to this function in both show_form_vertical and show_form_stacked - the two form functions that are actually used
+        3. The logic:
+          - Only syncs in Add mode (not Edit)
+          - Only syncs while form_title_auto_synced is true
+          - Only syncs while no newline has been entered
+          - Truncates to 47 characters + "..." (= 50 total) if needed
+          - Once a newline is entered, auto-sync is disabled
+- id: 523de53d-ab2d-4bc4-b501-45f649514518
+  author: ''
+  timestamp: 2025-11-30T02:24:47.150882995Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
