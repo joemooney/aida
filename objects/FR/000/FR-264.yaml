@@ -3,10 +3,10 @@ spec_id: FR-264
 agreed_id: FR-264
 title: 'aida push: unified code+store push (single command instead of git push && aida db sync --push)'
 description: Today users have to run `git push` for code and `aida db sync --push` for the orphan store as two separate operations. Easy to forget the second and end up with code public but reqs only local. Add an `aida push` wrapper that does both, or a git post-push hook. Surfaced 2026-05-09 walkthrough.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T20:38:58.912833494Z
-modified_at: 2026-05-09T20:38:58.912833494Z
+modified_at: 2026-05-09T20:48:29.238681578Z
 req_type: Functional
