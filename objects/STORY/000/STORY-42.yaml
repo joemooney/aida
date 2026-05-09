@@ -3,12 +3,12 @@ spec_id: STORY-42
 agreed_id: STORY-42
 title: 'Story 2b: Auto-suffix preferred id when taken; prompt to confirm'
 description: "When the user's preferred node id (e.g., \"JM\" from ~/.aida/preferences.toml) is already registered in nodes.toml, fall back to a numerically-suffixed variant (\"JM2\", \"JM3\" — find lowest free) and prompt the user to confirm or pick a different one.\n\nDecision tree on `aida init` / `aida node acquire`:\n  1. Read preferred id from prefs.toml (or default to \"1\")\n  2. Pull latest registry\n  3. If free → claim it (no prompt)\n  4. If taken AND --yes flag set → auto-suffix and use it\n  5. If taken AND interactive → show suggestion (\"JM is taken; use JM2? [Y/n]\") with options to enter a different id or bail\n  6. If --id <X> was passed explicitly AND it's taken → bail with the existing entry's hostname/email so the user can decide (and pointer to --hijack)\n\nAcceptance:\n- \"JM\" preferred + nodes.toml has \"JM\" → suggests \"JM2\"\n- \"JM2\" also taken → suggests \"JM3\"  \n- Suffix logic finds the lowest free integer suffix\n- `aida node acquire --yes` skips the prompt\n- Clear message when the user opts to bail\n"
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T19:13:18.798953916Z
-modified_at: 2026-05-09T19:13:18.798953916Z
+modified_at: 2026-05-09T19:43:56.353657845Z
 req_type: Story
 tags:
 - collision
