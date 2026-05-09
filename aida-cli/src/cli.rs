@@ -558,12 +558,12 @@ pub enum DevCommand {
 
         /// Pin to the debug build (target/debug). Sticky — subsequent plain
         /// `aida dev activate` invocations honor the pin until you pass
-        /// --auto or --release. trace:FR-1-070 | ai:claude
+        /// --auto or --release. trace:FR-1-068 | ai:claude
         #[clap(long, conflicts_with_all = ["release", "auto"])]
         debug: bool,
 
         /// Pin to the release build (target/release). Sticky.
-        /// trace:FR-1-070 | ai:claude
+        /// trace:FR-1-068 | ai:claude
         #[clap(long, conflicts_with_all = ["debug", "auto"])]
         release: bool,
 
