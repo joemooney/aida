@@ -3,10 +3,10 @@ spec_id: BUG-30
 agreed_id: BUG-30
 title: aida status 'Recent activity' includes META reqs from init seeding
 description: On a fresh project, the Recent activity section shows META-001..006 because they were just seeded. Once user adds a few reqs they push the METAs out, but on day one the section is all noise. Should filter type=meta from recent activity. Surfaced 2026-05-09 walkthrough.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T20:39:00.773184179Z
-modified_at: 2026-05-09T20:39:00.773184179Z
+modified_at: 2026-05-09T20:48:28.246066086Z
 req_type: Bug
