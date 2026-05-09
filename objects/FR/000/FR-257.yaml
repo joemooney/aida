@@ -1,11 +1,12 @@
-id: 019df974-3aa2-7141-97df-053b42ff878f
+id: 019e0dec-6fdd-76b3-b692-16f9b9c23f97
 spec_id: FR-257
-title: Auto-sync aida-store on aida dev release
-description: The 'aida dev release' command should automatically sync the aida-store orphan branch (pull then push) as part of the release workflow. This ensures requirement state is published alongside the code tag and avoids store divergence across machines. Pull should happen before the release commit/tag; push should happen after. If the pull detects conflicts, the release should abort with a clear message directing the user to resolve store conflicts first.
-status: Completed
-priority: Medium
+agreed_id: FR-257
+title: 'AIDA: graph is canonical, projections are derived'
+description: ''
+status: Approved
+priority: High
 owner: ''
 feature: Uncategorized
-created_at: 2026-05-05T18:43:57.218601096Z
-modified_at: 2026-05-05T21:13:37.716179866Z
-req_type: Functional
+created_at: 2026-05-09T18:07:39.485868473Z
+modified_at: 2026-05-09T18:07:39.485868473Z
+req_type: Principle
