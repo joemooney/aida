@@ -1,57 +1,12 @@
-id: 019df587-17f4-74e3-99ea-1cbb3ab49253
+id: 019e0e77-01a5-7a63-b96a-c031f40ca138
 spec_id: BUG-30
-title: scaffold extract and scaffold status disagree on whether the AIDA Generated header is part of the embedded template
-description: |-
-  **Symptom**
-
-  Round-trip is broken: `aida scaffold extract` writes hook scripts WITHOUT the `# AIDA Generated: vX | checksum:...` header. `aida scaffold status` then reports those same files as 'modified' (line counts off by 2 — the missing header lines). `aida scaffold apply --force` writes them WITH the header (header is added at apply-time with a fresh checksum), and only after `apply --force` does status agree.
-
-  **Reproduction (observed 2026-05-04 in ~/ai/paradox)**
-
-  ```
-  $ aida scaffold extract --output /tmp/tpl
-  $ cp /tmp/tpl/hooks/aida-validate-commit.sh ~/ai/paradox/.claude/hooks/
-  $ aida scaffold status -v
-  Modified:
-    ~ .claude/hooks/aida-validate-commit.sh (expected 83 lines, found 81)
-  $ aida scaffold apply --force   # rewrites the same file
-  $ aida scaffold status
-  ✓ Scaffold is up to date
-  $ head -2 ~/ai/paradox/.claude/hooks/aida-validate-commit.sh
-  # AIDA Generated: v2.0.0 | checksum:0ba50ab2
-  # To customize: copy this file and modify the copy
-  ```
-
-  **Why it matters**
-
-  This is a real safety hazard, not just an annoyance. It defeats the documented "safe customization" workflow: `scaffold extract` is *supposed* to produce a customizable copy that round-trips cleanly with `scaffold status`. Today it doesn't, which forces users into either `apply --force` (whole-file blast radius — already destroyed paradox CLAUDE.md and settings.json on 2026-05-04 because of this) or living with permanent drift warnings.
-
-  **Root cause hypothesis**
-
-  `scaffold apply` wraps the embedded template bytes with a header before writing (`generate_hook_script` or similar adds `# AIDA Generated: ... | checksum:...` referencing the freshly-computed checksum). `scaffold extract` writes raw embedded bytes, not the wrapped form. `scaffold status` compares disk against the WRAPPED form. So the three paths use two different definitions of 'the template.'
-
-  **Fix options**
-
-  1. `scaffold extract` writes the wrapped form (with header) so files round-trip via `cp`. Cleanest.
-  2. `scaffold status` strips the header before comparing, so unwrapped files don't drift. Less clean (status loses the version/checksum signal).
-  3. Document that `scaffold extract` is for read-only inspection and cannot round-trip — but then we should remove the `--output` flag's invitation to put files where AIDA will look at them.
-
-  Option 1 is recommended. FR-145 (Completed) added the header concept; this bug is that one of the three call sites was missed.
-
-  **Related**
-
-  - FR-145 (the protection mechanism that's misbehaving here)
-  - EPIC-1-026 / FR-1-027 / FR-1-028 / SPIKE-1-029 (broader upgrade workflow — fixing this bug unblocks the manual extract+cp workaround and reduces pressure on the larger redesign)
-status: Completed
-priority: Medium
+agreed_id: BUG-30
+title: aida status 'Recent activity' includes META reqs from init seeding
+description: On a fresh project, the Recent activity section shows META-001..006 because they were just seeded. Once user adds a few reqs they push the METAs out, but on day one the section is all noise. Should filter type=meta from recent activity. Surfaced 2026-05-09 walkthrough.
+status: Approved
+priority: Low
 owner: ''
 feature: Uncategorized
-created_at: 2026-05-05T00:26:04.660391580Z
-modified_at: 2026-05-05T00:48:22.974577034Z
+created_at: 2026-05-09T20:39:00.773184179Z
+modified_at: 2026-05-09T20:39:00.773184179Z
 req_type: Bug
-comments:
-- id: 019df59b-7e53-7b03-ace9-7012030bb090
-  author: joe
-  content: ''
-  created_at: 2026-05-05T00:48:21.587947135Z
-  modified_at: 2026-05-05T00:48:21.587947135Z
