@@ -1116,6 +1116,32 @@ fn handle_git_backend_command(
     store_path: &std::path::Path,
     command: &Command,
 ) -> Result<()> {
+    // STORY-43: warn loudly when this clone has been hijacked. Runs once
+    // per invocation before any command executes. The marker doesn't block
+    // operations — issued ids remain valid — but the user needs to know
+    // they're operating with a node id that no longer belongs to them.
+    let marker_path = aida_core::node::HijackMarker::path_in_store(store_path);
+    if let Ok(Some(marker)) = aida_core::node::HijackMarker::load(&marker_path) {
+        eprintln!(
+            "{} This clone's node id '{}' was reassigned by another clone on \
+             {} at {}",
+            "HIJACK WARNING:".red().bold(),
+            marker.node_id,
+            marker.new_owner_hostname,
+            marker.hijacked_at.format("%Y-%m-%d %H:%M UTC"),
+        );
+        if let Some(p) = &marker.new_owner_clone_path {
+            eprintln!("  New owner clone: {}", p.display());
+        }
+        eprintln!(
+            "  Continuing to write requirements here will issue ids attributed to \
+             the new owner. Run `aida node acquire` to claim a fresh id, or delete \
+             {} once you've migrated.",
+            marker_path.display()
+        );
+        eprintln!();
+    }
+
     let dispenser = load_dispenser(store_path)?;
     let inner = aida_core::GitBackend::new(store_path)?
         .with_dispenser(dispenser);
@@ -4644,7 +4670,45 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
             }
         }
 
-        NodeCommand::Acquire { id: requested_id, hostname: hn_override, email: email_override, force, yes } => {
+        NodeCommand::Acquire { id: requested_id, hostname: hn_override, email: email_override, force, yes, hijack } => {
+            // STORY-43 hijack path: re-claim an existing node id.
+            if let Some(target_id) = hijack {
+                let hn = hn_override.clone().unwrap_or_else(hostname);
+                let email = email_override.clone().or_else(|| {
+                    aida_core::git_ops::git_config_get("user.email").ok()
+                });
+                let user_id = 1;
+                println!(
+                    "Hijacking node id '{}' for this clone (hostname={}, email={})...",
+                    target_id, hn, email.as_deref().unwrap_or("-")
+                );
+                let outcome = aida_core::git_ops::hijack_node(
+                    store_path, target_id, user_id, &hn, email.clone(),
+                )?;
+                match &outcome {
+                    aida_core::git_ops::HijackOutcome::MarkedInPlace { marker_path } => {
+                        println!(
+                            "{} Hijacked node id '{}'. Marker dropped at {}",
+                            "".green().bold(),
+                            target_id,
+                            marker_path.display()
+                        );
+                        println!(
+                            "  Next `aida` invocation in the old clone will warn the user."
+                        );
+                    }
+                    aida_core::git_ops::HijackOutcome::Reattributed { reason } => {
+                        println!(
+                            "{} Hijacked node id '{}' (re-attributed: {}).",
+                            "".green().bold(),
+                            target_id,
+                            reason
+                        );
+                    }
+                }
+                return Ok(());
+            }
+
             if node_config_path.exists() && !*force {
                 let existing = aida_core::NodeConfig::load(&node_config_path)?;
                 anyhow::bail!(

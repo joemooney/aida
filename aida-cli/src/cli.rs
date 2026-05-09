@@ -798,6 +798,15 @@ pub enum NodeCommand {
         /// interactive mode. trace:STORY-42 | ai:claude
         #[clap(long)]
         yes: bool,
+
+        /// Re-claim an already-registered node id (the shared registry
+        /// entry gets re-attributed to this clone). When the previous
+        /// clone is reachable on this host, drops a HIJACKED.toml marker
+        /// inside its `.aida-store/.aida/` so the user sees a warning the
+        /// next time they run `aida` there. Mutually exclusive with
+        /// `--id`. trace:STORY-43 | ai:claude
+        #[clap(long, value_name = "ID", conflicts_with = "id")]
+        hijack: Option<String>,
     },
 
     /// Remove a node entry from the shared registry. Does not invalidate

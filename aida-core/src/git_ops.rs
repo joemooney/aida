@@ -11,7 +11,7 @@
 //! when they run git manually.
 
 use anyhow::{Context, Result};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// Result of a git command execution.
@@ -557,6 +557,190 @@ pub fn register_node_full(
         "Node registration failed after {} attempts — too much contention on the registry",
         MAX_CAS_RETRIES
     );
+}
+
+/// Outcome of [`hijack_node`]. Tells the CLI whether a stale-clone marker
+/// was successfully dropped or whether we just re-attributed silently
+/// (because the old clone is unreachable from this machine).
+/// trace:STORY-43 | ai:claude
+#[derive(Debug, Clone)]
+pub enum HijackOutcome {
+    /// Old clone was reachable; HIJACKED.toml was written into its
+    /// `.aida-store/.aida/`. The path returned is the marker file location.
+    MarkedInPlace { marker_path: PathBuf },
+    /// Old clone could not be reached (different host, missing path, no
+    /// clone_path recorded). The registry entry was overwritten in place,
+    /// so the new clone owns the id; the old clone, if it ever runs `aida`
+    /// again, will load a stale node.toml but won't see a marker.
+    Reattributed { reason: String },
+}
+
+/// Re-claim node `target_id` for the current clone. The registry entry's
+/// hostname/email/clone_path/registered are updated in place; if the
+/// previous clone is reachable from this machine (same hostname AND its
+/// recorded clone_path still exists), we drop a `HIJACKED.toml` into its
+/// `.aida-store/.aida/` so the user sees a warning the next time they run
+/// `aida` there. The CAS push loop applies — concurrent hijack attempts on
+/// different clones serialize through git.
+///
+/// Returns the [`HijackOutcome`] describing which branch was taken.
+/// trace:STORY-43 | ai:claude
+pub fn hijack_node(
+    aida_repo: &Path,
+    target_id: &str,
+    user_id: u32,
+    hostname: &str,
+    email: Option<String>,
+) -> Result<HijackOutcome> {
+    use crate::node::{HijackMarker, NodeConfig, NodeRegistry};
+
+    let registry_path = aida_repo.join("registry").join("nodes.toml");
+    let branch = current_branch(aida_repo).unwrap_or_else(|_| "main".to_string());
+    let clone_path = aida_repo.parent().and_then(|p| p.canonicalize().ok());
+
+    for attempt in 0..MAX_CAS_RETRIES {
+        if attempt > 0 {
+            pull_rebase(aida_repo, "origin", &branch)?;
+        }
+
+        let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
+        let entry_idx = registry
+            .nodes
+            .iter()
+            .position(|n| n.id == target_id)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Node id '{}' is not registered — nothing to hijack",
+                    target_id
+                )
+            })?;
+
+        // Decide reachability before mutating the registry. "Reachable"
+        // means same hostname, the clone_path is recorded and exists on
+        // disk, and email matches (proxy for same user). When email is
+        // None on either side, fall back to hostname+path.
+        let old_entry = registry.nodes[entry_idx].clone();
+        let same_host = old_entry.hostname == hostname;
+        let same_user = match (old_entry.email.as_deref(), email.as_deref()) {
+            (Some(a), Some(b)) => a == b,
+            _ => true,
+        };
+        let path_exists = old_entry
+            .clone_path
+            .as_ref()
+            .map(|p| p.exists() && *p != aida_repo.parent().unwrap_or(p))
+            .unwrap_or(false);
+
+        let outcome = if same_host && same_user && path_exists {
+            // Reachable — write HIJACKED.toml in the old clone.
+            let old_clone = old_entry.clone_path.clone().unwrap();
+            let marker = HijackMarker {
+                node_id: target_id.to_string(),
+                new_owner_hostname: hostname.to_string(),
+                new_owner_email: email.clone(),
+                new_owner_clone_path: clone_path.clone(),
+                hijacked_at: chrono::Utc::now(),
+            };
+            let marker_path =
+                HijackMarker::path_in_store(&old_clone.join(".aida-store"));
+            // Best-effort: if the old store path doesn't exist (the clone
+            // was deleted but its parent dir lingered), fall through to
+            // Reattributed instead of failing the whole hijack.
+            if marker_path
+                .parent()
+                .map(|p| p.exists())
+                .unwrap_or(false)
+                || std::fs::create_dir_all(marker_path.parent().unwrap()).is_ok()
+            {
+                marker.save(&marker_path)?;
+                HijackOutcome::MarkedInPlace { marker_path }
+            } else {
+                HijackOutcome::Reattributed {
+                    reason: format!(
+                        "old clone path {} no longer has a writable .aida-store/.aida/",
+                        old_clone.display()
+                    ),
+                }
+            }
+        } else {
+            let reason = if !same_host {
+                format!(
+                    "old clone was on different host ({} vs {})",
+                    old_entry.hostname, hostname
+                )
+            } else if !same_user {
+                "old clone was owned by a different user".to_string()
+            } else if old_entry.clone_path.is_none() {
+                "old clone path was not recorded (pre-EPIC-9 entry)".to_string()
+            } else {
+                format!(
+                    "old clone path {} no longer exists",
+                    old_entry
+                        .clone_path
+                        .as_ref()
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_default()
+                )
+            };
+            HijackOutcome::Reattributed { reason }
+        };
+
+        // Update the registry entry to point at this clone.
+        let entry = &mut registry.nodes[entry_idx];
+        entry.hostname = hostname.to_string();
+        entry.email = email.clone();
+        entry.clone_path = clone_path.clone();
+        entry.registered = chrono::Utc::now();
+        registry.save(&registry_path)?;
+
+        // Stage + commit + push.
+        add(aida_repo, &["registry/nodes.toml"])?;
+        let msg = format!(
+            "chore(registry): hijack node {} for user {} ({})",
+            target_id, user_id, hostname
+        );
+        commit(aida_repo, &msg)?;
+
+        match push(aida_repo, "origin", &branch) {
+            Ok(true) => {
+                // Save local NodeConfig so this clone now claims the id.
+                let config = NodeConfig {
+                    node_id: target_id.to_string(),
+                    user_id,
+                    hostname: hostname.to_string(),
+                    email: email.clone(),
+                    registered_at: chrono::Utc::now(),
+                };
+                let node_config_path = aida_repo.join(".aida").join("node.toml");
+                config.save(&node_config_path)?;
+                // Clear our own HIJACKED.toml (if present) — we're the
+                // legitimate owner again and the warning would be stale.
+                let local_marker = HijackMarker::path_in_store(aida_repo);
+                let _ = std::fs::remove_file(&local_marker);
+                return Ok(outcome);
+            }
+            Ok(false) => {
+                // CAS rejected — drop the marker we just wrote (if any),
+                // soft-reset, and retry. Without rolling back the marker we
+                // could leave a stale HIJACKED.toml when another node won
+                // the race and we failed.
+                if let HijackOutcome::MarkedInPlace { marker_path } = &outcome {
+                    let _ = std::fs::remove_file(marker_path);
+                }
+                let _ = std::process::Command::new("git")
+                    .args(["reset", "--hard", "HEAD~1"])
+                    .current_dir(aida_repo)
+                    .output();
+                continue;
+            }
+            Err(e) => anyhow::bail!("Hijack push failed: {}", e),
+        }
+    }
+
+    anyhow::bail!(
+        "Hijack failed after {} attempts — too much contention",
+        MAX_CAS_RETRIES
+    )
 }
 
 /// Remove a node entry from the shared registry via the CAS push loop.
