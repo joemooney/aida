@@ -26,7 +26,9 @@ fi
 # Patterns
 AI_TAG_PATTERN='^\[AI:[a-zA-Z]+(:(high|med|low))?\]'
 CONVENTIONAL_PATTERN='^(\[AI:[a-zA-Z]+(:(high|med|low))?\] )?(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-zA-Z0-9_-]+\))?: .+'
-REQ_ID_PATTERN='\([A-Z]+(-[0-9]+){1,2}\)$'
+# Match a single REQ-ID `(FR-42)` / `(FR-1-042)` OR a comma-separated list
+# `(TASK-20, TASK-27)` at end of line. trace:BUG-24 | ai:claude
+REQ_ID_PATTERN='\([A-Z]+(-[0-9]+){1,2}(,[[:space:]]*[A-Z]+(-[0-9]+){1,2})*\)$'
 FEAT_FIX_PATTERN='^(\[AI:[a-zA-Z]+(:(high|med|low))?\] )?(feat|fix)'
 
 ERRORS=()
