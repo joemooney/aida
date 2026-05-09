@@ -716,6 +716,19 @@ pub enum DbCommand {
     /// short form (FR-423).
     MergeGate,
 
+    /// Collapse legacy origin spec_ids onto their agreed_ids. For each
+    /// requirement where spec_id ≠ agreed_id (typically a legacy `FR-0153`
+    /// origin id with a later-assigned `FR-140` agreed id), set
+    /// spec_id := agreed_id and clear agreed_id. The on-disk YAML moves
+    /// to the new sharded path; relationships are unaffected (they use
+    /// UUIDs). Run with --dry-run first to preview.
+    /// trace:FR-1-071 | ai:claude
+    RetireLegacyIds {
+        /// Show what would change without writing anything.
+        #[clap(long)]
+        dry_run: bool,
+    },
+
     /// Initialize a multi-repo workspace (multiple code repos sharing one store)
     WorkspaceInit {
         /// Workspace name
@@ -1431,6 +1444,15 @@ pub enum Command {
         /// trace:TASK-1-021 | ai:claude
         #[clap(long)]
         no_scope: bool,
+
+        /// Show the origin id alongside the canonical id. The origin id is
+        /// the original spec_id assigned when the requirement was created
+        /// (legacy `FR-0153` for pre-EPIC-1-001 reqs, node-aware `FR-1-053`
+        /// for distributed-mode reqs). The canonical id is the agreed-id
+        /// post-merge-gate when one exists, else the origin id itself.
+        /// trace:FR-1-070 | ai:claude
+        #[clap(long, alias = "verbose", short = 'v')]
+        show_origin: bool,
     },
 
     /// Show details for a specific requirement

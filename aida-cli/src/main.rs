@@ -1065,7 +1065,7 @@ fn handle_git_backend_command(
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::Session(_) => unreachable!("session is dispatched before storage init"),
-        Command::List { status, r#type, feature, tags, no_scope, .. } => {
+        Command::List { status, r#type, feature, tags, no_scope, show_origin, .. } => {
             // Cache-backed list (EPIC-1-001 Phase 2). The CachedGitBackend
             // ensures the cache is fresh before querying, so this is one
             // SQLite query instead of ~360 YAML reads.
@@ -1101,12 +1101,16 @@ fn handle_git_backend_command(
             if reqs.is_empty() {
                 println!("No requirements found.");
             } else {
-                let has_agreed = reqs.iter().any(|r| r.agreed_id.is_some());
-
-                if has_agreed {
+                // Default rendering: one ID column (canonical = agreed_id
+                // when present, else spec_id). Pass --show-origin to
+                // surface the original spec_id alongside as "Origin ID".
+                // Replaces the older two-column-by-default layout where
+                // both columns were FR-NNN-shaped and confusing to grep
+                // against. trace:FR-1-070 | ai:claude
+                if *show_origin {
                     println!(
                         "{:<12} {:<14} {:<12} {:<10} {}",
-                        "ID", "Node ID", "Type", "Status", "Title"
+                        "ID", "Origin ID", "Type", "Status", "Title"
                     );
                     println!("{}", "─".repeat(78));
                     for req in &reqs {
@@ -1115,10 +1119,18 @@ fn handle_git_backend_command(
                             .as_deref()
                             .or(req.spec_id.as_deref())
                             .unwrap_or("?");
+                        let origin = req.spec_id.as_deref().unwrap_or("-");
+                        // When canonical and origin are the same, dim the
+                        // origin so the eye skips it.
+                        let origin_cell = if origin == display_id {
+                            origin.dimmed().to_string()
+                        } else {
+                            origin.to_string()
+                        };
                         println!(
                             "{:<12} {:<14} {:<12} {:<10} {}",
                             display_id,
-                            req.spec_id.as_deref().unwrap_or("-"),
+                            origin_cell,
                             req.req_type,
                             req.status,
                             req.title,
@@ -1132,8 +1144,9 @@ fn handle_git_backend_command(
                     println!("{}", "─".repeat(74));
                     for req in &reqs {
                         let display_id = req
-                            .spec_id
+                            .agreed_id
                             .as_deref()
+                            .or(req.spec_id.as_deref())
                             .unwrap_or("?");
                         println!(
                             "{:<14} {:<12} {:<10} {:<10} {}",
@@ -1316,7 +1329,12 @@ fn handle_git_backend_command(
                         }
                     }
                     if req.agreed_id.is_some() {
-                        println!("{}: {}", "Node ID".bold(), req.spec_id.as_deref().unwrap_or("-"));
+                        // trace:FR-1-070 | ai:claude
+                        println!(
+                            "{}: {}",
+                            "Origin ID".bold(),
+                            req.spec_id.as_deref().unwrap_or("-")
+                        );
                     }
                     println!("{}: {}", "UUID".bold(), req.id);
                     println!("{}: {}", "Title".bold(), req.title);
@@ -1846,6 +1864,11 @@ fn handle_git_backend_command(
         // trace:FR-2-005 | ai:claude
         Command::Db(DbCommand::Block { subcommand }) => {
             handle_block_command(subcommand, store_path)?;
+        }
+
+        // trace:FR-1-071 | ai:claude
+        Command::Db(DbCommand::RetireLegacyIds { dry_run }) => {
+            handle_retire_legacy_ids(&backend, store_path, *dry_run)?;
         }
 
         // Phase 3: Export to git backend
@@ -3828,6 +3851,92 @@ fn handle_type_command(cmd: &TypeCommand, storage: &Storage) -> Result<()> {
 /// trace:EPIC-1-001 | ai:claude
 /// Handle `aida db block <subcommand>` — pre-allocated agreed ID blocks.
 // trace:FR-2-005 | ai:claude
+/// One-shot migration: collapse legacy origin spec_ids onto their agreed_ids.
+/// For each requirement where spec_id ≠ agreed_id, set spec_id := agreed_id
+/// and clear agreed_id (since the canonical id now lives in spec_id alone).
+/// The on-disk YAML file moves from `objects/<TYPE>/000/<OLD>.yaml` to
+/// `objects/<TYPE>/000/<NEW>.yaml`; that's handled implicitly by save()'s
+/// "delete files that fell out of the store" pass.
+///
+/// Relationships use UUIDs internally so they're unaffected.
+/// trace:FR-1-071 | ai:claude
+fn handle_retire_legacy_ids(
+    backend: &aida_core::CachedGitBackend,
+    _store_path: &std::path::Path,
+    dry_run: bool,
+) -> Result<()> {
+    use aida_core::DatabaseBackend;
+
+    let store = backend.load()?;
+
+    // Collect the rename plan first so we can preview before mutating.
+    let mut renames: Vec<(String, String, uuid::Uuid)> = Vec::new();
+    for req in &store.requirements {
+        if let (Some(spec), Some(agreed)) = (req.spec_id.as_deref(), req.agreed_id.as_deref()) {
+            if spec != agreed {
+                renames.push((spec.to_string(), agreed.to_string(), req.id));
+            }
+        }
+    }
+
+    if renames.is_empty() {
+        println!(
+            "{} No legacy ids to retire — every requirement's spec_id already matches its agreed_id.",
+            "✓".green()
+        );
+        return Ok(());
+    }
+
+    println!(
+        "Found {} requirement{} with diverging spec_id ↔ agreed_id:",
+        renames.len(),
+        if renames.len() == 1 { "" } else { "s" }
+    );
+    println!("{}", "─".repeat(60));
+    let preview_limit = 20;
+    for (spec, agreed, _) in renames.iter().take(preview_limit) {
+        println!("  {}  →  {}", spec.dimmed(), agreed.bold());
+    }
+    if renames.len() > preview_limit {
+        println!(
+            "  {}",
+            format!("… and {} more", renames.len() - preview_limit).dimmed()
+        );
+    }
+
+    if dry_run {
+        println!();
+        println!("{} Dry run — no changes made.", "→".cyan());
+        println!("    Re-run without --dry-run to apply.");
+        return Ok(());
+    }
+
+    // Apply: load the mutable store, update each affected req, save once.
+    // The save() path (post-BUG-1-040) writes only changed YAMLs and deletes
+    // files that fell out of the store, so renames are handled automatically.
+    let mut mutable = store;
+    for req in mutable.requirements.iter_mut() {
+        let needs = match (req.spec_id.as_deref(), req.agreed_id.as_deref()) {
+            (Some(s), Some(a)) if s != a => Some(a.to_string()),
+            _ => None,
+        };
+        if let Some(new_spec) = needs {
+            req.spec_id = Some(new_spec);
+            req.agreed_id = None;
+        }
+    }
+    backend.save(&mutable)?;
+
+    println!();
+    println!(
+        "{} Retired {} legacy spec_id{}. Canonical id now lives in spec_id alone.",
+        "✓".green().bold(),
+        renames.len(),
+        if renames.len() == 1 { "" } else { "s" }
+    );
+    Ok(())
+}
+
 fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Result<()> {
     use aida_core::BlockRegistry;
 
@@ -7961,6 +8070,12 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
         DbCommand::Block { .. } => {
             println!(
                 "{} Block commands are only available for git-backed stores. Use: aida --file <dir> db block ...",
+                "!".yellow()
+            );
+        }
+        DbCommand::RetireLegacyIds { .. } => {
+            println!(
+                "{} retire-legacy-ids only applies to git-backed stores.",
                 "!".yellow()
             );
         }
