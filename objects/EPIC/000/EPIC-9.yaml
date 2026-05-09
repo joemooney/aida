@@ -31,12 +31,12 @@ description: |
   ## Out of scope
 
   - Migrating existing `nodes.toml` entries to string form. Numeric stays valid.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T18:59:40.292176534Z
-modified_at: 2026-05-09T19:13:21.630800829Z
+modified_at: 2026-05-09T20:08:07.371590388Z
 req_type: Epic
 tags:
 - EPIC-1-052-followup
