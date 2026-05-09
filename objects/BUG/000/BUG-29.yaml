@@ -3,10 +3,10 @@ spec_id: BUG-29
 agreed_id: BUG-29
 title: aida show prints both 'ID:' and 'Origin ID:' even when identical
 description: Every requirement until a merge-gate run has Origin ID == ID. Showing both is redundant noise. Collapse the two lines unless they differ. Surfaced 2026-05-09 walkthrough.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T20:38:59.879044064Z
-modified_at: 2026-05-09T20:38:59.879044064Z
+modified_at: 2026-05-09T20:48:27.237620747Z
 req_type: Bug
