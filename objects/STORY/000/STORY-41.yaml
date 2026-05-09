@@ -1,0 +1,26 @@
+id: 019e0e28-86c8-7cf3-b486-1ff15d643e66
+spec_id: STORY-41
+agreed_id: STORY-41
+title: 'Story 2a: Node id is String, not u32'
+description: |
+  Type change across the kernel: NodeRegistryEntry.id, NodeConfig.node_id, AgreedIdBlock.node_id, dispenser sequence keys all become String.
+
+  Backwards-compat: legacy numeric `id = 1` still parses as `id = "1"`. Existing repos keep working.
+
+  Constraints on the string format:
+  - Must match `[A-Za-z][A-Za-z0-9_-]*` (alphanumeric + dash/underscore, must start with letter)
+  - Used directly in node-aware spec ids: `FR-JM-052`, `FR-1-052`
+  - Compares lexicographically for sort order in `aida node list`
+
+  Touches: aida-core/src/node.rs, dispenser.rs, git_ops.rs (register_node_full, merge_gate prefix derivation), aida-cli's display formatting + parse_requirement_type. Estimated 2-3 hours.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-09T19:13:17.512063677Z
+modified_at: 2026-05-09T19:13:17.512063677Z
+req_type: Story
+tags:
+- node-ids
+- refactor
+- types
