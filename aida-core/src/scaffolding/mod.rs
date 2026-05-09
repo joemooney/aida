@@ -248,17 +248,32 @@ fn generate_aida_header_shell(content: &str) -> String {
 ///
 /// trace:BUG-1-034 | ai:claude
 pub fn wrap_with_aida_header(path: &std::path::Path, raw_content: &str) -> String {
-    let is_shell = path.extension().and_then(|e| e.to_str()) == Some("sh");
+    // Recognize shell scripts by .sh extension, by living under
+    // .git/hooks/ or .claude/hooks/ (extensionless hook files), or by
+    // a `#!` shebang at line 1. The shebang must remain line 1 or the
+    // OS won't honor it. trace:BUG-21 | ai:claude
+    let path_str = path.to_string_lossy();
+    let is_shell = path.extension().and_then(|e| e.to_str()) == Some("sh")
+        || path_str.starts_with(".git/hooks/")
+        || path_str.starts_with(".claude/hooks/")
+        || raw_content.starts_with("#!");
     let is_json = path.extension().and_then(|e| e.to_str()) == Some("json");
 
     if is_json {
         raw_content.to_string()
     } else if is_shell {
-        format!(
-            "{}{}",
-            generate_aida_header_shell(raw_content),
-            raw_content
-        )
+        // The shebang (if present) must remain on line 1 or the OS won't
+        // honor it. Inject the AIDA-Generated comment block AFTER the
+        // shebang line. trace:BUG-21 | ai:claude
+        let header = generate_aida_header_shell(raw_content);
+        if raw_content.starts_with("#!") {
+            // First line is a shebang; preserve it as-is, inject header after.
+            let split = raw_content.find('\n').map(|nl| nl + 1).unwrap_or(raw_content.len());
+            let (shebang_line, body) = raw_content.split_at(split);
+            format!("{}{}{}", shebang_line, header, body)
+        } else {
+            format!("{}{}", header, raw_content)
+        }
     } else if raw_content.starts_with("---\n") {
         let after_open = 4; // past "---\n"
         if let Some(close_pos) = raw_content[after_open..].find("\n---\n") {
