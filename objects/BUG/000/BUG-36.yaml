@@ -1,0 +1,12 @@
+id: 019e0e9b-c797-7210-9caa-9b7f2a58549e
+spec_id: BUG-36
+agreed_id: BUG-36
+title: aida init banner leaks raw-git instructions instead of native aida commands
+description: 'Closing banner says ''Sync store to remote: git push origin aida-store'' and ''New developer setup: git worktree add .aida-store aida-store''. Both leak orphan-branch implementation. Should use ''aida push'' (FR-264) and ''git clone <repo> + aida init'' (post-clone path already exists). Surfaced 2026-05-09 walkthrough.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-09T21:19:10.743169766Z
+modified_at: 2026-05-09T21:19:10.743169766Z
+req_type: Bug
