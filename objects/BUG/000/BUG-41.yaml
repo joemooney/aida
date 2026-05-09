@@ -1,0 +1,12 @@
+id: 019e0ec0-03a0-7c92-936c-5bf99be641f6
+spec_id: BUG-41
+agreed_id: BUG-41
+title: aida docs build doesn't surface the README path in its output
+description: After projection, the user has 8 generated files under docs/aida/ but no obvious entry point. They have to browse the directory to find README.md. The build output should end with a one-liner pointing at the README ('→ open docs/aida/README.md to navigate'). Surfaced 2026-05-09 walkthrough — user knew the layers existed but had no signpost.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-09T21:58:45.408304012Z
+modified_at: 2026-05-09T21:58:45.408304012Z
+req_type: Bug
