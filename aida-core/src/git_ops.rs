@@ -352,6 +352,64 @@ pub fn register_node_with_email(
     register_node_full(aida_repo, None, user_id, hostname, email)
 }
 
+/// Probe whether a candidate node id is in use, and if so return the next
+/// free id formed by suffixing the requested base with `2`, `3`, … This is
+/// the read half of STORY-42's auto-suffix UX: callers (e.g., `aida node
+/// acquire --id JM`) should call this first and then either accept the
+/// suggestion or prompt the user before invoking [`register_node_full`].
+///
+/// Pulls the latest registry state from `origin` first when the remote is
+/// reachable; falls back to the local state otherwise. The returned
+/// suggestion is best-effort — between this probe and the CAS push another
+/// node may grab the suggested id, in which case `register_node_full` will
+/// fail and the caller can retry.
+/// trace:STORY-42 | ai:claude
+pub fn suggest_free_node_id(aida_repo: &Path, requested: &str) -> Result<NodeIdProbe> {
+    use crate::node::{BlockRegistry, NodeRegistry};
+
+    let registry_dir = aida_repo.join("registry");
+    let registry_path = registry_dir.join("nodes.toml");
+    let blocks_path = registry_dir.join("blocks.yaml");
+
+    if let Ok(branch) = current_branch(aida_repo) {
+        let _ = pull_rebase(aida_repo, "origin", &branch);
+    }
+
+    let registry = NodeRegistry::load(&registry_path).unwrap_or_default();
+    let blocks_in_use: std::collections::HashSet<String> = if blocks_path.exists() {
+        BlockRegistry::load(&blocks_path)
+            .map(|br| br.blocks.iter().map(|b| b.node_id.clone()).collect())
+            .unwrap_or_default()
+    } else {
+        std::collections::HashSet::new()
+    };
+
+    let in_use = |id: &str| registry.is_registered(id) || blocks_in_use.contains(id);
+
+    if !in_use(requested) {
+        return Ok(NodeIdProbe::Free);
+    }
+    for n in 2..u32::MAX {
+        let candidate = format!("{}{}", requested, n);
+        if !in_use(&candidate) {
+            return Ok(NodeIdProbe::Taken {
+                suggested: candidate,
+            });
+        }
+    }
+    anyhow::bail!("could not find a free suffix for node id '{}'", requested)
+}
+
+/// Result of [`suggest_free_node_id`]. trace:STORY-42 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NodeIdProbe {
+    /// The requested id is free — caller can register it directly.
+    Free,
+    /// The requested id is taken; `suggested` is the lowest-numbered
+    /// `<requested><N>` that is currently free.
+    Taken { suggested: String },
+}
+
 /// Register a node, optionally at a specific id.
 ///
 /// When `requested_id` is Some(id), the CAS loop verifies the id is free;
@@ -827,5 +885,52 @@ mod tests {
 
         let node_id2 = register_node(&aida2, 2, "alice-dev").unwrap();
         assert_eq!(node_id2, "2");
+    }
+
+    #[test]
+    fn test_suggest_free_node_id() {
+        // trace:STORY-42 | ai:claude
+        let dir = tempfile::tempdir().unwrap();
+        let (_bare, aida, _branch) = setup_remote_and_clone(dir.path(), "aida");
+
+        // No registry yet — any id is free.
+        assert_eq!(
+            suggest_free_node_id(&aida, "JM").unwrap(),
+            NodeIdProbe::Free
+        );
+
+        // Manually seed a NodeRegistry with "JM" taken.
+        std::fs::create_dir_all(aida.join("registry")).unwrap();
+        let mut registry = crate::node::NodeRegistry::default();
+        registry.register_specific("JM".into(), 1, "imac".into(), None);
+        registry
+            .save(&aida.join("registry").join("nodes.toml"))
+            .unwrap();
+
+        match suggest_free_node_id(&aida, "JM").unwrap() {
+            NodeIdProbe::Taken { suggested } => assert_eq!(suggested, "JM2"),
+            other => panic!("expected Taken, got {:?}", other),
+        }
+
+        // After "JM2" is also taken, suggestion advances to "JM3".
+        let mut registry = crate::node::NodeRegistry::load(
+            &aida.join("registry").join("nodes.toml"),
+        )
+        .unwrap();
+        registry.register_specific("JM2".into(), 1, "spock".into(), None);
+        registry
+            .save(&aida.join("registry").join("nodes.toml"))
+            .unwrap();
+
+        match suggest_free_node_id(&aida, "JM").unwrap() {
+            NodeIdProbe::Taken { suggested } => assert_eq!(suggested, "JM3"),
+            other => panic!("expected Taken, got {:?}", other),
+        }
+
+        // Different prefix is still free.
+        assert_eq!(
+            suggest_free_node_id(&aida, "AL").unwrap(),
+            NodeIdProbe::Free
+        );
     }
 }
