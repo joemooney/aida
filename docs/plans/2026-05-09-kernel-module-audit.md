@@ -7,7 +7,7 @@
 
 **Goal of this audit:** identify what stays in the always-installed *kernel* (small, invisible, daily-load-bearing) vs what moves out to *layered module repos* (opt-in, can evolve independently).
 
-**Mark-up convention:** edit any **K** ↔ **M** ↔ **D** label below to override my call. **K** = kernel, **M** = module repo, **D** = drop entirely. Open questions are flagged `?`.
+**Mark-up convention:** edit any **K** ↔ **M** ↔ **D** ↔ **A** label below to override my call. **K** = kernel, **M** = module repo, **D** = drop entirely. **A** = archive in deprecated asubcommand/module/doc/directory, Open questions are flagged `?`.
 
 ---
 
@@ -38,10 +38,10 @@ Every top-level `Command` enum variant. Roughly grouped.
 | `aida edit <id>` | yes | **K** | The primary write |
 | `aida del <id>` | yes | **K** | |
 | `aida search <query>` | yes | **K** | FTS5 against the cache |
-| `aida grep <pattern>` | sometimes | **K?** | Overlaps with `search`. Could collapse — drop one? |
+| `aida grep <pattern>` | sometimes | **K** | Overlaps with `search` but keep for the moment |
 | `aida comment ...` | yes | **K** | Discussion thread is part of the graph |
 | `aida rel ...` | yes | **K** | The relationship graph IS the value-add |
-| `aida history` | sometimes | **K?** | Historical projection — kernel-shaped (read against the orphan log). Keep. |
+| `aida history` | sometimes | **K** | Historical projection — kernel-shaped (read against the orphan log). Keep. |
 | `aida status` | yes | **K** | Project overview is kernel-shaped |
 
 ### MCP server (clearly kernel)
@@ -61,7 +61,7 @@ Every top-level `Command` enum variant. Roughly grouped.
 | `aida scaffold extract` | rarely | **M** | |
 | `aida scaffold upgrade` | sometimes | **M** | |
 | `aida scaffold diff` | rarely | **M** | |
-| `aida upgrade` | rarely | **K?** | Self-update of the binary. Tiny. Probably stays in kernel for first-run UX. |
+| `aida upgrade` | rarely | **K** | Self-update of the binary. Tiny. Probably stays in kernel for first-run UX. |
 
 ### Distributed identity (kernel — it's plumbing)
 
@@ -80,9 +80,9 @@ Every top-level `Command` enum variant. Roughly grouped.
 | `aida db status` | rarely | **K** | Worktree state |
 | `aida db info` | rarely | **K** | |
 | `aida db path` | rarely | **K** | |
-| `aida db register` | rarely | **K?** | Project registry across SQLite databases. **Legacy multi-project — probably drop now that orphan-branch is canonical.** |
-| `aida db migrate` | once-per-legacy-project | **D?** | YAML/SQLite/Postgres migration. Now that we're git-canonical-only, who runs this? Drop. |
-| `aida db export-git` | once-per-legacy-project | **D?** | Same — extract from legacy backend → git store. One-shot, can be removed once legacy paths are gone. |
+| `aida db register` | rarely | **D** | Project registry across SQLite databases. **Legacy multi-project — probably drop now that orphan-branch is canonical.** |
+| `aida db migrate` | once-per-legacy-project | **A** | YAML/SQLite/Postgres migration. Now that we're git-canonical-only, who runs this? Drop. |
+| `aida db export-git` | once-per-legacy-project | **A** | Same — extract from legacy backend → git store. One-shot, can be removed once legacy paths are gone. |
 | `aida cache rebuild/status` | rarely | **K** | Cache plumbing |
 
 ### Personal workflow (clear module candidates)
@@ -109,14 +109,14 @@ Every top-level `Command` enum variant. Roughly grouped.
 | Command | Daily? | Verdict | Notes |
 |---|---|---|---|
 | `aida report ai-integration` | rarely | **M** (`aida-reports`) | Generated docs |
-| `aida user-guide` | rarely | **D?** | Just opens a URL — can be deleted, replaced by README link |
+| `aida user-guide` | rarely | **K** | Just opens a URL — can be deleted, but a more readable document is nicer for certain new users |
 
 ### Trace (split kernel + module)
 
 | Command | Daily? | Verdict | Notes |
 |---|---|---|---|
 | `// trace:SPEC-ID` comments | yes (passive) | **K** | The convention IS the integration surface |
-| `aida trace add/list/remove` | rarely | **M?** | The CLI for managing trace links explicitly. Most usage is via inline comments + `scan` — pure storage of structured links could ship as kernel, but the explicit-CRUD CLI is a module. |
+| `aida trace add/list/remove` | rarely | **M** | The CLI for managing trace links explicitly. Most usage is via inline comments + `scan` — pure storage of structured links could ship as kernel, but the explicit-CRUD CLI is a module. |
 | `aida trace scan` | sometimes | **K** | Scanning source for `// trace:` comments and updating the graph IS kernel value |
 | `aida trace sweep` | rarely | **M** | Git-log-based reverse-trace harvesting |
 
@@ -142,7 +142,7 @@ Every top-level `Command` enum variant. Roughly grouped.
 |---|---|---|---|
 | `aida feature add/list/show/...` | rarely | **K** | Feature is part of the graph metadata; small footprint, kernel-shaped. |
 | `aida type ...` | rarely | **K** | Custom requirement types are part of the schema — kernel |
-| `aida config format/numbering/digits/migrate` | once-per-project | **K?** | ID config. Niche but kernel-adjacent. Possibly fold into `aida init --interactive`. |
+| `aida config format/numbering/digits/migrate` | once-per-project | **K** | ID config. Niche but kernel-adjacent. Possibly fold into `aida init --interactive`. |
 | `aida rel-def add/list/remove` | rarely | **K** | Relationship type definitions. Same logic as `type`. |
 
 ### Search / explore (overlapping)
@@ -150,7 +150,7 @@ Every top-level `Command` enum variant. Roughly grouped.
 | Command | Daily? | Verdict | Notes |
 |---|---|---|---|
 | `aida search` | yes | **K** | |
-| `aida grep` | sometimes | **K?** | Field-filtered grep. Worth keeping but maybe `search --grep` flag? |
+| `aida grep` | sometimes | **K** | Field-filtered grep. Worth keeping but maybe `search --grep` in the future |
 | `aida history` | sometimes | **K** | Mentioned above |
 | `aida help-all` | rarely | **K** | Trivial; stays |
 
@@ -182,8 +182,8 @@ Files in `aida-core/src/` mapped to the same K/M/D scheme.
 | `ai/` | **M** (`aida-ai`) | Claude API client, evaluation, prompts. The MCP server itself stays kernel; *outbound* AI calls (evaluate, find-duplicates, suggest-relationships) are a module. |
 | `import.rs`, `export.rs` | **K** (light) | Tree export/import is graph maintenance |
 | `conflict.rs` | **K** | Cross-node conflict detection |
-| `daemon.rs` | **K?** | Long-running daemon. Currently small — keep in kernel, revisit if it grows. |
-| `project.rs`, `registry.rs`, `workspace.rs` | **K?** | Project registration / multi-repo workspace. **Open question — does multi-repo workspace belong in kernel or in `aida-workspace` module?** |
+| `daemon.rs` | **K** | Long-running daemon. Currently small — keep in kernel, revisit if it grows. |
+| `project.rs`, `registry.rs`, `workspace.rs` | **K** | Project registration / multi-repo workspace. **Open question — does multi-repo workspace belong in kernel or in `aida-workspace` module, keep in kernel for now** |
 | `storage.rs` | **K** (with surgery) | Legacy facade. After legacy SQLite/YAML drop, this shrinks dramatically. Worth keeping as a thin storage trait. |
 | `yaml_helpers.rs` | **K** | Deterministic-serde helpers |
 
@@ -239,15 +239,15 @@ Most-independent-first. Each step ships with the kernel still working.
 
 ## Open questions for mark-up
 
-1. **`aida grep`** — keep alongside `search`, or fold into `search --regex`?
-2. **`aida config format/numbering/digits`** — keep as separate command, or fold into `aida init --interactive`?
-3. **`aida db register` / multi-project SQLite registry** — drop entirely (recommended) or keep for back-compat?
-4. **`workspace.rs` / multi-repo workspace** — kernel (graph spans repos) or `aida-workspace` module?
-5. **`aida history`** — kernel (it's a read against oplog) or `aida-reports` (it's "reporting")?
-6. **`aida trace add/remove`** — explicit-CRUD-on-trace-links has been mostly unused; do we keep it or rely solely on `// trace:` comments + `aida trace scan`?
-7. **`aida-postgres` extraction** — extract now or wait until someone actually uses Postgres?
-8. **Rename**: should the kernel binary still be called `aida` or something narrower like `aidactl` to leave space for module CLIs (`aida-roles`, `aida-web`)? My instinct: keep `aida`, modules add subcommands via plugin discovery.
-9. **Plugin discovery mechanism** — git-style (`aida-foo` on PATH → `aida foo`)? Or explicit registration via `~/.aida/plugins/`? Or feature-flagged build-time?
+1. **`aida grep`** — keep alongside `search`, or fold into `search --regex`? keep for now
+2. **`aida config format/numbering/digits`** — keep as separate command, or fold into `aida init --interactive`? keep for now
+3. **`aida db register` / multi-project SQLite registry** — drop entirely (recommended) or keep for back-compat? drop
+4. **`workspace.rs` / multi-repo workspace** — kernel (graph spans repos) or `aida-workspace` module? keep in kernel for now, if ugly then separate
+5. **`aida history`** — kernel (it's a read against oplog) or `aida-reports` (it's "reporting")? keep
+6. **`aida trace add/remove`** — explicit-CRUD-on-trace-links has been mostly unused; do we keep it or rely solely on `// trace:` comments + `aida trace scan`? something we should use more and improve upon, to be a semantic web having  this may be useful
+7. **`aida-postgres` extraction** — extract now or wait until someone actually uses Postgres? wait
+8. **Rename**: should the kernel binary still be called `aida` or something narrower like `aidactl` to leave space for module CLIs (`aida-roles`, `aida-web`)? My instinct: keep `aida`, modules add subcommands via plugin discovery. Keep aida
+9. **Plugin discovery mechanism** — git-style (`aida-foo` on PATH → `aida foo`)? Or explicit registration via `~/.aida/plugins/`? Or feature-flagged build-time? git-style
 
 ---
 
