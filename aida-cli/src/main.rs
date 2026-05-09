@@ -7634,7 +7634,7 @@ fn handle_status_command_distributed(
     // AIDA's own .claude/ uses symlinks into aida-core/templates/ and can't
     // drift. The aida-self block below has its own template-symlink check.
     if !is_aida_repo(&project_root) {
-        print_scaffolding_freshness(&project_root);
+        print_scaffolding_freshness(&project_root, &store, store_path);
     }
 
     // AIDA-self developer context — only when this project IS the aida repo.
@@ -7651,24 +7651,40 @@ fn handle_status_command_distributed(
 /// files that have drifted, and suggests `aida scaffold apply --force` if
 /// there's drift. Quiet when the project has no scaffolding at all.
 /// trace:EPIC-1-001 | ai:claude
-fn print_scaffolding_freshness(project_root: &std::path::Path) {
+fn print_scaffolding_freshness(
+    project_root: &std::path::Path,
+    store: &aida_core::models::RequirementsStore,
+    db_path: &std::path::Path,
+) {
     use aida_core::scaffolding::{ScaffoldConfig, Scaffolder};
 
-    // Need a RequirementsStore to drive the scaffolder, but we only care
-    // about template content — an empty store is fine for comparison.
-    let empty_store = aida_core::models::RequirementsStore::new();
+    // BUG-43: drive the scaffolder with the *actual* store and the
+    // *actual* db_path, matching how init/scaffold-apply construct the
+    // scaffolder. AIDA.md bakes both store-derived data (req count) and
+    // db_path-derived data (`database_filename()`) into its content, so
+    // any mismatch on either input falsely reports drift on a fresh
+    // init. trace:BUG-43 | ai:claude
     let config = ScaffoldConfig::default();
     let mut scaffolder = Scaffolder::with_database(
         project_root.to_path_buf(),
         config,
-        std::path::PathBuf::from("requirements.db"), // dummy; only used for path-substitution in templates
+        db_path.to_path_buf(),
     );
-    let preview = scaffolder.preview(&empty_store);
+    let preview = scaffolder.preview(store);
+
+    use aida_core::scaffolding::FileCategory;
 
     let mut total = 0usize;
     let mut present = 0usize;
     let mut matches = 0usize;
-    let mut drifted: Vec<std::path::PathBuf> = Vec::new();
+    // BUG-42: split drift by file category. Template-category drift is a
+    // problem (AIDA-owned files shouldn't differ from embedded). Seed-
+    // category drift is *expected* once the user customizes CLAUDE.md /
+    // AGENTS.md — it's not really drift, it's their project. Reporting
+    // them under the same STALE banner trains users to ignore the warning.
+    // ManagedMerge sits with seed for now (user-owned post-init in v1).
+    let mut template_drift: Vec<std::path::PathBuf> = Vec::new();
+    let mut seed_drift: Vec<std::path::PathBuf> = Vec::new();
 
     for artifact in &preview.artifacts {
         total += 1;
@@ -7684,8 +7700,13 @@ fn print_scaffolding_freshness(project_root: &std::path::Path) {
         };
         if on_disk == artifact.content.as_bytes() {
             matches += 1;
-        } else {
-            drifted.push(artifact.path.clone());
+            continue;
+        }
+        match FileCategory::from_path(&artifact.path) {
+            FileCategory::Template => template_drift.push(artifact.path.clone()),
+            FileCategory::Seed | FileCategory::ManagedMerge => {
+                seed_drift.push(artifact.path.clone());
+            }
         }
     }
 
@@ -7697,28 +7718,44 @@ fn print_scaffolding_freshness(project_root: &std::path::Path) {
 
     println!("{}", "─── Scaffolding ───".bold());
     println!("  Templates compared: {} total, {} present in project", total, present);
-    if drifted.is_empty() {
+    if template_drift.is_empty() {
         println!(
-            "  Status:             {} — all {} present file(s) match the embedded templates",
+            "  Status:             {} — all {} AIDA-owned file(s) match the embedded templates",
             "FRESH".green(),
-            matches
+            matches + seed_drift.len()
         );
     } else {
         println!(
-            "  Status:             {} — {} file(s) differ from the embedded templates",
+            "  Status:             {} — {} AIDA-owned file(s) differ from the embedded templates",
             "STALE".yellow(),
-            drifted.len()
+            template_drift.len()
         );
-        for path in drifted.iter().take(5) {
+        for path in template_drift.iter().take(5) {
             println!("    - {}", path.display());
         }
-        if drifted.len() > 5 {
-            println!("    ... and {} more", drifted.len() - 5);
+        if template_drift.len() > 5 {
+            println!("    ... and {} more", template_drift.len() - 5);
         }
         println!(
             "  Refresh with:       {} (or `aida scaffold apply --dry-run` to preview)",
             "aida scaffold apply --force".cyan()
         );
+    }
+    if !seed_drift.is_empty() {
+        // Seed customizations are expected — report them informationally
+        // so the user knows their CLAUDE.md / AGENTS.md tweaks were
+        // detected, but don't roll them into the STALE count.
+        // trace:BUG-42 | ai:claude
+        let label = format!(
+            "  Customized:         {} user-owned file(s) (drift expected post-init): {}",
+            seed_drift.len(),
+            seed_drift
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        println!("{}", label.dimmed());
     }
     println!();
 }

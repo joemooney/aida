@@ -1603,20 +1603,27 @@ impl Scaffolder {
             }
         }
 
-        // Write artifacts based on their status and options
+        // Write artifacts based on their status, category, and options.
+        // BUG-43: Template-category files (.claude/AIDA.md, skills,
+        // commands, hooks) are AIDA-owned — drift on disk means a stale
+        // copy left over from a previous binary version, not a user
+        // customization. Always overwrite for that category. Seed +
+        // ManagedMerge keep the prior "respect user edits unless --force"
+        // semantics. trace:BUG-43 | ai:claude
         for artifact in &preview.artifacts {
+            let category = FileCategory::from_path(&artifact.path);
             let should_write = match &artifact.file_status {
                 FileStatus::New => true,
                 FileStatus::Unmodified => true,
                 FileStatus::OlderVersion { .. } => true, // Always upgrade
-                FileStatus::Modified { .. } => {
-                    // User modified - only write if --force
-                    options.force
-                }
-                FileStatus::NoHeader => {
-                    // No header means unknown origin - only write if --force
-                    options.force
-                }
+                FileStatus::Modified { .. } => match category {
+                    FileCategory::Template => true,
+                    FileCategory::Seed | FileCategory::ManagedMerge => options.force,
+                },
+                FileStatus::NoHeader => match category {
+                    FileCategory::Template => true,
+                    FileCategory::Seed | FileCategory::ManagedMerge => options.force,
+                },
             };
 
             if !should_write {
