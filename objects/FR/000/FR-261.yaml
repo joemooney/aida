@@ -1,11 +1,12 @@
-id: 019df9c4-f1a1-7c32-a056-4bafbe402c92
+id: 019e0dec-8e2b-7141-8acd-5c2db73c5d96
 spec_id: FR-261
-title: Pre-allocated agreed ID blocks per repo/shard for offline-safe trace comments
-description: Each repo/shard should be able to claim a reserved block of agreed IDs (e.g. FR-300 to FR-399) stored in the aida-store branch (e.g. blocks.yaml), claimed atomically via git push. This allows trace comments (// trace:FR-300) to use stable agreed IDs immediately, even when disconnected. When the block is exhausted offline, fall back to local shard IDs (// trace:FR-1-005) which are understood as pointers-to-agreed and rewritten by tooling at next sync. The block registry must handle concurrent claims via push-wins-retry semantics.
-status: Completed
+agreed_id: FR-261
+title: Self-hostable; no required SaaS dependency
+description: ''
+status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
-created_at: 2026-05-05T20:12:06.945617223Z
-modified_at: 2026-05-05T21:13:37.751887918Z
-req_type: Functional
+created_at: 2026-05-09T18:07:47.243900584Z
+modified_at: 2026-05-09T18:07:47.243900584Z
+req_type: Constraint
