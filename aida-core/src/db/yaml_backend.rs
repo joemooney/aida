@@ -1,7 +1,12 @@
-//! YAML file storage backend
+//! **ARCHIVED — legacy backend, do not use in new code.**
 //!
-//! This backend stores all data in a single YAML file, using the existing
-//! Storage implementation with file locking support.
+//! Pre-EPIC-1-001 single-YAML-file storage. Kept compilable so the
+//! archived `aida db migrate` command can still run one-shot
+//! migrations off the legacy path. The kernel's canonical store is the
+//! orphan-branch git backend (`db::cached_git_backend::CachedGitBackend`).
+//! Eventual full removal is tracked by FR-1-076.
+//!
+//! trace:FR-1-076 | ai:claude
 
 use anyhow::Result;
 use std::path::{Path, PathBuf};

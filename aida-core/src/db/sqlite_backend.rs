@@ -1,7 +1,13 @@
-//! SQLite database storage backend
+//! **ARCHIVED — legacy backend, do not use in new code.**
 //!
-//! This backend stores requirements data in a SQLite database file,
-//! providing better concurrent access and query performance.
+//! Pre-EPIC-1-001 SQLite-canonical storage. Kept compilable so the
+//! archived `aida db migrate` and `aida db export-git` commands can
+//! still run one-shot migrations off the legacy path. The kernel's
+//! canonical store is the orphan-branch git backend
+//! (`db::cached_git_backend::CachedGitBackend`). This file should not
+//! gain new features; eventual full removal is tracked by FR-1-076.
+//!
+//! trace:FR-1-076 | ai:claude
 
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection, OptionalExtension};

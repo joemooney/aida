@@ -19,7 +19,6 @@ use aida_core::{
     check_scaffold_status,
     determine_requirements_path,
     export,
-    get_registry_path,
     seed_meta_requirements,
     ArtifactType,
     Cardinality,
@@ -35,7 +34,6 @@ use aida_core::{
     IssueState,
     MigrationCheck,
     NumberingStrategy,
-    Registry,
     RelationshipDefinition,
     RelationshipType,
     ReportFormat,
@@ -1556,6 +1554,10 @@ fn handle_git_backend_command(
                     print_comment(c, 0);
                 }
             }
+        }
+        Command::Db(DbCommand::Path) => {
+            // trace:FR-1-076 | ai:claude
+            println!("{}", store_path.display());
         }
         Command::Db(DbCommand::Info) => {
             let store = backend.load()?;
@@ -7859,100 +7861,9 @@ fn dest_writable(dir: &std::path::Path) -> bool {
 
 fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) -> Result<()> {
     match cmd {
-        DbCommand::Register {
-            name,
-            path,
-            description,
-            default,
-            interactive,
-        } => {
-            // Get registry path
-            let registry_path = get_registry_path()?;
-
-            // Ensure registry exists
-            if !registry_path.exists() {
-                Registry::create_default(&registry_path)?;
-            }
-
-            // Load registry
-            let mut registry = Registry::load(&registry_path)?;
-
-            // Default to interactive mode if no specific arguments are provided or interactive flag is set
-            let should_be_interactive =
-                *interactive || (name.is_none() && path.is_none() && description.is_none());
-
-            // Project details to register
-            let (project_name, project_path, project_description, is_default) =
-                if should_be_interactive {
-                    // Use interactive prompting
-                    crate::prompts::prompt_register_project()?
-                } else {
-                    // Use command line arguments
-                    let project_name = name
-                        .clone()
-                        .ok_or_else(|| anyhow::anyhow!("Project name is required"))?;
-
-                    let project_path = path
-                        .clone()
-                        .ok_or_else(|| anyhow::anyhow!("Project path is required"))?;
-
-                    let project_description = description.clone().unwrap_or_default();
-
-                    (project_name, project_path, project_description, *default)
-                };
-
-            // Register project
-            registry.register_project(
-                project_name.clone(),
-                project_path.to_string_lossy().to_string(),
-                project_description,
-            );
-
-            // Set as default if requested
-            if is_default {
-                registry.set_default_project(&project_name)?;
-            }
-
-            // Save registry
-            registry.save(&registry_path)?;
-
-            println!(
-                "{} Project '{}' registered successfully.",
-                "✓".green(),
-                project_name
-            );
-            if is_default {
-                println!("{} Project '{}' set as default.", "✓".green(), project_name);
-            }
-        }
-        DbCommand::Path { name } => {
-            // If a name is provided, try to get that specific project
-            if let Some(project_name) = name {
-                // Get registry path
-                let registry_path = get_registry_path()?;
-
-                // Ensure registry exists
-                if !registry_path.exists() {
-                    Registry::create_default(&registry_path)?;
-                }
-
-                // Load registry
-                let registry = Registry::load(&registry_path)?;
-
-                // Find the project
-                if let Some(project) = registry.get_project(project_name) {
-                    println!("{}", project.path);
-                } else {
-                    println!(
-                        "{} Project '{}' not found in registry. Use 'req db register' to add it.",
-                        "!".yellow(),
-                        project_name
-                    );
-                }
-            } else {
-                // Use the already determined path
-                println!("{}", requirements_path.display());
-            }
+        DbCommand::Path => {
+            // trace:FR-1-076 | ai:claude
+            println!("{}", requirements_path.display());
         }
         DbCommand::Migrate {
             from,
