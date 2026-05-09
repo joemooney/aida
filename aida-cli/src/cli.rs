@@ -764,8 +764,8 @@ pub enum NodeCommand {
     /// Show details for a single node. With no id, defaults to the current
     /// node (read from `.aida/node.toml`).
     Show {
-        /// Node id to show (omit for current node)
-        id: Option<u32>,
+        /// Node id to show (omit for current node). String as of EPIC-9.
+        id: Option<String>,
     },
 
     /// Acquire a node id for this clone. Performs a CAS push loop on the
@@ -774,13 +774,12 @@ pub enum NodeCommand {
     /// Defaults pull `git config user.email` for the email stamp and the
     /// system hostname for the hostname stamp.
     /// trace:EPIC-1-052 | ai:claude
+    /// trace:STORY-41 | ai:claude
     Acquire {
-        /// Claim a specific node id (must be free in the registry). Use this
-        /// to formalize a clone that's already been operating with an
-        /// implicit id, e.g., when migrating from pre-EPIC-1-052 setups.
-        /// Default: next sequential id.
+        /// Claim a specific node id (must be free in the registry).
+        /// String as of EPIC-9 — accepts "JM" or "1" alike.
         #[clap(long)]
-        id: Option<u32>,
+        id: Option<String>,
 
         /// Override the hostname stamp (default: system hostname)
         #[clap(long)]
@@ -799,7 +798,7 @@ pub enum NodeCommand {
     /// any IDs already issued by that node. The node id is not reused.
     Release {
         /// Node id to release
-        id: u32,
+        id: String,
 
         /// Skip the confirmation prompt
         #[clap(long, short = 'y')]

@@ -61,8 +61,10 @@ pub struct Operation {
     pub target_id: Uuid,
     /// Who performed the operation
     pub author: String,
-    /// Node that created this operation
-    pub node_id: u32,
+    /// Node that created this operation. String as of EPIC-9 / STORY-41
+    /// (was u32; numeric ids deserialize as decimal strings for back-compat).
+    #[serde(default = "default_node_id_str", deserialize_with = "deserialize_node_id_oplog")]
+    pub node_id: String,
     /// Lamport clock value at creation
     pub lamport: LamportClock,
     /// Wall clock timestamp
@@ -124,13 +126,37 @@ pub struct OpLog {
     pub operations: Vec<Operation>,
     /// Current Lamport clock value
     pub clock: LamportClock,
-    /// Node ID for this log
-    pub node_id: u32,
+    /// Node ID for this log. String as of STORY-41.
+    #[serde(default = "default_node_id_str", deserialize_with = "deserialize_node_id_oplog")]
+    pub node_id: String,
+}
+
+fn default_node_id_str() -> String {
+    "0".to_string()
+}
+
+/// Local back-compat deserializer (accepts u64 or String).
+/// trace:STORY-41 | ai:claude
+fn deserialize_node_id_oplog<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Repr {
+        Str(String),
+        Num(u64),
+    }
+    Ok(match Repr::deserialize(deserializer)? {
+        Repr::Str(s) => s,
+        Repr::Num(n) => n.to_string(),
+    })
 }
 
 impl OpLog {
     /// Create a new empty operation log for the given node.
-    pub fn new(node_id: u32) -> Self {
+    pub fn new(node_id: String) -> Self {
         Self {
             operations: Vec::new(),
             clock: LamportClock::new(),
@@ -145,7 +171,7 @@ impl OpLog {
             id: Uuid::now_v7(),
             target_id,
             author,
-            node_id: self.node_id,
+            node_id: self.node_id.clone(),
             lamport,
             timestamp: Utc::now(),
             kind,
@@ -248,7 +274,7 @@ mod tests {
 
     #[test]
     fn test_oplog_append() {
-        let mut log = OpLog::new(7);
+        let mut log = OpLog::new("7".to_string());
         let target = Uuid::now_v7();
 
         log.append(target, "joe".into(), OpKind::Create {
@@ -272,12 +298,12 @@ mod tests {
     fn test_oplog_merge_dedup() {
         let target = Uuid::now_v7();
 
-        let mut log_a = OpLog::new(1);
+        let mut log_a = OpLog::new("1".to_string());
         let op1 = log_a.append(target, "alice".into(), OpKind::SetTitle {
             title: "Alice's title".into(),
         }).clone();
 
-        let mut log_b = OpLog::new(2);
+        let mut log_b = OpLog::new("2".to_string());
         let op2 = log_b.append(target, "bob".into(), OpKind::SetTitle {
             title: "Bob's title".into(),
         }).clone();
@@ -296,12 +322,12 @@ mod tests {
     fn test_oplog_merge_deterministic_order() {
         let target = Uuid::now_v7();
 
-        let mut log_a = OpLog::new(1);
+        let mut log_a = OpLog::new("1".to_string());
         log_a.append(target, "alice".into(), OpKind::SetTitle {
             title: "From A".into(),
         });
 
-        let mut log_b = OpLog::new(2);
+        let mut log_b = OpLog::new("2".to_string());
         log_b.append(target, "bob".into(), OpKind::SetTitle {
             title: "From B".into(),
         });
@@ -322,7 +348,7 @@ mod tests {
 
     #[test]
     fn test_ops_for_target() {
-        let mut log = OpLog::new(1);
+        let mut log = OpLog::new("1".to_string());
         let target_a = Uuid::now_v7();
         let target_b = Uuid::now_v7();
 
@@ -339,7 +365,7 @@ mod tests {
 
     #[test]
     fn test_ops_since() {
-        let mut log = OpLog::new(1);
+        let mut log = OpLog::new("1".to_string());
         let target = Uuid::now_v7();
 
         log.append(target, "joe".into(), OpKind::SetTitle { title: "v1".into() });
@@ -361,7 +387,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("oplog.yaml");
 
-        let mut log = OpLog::new(7);
+        let mut log = OpLog::new("7".to_string());
         let target = Uuid::now_v7();
         log.append(target, "joe".into(), OpKind::Create {
             title: "Test".into(),
@@ -374,6 +400,6 @@ mod tests {
 
         let loaded = OpLog::load(&path).unwrap();
         assert_eq!(loaded.len(), 1);
-        assert_eq!(loaded.node_id, 7);
+        assert_eq!(loaded.node_id, "7");
     }
 }

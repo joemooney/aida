@@ -2,9 +2,13 @@
 //! Node identity and workspace configuration for distributed AIDA.
 //!
 //! A **node** is a single clone/installation of AIDA. Each node gets a unique
-//! sequential integer ID via the git CAS push loop at `aida init`. After
-//! registration, the node can generate globally unique object IDs offline
-//! indefinitely.
+//! ID — a `String` matching `[A-Za-z][A-Za-z0-9_-]*` (typically initials like
+//! "JM" or a sequential number like "1") — via the git CAS push loop at
+//! `aida init`. After registration, the node can generate globally unique
+//! object IDs offline indefinitely.
+//!
+//! Node IDs were `u32` pre-EPIC-9; the deserializer below accepts either a
+//! string or a number for back-compat with existing `nodes.toml` files.
 //!
 //! A **workspace** groups multiple code repos that share a single AIDA database.
 //! The workspace config is discovered by walking up the directory tree.
@@ -14,6 +18,80 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 use crate::dispenser::IdMode;
+
+// ---------------------------------------------------------------------------
+// Node ID type + back-compat deserializer
+// ---------------------------------------------------------------------------
+
+/// Validate a candidate node id against the kernel's format rules:
+/// `[A-Za-z0-9][A-Za-z0-9_-]*`, length 1–32. Returns Err with a human-
+/// readable message on rejection.
+/// trace:STORY-41 | ai:claude
+pub fn validate_node_id(id: &str) -> Result<(), String> {
+    if id.is_empty() {
+        return Err("node id must not be empty".into());
+    }
+    if id.len() > 32 {
+        return Err(format!("node id '{}' exceeds 32 characters", id));
+    }
+    let mut chars = id.chars();
+    let first = chars.next().unwrap();
+    if !first.is_ascii_alphanumeric() {
+        return Err(format!(
+            "node id '{}' must start with an alphanumeric character",
+            id
+        ));
+    }
+    for c in chars {
+        if !(c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+            return Err(format!(
+                "node id '{}' contains invalid character '{}' (use letters, digits, '-', '_')",
+                id, c
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Deserialize a node id from either a string or an integer. Pre-EPIC-9
+/// stores wrote `id = 1`; new stores write `id = "JM"` or `id = "1"`.
+/// trace:STORY-41 | ai:claude
+fn deserialize_node_id<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Repr {
+        Str(String),
+        Num(u64),
+    }
+    Ok(match Repr::deserialize(deserializer)? {
+        Repr::Str(s) => s,
+        Repr::Num(n) => n.to_string(),
+    })
+}
+
+/// Same as [`deserialize_node_id`] but for `Option<String>`. Reserved for
+/// future use (e.g., parent-node references in NodeRegistryEntry).
+#[allow(dead_code)]
+fn deserialize_node_id_opt<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Repr {
+        Str(String),
+        Num(u64),
+        None,
+    }
+    Ok(match Option::<Repr>::deserialize(deserializer)? {
+        None | Some(Repr::None) => None,
+        Some(Repr::Str(s)) => Some(s),
+        Some(Repr::Num(n)) => Some(n.to_string()),
+    })
+}
 
 // ---------------------------------------------------------------------------
 // ID Format Policy (EPIC-1-052 Phase 2)
@@ -93,10 +171,13 @@ impl IdFormatPolicy {
 // ---------------------------------------------------------------------------
 
 /// Information about a registered node (persisted locally, gitignored).
+/// Node IDs became `String` in EPIC-9; the deserializer accepts both for
+/// back-compat with pre-EPIC-9 stores. trace:STORY-41 | ai:claude
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeConfig {
-    /// The assigned node ID (unique within the workspace)
-    pub node_id: u32,
+    /// The assigned node ID (unique within the workspace).
+    #[serde(deserialize_with = "deserialize_node_id")]
+    pub node_id: String,
     /// The user ID who owns this node
     pub user_id: u32,
     /// Hostname at registration time (informational)
@@ -132,16 +213,19 @@ impl NodeConfig {
     /// Get the IdMode for this node.
     pub fn id_mode(&self) -> IdMode {
         IdMode::Distributed {
-            node_id: self.node_id,
+            node_id: self.node_id.clone(),
         }
     }
 }
 
 /// A node registration entry in the shared registry (committed to git).
+/// trace:STORY-41 | ai:claude
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeRegistryEntry {
-    /// The assigned node ID
-    pub id: u32,
+    /// The assigned node ID. Strings as of EPIC-9; numeric ids from older
+    /// stores deserialize as their decimal string ("1", "2", ...).
+    #[serde(deserialize_with = "deserialize_node_id")]
+    pub id: String,
     /// The user ID who owns this node
     pub user_id: u32,
     /// Hostname at registration time
@@ -150,6 +234,12 @@ pub struct NodeRegistryEntry {
     /// Optional so entries written before EPIC-1-052 deserialize cleanly.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub email: Option<String>,
+    /// Absolute path of the clone's `.aida-store/` parent at register time.
+    /// Used by `aida node acquire --hijack` (STORY-43) to mark a same-host-
+    /// same-user clone as obsolete instead of silently re-attributing its
+    /// blocks. Optional so pre-EPIC-9 entries deserialize cleanly.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clone_path: Option<PathBuf>,
     /// Registration timestamp
     pub registered: DateTime<Utc>,
 }
@@ -163,23 +253,53 @@ pub struct NodeRegistry {
 }
 
 impl NodeRegistry {
-    /// Get the next available node ID.
-    pub fn next_node_id(&self) -> u32 {
-        self.nodes.iter().map(|n| n.id).max().unwrap_or(0) + 1
+    /// Get the next available numeric-style node ID — used as the
+    /// fallback when no preferred id is configured. Walks existing
+    /// numeric ids and returns max+1 (or "1" when none exist).
+    /// String-typed ids that aren't pure-numeric are ignored when
+    /// computing the next numeric.
+    /// trace:STORY-41 | ai:claude
+    pub fn next_node_id(&self) -> String {
+        let max_numeric: u32 = self
+            .nodes
+            .iter()
+            .filter_map(|n| n.id.parse::<u32>().ok())
+            .max()
+            .unwrap_or(0);
+        (max_numeric + 1).to_string()
+    }
+
+    /// Get the lowest-numbered free string id of the form `<prefix><N>`
+    /// where N >= 1. Returns `prefix` itself when free; otherwise
+    /// `<prefix>2`, `<prefix>3`, …. Used by STORY-42's auto-suffix flow
+    /// when a preferred id is taken (e.g., "JM" → "JM2").
+    /// trace:STORY-42 | ai:claude
+    pub fn next_free_with_prefix(&self, prefix: &str) -> String {
+        if !self.is_registered(prefix) {
+            return prefix.to_string();
+        }
+        for n in 2..u32::MAX {
+            let candidate = format!("{}{}", prefix, n);
+            if !self.is_registered(&candidate) {
+                return candidate;
+            }
+        }
+        // Practically unreachable.
+        format!("{}-overflow", prefix)
     }
 
     /// Check if a node ID is already registered.
-    pub fn is_registered(&self, node_id: u32) -> bool {
-        self.nodes.iter().any(|n| n.id == node_id)
+    pub fn is_registered(&self, node_id: &str) -> bool {
+        self.nodes.iter().any(|n| n.id.as_str() == node_id)
     }
 
     /// Get a node entry by ID.
-    pub fn get(&self, node_id: u32) -> Option<&NodeRegistryEntry> {
-        self.nodes.iter().find(|n| n.id == node_id)
+    pub fn get(&self, node_id: &str) -> Option<&NodeRegistryEntry> {
+        self.nodes.iter().find(|n| n.id.as_str() == node_id)
     }
 
     /// Register a new node. Returns the assigned node ID.
-    pub fn register(&mut self, user_id: u32, hostname: String) -> u32 {
+    pub fn register(&mut self, user_id: u32, hostname: String) -> String {
         self.register_with_email(user_id, hostname, None)
     }
 
@@ -191,34 +311,50 @@ impl NodeRegistry {
         user_id: u32,
         hostname: String,
         email: Option<String>,
-    ) -> u32 {
+    ) -> String {
         let id = self.next_node_id();
-        self.register_specific(id, user_id, hostname, email);
+        self.register_specific(id.clone(), user_id, hostname, email);
         id
     }
 
-    /// Register at a specific node id. Returns Err if the id is already taken.
+    /// Register at a specific node id. Caller is responsible for checking
+    /// the id isn't already taken (use `is_registered`).
     /// trace:EPIC-1-052 | ai:claude
     pub fn register_specific(
         &mut self,
-        id: u32,
+        id: String,
         user_id: u32,
         hostname: String,
         email: Option<String>,
+    ) {
+        self.register_specific_full(id, user_id, hostname, email, None);
+    }
+
+    /// Register with full provenance — including the absolute clone path
+    /// for STORY-43 (hijack mark-in-place).
+    /// trace:STORY-41 | ai:claude
+    pub fn register_specific_full(
+        &mut self,
+        id: String,
+        user_id: u32,
+        hostname: String,
+        email: Option<String>,
+        clone_path: Option<PathBuf>,
     ) {
         self.nodes.push(NodeRegistryEntry {
             id,
             user_id,
             hostname,
             email,
+            clone_path,
             registered: Utc::now(),
         });
     }
 
     /// Remove a node by id. Returns true if the entry existed.
-    pub fn remove(&mut self, node_id: u32) -> bool {
+    pub fn remove(&mut self, node_id: &str) -> bool {
         let before = self.nodes.len();
-        self.nodes.retain(|n| n.id != node_id);
+        self.nodes.retain(|n| n.id.as_str() != node_id);
         self.nodes.len() != before
     }
 
@@ -312,8 +448,10 @@ impl UserRegistry {
 /// a warning is printed on `aida add`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgreedIdBlock {
-    /// Node that owns this block
-    pub node_id: u32,
+    /// Node that owns this block. Strings as of EPIC-9; numeric ids from
+    /// older stores deserialize as decimal strings. trace:STORY-41 | ai:claude
+    #[serde(deserialize_with = "deserialize_node_id")]
+    pub node_id: String,
     /// Human-readable owner label (e.g., "joe@work")
     pub owner: String,
     /// Hostname at claim time (informational)
@@ -401,13 +539,13 @@ impl BlockRegistry {
 
     /// Find the active (non-exhausted) block for a given node + type prefix.
     /// Returns the index into `self.blocks` if found.
-    pub fn find_active_block(&self, node_id: u32, type_prefix: &str) -> Option<usize> {
+    pub fn find_active_block(&self, node_id: &str, type_prefix: &str) -> Option<usize> {
         let prefix = type_prefix.to_uppercase();
         self.blocks
             .iter()
             .enumerate()
             .find(|(_, b)| {
-                b.node_id == node_id
+                b.node_id.as_str() == node_id
                     && b.type_prefix.to_uppercase() == prefix
                     && !b.is_exhausted()
             })
@@ -445,7 +583,7 @@ impl BlockRegistry {
     /// Append a new block for the given node. Returns the claimed block.
     pub fn claim_block(
         &mut self,
-        node_id: u32,
+        node_id: String,
         owner: String,
         hostname: String,
         type_prefix: String,
@@ -461,7 +599,7 @@ impl BlockRegistry {
     /// trace:FR-1-073 | ai:claude
     pub fn claim_block_with_floor(
         &mut self,
-        node_id: u32,
+        node_id: String,
         owner: String,
         hostname: String,
         type_prefix: String,
@@ -486,7 +624,7 @@ impl BlockRegistry {
 
     /// Dispense the next agreed ID for a node+type, updating the block in-place.
     /// Returns `(id, is_low)` or None if no active block / exhausted.
-    pub fn dispense(&mut self, node_id: u32, type_prefix: &str) -> Option<(String, bool)> {
+    pub fn dispense(&mut self, node_id: &str, type_prefix: &str) -> Option<(String, bool)> {
         let idx = self.find_active_block(node_id, type_prefix)?;
         let block = &mut self.blocks[idx];
         let id = block.dispense()?;
@@ -623,11 +761,13 @@ impl DeploymentMode {
     /// Get the IdMode for the dispenser.
     /// In centralized mode, returns `IdMode::Centralized`.
     /// In distributed mode, requires a node_id (from NodeConfig).
-    pub fn id_mode(&self, node_id: Option<u32>) -> IdMode {
+    pub fn id_mode(&self, node_id: Option<&str>) -> IdMode {
         match self {
             Self::Centralized => IdMode::Centralized,
             Self::Distributed { .. } => IdMode::Distributed {
-                node_id: node_id.expect("distributed mode requires a node_id"),
+                node_id: node_id
+                    .expect("distributed mode requires a node_id")
+                    .to_string(),
             },
         }
     }
@@ -647,11 +787,54 @@ mod tests {
         let id1 = registry.register(1, "laptop".into());
         let id2 = registry.register(1, "workstation".into());
         let id3 = registry.register(2, "alice-dev".into());
-        assert_eq!(id1, 1);
-        assert_eq!(id2, 2);
-        assert_eq!(id3, 3);
-        assert!(registry.is_registered(1));
-        assert!(!registry.is_registered(99));
+        assert_eq!(id1, "1");
+        assert_eq!(id2, "2");
+        assert_eq!(id3, "3");
+        assert!(registry.is_registered("1"));
+        assert!(!registry.is_registered("99"));
+    }
+
+    #[test]
+    fn test_validate_node_id() {
+        // trace:STORY-41 | ai:claude
+        assert!(validate_node_id("JM").is_ok());
+        assert!(validate_node_id("1").is_ok());
+        assert!(validate_node_id("clone-2").is_ok());
+        assert!(validate_node_id("alice_dev").is_ok());
+        assert!(validate_node_id("J").is_ok());
+        assert!(validate_node_id("").is_err());
+        assert!(validate_node_id("-leading-dash").is_err());
+        assert!(validate_node_id("has space").is_err());
+        assert!(validate_node_id("has.dot").is_err());
+        let too_long = "a".repeat(33);
+        assert!(validate_node_id(&too_long).is_err());
+    }
+
+    #[test]
+    fn test_next_free_with_prefix() {
+        // trace:STORY-42 | ai:claude
+        let mut registry = NodeRegistry::default();
+        assert_eq!(registry.next_free_with_prefix("JM"), "JM");
+        registry.register_specific("JM".into(), 1, "imac".into(), None);
+        assert_eq!(registry.next_free_with_prefix("JM"), "JM2");
+        registry.register_specific("JM2".into(), 1, "spock".into(), None);
+        assert_eq!(registry.next_free_with_prefix("JM"), "JM3");
+    }
+
+    #[test]
+    fn test_back_compat_numeric_id_deserializes() {
+        // trace:STORY-41 | ai:claude
+        // Pre-EPIC-9 nodes.toml wrote `id = 1`. Post-EPIC-9 reads it as "1".
+        let toml_str = r#"
+[[nodes]]
+id = 1
+user_id = 5
+hostname = "imac"
+registered = "2026-05-09T00:00:00Z"
+"#;
+        let registry: NodeRegistry = toml::from_str(toml_str).unwrap();
+        assert_eq!(registry.nodes[0].id, "1");
+        assert_eq!(registry.nodes[0].user_id, 5);
     }
 
     #[test]
@@ -695,8 +878,8 @@ mod tests {
         };
         assert!(mode.is_distributed());
         assert_eq!(
-            mode.id_mode(Some(7)),
-            IdMode::Distributed { node_id: 7 }
+            mode.id_mode(Some("7")),
+            IdMode::Distributed { node_id: "7".to_string() }
         );
     }
 
@@ -721,7 +904,7 @@ mod tests {
         let path = dir.path().join("node.toml");
 
         let config = NodeConfig {
-            node_id: 7,
+            node_id: "7".to_string(),
             user_id: 102,
             hostname: "joe-laptop".into(),
             email: Some("joe@example.com".into()),
@@ -730,7 +913,7 @@ mod tests {
         config.save(&path).unwrap();
 
         let loaded = NodeConfig::load(&path).unwrap();
-        assert_eq!(loaded.node_id, 7);
+        assert_eq!(loaded.node_id, "7");
         assert_eq!(loaded.user_id, 102);
         assert_eq!(loaded.hostname, "joe-laptop");
     }
@@ -769,24 +952,24 @@ mod tests {
     #[test]
     fn test_block_registry_claim_and_dispense() {
         let mut registry = BlockRegistry::default();
-        let block = registry.claim_block(2, "joe@work".into(), "workstation".into(), "FR".into(), 100);
+        let block = registry.claim_block("2".into(), "joe@work".into(), "workstation".into(), "FR".into(), 100);
         assert_eq!(block.range_start, 1);
         assert_eq!(block.range_end, 100);
         assert_eq!(block.next, 1);
 
-        let (id, is_low) = registry.dispense(2, "FR").unwrap();
+        let (id, is_low) = registry.dispense("2", "FR").unwrap();
         assert_eq!(id, "FR-1");
         assert!(!is_low);
 
-        let (id2, _) = registry.dispense(2, "FR").unwrap();
+        let (id2, _) = registry.dispense("2", "FR").unwrap();
         assert_eq!(id2, "FR-2");
     }
 
     #[test]
     fn test_block_registry_next_range_start() {
         let mut registry = BlockRegistry::default();
-        registry.claim_block(1, "joe@home".into(), "home".into(), "FR".into(), 100);
-        registry.claim_block(2, "joe@work".into(), "work".into(), "FR".into(), 100);
+        registry.claim_block("1".into(), "joe@home".into(), "home".into(), "FR".into(), 100);
+        registry.claim_block("2".into(), "joe@work".into(), "work".into(), "FR".into(), 100);
 
         // home claims 1..100, work claims 101..200, next start should be 201
         assert_eq!(registry.next_range_start("FR"), 201);
@@ -797,12 +980,12 @@ mod tests {
     #[test]
     fn test_block_exhaustion() {
         let mut registry = BlockRegistry::default();
-        registry.claim_block(1, "a".into(), "h".into(), "FR".into(), 3);
+        registry.claim_block("1".into(), "a".into(), "h".into(), "FR".into(), 3);
 
-        assert_eq!(registry.dispense(1, "FR").unwrap().0, "FR-1");
-        assert_eq!(registry.dispense(1, "FR").unwrap().0, "FR-2");
-        assert_eq!(registry.dispense(1, "FR").unwrap().0, "FR-3");
-        assert!(registry.dispense(1, "FR").is_none()); // exhausted
+        assert_eq!(registry.dispense("1", "FR").unwrap().0, "FR-1");
+        assert_eq!(registry.dispense("1", "FR").unwrap().0, "FR-2");
+        assert_eq!(registry.dispense("1", "FR").unwrap().0, "FR-3");
+        assert!(registry.dispense("1", "FR").is_none()); // exhausted
         assert_eq!(registry.blocks[0].remaining(), 0);
         assert!(registry.blocks[0].is_exhausted());
     }
@@ -810,14 +993,14 @@ mod tests {
     #[test]
     fn test_block_low_threshold() {
         let mut registry = BlockRegistry::default();
-        registry.claim_block(1, "a".into(), "h".into(), "FR".into(), 15);
+        registry.claim_block("1".into(), "a".into(), "h".into(), "FR".into(), 15);
 
         // Consume until 5 remain — should trigger is_low
         for _ in 0..5 {
-            registry.dispense(1, "FR");
+            registry.dispense("1", "FR");
         }
         // 10 remain at this point — exactly at threshold, is_low = true
-        let (_, is_low) = registry.dispense(1, "FR").unwrap();
+        let (_, is_low) = registry.dispense("1", "FR").unwrap();
         assert!(is_low);
     }
 
@@ -828,13 +1011,13 @@ mod tests {
         let path = dir.path().join("blocks.yaml");
 
         let mut registry = BlockRegistry::default();
-        registry.claim_block(2, "joe@work".into(), "work".into(), "FR".into(), 100);
+        registry.claim_block("2".into(), "joe@work".into(), "work".into(), "FR".into(), 100);
         registry.save(&path).unwrap();
 
         let loaded = BlockRegistry::load(&path).unwrap();
         assert_eq!(loaded.blocks.len(), 1);
         assert_eq!(loaded.blocks[0].range_start, 1);
         assert_eq!(loaded.blocks[0].range_end, 100);
-        assert_eq!(loaded.blocks[0].node_id, 2);
+        assert_eq!(loaded.blocks[0].node_id, "2");
     }
 }

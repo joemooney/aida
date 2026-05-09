@@ -162,16 +162,16 @@ impl GitBackend {
             return;
         }
         let oplog_path = self.root.join("oplog.yaml");
-        let node_id = self.dispenser.as_ref()
+        let node_id: String = self.dispenser.as_ref()
             .and_then(|d| d.state().ok())
             .map(|s| match s.mode {
                 crate::dispenser::IdMode::Distributed { node_id } => node_id,
-                _ => 0,
+                _ => "0".to_string(),
             })
-            .unwrap_or(0);
+            .unwrap_or_else(|| "0".to_string());
 
         if let Ok(mut log) = crate::oplog::OpLog::load(&oplog_path) {
-            if log.node_id == 0 && node_id > 0 {
+            if log.node_id == "0" && node_id != "0" {
                 log.node_id = node_id;
             }
             log.append(target_id, "aida".into(), kind);
@@ -883,7 +883,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
 
-        let dispenser = Arc::new(MemoryDispenser::new(IdMode::Distributed { node_id: 7 }));
+        let dispenser = Arc::new(MemoryDispenser::new(IdMode::Distributed { node_id: "7".to_string() }));
         let handle = DispenserHandle(dispenser);
         let backend = GitBackend::new(&root).unwrap().with_dispenser(handle);
 

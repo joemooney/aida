@@ -1042,13 +1042,16 @@ fn read_id_format_policy(project_dir: &std::path::Path) -> aida_core::IdFormatPo
 }
 
 /// Read node_id from the store's node.toml; defaults to 1 for unregistered nodes.
-fn load_node_id(store_path: &std::path::Path) -> u32 {
+fn load_node_id(store_path: &std::path::Path) -> String {
     use aida_core::NodeConfig;
     let node_config_path = store_path.join(".aida").join("node.toml");
     if node_config_path.exists() {
-        NodeConfig::load(&node_config_path).map(|c| c.node_id).unwrap_or(1)
+        NodeConfig::load(&node_config_path)
+            .map(|c| c.node_id)
+            .unwrap_or_else(|_| "1".to_string())
     } else {
-        // Fall back to dispenser.toml node_id
+        // Fall back to dispenser.toml node_id (still a stringified-numeric
+        // for legacy stores written before EPIC-9). trace:STORY-41
         let dispenser_path = store_path.join(".aida").join("dispenser.toml");
         if dispenser_path.exists() {
             if let Ok(content) = std::fs::read_to_string(&dispenser_path) {
@@ -1056,15 +1059,16 @@ fn load_node_id(store_path: &std::path::Path) -> u32 {
                     let line = line.trim();
                     if line.starts_with("node_id") {
                         if let Some(val) = line.split('=').nth(1) {
-                            if let Ok(id) = val.trim().parse::<u32>() {
-                                return id;
+                            let trimmed = val.trim().trim_matches('"');
+                            if !trimmed.is_empty() {
+                                return trimmed.to_string();
                             }
                         }
                     }
                 }
             }
         }
-        1
+        "1".to_string()
     }
 }
 
@@ -1093,11 +1097,12 @@ fn load_dispenser(
     let node_config_path = aida_dir.join("node.toml");
     let dispenser_path = aida_dir.join("dispenser.toml");
 
-    // Load node_id from config, or default to 1 for local-only
-    let node_id = if node_config_path.exists() {
+    // Load node_id from config, or default to "1" for local-only.
+    // trace:STORY-41 | ai:claude
+    let node_id: String = if node_config_path.exists() {
         NodeConfig::load(&node_config_path)?.node_id
     } else {
-        1 // default for unregistered local node
+        "1".to_string() // default for unregistered local node
     };
 
     let mode = IdMode::Distributed { node_id };
@@ -1316,7 +1321,7 @@ fn handle_git_backend_command(
                     };
 
                     if let Ok(mut registry) = aida_core::BlockRegistry::load(&blocks_path) {
-                        match registry.find_active_block(node_id, &type_prefix) {
+                        match registry.find_active_block(&node_id, &type_prefix) {
                             None => {
                                 // No block for this type. Under `blocks-only`
                                 // this is fatal — the project requires every
@@ -1339,13 +1344,13 @@ fn handle_git_backend_command(
                                 );
                             }
                             Some(_) => {
-                                if let Some((agreed_id, is_low)) = registry.dispense(node_id, &type_prefix) {
+                                if let Some((agreed_id, is_low)) = registry.dispense(&node_id, &type_prefix) {
                                     if is_low {
                                         eprintln!(
                                             "{} {} block running low ({} remaining). Run `aida db block claim --type {}` soon.",
                                             "WARNING:".yellow().bold(),
                                             type_prefix,
-                                            registry.find_active_block(node_id, &type_prefix)
+                                            registry.find_active_block(&node_id, &type_prefix)
                                                 .map(|i| registry.blocks[i].remaining())
                                                 .unwrap_or(0),
                                             type_prefix
@@ -2323,7 +2328,7 @@ fn handle_init_distributed_worktree(
                     email.as_deref().unwrap_or("-")
                 );
                 if let Ok(blocks) =
-                    auto_allocate_initial_blocks(&store_path, new_id, &hn, email.as_deref())
+                    auto_allocate_initial_blocks(&store_path, &new_id, &hn, email.as_deref())
                 {
                     if !blocks.is_empty() {
                         println!(
@@ -2584,7 +2589,7 @@ fn handle_init_post_clone(
 
     // Auto-allocate initial blocks for the common types (Phase 3).
     // trace:FR-1-073 | ai:claude
-    match auto_allocate_initial_blocks(&store_path, new_id, &hn, email.as_deref()) {
+    match auto_allocate_initial_blocks(&store_path, &new_id, &hn, email.as_deref()) {
         Ok(blocks) if !blocks.is_empty() => {
             println!(
                 "  Auto-allocated {} block{}: {}",
@@ -4228,7 +4233,7 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
                 // trace:FR-1-073 | ai:claude
                 let counter_floor = read_agreed_counter(store_path, &type_prefix);
                 let block = registry.claim_block_with_floor(
-                    node_id,
+                    node_id.clone(),
                     std::env::var("USER").unwrap_or_else(|_| "unknown".into()),
                     hostname(),
                     type_prefix.clone(),
@@ -4466,7 +4471,7 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
             );
             println!("{}", "─".repeat(100));
             for n in &registry.nodes {
-                let marker = if Some(n.id) == current_id { "*" } else { " " };
+                let marker = if current_id.as_deref() == Some(n.id.as_str()) { "*" } else { " " };
                 let email = n.email.clone().unwrap_or_else(|| "-".into());
                 let when = n.registered.format("%Y-%m-%d %H:%M").to_string();
                 println!(
@@ -4478,8 +4483,8 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
 
         NodeCommand::Show { id } => {
             let registry = NodeRegistry::load(&registry_path).unwrap_or_default();
-            let target_id = match id {
-                Some(i) => *i,
+            let target_id: String = match id {
+                Some(i) => i.clone(),
                 None => {
                     if !node_config_path.exists() {
                         anyhow::bail!(
@@ -4491,7 +4496,7 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
                 }
             };
 
-            let entry = registry.get(target_id).ok_or_else(|| {
+            let entry = registry.get(&target_id).ok_or_else(|| {
                 anyhow::anyhow!("Node {} is not in the shared registry", target_id)
             })?;
 
@@ -4544,7 +4549,7 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
 
             let new_id = aida_core::git_ops::register_node_full(
                 store_path,
-                *requested_id,
+                requested_id.clone(),
                 user_id,
                 &hn,
                 email.clone(),
@@ -4566,7 +4571,7 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
             let project_dir = std::env::current_dir().unwrap_or_default();
             let id_policy = read_id_format_policy(&project_dir);
             if id_policy.uses_blocks() {
-                match auto_allocate_initial_blocks(store_path, new_id, &hn, email.as_deref()) {
+                match auto_allocate_initial_blocks(store_path, &new_id, &hn, email.as_deref()) {
                     Ok(blocks) if !blocks.is_empty() => {
                         println!(
                             "  Auto-allocated {} block{}: {}",
@@ -4597,7 +4602,7 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
 
         NodeCommand::Release { id, yes } => {
             let registry = NodeRegistry::load(&registry_path).unwrap_or_default();
-            let entry = registry.get(*id).ok_or_else(|| {
+            let entry = registry.get(id).ok_or_else(|| {
                 anyhow::anyhow!("Node {} is not in the shared registry", id)
             })?;
 
@@ -4621,7 +4626,7 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
                 }
             }
 
-            let removed = aida_core::git_ops::unregister_node(store_path, *id)?;
+            let removed = aida_core::git_ops::unregister_node(store_path, id)?;
             if removed {
                 println!("{} Node {} removed from registry.", "".green(), id);
             } else {
@@ -4658,7 +4663,7 @@ const PHASE3_AUTO_ALLOC_TYPES: &[&str] = &[
 /// trace:FR-1-073 | ai:claude
 fn auto_allocate_initial_blocks(
     store_path: &std::path::Path,
-    node_id: u32,
+    node_id: &str,
     hn: &str,
     email: Option<&str>,
 ) -> Result<Vec<String>> {
@@ -4679,7 +4684,7 @@ fn auto_allocate_initial_blocks(
 /// trace:FR-1-073 | ai:claude
 fn auto_allocate_block_for_type(
     store_path: &std::path::Path,
-    node_id: u32,
+    node_id: &str,
     hn: &str,
     email: Option<&str>,
     type_prefix: &str,
@@ -4706,7 +4711,7 @@ fn auto_allocate_block_for_type(
 
         let counter_floor = read_agreed_counter(store_path, type_prefix);
         let block = registry.claim_block_with_floor(
-            node_id,
+            node_id.to_string(),
             owner.clone(),
             hn.to_string(),
             type_prefix.to_string(),

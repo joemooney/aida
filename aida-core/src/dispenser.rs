@@ -16,14 +16,41 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// The operating mode for ID generation.
+///
+/// Node IDs were `u32` pre-EPIC-9; they're now `String` so personal
+/// identities like `"JM"` are first-class. Numeric ids deserialize
+/// back-compat as decimal strings (`"1"`, `"7"`).
+/// trace:STORY-41 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum IdMode {
     /// Centralized mode: IDs are `{TYPE}-{SEQ}` (e.g., `FR-001`).
     /// Used when a central database is always available.
     Centralized,
-    /// Distributed mode: IDs are `{TYPE}-{NODEID}-{SEQ}` (e.g., `FR-7-048`).
-    /// Used for offline-capable, multi-node deployments.
-    Distributed { node_id: u32 },
+    /// Distributed mode: IDs are `{TYPE}-{NODEID}-{SEQ}` (e.g., `FR-JM-048`
+    /// or `FR-7-048`). Used for offline-capable, multi-node deployments.
+    Distributed {
+        #[serde(deserialize_with = "deserialize_node_id_for_idmode")]
+        node_id: String,
+    },
+}
+
+/// Local re-of the back-compat deserializer (so `IdMode::Distributed`
+/// reads pre-EPIC-9 dispenser state where `node_id` was a u64).
+/// trace:STORY-41 | ai:claude
+fn deserialize_node_id_for_idmode<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Repr {
+        Str(String),
+        Num(u64),
+    }
+    Ok(match Repr::deserialize(deserializer)? {
+        Repr::Str(s) => s,
+        Repr::Num(n) => n.to_string(),
+    })
 }
 
 /// Current state of the dispenser — all counters for a given node.
@@ -300,11 +327,16 @@ impl SqliteDispenser {
         })
     }
 
-    /// Get the node_id for this dispenser (0 for centralized).
-    fn node_id(&self) -> u32 {
+    /// Get the node_id for this dispenser ("0" for centralized).
+    /// Pre-EPIC-9 stored this as i64; the column was migrated to TEXT
+    /// when node ids became strings. Numeric ids continue to work via
+    /// decimal-string repr (legacy dispenser.db rows pre-migration are
+    /// out of scope — this backend is archived).
+    /// trace:STORY-41 | ai:claude
+    fn node_id(&self) -> String {
         match &self.mode {
-            IdMode::Centralized => 0,
-            IdMode::Distributed { node_id } => *node_id,
+            IdMode::Centralized => "0".to_string(),
+            IdMode::Distributed { node_id } => node_id.clone(),
         }
     }
 }
@@ -325,7 +357,7 @@ impl Dispenser for SqliteDispenser {
                  ON CONFLICT (node_id, type_prefix)
                  DO UPDATE SET next_val = next_val + 1
                  RETURNING next_val",
-                rusqlite::params![node_id as i64, type_upper],
+                rusqlite::params![node_id.clone(), type_upper],
                 |row| row.get(0),
             )
             .map_err(|e| anyhow::anyhow!("SQLite dispenser next() failed: {}", e));
@@ -344,7 +376,7 @@ impl Dispenser for SqliteDispenser {
             .query_row(
                 "SELECT next_val FROM dispenser_sequences
                  WHERE node_id = ?1 AND type_prefix = ?2",
-                rusqlite::params![node_id as i64, type_upper],
+                rusqlite::params![node_id.clone(), type_upper],
                 |row| row.get(0),
             )
             .optional()?;
@@ -362,7 +394,7 @@ impl Dispenser for SqliteDispenser {
         )?;
 
         let mut sequences = HashMap::new();
-        let rows = stmt.query_map(rusqlite::params![node_id as i64], |row| {
+        let rows = stmt.query_map(rusqlite::params![node_id.clone()], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, u32>(1)?))
         })?;
 
@@ -398,7 +430,7 @@ mod tests {
 
     #[test]
     fn test_memory_dispenser_distributed() {
-        let d = MemoryDispenser::new(IdMode::Distributed { node_id: 7 });
+        let d = MemoryDispenser::new(IdMode::Distributed { node_id: "7".to_string() });
 
         assert_eq!(d.next_id("FR").unwrap(), "FR-7-001");
         assert_eq!(d.next_id("FR").unwrap(), "FR-7-002");
@@ -417,13 +449,13 @@ mod tests {
 
     #[test]
     fn test_state_snapshot() {
-        let d = MemoryDispenser::new(IdMode::Distributed { node_id: 42 });
+        let d = MemoryDispenser::new(IdMode::Distributed { node_id: "42".to_string() });
         d.next("FR").unwrap();
         d.next("FR").unwrap();
         d.next("FEAT").unwrap();
 
         let state = d.state().unwrap();
-        assert_eq!(state.mode, IdMode::Distributed { node_id: 42 });
+        assert_eq!(state.mode, IdMode::Distributed { node_id: "42".to_string() });
         assert_eq!(state.sequences.get("FR"), Some(&2));
         assert_eq!(state.sequences.get("FEAT"), Some(&1));
     }
@@ -442,14 +474,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("dispenser.toml");
 
-        let d = FileDispenser::open(path.clone(), IdMode::Distributed { node_id: 7 }).unwrap();
+        let d = FileDispenser::open(path.clone(), IdMode::Distributed { node_id: "7".to_string() }).unwrap();
 
         assert_eq!(d.next("FR").unwrap(), 1);
         assert_eq!(d.next("FR").unwrap(), 2);
         assert_eq!(d.next_id("FR").unwrap(), "FR-7-003");
 
         // Reopen — state should persist
-        let d2 = FileDispenser::open(path, IdMode::Distributed { node_id: 7 }).unwrap();
+        let d2 = FileDispenser::open(path, IdMode::Distributed { node_id: "7".to_string() }).unwrap();
         assert_eq!(d2.next("FR").unwrap(), 4);
         assert_eq!(d2.peek("FEAT").unwrap(), 1);
     }
@@ -460,7 +492,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("dispenser.db");
 
-        let d = SqliteDispenser::open(path, IdMode::Distributed { node_id: 7 }).unwrap();
+        let d = SqliteDispenser::open(path, IdMode::Distributed { node_id: "7".to_string() }).unwrap();
 
         assert_eq!(d.next("FR").unwrap(), 1);
         assert_eq!(d.next("FR").unwrap(), 2);
@@ -480,7 +512,7 @@ mod tests {
 
         // First session
         {
-            let d = SqliteDispenser::open(path.clone(), IdMode::Distributed { node_id: 3 }).unwrap();
+            let d = SqliteDispenser::open(path.clone(), IdMode::Distributed { node_id: "3".to_string() }).unwrap();
             assert_eq!(d.next("FR").unwrap(), 1);
             assert_eq!(d.next("FR").unwrap(), 2);
             assert_eq!(d.next("BUG").unwrap(), 1);
@@ -488,7 +520,7 @@ mod tests {
 
         // Second session — state persisted
         {
-            let d = SqliteDispenser::open(path, IdMode::Distributed { node_id: 3 }).unwrap();
+            let d = SqliteDispenser::open(path, IdMode::Distributed { node_id: "3".to_string() }).unwrap();
             assert_eq!(d.next("FR").unwrap(), 3);
             assert_eq!(d.peek("BUG").unwrap(), 2);
             assert_eq!(d.next_id("BUG").unwrap(), "BUG-3-002");
@@ -526,13 +558,13 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("dispenser.db");
 
-        let d = SqliteDispenser::open(path, IdMode::Distributed { node_id: 42 }).unwrap();
+        let d = SqliteDispenser::open(path, IdMode::Distributed { node_id: "42".to_string() }).unwrap();
         d.next("FR").unwrap();
         d.next("FR").unwrap();
         d.next("FEAT").unwrap();
 
         let state = d.state().unwrap();
-        assert_eq!(state.mode, IdMode::Distributed { node_id: 42 });
+        assert_eq!(state.mode, IdMode::Distributed { node_id: "42".to_string() });
         assert_eq!(state.sequences.get("FR"), Some(&2));
         assert_eq!(state.sequences.get("FEAT"), Some(&1));
     }
@@ -546,7 +578,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("dispenser.db");
 
-        let d = Arc::new(SqliteDispenser::open(path, IdMode::Distributed { node_id: 1 }).unwrap());
+        let d = Arc::new(SqliteDispenser::open(path, IdMode::Distributed { node_id: "1".to_string() }).unwrap());
 
         let mut handles = vec![];
         for _ in 0..10 {
