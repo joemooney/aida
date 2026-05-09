@@ -3,10 +3,10 @@ spec_id: BUG-31
 agreed_id: BUG-31
 title: Dispenser allocates IDs that already exist in the store (BUG-25/28/29/30 collisions)
 description: 'Filing 6 bugs in this session, the dispenser handed out BUG-25, BUG-26, BUG-27, BUG-28, BUG-29, BUG-30 — but BUG-25, BUG-28, BUG-29, BUG-30 ALREADY existed in the store from earlier sessions. Two different requirements now share the same canonical spec_id, breaking `aida show <id>` (only finds the most recent). Block dispenser''s `next` counter doesn''t validate against existing agreed-IDs in the store. Fix: when dispensing, scan existing IDs in the type prefix and skip any that''s already taken, OR rebuild the counter from the actual max(spec_id) at dispense time. Surfaced 2026-05-09 walkthrough.'
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T20:49:18.007735883Z
-modified_at: 2026-05-09T20:49:18.007735883Z
+modified_at: 2026-05-09T20:54:16.814799037Z
 req_type: Bug
