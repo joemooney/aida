@@ -7,12 +7,12 @@ description: |-
   Either: write a real templates/skills/aida-status.md (and slim the command stub to point at it), or document that aida-status is intentionally inline and update TASK-1-016 to whitelist it.
 
   Discovered while writing TASK-1-030 (/aida-queue) — that skill matches the convention, this one doesn't.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-05T00:23:39.732313620Z
-modified_at: 2026-05-05T00:23:48.524086022Z
+modified_at: 2026-05-09T20:22:42.784348151Z
 req_type: Task
 tags:
 - parity
