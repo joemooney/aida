@@ -2275,6 +2275,76 @@ fn handle_init_distributed_worktree(
     git_ops::add(&store_path, &["objects"])?;
     git_ops::commit(&store_path, "chore: initialize AIDA distributed store")?;
 
+    // Auto-push to origin/<branch_name> if origin exists, so subsequent
+    // node-acquire / db-sync work without a manual `git push -u`. Skipped
+    // silently when there's no origin (single-machine projects) or when
+    // the push fails (offline, auth, etc.) — failure isn't fatal here.
+    // trace:BUG-23 | ai:claude
+    let mut origin_pushed = false;
+    if git_ops::has_remote(&cwd, "origin") {
+        let push_result = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&store_path)
+            .args(["push", "-u", "origin", branch_name])
+            .output();
+        match push_result {
+            Ok(out) if out.status.success() => {
+                origin_pushed = true;
+                println!("  {} pushed orphan branch to origin/{}", "Done".green(), branch_name);
+            }
+            _ => {
+                eprintln!(
+                    "  {} could not push orphan branch to origin/{} \
+                     (run `git -C {} push -u origin {}` later)",
+                    "Note:".dimmed(),
+                    branch_name,
+                    worktree_dir,
+                    branch_name
+                );
+            }
+        }
+    }
+
+    // Auto-acquire a node id for this clone so nodes.toml has the entry
+    // from day one (instead of relying on the implicit-node-1 fallback).
+    // Only runs when origin was pushed successfully — without origin, the
+    // CAS push loop would fail. Single-machine setups skip silently and
+    // can run `aida node acquire` later. trace:EPIC-9 Story 1 | ai:claude
+    if origin_pushed {
+        let hn = hostname();
+        let email = git_ops::git_config_get("user.email").ok();
+        match git_ops::register_node_full(&store_path, None, 1, &hn, email.clone()) {
+            Ok(new_id) => {
+                println!(
+                    "  {} acquired node id {} (hostname={}, email={})",
+                    "Done".green(),
+                    new_id,
+                    hn,
+                    email.as_deref().unwrap_or("-")
+                );
+                if let Ok(blocks) =
+                    auto_allocate_initial_blocks(&store_path, new_id, &hn, email.as_deref())
+                {
+                    if !blocks.is_empty() {
+                        println!(
+                            "  {} auto-allocated {} initial block{}",
+                            "Done".green(),
+                            blocks.len(),
+                            if blocks.len() == 1 { "" } else { "s" }
+                        );
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!(
+                    "  {} could not auto-acquire node id: {}. Run `aida node acquire` later.",
+                    "Note:".dimmed(),
+                    e
+                );
+            }
+        }
+    }
+
     // Add .aida-store to .gitignore on main branch
     let gitignore_path = cwd.join(".gitignore");
     let gitignore_entry = format!("\n# AIDA distributed store (orphan branch worktree)\n{}/\n", worktree_dir);

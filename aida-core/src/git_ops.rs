@@ -264,6 +264,16 @@ pub fn is_remote_reachable(repo: &Path, remote: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// True when the repo has the given remote configured. Doesn't check
+/// reachability — that's `is_remote_reachable`. Useful for "should we
+/// even attempt a push?" decisions where unreachable-but-configured is
+/// still a useful signal. trace:BUG-23 | ai:claude
+pub fn has_remote(repo: &Path, remote: &str) -> bool {
+    git(repo, &["remote", "get-url", remote])
+        .map(|r| r.success)
+        .unwrap_or(false)
+}
+
 /// Check whether `<remote>/<branch>` exists on the remote, without fetching.
 /// Returns false on any git error (offline, unreachable remote, etc.) so
 /// callers can treat absence and unreachability the same.
