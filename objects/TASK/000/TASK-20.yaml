@@ -13,12 +13,12 @@ description: |-
   ## Depends on
 
   - The hook itself only does anything when AIDA_SESSION_ROLE is set, so it's safe to ship even when the user isn't using roles.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-04T19:05:40.993369591Z
-modified_at: 2026-05-04T19:05:40.993369591Z
+modified_at: 2026-05-09T20:16:50.988290660Z
 req_type: Task
 tags:
 - hooks
