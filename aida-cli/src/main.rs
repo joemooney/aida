@@ -1641,6 +1641,54 @@ fn handle_git_backend_command(
                 }
             }
         }
+        // SPIKE-2: edit/delete an existing comment on a git-backed store.
+        // Uses prefix-friendly resolution so users can pass the leading 8
+        // chars of the UUID instead of the full 36-char form.
+        // trace:SPIKE-2 | ai:claude
+        Command::Comment(CommentCommand::Edit {
+            req_id,
+            comment_id,
+            content,
+            interactive,
+        }) => {
+            record_role_activity(req_id, "comment");
+            let mut req = backend
+                .get_requirement_by_spec_id(req_id)?
+                .ok_or_else(|| not_found::requirement_not_found(req_id, Some(store_path)))?;
+            let comment_uuid = resolve_comment_uuid(&req, comment_id)?;
+
+            let new_content = if *interactive || content.is_none() {
+                let existing = req
+                    .find_comment_mut(&comment_uuid)
+                    .map(|c| c.content.clone())
+                    .unwrap_or_default();
+                inquire::Editor::new("Edit comment")
+                    .with_predefined_text(&existing)
+                    .prompt()
+                    .context("Editor cancelled")?
+            } else {
+                content.clone().unwrap()
+            };
+
+            let comment = req
+                .find_comment_mut(&comment_uuid)
+                .context("Comment not found (vanished between resolve and edit?)")?;
+            comment.content = new_content;
+            comment.touch();
+            req.modified_at = chrono::Utc::now();
+            backend.update_requirement(&req)?;
+            println!("{} comment {} on {}", "Updated".green(), comment_uuid, req_id);
+        }
+        Command::Comment(CommentCommand::Delete { req_id, comment_id }) => {
+            record_role_activity(req_id, "comment");
+            let mut req = backend
+                .get_requirement_by_spec_id(req_id)?
+                .ok_or_else(|| not_found::requirement_not_found(req_id, Some(store_path)))?;
+            let comment_uuid = resolve_comment_uuid(&req, comment_id)?;
+            req.delete_comment(&comment_uuid)?;
+            backend.update_requirement(&req)?;
+            println!("{} comment {} from {}", "Deleted".green(), comment_uuid, req_id);
+        }
         Command::Db(DbCommand::Path) => {
             // trace:FR-1-076 | ai:claude
             println!("{}", store_path.display());
@@ -9204,8 +9252,18 @@ fn print_comment(comment: &Comment, indent: usize) {
     let indent_str = "  ".repeat(indent);
     println!();
     println!("{}{}:", indent_str, comment.id.to_string().yellow());
+    let edited_marker = if comment.modified_at > comment.created_at {
+        format!(
+            " (edited {})",
+            comment.modified_at.format("%Y-%m-%d %H:%M")
+        )
+        .dimmed()
+        .to_string()
+    } else {
+        String::new()
+    };
     println!(
-        "{}  {} {} at {}",
+        "{}  {} {} at {}{}",
         indent_str,
         "By:".dimmed(),
         comment.author.cyan(),
@@ -9213,7 +9271,8 @@ fn print_comment(comment: &Comment, indent: usize) {
             .created_at
             .format("%Y-%m-%d %H:%M")
             .to_string()
-            .dimmed()
+            .dimmed(),
+        edited_marker,
     );
     println!("{}  {}", indent_str, comment.content);
 
@@ -9222,6 +9281,53 @@ fn print_comment(comment: &Comment, indent: usize) {
             print_comment(reply, indent + 1);
         }
     }
+}
+
+/// Resolve a user-supplied comment identifier into a concrete Uuid by
+/// matching against the requirement's comment tree. Accepts:
+/// - a full UUID string (e.g., `019df478-7a34-7f92-8d46-b00e0d1eeda7`)
+/// - a UUID prefix (e.g., `019df478`) — must uniquely match one comment
+/// Returns an error on no-match or ambiguous-prefix.
+/// trace:SPIKE-2 | ai:claude
+fn resolve_comment_uuid(req: &aida_core::Requirement, query: &str) -> Result<Uuid> {
+    if let Ok(parsed) = Uuid::parse_str(query) {
+        // Verify the exact UUID exists in the tree, even if parse succeeded.
+        if collect_comment_ids(&req.comments)
+            .into_iter()
+            .any(|id| id == parsed)
+        {
+            return Ok(parsed);
+        }
+        anyhow::bail!("No comment with id {} on this requirement", parsed);
+    }
+
+    let q = query.to_lowercase();
+    let matches: Vec<Uuid> = collect_comment_ids(&req.comments)
+        .into_iter()
+        .filter(|id| id.to_string().to_lowercase().starts_with(&q))
+        .collect();
+    match matches.len() {
+        0 => anyhow::bail!(
+            "No comment matches '{}' on this requirement (use `aida comment list <REQ>` to see ids)",
+            query
+        ),
+        1 => Ok(matches[0]),
+        n => anyhow::bail!(
+            "Ambiguous comment prefix '{}' — matches {} comments. Use a longer prefix.",
+            query,
+            n
+        ),
+    }
+}
+
+/// Walk the (potentially nested) comment tree and collect every comment id.
+fn collect_comment_ids(comments: &[Comment]) -> Vec<Uuid> {
+    let mut out = Vec::new();
+    for c in comments {
+        out.push(c.id);
+        out.extend(collect_comment_ids(&c.replies));
+    }
+    out
 }
 
 fn edit_comment_interactive(storage: &Storage, req_id: &str, comment_id: &str) -> Result<()> {
