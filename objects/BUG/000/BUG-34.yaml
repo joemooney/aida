@@ -1,0 +1,12 @@
+id: 019e0e84-6136-7153-bd1d-615cd44a81a0
+spec_id: BUG-34
+agreed_id: BUG-34
+title: '[test] dispense skip verification'
+description: ''
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-09T20:53:37.206205197Z
+modified_at: 2026-05-09T20:53:37.206205197Z
+req_type: Bug
