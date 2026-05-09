@@ -8,12 +8,9 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T18:10:07.033280927Z
-modified_at: 2026-05-09T18:10:07.033280927Z
+modified_at: 2026-05-09T22:41:45.360581146Z
 req_type: Vision
 relationships:
-- rel_type: Child
-  target_id: 019e0ee6-7b92-75f3-8229-acd705dc9461
-  created_at: 2026-05-09T22:40:48.416705230Z
 - rel_type: Parent
   target_id: 019e0ee7-1c74-71d0-ae38-d7e9652a6cb1
   created_at: 2026-05-09T22:41:28.585839737Z
