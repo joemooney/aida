@@ -6,4 +6,12 @@ blocks:
   range_start: 1
   range_end: 100
   next: 2
-  allocated_at: 2026-05-05 21:10:59.226465+00:00
+  allocated_at: 2026-05-05T21:10:59.226465Z
+- node_id: 3
+  owner: joe.mooney@gmail.com
+  hostname: imac
+  type_prefix: FR
+  range_start: 101
+  range_end: 200
+  next: 101
+  allocated_at: 2026-05-09T01:36:04.174206295Z
