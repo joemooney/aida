@@ -1309,6 +1309,7 @@ fn handle_git_backend_command(
             owner,
             tags,
             prefix,
+            parent,
             ..
         } => {
             // trace:BUG-17 | ai:claude
@@ -1485,6 +1486,52 @@ fn handle_git_backend_command(
                 );
                 if let Some(sid) = last.spec_id.as_deref() {
                     record_role_activity(sid, "add");
+                }
+
+                // FR-215: --parent <id> establishes a parent relationship
+                // in the same shot. Resolve the parent (spec_id or uuid),
+                // append a Parent relationship to both reqs, persist.
+                // trace:FR-215 | ai:claude
+                if let Some(parent_str) = parent {
+                    use aida_core::models::{Relationship, RelationshipType};
+                    let parent_req = backend
+                        .get_requirement_by_spec_id(parent_str)?
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "parent `{}` not found — child req {} created but \
+                                 the parent relationship was NOT recorded",
+                                parent_str,
+                                last.spec_id.as_deref().unwrap_or("?")
+                            )
+                        })?;
+                    let mut child = last.clone();
+                    let parent_uuid = parent_req.id;
+                    let child_uuid = child.id;
+                    // RelationshipType is "I am X to target", so on the
+                    // new (child) req we record `Child` pointing at the
+                    // parent's uuid, and on the parent we record `Parent`
+                    // pointing at the child's uuid. trace:FR-215
+                    let now = chrono::Utc::now();
+                    child.relationships.push(Relationship {
+                        target_id: parent_uuid,
+                        rel_type: RelationshipType::Child,
+                        created_at: Some(now),
+                        created_by: None,
+                    });
+                    backend.update_requirement(&child)?;
+                    let mut parent_mut = parent_req.clone();
+                    parent_mut.relationships.push(Relationship {
+                        target_id: child_uuid,
+                        rel_type: RelationshipType::Parent,
+                        created_at: Some(now),
+                        created_by: None,
+                    });
+                    backend.update_requirement(&parent_mut)?;
+                    println!(
+                        "  Linked: {} → parent of {}",
+                        parent_req.spec_id.as_deref().unwrap_or("?"),
+                        last.spec_id.as_deref().unwrap_or("?")
+                    );
                 }
             }
         }
