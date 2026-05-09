@@ -1,0 +1,28 @@
+id: 019e0a7e-77c5-7862-9f72-92fef50cab70
+spec_id: FR-1-070
+title: 'aida list: hide origin id by default; --show-origin to surface; rename column to Origin ID'
+description: |-
+  ## Problem
+
+  \`aida list\` showed both the canonical id (agreed_id when present, else spec_id) and the origin id (always spec_id) in two FR-NNN-shaped columns by default. Three issues:
+
+  1. The "Node ID" header was wrong — for legacy reqs it's the original FR-0153-format spec_id, not a node-namespaced FR-1-053.
+  2. Two FR-NNN-shaped columns made eyeballing and grepping ambiguous (a number could appear in either column for unrelated reqs).
+  3. The origin column has no value for most reads — once an agreed_id exists, that's the canonical handle.
+
+  ## Solution
+
+  Default rendering shows one ID column with the canonical id + the existing Type/Status/Priority/Title columns. New \`--show-origin\` (alias \`-v\`) opt-in flag brings back the origin column, dimmed when redundant (when origin == canonical). Header renamed "Node ID" → "Origin ID" in both \`aida list\` and \`aida show\`.
+
+  Trace: FR-1-071. Shipped in commit (pending).
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-09T02:08:40.901745992Z
+modified_at: 2026-05-09T02:08:40.901745992Z
+req_type: Functional
+tags:
+- display
+- list
+- ux
