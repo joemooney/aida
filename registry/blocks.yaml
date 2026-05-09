@@ -39,3 +39,11 @@ blocks:
   range_end: 108
   next: 9
   allocated_at: 2026-05-09T04:40:34.146191208Z
+- node_id: 1
+  owner: joe
+  hostname: imac
+  type_prefix: STORY
+  range_start: 41
+  range_end: 140
+  next: 41
+  allocated_at: 2026-05-09T04:40:37.967307234Z
