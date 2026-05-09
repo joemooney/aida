@@ -28,12 +28,12 @@ description: |
 
   - `aida node acquire --reclaim` to reverse a hijack — file as follow-up
   - Cross-host hijack notification (we never claim to detect that)
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T19:13:20.150137092Z
-modified_at: 2026-05-09T19:13:20.150137092Z
+modified_at: 2026-05-09T20:08:01.862978787Z
 req_type: Story
 tags:
 - hijack
