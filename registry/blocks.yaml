@@ -23,3 +23,11 @@ blocks:
   range_end: 300
   next: 201
   allocated_at: 2026-05-09T01:39:32.960185276Z
+- node_id: 5
+  owner: joe.mooney@gmail.com
+  hostname: imac
+  type_prefix: FR
+  range_start: 301
+  range_end: 400
+  next: 301
+  allocated_at: 2026-05-09T01:39:39.278638037Z
