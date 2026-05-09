@@ -1,0 +1,12 @@
+id: 019e0ec1-de27-7ca1-a553-be5dacad7b7e
+spec_id: BUG-43
+agreed_id: BUG-43
+title: .claude/AIDA.md flagged as STALE on a fresh init even though it's template-category and just got written
+description: On a fresh `aida init`, `aida status` reports .claude/AIDA.md as drifted from the embedded template — but it WAS the embedded template moments ago. Likely a write-vs-read checksum scope mismatch (BUG-29-ish) for files containing YAML frontmatter or some other artifact. Surfaced 2026-05-09 walkthrough.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-09T22:00:46.887264536Z
+modified_at: 2026-05-09T22:00:46.887264536Z
+req_type: Bug
