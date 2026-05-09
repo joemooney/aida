@@ -294,6 +294,11 @@ impl PostgresBackend {
             RequirementType::Sprint => "Sprint",
             RequirementType::Folder => "Folder",
             RequirementType::Meta => "Meta",
+            RequirementType::Principle => "Principle",
+            RequirementType::Vision => "Vision",
+            RequirementType::Constraint => "Constraint",
+            RequirementType::Decision => "Decision",
+            RequirementType::Term => "Term",
         }
     }
 

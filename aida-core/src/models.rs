@@ -69,6 +69,24 @@ pub enum RequirementType {
     Folder,
     // Meta type for database configuration (prompts, skills, etc.)
     Meta,
+    // Documentation-layer types (stateless or low-state, drive aida-docs
+    // projection of the graph into a layered docs tree).
+    // trace:FR-1-074 | ai:claude
+    /// Constitution clause — non-negotiable principle that governs how the
+    /// project is built. Stateless (always active until explicitly retired).
+    Principle,
+    /// Vision / target outcome — what we're building, for whom, by when.
+    /// Stateful (active / achieved / abandoned).
+    Vision,
+    /// External or technical constraint — regulation, dependency, deadline.
+    /// Stateful (active / lifted).
+    Constraint,
+    /// Architecture Decision Record (ADR) — a recorded decision + its
+    /// rationale. Stateful (proposed / accepted / superseded / deprecated).
+    Decision,
+    /// Glossary term — domain language entry, ubiquitous-language anchor.
+    /// Stateless.
+    Term,
 }
 
 impl fmt::Display for RequirementType {
@@ -87,6 +105,41 @@ impl fmt::Display for RequirementType {
             RequirementType::Sprint => write!(f, "Sprint"),
             RequirementType::Folder => write!(f, "Folder"),
             RequirementType::Meta => write!(f, "Meta"),
+            RequirementType::Principle => write!(f, "Principle"),
+            RequirementType::Vision => write!(f, "Vision"),
+            RequirementType::Constraint => write!(f, "Constraint"),
+            RequirementType::Decision => write!(f, "Decision"),
+            RequirementType::Term => write!(f, "Term"),
+        }
+    }
+}
+
+impl RequirementType {
+    /// The built-in short prefix for this type, used in agreed-id format
+    /// (`<PREFIX>-<SEQ>`) and as the default block-allocation key. Stateless
+    /// — does not consult any per-store override. For per-store config-aware
+    /// resolution, use `RequirementsStore::get_type_prefix`.
+    /// trace:FR-1-074 | ai:claude
+    pub fn default_prefix(&self) -> &'static str {
+        match self {
+            RequirementType::Functional => "FR",
+            RequirementType::NonFunctional => "NFR",
+            RequirementType::System => "SR",
+            RequirementType::User => "UR",
+            RequirementType::ChangeRequest => "CR",
+            RequirementType::Bug => "BUG",
+            RequirementType::Epic => "EPIC",
+            RequirementType::Story => "STORY",
+            RequirementType::Task => "TASK",
+            RequirementType::Spike => "SPIKE",
+            RequirementType::Sprint => "SPRINT",
+            RequirementType::Folder => "FOLDER",
+            RequirementType::Meta => "META",
+            RequirementType::Principle => "PRIN",
+            RequirementType::Vision => "VIS",
+            RequirementType::Constraint => "CON",
+            RequirementType::Decision => "ADR",
+            RequirementType::Term => "TERM",
         }
     }
 }
@@ -3623,6 +3676,11 @@ impl RequirementsStore {
             RequirementType::Sprint => "Sprint",
             RequirementType::Folder => "Folder",
             RequirementType::Meta => "Meta",
+            RequirementType::Principle => "Principle",
+            RequirementType::Vision => "Vision",
+            RequirementType::Constraint => "Constraint",
+            RequirementType::Decision => "Decision",
+            RequirementType::Term => "Term",
         };
         self.type_definitions.iter().find(|td| td.name == type_name)
     }
@@ -4583,6 +4641,12 @@ impl RequirementsStore {
             RequirementType::Sprint => ("Sprint", "SPRINT"),
             RequirementType::Folder => ("Folder", "FOLDER"),
             RequirementType::Meta => ("Meta", "META"),
+            // trace:FR-1-074 | ai:claude
+            RequirementType::Principle => ("Principle", "PRIN"),
+            RequirementType::Vision => ("Vision", "VIS"),
+            RequirementType::Constraint => ("Constraint", "CON"),
+            RequirementType::Decision => ("Decision", "ADR"),
+            RequirementType::Term => ("Term", "TERM"),
         };
         // Try database first, fall back to built-in prefix
         self.id_config
@@ -4708,6 +4772,12 @@ impl RequirementsStore {
                     RequirementType::Sprint => Some("SPRINT".to_string()),
                     RequirementType::Folder => Some("FLD".to_string()),
                     RequirementType::Meta => Some("META".to_string()),
+                    // trace:FR-1-074 | ai:claude
+                    RequirementType::Principle => Some("PRIN".to_string()),
+                    RequirementType::Vision => Some("VIS".to_string()),
+                    RequirementType::Constraint => Some("CON".to_string()),
+                    RequirementType::Decision => Some("ADR".to_string()),
+                    RequirementType::Term => Some("TERM".to_string()),
                 };
                 (i, prefix_override, feature_prefix, type_prefix)
             })
@@ -4883,6 +4953,12 @@ impl RequirementsStore {
                     RequirementType::Sprint => Some("SPRINT".to_string()),
                     RequirementType::Folder => Some("FLD".to_string()),
                     RequirementType::Meta => Some("META".to_string()),
+                    // trace:FR-1-074 | ai:claude
+                    RequirementType::Principle => Some("PRIN".to_string()),
+                    RequirementType::Vision => Some("VIS".to_string()),
+                    RequirementType::Constraint => Some("CON".to_string()),
+                    RequirementType::Decision => Some("ADR".to_string()),
+                    RequirementType::Term => Some("TERM".to_string()),
                 };
                 (i, prefix_override, feature_prefix, type_prefix)
             })

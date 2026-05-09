@@ -1253,21 +1253,13 @@ fn handle_git_backend_command(
                     );
                 }
                 if blocks_path.exists() {
-                    // Determine type prefix same way the store would
+                    // Determine type prefix. Use the canonical
+                    // RequirementType::default_prefix() so every type is
+                    // covered (no silent fallback to "FR" for new types).
+                    // trace:FR-1-074 | ai:claude
                     let type_prefix = match &req.prefix_override {
                         Some(p) => p.clone(),
-                        None => {
-                            // Mirror get_type_prefix fallback for common types
-                            match req.req_type {
-                                aida_core::models::RequirementType::Functional => "FR",
-                                aida_core::models::RequirementType::Bug => "BUG",
-                                aida_core::models::RequirementType::Epic => "EPIC",
-                                aida_core::models::RequirementType::Story => "STORY",
-                                aida_core::models::RequirementType::Task => "TASK",
-                                aida_core::models::RequirementType::Spike => "SPIKE",
-                                _ => "FR",
-                            }.to_string()
-                        }
+                        None => req.req_type.default_prefix().to_string(),
                     };
 
                     if let Ok(mut registry) = aida_core::BlockRegistry::load(&blocks_path) {
@@ -2016,6 +2008,14 @@ fn parse_requirement_type(s: &str) -> Result<RequirementType> {
         "sprint" => Ok(RequirementType::Sprint),
         "folder" => Ok(RequirementType::Folder),
         "meta" => Ok(RequirementType::Meta),
+        // Docs-layer types (FR-1-074). Aliases match the type prefix used
+        // in agreed-id format (`PRIN`, `VIS`, `CON`, `ADR`, `TERM`).
+        // trace:FR-1-074 | ai:claude
+        "principle" | "prin" => Ok(RequirementType::Principle),
+        "vision" | "vis" => Ok(RequirementType::Vision),
+        "constraint" | "con" => Ok(RequirementType::Constraint),
+        "decision" | "adr" => Ok(RequirementType::Decision),
+        "term" | "glossary" => Ok(RequirementType::Term),
         _ => anyhow::bail!("Unknown requirement type: {}", s),
     }
 }
@@ -2988,6 +2988,11 @@ fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
         RequirementType::Sprint => "Sprint",
         RequirementType::Folder => "Folder",
         RequirementType::Meta => "Meta",
+        RequirementType::Principle => "Principle",
+        RequirementType::Vision => "Vision",
+        RequirementType::Constraint => "Constraint",
+        RequirementType::Decision => "Decision",
+        RequirementType::Term => "Term",
     };
     println!("{}: {}", "Type".blue(), type_str);
 
@@ -3495,6 +3500,14 @@ fn parse_type(type_str: &str) -> Result<RequirementType> {
         "task" => Ok(RequirementType::Task),
         "spike" => Ok(RequirementType::Spike),
         "sprint" => Ok(RequirementType::Sprint),
+        "folder" => Ok(RequirementType::Folder),
+        "meta" => Ok(RequirementType::Meta),
+        // Docs-layer types (FR-1-074). trace:FR-1-074 | ai:claude
+        "principle" | "prin" => Ok(RequirementType::Principle),
+        "vision" | "vis" => Ok(RequirementType::Vision),
+        "constraint" | "con" => Ok(RequirementType::Constraint),
+        "decision" | "adr" => Ok(RequirementType::Decision),
+        "term" | "glossary" => Ok(RequirementType::Term),
         _ => anyhow::bail!("Invalid requirement type: {}", type_str),
     }
 }
@@ -4343,8 +4356,14 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
 /// acquire` (Phase 3 of EPIC-1-052). Without these, new reqs of these
 /// types fall through to the node-aware form (`TASK-1-019`) and require
 /// `aida db merge-gate` to promote them — friction the user shouldn't
-/// have to think about. trace:FR-1-073 | ai:claude
-const PHASE3_AUTO_ALLOC_TYPES: &[&str] = &["FR", "BUG", "TASK", "EPIC", "STORY", "SPIKE"];
+/// have to think about. Includes the five docs-layer types from FR-1-074
+/// so new clones get short ADR-1, PRIN-1, VIS-1, etc., out of the box.
+/// trace:FR-1-073 | ai:claude
+/// trace:FR-1-074 | ai:claude
+const PHASE3_AUTO_ALLOC_TYPES: &[&str] = &[
+    "FR", "BUG", "TASK", "EPIC", "STORY", "SPIKE",
+    "PRIN", "VIS", "CON", "ADR", "TERM",
+];
 
 /// Auto-allocate initial blocks for a freshly-acquired node. Claims one
 /// block per common type that doesn't already have one for this node.
