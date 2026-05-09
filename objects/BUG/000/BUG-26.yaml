@@ -3,10 +3,10 @@ spec_id: BUG-26
 agreed_id: BUG-26
 title: Fresh aida init installs the older commit-msg validator (no REQ-ID/conv-commit checks)
 description: generate_commit_msg_hook() in aida-core/src/scaffolding/hooks.rs is an older simpler validator (only AI-attribution + trace consistency). The richer validator with REQ_ID_PATTERN + conventional-commit format lives in aida-core/templates/hooks/aida-commit-msg. New projects get the weaker one because the scaffolder uses generate_commit_msg_hook() directly. Same drift class as TASK-27 — solve by sourcing from EMBEDDED_TEMPLATES['hooks/aida-commit-msg']. Surfaced 2026-05-09 walkthrough.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T20:38:56.070042822Z
-modified_at: 2026-05-09T20:38:56.070042822Z
+modified_at: 2026-05-09T20:48:24.442939998Z
 req_type: Bug
