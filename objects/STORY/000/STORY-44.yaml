@@ -1,0 +1,12 @@
+id: 019e0e4b-edfe-7b83-bb66-0d09def19d7e
+spec_id: STORY-44
+agreed_id: STORY-44
+title: 'EPIC-9 Story 4: ~/.aida/preferences.toml — preferred_node_id + email defaults'
+description: User-level preferences file. `aida init` reads preferred_node_id and tries to claim it (auto-suffix on collision via STORY-42). `aida config user --node-id <id> --email <addr>` to read/write.
+status: Completed
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-09T19:51:57.694373848Z
+modified_at: 2026-05-09T19:51:57.694373848Z
+req_type: Story

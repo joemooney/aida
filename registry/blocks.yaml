@@ -1,5 +1,5 @@
 blocks:
-- node_id: 2
+- node_id: '2'
   owner: joe.mooney
   hostname: spock
   type_prefix: FR
@@ -7,7 +7,7 @@ blocks:
   range_end: 100
   next: 2
   allocated_at: 2026-05-05T21:10:59.226465Z
-- node_id: 1
+- node_id: '1'
   owner: joe
   hostname: imac
   type_prefix: FR
@@ -15,7 +15,7 @@ blocks:
   range_end: 355
   next: 264
   allocated_at: 2026-05-09T04:40:27.408565724Z
-- node_id: 1
+- node_id: '1'
   owner: joe
   hostname: imac
   type_prefix: BUG
@@ -23,7 +23,7 @@ blocks:
   range_end: 116
   next: 24
   allocated_at: 2026-05-09T04:40:29.791723108Z
-- node_id: 1
+- node_id: '1'
   owner: joe
   hostname: imac
   type_prefix: TASK
@@ -31,7 +31,7 @@ blocks:
   range_end: 114
   next: 17
   allocated_at: 2026-05-09T04:40:32.055300661Z
-- node_id: 1
+- node_id: '1'
   owner: joe
   hostname: imac
   type_prefix: EPIC
@@ -39,15 +39,15 @@ blocks:
   range_end: 108
   next: 10
   allocated_at: 2026-05-09T04:40:34.146191208Z
-- node_id: 1
+- node_id: '1'
   owner: joe
   hostname: imac
   type_prefix: STORY
   range_start: 41
   range_end: 140
-  next: 44
+  next: 45
   allocated_at: 2026-05-09T04:40:37.967307234Z
-- node_id: 1
+- node_id: '1'
   owner: joe
   hostname: imac
   type_prefix: SPIKE
@@ -55,7 +55,7 @@ blocks:
   range_end: 104
   next: 5
   allocated_at: 2026-05-09T04:40:40.163752645Z
-- node_id: 1
+- node_id: '1'
   owner: joe
   hostname: imac
   type_prefix: PRIN
@@ -63,7 +63,7 @@ blocks:
   range_end: 100
   next: 2
   allocated_at: 2026-05-09T18:09:51.978243591Z
-- node_id: 1
+- node_id: '1'
   owner: joe
   hostname: imac
   type_prefix: VIS
@@ -71,7 +71,7 @@ blocks:
   range_end: 100
   next: 2
   allocated_at: 2026-05-09T18:09:55.276370985Z
-- node_id: 1
+- node_id: '1'
   owner: joe
   hostname: imac
   type_prefix: CON
@@ -79,7 +79,7 @@ blocks:
   range_end: 100
   next: 2
   allocated_at: 2026-05-09T18:09:58.248053828Z
-- node_id: 1
+- node_id: '1'
   owner: joe
   hostname: imac
   type_prefix: ADR
@@ -87,7 +87,7 @@ blocks:
   range_end: 100
   next: 2
   allocated_at: 2026-05-09T18:10:00.750673053Z
-- node_id: 1
+- node_id: '1'
   owner: joe
   hostname: imac
   type_prefix: TERM
