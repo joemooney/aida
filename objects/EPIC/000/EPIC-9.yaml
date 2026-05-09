@@ -1,44 +1,45 @@
-id: 019df146-2d95-7ec0-8671-41833deba595
+id: 019e0e1c-0e84-7be3-a32a-e33641d94811
 spec_id: EPIC-9
-title: 'Build banner: build time + git SHA + dirty flag in --version'
-description: |-
-  Every aida build stamps three values via build.rs:
-  - AIDA_BUILD_UNIX_TIME — epoch seconds at compile time
-  - AIDA_BUILD_GIT_SHA — short SHA at build (or \"unknown\" when not in git)
-  - AIDA_BUILD_GIT_DIRTY — \"1\" if working tree was dirty at build, else \"0\"
+agreed_id: EPIC-9
+title: 'Identity UX: auto-acquire on init, string node ids, per-user preferences'
+description: |
+  Three changes that together make node identity feel like a personal touch instead of CAS-loop bookkeeping. Discussed in the 2026-05-09 walkthrough strategy thread.
 
-  Formatted at runtime as: \"0.4.0 (built 2026-05-03T07:24:26Z, sha 866b050+dirty)\"
+  ## Stories
 
-  ## Surfaced in
+  1. **`aida init` auto-acquires** — the fresh-init path implicitly assumes node 1 today (no nodes.toml entry). Make it explicit: init runs `node acquire` inline so nodes.toml has the entry from day one. No new prompt; uses the same defaults the post-clone path uses.
 
-  - aida --version — full banner
-  - aida status (AIDA dev context section) — \"Running binary: <banner>\"
-  - aida upgrade — banner per detected sibling install + filesystem mtime as universal fallback
+  2. **Node id is `String` not `u32`** — `FR-JM-052` reads better than `FR-2-052` for unfreshly-merge-gated work. `aida node list` becomes instantly meaningful (you know which row is *you*). Backwards-compat: numeric ids continue to work (`"1"` is a valid string). Touches `nodes.toml`, `blocks.yaml`, dispenser, merge-gate.
 
-  ## Why
+  3. **`~/.aida/preferences.toml` for preferred id + email defaults** — analogous to `git config --global user.email`. New user format:
 
-  Distinguishes two binaries that share a release version number but were compiled at different times — e.g. dev rebuild after a fix vs the released tarball. Without this, sibling-scan can't tell which install is freshest when versions match.
+         [identity]
+         preferred_node_id = "JM"
+         email = "joe.mooney@gmail.com"
 
-  File mtime in the upgrade listing covers binaries built before this stamping was added (they only emit the bare version string).
+     `aida init` and `aida node acquire` read this first, attempt the preferred id, fall back to numeric next-id if unavailable. The "your initials travel with you" UX.
 
-  ## Build script behavior
+  ## Acceptance
 
-  - rerun-if-changed=../.git/HEAD and ../.git/index keeps SHA/dirty flag accurate without forcing rebuild on every source-file edit
-  - Pristine cached builds stay cached
-status: Completed
-priority: Medium
+  - `aida init` always emits a `nodes.toml` entry for the current clone
+  - Node ids accept `[A-Za-z][A-Za-z0-9_-]*` (alphanumeric + dash/underscore, must start with letter)
+  - A user with `preferred_node_id = "JM"` in prefs gets it on init when free
+  - Two clones on the same host with the same preferred id: first wins, second falls back with a clear message
+  - `aida node list` shows the string ids verbatim
+  - Merge-gate still produces short global ids (FR-15) — node-id strings only appear in the node-aware form
+
+  ## Out of scope
+
+  - Migrating existing `nodes.toml` entries to string form. Numeric stays valid.
+status: Approved
+priority: High
 owner: ''
 feature: Uncategorized
-created_at: 2026-05-04T04:36:41.493444697Z
-modified_at: 2026-05-04T04:38:31.969221069Z
+created_at: 2026-05-09T18:59:40.292176534Z
+modified_at: 2026-05-09T18:59:40.292176534Z
 req_type: Epic
 tags:
-- build
-- observability
-- version
-comments:
-- id: 019df147-dd21-7862-a299-7361959fd52d
-  author: joe
-  content: ''
-  created_at: 2026-05-04T04:38:31.969221069Z
-  modified_at: 2026-05-04T04:38:31.969221069Z
+- EPIC-1-052-followup
+- ergonomics
+- identity
+- node-ids
