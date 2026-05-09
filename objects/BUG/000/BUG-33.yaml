@@ -1,0 +1,28 @@
+id: 019df6b3-3fff-7ea3-b50f-9512a39b437f
+spec_id: BUG-33
+title: aida dev serve picks stale release aida-server binary, falls back to YAML and dies on orphan store
+description: |-
+  **Reported in chat 2026-05-05**: 'aida dev serve' from the AIDA repo failed with:
+
+    [server] Backend type: YAML
+    [server] YAML parse error details: Is a directory (os error 21)
+    [server] Error: Failed to parse YAML from "/home/joe/ai/aida/.aida-store"
+
+  **Cause**: 'locate_aida_server_binary' preferred 'target/release/aida-server' over 'target/debug/aida-server' unconditionally. On this machine the release binary was 3 months old (Feb 22, v0.1.0) and predated git-backend support — so even though the freshly-built debug binary at v0.4.3 was sitting right next to it, dev serve picked the stale one. v0.1.0's create_backend defaulted to YAML; YAML can't parse a directory; bail.
+
+  **Fix**: same mtime-based choice 'pick_dev_binary_dir' uses for the CLI binary — pick whichever of release vs debug is most recently built. Stale release no longer shadows current debug.
+
+  **Verified**: 'aida dev serve' now reports 'Starting AIDA server v0.4.3' and 'Backend type: Git', REST endpoints serve from the orphan store correctly.
+
+  **Workaround for users on older binaries**: 'cargo build --release -p aida-server' to rebuild release, OR just delete target/release/aida-server so debug is picked.
+status: Completed
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-05T05:53:55.711056400Z
+modified_at: 2026-05-05T05:53:55.711056400Z
+req_type: Bug
+tags:
+- binary-resolution
+- dev-serve
+- scaffolding

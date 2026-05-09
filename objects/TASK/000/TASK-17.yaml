@@ -1,0 +1,19 @@
+id: 019df584-dc7d-7960-8759-ef2615c79ea9
+spec_id: TASK-17
+title: 'CLAUDE.md: clarify .claude/ symlink layout (per-file, not per-directory)'
+description: |-
+  CLAUDE.md says: 'Project-local templates at .claude/skills/, .claude/commands/, .claude/hooks/, and .claude/settings.json are symlinks into aida-core/templates/'.
+
+  Only .claude/settings.json is a directory-level / file-level symlink. The other three are regular directories whose contents are per-file symlinks (24 skills, 25 commands, 2-of-3 hooks at the time of writing). The current wording suggests the directories themselves are symlinks, which they are not.
+
+  Fix: rephrase to make the per-file nature explicit, and note that hooks is currently the partial-coverage exception.
+status: Completed
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-05T00:23:38.365325523Z
+modified_at: 2026-05-05T00:24:25.678286081Z
+req_type: Task
+tags:
+- docs
+- scaffolding

@@ -1,0 +1,55 @@
+id: 019df146-788f-7813-b185-f0762b823ee5
+spec_id: EPIC-14
+title: aida status (project overview) + aida statusline (one-liner for prompts)
+description: |-
+  Two related top-level commands.
+
+  ## aida status
+
+  Comprehensive project overview — adaptive based on context.
+
+  Always-shown sections:
+  - Project name + storage mode
+  - Requirement counts grouped by status
+  - Cache state (FRESH/STALE, last built, count vs store)
+  - Sync state (orphan-branch ahead/behind origin)
+  - Recent activity (last 5 modifications)
+  - Scaffolding freshness (compares .claude/skills/, .mcp.json, etc. against embedded templates) — only for non-AIDA-self projects
+
+  AIDA-self extra section (when run in the joemooney/aida repo):
+  - Workspace version vs latest release tag, commits ahead
+  - Template symlink integrity (23/23 OK)
+  - Cargo.lock presence
+  - Pointers to scripts/release.sh + scripts/publish.sh
+
+  ## aida statusline
+
+  Sub-50ms one-liner for ~/.claude/settings.json statusLine.command or shell PS1. Reads .aida/cache.db directly (read-only sqlite handle, no rebuild, no git ops).
+
+  Format: aida · <project> · role:<name> · @<spec_id> · reqs:N · cache:fresh|stale
+
+  Where role + @<spec_id> only appear when AIDA_SESSION_ROLE is set; @<spec_id> shows the most recent activity from the active role's log.
+
+  ## Acceptance
+
+  - aida status from non-AIDA project: 6-section overview, no dev context
+  - aida status from AIDA repo: extra dev-context section with build banner + tag info
+  - aida statusline: <50ms, single line, omits empty sections
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-04T04:37:00.687454668Z
+modified_at: 2026-05-04T04:38:33.011220550Z
+req_type: Epic
+tags:
+- cli
+- observability
+- status
+- statusline
+comments:
+- id: 019df147-e133-7d00-9c34-af387d308f69
+  author: joe
+  content: ''
+  created_at: 2026-05-04T04:38:33.011220550Z
+  modified_at: 2026-05-04T04:38:33.011220550Z

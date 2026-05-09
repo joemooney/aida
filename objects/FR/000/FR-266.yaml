@@ -1,0 +1,53 @@
+id: 019df1a9-db7e-79c0-9948-4866ecedbfaa
+spec_id: FR-266
+title: Global queue spanning projects (aida queue --global)
+description: |-
+  Queues today are per-project (stored in the orphan-branch store at <project>/.aida-store/registry/queues/<user>.yaml). For solo devs hopping between repos with the same persona (e.g., 'implementer' working on AIDA in the morning and paradox in the afternoon), this means N queues to remember/check.
+
+  Roles already support `--global` (state at ~/.aida/roles/). Queues should match.
+
+  ## Acceptance
+
+  - `aida queue add <id> --for <role> --global` stores the entry in a global queue at `~/.aida/queue/<role>.yaml`
+  - `aida queue list --global` shows the global queue for the active role (or all if --all)
+  - `aida queue list` (default) merges local + global with origin tag, e.g.:
+      1. FR-1-042  Add OAuth provider  [Approved]  [for:implementer]  [origin:aida]
+      2. FR-2-007  Refactor parser     [In-progress] [for:implementer] [origin:paradox]
+  - `aida queue next` considers both local and global, with local taking precedence for tiebreaks (because local context is closer)
+  - A global queue entry needs a project pointer so `aida show <id>` from a different project can resolve it (store the source project root in the entry)
+
+  ## Open design questions
+
+  - How does the implementer session know which PROJECT to switch to when picking up a global item? Auto-cd? Print a hint? Refuse if not in the right project?
+  - Conflict semantics if the same SPEC-ID exists in multiple projects (rare but possible with node-namespaced IDs)?
+
+  Parent: EPIC-1-006 (Queue routing).
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-04T06:25:34.078156796Z
+modified_at: 2026-05-06T06:25:08.949754701Z
+req_type: Functional
+tags:
+- deferred
+- global
+- multi-project
+- queue
+- ux
+relationships:
+- rel_type: Parent
+  target_id: 019df145-ea4e-7440-b80d-88a34684f39c
+  created_at: 2026-05-04T06:26:09.377408287Z
+  created_by: joe
+comments:
+- id: 019df46b-101d-7bc1-b290-27c8943f164c
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:15:50.429605931Z
+  modified_at: 2026-05-04T19:15:50.429605931Z
+- id: 019dfbf6-3155-7373-bf82-417353dffd8a
+  author: joe
+  content: ''
+  created_at: 2026-05-06T06:25:08.949754701Z
+  modified_at: 2026-05-06T06:25:08.949754701Z

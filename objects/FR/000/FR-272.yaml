@@ -1,0 +1,42 @@
+id: 019dea97-7d5b-7711-b269-b9ca74515bbe
+spec_id: FR-272
+title: Write-behind batched commits for bulk-import paths
+description: |-
+  Bulk-import operations (Jira sync, GitHub pull, GitLab sync, large `aida import` calls) currently incur one git commit per requirement under the write-through model adopted in EPIC-1-001. For imports of hundreds or thousands of requirements this is too slow.
+
+  Add a write-behind / batched-commit mode: collect mutations in memory, write all YAML files in one filesystem pass, then create a single git commit covering the batch. The cache update happens once at the end.
+
+  ## Acceptance criteria
+
+  - New `BulkWriter` API on the storage layer that batches mutations until commit
+  - All existing bulk-import code paths (Jira/GitHub/GitLab sync, `aida import`) opt into batched mode
+  - Single batched import of 1000 requirements completes in under 5 seconds (vs. expected 50+ seconds at one-commit-each)
+  - Batch commit message includes count and source ("chore: import 1000 requirements from jira sync")
+  - On batch failure, partial state is rolled back (no orphaned YAML files in working tree)
+
+  ## Defer until
+
+  EPIC-1-001 Phase 1 lands and write-through performance becomes a measured pain point on real bulk-import workloads.
+status: Completed
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-02T21:28:09.819088898Z
+modified_at: 2026-05-06T06:30:17.014687097Z
+req_type: Functional
+tags:
+- bulk-import
+- deferred
+- performance
+- storage
+relationships:
+- rel_type: Parent
+  target_id: 019dea8d-c189-72e3-a27f-ea562a6ff148
+  created_at: 2026-05-02T21:28:10.363054020Z
+  created_by: joe
+comments:
+- id: 019dfbfa-e4b6-76e1-a864-3f8643bc79e5
+  author: joe
+  content: ''
+  created_at: 2026-05-06T06:30:17.014687097Z
+  modified_at: 2026-05-06T06:30:17.014687097Z

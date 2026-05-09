@@ -1,0 +1,26 @@
+id: 019df461-c381-7303-b2f8-7e3191448304
+spec_id: TASK-20
+title: 'Scaffolder: emit SessionStart hook in generate_claude_settings_json'
+description: |-
+  TASK-1-022 added aida-core/templates/hooks/aida-role-context.sh and wired it into the master templates/settings.json under a SessionStart block. But generate_claude_settings_json (in aida-core/src/scaffolding/settings.rs) — the function aida init / aida scaffold apply use to write project settings.json — does NOT emit a SessionStart entry. Fresh inits don't get the role-context hook configured, even if the file exists on disk.
+
+  ## Acceptance
+
+  1. generate_claude_settings_json emits a SessionStart block referencing $CLAUDE_PROJECT_DIR/.claude/hooks/aida-role-context.sh, with a 5s timeout.
+  2. New ScaffoldConfig flag (e.g. include_role_context_hook, default true) so it can be turned off.
+  3. Unit test asserting the block parses and points at the right hook.
+
+  ## Depends on
+
+  - The hook itself only does anything when AIDA_SESSION_ROLE is set, so it's safe to ship even when the user isn't using roles.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-04T19:05:40.993369591Z
+modified_at: 2026-05-04T19:05:40.993369591Z
+req_type: Task
+tags:
+- hooks
+- roles
+- scaffolding

@@ -1,0 +1,31 @@
+id: 019df43b-46e4-7c62-8381-130daa33a01b
+spec_id: TASK-19
+title: Switch aida dev activate PS1 to splice semantics for clean composition with roles
+description: |-
+  'aida dev activate' uses save/restore for PS1 (AIDA_DEV_PREV_PS1) — it captures the full PS1 at activation time and restores it on deactivate. This is fragile when other things modify PS1 in between (notably 'aida role enter', which now also touches PS1 via splice — see TASK-1-018).
+
+  Symptom: if the user enters a role *before* dev activate, then ends the role, then runs dev deactivate, the role prefix returns because it was captured in AIDA_DEV_PREV_PS1.
+
+    PS1='joe$ '
+    aida role enter implementer       # PS1='(role:implementer) joe$ '
+    aida dev activate                 # PS1='(aida-debug) (role:implementer) joe$ ' — saves the whole thing
+    aida role end                     # PS1='(aida-debug) joe$ '   (role spliced out, correct)
+    aida dev deactivate               # PS1='(role:implementer) joe$ '   (BUG — role came back from the saved value)
+
+  Fix: change dev activate to splice-in '(aida-PROFILE) ' and dev deactivate to splice-out the same, mirroring how 'aida role' works after TASK-1-018. Use AIDA_DEV_PROFILE env var to know what to strip on deactivate.
+
+  Affected: aida-cli/src/main.rs ~4163 (activate) and ~4181 (deactivate). Drop AIDA_DEV_PREV_PS1 entirely.
+
+  Cosmetic-only — typical workflow (dev activate once at session start, role enter/end many times, dev deactivate at session end) is unaffected. Low priority.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-04T18:23:38.724369632Z
+modified_at: 2026-05-04T18:23:38.724369632Z
+req_type: Task
+tags:
+- composition
+- dev-activate
+- ps1
+- shell

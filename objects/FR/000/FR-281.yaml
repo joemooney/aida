@@ -1,0 +1,32 @@
+id: 019dfbe7-9110-74f0-81b5-201c58dc2ad0
+spec_id: FR-281
+title: aida db block verify — consistency check between nodes.toml and blocks.yaml
+description: |-
+  ## Problem
+
+  Nothing today catches divergence between the node registry and the block registry. Two real cases I've already hit:
+
+  1. **Block without registry entry** — spock had FR-1..100 in `blocks.yaml` for node 2 with no entry in `nodes.toml`. EPIC-1-052 added a safety check on acquire to treat any block-owning node id as "taken" but didn't surface the divergence to the user.
+  2. **Registry entry without block** — `aida node acquire` with `id_format = blocks-only` should warn loudly when the new node has no block (Phase 3 auto-allocate handles the happy path, but the failure mode is silent).
+
+  ## Acceptance
+
+  - `aida db block verify` exits 0 when nodes.toml and blocks.yaml are consistent, non-zero otherwise
+  - Surfaces:
+    - block-owning nodes missing from nodes.toml (suggest `aida node acquire --id N` or `aida node release N --free-blocks`)
+    - registered nodes with no blocks under `blocks-only` policy (suggest `aida db block claim --type FR --size 100`)
+    - exhausted blocks with no successor block (suggest `aida db block claim`)
+    - blocks with overlapping ranges for the same type prefix (data corruption — should not happen but worth checking)
+  - Suitable for a CI check on the orphan branch
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-06T06:09:10.416704207Z
+modified_at: 2026-05-06T06:09:10.416704207Z
+req_type: Functional
+tags:
+- EPIC-1-052-followup
+- blocks
+- diagnostics
+- node-identity

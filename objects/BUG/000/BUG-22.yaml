@@ -1,0 +1,46 @@
+id: 019e0a64-c27c-76d1-8149-6be8a92c4f99
+spec_id: BUG-22
+title: register_node CAS retry wedges on rebase conflict when two clones acquire concurrently
+description: |-
+  ## Symptom
+
+  Two clones of the same repo on the same host run \`aida node acquire\` near-simultaneously. Clone A succeeds; clone B's first push is rejected (correct), but the CAS retry then fails with:
+
+  \`\`\`
+  error: cannot pull with rebase: Your index contains uncommitted changes.
+  Could not apply <sha>... chore(registry): register node N for user 1 (imac)
+  \`\`\`
+
+  The local commit gets stuck on rebase because both clones independently appended a \`[[nodes]]\` block at the same line in nodes.toml.
+
+  ## Root cause
+
+  \`register_node_full\` (and \`unregister_node\`) in aida-core/src/git_ops.rs handled \`Ok(false)\` (push rejected) by simply \`continue\`ing to the next loop iteration. The next iteration's \`pull --rebase\` then tried to re-apply the now-stale local commit on top of origin's newer state and conflicted on the same nodes.toml lines.
+
+  The block-claim path in handle_block_command DID soft-reset before retry, but with \`--soft\` only, leaving the index dirty — pull --rebase rejects an unclean index too.
+
+  ## Fix
+
+  Both paths now do \`git reset --hard HEAD~1\` after a rejected push to fully discard the stale commit + index + working-tree state before pull-rebasing on the next attempt. This is safe because:
+  - The CAS loop has just made the commit and nothing else has happened since
+  - Only the registry update is at risk, and we WANT to discard it (it's based on a stale view)
+
+  ## Verification
+
+  Empirical end-to-end test with two fresh clones: clone A acquires node 4 + FR-201..300; clone B sees push rejection ('Node registration: push rejected (attempt 1), retrying...'), retries successfully, and acquires node 5 + FR-301..400. Both per-clone node.toml files have distinct node IDs.
+
+  This was hit immediately when the user asked 'can I have multiple repo clones with different node IDs on one host' — the answer is yes after this fix.
+
+  Shipped in commit (pending).
+status: Completed
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-09T01:40:36.092423985Z
+modified_at: 2026-05-09T01:40:36.092423985Z
+req_type: Bug
+tags:
+- EPIC-1-052-followup
+- cas
+- distributed
+- node-identity

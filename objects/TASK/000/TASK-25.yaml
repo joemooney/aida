@@ -1,0 +1,37 @@
+id: 019df57e-1323-7320-8815-72420e3b2be1
+spec_id: TASK-25
+title: Add /aida-queue skill (read-only queue inspection)
+description: |-
+  Skill gap: /aida-pickup grabs the queue head and starts work, but there's no skill for just inspecting the queue without committing to start the next item. /aida-queue fills that.
+
+  ## Surface
+
+  - aida-core/templates/skills/aida-queue.md — skill body
+  - aida-core/templates/commands/aida-queue.md — slash-command stub
+  - Symlinks under .claude/skills/ and .claude/commands/ so this repo dogfoods it
+  - Embedded into the binary via build.rs (already walks templates/skills + templates/commands)
+
+  ## Behavior
+
+  - Reads !`aida queue list` (which honors role routing + scope filter by default)
+  - Offers --no-scope and --all as broader views when filtered queue is empty
+  - Suggests next actions (/aida-pickup to start, queue move/remove, show <id>)
+  - Does NOT auto-pick anything up — that's /aida-pickup's job
+status: Completed
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-05T00:16:13.603078107Z
+modified_at: 2026-05-05T00:16:33.480387990Z
+req_type: Task
+tags:
+- queue
+- roles
+- scaffolding
+- skills
+comments:
+- id: 019df57e-4074-7fa0-baf1-c13737bdf3c0
+  author: joe
+  content: ''
+  created_at: 2026-05-05T00:16:25.204489694Z
+  modified_at: 2026-05-05T00:16:25.204489694Z

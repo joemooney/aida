@@ -1,0 +1,39 @@
+id: 019df46e-e140-7252-8e76-cd979ccd2c1a
+spec_id: BUG-27
+title: set_status_from_str misroutes 'in-progress' (and 'planned') to custom_status, overriding canonical enum
+description: |-
+  BUG. `Requirement::set_status_from_str` (aida-core/src/models.rs:3087) only matches the four strings 'Draft', 'Approved', 'Completed', 'Rejected'. Anything else — including 'in-progress', 'In Progress', 'InProgress', 'in_progress', and 'planned' — falls through to the wildcard arm and gets stored as `custom_status`.
+
+  This is bad in two ways:
+
+  1. `aida edit FOO --status in-progress` and `aida add ... --status in-progress` (the documented user-facing form per CLAUDE.md) silently store custom_status='In-progress' instead of mapping to RequirementStatus::InProgress.
+  2. `effective_status()` returns custom_status if set. So once a requirement has the bogus custom_status, even setting `req.status = Completed` directly via queue done has no visible effect — effective_status keeps returning the stale custom_status.
+
+  Repro:
+    aida add --type task --status in-progress --title 'Demo'  → custom_status=In-progress under the hood
+    aida edit <id> --status completed                          → status=Completed but custom_status still set
+    aida show <id>                                             → reports In-progress (wrong)
+
+  ## Fix
+
+  1. set_status_from_str must accept all canonical variants of each status: 'InProgress', 'In Progress', 'In-progress', 'in-progress', 'in_progress' all → RequirementStatus::InProgress with custom_status=None. Same for Planned.
+  2. Tighten the wildcard arm so only TRULY non-standard strings fall through (project-specific custom statuses).
+  3. One-time data sweep: any requirement whose custom_status normalizes to a canonical RequirementStatus should be migrated (custom_status=None, status=enum).
+status: Completed
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-04T19:20:00.576982769Z
+modified_at: 2026-05-04T19:23:18.671234174Z
+req_type: Bug
+tags:
+- cli
+- data-integrity
+- models
+- status
+comments:
+- id: 019df471-d3fa-76d3-811f-ad68b765f72c
+  author: joe
+  content: ''
+  created_at: 2026-05-04T19:23:13.786142940Z
+  modified_at: 2026-05-04T19:23:13.786142940Z

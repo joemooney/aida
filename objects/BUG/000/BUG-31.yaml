@@ -1,0 +1,30 @@
+id: 019df5ca-a87f-72d0-ac1e-898b23aef1d8
+spec_id: BUG-31
+title: aida history digest clustered all rows at one timestamp due to bulk-save commits
+description: |-
+  **Reported by user immediately after the previous fix:** all 20 digest rows showed the same timestamp (e.g. 18:29) because GitBackend::save() rewrites every YAML on bulk-save paths (queue add, comment add, scaffold ops) and produces a single 'chore: update requirements store' commit touching dozens of files. Sorting by git commit timestamp meant one bulk commit clustered every spec it touched into the same row time.
+
+  **Fix**
+
+  1. Sort & display by the YAML's own modified_at field — that's the canonical 'when did this actually change'. save() rewrites files but does NOT bump modified_at (verified: BUG-0378's modified_at stayed at 2026-02-22 even after a bulk save touched its file at 18:29).
+  2. Replaced the 'C' (commit count) column with a leading '+ / · / −' marker showing 'added in window / edited / deleted'. The count was muddled by chore commits anyway; the marker answers the same question more clearly ('which of these did I create vs edit?').
+  3. Time column auto-widens — collapses to HH:MM if today, expands to MM-DD HH:MM if older.
+
+  Output now diverse and meaningful — 20 rows showing 20 distinct modified_at times, with a clear visual signal for new vs edited requirements.
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-05T01:39:52.574997981Z
+modified_at: 2026-05-05T01:53:55.963386246Z
+req_type: Bug
+tags:
+- cli
+- history
+- timestamp
+- ux
+relationships:
+- rel_type: References
+  target_id: 019df5d7-6215-7a00-aaa3-55baae9596f1
+  created_at: 2026-05-05T01:53:55.963375424Z
+  created_by: joe

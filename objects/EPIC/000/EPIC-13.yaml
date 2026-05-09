@@ -1,0 +1,42 @@
+id: 019df145-ea4e-7440-b80d-88a34684f39c
+spec_id: EPIC-13
+title: Role-routed queue + producer/consumer pickup loop
+description: |-
+  QueueEntry gains for_role: Option<String> field. Enables routing queued items to specific role-wearers via `aida queue add --for <role>`, and a peek/consume loop on the receiving side.
+
+  ## Surfaces
+
+  - aida queue add <id> --for <role> — route an item to a specific doer role
+  - aida queue list [--role X] [--all] — filtered view; defaults to AIDA_SESSION_ROLE if active; --all overrides
+  - aida queue next — peek the top item routed to the current role; shows spec/title/status/note/description excerpt + suggested follow-up commands; doesn't mutate
+  - aida queue done <id> [-y] — atomic: marks status=Completed AND removes from queue
+  - /aida-pickup skill — wraps the loop: peek → confirm pickup → mark in-progress → work → done → suggest re-running
+
+  ## Workflow
+
+  Producer (in dialog session): aida queue add FR-1-042 --for implementer --note \"...\"
+  Consumer (in implementer session): aida queue next → work → aida queue done FR-1-042
+
+  ## Implementation notes
+
+  - Field is Option<String>, serde-default, backward-compatible with existing YAML
+  - Legacy SQLite + Postgres backends always pass None for for_role (column doesn't exist; git-canonical is the canonical path per EPIC-1-001)
+  - REST API doesn't yet expose for_role — straightforward addition when dashboard needs it
+status: Completed
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-04T04:36:24.270885134Z
+modified_at: 2026-05-04T04:38:31.080542130Z
+req_type: Epic
+tags:
+- producer-consumer
+- queue
+- roles
+- workflow
+comments:
+- id: 019df147-d9a8-7f71-9cde-7a2d91d6f78e
+  author: joe
+  content: ''
+  created_at: 2026-05-04T04:38:31.080542130Z
+  modified_at: 2026-05-04T04:38:31.080542130Z

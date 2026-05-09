@@ -1,0 +1,67 @@
+id: 019dfb7b-0f6f-7e82-a3ba-0b0a8f211c89
+spec_id: EPIC-11
+title: 'Per-clone node IDs: registry, auto-acquire, format-policy config'
+description: |-
+  **Problem reported 2026-05-05**
+
+  Every clone of an AIDA-init'd project starts with node_id=1 by default. Two clones working independently both issue spec IDs as if they're 'node 1' — the orphan branches diverge and merge-gate has to disambiguate at promotion time. We need each clone to claim a unique node_id deterministically, and surface what's allocated so the user can see which machines are which.
+
+  **Surface needed**
+
+    aida node list                        # list registered nodes (id, hostname, registered-at)
+    aida node show [id]                   # show a single node's details + active block(s)
+    aida node acquire [--hostname H]      # claim the next free node id post-clone
+    aida node release <id>                # de-register an old node (reclaim the id)
+
+    aida config id-format <policy>        # 'node-aware' | 'blocks-allowed' (per-project)
+
+  **Format-policy**
+
+  Today the dispenser tries blocks first (XXX-nnn form) then falls back to node-aware (XXX-n-nnn). Some projects want only node-aware to avoid the merge-gate promotion step ever surfacing — they'd configure 'node-aware'. Others (solo-dev, single-machine) want compact 'blocks-allowed' so spec IDs read XXX-nnn directly. Make this a per-project setting so init can pick a sensible default and the user can toggle.
+
+  **Auto-acquire on clone**
+
+  After 'git clone' + 'git worktree add .aida-store aida-store', the user's NodeConfig is missing or stale (still points at the original node). 'aida init --acquire' (or just 'aida node acquire') should:
+  1. Read NodeRegistry from .aida-store
+  2. Pick next_node_id() (or a passed --id)
+  3. Append to registry
+  4. Write NodeConfig.toml with the new id
+  5. Optionally allocate the first block from BlockRegistry for compact-form dispensing
+
+  **Children**
+
+  - FR-1-XXX: aida node list/show/acquire/release CLI
+  - FR-1-XXX: per-project id-format config (node-aware vs blocks-allowed)
+  - FR-1-XXX: 'aida init' / 'aida node acquire' flow for post-clone bootstrap
+
+  **Open design questions**
+
+  1. Where does the format-policy live? '.aida/config.toml [id_format]'? NodeRegistry?
+  2. Should 'aida node acquire' auto-allocate a block for the new node, or require a follow-up 'aida node block alloc'?
+  3. Should existing reqs created under node_id=1 stay as 'FR-1-NNN' or be rewritten on acquire?  (Probably stay — rewriting agreed IDs is its own deep refactor.)
+  4. Is hostname enough as a tie-breaker, or should we also stamp user-email at register time?
+
+  Discuss design before implementing.
+status: Completed
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-06T04:10:39.343335710Z
+modified_at: 2026-05-06T04:59:30.697372555Z
+req_type: Epic
+tags:
+- blocks
+- distributed
+- multi-clone
+- node-ids
+comments:
+- id: 019dfb8f-6baf-7493-bf76-9fa4e78e1b43
+  author: joe
+  content: ''
+  created_at: 2026-05-06T04:32:53.679161921Z
+  modified_at: 2026-05-06T04:32:53.679161921Z
+- id: 019dfba7-ca09-74d2-9308-2c9e99d629d8
+  author: joe
+  content: ''
+  created_at: 2026-05-06T04:59:30.697372555Z
+  modified_at: 2026-05-06T04:59:30.697372555Z
