@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-05T21:11:40.068419354Z
-modified_at: 2026-05-09T20:35:26.198062675Z
+modified_at: 2026-05-09T22:27:41.804810861Z
 req_type: Functional
 comments:
 - id: 019e0e73-bb76-7ab1-9f09-51140a1ae2fd
@@ -16,3 +16,8 @@ comments:
   content: ''
   created_at: 2026-05-09T20:35:26.198062675Z
   modified_at: 2026-05-09T20:35:26.198062675Z
+- id: 019e0eda-826c-7f20-a9e0-0d7f2af1694c
+  author: joe
+  content: Commit 8174f70 references this requirement
+  created_at: 2026-05-09T22:27:41.804810861Z
+  modified_at: 2026-05-09T22:27:41.804810861Z
