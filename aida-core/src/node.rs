@@ -382,6 +382,62 @@ impl NodeRegistry {
 }
 
 // ---------------------------------------------------------------------------
+// Hijack marker (STORY-43)
+// ---------------------------------------------------------------------------
+
+/// Marker file dropped into an abandoned clone's `.aida-store/.aida/` when
+/// another clone hijacks its node id. Subsequent `aida` invocations in the
+/// abandoned clone read this and print a loud warning so the user doesn't
+/// keep issuing requirements with a now-reassigned node id.
+///
+/// Path: `<clone>/.aida-store/.aida/HIJACKED.toml`. trace:STORY-43
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HijackMarker {
+    /// The node id that was hijacked (used to be ours).
+    pub node_id: String,
+    /// Hostname of the new owner clone.
+    pub new_owner_hostname: String,
+    /// Email of the new owner clone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub new_owner_email: Option<String>,
+    /// Absolute path of the new owner clone (informational).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub new_owner_clone_path: Option<PathBuf>,
+    /// When the hijack happened.
+    pub hijacked_at: DateTime<Utc>,
+}
+
+impl HijackMarker {
+    /// Standard filename written into `<clone>/.aida-store/.aida/HIJACKED.toml`.
+    pub const FILENAME: &'static str = "HIJACKED.toml";
+
+    /// Compute the marker path inside an `.aida-store/` worktree.
+    pub fn path_in_store(store_path: &Path) -> PathBuf {
+        store_path.join(".aida").join(Self::FILENAME)
+    }
+
+    #[cfg(feature = "native")]
+    pub fn load(path: &Path) -> anyhow::Result<Option<Self>> {
+        if !path.exists() {
+            return Ok(None);
+        }
+        let content = std::fs::read_to_string(path)?;
+        let marker: Self = toml::from_str(&content)?;
+        Ok(Some(marker))
+    }
+
+    #[cfg(feature = "native")]
+    pub fn save(&self, path: &Path) -> anyhow::Result<()> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let content = toml::to_string_pretty(self)?;
+        std::fs::write(path, content)?;
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
 // User Identity
 // ---------------------------------------------------------------------------
 
