@@ -18,12 +18,12 @@ description: |-
     - exhausted blocks with no successor block (suggest `aida db block claim`)
     - blocks with overlapping ranges for the same type prefix (data corruption — should not happen but worth checking)
   - Suitable for a CI check on the orphan branch
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-06T06:09:10.416704207Z
-modified_at: 2026-05-09T22:35:14.933110627Z
+modified_at: 2026-05-09T22:36:51.413245331Z
 req_type: Functional
 tags:
 - EPIC-1-052-followup
