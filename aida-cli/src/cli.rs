@@ -839,6 +839,12 @@ pub enum BlockCommand {
 
     /// Show blocks for the current node and their remaining capacity
     Status,
+
+    /// Cross-check nodes.toml against blocks.yaml. Reports any block-
+    /// owning node id missing from the registry and (under blocks-only
+    /// policy) any registered node with no claimed block. Exits non-zero
+    /// on inconsistency. trace:FR-281 | ai:claude
+    Verify,
 }
 
 #[derive(Subcommand, Debug)]
