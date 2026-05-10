@@ -143,6 +143,12 @@ fn main() -> Result<()> {
         return handle_dev_command(dev_cmd);
     }
 
+    // Doctor commands run before storage init — they may need to operate
+    // on broken or partially-migrated stores. trace:EPIC-19 | ai:claude
+    if let Command::Doctor(doctor_cmd) = &cli.command {
+        return handle_doctor_command(doctor_cmd);
+    }
+
     // Help-all is pure text; no storage needed.
     if let Command::HelpAll = &cli.command {
         print_help_all();
@@ -388,6 +394,7 @@ fn main() -> Result<()> {
         }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
+        Command::Doctor(_) => unreachable!("doctor is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
@@ -1208,6 +1215,7 @@ fn handle_git_backend_command(
         }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
+        Command::Doctor(_) => unreachable!("doctor is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
@@ -4987,9 +4995,14 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
             let blocks_registry = BlockRegistry::load(&blocks_path).unwrap_or_default();
             let nodes_registry = NodeRegistry::load(&nodes_path).unwrap_or_default();
 
+            // Only active (non-exhausted) blocks count as "owning" a range.
+            // Tombstoned blocks (post `aida doctor repair-stale-blocks`)
+            // intentionally have an unregistered owner — that's the repair
+            // outcome, not a problem to flag.
             let block_owners: std::collections::HashSet<String> = blocks_registry
                 .blocks
                 .iter()
+                .filter(|b| !b.is_exhausted())
                 .map(|b| b.node_id.clone())
                 .collect();
             let registered: std::collections::HashSet<String> = nodes_registry
@@ -6543,6 +6556,1294 @@ fn humanize_relative(t: chrono::DateTime<chrono::Utc>) -> String {
 // statusLine.command setting. Cache-only; no git operations, no API calls.
 // trace:EPIC-1-001 | ai:claude
 // ----------------------------------------------------------------------------
+
+// ----------------------------------------------------------------------------
+// EPIC-19 — `aida doctor`: maintenance + migration commands.
+// ----------------------------------------------------------------------------
+
+fn handle_doctor_command(cmd: &cli::DoctorCommand) -> Result<()> {
+    match cmd {
+        cli::DoctorCommand::MigrateCounterScope {
+            to,
+            dry_run,
+            yes,
+            size,
+        } => doctor_migrate_counter_scope(to, *dry_run, *yes, *size),
+        cli::DoctorCommand::RepairStaleBlocks { dry_run, yes } => {
+            doctor_repair_stale_blocks(*dry_run, *yes)
+        }
+        cli::DoctorCommand::ScrubCollisions => doctor_scrub_collisions(),
+        cli::DoctorCommand::VerifyRelationships { repair, yes } => {
+            doctor_verify_relationships(*repair, *yes)
+        }
+        cli::DoctorCommand::ValidateTraceComments {
+            strip_dangling,
+            dry_run,
+            yes,
+        } => doctor_validate_trace_comments(*strip_dangling, *dry_run, *yes),
+        cli::DoctorCommand::Fsck => doctor_fsck(),
+    }
+}
+
+/// Walk every YAML in objects/, collect every `relationships[*].target_id`
+/// reference, and verify each resolves to an existing req's UUID. Reports
+/// dangling references, optionally repairs by stripping the bad entries.
+/// trace:EPIC-19 | ai:claude
+fn doctor_verify_relationships(repair: bool, yes: bool) -> Result<()> {
+    let project_root = find_project_root()?;
+    let store_path = project_root.join(".aida-store");
+    let objects_root = store_path.join("objects");
+    if !objects_root.exists() {
+        println!("(no objects/ tree — nothing to check)");
+        return Ok(());
+    }
+
+    let mut yaml_files: Vec<std::path::PathBuf> = Vec::new();
+    walk_yamls(&objects_root, &mut yaml_files);
+
+    // First pass: collect every uuid present in the store.
+    let mut all_uuids: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut spec_by_uuid: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+    for path in &yaml_files {
+        let Ok(content) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        let mut uuid = String::new();
+        let mut spec_id = String::new();
+        for raw in content.lines() {
+            let line = raw.trim_start();
+            if uuid.is_empty() {
+                if let Some(v) = line.strip_prefix("id:") {
+                    uuid = v.trim().trim_matches('"').trim_matches('\'').to_string();
+                }
+            }
+            if spec_id.is_empty() {
+                if let Some(v) = line.strip_prefix("spec_id:") {
+                    spec_id = v.trim().trim_matches('"').trim_matches('\'').to_string();
+                }
+            }
+            if !uuid.is_empty() && !spec_id.is_empty() {
+                break;
+            }
+        }
+        if !uuid.is_empty() {
+            all_uuids.insert(uuid.clone());
+            if !spec_id.is_empty() {
+                spec_by_uuid.insert(uuid, spec_id);
+            }
+        }
+    }
+
+    // Second pass: collect (source_uuid, target_uuid, rel_type) triples
+    // and check each target.
+    #[derive(Debug)]
+    struct Dangling {
+        source_path: std::path::PathBuf,
+        source_spec: String,
+        target_uuid: String,
+        rel_type: String,
+    }
+    let mut dangling: Vec<Dangling> = Vec::new();
+
+    for path in &yaml_files {
+        let Ok(content) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        // Find the source spec_id once for nicer reporting.
+        let source_spec = content
+            .lines()
+            .find_map(|l| l.trim_start().strip_prefix("spec_id:"))
+            .map(|v| v.trim().trim_matches('"').trim_matches('\'').to_string())
+            .unwrap_or_else(|| "?".to_string());
+
+        // Scan for relationships block. The shape (in serde-flavored YAML):
+        //   relationships:
+        //   - rel_type: parent
+        //     target_id: <uuid>
+        //     ...
+        let mut in_rel_block = false;
+        let mut current_rel_type = String::new();
+        for raw in content.lines() {
+            let trimmed = raw.trim_start();
+            if !raw.starts_with(' ') && trimmed.starts_with("relationships:") {
+                in_rel_block = true;
+                continue;
+            }
+            // Leaving the relationships block — heuristic: any non-indented
+            // top-level YAML key.
+            if in_rel_block && !raw.starts_with(' ') && !trimmed.is_empty() && trimmed.contains(':')
+            {
+                in_rel_block = false;
+                continue;
+            }
+            if !in_rel_block {
+                continue;
+            }
+            if let Some(v) = trimmed.strip_prefix("rel_type:") {
+                current_rel_type =
+                    v.trim().trim_matches('"').trim_matches('\'').to_string();
+            }
+            if let Some(v) = trimmed.strip_prefix("target_id:") {
+                let target_uuid =
+                    v.trim().trim_matches('"').trim_matches('\'').to_string();
+                if !target_uuid.is_empty() && !all_uuids.contains(&target_uuid) {
+                    dangling.push(Dangling {
+                        source_path: path.clone(),
+                        source_spec: source_spec.clone(),
+                        target_uuid,
+                        rel_type: current_rel_type.clone(),
+                    });
+                }
+            }
+        }
+    }
+
+    if dangling.is_empty() {
+        println!(
+            "{} every relationship target resolves to an existing requirement.",
+            "✓".green()
+        );
+        return Ok(());
+    }
+
+    println!(
+        "{} {} dangling relationship reference(s):",
+        "✗".red().bold(),
+        dangling.len()
+    );
+    println!();
+    for d in &dangling {
+        println!(
+            "  {} → {}: target uuid {} not found",
+            d.source_spec.bold(),
+            d.rel_type.dimmed(),
+            d.target_uuid.yellow()
+        );
+        println!("    in {}", d.source_path.display().to_string().dimmed());
+    }
+    println!();
+
+    if !repair {
+        println!(
+            "Run with {} to strip dangling references in-place.",
+            "--repair".cyan()
+        );
+        std::process::exit(1);
+    }
+
+    if !yes {
+        use std::io::Write;
+        print!("Strip {} dangling reference(s)? [y/N] ", dangling.len());
+        std::io::stdout().flush()?;
+        let mut ans = String::new();
+        std::io::stdin().read_line(&mut ans)?;
+        if !matches!(ans.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+            println!("Aborted.");
+            return Ok(());
+        }
+    }
+
+    // Repair: load each affected req via aida-core, filter relationships,
+    // save back. trace:EPIC-19 | ai:claude
+    let store = aida_core::GitBackend::new(&store_path)?.load()?;
+    let dangling_uuids: std::collections::HashSet<String> =
+        dangling.iter().map(|d| d.target_uuid.clone()).collect();
+    let mut fixed = 0usize;
+    for mut req in store.requirements.into_iter() {
+        let before = req.relationships.len();
+        req.relationships
+            .retain(|r| !dangling_uuids.contains(&r.target_id.to_string()));
+        if req.relationships.len() != before {
+            aida_core::object_store::write_object(&store_path.join("objects"), &req)?;
+            fixed += 1;
+        }
+    }
+    let _ = aida_core::git_ops::add(&store_path, &["objects"]);
+    let _ = aida_core::git_ops::commit(
+        &store_path,
+        &format!("chore(repair): strip {} dangling relationship target(s)", dangling.len()),
+    );
+    println!("{} repaired {} requirement(s).", "✓".green().bold(), fixed);
+    println!("  Push with: {}", "aida push".cyan());
+    Ok(())
+}
+
+/// Walk source files under the project root for `trace:<SPEC-ID>`
+/// patterns and verify each spec_id resolves to a requirement in the
+/// store. With `strip_dangling`, rewrites source files to remove the
+/// dangling trace markers. trace:EPIC-19 | ai:claude
+fn doctor_validate_trace_comments(strip_dangling: bool, dry_run: bool, yes: bool) -> Result<()> {
+    let project_root = find_project_root()?;
+    let store_path = project_root.join(".aida-store");
+    let objects_root = store_path.join("objects");
+    if !objects_root.exists() {
+        println!("(no objects/ tree — nothing to check)");
+        return Ok(());
+    }
+
+    // Collect every spec_id AND agreed_id from the store. A trace
+    // comment is considered valid if it matches either form — the
+    // spec_id is the original (pre-merge-gate) id and stays in trace
+    // comments, while agreed_id is the canonical post-merge form.
+    // trace:EPIC-19 | ai:claude
+    let mut yaml_files: Vec<std::path::PathBuf> = Vec::new();
+    walk_yamls(&objects_root, &mut yaml_files);
+    let mut known_specs: std::collections::HashSet<String> =
+        std::collections::HashSet::new();
+    for path in &yaml_files {
+        let Ok(content) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        for line in content.lines() {
+            let t = line.trim_start();
+            if let Some(v) = t.strip_prefix("spec_id:") {
+                let s = v.trim().trim_matches('"').trim_matches('\'').to_string();
+                if !s.is_empty() {
+                    known_specs.insert(s);
+                }
+            } else if let Some(v) = t.strip_prefix("agreed_id:") {
+                let s = v.trim().trim_matches('"').trim_matches('\'').to_string();
+                // agreed_id can be `null` / empty in YAML; skip those.
+                if !s.is_empty() && s != "null" && s != "~" {
+                    known_specs.insert(s);
+                }
+            }
+        }
+    }
+
+    // Collect every trace comment in the project tree.
+    let trace_re =
+        regex::Regex::new(r"trace:([A-Z]+(?:-[A-Z0-9]+)?-[0-9]+(?:-[0-9]+)?)").unwrap();
+    let mut by_spec: std::collections::HashMap<String, Vec<(std::path::PathBuf, usize)>> =
+        std::collections::HashMap::new();
+
+    walk_source_for_traces(&project_root, &project_root, &trace_re, &mut by_spec);
+
+    let mut orphan_specs: Vec<&String> = by_spec
+        .keys()
+        .filter(|s| !known_specs.contains(*s))
+        .collect();
+    orphan_specs.sort();
+
+    if orphan_specs.is_empty() {
+        println!(
+            "{} every `trace:<SPEC-ID>` in source resolves to a requirement ({} unique spec_ids referenced from {} location(s)).",
+            "✓".green(),
+            by_spec.len(),
+            by_spec.values().map(|v| v.len()).sum::<usize>()
+        );
+        return Ok(());
+    }
+
+    println!(
+        "{} {} trace comment(s) reference unknown spec_ids:",
+        "✗".red().bold(),
+        orphan_specs.len()
+    );
+    println!();
+    for spec in &orphan_specs {
+        let locations = by_spec.get(*spec).unwrap();
+        println!("{}: ({} reference(s))", spec.bold(), locations.len());
+        for (path, line) in locations.iter().take(5) {
+            let rel = path.strip_prefix(&project_root).unwrap_or(path);
+            println!("  {}:{}", rel.display(), line);
+        }
+        if locations.len() > 5 {
+            println!("  … and {} more", locations.len() - 5);
+        }
+        println!();
+    }
+    if !strip_dangling {
+        println!("Likely causes: req was deleted, or a typo. Either delete the");
+        println!("trace comment or update it to reference an existing spec_id.");
+        println!();
+        println!("To strip these in-place: {}", "aida doctor validate-trace-comments --strip-dangling".cyan());
+        std::process::exit(1);
+    }
+
+    // --- strip-dangling path ---
+    let dangling_set: std::collections::HashSet<String> =
+        orphan_specs.iter().map(|s| (*s).clone()).collect();
+
+    println!(
+        "{} {} reference(s) across {} unique spec_ids will be stripped.",
+        "Plan:".yellow().bold(),
+        by_spec
+            .iter()
+            .filter(|(s, _)| dangling_set.contains(*s))
+            .map(|(_, v)| v.len())
+            .sum::<usize>(),
+        dangling_set.len()
+    );
+
+    if dry_run {
+        println!();
+        let stats = strip_dangling_traces(&project_root, &dangling_set, true)?;
+        println!(
+            "→ dry-run: would delete {} whole line(s) and modify {} other line(s) across {} file(s).",
+            stats.lines_deleted, stats.lines_modified, stats.files_changed
+        );
+        return Ok(());
+    }
+
+    if !yes {
+        use std::io::Write;
+        print!("Strip dangling trace annotations from source files? [y/N] ");
+        std::io::stdout().flush()?;
+        let mut ans = String::new();
+        std::io::stdin().read_line(&mut ans)?;
+        if !matches!(ans.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+            println!("Aborted.");
+            return Ok(());
+        }
+    }
+
+    let stats = strip_dangling_traces(&project_root, &dangling_set, false)?;
+    println!(
+        "{} stripped {} line(s) (deleted {} whole, modified {} mixed) across {} file(s).",
+        "✓".green().bold(),
+        stats.lines_deleted + stats.lines_modified,
+        stats.lines_deleted,
+        stats.lines_modified,
+        stats.files_changed
+    );
+    println!(
+        "  Review the diff: {}",
+        "git diff".cyan()
+    );
+    Ok(())
+}
+
+#[derive(Default)]
+struct StripStats {
+    files_changed: usize,
+    lines_deleted: usize,
+    lines_modified: usize,
+}
+
+/// Walk every text source file under `root` and either delete or modify
+/// any line containing `trace:<DANGLING>` per the dangling_ids set.
+/// When `dry_run`, returns counts without writing. trace:EPIC-19
+fn strip_dangling_traces(
+    root: &std::path::Path,
+    dangling_ids: &std::collections::HashSet<String>,
+    dry_run: bool,
+) -> Result<StripStats> {
+    let mut stats = StripStats::default();
+    strip_dangling_walk(root, root, dangling_ids, dry_run, &mut stats);
+    Ok(stats)
+}
+
+fn strip_dangling_walk(
+    root: &std::path::Path,
+    project_root: &std::path::Path,
+    dangling_ids: &std::collections::HashSet<String>,
+    dry_run: bool,
+    stats: &mut StripStats,
+) {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+        if path.is_dir() {
+            if matches!(
+                name,
+                ".git" | ".aida-store" | ".aida" | "target" | "node_modules"
+                    | "dist" | "build" | ".cache" | ".venv" | "venv"
+            ) {
+                continue;
+            }
+            strip_dangling_walk(&path, project_root, dangling_ids, dry_run, stats);
+            continue;
+        }
+        let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+        let probably_text = matches!(
+            ext,
+            "rs" | "py" | "ts" | "tsx" | "js" | "jsx" | "go" | "java"
+                | "c" | "cpp" | "h" | "hpp" | "cs" | "rb" | "sh" | "md"
+                | "toml" | "yaml" | "yml" | "json"
+        );
+        if !probably_text {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        // Quick scan: any dangling id present?
+        let mut had_match = false;
+        for id in dangling_ids {
+            if content.contains(&format!("trace:{}", id)) {
+                had_match = true;
+                break;
+            }
+        }
+        if !had_match {
+            continue;
+        }
+
+        let (new_content, deleted, modified) = rewrite_strip_dangling(&content, dangling_ids);
+        if new_content == content {
+            continue;
+        }
+        stats.files_changed += 1;
+        stats.lines_deleted += deleted;
+        stats.lines_modified += modified;
+        if !dry_run {
+            let _ = std::fs::write(&path, new_content);
+        }
+    }
+}
+
+/// Pure transform: take a file's content and the dangling-id set,
+/// return (new_content, lines_deleted, lines_modified). A line is
+/// "deleted" when the only meaningful content was the trace marker
+/// (post-strip, only a comment marker remains); otherwise the trace
+/// fragment is excised and the line is "modified". trace:EPIC-19
+fn rewrite_strip_dangling(
+    content: &str,
+    dangling_ids: &std::collections::HashSet<String>,
+) -> (String, usize, usize) {
+    use regex::Regex;
+    // Match `trace:<ID> | ai:<tool>(:<conf>)?` fragments. Capture the
+    // id so we can check it against the dangling set.
+    let frag_re =
+        Regex::new(r"trace:([A-Z]+(?:-[A-Z0-9]+)?-[0-9]+(?:-[0-9]+)?)\s*\|\s*ai:[a-zA-Z]+(?::(?:high|med|low))?")
+            .unwrap();
+
+    let mut out = String::with_capacity(content.len());
+    let mut deleted = 0;
+    let mut modified = 0;
+
+    for line in content.lines() {
+        // Does this line contain a dangling trace?
+        let mut should_strip = false;
+        for cap in frag_re.captures_iter(line) {
+            if let Some(m) = cap.get(1) {
+                if dangling_ids.contains(m.as_str()) {
+                    should_strip = true;
+                    break;
+                }
+            }
+        }
+        if !should_strip {
+            out.push_str(line);
+            out.push('\n');
+            continue;
+        }
+
+        // Strip every dangling trace fragment from this line.
+        let stripped = frag_re
+            .replace_all(line, |caps: &regex::Captures| {
+                let id = caps.get(1).map(|m| m.as_str()).unwrap_or("");
+                if dangling_ids.contains(id) {
+                    String::new()
+                } else {
+                    caps.get(0).map(|m| m.as_str().to_string()).unwrap_or_default()
+                }
+            })
+            .into_owned();
+
+        // Decide: delete the whole line if what remains is just a
+        // comment marker (no content), or modify (keep the line with
+        // the fragment removed).
+        let trimmed = stripped.trim();
+        let is_just_marker = matches!(
+            trimmed,
+            "" | "//" | "///" | "//!" | "/*" | "*/" | "*" | "#"
+        ) || trimmed.starts_with("// ") && trimmed.trim_end_matches(' ').len() <= 3;
+
+        if is_just_marker {
+            deleted += 1;
+            // skip — don't push this line
+        } else {
+            modified += 1;
+            // Clean up double-spaces left behind by the strip.
+            let cleaned = stripped
+                .replace("  ", " ")
+                .trim_end()
+                .to_string();
+            out.push_str(&cleaned);
+            out.push('\n');
+        }
+    }
+
+    // Preserve trailing newline behavior (str.lines() drops it; if the
+    // original content ended without a newline, drop our trailing one).
+    if !content.ends_with('\n') && out.ends_with('\n') {
+        out.pop();
+    }
+
+    (out, deleted, modified)
+}
+
+/// Recurse into source files looking for trace comments. Skips the
+/// usual "don't grep here" directories. trace:EPIC-19 | ai:claude
+fn walk_source_for_traces(
+    root: &std::path::Path,
+    project_root: &std::path::Path,
+    re: &regex::Regex,
+    out: &mut std::collections::HashMap<String, Vec<(std::path::PathBuf, usize)>>,
+) {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+        // Skip noise dirs.
+        if path.is_dir() {
+            if matches!(
+                name,
+                ".git"
+                    | ".aida-store"
+                    | ".aida"
+                    | "target"
+                    | "node_modules"
+                    | "dist"
+                    | "build"
+                    | ".cache"
+                    | ".venv"
+                    | "venv"
+            ) {
+                continue;
+            }
+            walk_source_for_traces(&path, project_root, re, out);
+            continue;
+        }
+        // Read text-like files only. trace:EPIC-19 | ai:claude
+        let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+        let probably_text = matches!(
+            ext,
+            "rs" | "py" | "ts" | "tsx" | "js" | "jsx" | "go" | "java"
+                | "c" | "cpp" | "h" | "hpp" | "cs" | "rb" | "sh" | "md"
+                | "toml" | "yaml" | "yml" | "json"
+        );
+        if !probably_text {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        for (lineno, line) in content.lines().enumerate() {
+            for cap in re.captures_iter(line) {
+                if let Some(m) = cap.get(1) {
+                    out.entry(m.as_str().to_string())
+                        .or_default()
+                        .push((path.clone(), lineno + 1));
+                }
+            }
+        }
+    }
+}
+
+/// Recursively collect every `*.yaml` file under `root` into `out`.
+/// Hand-rolled to avoid adding a walkdir dep just for the doctor ops.
+/// The orphan store's objects/ tree is shallow (3 levels) so a simple
+/// recursive read_dir is fine. trace:EPIC-19 | ai:claude
+fn walk_yamls(root: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            walk_yamls(&path, out);
+        } else if path.extension().and_then(|s| s.to_str()) == Some("yaml") {
+            out.push(path);
+        }
+    }
+}
+
+/// Mark blocks whose owner isn't in nodes.toml as exhausted, so the
+/// dispenser skips them but their range stays reserved (so other
+/// clones don't reallocate the same numbers and create a real
+/// collision). trace:EPIC-19 | ai:claude
+fn doctor_repair_stale_blocks(dry_run: bool, yes: bool) -> Result<()> {
+    use aida_core::{BlockRegistry, NodeRegistry};
+
+    let project_root = find_project_root()?;
+    let store_path = project_root.join(".aida-store");
+    let blocks_path = store_path.join("registry").join("blocks.yaml");
+    let nodes_path = store_path.join("registry").join("nodes.toml");
+
+    if !blocks_path.exists() {
+        println!("(no blocks.yaml — nothing to repair)");
+        return Ok(());
+    }
+
+    let mut blocks = BlockRegistry::load(&blocks_path).unwrap_or_default();
+    let nodes = NodeRegistry::load(&nodes_path).unwrap_or_default();
+    let registered: std::collections::HashSet<String> =
+        nodes.nodes.iter().map(|n| n.id.clone()).collect();
+
+    let stale: Vec<(usize, &aida_core::AgreedIdBlock)> = blocks
+        .blocks
+        .iter()
+        .enumerate()
+        .filter(|(_, b)| !registered.contains(&b.node_id) && !b.is_exhausted())
+        .collect();
+
+    if stale.is_empty() {
+        println!("{} no stale blocks — every active block has a registered node.", "✓".green());
+        return Ok(());
+    }
+
+    println!("{}", "Stale blocks (owner not in nodes.toml)".bold());
+    for (_, b) in &stale {
+        println!(
+            "  {} node `{}` owns {}-{}..{} (next={})",
+            "·".dimmed(),
+            b.node_id,
+            b.type_prefix,
+            b.range_start,
+            b.range_end,
+            b.next
+        );
+    }
+    println!();
+    println!("Plan: bump each block's `next` past `range_end` so the dispenser");
+    println!("      skips it. The range stays reserved (preserves cross-clone safety).");
+    println!();
+
+    if dry_run {
+        println!("{} dry-run — no changes written.", "→".cyan());
+        return Ok(());
+    }
+    if !yes {
+        use std::io::Write;
+        print!("Tombstone {} stale block(s)? [y/N] ", stale.len());
+        std::io::stdout().flush()?;
+        let mut ans = String::new();
+        std::io::stdin().read_line(&mut ans)?;
+        if !matches!(ans.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+            println!("Aborted.");
+            return Ok(());
+        }
+    }
+
+    let stale_indices: Vec<usize> = stale.iter().map(|(i, _)| *i).collect();
+    let count = stale_indices.len();
+    for idx in stale_indices {
+        let b = &mut blocks.blocks[idx];
+        b.next = b.range_end + 1;
+    }
+    blocks.save(&blocks_path)?;
+    let _ = aida_core::git_ops::add(&store_path, &["registry/blocks.yaml"]);
+    let _ = aida_core::git_ops::commit(
+        &store_path,
+        &format!("chore(registry): tombstone {} stale block(s) (no node owner)", count),
+    );
+
+    println!("{} tombstoned {} block(s).", "✓".green().bold(), count);
+    println!("  Push with: {}", "aida push".cyan());
+    Ok(())
+}
+
+/// Walk the orphan store's objects tree, group requirements by their
+/// `spec_id` field, and report any spec_id claimed by more than one
+/// requirement. v1 reports only — auto-renumber is dangerous (would
+/// orphan trace comments + commit refs). trace:EPIC-19 | ai:claude
+fn doctor_scrub_collisions() -> Result<()> {
+    let project_root = find_project_root()?;
+    let store_path = project_root.join(".aida-store");
+    let objects_root = store_path.join("objects");
+    if !objects_root.exists() {
+        println!("(no objects/ tree — nothing to check)");
+        return Ok(());
+    }
+
+    let mut by_spec: std::collections::HashMap<String, Vec<(String, String, String)>> =
+        std::collections::HashMap::new();
+
+    let mut yaml_files: Vec<std::path::PathBuf> = Vec::new();
+    walk_yamls(&objects_root, &mut yaml_files);
+    for path in &yaml_files {
+        let Ok(content) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        let mut spec_id = String::new();
+        let mut uuid = String::new();
+        let mut title = String::new();
+        for raw in content.lines() {
+            let line = raw.trim_start();
+            if let Some(v) = line.strip_prefix("spec_id:") {
+                spec_id = v.trim().trim_matches('"').trim_matches('\'').to_string();
+            } else if let Some(v) = line.strip_prefix("id:") {
+                if uuid.is_empty() {
+                    uuid = v.trim().trim_matches('"').trim_matches('\'').to_string();
+                }
+            } else if let Some(v) = line.strip_prefix("title:") {
+                if title.is_empty() {
+                    title = v.trim().trim_matches('"').trim_matches('\'').to_string();
+                }
+            }
+            if !spec_id.is_empty() && !uuid.is_empty() && !title.is_empty() {
+                break;
+            }
+        }
+        if spec_id.is_empty() {
+            continue;
+        }
+        by_spec
+            .entry(spec_id)
+            .or_default()
+            .push((uuid, title, path.display().to_string()));
+    }
+
+    let mut collisions: Vec<(&String, &Vec<(String, String, String)>)> = by_spec
+        .iter()
+        .filter(|(_, entries)| entries.len() > 1)
+        .collect();
+    collisions.sort_by(|a, b| a.0.cmp(b.0));
+
+    if collisions.is_empty() {
+        println!(
+            "{} no spec_id collisions — every spec_id maps to exactly one requirement.",
+            "✓".green()
+        );
+        return Ok(());
+    }
+
+    println!(
+        "{} {} spec_id collision(s) found:",
+        "✗".red().bold(),
+        collisions.len()
+    );
+    println!();
+    for (spec, entries) in &collisions {
+        println!("{}:", spec.bold());
+        for (uuid, title, path) in entries.iter() {
+            let title_disp = if title.is_empty() { "(no title)".dimmed().to_string() } else { title.clone() };
+            println!(
+                "  {} {} — {}",
+                uuid.yellow(),
+                title_disp,
+                path.dimmed()
+            );
+        }
+        println!();
+    }
+    println!("Resolution (v1 is detect-only — auto-renumber would orphan trace comments):");
+    println!("  - Decide which UUID is canonical for each spec_id");
+    println!("  - For the others, edit their YAML directly to set a fresh spec_id, or");
+    println!("    delete their YAML if duplicates");
+    println!();
+    std::process::exit(1);
+}
+
+/// Compose every diagnostic into a single report. Exits non-zero on any
+/// problem so it can gate CI. trace:EPIC-19 | ai:claude
+fn doctor_fsck() -> Result<()> {
+    let project_root = find_project_root()?;
+    let store_path = project_root.join(".aida-store");
+
+    println!("{}", "AIDA fsck".bold());
+    println!("  project root:  {}", project_root.display());
+    println!("  store path:    {}", store_path.display());
+    println!();
+
+    let mut had_problem = false;
+
+    // --- Check 1: block registry consistency (FR-281's logic, inline) ---
+    println!("{}", "── block registry ──".bold());
+    use aida_core::{BlockRegistry, NodeRegistry};
+    let blocks_path = store_path.join("registry").join("blocks.yaml");
+    let nodes_path = store_path.join("registry").join("nodes.toml");
+    if blocks_path.exists() {
+        let blocks = BlockRegistry::load(&blocks_path).unwrap_or_default();
+        let nodes = NodeRegistry::load(&nodes_path).unwrap_or_default();
+        let registered: std::collections::HashSet<String> =
+            nodes.nodes.iter().map(|n| n.id.clone()).collect();
+        // Only ACTIVE (non-exhausted) blocks count — tombstoned blocks
+        // are explicitly retired (next > range_end) and no longer
+        // dispense, so an unregistered owner on a tombstoned block is
+        // expected (it's the post-repair state).
+        let block_owners: std::collections::HashSet<String> = blocks
+            .blocks
+            .iter()
+            .filter(|b| !b.is_exhausted())
+            .map(|b| b.node_id.clone())
+            .collect();
+        let orphan_blocks: Vec<&str> = block_owners
+            .iter()
+            .filter(|id| !registered.contains(*id))
+            .map(|s| s.as_str())
+            .collect();
+        if orphan_blocks.is_empty() {
+            println!("  {} every active block has a registered node owner.", "✓".green());
+        } else {
+            had_problem = true;
+            println!(
+                "  {} {} block-owning node(s) not in nodes.toml: {}",
+                "✗".red(),
+                orphan_blocks.len(),
+                orphan_blocks.join(", ")
+            );
+            println!(
+                "    fix: {}",
+                "aida doctor repair-stale-blocks".cyan()
+            );
+        }
+    } else {
+        println!("  {} no blocks.yaml — skipping (project may be node-aware-only).", "·".dimmed());
+    }
+    println!();
+
+    // --- Check 2: spec_id collisions ---
+    println!("{}", "── spec_id collisions ──".bold());
+    let objects_root = store_path.join("objects");
+    if objects_root.exists() {
+        let mut by_spec: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
+        let mut yaml_files: Vec<std::path::PathBuf> = Vec::new();
+        walk_yamls(&objects_root, &mut yaml_files);
+        for path in &yaml_files {
+            if let Ok(content) = std::fs::read_to_string(path) {
+                for line in content.lines() {
+                    let t = line.trim_start();
+                    if let Some(v) = t.strip_prefix("spec_id:") {
+                        let spec = v.trim().trim_matches('"').trim_matches('\'').to_string();
+                        if !spec.is_empty() {
+                            *by_spec.entry(spec).or_default() += 1;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        let collisions: Vec<&String> = by_spec
+            .iter()
+            .filter(|(_, count)| **count > 1)
+            .map(|(spec, _)| spec)
+            .collect();
+        if collisions.is_empty() {
+            println!("  {} every spec_id maps to one requirement.", "✓".green());
+        } else {
+            had_problem = true;
+            println!(
+                "  {} {} spec_id(s) claimed by multiple requirements: {}",
+                "✗".red(),
+                collisions.len(),
+                collisions
+                    .iter()
+                    .take(8)
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            println!("    fix: {}", "aida doctor scrub-collisions".cyan());
+        }
+    } else {
+        println!("  {} no objects/ — skipping.", "·".dimmed());
+    }
+    println!();
+
+    // --- Check 3: cache freshness ---
+    println!("{}", "── cache freshness ──".bold());
+    let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
+    if cache_path.exists() {
+        // Simple heuristic: cache exists. Detailed staleness check
+        // requires reading cache HEAD — defer to `aida cache status`.
+        println!("  {} cache exists at {} (run `aida cache status` for HEAD-vs-store check).", "·".dimmed(), cache_path.display());
+    } else {
+        println!("  {} cache missing — run `aida cache rebuild` if list/search are slow.", "·".dimmed());
+    }
+    println!();
+
+    // --- Check 4: relationship targets resolve ---
+    println!("{}", "── relationships ──".bold());
+    if objects_root.exists() {
+        let mut yaml_files: Vec<std::path::PathBuf> = Vec::new();
+        walk_yamls(&objects_root, &mut yaml_files);
+        let mut all_uuids: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        for path in &yaml_files {
+            if let Ok(content) = std::fs::read_to_string(path) {
+                for line in content.lines() {
+                    let t = line.trim_start();
+                    if let Some(v) = t.strip_prefix("id:") {
+                        let s = v.trim().trim_matches('"').trim_matches('\'').to_string();
+                        if !s.is_empty() {
+                            all_uuids.insert(s);
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        let mut dangling = 0usize;
+        for path in &yaml_files {
+            let Ok(content) = std::fs::read_to_string(path) else { continue; };
+            let mut in_rel = false;
+            for raw in content.lines() {
+                let trimmed = raw.trim_start();
+                if !raw.starts_with(' ') && trimmed.starts_with("relationships:") {
+                    in_rel = true;
+                    continue;
+                }
+                if in_rel
+                    && !raw.starts_with(' ')
+                    && !trimmed.is_empty()
+                    && trimmed.contains(':')
+                {
+                    in_rel = false;
+                    continue;
+                }
+                if !in_rel {
+                    continue;
+                }
+                if let Some(v) = trimmed.strip_prefix("target_id:") {
+                    let target = v.trim().trim_matches('"').trim_matches('\'').to_string();
+                    if !target.is_empty() && !all_uuids.contains(&target) {
+                        dangling += 1;
+                    }
+                }
+            }
+        }
+        if dangling == 0 {
+            println!("  {} every relationship target resolves.", "✓".green());
+        } else {
+            had_problem = true;
+            println!(
+                "  {} {} dangling relationship reference(s).",
+                "✗".red(),
+                dangling
+            );
+            println!("    fix: {}", "aida doctor verify-relationships --repair".cyan());
+        }
+    } else {
+        println!("  {} no objects/ — skipping.", "·".dimmed());
+    }
+    println!();
+
+    // --- Check 5: trace comments resolve to existing reqs (informational) ---
+    // Slow-ish (walks source tree) and the failure mode (dangling traces
+    // from renumbered/deleted reqs) is rarely urgent — keep it
+    // non-blocking so fsck can serve as a CI gate without a perpetual
+    // false-fail. trace:EPIC-19 | ai:claude
+    println!("{}", "── trace comments ──".bold());
+    if objects_root.exists() {
+        let trace_re =
+            regex::Regex::new(r"trace:([A-Z]+(?:-[A-Z0-9]+)?-[0-9]+(?:-[0-9]+)?)").unwrap();
+        let mut yaml_files: Vec<std::path::PathBuf> = Vec::new();
+        walk_yamls(&objects_root, &mut yaml_files);
+        let mut known_specs: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        for path in &yaml_files {
+            if let Ok(content) = std::fs::read_to_string(path) {
+                for line in content.lines() {
+                    let t = line.trim_start();
+                    if let Some(v) = t.strip_prefix("spec_id:") {
+                        let s = v.trim().trim_matches('"').trim_matches('\'').to_string();
+                        if !s.is_empty() {
+                            known_specs.insert(s);
+                        }
+                    } else if let Some(v) = t.strip_prefix("agreed_id:") {
+                        let s = v.trim().trim_matches('"').trim_matches('\'').to_string();
+                        if !s.is_empty() && s != "null" && s != "~" {
+                            known_specs.insert(s);
+                        }
+                    }
+                }
+            }
+        }
+        let mut by_spec: std::collections::HashMap<
+            String,
+            Vec<(std::path::PathBuf, usize)>,
+        > = std::collections::HashMap::new();
+        walk_source_for_traces(&project_root, &project_root, &trace_re, &mut by_spec);
+        let total_refs: usize = by_spec.values().map(|v| v.len()).sum();
+        let dangling: usize = by_spec
+            .iter()
+            .filter(|(s, _)| !known_specs.contains(*s))
+            .map(|(_, v)| v.len())
+            .sum();
+        let dangling_specs: usize = by_spec.keys().filter(|s| !known_specs.contains(*s)).count();
+        if dangling == 0 {
+            println!(
+                "  {} {} unique spec_ids referenced from {} location(s); all resolve.",
+                "✓".green(),
+                by_spec.len(),
+                total_refs
+            );
+        } else {
+            // Informational, not a failure — see comment above.
+            println!(
+                "  {} {} unique spec_ids referenced from {} location(s); {} reference(s) ({} unique spec_ids) dangling.",
+                "·".yellow(),
+                by_spec.len(),
+                total_refs,
+                dangling,
+                dangling_specs
+            );
+            println!(
+                "    detail: {}",
+                "aida doctor validate-trace-comments".cyan()
+            );
+        }
+    } else {
+        println!("  {} no objects/ — skipping.", "·".dimmed());
+    }
+    println!();
+
+    // --- Check 6: counter_scope sanity (warn if config + blocks disagree) ---
+    println!("{}", "── counter_scope ──".bold());
+    let scope = read_id_counter_scope(&project_root);
+    let has_global_block = blocks_path.exists()
+        && BlockRegistry::load(&blocks_path)
+            .map(|br| {
+                br.blocks
+                    .iter()
+                    .any(|b| b.type_prefix == aida_core::IdCounterScope::GLOBAL_TYPE_PREFIX)
+            })
+            .unwrap_or(false);
+    match (scope, has_global_block) {
+        (aida_core::IdCounterScope::Global, true) => {
+            println!("  {} config=global, blocks have a `*` block. Consistent.", "✓".green());
+        }
+        (aida_core::IdCounterScope::Global, false) => {
+            had_problem = true;
+            println!(
+                "  {} config says global but no `*` block exists. New `aida add` would fall back to per-type.",
+                "✗".red()
+            );
+            println!(
+                "    fix: {}",
+                "aida doctor migrate-counter-scope --to global".cyan()
+            );
+        }
+        (aida_core::IdCounterScope::PerType, true) => {
+            println!(
+                "  {} config=per-type, but a `*` block exists (mid-migration?). Consider running `migrate-counter-scope --to global`.",
+                "·".yellow()
+            );
+        }
+        (aida_core::IdCounterScope::PerType, false) => {
+            println!("  {} config=per-type, no `*` block. Consistent.", "✓".green());
+        }
+    }
+    println!();
+
+    if had_problem {
+        println!("{}", "fsck found problems — see above.".red().bold());
+        std::process::exit(1);
+    } else {
+        println!("{}", "✓ fsck clean.".green().bold());
+    }
+    Ok(())
+}
+
+fn doctor_migrate_counter_scope(
+    to: &str,
+    dry_run: bool,
+    yes: bool,
+    new_block_size: u32,
+) -> Result<()> {
+    use aida_core::BlockRegistry;
+
+    if to != "global" {
+        anyhow::bail!("only `--to global` is supported today (per-type → global)");
+    }
+
+    let project_root = find_project_root()?;
+    let store_path = project_root.join(".aida-store");
+    let blocks_path = store_path.join("registry").join("blocks.yaml");
+    let config_path = project_root.join(".aida").join("config.toml");
+
+    if !blocks_path.exists() {
+        anyhow::bail!(
+            "no blocks.yaml at {} — nothing to migrate",
+            blocks_path.display()
+        );
+    }
+    if !config_path.exists() {
+        anyhow::bail!(
+            "no config.toml at {} — is this an AIDA project?",
+            config_path.display()
+        );
+    }
+
+    let current_scope = read_id_counter_scope(&project_root);
+    if current_scope == aida_core::IdCounterScope::Global {
+        println!(
+            "{} already on global counter_scope — nothing to migrate.",
+            "✓".green()
+        );
+        return Ok(());
+    }
+
+    let mut registry = BlockRegistry::load(&blocks_path)?;
+    if registry.blocks.is_empty() {
+        anyhow::bail!("blocks.yaml is empty — no blocks to migrate from");
+    }
+
+    // Identify this clone's node id so the new `*` block belongs to it.
+    let node_id = load_node_id(&store_path);
+    let our_blocks: Vec<_> = registry
+        .blocks
+        .iter()
+        .filter(|b| b.node_id == node_id && !b.is_exhausted())
+        .map(|b| b.clone())
+        .collect();
+    if our_blocks.is_empty() {
+        anyhow::bail!(
+            "node {} has no active per-type blocks in blocks.yaml — \
+             either already migrated, or this clone hasn't been initialized",
+            node_id
+        );
+    }
+
+    // The new `*` block starts strictly above the highest range_end across
+    // ALL blocks (any node, any type) so we never collide with another
+    // clone's range. Then size more on top.
+    let highest_end: u32 = registry
+        .blocks
+        .iter()
+        .map(|b| b.range_end)
+        .max()
+        .unwrap_or(0);
+    let new_start = highest_end + 1;
+    let new_end = new_start + new_block_size - 1;
+
+    println!("{}", "Migration plan: per-type → global".bold());
+    println!("  node:                {}", node_id);
+    println!("  per-type blocks to retire (mark exhausted):");
+    for b in &our_blocks {
+        println!(
+            "    - {} {}-{}..{} (next was {})",
+            "·".dimmed(),
+            b.type_prefix,
+            b.range_start,
+            b.range_end,
+            b.next
+        );
+    }
+    println!(
+        "  new global block:    *-{}..{} (size {}) for node {}",
+        new_start, new_end, new_block_size, node_id
+    );
+    println!("  config write:        [id_format] counter_scope = \"global\"");
+    println!();
+    println!("After this migration:");
+    println!("  - existing requirement spec_ids stay UNCHANGED");
+    println!("  - new requirements use the global counter (FR-{}, BUG-{}, etc.)", new_start, new_start + 1);
+    println!("  - the retired per-type blocks remain in blocks.yaml as history");
+    println!();
+
+    if dry_run {
+        println!("{} dry-run — no changes written.", "→".cyan());
+        return Ok(());
+    }
+
+    if !yes {
+        use std::io::Write;
+        print!("Proceed? [y/N] ");
+        std::io::stdout().flush()?;
+        let mut ans = String::new();
+        std::io::stdin().read_line(&mut ans)?;
+        if !matches!(ans.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+            println!("Aborted.");
+            return Ok(());
+        }
+    }
+
+    // Apply: mark our per-type blocks exhausted (next = range_end + 1) so
+    // the dispenser skips them. Then append the new `*` block.
+    for b in registry.blocks.iter_mut() {
+        if b.node_id == node_id && !b.is_exhausted() {
+            b.next = b.range_end + 1;
+        }
+    }
+    let owner = aida_core::git_ops::git_config_get("user.email")
+        .ok()
+        .or_else(|| std::env::var("USER").ok())
+        .unwrap_or_else(|| "unknown".to_string());
+    registry.claim_block_with_floor(
+        node_id.clone(),
+        owner,
+        hostname(),
+        aida_core::IdCounterScope::GLOBAL_TYPE_PREFIX.to_string(),
+        new_block_size,
+        highest_end,
+    );
+    registry.save(&blocks_path)?;
+
+    // Update config.toml — preserve the file by line-rewriting; if
+    // counter_scope already exists (it shouldn't given the early check),
+    // overwrite. Otherwise append after the [id_format] section.
+    update_config_counter_scope(&config_path, "global")?;
+
+    // Stage + commit the registry change. The lease symlink in the
+    // session worktree means `git -C <store_path>` operates on the
+    // shared orphan branch.
+    let _ = aida_core::git_ops::add(&store_path, &["registry/blocks.yaml"]);
+    let _ = aida_core::git_ops::commit(
+        &store_path,
+        &format!(
+            "chore(registry): migrate node {} to global counter (*-{}..{})",
+            node_id, new_start, new_end
+        ),
+    );
+
+    println!();
+    println!("{} migration complete.", "✓".green().bold());
+    println!(
+        "  new global block: {}",
+        format!("*-{}..{}", new_start, new_end).cyan()
+    );
+    println!("  next `aida add` will dispense {}", format!("<TYPE>-{}", new_start).cyan());
+    println!();
+    println!("Don't forget to push:");
+    println!("  {}", "aida push".cyan());
+    Ok(())
+}
+
+/// Update the `[id_format] counter_scope` value in config.toml. Adds the
+/// line if missing, replaces it in-place if present. Preserves the rest
+/// of the file (comments, other keys, formatting).
+fn update_config_counter_scope(config_path: &std::path::Path, new_value: &str) -> Result<()> {
+    let content = std::fs::read_to_string(config_path)?;
+    let mut lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
+    let mut in_id_format = false;
+    let mut last_id_format_line: Option<usize> = None;
+    let mut replaced = false;
+    for (i, line) in lines.iter_mut().enumerate() {
+        let trimmed_owned: String = line.trim().to_string();
+        if trimmed_owned.starts_with('[') {
+            in_id_format = trimmed_owned == "[id_format]";
+            if in_id_format {
+                last_id_format_line = Some(i);
+            }
+            continue;
+        }
+        if in_id_format && trimmed_owned.starts_with("counter_scope") {
+            *line = format!("counter_scope = \"{}\"", new_value);
+            replaced = true;
+        }
+        if in_id_format && !trimmed_owned.is_empty() && !trimmed_owned.starts_with('#') {
+            last_id_format_line = Some(i);
+        }
+    }
+    if !replaced {
+        // Insert after the last line of the [id_format] section.
+        let insert_at = last_id_format_line.map(|i| i + 1);
+        let new_line = format!("counter_scope = \"{}\"", new_value);
+        match insert_at {
+            Some(idx) => lines.insert(idx, new_line),
+            None => {
+                // No [id_format] section found — append both header and value.
+                lines.push(String::new());
+                lines.push("[id_format]".to_string());
+                lines.push(new_line);
+            }
+        }
+    }
+    std::fs::write(config_path, lines.join("\n") + "\n")?;
+    Ok(())
+}
 
 /// trace:FR-1-043 | ai:claude
 fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
