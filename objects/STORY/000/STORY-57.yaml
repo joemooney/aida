@@ -52,12 +52,12 @@ description: |
 
   - Queue archive / history of items routed elsewhere — defer
   - Cross-session queue stealing ("session A reassigns item to session B") — defer; manual queue-remove + queue-add suffices
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T03:07:01.020971773Z
-modified_at: 2026-05-10T03:07:01.020971773Z
+modified_at: 2026-05-10T04:47:53.551866125Z
 req_type: Story
 relationships:
 - rel_type: Child
