@@ -40,10 +40,10 @@ description: |
   - [ ] Skill produces title + body matching PR-3/PR-4/PR-5 format
   - [ ] Skill confirms with user before invoking `gh pr create`
   - [ ] Tested against current EPIC-20 batch5 worktree (the prompt that motivated this filing)
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T17:23:27.184082740Z
-modified_at: 2026-05-10T17:23:27.184082740Z
+modified_at: 2026-05-10T22:26:40.436469418Z
 req_type: Story
