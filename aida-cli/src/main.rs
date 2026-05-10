@@ -6159,23 +6159,20 @@ fn record_role_activity(spec_id: &str, action: &str) {
         Ok(t) => t,
         Err(_) => return,
     };
-    // Dedupe consecutive entries on the same spec_id+action.
+    // BUG-65: LRU-by-(spec_id, action). Drop any prior entry with the
+    // same key, then insert at the front — interleaved sequences like
+    // [show A, edit B, show A] no longer leave a stale duplicate behind.
+    // trace:BUG-65 | ai:claude
     let entry = RoleActivity {
         spec_id: spec_id.to_string(),
         action: action.to_string(),
         at: chrono::Utc::now(),
     };
-    let dup = state
+    state
         .activity
-        .first()
-        .map(|prev| prev.spec_id == entry.spec_id && prev.action == entry.action)
-        .unwrap_or(false);
-    if !dup {
-        state.activity.insert(0, entry);
-        state.activity.truncate(ACTIVITY_MAX);
-    } else if let Some(first) = state.activity.first_mut() {
-        first.at = entry.at;
-    }
+        .retain(|prev| !(prev.spec_id == entry.spec_id && prev.action == entry.action));
+    state.activity.insert(0, entry);
+    state.activity.truncate(ACTIVITY_MAX);
     state.last_active_at = chrono::Utc::now();
     let _ = save_role_at(&state, &path);
 }
@@ -8501,23 +8498,17 @@ fn append_session_activity(
         action: action.to_string(),
         at: chrono::Utc::now(),
     };
-    let dup = log
-        .entries
-        .first()
-        .map(|prev| {
-            prev.role == entry.role
-                && prev.spec_id == entry.spec_id
-                && prev.action == entry.action
-        })
-        .unwrap_or(false);
-    if dup {
-        if let Some(first) = log.entries.first_mut() {
-            first.at = entry.at;
-        }
-    } else {
-        log.entries.insert(0, entry);
-        log.entries.truncate(SESSION_ACTIVITY_MAX);
-    }
+    // BUG-65: LRU-by-(role, spec_id, action). Drop any prior entry with
+    // the same key, then insert at the front — interleaved actions across
+    // specs no longer accumulate stale duplicates.
+    // trace:BUG-65 | ai:claude
+    log.entries.retain(|prev| {
+        !(prev.role == entry.role
+            && prev.spec_id == entry.spec_id
+            && prev.action == entry.action)
+    });
+    log.entries.insert(0, entry);
+    log.entries.truncate(SESSION_ACTIVITY_MAX);
     save_session_activity(project_root, session_id, &log)
 }
 
@@ -9686,6 +9677,62 @@ mod statusline_tests {
         let log = load_session_activity(root, id);
         assert_eq!(log.entries.len(), 2);
         assert_eq!(log.entries[0].action, "show", "newest first");
+    }
+
+    /// BUG-65: dedupe is LRU-by-(role, spec_id, action), not just
+    /// consecutive — interleaved actions across specs still collapse
+    /// duplicates. Without this, a long agent run that revisits the same
+    /// spec produces an ever-growing log.
+    /// trace:BUG-65 | ai:claude
+    #[test]
+    fn session_activity_dedupes_lru_across_interleaving() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".aida/sessions")).unwrap();
+        let id = "lru-session-01";
+
+        // Sequence: show A → edit B → show A. The second show A must
+        // remove the first one and land at the front (not append a
+        // duplicate behind edit B).
+        append_session_activity(root, id, "implementer", "STORY-A", "show").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        append_session_activity(root, id, "implementer", "STORY-B", "edit").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        append_session_activity(root, id, "implementer", "STORY-A", "show").unwrap();
+
+        let log = load_session_activity(root, id);
+        assert_eq!(log.entries.len(), 2, "duplicate show STORY-A collapsed");
+        assert_eq!(log.entries[0].spec_id, "STORY-A", "newest first");
+        assert_eq!(log.entries[0].action, "show");
+        assert_eq!(log.entries[1].spec_id, "STORY-B");
+    }
+
+    /// BUG-65 acceptance: shipping 3 specs sequentially via a typical
+    /// implementer lifecycle (edit → done) leaves the activity log
+    /// pointing at the 3rd, not the 1st. This is the contract the
+    /// statusline @SPEC reads off of, so this test pins the regression
+    /// that motivated the bug.
+    /// trace:BUG-65 | ai:claude
+    #[test]
+    fn session_activity_three_specs_lifecycle_points_at_last() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".aida/sessions")).unwrap();
+        let id = "lifecycle-01";
+
+        for spec in ["STORY-1", "STORY-2", "STORY-3"] {
+            append_session_activity(root, id, "implementer", spec, "edit").unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(1));
+            append_session_activity(root, id, "implementer", spec, "done").unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+
+        let log = load_session_activity(root, id);
+        // Newest action is `done` on STORY-3.
+        assert_eq!(log.entries[0].spec_id, "STORY-3");
+        assert_eq!(log.entries[0].action, "done");
+        // Each spec contributes 2 entries (edit, done) — total 6, no dups.
+        assert_eq!(log.entries.len(), 6);
     }
 
     /// STORY-67: extract_acceptance_section finds `## Acceptance`,
@@ -17939,6 +17986,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     for_role: role.clone(),
                 };
                 global_queue::add(&role, gentry)?;
+                // BUG-65: bump role activity on queue-add so statusline
+                // tracks "started caring about this spec" alongside the
+                // existing edit/show/comment events.
+                // trace:BUG-65 | ai:claude
+                record_role_activity(spec_id, "queue-add");
                 println!(
                     "{} Added {} ({}) to {} {}",
                     "✓".green(),
@@ -17962,6 +18014,10 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 for_session: for_session_routing.clone(),
             };
             storage.queue_add(entry)?;
+            // BUG-65: bump role activity on queue-add so statusline tracks
+            // "started caring about this spec" alongside edit/show/comment.
+            // trace:BUG-65 | ai:claude
+            record_role_activity(spec_id, "queue-add");
 
             // trace:STORY-57 | ai:claude
             let mut routing_parts: Vec<String> = Vec::new();
@@ -18456,6 +18512,13 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 }
             })?;
             storage.queue_remove(&user_id, &req_id)?;
+            // BUG-65: queue done bypasses Command::Edit (sets status via
+            // update_atomically directly), so the role activity log used
+            // to miss it entirely — leaving statusline @SPEC stuck on the
+            // last show/comment after every shipped spec. Bump explicitly
+            // here so the most recently shipped spec wins.
+            // trace:BUG-65 | ai:claude
+            record_role_activity(spec_id, "done");
 
             println!(
                 "{} {} marked completed and removed from queue.",
