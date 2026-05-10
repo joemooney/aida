@@ -6564,7 +6564,365 @@ fn handle_doctor_command(cmd: &cli::DoctorCommand) -> Result<()> {
             yes,
             size,
         } => doctor_migrate_counter_scope(to, *dry_run, *yes, *size),
+        cli::DoctorCommand::RepairStaleBlocks { dry_run, yes } => {
+            doctor_repair_stale_blocks(*dry_run, *yes)
+        }
+        cli::DoctorCommand::ScrubCollisions => doctor_scrub_collisions(),
+        cli::DoctorCommand::Fsck => doctor_fsck(),
     }
+}
+
+/// Recursively collect every `*.yaml` file under `root` into `out`.
+/// Hand-rolled to avoid adding a walkdir dep just for the doctor ops.
+/// The orphan store's objects/ tree is shallow (3 levels) so a simple
+/// recursive read_dir is fine. trace:EPIC-19 | ai:claude
+fn walk_yamls(root: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            walk_yamls(&path, out);
+        } else if path.extension().and_then(|s| s.to_str()) == Some("yaml") {
+            out.push(path);
+        }
+    }
+}
+
+/// Mark blocks whose owner isn't in nodes.toml as exhausted, so the
+/// dispenser skips them but their range stays reserved (so other
+/// clones don't reallocate the same numbers and create a real
+/// collision). trace:EPIC-19 | ai:claude
+fn doctor_repair_stale_blocks(dry_run: bool, yes: bool) -> Result<()> {
+    use aida_core::{BlockRegistry, NodeRegistry};
+
+    let project_root = find_project_root()?;
+    let store_path = project_root.join(".aida-store");
+    let blocks_path = store_path.join("registry").join("blocks.yaml");
+    let nodes_path = store_path.join("registry").join("nodes.toml");
+
+    if !blocks_path.exists() {
+        println!("(no blocks.yaml — nothing to repair)");
+        return Ok(());
+    }
+
+    let mut blocks = BlockRegistry::load(&blocks_path).unwrap_or_default();
+    let nodes = NodeRegistry::load(&nodes_path).unwrap_or_default();
+    let registered: std::collections::HashSet<String> =
+        nodes.nodes.iter().map(|n| n.id.clone()).collect();
+
+    let stale: Vec<(usize, &aida_core::AgreedIdBlock)> = blocks
+        .blocks
+        .iter()
+        .enumerate()
+        .filter(|(_, b)| !registered.contains(&b.node_id) && !b.is_exhausted())
+        .collect();
+
+    if stale.is_empty() {
+        println!("{} no stale blocks — every active block has a registered node.", "✓".green());
+        return Ok(());
+    }
+
+    println!("{}", "Stale blocks (owner not in nodes.toml)".bold());
+    for (_, b) in &stale {
+        println!(
+            "  {} node `{}` owns {}-{}..{} (next={})",
+            "·".dimmed(),
+            b.node_id,
+            b.type_prefix,
+            b.range_start,
+            b.range_end,
+            b.next
+        );
+    }
+    println!();
+    println!("Plan: bump each block's `next` past `range_end` so the dispenser");
+    println!("      skips it. The range stays reserved (preserves cross-clone safety).");
+    println!();
+
+    if dry_run {
+        println!("{} dry-run — no changes written.", "→".cyan());
+        return Ok(());
+    }
+    if !yes {
+        use std::io::Write;
+        print!("Tombstone {} stale block(s)? [y/N] ", stale.len());
+        std::io::stdout().flush()?;
+        let mut ans = String::new();
+        std::io::stdin().read_line(&mut ans)?;
+        if !matches!(ans.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+            println!("Aborted.");
+            return Ok(());
+        }
+    }
+
+    let stale_indices: Vec<usize> = stale.iter().map(|(i, _)| *i).collect();
+    let count = stale_indices.len();
+    for idx in stale_indices {
+        let b = &mut blocks.blocks[idx];
+        b.next = b.range_end + 1;
+    }
+    blocks.save(&blocks_path)?;
+    let _ = aida_core::git_ops::add(&store_path, &["registry/blocks.yaml"]);
+    let _ = aida_core::git_ops::commit(
+        &store_path,
+        &format!("chore(registry): tombstone {} stale block(s) (no node owner)", count),
+    );
+
+    println!("{} tombstoned {} block(s).", "✓".green().bold(), count);
+    println!("  Push with: {}", "aida push".cyan());
+    Ok(())
+}
+
+/// Walk the orphan store's objects tree, group requirements by their
+/// `spec_id` field, and report any spec_id claimed by more than one
+/// requirement. v1 reports only — auto-renumber is dangerous (would
+/// orphan trace comments + commit refs). trace:EPIC-19 | ai:claude
+fn doctor_scrub_collisions() -> Result<()> {
+    let project_root = find_project_root()?;
+    let store_path = project_root.join(".aida-store");
+    let objects_root = store_path.join("objects");
+    if !objects_root.exists() {
+        println!("(no objects/ tree — nothing to check)");
+        return Ok(());
+    }
+
+    let mut by_spec: std::collections::HashMap<String, Vec<(String, String, String)>> =
+        std::collections::HashMap::new();
+
+    let mut yaml_files: Vec<std::path::PathBuf> = Vec::new();
+    walk_yamls(&objects_root, &mut yaml_files);
+    for path in &yaml_files {
+        let Ok(content) = std::fs::read_to_string(path) else {
+            continue;
+        };
+        let mut spec_id = String::new();
+        let mut uuid = String::new();
+        let mut title = String::new();
+        for raw in content.lines() {
+            let line = raw.trim_start();
+            if let Some(v) = line.strip_prefix("spec_id:") {
+                spec_id = v.trim().trim_matches('"').trim_matches('\'').to_string();
+            } else if let Some(v) = line.strip_prefix("id:") {
+                if uuid.is_empty() {
+                    uuid = v.trim().trim_matches('"').trim_matches('\'').to_string();
+                }
+            } else if let Some(v) = line.strip_prefix("title:") {
+                if title.is_empty() {
+                    title = v.trim().trim_matches('"').trim_matches('\'').to_string();
+                }
+            }
+            if !spec_id.is_empty() && !uuid.is_empty() && !title.is_empty() {
+                break;
+            }
+        }
+        if spec_id.is_empty() {
+            continue;
+        }
+        by_spec
+            .entry(spec_id)
+            .or_default()
+            .push((uuid, title, path.display().to_string()));
+    }
+
+    let mut collisions: Vec<(&String, &Vec<(String, String, String)>)> = by_spec
+        .iter()
+        .filter(|(_, entries)| entries.len() > 1)
+        .collect();
+    collisions.sort_by(|a, b| a.0.cmp(b.0));
+
+    if collisions.is_empty() {
+        println!(
+            "{} no spec_id collisions — every spec_id maps to exactly one requirement.",
+            "✓".green()
+        );
+        return Ok(());
+    }
+
+    println!(
+        "{} {} spec_id collision(s) found:",
+        "✗".red().bold(),
+        collisions.len()
+    );
+    println!();
+    for (spec, entries) in &collisions {
+        println!("{}:", spec.bold());
+        for (uuid, title, path) in entries.iter() {
+            let title_disp = if title.is_empty() { "(no title)".dimmed().to_string() } else { title.clone() };
+            println!(
+                "  {} {} — {}",
+                uuid.yellow(),
+                title_disp,
+                path.dimmed()
+            );
+        }
+        println!();
+    }
+    println!("Resolution (v1 is detect-only — auto-renumber would orphan trace comments):");
+    println!("  - Decide which UUID is canonical for each spec_id");
+    println!("  - For the others, edit their YAML directly to set a fresh spec_id, or");
+    println!("    delete their YAML if duplicates");
+    println!();
+    std::process::exit(1);
+}
+
+/// Compose every diagnostic into a single report. Exits non-zero on any
+/// problem so it can gate CI. trace:EPIC-19 | ai:claude
+fn doctor_fsck() -> Result<()> {
+    let project_root = find_project_root()?;
+    let store_path = project_root.join(".aida-store");
+
+    println!("{}", "AIDA fsck".bold());
+    println!("  project root:  {}", project_root.display());
+    println!("  store path:    {}", store_path.display());
+    println!();
+
+    let mut had_problem = false;
+
+    // --- Check 1: block registry consistency (FR-281's logic, inline) ---
+    println!("{}", "── block registry ──".bold());
+    use aida_core::{BlockRegistry, NodeRegistry};
+    let blocks_path = store_path.join("registry").join("blocks.yaml");
+    let nodes_path = store_path.join("registry").join("nodes.toml");
+    if blocks_path.exists() {
+        let blocks = BlockRegistry::load(&blocks_path).unwrap_or_default();
+        let nodes = NodeRegistry::load(&nodes_path).unwrap_or_default();
+        let registered: std::collections::HashSet<String> =
+            nodes.nodes.iter().map(|n| n.id.clone()).collect();
+        let block_owners: std::collections::HashSet<String> =
+            blocks.blocks.iter().map(|b| b.node_id.clone()).collect();
+        let orphan_blocks: Vec<&str> = block_owners
+            .iter()
+            .filter(|id| !registered.contains(*id))
+            .map(|s| s.as_str())
+            .collect();
+        if orphan_blocks.is_empty() {
+            println!("  {} every block has a registered node owner.", "✓".green());
+        } else {
+            had_problem = true;
+            println!(
+                "  {} {} block-owning node(s) not in nodes.toml: {}",
+                "✗".red(),
+                orphan_blocks.len(),
+                orphan_blocks.join(", ")
+            );
+            println!(
+                "    fix: {}",
+                "aida doctor repair-stale-blocks".cyan()
+            );
+        }
+    } else {
+        println!("  {} no blocks.yaml — skipping (project may be node-aware-only).", "·".dimmed());
+    }
+    println!();
+
+    // --- Check 2: spec_id collisions ---
+    println!("{}", "── spec_id collisions ──".bold());
+    let objects_root = store_path.join("objects");
+    if objects_root.exists() {
+        let mut by_spec: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
+        let mut yaml_files: Vec<std::path::PathBuf> = Vec::new();
+        walk_yamls(&objects_root, &mut yaml_files);
+        for path in &yaml_files {
+            if let Ok(content) = std::fs::read_to_string(path) {
+                for line in content.lines() {
+                    let t = line.trim_start();
+                    if let Some(v) = t.strip_prefix("spec_id:") {
+                        let spec = v.trim().trim_matches('"').trim_matches('\'').to_string();
+                        if !spec.is_empty() {
+                            *by_spec.entry(spec).or_default() += 1;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        let collisions: Vec<&String> = by_spec
+            .iter()
+            .filter(|(_, count)| **count > 1)
+            .map(|(spec, _)| spec)
+            .collect();
+        if collisions.is_empty() {
+            println!("  {} every spec_id maps to one requirement.", "✓".green());
+        } else {
+            had_problem = true;
+            println!(
+                "  {} {} spec_id(s) claimed by multiple requirements: {}",
+                "✗".red(),
+                collisions.len(),
+                collisions
+                    .iter()
+                    .take(8)
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            println!("    fix: {}", "aida doctor scrub-collisions".cyan());
+        }
+    } else {
+        println!("  {} no objects/ — skipping.", "·".dimmed());
+    }
+    println!();
+
+    // --- Check 3: cache freshness ---
+    println!("{}", "── cache freshness ──".bold());
+    let cache_path = aida_core::CachedGitBackend::default_cache_path(&store_path);
+    if cache_path.exists() {
+        // Simple heuristic: cache exists. Detailed staleness check
+        // requires reading cache HEAD — defer to `aida cache status`.
+        println!("  {} cache exists at {} (run `aida cache status` for HEAD-vs-store check).", "·".dimmed(), cache_path.display());
+    } else {
+        println!("  {} cache missing — run `aida cache rebuild` if list/search are slow.", "·".dimmed());
+    }
+    println!();
+
+    // --- Check 4: counter_scope sanity (warn if config + blocks disagree) ---
+    println!("{}", "── counter_scope ──".bold());
+    let scope = read_id_counter_scope(&project_root);
+    let has_global_block = blocks_path.exists()
+        && BlockRegistry::load(&blocks_path)
+            .map(|br| {
+                br.blocks
+                    .iter()
+                    .any(|b| b.type_prefix == aida_core::IdCounterScope::GLOBAL_TYPE_PREFIX)
+            })
+            .unwrap_or(false);
+    match (scope, has_global_block) {
+        (aida_core::IdCounterScope::Global, true) => {
+            println!("  {} config=global, blocks have a `*` block. Consistent.", "✓".green());
+        }
+        (aida_core::IdCounterScope::Global, false) => {
+            had_problem = true;
+            println!(
+                "  {} config says global but no `*` block exists. New `aida add` would fall back to per-type.",
+                "✗".red()
+            );
+            println!(
+                "    fix: {}",
+                "aida doctor migrate-counter-scope --to global".cyan()
+            );
+        }
+        (aida_core::IdCounterScope::PerType, true) => {
+            println!(
+                "  {} config=per-type, but a `*` block exists (mid-migration?). Consider running `migrate-counter-scope --to global`.",
+                "·".yellow()
+            );
+        }
+        (aida_core::IdCounterScope::PerType, false) => {
+            println!("  {} config=per-type, no `*` block. Consistent.", "✓".green());
+        }
+    }
+    println!();
+
+    if had_problem {
+        println!("{}", "fsck found problems — see above.".red().bold());
+        std::process::exit(1);
+    } else {
+        println!("{}", "✓ fsck clean.".green().bold());
+    }
+    Ok(())
 }
 
 fn doctor_migrate_counter_scope(
