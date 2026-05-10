@@ -1,0 +1,39 @@
+id: 019e0ff3-8046-7621-9e39-57216fca5308
+spec_id: STORY-62
+agreed_id: STORY-62
+title: 'aida list --parent <id> + aida show --tree: show children with statuses'
+description: |
+  Today aida rel list <id> shows the parent's relationships including children, but only their titles — no statuses. To answer "is EPIC-20 done?" you need a per-child shell loop calling aida show.
+
+  ## Proposal
+
+  Two complementary entry points, same underlying data:
+
+  1. `aida list --parent <id>`: extends the existing list filters with a parent constraint. Returns the standard list table (ID/Type/Status/Priority/Title) for every direct child of <id>. Composes with --status, --priority, etc., so `aida list --parent EPIC-20 --status approved` gives "what's still open under EPIC-20."
+
+  2. `aida show <id> --tree`: indented hierarchical view, status indicator per row:
+
+     EPIC-20  In Progress   aida session start: scoped concurrent sessions ...
+       ✓ BUG-52    Completed     aida session start fails to symlink ...
+       ✓ STORY-48  Completed     lease enforcement
+       ✓ STORY-55  Completed     statusline @SPEC defaults
+       ○ STORY-52  Approved      session worktree shares target/
+       ○ STORY-53  Approved      statusline shows session scope
+       ...
+
+  Tree-walk descends recursively (an EPIC's child STORY may itself have grandchildren); cap at depth=3 by default with `--depth N`.
+
+  ## Why high priority
+
+  This is the canonical "is this EPIC done?" query. Without it, even simple project status takes a shell one-liner. Surfaced 2026-05-09 when the user asked how to check EPIC-20's children's statuses and the answer was "loop over rel list output."
+
+  ## Implementation hint
+
+  Both commands share a "find direct children" helper: walk the parent's relationships array, filter rel_type=Parent, resolve target uuids via the cache. The cache already indexes by uuid; this should be a single SQLite query under the hood.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T03:34:36.870677875Z
+modified_at: 2026-05-10T03:34:36.870677875Z
+req_type: Story
