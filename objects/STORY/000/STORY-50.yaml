@@ -1,0 +1,16 @@
+id: 019e0fb9-8da5-70d1-b0fc-b51583ab9050
+spec_id: STORY-50
+agreed_id: STORY-50
+title: 'EPIC-21 v3: agent + release-tag integration'
+description: |
+  After v2 ships:
+  - Agents (Claude, Codex) working on an old branch automatically see the right store version (via the trailer + auto-checkout on session-enter)
+  - Release tags carry both code SHA + store SHA so git checkout v1.2.0 reproducibly gives you code v1.2.0 + the store as it was at v1.2.0
+  - Branch-aware: feature branches can have their own store snapshot diverging from main; merge resolves both
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T02:31:19.205259100Z
+modified_at: 2026-05-10T02:31:19.205259100Z
+req_type: Story
