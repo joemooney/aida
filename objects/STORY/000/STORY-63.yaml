@@ -1,0 +1,47 @@
+id: 019e0ff7-0056-70b0-84ba-17f841fd2a33
+spec_id: STORY-63
+agreed_id: STORY-63
+title: '/aida-pickup: scope-aware fallback when queue is empty'
+description: |
+  Today /aida-pickup reads the role's queue. If the queue is empty, it returns "queue is empty" and stops. But when running in a session scoped to EPIC-X (lease at .aida/sessions/<id>.toml), the natural pickup candidates are EPIC-X's approved children — even if no one explicitly queued them.
+
+  User concrete observation 2026-05-09: in a fresh EPIC-20 session with 11 approved child stories (STORY-52..62), /aida-pickup said the queue was empty. Workaround was to manually `aida queue add` each story.
+
+  ## Proposal
+
+  Three-tier fallback for /aida-pickup (and the underlying aida queue next or whatever the resolver is):
+
+  1. **Queue first**: if items are routed to my role (via --for), pick the head. Same as today.
+  2. **Scope fallback**: if my queue is empty AND cwd is in an active session lease, look at the scope's children. Filter to:
+     - status = approved
+     - no sibling already in-progress (don't double-pick under the same EPIC)
+     - matches my role's scope filter (tags/status) if any
+     Sort by priority (high → low), then by created_at (oldest first). Pick the head.
+  3. **Empty empty**: if both above are empty, return a useful message — "queue empty AND scope has no approved+ready children; consider `aida list --status approved` to find work."
+
+  ## Render
+
+  When picking from the scope fallback, message clearly:
+    "Queue empty. EPIC-20 has 11 approved children; picking STORY-52 (highest priority)."
+
+  vs explicit queue pickup:
+    "Picking STORY-52 from your queue."
+
+  User can tell at a glance which path was taken.
+
+  ## Why high priority
+
+  This is the friction point that makes sessions feel disconnected from the work they're scoped to. Without it, `aida session start --owns EPIC-X` just creates a worktree — it doesn't actually give the agent any sense of "work here." With it, the session-start → pickup loop becomes one motion.
+
+  ## Composes with
+
+  - STORY-48 (lease enforcement) — both touch the same lease-lookup code
+  - STORY-57 (queue routing by scope) — when that lands, scope-routed items should bubble up before scope-fallback children
+  - STORY-62 (--parent / --tree views) — the children-of-scope query is the same data
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T03:38:26.262043609Z
+modified_at: 2026-05-10T03:38:26.262043609Z
+req_type: Story
