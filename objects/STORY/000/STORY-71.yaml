@@ -45,7 +45,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T06:06:24.835272423Z
-modified_at: 2026-05-10T17:26:45.362794254Z
+modified_at: 2026-05-10T17:44:05.619686593Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -57,3 +57,8 @@ comments:
   content: 'Implemented in epic-20-batch5 (PR pending). Summary: query_pr_metadata helper for gh/glab JSON; lease gains pr_head_sha/pr_base_sha/pr_base_ref (back-compat via #[serde(default)]); session start prints pr-head/pr-base lines; 4 new tests + 311 workspace pass. Note: the empty-branch symptom in the original bug filing predated STORY-61''s fix in earlier batch — no current regression. STORY-68''s session show extension on epic-20-batch4 will surface these new lease fields once batches merge.'
   created_at: 2026-05-10T17:26:45.362794254Z
   modified_at: 2026-05-10T17:26:45.362794254Z
+- id: 019e12fd-38f3-7d13-ae9a-3f74646d2cf1
+  author: joe
+  content: 'PR #5 (merged 2026-05-10) shipped the data-write half: lease now records pr_head_sha/pr_base_sha/pr_base_ref, gh/glab JSON parsers are unit-tested, session-start summary prints the captured SHAs, and CLI-missing path soft-falls-back with a stderr hint. Read-side acceptance (''aida session show <id> displays the PR head/base SHAs'') still pending — completes when PR #4 (epic-20-batch4, contains STORY-68''s session_show) wires the printout. Keeping status=approved until then.'
+  created_at: 2026-05-10T17:44:05.619686593Z
+  modified_at: 2026-05-10T17:44:05.619686593Z
