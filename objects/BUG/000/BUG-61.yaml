@@ -58,12 +58,12 @@ description: |
   - [ ] `aida session start` refuses to recreate a worktree path that has a leaked claude
   - [ ] `aida fsck` reports leaked claude processes as a warning row
   - [ ] Existing dangling-cwd processes can be cleaned via `aida session reap` (new subcommand) or just `kill <pid>` after `aida fsck` flags them
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T04:43:21.050664346Z
-modified_at: 2026-05-10T06:35:33.479468507Z
+modified_at: 2026-05-10T07:03:00.463622516Z
 req_type: Bug
 relationships:
 - rel_type: Child
