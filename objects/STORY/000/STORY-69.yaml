@@ -1,0 +1,66 @@
+id: 019e1030-fd52-7b50-bc50-0976bdeb53e7
+spec_id: STORY-69
+agreed_id: STORY-69
+title: Session liveness probe via process inspection (sysinfo crate)
+description: |
+  Foundation for STORY-59 (default-recent listing) and STORY-60 (prune command). Without a liveness check, both will misclassify long-running sessions as stale and either hide them or delete them.
+
+  ## Approach
+
+  Use the `sysinfo` crate (cross-platform: Linux /proc, macOS libproc, Windows toolhelp). Already battle-tested by `bottom`/`procs`/`cargo`.
+
+  ```toml
+  sysinfo = "0.30"
+  ```
+
+  ```rust
+  pub struct LiveSession { pub pid: u32, pub cwd: PathBuf, pub jsonl: Option<PathBuf>, pub stale_cwd: bool }
+
+  pub fn probe_live_claude_sessions() -> Vec<LiveSession> {
+      let mut sys = sysinfo::System::new();
+      sys.refresh_processes_specifics(ProcessRefreshKind::new().with_cwd().with_cmd());
+      sys.processes().values()
+         .filter(|p| p.name() == "claude")
+         .map(|p| {
+             let cwd = p.cwd().map(PathBuf::from).unwrap_or_default();
+             // /proc readlink returns "/path/to/dir (deleted)" if inode unlinked — sysinfo preserves this
+             let stale_cwd = cwd.to_string_lossy().ends_with(" (deleted)");
+             let real_cwd = if stale_cwd { /* strip suffix */ } else { cwd.clone() };
+             let jsonl = recent_jsonl_in_project(&real_cwd);  // mtime < 60s heuristic
+             LiveSession { pid: p.pid().as_u32(), cwd: real_cwd, jsonl, stale_cwd }
+         })
+         .collect()
+  }
+  ```
+
+  ## Why fd-based probe doesn't work
+
+  Tested on Linux 2026-05-09: `/proc/<pid>/fd/` does NOT contain any session-specific jsonl for live `claude` processes — only `/home/joe/.claude/history.jsonl` is held open. Session jsonls are opened-append-closed per tool call, so fd inspection always sees them closed. Mtime is the only viable signal for the *active* session within a project dir.
+
+  ## Bonus diagnostic — leaked claude processes
+
+  While probing, also surfaced a leaked process: PID 2537824 with `cwd=/home/joe/ai/aida-epic-20 (deleted)`. That worktree was torn down (pr-2 cleanup) but the claude process inside it never exited — its cwd inode is dangling. `aida session leases`/`fsck`/the new probe should warn about these. Add to acceptance:
+
+    $ aida session leases
+    WARN: PID 2537824 cwd is dangling (worktree removed) — `kill 2537824` to clean up
+
+  ## Composes with
+
+  - **STORY-59** (default-recent in `aida session list`) — promotes "recent OR live" instead of just "recent"
+  - **STORY-60** (`aida session prune`) — refuses to delete jsonls whose project dir has a live claude cwd
+  - **BUG-59** (Stop hook ENOENT after worktree removal) — same root cause: AIDA assumes session lifetime ≈ worktree lifetime, but a stuck claude can outlive its worktree
+
+  ## Acceptance
+
+  - [ ] `sysinfo` added to aida-cli or a new aida-core::process module
+  - [ ] `probe_live_claude_sessions()` returns live PIDs with cwd + best-effort jsonl mapping
+  - [ ] Detects and reports `(deleted)` cwd as `stale_cwd: true`
+  - [ ] Used by `aida session list` (mark live rows), `aida session prune` (skip live), `aida session leases --verbose` (warn on stale_cwd)
+  - [ ] Falls back gracefully on platforms where sysinfo can't read cwd (Windows pre-Vista, restricted procfs) — degrades to mtime-only without crashing
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T04:41:46.578062063Z
+modified_at: 2026-05-10T04:41:46.578062063Z
+req_type: Story
