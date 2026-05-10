@@ -1,0 +1,68 @@
+id: 019e134a-57d3-70e0-a15c-006dea10310d
+spec_id: STORY-86
+agreed_id: STORY-86
+title: 'New status ''Done'': distinguish ''work finished on branch'' from ''merged to main'' (Completed)'
+description: |
+  Caught 2026-05-10 — user noticed that `aida history` and `aida show` both report `Completed` for two semantically different states:
+
+  1. **Done on branch**: agent finished work, ran `aida queue done`, but the PR isn't merged yet (e.g., BUG-62, BUG-53, BUG-66, STORY-72 — completed by batch6 implementer but PR-6 not opened yet)
+  2. **Merged to main**: actually shipped, visible to everyone (e.g., BUG-60, STORY-65, STORY-68 — from PR-3/4/5 merges)
+
+  Today's `Completed` status conflates these. You can't filter "what's pending merge" vs "what's actually live on main" without manually cross-referencing git.
+
+  ## Proposed lifecycle
+
+  ```
+  Draft → Approved → Planned → InProgress → Done → Completed
+                                            ↑       ↑
+                                            branch  merged
+                                ↘                   ↗
+                                 Rejected (terminal)
+  ```
+
+  - **InProgress**: agent currently working
+  - **Done**: `aida queue done` flips here; work finished on a branch
+  - **Completed**: only set when commit lands on `main` (or default branch); auto-bumped from `Done`
+
+  ## Auto-bump mechanism
+
+  aida's prepare-commit-msg hook (EPIC-21) already adds `Aida-Store: <sha>` to every code commit. Extend the pull/sync path:
+
+  1. `aida db sync --pull` (and the proposed `aida pull` from TASK-43) — after fetching, scan new commits on main
+  2. For each commit: parse `(REQ-ID)` from subject line and `Aida-Store:` trailer
+  3. For each REQ-ID currently in `Done` status: bump to `Completed`
+  4. Optional: record `completed_at` and `completion_sha` on the req (composes with STORY-81 implementation_info)
+
+  ## Migration
+
+  Existing `Completed` reqs are assumed merged (since they're on main). Agent behavior changes: `aida queue done` now flips to `Done`, not `Completed`. Reviewer-driven workflow: at PR merge, reviewer may also manually flip `Done` → `Completed` if auto-bump hasn't run yet.
+
+  ## Composes with
+
+  - EPIC-21 (Aida-Store trailer) — provides the link between commits and specs
+  - STORY-81 (implementation_info auto-populate) — natural to populate both at the same moment
+  - BUG-65 (activity log) — both bump events become useful activity-log entries
+  - TASK-43 (aida pull) — sync path is where auto-bump fires
+
+  ## Open questions
+
+  - Should `Done` show distinctly in `aida list` / `aida history` / statusline `@SPEC` ? Probably yes — different color, separate filter
+  - For projects with no git (centralized SQLite mode), `Done` is the new terminal — auto-bump to `Completed` only fires for git-canonical
+  - What about reverted commits? If a commit with `(FR-X)` is reverted on main, should FR-X bump back from Completed → ? — out of scope for v1, file as followup
+
+  ## Acceptance
+
+  - [ ] `RequirementStatus::Done` enum variant added (between InProgress and Completed)
+  - [ ] `aida queue done` flips to `Done`, not `Completed`
+  - [ ] `aida db sync --pull` (and `aida pull`) auto-bumps `Done` → `Completed` when a referencing commit lands on main
+  - [ ] `aida list --status done` works (and shows the new state in default list view distinctly)
+  - [ ] `aida history` differentiates Done vs Completed visually
+  - [ ] Migration tooling for existing Completed reqs (treat as already-bumped; no action needed)
+  - [ ] Documented in CLAUDE.md and the META prompts (so agents know to use the new status)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T19:08:19.795760812Z
+modified_at: 2026-05-10T19:08:19.795760812Z
+req_type: Story
