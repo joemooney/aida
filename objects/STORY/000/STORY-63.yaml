@@ -38,12 +38,12 @@ description: |
   - STORY-48 (lease enforcement) — both touch the same lease-lookup code
   - STORY-57 (queue routing by scope) — when that lands, scope-routed items should bubble up before scope-fallback children
   - STORY-62 (--parent / --tree views) — the children-of-scope query is the same data
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T03:38:26.262043609Z
-modified_at: 2026-05-10T03:38:26.262043609Z
+modified_at: 2026-05-10T04:11:30.092627327Z
 req_type: Story
 relationships:
 - rel_type: Child
