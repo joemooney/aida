@@ -1,0 +1,26 @@
+id: 019e10a7-a086-7631-9579-8d4dc6b71926
+spec_id: STORY-77
+agreed_id: STORY-77
+title: 'Cross-project search: aida search --all-projects'
+description: |
+  Walk the registry, run search across each project's cache, merge results with project prefix.
+
+  ```
+  aida search "session lease" --all-projects
+  [aida]        STORY-48  Session lease enforcement on edit (...)
+  [aida-tutor]  STORY-29  Exercise: session start (...)
+  ```
+
+  ## Acceptance
+
+  - [ ] `aida search Q --all-projects` walks registry
+  - [ ] Per-project results show project prefix
+  - [ ] Results merged-and-ranked (or grouped — pick one based on UX testing)
+  - [ ] Slow path: search each project sequentially (registry size is tiny — single-digit count)
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T06:51:21.606041294Z
+modified_at: 2026-05-10T06:51:21.606041294Z
+req_type: Story
