@@ -9826,6 +9826,31 @@ fn probe_dangling_claudes_at_path(worktree: &std::path::Path) -> Vec<process_pro
         .collect()
 }
 
+/// BUG-67: list every line of `git status --porcelain` inside `worktree`,
+/// skipping the leading two-char status code so output is human-readable.
+/// Ignored entries are excluded by default (no `--ignored=normal`), so
+/// `target/`, `.aida/cache.db`, etc. never appear here — only tracked-
+/// and-modified or untracked-but-not-ignored files. Returns an empty
+/// vec when the worktree is clean OR when `git status` itself fails
+/// (we treat an unparseable status as clean and let `git worktree
+/// remove --force` produce the authoritative error). trace:BUG-67 | ai:claude
+fn worktree_dirty_entries(worktree: &std::path::Path) -> Vec<String> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(worktree)
+        .args(["status", "--porcelain"])
+        .output();
+    let Ok(out) = out else { return Vec::new() };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| l.to_string())
+        .collect()
+}
+
 /// BUG-61: SIGTERM each pid, sleep `grace_secs`, then SIGKILL any that
 /// are still alive. trace:BUG-61 | ai:claude
 fn terminate_pids_with_grace(pids: &[u32], grace_secs: u64) {
@@ -10186,6 +10211,30 @@ fn session_end(id_query: Option<&str>, yes: bool, force: bool) -> Result<()> {
         }
     }
 
+    // BUG-67: refuse to nuke a worktree that has real uncommitted work.
+    // `git status --porcelain` excludes ignored entries by default, so
+    // `target/`, `.aida/cache.db`, etc. don't trip this check — those are
+    // by definition disposable. Tracked-but-modified or untracked-and-
+    // unignored files DO trip it and require `--force`. We run this AFTER
+    // stripping the runtime symlinks (which would otherwise show up as
+    // untracked) and BEFORE deleting the lease, so a refusal leaves the
+    // session intact and recoverable. trace:BUG-67 | ai:claude
+    let dirty_entries = worktree_dirty_entries(&target.worktree_path);
+    if !dirty_entries.is_empty() && !force {
+        let mut msg = format!(
+            "worktree {} has uncommitted changes:\n",
+            target.worktree_path.display()
+        );
+        for line in &dirty_entries {
+            msg.push_str(&format!("  {}\n", line));
+        }
+        msg.push_str(
+            "\nPass `--force` to `aida session end` to discard these and remove the worktree.\n\
+             (Gitignored files like target/ and .aida/cache.db never require --force.)",
+        );
+        anyhow::bail!(msg);
+    }
+
     // Delete the lease file BEFORE removing the worktree. The canonical
     // path resolved above points at the parent's sessions dir, so the
     // unlink succeeds regardless of whether the worktree's symlink chain
@@ -10231,12 +10280,17 @@ fn session_end(id_query: Option<&str>, yes: bool, force: bool) -> Result<()> {
         }
     }
 
+    // BUG-67: always pass `--force`. We've already gated on the dirty
+    // check above, so by this point the only non-clean state is
+    // gitignored (target/, .aida/cache.db, etc.) — which git still
+    // refuses to remove without `--force`. trace:BUG-67 | ai:claude
     let res = std::process::Command::new("git")
         .arg("-C")
         .arg(&project_root)
         .args([
             "worktree",
             "remove",
+            "--force",
             target.worktree_path.to_str().unwrap_or_default(),
         ])
         .output();
@@ -12652,6 +12706,108 @@ mod auto_branch_tests {
         let tmp = init_repo();
         let err = resolve_session_branch(tmp.path(), "epic-20", "wat").unwrap_err();
         assert!(err.to_string().contains("unknown --branch-style"));
+    }
+}
+
+#[cfg(test)]
+mod worktree_dirty_entries_tests {
+    use super::*;
+    use std::process::Command;
+    use tempfile::TempDir;
+
+    /// Init a real git repo with one commit and a `.gitignore` that
+    /// excludes `target/` and `.aida/cache.db` — the two canonical
+    /// "disposable" patterns from BUG-67's acceptance.
+    fn init_repo_with_gitignore() -> TempDir {
+        let tmp = TempDir::new().unwrap();
+        let p = tmp.path();
+        Command::new("git")
+            .arg("-C").arg(p)
+            .args(["init", "--initial-branch=main", "--quiet"])
+            .status().unwrap();
+        std::fs::write(p.join(".gitignore"), "target/\n.aida/cache.db\n").unwrap();
+        Command::new("git")
+            .arg("-C").arg(p)
+            .args(["add", ".gitignore"])
+            .status().unwrap();
+        Command::new("git")
+            .arg("-C").arg(p)
+            .args(["commit", "-m", "init", "--quiet"])
+            .env("GIT_AUTHOR_NAME", "t").env("GIT_AUTHOR_EMAIL", "t@t")
+            .env("GIT_COMMITTER_NAME", "t").env("GIT_COMMITTER_EMAIL", "t@t")
+            .status().unwrap();
+        tmp
+    }
+
+    /// Clean worktree → empty vec. trace:BUG-67 | ai:claude
+    #[test]
+    fn clean_worktree_is_clean() {
+        let tmp = init_repo_with_gitignore();
+        assert!(worktree_dirty_entries(tmp.path()).is_empty());
+    }
+
+    /// Build artifacts under `target/` are gitignored → no entries.
+    /// This is the headline case from BUG-67: every reviewer session
+    /// builds with cargo before reviewing. trace:BUG-67 | ai:claude
+    #[test]
+    fn gitignored_target_dir_is_clean() {
+        let tmp = init_repo_with_gitignore();
+        std::fs::create_dir_all(tmp.path().join("target/release")).unwrap();
+        std::fs::write(tmp.path().join("target/release/aida"), b"binary").unwrap();
+        assert!(worktree_dirty_entries(tmp.path()).is_empty());
+    }
+
+    /// `.aida/cache.db` is gitignored → no entries. trace:BUG-67 | ai:claude
+    #[test]
+    fn gitignored_cache_db_is_clean() {
+        let tmp = init_repo_with_gitignore();
+        std::fs::create_dir_all(tmp.path().join(".aida")).unwrap();
+        std::fs::write(tmp.path().join(".aida/cache.db"), b"sqlite").unwrap();
+        assert!(worktree_dirty_entries(tmp.path()).is_empty());
+    }
+
+    /// A modified tracked file shows up. trace:BUG-67 | ai:claude
+    #[test]
+    fn tracked_modified_file_is_dirty() {
+        let tmp = init_repo_with_gitignore();
+        // Modify the tracked .gitignore so it shows as "M".
+        std::fs::write(tmp.path().join(".gitignore"), "target/\n.aida/cache.db\n# touched\n").unwrap();
+        let entries = worktree_dirty_entries(tmp.path());
+        assert_eq!(entries.len(), 1, "{:?}", entries);
+        assert!(entries[0].contains(".gitignore"), "{:?}", entries);
+    }
+
+    /// Untracked-but-not-ignored file shows up. trace:BUG-67 | ai:claude
+    #[test]
+    fn untracked_unignored_file_is_dirty() {
+        let tmp = init_repo_with_gitignore();
+        std::fs::write(tmp.path().join("scratch.rs"), b"// notes").unwrap();
+        let entries = worktree_dirty_entries(tmp.path());
+        assert_eq!(entries.len(), 1, "{:?}", entries);
+        assert!(entries[0].contains("scratch.rs"), "{:?}", entries);
+    }
+
+    /// Mix: gitignored build output is hidden, real changes show.
+    /// trace:BUG-67 | ai:claude
+    #[test]
+    fn mixed_only_real_changes_show() {
+        let tmp = init_repo_with_gitignore();
+        std::fs::create_dir_all(tmp.path().join("target")).unwrap();
+        std::fs::write(tmp.path().join("target/foo"), b"x").unwrap();
+        std::fs::write(tmp.path().join("scratch.rs"), b"// notes").unwrap();
+        let entries = worktree_dirty_entries(tmp.path());
+        assert_eq!(entries.len(), 1, "{:?}", entries);
+        assert!(entries[0].contains("scratch.rs"), "{:?}", entries);
+        assert!(!entries.iter().any(|e| e.contains("target")), "{:?}", entries);
+    }
+
+    /// Non-git path → empty vec (git errors, we treat as clean and let
+    /// the downstream remove --force produce the real error).
+    /// trace:BUG-67 | ai:claude
+    #[test]
+    fn non_git_path_is_clean() {
+        let tmp = TempDir::new().unwrap();
+        assert!(worktree_dirty_entries(tmp.path()).is_empty());
     }
 }
 
