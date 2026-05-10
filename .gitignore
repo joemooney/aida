@@ -81,3 +81,13 @@ docker/.env
 .aida/cache.db-journal
 .aida/cache.db-shm
 .aida/cache.db-wal
+
+# AIDA runtime state (per-clone, gitignored — must NOT be tracked)
+# Session leases (EPIC-20) and role activity logs are local runtime
+# state, not project-tracked content. Pattern matches both the directory
+# (canonical worktree) AND a symlink (session-worktree siblings).
+# trace:BUG-52 | ai:claude
+.aida/sessions/
+.aida/sessions
+.aida/roles/
+.aida/roles

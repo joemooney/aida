@@ -8248,22 +8248,50 @@ fn session_start(
         anyhow::bail!("`git worktree add` failed");
     }
 
-    // Symlink .aida/ and .aida-store/ from the parent so AIDA commands
-    // run from the new worktree see the same state. Unix only; on Windows
-    // the user would need to copy or use a junction (deferred).
+    // Make AIDA state from the parent visible inside the new worktree.
+    // .aida-store/ is gitignored so a whole-directory symlink works.
+    // .aida/ is partially tracked (config.toml, setup.sh, docker-compose,
+    // etc. live in main's tree), so a whole-dir symlink would skip when
+    // git checks out those tracked files. Instead, ensure .aida/ exists
+    // and symlink only the gitignored runtime subdirs into it.
+    // trace:BUG-52 | ai:claude
     #[cfg(unix)]
     {
-        for name in &[".aida", ".aida-store"] {
-            let src = project_root.join(name);
-            let dst = worktree_path.join(name);
-            if src.exists() && !dst.exists() {
-                std::os::unix::fs::symlink(&src, &dst).with_context(|| {
-                    format!(
-                        "symlink {} -> {} failed",
-                        dst.display(),
-                        src.display()
-                    )
-                })?;
+        let store_src = project_root.join(".aida-store");
+        let store_dst = worktree_path.join(".aida-store");
+        if store_src.exists() && !store_dst.exists() {
+            std::os::unix::fs::symlink(&store_src, &store_dst).with_context(|| {
+                format!(
+                    "symlink {} -> {} failed",
+                    store_dst.display(),
+                    store_src.display()
+                )
+            })?;
+        }
+
+        let parent_aida = project_root.join(".aida");
+        let worktree_aida = worktree_path.join(".aida");
+        if parent_aida.exists() {
+            std::fs::create_dir_all(&worktree_aida)?;
+            for runtime in &[
+                "sessions",
+                "roles",
+                "cache.db",
+                "cache.db-shm",
+                "cache.db-wal",
+                "pgdata",
+            ] {
+                let src = parent_aida.join(runtime);
+                let dst = worktree_aida.join(runtime);
+                if src.exists() && !dst.exists() {
+                    std::os::unix::fs::symlink(&src, &dst).with_context(|| {
+                        format!(
+                            "symlink {} -> {} failed",
+                            dst.display(),
+                            src.display()
+                        )
+                    })?;
+                }
             }
         }
     }
@@ -8399,9 +8427,25 @@ fn session_end(id_query: Option<&str>, yes: bool) -> Result<()> {
     // Clean the symlinks we created at session start before git tries to
     // remove the worktree — they count as untracked files and `git worktree
     // remove` would otherwise refuse without --force.
-    for name in &[".aida", ".aida-store"] {
-        let p = target.worktree_path.join(name);
-        if p.is_symlink() || p.exists() {
+    //   - .aida-store/ is a whole-directory symlink (top-level)
+    //   - .aida/ itself is a real dir (with tracked content) — leave it
+    //     alone, but strip the runtime symlinks inside it that
+    //     session_start created. trace:BUG-52 | ai:claude
+    let store_link = target.worktree_path.join(".aida-store");
+    if store_link.is_symlink() {
+        let _ = std::fs::remove_file(&store_link);
+    }
+    let aida_dir = target.worktree_path.join(".aida");
+    for runtime in &[
+        "sessions",
+        "roles",
+        "cache.db",
+        "cache.db-shm",
+        "cache.db-wal",
+        "pgdata",
+    ] {
+        let p = aida_dir.join(runtime);
+        if p.is_symlink() {
             let _ = std::fs::remove_file(&p);
         }
     }
