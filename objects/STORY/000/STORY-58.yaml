@@ -29,12 +29,12 @@ description: |
 
   - Cross-worktree session resume (`aida session resume <id>` from a worktree resuming a session in the parent) — defer until user has wanted it more than once
   - Unifying Claude Code's per-cwd project model — that's Claude Code's model; we just wrap it
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T03:10:19.140282624Z
-modified_at: 2026-05-10T03:10:19.140282624Z
+modified_at: 2026-05-10T17:04:34.605710114Z
 req_type: Story
 relationships:
 - rel_type: Child
