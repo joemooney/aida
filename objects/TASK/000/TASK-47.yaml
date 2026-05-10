@@ -1,0 +1,51 @@
+id: 019e12e7-e1be-7661-87e8-c8d4177583d7
+spec_id: TASK-47
+agreed_id: TASK-47
+title: 'aida edit --status in-progress: refuse if requirement was Rejected/Completed (need --force)'
+description: |
+  Caught 2026-05-10 — same incident as the queue-filter task. Today `aida edit X --status in-progress` silently flips Rejected → InProgress, effectively re-opening a closed requirement with no warning. The user (or agent) might do this accidentally during a queue pickup loop.
+
+  ## Today's behavior
+
+  `aida edit X --status Y` accepts any status transition. No validation against the prior status.
+
+  ## Desired behavior
+
+  Refuse transitions FROM terminal status (Rejected, Completed) TO non-terminal status without `--force`:
+
+  ```
+  $ aida edit BUG-63 --status in-progress
+  Error: BUG-63 is currently Rejected. Re-opening a closed requirement is
+         usually a mistake. If you mean to re-open it, pass --force.
+         Otherwise, file a new requirement that supersedes it.
+  ```
+
+  `--force` bypasses. The check covers:
+  - Rejected → InProgress / Approved / Draft / Planned
+  - Completed → InProgress / Approved / Draft / Planned
+
+  Allowed transitions (no force needed):
+  - Rejected/Completed → Rejected/Completed (idempotent flips)
+  - Anything → Rejected/Completed (closing a req is always fine)
+
+  ## Composes with
+
+  - TASK-45 (queue add: refuse terminal-status) — write-side enforcement at queue boundary
+  - Companion task (b — queue list/next filters terminal-status) — read-side hygiene
+  - BUG-64 (--parent terminal-status check) — consistent "validate-status-at-write-boundary" pattern across all surfaces
+
+  ## Acceptance
+
+  - [ ] `aida edit X --status in-progress` errors if X is Rejected/Completed (no --force)
+  - [ ] `--force` bypasses with no extra ceremony
+  - [ ] Idempotent flips (Rejected→Rejected) still work
+  - [ ] Closing a req (any → Rejected/Completed) still works
+  - [ ] Error message hints at "file a new req that supersedes" path
+  - [ ] Test matrix: all source-status × target-status combinations × {force=true, force=false}
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T17:20:47.038861227Z
+modified_at: 2026-05-10T17:20:47.038861227Z
+req_type: Task
