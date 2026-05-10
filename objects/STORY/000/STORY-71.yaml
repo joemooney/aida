@@ -1,0 +1,49 @@
+id: 019e107e-7a43-7f71-8b8a-df3ef8008d68
+spec_id: STORY-71
+agreed_id: STORY-71
+title: aida session start --owns PR-N should gh-pr-checkout that PR's source branch instead of creating an empty branch
+description: |
+  Caught 2026-05-10 during PR-3 review setup: a reviewer session created via
+
+    aida session start --owns PR-3 --branch pr-3
+
+  silently created an empty `pr-3` branch off current HEAD instead of checking out PR #3's actual source branch. The reviewer agent's worktree therefore had no PR commits — they couldn't run `aida review prompt --pr 3` because STORY-67 ships in the PR being reviewed, not on main yet.
+
+  ## Today's behavior
+
+  `session start` always calls `git worktree add -b <branch> <path> <base>`, which creates a fresh branch. No awareness that `--owns PR-N` is special.
+
+  ## Desired behavior
+
+  When `--owns` matches `PR-<N>` or `MR-<N>`:
+
+  1. Resolve PR/MR via `gh pr view <N> --json headRefName,headRepository,...` (or `glab mr view <N>`)
+  2. `git fetch origin pull/<N>/head:pr-<N>-review` (or use `gh pr checkout`)
+  3. `git worktree add <path> pr-<N>-review` — worktree is on the PR's actual code
+  4. Lease records both: `scope=PR-3`, `branch=pr-<N>-review`, `pr_head=<sha>`, `pr_base=<base>`
+  5. If `gh`/`glab` not available → fall back to current behavior with a clear stderr note: "PR-N pattern detected but `gh`/`glab` not installed; created empty branch — install gh to auto-checkout the PR"
+
+  ## Composes with
+
+  - STORY-65 (auto-branch + role inheritance) — same family of "session start does the smart thing"
+  - STORY-67 (review prompt generator) — depended on this; STORY-67's `--pr N` flow assumes the PR's code is checked out
+  - TASK-40 (gh/glab dependency doc) — extends the existing fallback note
+
+  ## Why now
+
+  Without this, every PR review starts with the user remembering to run `gh pr checkout N` after `session start`. Easy to forget; failure mode is silent (worktree compiles, just from main code). Caught this on PR-3, will catch it on every future PR.
+
+  ## Acceptance
+
+  - [ ] `aida session start --owns PR-N` checks out PR-N's source branch when `gh`/`glab` is available
+  - [ ] Lease records `pr_head` and `pr_base` SHAs alongside `scope`/`branch`
+  - [ ] Falls back to current behavior with clear stderr note when no PR CLI installed
+  - [ ] `aida session show <id>` (STORY-68) displays the PR head/base SHAs
+  - [ ] Tested against both gh (GitHub) and glab (GitLab)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T06:06:24.835272423Z
+modified_at: 2026-05-10T06:06:24.835272423Z
+req_type: Story
