@@ -40,12 +40,12 @@ description: |
   - [ ] Falls back to current behavior with clear stderr note when no PR CLI installed
   - [ ] `aida session show <id>` (STORY-68) displays the PR head/base SHAs
   - [ ] Tested against both gh (GitHub) and glab (GitLab)
-status: Completed
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T06:06:24.835272423Z
-modified_at: 2026-05-10T17:44:05.619686593Z
+modified_at: 2026-05-10T17:44:14.877109195Z
 req_type: Story
 relationships:
 - rel_type: Child
