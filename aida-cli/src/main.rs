@@ -6048,6 +6048,28 @@ fn record_role_activity(spec_id: &str, action: &str) {
         Ok(p) => std::path::PathBuf::from(p),
         Err(_) => statusline_project_root(),
     };
+
+    // STORY-56: when this shell is inside a session lease's worktree,
+    // route the per-spec activity to the session-local log so concurrent
+    // sessions don't clobber each other's @SPEC. The project-level role
+    // file still gets `last_active_at` bumped so `aida role list --recent`
+    // keeps working as a "what role was used most recently" view, but its
+    // `activity` stream stays at whatever the last non-session shell saw
+    // until session-end flattens the session log into it.
+    // trace:STORY-56 | ai:claude
+    let lease = std::env::current_dir()
+        .ok()
+        .and_then(|cwd| active_lease_for_cwd(&project, &cwd));
+
+    if let Some(lease) = lease {
+        let _ = append_session_activity(&project, &lease.id, &role_name, spec_id, action);
+        if let Ok((mut state, path)) = load_role(&project, &role_name) {
+            state.last_active_at = chrono::Utc::now();
+            let _ = save_role_at(&state, &path);
+        }
+        return;
+    }
+
     let (mut state, path) = match load_role(&project, &role_name) {
         Ok(t) => t,
         Err(_) => return,
@@ -8244,6 +8266,171 @@ fn active_lease_for_cwd(
         .find(|l| canon == l.worktree_path || canon.starts_with(&l.worktree_path))
 }
 
+// ---------------------------------------------------------------------------
+// Per-session role activity log (STORY-56)
+//
+// Project-level role activity (`.aida/roles/<name>.toml`'s `activity` field)
+// is shared by every shell that has the role active. When two sessions for
+// the same project both run `role:implementer`, they fight over the same
+// "current spec" — last writer wins, and `aida statusline`'s @SPEC segment
+// flips between specs depending on which session most recently touched
+// something. STORY-56 splits that activity stream: while a shell is inside
+// a session lease's worktree, role activity goes to a session-local log
+// (`.aida/sessions/<id>.activity.toml`) instead. Statusline reads the
+// session log when in-session, the project log otherwise. `session end`
+// flattens unique (spec_id) entries from the session log back into each
+// participating role's project-level activity (newest first, dedupe,
+// truncate to ACTIVITY_MAX) so long-term recent-activity views still show
+// what was worked on under the closed session.
+// trace:STORY-56 | ai:claude
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
+struct SessionActivityLog {
+    #[serde(default)]
+    entries: Vec<SessionActivityEntry>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct SessionActivityEntry {
+    /// Role active when this entry was recorded — needed at session-end to
+    /// know which project-level role file to fold the entry back into.
+    role: String,
+    spec_id: String,
+    action: String,
+    at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Hard cap on session activity entries — keeps the file small for long
+/// sessions. Older-than-cap entries fall off the back (so the newest cap
+/// entries are kept, matching the project-level role's stream behavior).
+const SESSION_ACTIVITY_MAX: usize = 200;
+
+fn session_activity_path(project_root: &std::path::Path, id: &str) -> std::path::PathBuf {
+    leases_dir(project_root).join(format!("{}.activity.toml", id))
+}
+
+fn load_session_activity(
+    project_root: &std::path::Path,
+    id: &str,
+) -> SessionActivityLog {
+    let path = session_activity_path(project_root, id);
+    let Ok(content) = std::fs::read_to_string(&path) else {
+        return SessionActivityLog::default();
+    };
+    toml::from_str(&content).unwrap_or_default()
+}
+
+fn save_session_activity(
+    project_root: &std::path::Path,
+    id: &str,
+    log: &SessionActivityLog,
+) -> Result<()> {
+    let path = session_activity_path(project_root, id);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let content = toml::to_string_pretty(log)?;
+    std::fs::write(&path, content)
+        .with_context(|| format!("failed to write {}", path.display()))?;
+    Ok(())
+}
+
+/// Append an activity entry to the given session's log. Dedupes against
+/// the most recent entry the same way project-level activity does:
+/// consecutive (role, spec_id, action) collapse into one entry whose
+/// timestamp ticks forward.
+/// trace:STORY-56 | ai:claude
+fn append_session_activity(
+    project_root: &std::path::Path,
+    session_id: &str,
+    role: &str,
+    spec_id: &str,
+    action: &str,
+) -> Result<()> {
+    let mut log = load_session_activity(project_root, session_id);
+    let entry = SessionActivityEntry {
+        role: role.to_string(),
+        spec_id: spec_id.to_string(),
+        action: action.to_string(),
+        at: chrono::Utc::now(),
+    };
+    let dup = log
+        .entries
+        .first()
+        .map(|prev| {
+            prev.role == entry.role
+                && prev.spec_id == entry.spec_id
+                && prev.action == entry.action
+        })
+        .unwrap_or(false);
+    if dup {
+        if let Some(first) = log.entries.first_mut() {
+            first.at = entry.at;
+        }
+    } else {
+        log.entries.insert(0, entry);
+        log.entries.truncate(SESSION_ACTIVITY_MAX);
+    }
+    save_session_activity(project_root, session_id, &log)
+}
+
+/// Fold a closed session's activity entries back into each participating
+/// role's project-level `activity` stream. Called from `session_end` so
+/// long-running views (`aida role show`, `aida statusline` outside any
+/// session) still surface what was worked on under the session. Does NOT
+/// delete the activity log file — `session_end` handles that after this
+/// returns successfully.
+///
+/// Per role: take the newest session entry per spec_id, merge in front of
+/// the project role's existing activity, dedupe by spec_id, truncate to
+/// ACTIVITY_MAX. Best-effort — malformed/missing role files are skipped
+/// (the project role might have been deleted while the session ran).
+/// trace:STORY-56 | ai:claude
+fn aggregate_session_activity_into_roles(
+    project_root: &std::path::Path,
+    session_id: &str,
+) {
+    let log = load_session_activity(project_root, session_id);
+    if log.entries.is_empty() {
+        return;
+    }
+    // Group newest-first by role; within each role the first entry per
+    // spec_id wins (newest, since `entries` is newest-first by design).
+    use std::collections::{BTreeMap, BTreeSet};
+    let mut per_role: BTreeMap<String, Vec<RoleActivity>> = BTreeMap::new();
+    for entry in &log.entries {
+        let bucket = per_role.entry(entry.role.clone()).or_default();
+        if !bucket.iter().any(|a| a.spec_id == entry.spec_id) {
+            bucket.push(RoleActivity {
+                spec_id: entry.spec_id.clone(),
+                action: entry.action.clone(),
+                at: entry.at,
+            });
+        }
+    }
+    for (role_name, mut new_entries) in per_role {
+        let Ok((mut state, path)) = load_role(project_root, &role_name) else {
+            continue;
+        };
+        // Merge: prepend session-newest entries, then append project's
+        // existing entries skipping any spec_id already brought forward.
+        let promoted: BTreeSet<String> =
+            new_entries.iter().map(|e| e.spec_id.clone()).collect();
+        new_entries.extend(
+            state
+                .activity
+                .iter()
+                .filter(|e| !promoted.contains(&e.spec_id))
+                .cloned(),
+        );
+        new_entries.truncate(ACTIVITY_MAX);
+        state.activity = new_entries;
+        state.last_active_at = chrono::Utc::now();
+        let _ = save_role_at(&state, &path);
+    }
+}
+
 /// Lease-enforcement mode for cross-session writes.
 /// Configured via `[session] enforcement = "warn"|"block"|"off"` in
 /// `.aida/config.toml`; default is `Warn`.
@@ -8704,6 +8891,21 @@ fn session_end(id_query: Option<&str>, yes: bool) -> Result<()> {
         }
     }
 
+    // STORY-56: flatten the session's activity log into each
+    // participating role's project-level activity stream BEFORE we delete
+    // the lease — once the lease is gone the activity file is orphaned.
+    // For each role, take the newest entry per spec_id from the session
+    // log, merge into the project role's `activity` (newest first, dedupe
+    // by spec_id, truncate to ACTIVITY_MAX) so post-session views like
+    // `aida role show` still surface what was worked on under the closed
+    // session. trace:STORY-56 | ai:claude
+    aggregate_session_activity_into_roles(&project_root, &target.id);
+    let activity_file = session_activity_path(&project_root, &target.id);
+    let canonical_activity = activity_file.canonicalize().ok();
+    let activity_target: std::path::PathBuf = canonical_activity
+        .clone()
+        .unwrap_or_else(|| activity_file.clone());
+
     // Snapshot the lease file's authoritative on-disk location BEFORE we
     // touch the worktree's symlinks. When session_end runs from inside the
     // worktree (the natural flow), `project_root` IS the worktree path —
@@ -8765,6 +8967,25 @@ fn session_end(id_query: Option<&str>, yes: bool) -> Result<()> {
                 lease_target.display(),
                 e
             );
+        }
+    }
+
+    // STORY-56: drop the session activity log. Quiet on missing — short
+    // sessions that never recorded any activity won't have one. We've
+    // already aggregated entries into the project-level role(s) above.
+    // trace:STORY-56 | ai:claude
+    if activity_target.exists() {
+        match std::fs::remove_file(&activity_target) {
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
+                eprintln!(
+                    "{} could not delete session activity log at {}: {}",
+                    "Warning:".yellow().bold(),
+                    activity_target.display(),
+                    e
+                );
+            }
         }
     }
 
@@ -8970,6 +9191,86 @@ mod statusline_tests {
         let out = truncate(long, SCOPE_LABEL_MAX);
         assert!(out.chars().count() <= SCOPE_LABEL_MAX);
         assert!(out.ends_with('…'));
+    }
+
+    /// STORY-56: appending session activity dedupes consecutive same-(role,
+    /// spec_id, action) writes by ticking the timestamp instead of stacking
+    /// duplicate entries — same shape as project-level role activity.
+    /// trace:STORY-56 | ai:claude
+    #[test]
+    fn session_activity_dedupes_consecutive_repeats() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".aida/sessions")).unwrap();
+
+        let id = "test-session-01";
+        append_session_activity(root, id, "implementer", "STORY-56", "edit").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        append_session_activity(root, id, "implementer", "STORY-56", "edit").unwrap();
+        let log = load_session_activity(root, id);
+        assert_eq!(log.entries.len(), 1, "consecutive same-action collapse");
+
+        // A different action breaks the dedupe.
+        append_session_activity(root, id, "implementer", "STORY-56", "show").unwrap();
+        let log = load_session_activity(root, id);
+        assert_eq!(log.entries.len(), 2);
+        assert_eq!(log.entries[0].action, "show", "newest first");
+    }
+
+    /// STORY-56: aggregating a session log into the project role keeps
+    /// only the newest entry per spec_id, merges in front of the role's
+    /// existing activity, and respects ACTIVITY_MAX. The session's
+    /// per-spec winners survive even when the project role already had
+    /// older entries for the same specs (the session entry is fresher,
+    /// so it wins).
+    /// trace:STORY-56 | ai:claude
+    #[test]
+    fn session_aggregation_dedupes_and_promotes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".aida/sessions")).unwrap();
+        std::fs::create_dir_all(root.join(".aida/roles")).unwrap();
+
+        // Seed a project role with one stale entry for STORY-X.
+        let role_path = root.join(".aida/roles/implementer.toml");
+        let stale = chrono::Utc::now() - chrono::Duration::hours(1);
+        let role = RoleState {
+            name: "implementer".into(),
+            purpose: None,
+            created_at: stale,
+            last_active_at: stale,
+            working_directory: None,
+            notes: None,
+            global: false,
+            activity: vec![RoleActivity {
+                spec_id: "STORY-X".into(),
+                action: "edit".into(),
+                at: stale,
+            }],
+            scope_tags: vec![],
+            scope_status: None,
+            system_prompt: None,
+        };
+        std::fs::write(&role_path, toml::to_string_pretty(&role).unwrap()).unwrap();
+
+        // Session log: STORY-X (newer than the seed) and STORY-Y.
+        let id = "agg-session-01";
+        append_session_activity(root, id, "implementer", "STORY-X", "show").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        append_session_activity(root, id, "implementer", "STORY-Y", "edit").unwrap();
+
+        aggregate_session_activity_into_roles(root, id);
+
+        let merged: RoleState =
+            toml::from_str(&std::fs::read_to_string(&role_path).unwrap()).unwrap();
+        let ids: Vec<&str> = merged.activity.iter().map(|a| a.spec_id.as_str()).collect();
+        // STORY-Y (newest in session) first, then STORY-X (the session
+        // entry wins over the seed; the seed's stale STORY-X is dropped).
+        assert_eq!(ids, vec!["STORY-Y", "STORY-X"]);
+        assert!(
+            merged.activity[1].at > stale,
+            "session-promoted STORY-X must carry the session timestamp, not the stale seed"
+        );
     }
 }
 
@@ -9508,14 +9809,36 @@ fn handle_statusline_command(color: &str) -> Result<()> {
 
     if let Some(r) = &role {
         parts.push(format!("role:{}", r).yellow().bold().to_string());
-        // @SPEC segment. Default: newest activity entry from the active role
-        // (the spec the user most recently touched). Override: when cwd is
-        // inside an active session lease and the role's last activity is
-        // older than the lease (or there is none), show `@<scope>` instead
-        // — otherwise the prompt would carry over a stale spec from before
-        // this session began. trace:STORY-55 | ai:claude
+        // @SPEC segment. Default: newest activity entry the active role
+        // touched. Source preference: the session-local activity log when
+        // cwd is inside an active session lease (STORY-56), else the
+        // project-level role's activity stream. Override: with a session
+        // active but no role activity yet inside it, fall back to
+        // `@<scope>` so the prompt advertises the session anchor instead
+        // of a pre-session spec. trace:STORY-55 | ai:claude
+        let session_latest: Option<RoleActivity> = lease
+            .as_ref()
+            .and_then(|l| {
+                load_session_activity(&project_root, &l.id)
+                    .entries
+                    .into_iter()
+                    .find(|e| e.role == *r)
+                    .map(|e| RoleActivity {
+                        spec_id: e.spec_id,
+                        action: e.action,
+                        at: e.at,
+                    })
+            });
         let role_state = load_role(&project_root, r).ok().map(|(s, _)| s);
-        let latest = role_state.as_ref().and_then(|s| s.activity.first());
+        let project_latest = role_state.as_ref().and_then(|s| s.activity.first()).cloned();
+        let latest: Option<RoleActivity> = match (lease.as_ref(), session_latest, project_latest) {
+            // In-session: prefer session log; only consider project-level
+            // entries that are newer than the lease (i.e. a freshly
+            // promoted entry from a prior `session end`).
+            (Some(l), Some(s), _) => Some(s).filter(|s| s.at >= l.started_at),
+            (Some(l), None, p) => p.filter(|p| p.at >= l.started_at),
+            (None, _, p) => p,
+        };
         let label: Option<String> = match (latest, lease.as_ref()) {
             (Some(act), Some(l)) if act.at >= l.started_at => Some(act.spec_id.clone()),
             (_, Some(l)) => Some(truncate(&l.scope, SCOPE_LABEL_MAX)),
