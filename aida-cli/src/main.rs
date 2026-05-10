@@ -9732,7 +9732,337 @@ fn session_end(id_query: Option<&str>, yes: bool) -> Result<()> {
         target.branch.cyan(),
         target.branch
     );
+
+    // STORY-66: when the just-ended session's branch has an open PR, file a
+    // Story-typed review item routed to the `reviewer` role with `implements`
+    // relations to every spec referenced in the PR's commit messages. Best
+    // effort: any failure here logs a warning and is otherwise silent — we
+    // never fail `session_end` because of a queue side-effect.
+    // trace:STORY-66 | ai:claude
+    if let Some(summary) =
+        try_auto_queue_pr_review(&project_root, &target.branch, &target.id)
+    {
+        println!("{} {}", "✓".green(), summary);
+    }
+
     Ok(())
+}
+
+/// Open-PR metadata captured by `gh pr list` for a session's branch. Just
+/// the fields the auto-queue side-effect needs to brief a reviewer.
+/// trace:STORY-66 | ai:claude
+struct OpenPrInfo {
+    number: u64,
+    title: String,
+    url: String,
+}
+
+/// Look up a single open PR for `branch` via `gh`. Returns None when `gh`
+/// isn't installed, the user isn't authenticated, the branch has no open
+/// PR, or the output can't be parsed. All paths are best-effort —
+/// session_end never fails because of this hook. trace:STORY-66 | ai:claude
+fn detect_open_pr_for_branch(
+    project_root: &std::path::Path,
+    branch: &str,
+) -> Option<OpenPrInfo> {
+    let out = std::process::Command::new("gh")
+        .current_dir(project_root)
+        .args([
+            "pr", "list",
+            "--head", branch,
+            "--state", "open",
+            "--limit", "1",
+            "--json", "number,title,url",
+            "-q", r#".[] | "\(.number)\t\(.title)\t\(.url)""#,
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout);
+    let line = s.lines().next()?.trim();
+    if line.is_empty() {
+        return None;
+    }
+    let parts: Vec<&str> = line.split('\t').collect();
+    if parts.len() < 3 {
+        return None;
+    }
+    let number: u64 = parts[0].parse().ok()?;
+    Some(OpenPrInfo {
+        number,
+        title: parts[1].to_string(),
+        url: parts[2].to_string(),
+    })
+}
+
+/// Detect whether a `Review PR-<n>:` story already exists in the local
+/// store, so calling `aida session end` twice on the same branch doesn't
+/// create duplicate queue entries. trace:STORY-66 | ai:claude
+fn pr_review_story_already_exists(
+    project_root: &std::path::Path,
+    pr_number: u64,
+) -> bool {
+    let aida = std::env::current_exe()
+        .unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    let Ok(out) = std::process::Command::new(&aida)
+        .current_dir(project_root)
+        .args(["list", "--type", "story"])
+        .output()
+    else {
+        return false;
+    };
+    if !out.status.success() {
+        return false;
+    }
+    let needle = format!("Review PR-{}:", pr_number);
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .any(|line| line.contains(&needle))
+}
+
+/// Strip ANSI SGR sequences (`ESC[...m`) so we can match output text
+/// regardless of whether the child invocation colored its output. Keep it
+/// minimal — we only need the SGR shape `aida add` emits.
+/// trace:STORY-66 | ai:claude
+fn strip_ansi_color(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' && chars.peek() == Some(&'[') {
+            chars.next();
+            for cc in chars.by_ref() {
+                if cc.is_ascii_alphabetic() {
+                    break;
+                }
+            }
+            continue;
+        }
+        out.push(c);
+    }
+    out
+}
+
+/// Self-invoke `aida add` for a Story-typed review requirement and parse the
+/// resulting spec id out of stdout. Returns None on any failure.
+/// trace:STORY-66 | ai:claude
+fn aida_subcmd_add_review_story(
+    project_root: &std::path::Path,
+    title: &str,
+    description: &str,
+) -> Option<String> {
+    let aida = std::env::current_exe()
+        .unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    let out = std::process::Command::new(&aida)
+        .current_dir(project_root)
+        .args([
+            "add",
+            "--type", "story",
+            "--status", "approved",
+            "--priority", "medium",
+            "--title", title,
+            "--description", description,
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        eprintln!(
+            "{} auto-queue review story: `aida add` failed: {}",
+            "Warning:".yellow().bold(),
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    parse_spec_id_from_add_output(&stdout)
+}
+
+/// Parse the spec id printed by `aida add`. The git-canonical path prints
+/// `Added: STORY-N - <title>` (one line); the legacy YAML/SQLite path
+/// prints a standalone `ID: STORY-N` line. Accept either so this hook keeps
+/// working across backends. trace:STORY-66 | ai:claude
+fn parse_spec_id_from_add_output(stdout: &str) -> Option<String> {
+    for line in stdout.lines() {
+        let cleaned = strip_ansi_color(line);
+        let candidate = cleaned
+            .strip_prefix("Added: ")
+            .map(|rest| rest.split(" - ").next().unwrap_or("").trim().to_string())
+            .or_else(|| {
+                cleaned
+                    .strip_prefix("ID: ")
+                    .map(|rest| rest.trim().to_string())
+            });
+        if let Some(c) = candidate {
+            if !c.is_empty() {
+                return Some(c);
+            }
+        }
+    }
+    None
+}
+
+/// Best-effort `aida rel add <from> <to> --type implements` (and the
+/// matching reverse `implemented-by` so `aida show <spec>` surfaces the
+/// review story). Custom relation types don't have an `inverse()` mapping
+/// in core, so `--bidirectional` is a no-op for them — we add both
+/// directions manually instead. Logs and continues on failure.
+/// trace:STORY-66 | ai:claude
+fn aida_subcmd_rel_add_implements(
+    project_root: &std::path::Path,
+    from: &str,
+    to: &str,
+) {
+    aida_subcmd_rel_add(project_root, from, to, "implements");
+    aida_subcmd_rel_add(project_root, to, from, "implemented-by");
+}
+
+fn aida_subcmd_rel_add(
+    project_root: &std::path::Path,
+    from: &str,
+    to: &str,
+    rel_type: &str,
+) {
+    let aida = std::env::current_exe()
+        .unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    match std::process::Command::new(&aida)
+        .current_dir(project_root)
+        .args(["rel", "add", from, to, "--type", rel_type])
+        .output()
+    {
+        Ok(o) if o.status.success() => {}
+        Ok(o) => eprintln!(
+            "{} auto-queue: `rel add {} {} --type {}` failed: {}",
+            "Warning:".yellow().bold(),
+            from,
+            to,
+            rel_type,
+            String::from_utf8_lossy(&o.stderr).trim()
+        ),
+        Err(e) => eprintln!(
+            "{} auto-queue: could not invoke `aida rel add`: {}",
+            "Warning:".yellow().bold(),
+            e
+        ),
+    }
+}
+
+/// Best-effort `aida queue add <id> --for reviewer --no-scope --note <...>`.
+/// trace:STORY-66 | ai:claude
+fn aida_subcmd_queue_add_for_reviewer(
+    project_root: &std::path::Path,
+    spec_id: &str,
+    note: &str,
+) {
+    let aida = std::env::current_exe()
+        .unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    let out = std::process::Command::new(&aida)
+        .current_dir(project_root)
+        .args([
+            "queue", "add", spec_id,
+            "--for", "reviewer",
+            "--no-scope",
+            "--note", note,
+        ])
+        .output();
+    match out {
+        Ok(o) if o.status.success() => {}
+        Ok(o) => eprintln!(
+            "{} auto-queue: `queue add {}` failed: {}",
+            "Warning:".yellow().bold(),
+            spec_id,
+            String::from_utf8_lossy(&o.stderr).trim()
+        ),
+        Err(e) => eprintln!(
+            "{} auto-queue: could not invoke `aida queue add`: {}",
+            "Warning:".yellow().bold(),
+            e
+        ),
+    }
+}
+
+/// End-of-session auto-detect-and-queue. Runs as a side effect of
+/// `aida session end` so a forgotten `gh pr create` doesn't leave the
+/// reviewer unaware. Returns a one-line summary string when it filed (or
+/// already-skipped) something; None when there's no PR to act on.
+/// trace:STORY-66 | ai:claude
+fn try_auto_queue_pr_review(
+    project_root: &std::path::Path,
+    branch: &str,
+    session_id: &str,
+) -> Option<String> {
+    let pr = detect_open_pr_for_branch(project_root, branch)?;
+    if pr_review_story_already_exists(project_root, pr.number) {
+        return Some(format!(
+            "PR #{} already has a `Review PR-{}` story queued — skipping",
+            pr.number, pr.number
+        ));
+    }
+
+    // Pull the commit-range spec ids using the existing helpers from STORY-67.
+    let (base, head) = pr_base_head(project_root, ReviewForge::GitHub, pr.number)
+        .unwrap_or_else(|_| ("main".to_string(), branch.to_string()));
+    let messages = git_log_messages(project_root, &base, &head).unwrap_or_default();
+    let mut spec_ids: Vec<String> = Vec::new();
+    for msg in &messages {
+        for id in extract_spec_ids_from_commit(msg) {
+            if !spec_ids.iter().any(|x| x.eq_ignore_ascii_case(&id)) {
+                spec_ids.push(id);
+            }
+        }
+    }
+
+    let session_short: &str = &session_id[..session_id.len().min(8)];
+    let mut desc = String::new();
+    desc.push_str(&format!(
+        "Auto-filed by `aida session end` (session `{}`) when its branch `{}` had an open PR.\n\n",
+        session_short, branch
+    ));
+    desc.push_str(&format!("- PR: <{}>\n", pr.url));
+    desc.push_str(&format!("- Branch: `{}` → `{}`\n\n", head, base));
+    if spec_ids.is_empty() {
+        desc.push_str(
+            "No `(REQ-ID)` trailers were found in the PR's commit range — review against the PR title/body and link specs after the fact via `aida rel add <this> <spec> --type implements`.\n\n",
+        );
+    } else {
+        desc.push_str("## Covers\n\n");
+        for id in &spec_ids {
+            desc.push_str(&format!("- {}\n", id));
+        }
+        desc.push('\n');
+    }
+    desc.push_str("## Acceptance\n\n");
+    desc.push_str(&format!(
+        "- Generate a structured review prompt with `aida review prompt --pr {}` and verify each spec's acceptance criteria.\n",
+        pr.number
+    ));
+    desc.push_str("- Approve and merge, or request changes by spec id.\n");
+    desc.push_str("- Mark this story `completed` once the PR is merged.\n");
+
+    let title = format!("Review PR-{}: {}", pr.number, pr.title);
+    let new_id = aida_subcmd_add_review_story(project_root, &title, &desc)?;
+
+    for id in &spec_ids {
+        aida_subcmd_rel_add_implements(project_root, &new_id, id);
+    }
+
+    let note = format!(
+        "auto-queued by `aida session end` ({}); covers {} spec{}",
+        session_short,
+        spec_ids.len(),
+        if spec_ids.len() == 1 { "" } else { "s" }
+    );
+    aida_subcmd_queue_add_for_reviewer(project_root, &new_id, &note);
+
+    let covers = if spec_ids.is_empty() {
+        "no specs".to_string()
+    } else {
+        spec_ids.join(", ")
+    };
+    Some(format!(
+        "filed {} (covers {}) → reviewer queue (PR #{})",
+        new_id, covers, pr.number
+    ))
 }
 
 fn session_leases() -> Result<()> {
@@ -9815,6 +10145,54 @@ mod statusline_tests {
         assert!(sha_prefix_match("", ""));
         assert!(!sha_prefix_match("", "abc"));
         assert!(!sha_prefix_match("abc", ""));
+    }
+
+    /// STORY-66: the auto-queue hook parses `aida add`'s spec_id out of a
+    /// line that may be wrapped in colored() output. Drop SGR sequences
+    /// without depending on a regex / ansi crate.
+    /// trace:STORY-66 | ai:claude
+    #[test]
+    fn strip_ansi_color_basic() {
+        assert_eq!(strip_ansi_color("plain"), "plain");
+        assert_eq!(strip_ansi_color("\x1b[32mSTORY-77\x1b[0m"), "STORY-77");
+        assert_eq!(
+            strip_ansi_color("\x1b[1;32mbold green\x1b[0m and tail"),
+            "bold green and tail"
+        );
+        // Lone ESC without `[` survives — we only strip well-formed SGR.
+        assert_eq!(strip_ansi_color("a\x1bb"), "a\x1bb");
+    }
+
+    /// STORY-66: parse spec_id out of `aida add` stdout. Cover both backend
+    /// output shapes — git-canonical (`Added: ID - title`) and legacy
+    /// (`ID: spec_id`) — plus colored output and trailing `Hint:` noise.
+    /// trace:STORY-66 | ai:claude
+    #[test]
+    fn parse_spec_id_from_add_output_handles_known_shapes() {
+        // Git-canonical default.
+        assert_eq!(
+            parse_spec_id_from_add_output(
+                "Added: STORY-82 - Test STORY-66 auto-queue helper\nHint: link it via …\n"
+            ),
+            Some("STORY-82".to_string())
+        );
+        // Legacy YAML/SQLite path.
+        assert_eq!(
+            parse_spec_id_from_add_output(
+                "Requirement added successfully!\nUUID: 019e1300-…\nID: \x1b[32mSTORY-77\x1b[0m\n"
+            ),
+            Some("STORY-77".to_string())
+        );
+        // Color-wrapped git-canonical.
+        assert_eq!(
+            parse_spec_id_from_add_output("Added: \x1b[1;32mSTORY-99\x1b[0m - hello\n"),
+            Some("STORY-99".to_string())
+        );
+        // Output with no recognizable line.
+        assert_eq!(
+            parse_spec_id_from_add_output("something unrelated\n"),
+            None
+        );
     }
 
     /// STORY-55: scope-fallback decision table for the `@<…>` segment.

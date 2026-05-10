@@ -484,6 +484,13 @@ pub enum SessionCommand {
     /// leave the branch alone (merge/discard is up to the user). When
     /// `id` is omitted, ends the session whose lease names this cwd's
     /// worktree.
+    ///
+    /// As a side effect, when the just-ended session's branch has an
+    /// open PR (detected via `gh`), files a Story-typed review item
+    /// routed to the `reviewer` role with `implements` relations to
+    /// every spec referenced in the PR's commit messages — so a
+    /// forgotten `gh pr create` doesn't leave the reviewer unaware.
+    /// trace:STORY-66 | ai:claude
     End {
         /// Session id (8-char prefix accepted) to end. Omit to end the
         /// session matching the current cwd.
