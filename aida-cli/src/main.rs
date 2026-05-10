@@ -3,6 +3,7 @@ mod docs;
 mod global_queue;
 mod history;
 mod not_found;
+mod process_probe;
 mod session;
 #[cfg(feature = "remote")]
 mod client;
@@ -6564,12 +6565,23 @@ fn emit_role_enter_eval(
         .unwrap_or(project_root)
         .display();
     println!("# aida role enter — {}", state.name);
-    // Strip any prior role prefix from PS1 (anywhere in the string, not just
-    // at the front — `aida dev activate` may have prepended its own prefix
-    // since this role was entered). Keyed off the prior AIDA_SESSION_ROLE
-    // so the match is a literal substring. ${VAR/pat/} works in bash and zsh.
-    println!("if [ -n \"${{PS1+x}}\" ] && [ -n \"${{AIDA_SESSION_ROLE:-}}\" ]; then");
-    println!("    PS1=\"${{PS1/(role:$AIDA_SESSION_ROLE) /}}\"");
+    // Strip ALL `(role:NAME) ` prefixes from PS1, regardless of which role
+    // is currently in AIDA_SESSION_ROLE. The earlier single-pattern strip
+    // (keyed off AIDA_SESSION_ROLE) leaked prefixes whenever the env var
+    // went stale: a subshell that didn't inherit the var, a manual unset,
+    // or a `role end` that fired without `role enter` having matched —
+    // each leaves an orphan `(role:foo) ` in PS1 that the next `role enter`
+    // wouldn't see. The loop walks PS1, extracts each `(role:NAME)` token,
+    // and strips it globally. trace:BUG-60 | ai:claude
+    println!("if [ -n \"${{PS1+x}}\" ]; then");
+    println!("    while case \"$PS1\" in *'(role:'*') '*) true;; *) false;; esac; do");
+    println!("        _aida_old_ps1=\"$PS1\"");
+    println!("        _aida_after=\"${{PS1#*'(role:'}}\"");
+    println!("        _aida_name=\"${{_aida_after%%') '*}}\"");
+    println!("        PS1=\"${{PS1//'(role:'$_aida_name') '/}}\"");
+    println!("        [ \"$PS1\" = \"$_aida_old_ps1\" ] && break");
+    println!("    done");
+    println!("    unset _aida_old_ps1 _aida_after _aida_name");
     println!("fi");
     println!("export AIDA_SESSION_ROLE='{}'", state.name);
     if let Some(p) = &state.purpose {
@@ -6635,10 +6647,18 @@ fn handle_role_end() -> Result<()> {
     // both at the shell top level and inside a wrapper function.
     println!("# aida role end");
     println!("__AIDA_ROLE_END_PREV=\"${{AIDA_SESSION_ROLE:-}}\"");
-    // Strip the role's PS1 prefix before unsetting, while we still know
-    // the role name to match against.
-    println!("if [ -n \"${{PS1+x}}\" ] && [ -n \"$__AIDA_ROLE_END_PREV\" ]; then");
-    println!("    PS1=\"${{PS1/(role:$__AIDA_ROLE_END_PREV) /}}\"");
+    // Strip ALL `(role:NAME) ` prefixes from PS1 — same rationale as the
+    // entry path: stale env state can leave orphan prefixes that a single
+    // pattern strip misses. trace:BUG-60 | ai:claude
+    println!("if [ -n \"${{PS1+x}}\" ]; then");
+    println!("    while case \"$PS1\" in *'(role:'*') '*) true;; *) false;; esac; do");
+    println!("        _aida_old_ps1=\"$PS1\"");
+    println!("        _aida_after=\"${{PS1#*'(role:'}}\"");
+    println!("        _aida_name=\"${{_aida_after%%') '*}}\"");
+    println!("        PS1=\"${{PS1//'(role:'$_aida_name') '/}}\"");
+    println!("        [ \"$PS1\" = \"$_aida_old_ps1\" ] && break");
+    println!("    done");
+    println!("    unset _aida_old_ps1 _aida_after _aida_name");
     println!("fi");
     println!("unset AIDA_SESSION_ROLE AIDA_SESSION_PURPOSE AIDA_SESSION_PROJECT");
     println!("if [ -n \"$__AIDA_ROLE_END_PREV\" ]; then");
@@ -8487,6 +8507,7 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             base,
             path,
             forge,
+            branch_style,
             launch,
             title,
             permission_mode,
@@ -8497,13 +8518,15 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             base.as_deref(),
             path.as_deref(),
             forge.as_deref(),
+            branch_style,
             *launch,
             title.clone(),
             permission_mode,
             role.clone(),
         ),
-        SessionCommand::End { id, yes } => session_end(id.as_deref(), *yes),
-        SessionCommand::Leases => session_leases(),
+        SessionCommand::End { id, yes, force } => session_end(id.as_deref(), *yes, *force),
+        SessionCommand::Leases { verbose } => session_leases(*verbose),
+        SessionCommand::Show { id } => session_show(id.as_deref()),
         SessionCommand::Prune { days, dry_run, yes } => {
             session_prune(*days, *dry_run, *yes)
         }
@@ -8533,6 +8556,19 @@ struct SessionLease {
     started_at: chrono::DateTime<chrono::Utc>,
     /// Hostname when started.
     hostname: String,
+    /// Role active in the calling shell at session-start time, if any.
+    /// Lets `aida session leases` / `aida session show` display role per
+    /// session, and gives subsequent role-aware tooling inside the worktree
+    /// the right starting persona. Optional for back-compat with older
+    /// leases written before STORY-65. trace:STORY-65 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    role: Option<String>,
+    /// PID of the shell that ran `aida session start`. Used by
+    /// `aida session end` to resolve the right lease when the user runs
+    /// `end` from the same parent shell that ran `start` (cwd is outside
+    /// the worktree). Optional for back-compat. trace:STORY-73 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    creator_pid: Option<u32>,
     /// Parent project's `target/` dir, captured so the session shell can
     /// share its cargo build cache with the parent worktree (avoids a full
     /// rebuild on first `cargo build` inside the session). `None` when the
@@ -9254,12 +9290,95 @@ fn detect_forge_from_origin(project_root: &std::path::Path) -> Option<ReviewForg
     }
 }
 
+/// True if `branch` exists either locally or as `origin/<branch>`. Used by
+/// STORY-65 auto-branch resolution. Treats any git error as "doesn't exist"
+/// — better to try the name and let `git worktree add -b` fail loudly than
+/// to refuse to start a session because origin is unreachable.
+/// trace:STORY-65 | ai:claude
+fn branch_exists_anywhere(project_root: &std::path::Path, branch: &str) -> bool {
+    let local = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["rev-parse", "--verify", "--quiet", &format!("refs/heads/{}", branch)])
+        .output();
+    if matches!(&local, Ok(o) if o.status.success()) {
+        return true;
+    }
+    aida_core::git_ops::remote_branch_exists(project_root, "origin", branch)
+}
+
+/// Walk a candidate list of branch names and return the first that's free
+/// locally and on origin. STORY-65: auto for slug → slug-2..-10 →
+/// slug-YYYY-MM-DD → slug-YYYY-MM-DD-2..-10; date for slug-YYYY-MM-DD
+/// (with -N suffix on collision). Bails if 21 candidates all collide —
+/// that's a strong signal the user wants an explicit --branch.
+/// trace:STORY-65 | ai:claude
+fn resolve_session_branch(
+    project_root: &std::path::Path,
+    slug: &str,
+    branch_style: &str,
+) -> Result<String> {
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let dated = format!("{}-{}", slug, today);
+    let candidates: Vec<String> = match branch_style {
+        "auto" => {
+            let mut v = vec![slug.to_string()];
+            for n in 2..=10 {
+                v.push(format!("{}-{}", slug, n));
+            }
+            v.push(dated.clone());
+            for n in 2..=10 {
+                v.push(format!("{}-{}", dated, n));
+            }
+            v
+        }
+        "date" => {
+            let mut v = vec![dated.clone()];
+            for n in 2..=10 {
+                v.push(format!("{}-{}", dated, n));
+            }
+            v
+        }
+        other => anyhow::bail!(
+            "unknown --branch-style `{}` (expected `auto` or `date`)",
+            other
+        ),
+    };
+    for cand in &candidates {
+        if !branch_exists_anywhere(project_root, cand) {
+            return Ok(cand.clone());
+        }
+    }
+    anyhow::bail!(
+        "all {} candidate branch names are taken (slug `{}`); pass --branch explicitly",
+        candidates.len(),
+        slug
+    )
+}
+
+/// Best-effort PID of the shell that invoked `aida session start`. The
+/// `aida` shell wrapper is a function (not a forked process) so the
+/// binary's parent IS the user's interactive shell. Goes through sysinfo
+/// — already on for STORY-69 — so we don't add a libc dep just for
+/// `getppid`. Returns None if sysinfo can't see this process at all (a
+/// platform that didn't make it into the probe). trace:STORY-73 | ai:claude
+fn creator_shell_pid() -> Option<u32> {
+    let mut sys = sysinfo::System::new_with_specifics(
+        sysinfo::RefreshKind::new()
+            .with_processes(sysinfo::ProcessRefreshKind::new()),
+    );
+    sys.refresh_processes_specifics(sysinfo::ProcessRefreshKind::new());
+    let me = sysinfo::Pid::from_u32(std::process::id());
+    sys.process(me)?.parent().map(|p| p.as_u32())
+}
+
 fn session_start(
     owns: &str,
     branch: Option<&str>,
     base: Option<&str>,
     explicit_path: Option<&str>,
     forge_override: Option<&str>,
+    branch_style: &str,
     launch_claude: bool,
     launch_title: Option<String>,
     launch_permission_mode: &str,
@@ -9285,9 +9404,17 @@ fn session_start(
             (resolved_forge, n)
         });
 
+    // STORY-65: auto-branch with collision-aware naming. If --branch isn't
+    // given (and we're not in review mode, which has its own deterministic
+    // naming), walk a candidate list — slug, slug-2..-10, slug-YYYY-MM-DD,
+    // slug-YYYY-MM-DD-2..-10 — and pick the first that doesn't exist
+    // locally OR on origin. `--branch-style date` skips straight to the
+    // dated form for callers that want every session traceable to a date.
+    // trace:STORY-65 | ai:claude
     let branch_name = match (&review_target, branch) {
         (Some((forge, n)), None) => forge.local_branch_for(*n),
-        _ => branch.map(|s| s.to_string()).unwrap_or_else(|| slug.clone()),
+        (_, Some(b)) => b.to_string(),
+        (None, None) => resolve_session_branch(&project_root, &slug, branch_style)?,
     };
     let repo_name = project_root
         .file_name()
@@ -9306,6 +9433,26 @@ fn session_start(
             "{} already exists — pick a different --path or remove it first",
             worktree_path.display()
         );
+    }
+
+    // BUG-61: refuse to recreate a worktree at a path that still has a
+    // leaked claude process pinning the old (now-dangling) inode. Even
+    // though `worktree_path.exists()` is false (the dir was unlinked),
+    // a live claude with `cwd=<path> (deleted)` will silently misroute
+    // hooks and writes against the new worktree we're about to create.
+    // The user must `kill <pid>` first. trace:BUG-61 | ai:claude
+    let dangling = probe_dangling_claudes_at_path(&worktree_path);
+    if !dangling.is_empty() {
+        let mut msg = format!(
+            "refusing to start session at {} — {} leaked claude process(es) still hold the previous (deleted) inode:",
+            worktree_path.display(),
+            dangling.len()
+        );
+        for p in &dangling {
+            msg.push_str(&format!("\n  pid {}    `kill {}` to clean up", p.pid, p.pid));
+        }
+        msg.push_str("\n\nThen retry `aida session start`.");
+        anyhow::bail!(msg)
     }
 
     // Check the lease dir exists; create if not.
@@ -9346,8 +9493,11 @@ fn session_start(
             .arg("-C")
             .arg(&project_root)
             .args(["fetch", "origin", refspec.as_str()])
-            .status()?;
-        if !fetch.success() {
+            .output()?;
+        use std::io::Write;
+        let _ = std::io::stderr().write_all(&fetch.stdout);
+        let _ = std::io::stderr().write_all(&fetch.stderr);
+        if !fetch.status.success() {
             anyhow::bail!(
                 "`git fetch origin {}` failed — is {} #{} valid? \
                  (For self-hosted forges, override with --forge github|gitlab.)",
@@ -9368,8 +9518,10 @@ fn session_start(
                 worktree_path.to_str().unwrap(),
                 branch_name.as_str(),
             ])
-            .status()?;
-        if !res.success() {
+            .output()?;
+        let _ = std::io::stderr().write_all(&res.stdout);
+        let _ = std::io::stderr().write_all(&res.stderr);
+        if !res.status.success() {
             anyhow::bail!("`git worktree add` failed");
         }
 
@@ -9409,12 +9561,20 @@ fn session_start(
         if let Some(b) = base {
             args.push(b);
         }
+        // STORY-73: capture stdout and re-emit to stderr. `git worktree add`
+        // prints things like "HEAD is now at <sha>" to stdout, which would
+        // otherwise contaminate session_start's stdout (where the wrapper
+        // expects only `export AIDA_SESSION_ID=...` for eval).
+        // trace:STORY-73 | ai:claude
         let res = std::process::Command::new("git")
             .arg("-C")
             .arg(&project_root)
             .args(&args)
-            .status()?;
-        if !res.success() {
+            .output()?;
+        use std::io::Write;
+        let _ = std::io::stderr().write_all(&res.stdout);
+        let _ = std::io::stderr().write_all(&res.stderr);
+        if !res.status.success() {
             anyhow::bail!("`git worktree add` failed");
         }
     }
@@ -9490,6 +9650,21 @@ fn session_start(
         .ok()
         .or_else(|| std::env::var("USER").ok())
         .unwrap_or_else(|| "unknown".to_string());
+    // STORY-65: inherit the calling shell's role (if any) into the lease so
+    // `aida session leases`, `aida session show`, and tooling inside the
+    // worktree all know which persona this session was started under.
+    // trace:STORY-65 | ai:claude
+    let inherited_role = std::env::var("AIDA_SESSION_ROLE")
+        .ok()
+        .filter(|s| !s.trim().is_empty());
+
+    // STORY-73: capture the parent shell PID so `aida session end` (without
+    // an arg) can resolve the right lease from the shell that ran `start`,
+    // even when cwd doesn't help. Best effort — if PPID isn't set / process
+    // self-introspection fails, we leave the field None and fall back to
+    // the cwd / single-active heuristics. trace:STORY-73 | ai:claude
+    let creator_pid = creator_shell_pid();
+
     let lease = SessionLease {
         id: id.clone(),
         scope: owns.to_string(),
@@ -9501,6 +9676,8 @@ fn session_start(
         branch: branch_name.clone(),
         started_at: chrono::Utc::now(),
         hostname: hostname(),
+        role: inherited_role.clone(),
+        creator_pid,
         cargo_target_dir: cargo_target_dir.clone(),
         // STORY-58: record the parent project root so `aida session list`
         // run from inside the new worktree can also walk the parent's
@@ -9520,18 +9697,27 @@ fn session_start(
     let lease_file = lease_path(&project_root, &id);
     std::fs::write(&lease_file, toml::to_string_pretty(&lease)?)?;
 
-    println!(
+    // STORY-73: human output to stderr, eval-friendly export to stdout when
+    // stdout is captured (i.e., the shell wrapper's `eval "$(...)"` is
+    // running). Direct invocation (TTY stdout) prints only the human output
+    // — no raw `export` lines bleeding into the terminal. The wrapper
+    // captures stdout into eval; stderr passes through to the user; stdin
+    // is unaffected so any prompts still work. trace:STORY-73 | ai:claude
+    eprintln!(
         "{} session {} started",
         "✓".green().bold(),
         id.yellow()
     );
-    println!("  {}: {}", "scope".bold(), owns.cyan());
-    println!("  {}: {}", "branch".bold(), branch_name.cyan());
-    println!(
+    eprintln!("  {}: {}", "scope".bold(), owns.cyan());
+    eprintln!("  {}: {}", "branch".bold(), branch_name.cyan());
+    eprintln!(
         "  {}: {}",
         "worktree".bold(),
         worktree_path.display().to_string().cyan()
     );
+    if let Some(r) = &inherited_role {
+        eprintln!("  {}: {} {}", "role".bold(), r.cyan(), "(inherited)".dimmed());
+    }
     // STORY-71: surface captured PR head/base in the summary so the user
     // sees what the reviewer flow recorded (matches `aida session show`).
     // trace:STORY-71 | ai:claude
@@ -9546,10 +9732,10 @@ fn session_start(
             (None, Some(b)) => b[..b.len().min(12)].to_string(),
             (None, None) => "-".to_string(),
         };
-        println!("  {}: {}", "pr-head".bold(), head_short.cyan());
-        println!("  {}: {}", "pr-base".bold(), base_disp.cyan());
+        eprintln!("  {}: {}", "pr-head".bold(), head_short.cyan());
+        eprintln!("  {}: {}", "pr-base".bold(), base_disp.cyan());
     }
-    println!("  {}: {}", "lease".bold(), lease_file.display().to_string().dimmed());
+    eprintln!("  {}: {}", "lease".bold(), lease_file.display().to_string().dimmed());
 
     if launch_claude {
         // STORY-54: --launch collapses "start → cd → session new" into one
@@ -9561,8 +9747,8 @@ fn session_start(
         // success.
         // trace:STORY-54 | ai:claude
         if cargo_target_dir.is_some() {
-            println!();
-            println!(
+            eprintln!();
+            eprintln!(
                 "{} {}",
                 "ℹ".cyan(),
                 "tip: source .aida/session-env.sh in your shell to share \
@@ -9570,8 +9756,8 @@ fn session_start(
                     .dimmed()
             );
         }
-        println!();
-        println!(
+        eprintln!();
+        eprintln!(
             "{} {}",
             "▶".green().bold(),
             format!(
@@ -9587,24 +9773,224 @@ fn session_start(
         return session::new_session(launch_title, launch_permission_mode, launch_role);
     }
 
-    println!();
-    println!("Next:");
-    println!(
+    eprintln!();
+    eprintln!("Next:");
+    eprintln!(
         "  {}",
         format!("cd {}", worktree_path.display()).cyan()
     );
     if cargo_target_dir.is_some() {
-        println!(
+        eprintln!(
             "  {}    {}",
             "source .aida/session-env.sh".cyan(),
             "# share parent's cargo target/".dimmed()
         );
     }
-    println!(
+    eprintln!(
         "  {}",
         format!("aida session end {}    # when done", &id[..8]).dimmed()
     );
+
+    if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
+        // Wrapped in eval — emit the env modification.
+        println!("export AIDA_SESSION_ID='{}'", id);
+    }
     Ok(())
+}
+
+/// BUG-61: enumerate live `claude` processes whose cwd is at-or-under
+/// `worktree`. Used by both `session end` (refuse to remove a worktree
+/// with live claudes inside) and `session start` (refuse to recreate a
+/// worktree path that has a leaked claude pinning its dangling inode).
+/// Returns an empty vec when probing isn't possible — better to let the
+/// session op proceed than to block on a probe failure.
+/// trace:BUG-61 | ai:claude
+fn probe_live_claudes_in_worktree(worktree: &std::path::Path) -> Vec<process_probe::LiveSession> {
+    let canon = worktree.canonicalize().unwrap_or_else(|_| worktree.to_path_buf());
+    process_probe::probe_live_claude_sessions()
+        .into_iter()
+        .filter(|s| !s.stale_cwd && (s.cwd == canon || s.cwd.starts_with(&canon)))
+        .collect()
+}
+
+/// BUG-61: enumerate dangling-cwd claude processes that USED to be inside
+/// `worktree` (cwd matches the path with `(deleted)` suffix). Used by
+/// `session start` to refuse recreating a worktree path that has an
+/// orphan claude attached — the new worktree's writes would be ignored
+/// by the leaked process and any hook it fires would resolve against a
+/// stale inode. trace:BUG-61 | ai:claude
+fn probe_dangling_claudes_at_path(worktree: &std::path::Path) -> Vec<process_probe::LiveSession> {
+    process_probe::probe_live_claude_sessions()
+        .into_iter()
+        .filter(|s| s.stale_cwd && (s.cwd == worktree || s.cwd.starts_with(worktree)))
+        .collect()
+}
+
+/// BUG-61: SIGTERM each pid, sleep `grace_secs`, then SIGKILL any that
+/// are still alive. trace:BUG-61 | ai:claude
+fn terminate_pids_with_grace(pids: &[u32], grace_secs: u64) {
+    use sysinfo::{ProcessRefreshKind, RefreshKind, Signal, System};
+    let mut sys = System::new_with_specifics(
+        RefreshKind::new().with_processes(ProcessRefreshKind::new()),
+    );
+    sys.refresh_processes_specifics(ProcessRefreshKind::new());
+    for &pid in pids {
+        if let Some(p) = sys.process(sysinfo::Pid::from_u32(pid)) {
+            let _ = p.kill_with(Signal::Term);
+        }
+    }
+    std::thread::sleep(std::time::Duration::from_secs(grace_secs));
+    sys.refresh_processes_specifics(ProcessRefreshKind::new());
+    for &pid in pids {
+        if let Some(p) = sys.process(sysinfo::Pid::from_u32(pid)) {
+            eprintln!(
+                "  pid {} still alive after SIGTERM — sending SIGKILL",
+                pid.to_string().yellow()
+            );
+            let _ = p.kill_with(Signal::Kill);
+        }
+    }
+}
+
+/// STORY-73: resolution chain for `aida session end` (no arg). Tries in
+/// order, stopping at first hit:
+///
+///   1. cwd-based: lease whose worktree_path contains cwd. (existing flow)
+///   2. AIDA_SESSION_ID env var: exported by `session start` when wrapped
+///      via the shell helper; matches a live lease by id prefix.
+///   3. ancestor PID: walks the calling shell's ancestors via sysinfo and
+///      matches against any lease's `creator_pid`. Catches the common case
+///      where the user ran `start` then `end` from the same shell, never
+///      cd'd into the worktree, and AIDA_SESSION_ID isn't set (e.g., shell
+///      helpers not installed).
+///   4. single-active fallback: if exactly one lease is active for this
+///      project, prompt y/N (or auto-accept with -y).
+///   5. error: list active leases and ask for an explicit id.
+///
+/// trace:STORY-73 | ai:claude
+fn resolve_session_to_end(
+    id_query: Option<&str>,
+    leases: &[SessionLease],
+    yes: bool,
+) -> Result<SessionLease> {
+    if let Some(q) = id_query {
+        return find_lease_by_id_prefix(q, leases);
+    }
+
+    // 1. cwd
+    if let Ok(cwd) = std::env::current_dir() {
+        let canon = cwd.canonicalize().unwrap_or(cwd);
+        if let Some(l) = leases.iter().find(|l| {
+            canon == l.worktree_path || canon.starts_with(&l.worktree_path)
+        }) {
+            return Ok(l.clone());
+        }
+    }
+
+    // 2. AIDA_SESSION_ID env var
+    if let Ok(env_id) = std::env::var("AIDA_SESSION_ID") {
+        if !env_id.trim().is_empty() {
+            if let Ok(l) = find_lease_by_id_prefix(&env_id, leases) {
+                eprintln!(
+                    "{} resolved session via {} env var",
+                    "→".dimmed(),
+                    "AIDA_SESSION_ID".cyan()
+                );
+                return Ok(l);
+            }
+        }
+    }
+
+    // 3. ancestor PID
+    let my_chain = process_probe::walk_ancestor_pids(std::process::id());
+    let chain_set: std::collections::HashSet<u32> = my_chain.into_iter().collect();
+    let ancestor_match: Vec<&SessionLease> = leases
+        .iter()
+        .filter(|l| {
+            l.creator_pid
+                .map(|p| chain_set.contains(&p))
+                .unwrap_or(false)
+        })
+        .collect();
+    match ancestor_match.len() {
+        0 => {}
+        1 => {
+            eprintln!(
+                "{} resolved session via ancestor PID match (creator_pid {})",
+                "→".dimmed(),
+                ancestor_match[0].creator_pid.unwrap()
+            );
+            return Ok(ancestor_match[0].clone());
+        }
+        n => {
+            eprintln!(
+                "{} {} active leases all have an ancestor PID match — pass an id explicitly",
+                "Warning:".yellow().bold(),
+                n
+            );
+        }
+    }
+
+    // 4. single-active fallback
+    if leases.len() == 1 {
+        let only = &leases[0];
+        if yes {
+            eprintln!(
+                "{} only one active session ({}); -y given, ending it",
+                "→".dimmed(),
+                only.id[..8].yellow()
+            );
+            return Ok(only.clone());
+        }
+        eprintln!(
+            "Only one active session: {} (scope {}, branch {})",
+            only.id[..8].yellow(),
+            only.scope,
+            only.branch
+        );
+        eprint!("End it? [y/N] ");
+        use std::io::Write;
+        let _ = std::io::stderr().flush();
+        let mut ans = String::new();
+        std::io::stdin().read_line(&mut ans)?;
+        if matches!(ans.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+            return Ok(only.clone());
+        }
+        anyhow::bail!("aborted by user");
+    }
+
+    // 5. error with listing
+    let mut msg = String::from(
+        "no active session resolvable from this shell — pass an id or `aida session leases`\n\nActive sessions:",
+    );
+    for l in leases {
+        msg.push_str(&format!(
+            "\n  {} {} ({})",
+            &l.id[..8],
+            l.scope,
+            l.worktree_path.display()
+        ));
+    }
+    anyhow::bail!(msg)
+}
+
+/// Look up a lease by id prefix (case-insensitive). Errors on no-match
+/// or ambiguous prefix. trace:STORY-73 | ai:claude
+fn find_lease_by_id_prefix(query: &str, leases: &[SessionLease]) -> Result<SessionLease> {
+    let q = query.to_lowercase();
+    let matches: Vec<&SessionLease> = leases
+        .iter()
+        .filter(|l| l.id.to_lowercase().starts_with(&q))
+        .collect();
+    match matches.len() {
+        0 => anyhow::bail!("no session matching `{}`", query),
+        1 => Ok(matches[0].clone()),
+        n => anyhow::bail!(
+            "ambiguous session id `{}` — matches {} sessions, use a longer prefix",
+            query,
+            n
+        ),
+    }
 }
 
 /// STORY-52: locate the parent project's cargo `target/` directory so a
@@ -9671,69 +10057,65 @@ fn shell_single_quote(s: &str) -> String {
     out
 }
 
-fn session_end(id_query: Option<&str>, yes: bool) -> Result<()> {
+fn session_end(id_query: Option<&str>, yes: bool, force: bool) -> Result<()> {
     let project_root = find_project_root()?;
     let leases = list_leases(&project_root);
     if leases.is_empty() {
-        println!("(no active sessions)");
+        eprintln!("(no active sessions)");
         return Ok(());
     }
 
-    // Resolve the lease to end. If no id given, match by cwd.
-    let cwd = std::env::current_dir().ok();
-    let target = match id_query {
-        Some(q) => {
-            let q = q.to_lowercase();
-            let matches: Vec<&SessionLease> = leases
-                .iter()
-                .filter(|l| l.id.to_lowercase().starts_with(&q))
-                .collect();
-            match matches.len() {
-                0 => anyhow::bail!("no session matching `{}`", q),
-                1 => matches[0].clone(),
-                n => anyhow::bail!(
-                    "ambiguous session id `{}` — matches {} sessions, use a longer prefix",
-                    q,
-                    n
-                ),
-            }
-        }
-        None => {
-            let Some(cwd) = cwd else {
-                anyhow::bail!("cwd unavailable; pass an explicit session id");
-            };
-            let canon_cwd = cwd.canonicalize().unwrap_or(cwd);
-            leases
-                .iter()
-                .find(|l| {
-                    let p = &l.worktree_path;
-                    p == &canon_cwd
-                        || canon_cwd.starts_with(p)
-                })
-                .cloned()
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "no session lease covers cwd ({}). Pass an id explicitly.",
-                        canon_cwd.display()
-                    )
-                })?
-        }
-    };
+    let target = resolve_session_to_end(id_query, &leases, yes)?;
 
-    println!(
+    // BUG-61: detect live `claude` processes whose cwd is under the
+    // worktree we're about to remove. If we don't, `git worktree remove`
+    // succeeds (cwd is just a soft handle), the dir is unlinked, and the
+    // claude keeps running with `(deleted)` as its cwd — leaking memory,
+    // confusing future liveness probes, and potentially firing hooks at
+    // paths that no longer exist. Default refuses with a clear message;
+    // `--force` SIGTERMs them with a 5s grace, then SIGKILLs.
+    // trace:BUG-61 | ai:claude
+    let leaked = probe_live_claudes_in_worktree(&target.worktree_path);
+    if !leaked.is_empty() {
+        if !force {
+            let mut msg = format!(
+                "{} live claude process{} inside worktree {} — would leak with `(deleted)` cwd if we removed the worktree:",
+                leaked.len(),
+                if leaked.len() == 1 { "" } else { "es" },
+                target.worktree_path.display()
+            );
+            for p in &leaked {
+                msg.push_str(&format!("\n  pid {} cwd {}", p.pid, p.cwd.display()));
+            }
+            msg.push_str("\n\nExit those claude(s) first, or pass --force to SIGTERM them.");
+            anyhow::bail!(msg)
+        }
+        eprintln!(
+            "{} {} live claude process(es) inside worktree — sending SIGTERM, then SIGKILL after 5s",
+            "→".dimmed(),
+            leaked.len()
+        );
+        terminate_pids_with_grace(&leaked.iter().map(|p| p.pid).collect::<Vec<_>>(), 5);
+    }
+
+    // STORY-73: human output to stderr, eval-friendly `unset` to stdout
+    // when wrapped — same shape as session_start's `export`. Stdin/stderr
+    // for the prompt still works inside `eval "$(...)"` because $(...)
+    // captures stdout only. trace:STORY-73 | ai:claude
+    eprintln!(
         "About to end session {}:",
         target.id.yellow()
     );
-    println!("  scope:    {}", target.scope);
-    println!("  branch:   {}", target.branch);
-    println!("  worktree: {}", target.worktree_path.display());
-    println!();
-    println!("Effects:");
-    println!(
+    eprintln!("  scope:    {}", target.scope);
+    eprintln!("  branch:   {}", target.branch);
+    eprintln!("  worktree: {}", target.worktree_path.display());
+    eprintln!();
+    eprintln!("Effects:");
+    eprintln!(
         "  - delete lease at {}",
         lease_path(&project_root, &target.id).display()
     );
-    println!(
+    eprintln!(
         "  - run `git worktree remove {}` (branch {} kept; merge/discard manually)",
         target.worktree_path.display(),
         target.branch
@@ -9741,12 +10123,12 @@ fn session_end(id_query: Option<&str>, yes: bool) -> Result<()> {
 
     if !yes {
         use std::io::Write;
-        print!("\nContinue? [y/N] ");
-        std::io::stdout().flush()?;
+        eprint!("\nContinue? [y/N] ");
+        std::io::stderr().flush()?;
         let mut ans = String::new();
         std::io::stdin().read_line(&mut ans)?;
         if !matches!(ans.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
-            println!("Aborted.");
+            eprintln!("Aborted.");
             return Ok(());
         }
     }
@@ -9816,7 +10198,7 @@ fn session_end(id_query: Option<&str>, yes: bool) -> Result<()> {
         .as_deref()
         .unwrap_or(&lease_file_via_symlink);
     match std::fs::remove_file(lease_target) {
-        Ok(_) => println!("{} lease deleted", "✓".green()),
+        Ok(_) => eprintln!("{} lease deleted", "✓".green()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             // Already gone — keep quiet.
         }
@@ -9857,19 +10239,30 @@ fn session_end(id_query: Option<&str>, yes: bool) -> Result<()> {
             "remove",
             target.worktree_path.to_str().unwrap_or_default(),
         ])
-        .status();
+        .output();
+    use std::io::Write;
     match res {
-        Ok(s) if s.success() => {
-            println!("{} worktree removed", "✓".green());
+        Ok(o) if o.status.success() => {
+            let _ = std::io::stderr().write_all(&o.stdout);
+            let _ = std::io::stderr().write_all(&o.stderr);
+            eprintln!("{} worktree removed", "✓".green());
         }
-        _ => {
+        Ok(o) => {
+            let _ = std::io::stderr().write_all(&o.stdout);
+            let _ = std::io::stderr().write_all(&o.stderr);
             eprintln!(
                 "{} `git worktree remove` failed; you may need to run it manually with --force",
                 "Warning:".yellow().bold()
             );
         }
+        Err(_) => {
+            eprintln!(
+                "{} `git worktree remove` failed to spawn; you may need to run it manually",
+                "Warning:".yellow().bold()
+            );
+        }
     }
-    println!(
+    eprintln!(
         "  branch {} retained — merge or `git branch -D {}` when ready",
         target.branch.cyan(),
         target.branch
@@ -9887,6 +10280,13 @@ fn session_end(id_query: Option<&str>, yes: bool) -> Result<()> {
         println!("{} {}", "✓".green(), summary);
     }
 
+    // STORY-73: emit `unset AIDA_SESSION_ID` to stdout when wrapped via the
+    // shell helper's `eval "$(...)"`, so the calling shell's env var
+    // doesn't go stale after the lease it pointed at is gone.
+    // trace:STORY-73 | ai:claude
+    if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
+        println!("unset AIDA_SESSION_ID");
+    }
     Ok(())
 }
 
@@ -10207,7 +10607,7 @@ fn try_auto_queue_pr_review(
     ))
 }
 
-fn session_leases() -> Result<()> {
+fn session_leases(verbose: bool) -> Result<()> {
     let project_root = find_project_root()?;
     let leases = list_leases(&project_root);
     if leases.is_empty() {
@@ -10222,20 +10622,69 @@ fn session_leases() -> Result<()> {
     }
     println!("{}", "Active session leases".bold());
     println!();
+    // STORY-65: role column shows the persona inherited at session start
+    // (blank when no role was active in the calling shell). Lets multi-
+    // session workflows see at a glance which seat each lease was opened
+    // under. trace:STORY-65 | ai:claude
     println!(
-        "{:<14} {:<24} {:<22} {}",
-        "id", "scope", "branch", "worktree"
+        "{:<14} {:<20} {:<18} {:<14} {}",
+        "id", "scope", "branch", "role", "worktree"
     );
-    println!("{}", "─".repeat(96));
+    println!("{}", "─".repeat(102));
     for l in &leases {
         println!(
-            "{:<14} {:<24} {:<22} {}",
+            "{:<14} {:<20} {:<18} {:<14} {}",
             (&l.id[..8]).yellow(),
-            truncate(&l.scope, 24),
-            truncate(&l.branch, 22),
+            truncate(&l.scope, 20),
+            truncate(&l.branch, 18),
+            truncate(l.role.as_deref().unwrap_or("-"), 14),
             l.worktree_path.display()
         );
     }
+
+    // STORY-69: --verbose probes live claude processes to surface leaked
+    // ones with `(deleted)` cwd — a session ended its worktree but a
+    // claude inside the worktree never exited. Each WARN row points at a
+    // PID the user can `kill` to clean up. trace:STORY-69 | ai:claude
+    if verbose {
+        let live = process_probe::probe_live_claude_sessions();
+        let leaked: Vec<_> = live.iter().filter(|s| s.stale_cwd).collect();
+        if !leaked.is_empty() {
+            println!();
+            println!("{}", "Leaked claude processes:".bold());
+            for s in &leaked {
+                println!(
+                    "  {} pid {} cwd {} {} — `kill {}` to clean up",
+                    "WARN".yellow().bold(),
+                    s.pid.to_string().yellow(),
+                    s.cwd.display(),
+                    "(deleted)".dimmed(),
+                    s.pid
+                );
+            }
+        }
+        let live_in_lease: Vec<_> = live
+            .iter()
+            .filter(|s| !s.stale_cwd)
+            .filter(|s| {
+                leases
+                    .iter()
+                    .any(|l| s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path))
+            })
+            .collect();
+        if !live_in_lease.is_empty() {
+            println!();
+            println!("{}", "Live claude processes in lease worktrees:".bold());
+            for s in &live_in_lease {
+                println!(
+                    "  pid {} cwd {}",
+                    s.pid.to_string().green(),
+                    s.cwd.display()
+                );
+            }
+        }
+    }
+
     println!();
     println!(
         "End one with: {} {}",
@@ -10534,6 +10983,218 @@ fn session_prune(days: u32, dry_run: bool, yes: bool) -> Result<()> {
     if log_handle.is_some() {
         println!("  log: {}", log_path.display().to_string().dimmed());
     }
+    Ok(())
+}
+
+/// STORY-68: detail view for one session lease. Resolution: explicit id
+/// → cwd-based lease → ancestor-PID match (same chain as session end's
+/// resolution chain, minus the single-active prompt — `show` should be
+/// non-interactive). Errors with the active-lease listing if nothing
+/// resolves. trace:STORY-68 | ai:claude
+fn session_show(id: Option<&str>) -> Result<()> {
+    let project_root = find_project_root()?;
+    let leases = list_leases(&project_root);
+    if leases.is_empty() {
+        println!("(no active sessions)");
+        println!();
+        println!(
+            "Start one with: {} {}",
+            "aida session start --owns".cyan(),
+            "<scope>".dimmed()
+        );
+        return Ok(());
+    }
+
+    let lease = if let Some(q) = id {
+        find_lease_by_id_prefix(q, &leases)?
+    } else if let Some(l) = std::env::current_dir().ok().and_then(|cwd| {
+        let canon = cwd.canonicalize().unwrap_or(cwd);
+        leases
+            .iter()
+            .find(|l| canon == l.worktree_path || canon.starts_with(&l.worktree_path))
+            .cloned()
+    }) {
+        l
+    } else {
+        // Ancestor-PID fallback (no env-var lookup here — `show` is for
+        // human inspection, not env mutation, so we want a deterministic
+        // best-effort match without relying on the export side channel).
+        let chain: std::collections::HashSet<u32> =
+            process_probe::walk_ancestor_pids(std::process::id())
+                .into_iter()
+                .collect();
+        let candidates: Vec<&SessionLease> = leases
+            .iter()
+            .filter(|l| l.creator_pid.map(|p| chain.contains(&p)).unwrap_or(false))
+            .collect();
+        match candidates.len() {
+            1 => candidates[0].clone(),
+            _ => {
+                let mut msg = String::from(
+                    "no session lease covers cwd or this shell's ancestors — pass an id explicitly\n\nActive sessions:",
+                );
+                for l in &leases {
+                    msg.push_str(&format!(
+                        "\n  {} {} ({})",
+                        &l.id[..8],
+                        l.scope,
+                        l.worktree_path.display()
+                    ));
+                }
+                anyhow::bail!(msg)
+            }
+        }
+    };
+
+    let lease_file = lease_path(&project_root, &lease.id);
+    let started_local = lease.started_at.with_timezone(&chrono::Local);
+    let now = chrono::Utc::now();
+    let age = now.signed_duration_since(lease.started_at);
+    let age_human = humanize_relative(lease.started_at);
+
+    println!("{} {}", "Session".bold(), (&lease.id[..8]).yellow());
+    println!("  {}: {}", "scope".bold(), lease.scope.cyan());
+    println!("  {}: {}", "branch".bold(), lease.branch.cyan());
+    println!("  {}: {}", "worktree".bold(), lease.worktree_path.display());
+    if let Some(role) = &lease.role {
+        println!(
+            "  {}: {} {}",
+            "role".bold(),
+            role.cyan(),
+            "(inherited from shell at start time)".dimmed()
+        );
+    }
+    println!(
+        "  {}: {} ({})",
+        "started_at".bold(),
+        started_local.format("%Y-%m-%d %H:%M %Z"),
+        age_human.dimmed()
+    );
+    if age.num_seconds() < 0 {
+        // Future-dated lease (clock skew or hand-edited TOML) — flag it.
+        eprintln!(
+            "  {} lease started_at is in the future — clock skew?",
+            "Warning:".yellow().bold()
+        );
+    }
+    println!("  {}: {}", "owner".bold(), lease.owner);
+    println!("  {}: {}", "hostname".bold(), lease.hostname);
+    // STORY-71 / TASK-51: when this is a review session (--owns PR-N or
+    // MR-N), session_start captured the head/base SHAs and base ref.
+    // Render them on one line so the reviewer can see what diff range
+    // they're working against. Omit the line entirely for non-PR
+    // sessions so non-review output stays clean.
+    // trace:STORY-71, TASK-51 | ai:claude
+    if lease.pr_head_sha.is_some()
+        || lease.pr_base_sha.is_some()
+        || lease.pr_base_ref.is_some()
+    {
+        let head = lease
+            .pr_head_sha
+            .as_deref()
+            .map(|s| s[..s.len().min(12)].to_string())
+            .unwrap_or_else(|| "?".to_string());
+        let base = match (lease.pr_base_ref.as_deref(), lease.pr_base_sha.as_deref()) {
+            (Some(r), Some(b)) => format!("{} ({})", r, &b[..b.len().min(12)]),
+            (Some(r), None) => r.to_string(),
+            (None, Some(b)) => b[..b.len().min(12)].to_string(),
+            (None, None) => "?".to_string(),
+        };
+        println!(
+            "  {}: head {}  base {}",
+            "PR / MR".bold(),
+            head.cyan(),
+            base.cyan()
+        );
+    }
+    if let Some(pid) = lease.creator_pid {
+        let descendant = {
+            let chain: std::collections::HashSet<u32> =
+                process_probe::walk_ancestor_pids(std::process::id())
+                    .into_iter()
+                    .collect();
+            chain.contains(&pid)
+        };
+        let suffix = if descendant {
+            " (this shell is a descendant)".green().to_string()
+        } else {
+            String::new()
+        };
+        println!("  {}: {}{}", "creator_pid".bold(), pid, suffix);
+    }
+    println!("  {}: {}", "lease file".bold(), lease_file.display().to_string().dimmed());
+
+    // Activity rows from the session-local log.
+    let activity = load_session_activity(&project_root, &lease.id);
+    println!();
+    if activity.entries.is_empty() {
+        println!("{}", "Activity in this session: (none yet)".bold());
+    } else {
+        println!("{}", "Activity in this session:".bold());
+        let mut sorted = activity.entries.clone();
+        sorted.sort_by_key(|e| std::cmp::Reverse(e.at));
+        for e in sorted.iter().take(10) {
+            println!(
+                "  {:<14} {:<10} {} ({})",
+                e.spec_id.cyan(),
+                e.action,
+                e.role.dimmed(),
+                humanize_relative(e.at).dimmed()
+            );
+        }
+        if activity.entries.len() > 10 {
+            println!(
+                "  {} {} more",
+                "…".dimmed(),
+                (activity.entries.len() - 10).to_string().dimmed()
+            );
+        }
+    }
+
+    // Liveness: is there a live claude inside this worktree right now?
+    let live_in_wt = probe_live_claudes_in_worktree(&lease.worktree_path);
+    println!();
+    if live_in_wt.is_empty() {
+        println!("{}: (no live claude detected)", "Claude Code".bold());
+    } else {
+        println!(
+            "{}: {} live claude process{} in worktree",
+            "Claude Code".bold(),
+            live_in_wt.len().to_string().green(),
+            if live_in_wt.len() == 1 { "" } else { "es" }
+        );
+        for s in &live_in_wt {
+            let jsonl_note = match &s.jsonl {
+                Some(p) => format!(
+                    " (jsonl {})",
+                    p.file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("?")
+                        .dimmed()
+                ),
+                None => String::new(),
+            };
+            println!("  pid {}{}", s.pid.to_string().green(), jsonl_note);
+        }
+    }
+
+    let dangling = probe_dangling_claudes_at_path(&lease.worktree_path);
+    if !dangling.is_empty() {
+        println!();
+        println!(
+            "{} {} leaked claude process(es) with `(deleted)` cwd at this path:",
+            "Warning:".yellow().bold(),
+            dangling.len()
+        );
+        for s in &dangling {
+            println!(
+                "  pid {} — `kill {}` to clean up",
+                s.pid.to_string().yellow(),
+                s.pid
+            );
+        }
+    }
+
     Ok(())
 }
 
@@ -11079,6 +11740,8 @@ mod statusline_tests {
             branch: "br".into(),
             started_at: now,
             hostname: "h".into(),
+            role: None,
+            creator_pid: None,
             cargo_target_dir: None,
             parent_project_root: None,
             pr_head_sha: None,
@@ -11266,6 +11929,8 @@ hostname = "h"
             branch: "epic-20".into(),
             started_at: chrono::Utc::now(),
             hostname: "h".into(),
+            role: None,
+            creator_pid: None,
             cargo_target_dir: None,
             parent_project_root: Some(parent_dir.canonicalize().unwrap()),
             pr_head_sha: None,
@@ -11426,6 +12091,8 @@ mod lease_enforcement_tests {
             branch: format!("br-{}", id),
             started_at: chrono::Utc::now(),
             hostname: "test".into(),
+            role: None,
+            creator_pid: None,
             cargo_target_dir: None,
             parent_project_root: None,
             pr_head_sha: None,
@@ -11584,6 +12251,8 @@ mod scope_fallback_tests {
             branch: "br".into(),
             started_at: chrono::Utc::now(),
             hostname: "h".into(),
+            role: None,
+            creator_pid: None,
             cargo_target_dir: None,
             parent_project_root: None,
             pr_head_sha: None,
@@ -11808,6 +12477,181 @@ mod store_walkup_tests {
         let nested = tmp.path().join("a/b");
         std::fs::create_dir_all(&nested).unwrap();
         assert!(detect_distributed_store_from(&nested).is_none());
+    }
+}
+
+#[cfg(test)]
+mod session_end_resolution_tests {
+    use super::*;
+
+    fn lease(id: &str, scope: &str, cwd: &str, creator_pid: Option<u32>) -> SessionLease {
+        SessionLease {
+            id: id.to_string(),
+            scope: scope.to_string(),
+            slug: scope.to_lowercase(),
+            owner: "u".into(),
+            worktree_path: std::path::PathBuf::from(cwd),
+            branch: format!("br-{}", id),
+            started_at: chrono::Utc::now(),
+            hostname: "h".into(),
+            role: None,
+            creator_pid,
+            cargo_target_dir: None,
+            parent_project_root: None,
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
+        }
+    }
+
+    /// Explicit id query short-circuits the resolution chain.
+    /// trace:STORY-73 | ai:claude
+    #[test]
+    fn id_query_takes_precedence() {
+        let leases = vec![
+            lease("019e10260000", "EPIC-1", "/tmp/wt-1", None),
+            lease("019e10271111", "EPIC-2", "/tmp/wt-2", None),
+        ];
+        let got = resolve_session_to_end(Some("019e1027"), &leases, false).unwrap();
+        assert_eq!(got.scope, "EPIC-2");
+    }
+
+    /// Ambiguous prefix bails clearly.
+    /// trace:STORY-73 | ai:claude
+    #[test]
+    fn ambiguous_id_query_bails() {
+        let leases = vec![
+            lease("019e10260000", "EPIC-1", "/tmp/wt-1", None),
+            lease("019e10271111", "EPIC-2", "/tmp/wt-2", None),
+        ];
+        // "019e10" matches both.
+        let err = resolve_session_to_end(Some("019e10"), &leases, false).unwrap_err();
+        assert!(err.to_string().contains("ambiguous"), "{}", err);
+    }
+
+    /// Empty id query miss bails (find_lease_by_id_prefix path).
+    /// trace:STORY-73 | ai:claude
+    #[test]
+    fn unknown_id_query_bails() {
+        let leases = vec![lease("019e10260000", "EPIC-1", "/tmp/wt-1", None)];
+        let err = resolve_session_to_end(Some("ffffffff"), &leases, false).unwrap_err();
+        assert!(err.to_string().contains("no session matching"));
+    }
+
+    /// No-arg + zero leases never reaches the chain (caller short-circuits)
+    /// — but multi-lease, no env, cwd not under any worktree yields the
+    /// "no resolvable" error with a listing.
+    /// trace:STORY-73 | ai:claude
+    #[test]
+    fn unresolvable_lists_active_leases() {
+        let leases = vec![
+            lease("019e10260000", "EPIC-1", "/nonexistent/wt-1", None),
+            lease("019e10271111", "EPIC-2", "/nonexistent/wt-2", None),
+        ];
+        // Clear env so #2 doesn't fire.
+        std::env::remove_var("AIDA_SESSION_ID");
+        let err = resolve_session_to_end(None, &leases, false).unwrap_err();
+        let s = err.to_string();
+        assert!(s.contains("no active session resolvable"), "{}", s);
+        assert!(s.contains("EPIC-1"), "{}", s);
+        assert!(s.contains("EPIC-2"), "{}", s);
+    }
+
+    /// -y on single-active fallback skips the prompt.
+    /// trace:STORY-73 | ai:claude
+    #[test]
+    fn single_active_with_yes_resolves() {
+        let leases = vec![lease("019e10260000", "EPIC-1", "/nonexistent/wt-1", None)];
+        std::env::remove_var("AIDA_SESSION_ID");
+        let got = resolve_session_to_end(None, &leases, true).unwrap();
+        assert_eq!(got.scope, "EPIC-1");
+    }
+}
+
+#[cfg(test)]
+mod auto_branch_tests {
+    use super::*;
+    use std::process::Command;
+    use tempfile::TempDir;
+
+    fn init_repo() -> TempDir {
+        let tmp = TempDir::new().unwrap();
+        Command::new("git")
+            .arg("-C")
+            .arg(tmp.path())
+            .args(["init", "--initial-branch=main", "--quiet"])
+            .status()
+            .unwrap();
+        // Need at least one commit so subsequent branch creates work.
+        Command::new("git")
+            .arg("-C")
+            .arg(tmp.path())
+            .args(["commit", "--allow-empty", "-m", "init", "--quiet"])
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@t")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@t")
+            .status()
+            .unwrap();
+        tmp
+    }
+
+    fn create_branch(repo: &std::path::Path, name: &str) {
+        Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(["branch", name])
+            .status()
+            .unwrap();
+    }
+
+    /// First call returns the slug as-is. trace:STORY-65 | ai:claude
+    #[test]
+    fn auto_branch_slug_when_free() {
+        let tmp = init_repo();
+        let got = resolve_session_branch(tmp.path(), "epic-20", "auto").unwrap();
+        assert_eq!(got, "epic-20");
+    }
+
+    /// Slug taken → `-2`. trace:STORY-65 | ai:claude
+    #[test]
+    fn auto_branch_appends_2_on_first_collision() {
+        let tmp = init_repo();
+        create_branch(tmp.path(), "epic-20");
+        let got = resolve_session_branch(tmp.path(), "epic-20", "auto").unwrap();
+        assert_eq!(got, "epic-20-2");
+    }
+
+    /// Slug + slug-2..-10 all taken → falls through to dated form.
+    /// trace:STORY-65 | ai:claude
+    #[test]
+    fn auto_branch_falls_back_to_dated_form() {
+        let tmp = init_repo();
+        create_branch(tmp.path(), "epic-20");
+        for n in 2..=10 {
+            create_branch(tmp.path(), &format!("epic-20-{}", n));
+        }
+        let got = resolve_session_branch(tmp.path(), "epic-20", "auto").unwrap();
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        assert_eq!(got, format!("epic-20-{}", today));
+    }
+
+    /// `--branch-style date` skips the slug attempt and goes straight to
+    /// the dated form. trace:STORY-65 | ai:claude
+    #[test]
+    fn date_branch_style_uses_date_form_even_when_slug_free() {
+        let tmp = init_repo();
+        let got = resolve_session_branch(tmp.path(), "epic-20", "date").unwrap();
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        assert_eq!(got, format!("epic-20-{}", today));
+    }
+
+    /// Unknown style errors clearly. trace:STORY-65 | ai:claude
+    #[test]
+    fn unknown_branch_style_errors() {
+        let tmp = init_repo();
+        let err = resolve_session_branch(tmp.path(), "epic-20", "wat").unwrap_err();
+        assert!(err.to_string().contains("unknown --branch-style"));
     }
 }
 
@@ -12522,7 +13366,12 @@ aida() {
     # disambiguate every eval-required subcommand we have.
     local _aida_cmd="${1:-} ${2:-}"
     case "$_aida_cmd" in
-        "dev activate"|"dev deactivate"|"role enter"|"role end"|"role add")
+        "dev activate"|"dev deactivate"|"role enter"|"role end"|"role add"|"session start"|"session end")
+            # session start/end split output: stderr for human messages
+            # (status, prompts), stdout for the shell-modifying lines
+            # (`export AIDA_SESSION_ID=...` / `unset AIDA_SESSION_ID`).
+            # `eval "$(...)"` captures stdout only — stderr passes through
+            # to the user, stdin still reaches the binary for prompts.
             eval "$(command aida "$@")"
             ;;
         *)
