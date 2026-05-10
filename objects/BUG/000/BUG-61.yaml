@@ -1,0 +1,67 @@
+id: 019e1032-6e5a-7d72-97a4-42e50e6a2af8
+spec_id: BUG-61
+agreed_id: BUG-61
+title: aida session end removes worktree while claude processes inside are still running, leaking them with dangling cwd
+description: |
+  Caught 2026-05-09 while probing live claude PIDs for STORY-69:
+
+    pid=2537824  cwd=/home/joe/ai/aida-epic-20 (deleted)
+    pid=2651787  cwd=/home/joe/ai/aida-epic-20
+
+  PID 2537824 is a claude process from the **previous** session in that worktree (pr-2 work). When the user ran `aida session end` for pr-2, the flow was:
+
+  1. `git worktree remove /home/joe/ai/aida-epic-20`  → directory unlinked
+  2. lease file deleted (BUG-56 fixed the order, but the process is unrelated)
+  3. `aida session start` for batch3 → recreated the worktree at the same path
+  4. New claude (PID 2651787) started inside the new worktree
+
+  But the **old claude (PID 2537824) was never stopped** — it kept running with its cwd pointing at the now-unlinked inode. Linux marks this as `(deleted)` in the cwd readlink. The process is still consuming memory/CPU cycles, and any lingering hooks/file writes from it go to a black hole.
+
+  ## Why this matters
+
+  - **Resource leak**: every session end leaves a zombie claude unless the user notices and kills it.
+  - **Hook execution from orphan**: if the leaked claude tries to fire a Stop hook or commit-msg hook, the path resolution fails (BUG-59 territory — but BUG-59 is the cosmetic "ENOENT" message; this bug is the cause).
+  - **Confused liveness reporting**: `aida session list` / STORY-69's probe will see the orphan and may attribute a recent jsonl to it incorrectly.
+
+  ## Reproduction
+
+  1. Start a session: `aida session start --owns FR-X --branch foo` (creates worktree at /tmp/foo)
+  2. Open `cd /tmp/foo && claude` — claude is now running inside the worktree
+  3. **Without exiting that claude**, run `aida session end <id>` from another terminal
+  4. `git worktree remove` succeeds because the cwd is just a soft handle
+  5. The claude process is still alive with `(deleted)` cwd
+
+  ## Fix sketch
+
+  In `aida session end`:
+
+  1. Probe live claude processes whose cwd is rooted under the worktree path (use STORY-69's helper or a direct fallback)
+  2. If any found:
+     - Default: warn and abort, asking the user to exit those claudes first
+     - With `--force`: SIGTERM them with a 5s grace period, then SIGKILL
+     - With `--detach`: leave them running but warn that worktree removal will leave them dangling
+  3. Only proceed with `git worktree remove` after step 2 resolves
+
+  Same logic should apply when `aida session start` would recreate a worktree at a path that has a leaked claude — refuse and tell the user `kill <pid>` first.
+
+  ## Composes with
+
+  - STORY-69 (liveness probe) — provides the detection mechanism
+  - BUG-59 (Stop hook ENOENT) — that's the user-visible symptom; this bug is the root cause
+  - BUG-56 (lease delete order) — already fixed; this is a different ordering issue (process vs filesystem)
+  - STORY-68 (`aida session show`) — should display "warnings: 1 leaked claude PID with dangling cwd" in its output
+
+  ## Acceptance
+
+  - [ ] `aida session end` detects live claude PIDs whose cwd is under the worktree
+  - [ ] Default refuses with clear message; `--force` SIGTERM/SIGKILL them
+  - [ ] `aida session start` refuses to recreate a worktree path that has a leaked claude
+  - [ ] `aida fsck` reports leaked claude processes as a warning row
+  - [ ] Existing dangling-cwd processes can be cleaned via `aida session reap` (new subcommand) or just `kill <pid>` after `aida fsck` flags them
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T04:43:21.050664346Z
+modified_at: 2026-05-10T04:43:21.050664346Z
+req_type: Bug
