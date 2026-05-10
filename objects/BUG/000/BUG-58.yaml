@@ -1,0 +1,32 @@
+id: 019e1026-2ac2-7c91-87b7-80a1465872b4
+spec_id: BUG-58
+agreed_id: BUG-58
+title: aida add --parent silently dropped on STORY-62 / not linking parent on add
+description: |
+  Reproduced 2026-05-09 by reviewer's PR-2 audit: STORY-62 was filed and supposedly tagged as a child of EPIC-20, but the bidirectional relationship was missing in the store. STORY-62 had no `is child of EPIC-20` rel; EPIC-20's rel list didn't include STORY-62.
+
+  Hypotheses:
+
+  1. The original `aida add` for STORY-62 didn't include `--parent EPIC-20` (operator error). Easy to verify by checking commit history of the orphan store for the spec_id at the time of creation.
+
+  2. `aida add --parent` was passed but silently dropped — would be a regression in FR-215's `--parent` wiring.
+
+  Either way, the fix is a one-line audit:
+  - If (1): document/highlight the convention. The aida-implement skill could include "always pass --parent for stories under an EPIC" or `aida add` could prompt for parent when a related EPIC seems likely (interactive mode).
+  - If (2): real bug; reproduce + fix the wiring.
+
+  ## Suggested test
+
+    aida add --type story --title "test" --parent EPIC-X --status draft
+    aida rel list <new-story-id> | grep "child of EPIC-X"   # must show
+    aida rel list EPIC-X | grep "parent of <new-story-id>"  # must show
+    aida edit <new-story-id> --status rejected             # cleanup
+
+  Surfaced 2026-05-09 — hand-fixed via `aida rel add --from STORY-62 --to EPIC-20 --type child --bidirectional`.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T04:29:57.314253109Z
+modified_at: 2026-05-10T04:29:57.314253109Z
+req_type: Bug
