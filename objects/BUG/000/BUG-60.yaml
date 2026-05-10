@@ -28,10 +28,10 @@ description: |
   ## Severity
 
   Medium — cosmetic but visually distracting, makes the PS1 long enough to wrap on narrow terminals. Easy fix.
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T04:34:37.512633417Z
-modified_at: 2026-05-10T04:34:37.512633417Z
+modified_at: 2026-05-10T06:35:27.695965517Z
 req_type: Bug
