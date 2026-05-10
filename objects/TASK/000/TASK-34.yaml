@@ -1,0 +1,39 @@
+id: 019e0fba-0e8e-74f2-bfce-562c8908ff0b
+spec_id: TASK-34
+agreed_id: TASK-34
+title: 'Convention: v2/v3 follow-ups must be filed as STORYs, not described in EPIC body'
+description: |
+  ## Gap
+
+  This session shipped EPIC-19 v1+v2+v3 (doctor), EPIC-20 v1 (sessions), EPIC-21 v1 (commit pairing). Each EPIC's description sketches v1/v2/v3 in prose. Those v2/v3 ideas were NOT filed as STORYs — they lived in EPIC body text only.
+
+  /aida-capture ran at session end and surfaced six follow-ups that should have been filed as we went. The cause wasn't laziness — the conventions don't currently say "file each version progression as a STORY before committing."
+
+  ## Why it matters
+
+  - aida list --status approved --parent EPIC-21 returns only the explicitly-filed children. Without STORYs, the EPIC looked done after v1.
+  - The queue can't route v2 work to an implementer role
+  - aida status' Recent activity doesn't include v2/v3 ideas
+  - Cross-session coordination breaks: another session can't "pick up EPIC-21 v2" if it's not a real req
+
+  ## Proposal
+
+  Update the scaffold:
+
+  1. /aida-implement skill (.claude/skills/aida-implement.md): add a step before commit — "if your work or commit message describes v2/v3/follow-up scope, file each as a child STORY now (aida add --type story --parent <EPIC-id>)."
+
+  2. .claude/AIDA.md conventions block: add a rule — "EPIC descriptions describe scope/intent, not the path forward. Path forward goes in child STORYs. If you mention v1/v2/v3 in an EPIC body, file each as a STORY whose title is the version slug."
+
+  3. (Optional) aida doctor convention-check: lint EPICs whose descriptions contain "v2", "v3", "follow-up", "later" and warn if no corresponding child STORYs exist. Defer until we feel the pain again.
+
+  ## Out of scope
+
+  - Auto-extracting v2 mentions from prose to draft STORYs (too magical; would create junk)
+  - Hard enforcement (commit-msg hook that blocks commits whose subject mentions vN without a filed STORY) — nice idea, premature for v1
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T02:31:52.206565944Z
+modified_at: 2026-05-10T02:31:52.206565944Z
+req_type: Task
