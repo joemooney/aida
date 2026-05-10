@@ -1,0 +1,58 @@
+id: 019e1322-bf05-7e03-8790-9a907f9b9129
+spec_id: TASK-52
+agreed_id: TASK-52
+title: 'aida queue list: --scope <scope> filter (mirrors STORY-57''s queue add flags)'
+description: |
+  Caught 2026-05-10 — `aida queue list` shows entries filtered by role only. With `[@EPIC-20]` chips on rows (STORY-57 explicit + TASK-44 auto-derived), a `--scope EPIC-20` filter is the natural next step: see only what's queued under a specific scope.
+
+  ## Today's filters
+
+  ```
+  aida queue list                  # filter: current active role
+  aida queue list --all            # all roles
+  aida queue list --for <role>     # specific role
+  aida queue list --user <name>    # specific user
+  ```
+
+  No filter by `for_scope`.
+
+  ## Desired
+
+  ```
+  aida queue list --scope EPIC-20         # filter to entries with for_scope = EPIC-20
+  aida queue list --scope PR-5            # filter to a PR
+  aida queue list --no-scope              # filter to entries without any scope (unscoped TASKs)
+  aida queue list --scope EPIC-20,EPIC-22 # multiple scopes (comma list)
+  ```
+
+  Mirrors STORY-57's `--scope`/`--no-scope` shape on `queue add` for consistency.
+
+  ## Implementation
+
+  In `QueueCommand::List` handler:
+  - Add `--scope <CSV>` and `--no-scope` clap args (mutually exclusive with each other)
+  - After role filter applies, apply scope filter to remaining entries
+  - Composes with `--all` (cross-role + scope filter)
+
+  ## Composes with
+
+  - STORY-57 (queue add `--scope`) — write-side; this is the read-side
+  - TASK-44 (auto-derived parent EPIC chip) — derived scope should also match `--scope EPIC-N` (otherwise the chip and the filter disagree)
+  - TASK-46 (queue list filters terminal-status by default) — same family of filter enhancements
+  - Future cross-project queue (STORY-75) — `--scope aida-tutor:EPIC-2` for cross-project filtering
+
+  ## Acceptance
+
+  - [ ] `aida queue list --scope <S>` shows only entries with for_scope = S
+  - [ ] `aida queue list --no-scope` shows only entries with for_scope unset
+  - [ ] `aida queue list --scope A,B` accepts comma list
+  - [ ] Auto-derived scope (TASK-44) also matches the filter (if implemented)
+  - [ ] Composes correctly with `--all`, `--for`, `--user`
+  - [ ] Empty result renders cleanly ("no items match: role=implementer, scope=EPIC-20")
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T18:25:04.773464051Z
+modified_at: 2026-05-10T18:25:04.773464051Z
+req_type: Task
