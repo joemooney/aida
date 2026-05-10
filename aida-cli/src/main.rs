@@ -1248,8 +1248,8 @@ fn handle_git_backend_command(
         Command::Status { no_dev_context } => {
             return handle_status_command_distributed(*no_dev_context, store_path, &backend);
         }
-        Command::Push { code_only, store_only, message } => {
-            return handle_push_command(store_path, *code_only, *store_only, message.as_deref());
+        Command::Push { code_only, store_only, message, no_rebase_check } => {
+            return handle_push_command(store_path, *code_only, *store_only, message.as_deref(), *no_rebase_check);
         }
         Command::Pull { code_only, store_only } => {
             return handle_pull_command(store_path, *code_only, *store_only);
@@ -10131,6 +10131,74 @@ fn probe_dangling_claudes_at_path(worktree: &std::path::Path) -> Vec<process_pro
         .collect()
 }
 
+/// TASK-54: return Some((behind, sample)) when `branch` lags `main`
+/// (or origin/main) by 1+ commits. `sample` is a list of one-line
+/// `<short-sha> <subject>` strings for the commits the user would
+/// rebase onto. Returns None when:
+///   - we're already on main (no point comparing to ourselves)
+///   - main / origin/main don't exist locally
+///   - branch is equal-to or strictly-ahead-of main (nothing to pull)
+///   - any git invocation fails (treat as "no signal" rather than
+///     pretending we know the answer).
+/// Prefers `origin/main` when present so users with stale local
+/// `main` still see the right delta. trace:TASK-54 | ai:claude
+fn branch_behind_main(
+    repo: &std::path::Path,
+    branch: &str,
+) -> Option<(u64, Vec<String>)> {
+    if branch == "main" || branch == "HEAD" {
+        return None;
+    }
+    let rev_parse = |refname: &str| {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(["rev-parse", "--verify", "--quiet", refname])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .filter(|s| !s.is_empty())
+    };
+    // Prefer origin/main when it exists — local main can be days behind.
+    let main_ref = rev_parse("origin/main")
+        .map(|_| "origin/main")
+        .or_else(|| rev_parse("main").map(|_| "main"))?;
+    let range = format!("{}..{}", branch, main_ref);
+    let count_out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["rev-list", "--count", &range])
+        .output()
+        .ok()?;
+    if !count_out.status.success() {
+        return None;
+    }
+    let count: u64 = String::from_utf8_lossy(&count_out.stdout)
+        .trim()
+        .parse()
+        .ok()?;
+    if count == 0 {
+        return None;
+    }
+    let log_out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args([
+            "log",
+            &range,
+            "--pretty=format:%h %s",
+            "--no-merges",
+        ])
+        .output()
+        .ok()?;
+    let sample: Vec<String> = String::from_utf8_lossy(&log_out.stdout)
+        .lines()
+        .map(|l| l.to_string())
+        .collect();
+    Some((count, sample))
+}
+
 /// TASK-53: list distinct files touched by commits on `branch` since
 /// `since` (a git-friendly time string like "14 days ago"). Returns
 /// an empty vec on any git error or when the branch has no commits in
@@ -14335,6 +14403,105 @@ mod recent_files_for_branch_tests {
     }
 }
 
+#[cfg(test)]
+mod branch_behind_main_tests {
+    use super::*;
+    use std::process::Command;
+    use tempfile::TempDir;
+
+    /// Init a repo with `main` and a feature branch in one of three
+    /// configurations: behind / ahead / diverged / equal.
+    fn fixture(
+        feat_ahead: u32,
+        main_ahead: u32,
+    ) -> (TempDir, &'static str) {
+        let tmp = TempDir::new().unwrap();
+        let p = tmp.path();
+        let run = |args: &[&str]| {
+            let r = Command::new("git")
+                .arg("-C").arg(p)
+                .args(args)
+                .env("GIT_AUTHOR_NAME", "t").env("GIT_AUTHOR_EMAIL", "t@t")
+                .env("GIT_COMMITTER_NAME", "t").env("GIT_COMMITTER_EMAIL", "t@t")
+                .output().unwrap();
+            assert!(r.status.success(),
+                "git {:?} failed: {}", args,
+                String::from_utf8_lossy(&r.stderr));
+        };
+        run(&["init", "--initial-branch=main", "--quiet"]);
+        run(&["commit", "--allow-empty", "-m", "root", "--quiet"]);
+        run(&["checkout", "-q", "-b", "feat-x"]);
+        for i in 0..feat_ahead {
+            run(&["commit", "--allow-empty", "-m", &format!("feat{}", i), "--quiet"]);
+        }
+        run(&["checkout", "-q", "main"]);
+        for i in 0..main_ahead {
+            run(&["commit", "--allow-empty", "-m", &format!("main{}", i), "--quiet"]);
+        }
+        run(&["checkout", "-q", "feat-x"]);
+        (tmp, "feat-x")
+    }
+
+    /// Feature branch equal-to main → None (no rebase needed).
+    #[test]
+    fn equal_to_main_returns_none() {
+        let (tmp, branch) = fixture(0, 0);
+        assert!(branch_behind_main(tmp.path(), branch).is_none());
+    }
+
+    /// Feature strictly ahead → None (push, don't rebase).
+    #[test]
+    fn ahead_of_main_returns_none() {
+        let (tmp, branch) = fixture(3, 0);
+        assert!(branch_behind_main(tmp.path(), branch).is_none());
+    }
+
+    /// Feature behind main → Some(count, samples).
+    #[test]
+    fn behind_main_returns_count() {
+        let (tmp, branch) = fixture(0, 2);
+        let result = branch_behind_main(tmp.path(), branch);
+        assert!(result.is_some());
+        let (count, sample) = result.unwrap();
+        assert_eq!(count, 2);
+        assert_eq!(sample.len(), 2);
+    }
+
+    /// Diverged (both ahead) → Some — origin still has stuff we don't.
+    #[test]
+    fn diverged_returns_count() {
+        let (tmp, branch) = fixture(1, 3);
+        let result = branch_behind_main(tmp.path(), branch);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().0, 3);
+    }
+
+    /// On main itself → None (nothing to rebase onto).
+    #[test]
+    fn on_main_returns_none() {
+        let (tmp, _) = fixture(0, 1);
+        assert!(branch_behind_main(tmp.path(), "main").is_none());
+    }
+
+    /// No `main` branch at all → None.
+    #[test]
+    fn missing_main_returns_none() {
+        let tmp = TempDir::new().unwrap();
+        let p = tmp.path();
+        Command::new("git")
+            .arg("-C").arg(p)
+            .args(["init", "--initial-branch=trunk", "--quiet"])
+            .status().unwrap();
+        Command::new("git")
+            .arg("-C").arg(p)
+            .args(["commit", "--allow-empty", "-m", "x", "--quiet"])
+            .env("GIT_AUTHOR_NAME", "t").env("GIT_AUTHOR_EMAIL", "t@t")
+            .env("GIT_COMMITTER_NAME", "t").env("GIT_COMMITTER_EMAIL", "t@t")
+            .status().unwrap();
+        assert!(branch_behind_main(p, "trunk").is_none());
+    }
+}
+
 /// Apply the user's `--color=auto|always|never` choice to the colored
 /// crate's global override. `auto` is the colored crate's default
 /// behavior — it uses `isatty(stdout)` and respects `NO_COLOR`.
@@ -15747,6 +15914,7 @@ fn handle_push_command(
     code_only: bool,
     store_only: bool,
     message: Option<&str>,
+    no_rebase_check: bool,
 ) -> Result<()> {
     use aida_core::git_ops;
 
@@ -15762,6 +15930,59 @@ fn handle_push_command(
         } else {
             let branch = git_ops::current_branch(&project_root)
                 .unwrap_or_else(|_| "HEAD".to_string());
+
+            // TASK-54: pre-flight "behind main" check. If the current
+            // branch lags `main` by N commits, prompt before pushing
+            // so the user gets a chance to rebase first (or push
+            // anyway). Skipped: --no-rebase-check (scripts/CI),
+            // pushing main itself, no upstream main locally, branch
+            // is exactly up-to-date. trace:TASK-54 | ai:claude
+            if !no_rebase_check {
+                if let Some((behind, sample)) =
+                    branch_behind_main(&project_root, &branch)
+                {
+                    eprintln!(
+                        "{} {} is {} commit{} behind {}:",
+                        "⚠".yellow().bold(),
+                        branch.cyan(),
+                        behind,
+                        if behind == 1 { "" } else { "s" },
+                        "main".cyan()
+                    );
+                    for s in sample.iter().take(5) {
+                        eprintln!("    {}", s.dimmed());
+                    }
+                    if sample.len() > 5 {
+                        eprintln!(
+                            "    {}",
+                            format!("… and {} more", sample.len() - 5).dimmed()
+                        );
+                    }
+                    eprintln!(
+                        "  {}",
+                        "Rebase first to avoid stale-base review noise:".dimmed()
+                    );
+                    eprintln!("    {}", "git pull --rebase origin main".cyan());
+                    eprintln!(
+                        "  Push anyway? [y/N] (or pass --no-rebase-check to skip this check)"
+                    );
+                    use std::io::Write;
+                    let _ = std::io::stderr().flush();
+                    let mut answer = String::new();
+                    let _ = std::io::stdin().read_line(&mut answer);
+                    if !matches!(
+                        answer.trim().to_ascii_lowercase().as_str(),
+                        "y" | "yes"
+                    ) {
+                        eprintln!(
+                            "{}",
+                            "Push aborted. Rebase and re-run `aida push`.".dimmed()
+                        );
+                        return Ok(());
+                    }
+                }
+            }
+
             println!(
                 "{} {} → origin",
                 "Pushing code".cyan().bold(),
