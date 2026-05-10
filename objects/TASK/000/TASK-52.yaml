@@ -49,10 +49,10 @@ description: |
   - [ ] Auto-derived scope (TASK-44) also matches the filter (if implemented)
   - [ ] Composes correctly with `--all`, `--for`, `--user`
   - [ ] Empty result renders cleanly ("no items match: role=implementer, scope=EPIC-20")
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T18:25:04.773464051Z
-modified_at: 2026-05-10T18:25:04.773464051Z
+modified_at: 2026-05-10T22:33:32.525140248Z
 req_type: Task
