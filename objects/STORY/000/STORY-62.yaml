@@ -30,10 +30,10 @@ description: |
   ## Implementation hint
 
   Both commands share a "find direct children" helper: walk the parent's relationships array, filter rel_type=Parent, resolve target uuids via the cache. The cache already indexes by uuid; this should be a single SQLite query under the hood.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T03:34:36.870677875Z
-modified_at: 2026-05-10T03:34:36.870677875Z
+modified_at: 2026-05-10T04:07:26.663040403Z
 req_type: Story
