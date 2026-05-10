@@ -42,10 +42,10 @@ description: |
   - [ ] postgres feature build succeeds on linux (with libpq installed)
   - [ ] Workflow documented (which legs run on which platforms, why)
   - [ ] Tested by re-running PR-5's CI and seeing green
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T17:41:56.014022424Z
-modified_at: 2026-05-10T17:41:56.014022424Z
+modified_at: 2026-05-10T17:50:19.058293211Z
 req_type: Bug
