@@ -1310,21 +1310,44 @@ fn handle_git_backend_command(
             tags,
             prefix,
             parent,
+            interactive,
             ..
         } => {
+            // BUG-45: refuse to silently create `FR-N - Untitled`. Either
+            // the user passes `--title`, drops into interactive mode (prompt
+            // for title), or sees a usage hint and exits non-zero. Decided
+            // by: explicit --interactive flag, OR no title + stdin is a TTY
+            // (auto-interactive). trace:BUG-45 | ai:claude
+            let title_resolved: String = if let Some(t) = title.clone() {
+                t
+            } else if *interactive
+                || std::io::IsTerminal::is_terminal(&std::io::stdin())
+            {
+                use std::io::Write;
+                eprint!("Title: ");
+                std::io::stderr().flush()?;
+                let mut t = String::new();
+                std::io::stdin().read_line(&mut t)?;
+                let t = t.trim().to_string();
+                if t.is_empty() {
+                    anyhow::bail!("title is required (got empty input)");
+                }
+                t
+            } else {
+                anyhow::bail!(
+                    "title is required — pass `--title \"...\"` or run with `--interactive` \
+                     for prompts. (See `aida add --help` for the full flag list.)"
+                );
+            };
             // trace:BUG-17 | ai:claude
             let resolved_description =
                 resolve_description(description, description_from_file, *description_stdin)?;
             // trace:BUG-22 | ai:claude
-            if let Some(ref t) = title {
-                if let Some(msg) = suspicious_title_signal(t) {
-                    eprintln!("{} {}", "Warning:".yellow().bold(), msg);
-                }
+            if let Some(msg) = suspicious_title_signal(&title_resolved) {
+                eprintln!("{} {}", "Warning:".yellow().bold(), msg);
             }
             let mut req = Requirement::new(
-                title
-                    .clone()
-                    .unwrap_or_else(|| "Untitled".to_string()),
+                title_resolved,
                 resolved_description.unwrap_or_default(),
             );
             if let Some(s) = status {
