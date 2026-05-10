@@ -1,0 +1,39 @@
+id: 019e10a7-9394-7a93-919e-31c9fef789d5
+spec_id: STORY-76
+agreed_id: STORY-76
+title: 'Cross-project relationships: rel add <project>:<id>'
+description: |
+  Extends `aida rel add` to accept project-qualified IDs.
+
+  ## Surface
+
+  ```
+  aida rel add EPIC-20 aida-tutor:STORY-12 --type taught-by
+  aida rel list EPIC-20    # cross-project edges shown distinctly
+  ```
+
+  ## Semantics
+
+  `<project>:<id>` parses as project-qualified reference. On add:
+  1. Local project records edge: target_uuid is from `aida-tutor` project's req
+  2. Optionally writes the inverse edge to `aida-tutor`'s store (with `--bidirectional`)
+  3. `rel list` displays cross-project edges with the project prefix, distinct from local edges
+
+  ## Open questions
+
+  - Should cross-project rels live in a separate index, or in the local req's relationships array (with a project-qualified target_uuid)?
+  - How does `aida rel remove` handle the "other side" — best-effort, or required?
+
+  ## Acceptance
+
+  - [ ] `rel add HERE-X aida-tutor:THERE-Y --type Z` works
+  - [ ] `rel list` shows cross-project edges with project prefix
+  - [ ] Bidirectional cross-project rels write to both stores
+  - [ ] Graceful failure when target project's store is unreachable
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T06:51:18.292085502Z
+modified_at: 2026-05-10T06:51:18.292085502Z
+req_type: Story
