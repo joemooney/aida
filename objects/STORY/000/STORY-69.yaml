@@ -57,12 +57,12 @@ description: |
   - [ ] Detects and reports `(deleted)` cwd as `stale_cwd: true`
   - [ ] Used by `aida session list` (mark live rows), `aida session prune` (skip live), `aida session leases --verbose` (warn on stale_cwd)
   - [ ] Falls back gracefully on platforms where sysinfo can't read cwd (Windows pre-Vista, restricted procfs) — degrades to mtime-only without crashing
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T04:41:46.578062063Z
-modified_at: 2026-05-10T06:47:34.060275530Z
+modified_at: 2026-05-10T06:47:40.092513554Z
 req_type: Story
 relationships:
 - rel_type: Child
