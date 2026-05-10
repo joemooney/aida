@@ -577,6 +577,12 @@ pub enum RoleCommand {
         name: Option<String>,
     },
 
+    /// Print the active role's name and exit, or exit 1 with empty
+    /// stdout when no role is active. Pure read of `$AIDA_SESSION_ROLE`
+    /// — no project-store load. Shell-friendly counterpart to
+    /// `git branch --show-current`. trace:TASK-42 | ai:claude
+    Active,
+
     /// Deactivate the current role (state preserved). Outputs shell code:
     ///   `eval "$(aida role end)"`
     End,

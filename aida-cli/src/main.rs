@@ -6301,6 +6301,7 @@ fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
         } => handle_role_add(&project_root, name, purpose.as_deref(), *global),
         RoleCommand::List => handle_role_list(&project_root),
         RoleCommand::Show { name } => handle_role_show(&project_root, name.as_deref()),
+        RoleCommand::Active => handle_role_active(),
         RoleCommand::End => handle_role_end(),
         RoleCommand::Delete { name, yes } => handle_role_delete(&project_root, name, *yes),
         RoleCommand::Scaffold => handle_role_scaffold(),
@@ -6601,6 +6602,22 @@ fn emit_role_enter_eval(
                 entry.spec_id, entry.action, when
             );
         }
+    }
+}
+
+/// `aida role active` — one-line stub that prints just the active role
+/// name, scriptable counterpart to `git branch --show-current` and
+/// `git config --get user.email`. Pure read of `$AIDA_SESSION_ROLE` so
+/// it never loads the project store; exits 1 with empty stdout when no
+/// role is active so shell guards like `[ -n "$(aida role active)" ]`
+/// work without parsing. trace:TASK-42 | ai:claude
+fn handle_role_active() -> Result<()> {
+    match std::env::var("AIDA_SESSION_ROLE") {
+        Ok(role) if !role.is_empty() => {
+            println!("{}", role);
+            Ok(())
+        }
+        _ => std::process::exit(1),
     }
 }
 
