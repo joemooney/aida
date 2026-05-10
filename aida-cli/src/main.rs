@@ -1916,6 +1916,40 @@ fn handle_git_backend_command(
                     if !req.comments.is_empty() {
                         println!("{}: {} comment(s)", "Comments".bold(), req.comments.len());
                     }
+                    // STORY-81: surface the auto-stamped completion
+                    // context (who/when/source-tool/optional summary)
+                    // when `aida queue done` populated it. Skips when
+                    // `implementation_info` is None or `implemented`
+                    // is false — keeps the section out of `aida show`
+                    // for reqs that were closed via `aida edit
+                    // --status completed` directly (no queue done flow).
+                    // trace:STORY-81 | ai:claude
+                    if let Some(info) = req
+                        .implementation_info
+                        .as_ref()
+                        .filter(|i| i.implemented)
+                    {
+                        println!("\n{}:", "Implementation".green().bold());
+                        if let Some(ts) = info.implemented_at {
+                            println!(
+                                "  Completed: {}",
+                                ts.with_timezone(&chrono::Local)
+                                    .format("%Y-%m-%d %H:%M %Z")
+                            );
+                        }
+                        if let Some(ref who) = info.implemented_by {
+                            println!("  By:        {}", who);
+                        }
+                        if let Some(ref tool) = info.source_tool {
+                            println!("  Source:    {}", tool);
+                        }
+                        if let Some(ref summary) = info.summary {
+                            println!("  Summary:");
+                            for line in summary.lines() {
+                                println!("    {}", line);
+                            }
+                        }
+                    }
                     if !req.description.is_empty() {
                         println!("\n{}", req.description);
                     }
@@ -9293,9 +9327,17 @@ fn query_pr_metadata(
         .args(&args)
         .output()
         .map_err(|e| {
+            // TASK-50: the install URL belongs to the `not on PATH`
+            // case only — that's the one where "go install this" is
+            // the relevant action. Other failures (spawn errors,
+            // exited-with-failure, JSON parse) mean the CLI is
+            // present but unhappy; appending the install URL there
+            // would be confusing. The outer call-site keeps its
+            // message terse so the URL stops appearing twice for
+            // the missing-binary path. trace:TASK-50 | ai:claude
             if e.kind() == std::io::ErrorKind::NotFound {
                 format!(
-                    "`{}` not on PATH ({} not installed?)",
+                    "`{}` not on PATH — install from {}",
                     cli,
                     forge.cli_install_url()
                 )
@@ -9627,16 +9669,15 @@ fn session_start(
         match query_pr_metadata(forge, n, &project_root) {
             Ok(meta) => pr_metadata = meta,
             Err(reason) => {
+                // TASK-50: outer template stays terse. The reason
+                // string already contains the install URL when
+                // relevant (`not on PATH` path); appending it again
+                // here was producing duplicated content.
+                // trace:TASK-50 | ai:claude
                 eprintln!(
                     "{} {}",
                     "ℹ".cyan(),
-                    format!(
-                        "skipped PR metadata capture: {} \u{2014} install {} from {} for richer `aida session show` output",
-                        reason,
-                        forge.cli_name(),
-                        forge.cli_install_url()
-                    )
-                    .dimmed()
+                    format!("skipped PR metadata capture: {}", reason).dimmed()
                 );
             }
         }
@@ -22298,11 +22339,38 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // also clears any stale custom_status so the canonical enum
             // value actually takes effect (BUG-1-025).
             // trace:BUG-1-025 | ai:claude
+            //
+            // STORY-81 Part 2: also stamp `implementation_info` so the
+            // req permanently records who completed it and when, with
+            // the AI source-tool when known. This survives the queue
+            // entry's deletion (which happens right below) so post-
+            // merge `aida show` still surfaces the completion context.
+            // trace:STORY-81 | ai:claude
             let req_id = req.id;
+            let now = chrono::Utc::now();
+            let completer = get_default_author();
+            let source_tool = std::env::var("AIDA_AI_TOOL")
+                .ok()
+                .filter(|s| !s.is_empty());
             storage.update_atomically(|s| {
                 if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
                     r.set_status_from_str("Completed");
-                    r.modified_at = chrono::Utc::now();
+                    r.modified_at = now;
+                    // Don't clobber prior `summary` / `risk_notes` /
+                    // `test_coverage_notes` if the user / `/aida-pr`
+                    // skill already populated them. We only set the
+                    // fields the queue-done path can know.
+                    let info = r
+                        .implementation_info
+                        .get_or_insert_with(aida_core::ImplementationInfo::default);
+                    info.implemented = true;
+                    info.implemented_at.get_or_insert(now);
+                    if info.implemented_by.is_none() {
+                        info.implemented_by = Some(completer.clone());
+                    }
+                    if let Some(ref tool) = source_tool {
+                        info.source_tool.get_or_insert_with(|| tool.clone());
+                    }
                 }
             })?;
             storage.queue_remove(&user_id, &req_id)?;

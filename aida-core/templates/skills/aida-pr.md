@@ -54,7 +54,36 @@ Collect a status table:
 
 If any non-`Completed` items exist, STOP and report them to the user with the matching commit SHAs. Ask: "ship anyway?" — `--force` (or explicit user confirmation) bypasses; default is to refuse.
 
-### 4. Push code + orphan store
+### 4. Attach an implementation summary comment per spec (STORY-81)
+
+For each `Completed` REQ-ID derived in step 2, run:
+
+```bash
+aida comment add <REQ-ID> "$(cat <<'EOF'
+Implemented via PR-N (commit <short-sha>):
+
+- <one-line bullet derived from the matching commit's body>
+- <second bullet if commit covers multiple files / behaviors>
+
+Test status: <passing-count>/<total> tests green
+Follow-up: <any explicit follow-up note from the commit body or chat output, omit if none>
+EOF
+)"
+```
+
+Mechanically derived — no creative writing required:
+
+- **PR-N** is the eventual PR number; if `gh pr create` hasn't run yet, use the branch name and revise after the PR opens
+- **commit short-sha** comes from `git log <base>..HEAD --grep="(REQ-ID)" --pretty=%h`
+- **bullets** lift from the commit body's bulleted lines, falling back to `git show --stat` line summaries
+- **test status** comes from the latest `cargo test --workspace` run in the session — usually surfaced in the agent's final report
+- **follow-up** is optional; only include when the commit body explicitly notes one (e.g. "tracked separately as BUG-NN")
+
+Skip the comment for trivial fixes whose entire commit body is one line (typo, doc bump, lint) — the commit subject is the whole context.
+
+Once the PR opens (step 7) and the URL is known, revise the comments to include the actual PR URL via `aida comment edit`. This step is best-effort — if the user cancels before step 7, the comments still survive as useful "implemented via commit <sha>" markers.
+
+### 5. Push code + orphan store
 
 The orphan-branch store changes have to land before the PR is opened — otherwise reviewers see commits referencing requirements they can't `aida show`.
 
@@ -64,7 +93,7 @@ aida push                     # one-shot: code + orphan store
 
 If `aida push` errors with "branch behind main", surface the rebase prompt rather than carry on. (See TASK-54.)
 
-### 5. Draft the PR title + body
+### 6. Draft the PR title + body
 
 **Title format** (mirrors PR-3 through PR-6):
 
@@ -96,14 +125,14 @@ Derive `N` from the dominant `@EPIC-N` chip across the batch's requirements; der
 - [ ] <other smoke tests run during development>
 ```
 
-### 6. Confirm with the user
+### 7. Confirm with the user
 
 Show the title and the Summary paragraph. Ask explicitly: "Open this PR?"  The user can:
 - Accept (proceed to step 7)
 - Edit the title/summary inline (revise and re-confirm)
 - Cancel (no `gh pr create` call)
 
-### 7. Open the PR
+### 8. Open the PR
 
 ```bash
 gh pr create --base <base> --head <branch> --title "<title>" --body "$(cat <<'EOF'
@@ -114,7 +143,7 @@ EOF
 
 Use HEREDOC for the body so markdown formatting and code fences survive intact.
 
-### 8. Output the URL
+### 9. Output the URL
 
 Print the URL `gh` returned, and optionally suggest `/aida-code-review` as the next step if the project has a reviewer role configured.
 
