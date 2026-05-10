@@ -1,0 +1,19 @@
+id: 019e0fb9-a7aa-7173-be75-52167796a252
+spec_id: STORY-52
+agreed_id: STORY-52
+title: 'EPIC-20 v1.1: session worktree shares target/ with parent'
+description: |
+  aida session start creates a sibling worktree but target/ isn't shared, so the first cargo build in a session is a full rebuild (~2min for aida-cli). Three fix options:
+
+  a. Symlink target/ from parent into the new worktree (fast, may surprise users who expect isolated builds)
+  b. Set CARGO_TARGET_DIR env in the session's shell context to point at parent's target/ (cleaner, opt-in)
+  c. Pre-warm by running cargo build --release -p aida-cli before printing the cd hint (transparent, slow)
+
+  Option b is probably right — recorded in the lease, sourced when the user cds into the worktree (or via aida session enter <id> when that exists).
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T02:31:25.866286615Z
+modified_at: 2026-05-10T02:31:25.866286615Z
+req_type: Story
