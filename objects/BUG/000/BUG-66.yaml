@@ -47,5 +47,16 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T17:41:56.014022424Z
-modified_at: 2026-05-10T18:12:30.544627824Z
+modified_at: 2026-05-10T18:44:17.365354039Z
 req_type: Bug
+comments:
+- id: 019e1334-5555-7300-8967-1041233be352
+  author: joe
+  content: |-
+    PR-4 reviewer noted 2026-05-10: failure mode is broader than originally captured. CI is red on ALL 3 platforms for at least two distinct reasons:
+    - Linux/macOS: missing protoc (protobuf compiler) on runner
+    - Windows: postgres/reqwest/r2d2 feature-flag/native-deps breakage
+
+    Fix scope expanded — needs both runner-side protoc install (linux + macos) AND feature-gating (windows). PR-5 + PR-4 both merged through this red CI as the precedent (unrelated infra ≠ block merges). BUG-66's eventual fix should turn that around so CI green-on-main is meaningful signal again.
+  created_at: 2026-05-10T18:44:17.365354039Z
+  modified_at: 2026-05-10T18:44:17.365354039Z
