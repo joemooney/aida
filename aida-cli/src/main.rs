@@ -1656,6 +1656,49 @@ fn handle_git_backend_command(
                 }
             }
 
+            // BUG-62: pre-resolve --parent BEFORE writing the child. Two
+            // gaps in the original post-hoc flow: (1) the lookup only
+            // consulted spec_id/agreed_id, silently rejecting UUID input
+            // even though FR-215's acceptance says "accepts SPEC-ID or
+            // UUID"; (2) when the lookup failed, the child file was
+            // already on disk with no parent edge, leaving an orphan.
+            // Resolve here (UUID → spec_id/agreed_id), and run the
+            // STORY-48 lease enforcement up-front too — both gates fire
+            // before any write so a blocked or invalid --parent leaves
+            // the store untouched. The actual relationship insert still
+            // happens post-write because the child has to exist before
+            // it can receive a Child edge. trace:BUG-62, FR-215 | ai:claude
+            let parent_req: Option<aida_core::models::Requirement> = if let Some(parent_str) = parent {
+                let resolved = if let Ok(uuid) = uuid::Uuid::parse_str(parent_str) {
+                    backend.get_requirement(&uuid)?
+                } else {
+                    backend.get_requirement_by_spec_id(parent_str)?
+                };
+                Some(resolved.ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "parent `{}` not found — refusing to create child requirement \
+                         without a valid parent (no child file written)",
+                        parent_str
+                    )
+                })?)
+            } else {
+                None
+            };
+            if let Some(ref pr) = parent_req {
+                if let Ok(project_root) = find_project_root() {
+                    if !list_leases(&project_root).is_empty() {
+                        let store = backend.load()?;
+                        enforce_session_lease(
+                            &project_root,
+                            pr,
+                            &store,
+                            "aida add --parent",
+                            false,
+                        )?;
+                    }
+                }
+            }
+
             // Use update_atomically to generate the ID with store's config
             let store = backend.update_atomically(|store| {
                 let type_prefix = store.get_type_prefix(&req.req_type);
@@ -1729,40 +1772,12 @@ fn handle_git_backend_command(
                 }
 
                 // FR-215: --parent <id> establishes a parent relationship
-                // in the same shot. Resolve the parent (spec_id or uuid),
-                // append a Parent relationship to both reqs, persist.
-                // trace:FR-215 | ai:claude
-                if let Some(parent_str) = parent {
+                // in the same shot. Parent was pre-resolved + lease-checked
+                // above (BUG-62) so by this point we know the link is
+                // valid; here we just append the bidirectional edges.
+                // trace:FR-215, BUG-62 | ai:claude
+                if let Some(parent_req) = parent_req {
                     use aida_core::models::{Relationship, RelationshipType};
-                    let parent_req = backend
-                        .get_requirement_by_spec_id(parent_str)?
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "parent `{}` not found — child req {} created but \
-                                 the parent relationship was NOT recorded",
-                                parent_str,
-                                last.spec_id.as_deref().unwrap_or("?")
-                            )
-                        })?;
-                    // STORY-48: lease enforcement on the parent — adding a
-                    // child mutates the parent and effectively extends the
-                    // owning session's scope, so warn/block in the same
-                    // way as a direct edit. The child has already been
-                    // persisted by the add path above; the warning is
-                    // about the parent-link operation only.
-                    // trace:STORY-48 | ai:claude
-                    if let Ok(project_root) = find_project_root() {
-                        if !list_leases(&project_root).is_empty() {
-                            let store = backend.load()?;
-                            enforce_session_lease(
-                                &project_root,
-                                &parent_req,
-                                &store,
-                                "aida add --parent",
-                                false,
-                            )?;
-                        }
-                    }
                     let mut child = last.clone();
                     let parent_uuid = parent_req.id;
                     let child_uuid = child.id;
