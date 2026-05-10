@@ -419,7 +419,7 @@ fn collect_sessions_from_cwd(cwd: &Path, limit: usize) -> Result<Vec<SessionMeta
 /// Encode a project path the way Claude Code does — replace each `/`
 /// with `-` (and drop the leading separator). e.g. `/home/joe/ai/aida` →
 /// `-home-joe-ai-aida`.
-fn claude_project_dir(cwd: &Path) -> Result<PathBuf> {
+pub(crate) fn claude_project_dir(cwd: &Path) -> Result<PathBuf> {
     let s = cwd.to_string_lossy();
     let encoded = s.replace('/', "-");
     let home = dirs::home_dir().context("HOME not set; cannot locate Claude project dir")?;

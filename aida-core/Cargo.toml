@@ -46,18 +46,21 @@ dirs = { workspace = true, optional = true }
 fs2 = { workspace = true, optional = true }
 rusqlite = { workspace = true, optional = true }
 
-# Unix daemon support
-[target.'cfg(unix)'.dependencies]
-libc = "0.2"
-
-# PostgreSQL dependencies (optional)
+# PostgreSQL dependencies (optional) — opt-in via the `postgres` feature.
+# trace:BUG-66 | ai:claude — must live under [dependencies], not the
+# [target.'cfg(unix)'.dependencies] table below, or Windows builds with
+# the postgres/integration features enabled fail with "unresolved import".
 postgres = { workspace = true, optional = true }
 r2d2 = { workspace = true, optional = true }
 r2d2_postgres = { workspace = true, optional = true }
 
-# GitLab integration dependencies (optional)
+# Integration dependencies (optional) — opt-in via the github/gitlab/jira features.
 reqwest = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
+
+# Unix daemon support
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 # WASM-specific dependencies (uuid needs js feature for randomness)
 [target.'cfg(target_arch = "wasm32")'.dependencies]
