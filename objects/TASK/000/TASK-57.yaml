@@ -23,10 +23,10 @@ description: |-
 
   - [ ] `cargo fmt --all -- --check` is clean
   - [ ] CI 'Check formatting' step passes on main
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T19:24:02.088640698Z
-modified_at: 2026-05-10T19:24:02.088640698Z
+modified_at: 2026-05-10T22:39:05.902467502Z
 req_type: Task
