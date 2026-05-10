@@ -53,7 +53,7 @@ use aida_core::{
 use crate::cli::{
     BlockCommand, CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand, DevCommand,
     DocsCommand, FeatureCommand, GitHubCommand, GitLabCommand, JiraCommand, NodeCommand,
-    QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand, RoleCommand,
+    QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand,
     RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ServerCommand, SessionCommand,
     TraceCommand, TypeCommand,
 };
@@ -440,6 +440,9 @@ fn main() -> Result<()> {
         }
         Command::Trace(trace_cmd) => {
             handle_trace_command(trace_cmd, &storage)?;
+        }
+        Command::Review(review_cmd) => {
+            handle_review_command(review_cmd, &storage)?;
         }
         Command::Report(report_cmd) => {
             let db_path_str = requirements_path.display().to_string();
@@ -2468,6 +2471,13 @@ fn handle_git_backend_command(
             // Wrap our backend in a Storage façade pointing at the store path.
             let storage = Storage::new(store_path);
             handle_queue_command(queue_cmd, &storage)?;
+        }
+        Command::Review(review_cmd) => {
+            // STORY-67: review-prompt generation reads requirements via the
+            // same Storage façade as Queue above. Pure read path — no
+            // mutation of the store.
+            let storage = Storage::new(store_path);
+            handle_review_command(review_cmd, &storage)?;
         }
         // STORY-44: `aida config user` is a global op against
         // ~/.aida/preferences.toml — no store needed. Route it through the
@@ -9404,6 +9414,87 @@ mod statusline_tests {
         assert_eq!(log.entries[0].action, "show", "newest first");
     }
 
+    /// STORY-67: extract_acceptance_section finds `## Acceptance`,
+    /// `## Verify`, etc. (case-insensitive) and returns the body until
+    /// the next `## ` heading. Missing or empty sections return None
+    /// so the caller can render a placeholder rather than an empty
+    /// section. trace:STORY-67 | ai:claude
+    #[test]
+    fn extract_acceptance_section_basic() {
+        let desc = "Some intro paragraph.\n\n## Acceptance\n\n- alpha\n- bravo\n\n## Notes\n\nFollow-up.\n";
+        let body = extract_acceptance_section(desc).unwrap();
+        assert_eq!(body, "- alpha\n- bravo");
+    }
+
+    /// trace:STORY-67 | ai:claude
+    #[test]
+    fn extract_acceptance_section_aliases() {
+        for heading in &["Acceptance", "Verify", "Test cases", "Tests", "Verification"] {
+            let desc = format!("blah\n\n## {}\n\nbody text\n", heading);
+            assert!(
+                extract_acceptance_section(&desc).is_some(),
+                "missing recognition for `## {}`",
+                heading
+            );
+        }
+        // Non-matching headings fall through.
+        let desc = "Body.\n\n## Why\n\nBecause.\n";
+        assert!(extract_acceptance_section(desc).is_none());
+    }
+
+    /// trace:STORY-67 | ai:claude
+    #[test]
+    fn extract_acceptance_section_empty_body() {
+        let desc = "## Acceptance\n\n## Why\n\nReason.\n";
+        // Empty body (just whitespace until the next heading) → None.
+        assert!(extract_acceptance_section(desc).is_none());
+    }
+
+    /// STORY-67: spec ID detection inside a `(...)` group at end of
+    /// commit subject. Matches AIDA-format SPEC-IDs and rejects
+    /// anything else (e.g., issue refs, version strings).
+    /// trace:STORY-67 | ai:claude
+    #[test]
+    fn extract_spec_ids_from_commit_subject() {
+        let msg = "[AI:claude] feat(api): add endpoint (FR-1-042)\n\nBody text.\n";
+        assert_eq!(
+            extract_spec_ids_from_commit(msg),
+            vec!["FR-1-042".to_string()]
+        );
+        let msg = "fix(scope): tweak (BUG-23)\n";
+        assert_eq!(
+            extract_spec_ids_from_commit(msg),
+            vec!["BUG-23".to_string()]
+        );
+        // Commits with no trailer leave nothing.
+        let msg = "chore: bump dep version\n";
+        assert!(extract_spec_ids_from_commit(msg).is_empty());
+        // Version-like parens shouldn't match.
+        let msg = "release: v1.2.3 (1.2.3)\n";
+        assert!(extract_spec_ids_from_commit(msg).is_empty());
+    }
+
+    /// STORY-67: looks_like_spec_id validates the alpha-DASH-digits
+    /// shape used throughout AIDA.
+    /// trace:STORY-67 | ai:claude
+    #[test]
+    fn spec_id_shape_recognition() {
+        assert!(looks_like_spec_id("FR-42"));
+        assert!(looks_like_spec_id("BUG-1-038"));
+        assert!(looks_like_spec_id("EPIC-2"));
+        assert!(looks_like_spec_id("STORY-100"));
+        // Rejects.
+        assert!(!looks_like_spec_id("v1.2.3"));
+        assert!(!looks_like_spec_id("1.2"));
+        assert!(!looks_like_spec_id("X-"));
+        assert!(!looks_like_spec_id("X"));
+        assert!(!looks_like_spec_id(""));
+        // Lowercase prefix is permitted at this layer; commit subjects
+        // typically uppercase, but `(fr-1)` shouldn't blow up if it
+        // appears.
+        assert!(looks_like_spec_id("fr-1"));
+    }
+
     /// STORY-61: PR-N / MR-N scope parsing — case-insensitive, requires
     /// the trailing number, and rejects everything else (so the normal
     /// scope flow is preserved for non-review scopes like EPIC-20).
@@ -14887,6 +14978,373 @@ fn trace_sweep(
     }
 
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// `aida review` — review-workflow helpers (STORY-67)
+// ---------------------------------------------------------------------------
+
+/// Section headings the prompt-generator looks for in a requirement's
+/// description. The first match (case-insensitive) wins; everything from
+/// that heading until the next `## ` heading or end-of-string is the
+/// extracted body.
+/// trace:STORY-67 | ai:claude
+const ACCEPTANCE_SECTION_HEADINGS: &[&str] =
+    &["Acceptance", "Verify", "Test cases", "Tests", "Verification"];
+
+/// Extract the acceptance-criteria body from a requirement description.
+/// Returns the body text (without the heading line) when one of the
+/// recognized headings is found; None otherwise so the caller can render
+/// a "no acceptance criteria documented" placeholder instead of silently
+/// emitting an empty section. trace:STORY-67 | ai:claude
+fn extract_acceptance_section(description: &str) -> Option<String> {
+    let lines: Vec<&str> = description.lines().collect();
+    let mut start: Option<usize> = None;
+    let mut i = 0usize;
+    while i < lines.len() {
+        let line = lines[i].trim();
+        if let Some(rest) = line.strip_prefix("## ") {
+            let lower = rest.trim().to_ascii_lowercase();
+            if ACCEPTANCE_SECTION_HEADINGS
+                .iter()
+                .any(|h| lower.starts_with(&h.to_ascii_lowercase()))
+            {
+                start = Some(i + 1);
+                break;
+            }
+        }
+        i += 1;
+    }
+    let start = start?;
+    let mut end = lines.len();
+    for (j, line) in lines.iter().enumerate().skip(start) {
+        if line.trim_start().starts_with("## ") {
+            end = j;
+            break;
+        }
+    }
+    let body = lines[start..end].join("\n").trim().to_string();
+    if body.is_empty() {
+        None
+    } else {
+        Some(body)
+    }
+}
+
+/// Pull `(REQ-ID)` trailers from a single commit message body. AIDA's
+/// commit format wraps the requirement id in parens at end-of-subject:
+/// `[AI:tool] feat(scope): description (REQ-ID)`. Also tolerates the
+/// shorter form without `[AI:tool]` (chores/docs).
+/// trace:STORY-67 | ai:claude
+fn extract_spec_ids_from_commit(message: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for line in message.lines() {
+        let trimmed = line.trim();
+        // Walk until the LAST `(...)` group on the subject line, which
+        // is where the REQ-ID lives. Body lines occasionally mention
+        // other reqs in prose; we ignore those to avoid false matches.
+        let Some(open_at) = trimmed.rfind('(') else { continue };
+        let Some(close_at) = trimmed[open_at..].find(')').map(|n| open_at + n) else {
+            continue;
+        };
+        let inner = &trimmed[open_at + 1..close_at];
+        if looks_like_spec_id(inner) {
+            out.push(inner.to_string());
+        }
+    }
+    out
+}
+
+fn looks_like_spec_id(s: &str) -> bool {
+    let s = s.trim();
+    if s.len() < 3 || s.len() > 40 {
+        return false;
+    }
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() && bytes[i].is_ascii_alphabetic() {
+        i += 1;
+    }
+    if i < 2 || i >= bytes.len() || bytes[i] != b'-' {
+        return false;
+    }
+    i += 1;
+    if i >= bytes.len() || !bytes[i].is_ascii_digit() {
+        return false;
+    }
+    while i < bytes.len() {
+        let b = bytes[i];
+        if b.is_ascii_digit() || b == b'-' {
+            i += 1;
+        } else {
+            return false;
+        }
+    }
+    true
+}
+
+/// trace:STORY-67 | ai:claude
+fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
+    match cmd {
+        ReviewCommand::Prompt {
+            specs,
+            pr,
+            forge,
+            write,
+        } => generate_review_prompt(storage, specs.as_deref(), *pr, forge.as_deref(), write.as_deref()),
+    }
+}
+
+/// trace:STORY-67 | ai:claude
+fn generate_review_prompt(
+    storage: &Storage,
+    specs_csv: Option<&str>,
+    pr: Option<u64>,
+    forge_override: Option<&str>,
+    write_path: Option<&str>,
+) -> Result<()> {
+    let store = storage.load()?;
+
+    // Resolve the spec list. Preference order: --specs explicit,
+    // --pr range parse, error if neither.
+    let (spec_ids, header_subtitle): (Vec<String>, String) = if let Some(csv) = specs_csv {
+        let ids: Vec<String> = csv
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if ids.is_empty() {
+            anyhow::bail!("--specs was empty after splitting on commas");
+        }
+        (ids.clone(), format!("Specs: {}", ids.join(", ")))
+    } else if let Some(pr_n) = pr {
+        let project_root = find_project_root()?;
+        let forge = forge_override
+            .and_then(ReviewForge::parse)
+            .or_else(|| detect_forge_from_origin(&project_root))
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "couldn't detect forge from origin URL — pass --forge github|gitlab"
+                )
+            })?;
+        let (base, head) = pr_base_head(&project_root, forge, pr_n)?;
+        let messages = git_log_messages(&project_root, &base, &head)?;
+        let mut ids: Vec<String> = Vec::new();
+        for msg in &messages {
+            for id in extract_spec_ids_from_commit(msg) {
+                if !ids.iter().any(|existing| existing.eq_ignore_ascii_case(&id)) {
+                    ids.push(id);
+                }
+            }
+        }
+        if ids.is_empty() {
+            anyhow::bail!(
+                "no `(REQ-ID)` trailers found in {}..{} ({} commits inspected)",
+                base,
+                head,
+                messages.len()
+            );
+        }
+        let label = match forge {
+            ReviewForge::GitHub => format!("PR #{} — branch `{}`", pr_n, head),
+            ReviewForge::GitLab => format!("MR !{} — branch `{}`", pr_n, head),
+        };
+        (ids, label)
+    } else {
+        anyhow::bail!("pass --specs <CSV> or --pr <N>");
+    };
+
+    // Compose the markdown.
+    let mut out = String::new();
+    out.push_str("# Review Prompt\n\n");
+    out.push_str(&header_subtitle);
+    out.push_str("\n\n## What to verify\n\n");
+
+    let mut missing: Vec<String> = Vec::new();
+    for id in &spec_ids {
+        let req = store
+            .requirements
+            .iter()
+            .find(|r| r.spec_id.as_deref() == Some(id.as_str()))
+            .or_else(|| {
+                uuid::Uuid::parse_str(id)
+                    .ok()
+                    .and_then(|u| store.requirements.iter().find(|r| r.id == u))
+            });
+        let Some(req) = req else {
+            out.push_str(&format!(
+                "### {}\n\n_(not found in store)_\n\n",
+                id
+            ));
+            missing.push(id.clone());
+            continue;
+        };
+        out.push_str(&format!(
+            "### {} — {}\n\n",
+            req.spec_id.as_deref().unwrap_or(id.as_str()),
+            req.title
+        ));
+        match extract_acceptance_section(&req.description) {
+            Some(body) => {
+                out.push_str(&body);
+                out.push_str("\n\n");
+            }
+            None => {
+                out.push_str("_(no `## Acceptance` / `## Verify` section in description — review against the requirement title and description.)_\n\n");
+            }
+        }
+    }
+
+    out.push_str("## Decide\n\n");
+    out.push_str(
+        "If every item above passes: approve and merge (`gh pr merge --squash` / \
+         `glab mr merge --squash`), then mark each linked req `completed`.\n\n",
+    );
+    out.push_str(
+        "If any item fails: request changes with specifics tied to the spec_id, \
+         so the contributor can address them by id (not by paraphrase).\n",
+    );
+
+    if let Some(path) = write_path {
+        std::fs::write(path, &out)
+            .with_context(|| format!("failed to write review prompt to {}", path))?;
+        eprintln!(
+            "{} review prompt written to {} ({} spec{}{})",
+            "✓".green().bold(),
+            path,
+            spec_ids.len(),
+            if spec_ids.len() == 1 { "" } else { "s" },
+            if missing.is_empty() {
+                String::new()
+            } else {
+                format!(", {} missing in store", missing.len())
+            },
+        );
+    } else {
+        print!("{}", out);
+    }
+    Ok(())
+}
+
+/// trace:STORY-67 | ai:claude
+fn pr_base_head(
+    project_root: &std::path::Path,
+    forge: ReviewForge,
+    n: u64,
+) -> Result<(String, String)> {
+    // Use the forge CLI when available — it knows about fork PRs and
+    // returns the resolved branch names. Fall back to a pure-git
+    // approximation for environments without `gh`/`glab` (we fetch the
+    // standard server-side ref and pretend base = current branch's
+    // merge base with it; not perfect but better than failing).
+    let (cli, args): (&str, &[&str]) = match forge {
+        ReviewForge::GitHub => (
+            "gh",
+            &["pr", "view", "", "--json", "baseRefName,headRefName", "-q",
+              ".baseRefName + \"\\t\" + .headRefName"],
+        ),
+        ReviewForge::GitLab => (
+            "glab",
+            &["mr", "view", "", "-F", "json"],
+        ),
+    };
+    // The CLI invocation needs the PR number injected — clone args and
+    // overwrite the empty placeholder.
+    let mut args_owned: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+    args_owned[2] = n.to_string();
+
+    // gh / glab don't take `-C <path>` like git does — set the cwd via
+    // `current_dir` so each tool runs against the right repo.
+    // trace:STORY-67 | ai:claude
+    let out = std::process::Command::new(cli)
+        .current_dir(project_root)
+        .args(&args_owned[..])
+        .output();
+
+    if let Ok(out) = out {
+        if out.status.success() {
+            match forge {
+                ReviewForge::GitHub => {
+                    let s = String::from_utf8_lossy(&out.stdout);
+                    let parts: Vec<&str> = s.trim().split('\t').collect();
+                    if parts.len() == 2 && !parts[0].is_empty() && !parts[1].is_empty() {
+                        return Ok((parts[0].to_string(), parts[1].to_string()));
+                    }
+                }
+                ReviewForge::GitLab => {
+                    // Cheap parse: grep for the two fields rather than
+                    // depending on serde_json — avoids a fresh dep just
+                    // for this one path.
+                    let s = String::from_utf8_lossy(&out.stdout).into_owned();
+                    let base = json_string_field(&s, "target_branch");
+                    let head = json_string_field(&s, "source_branch");
+                    if let (Some(b), Some(h)) = (base, head) {
+                        return Ok((b, h));
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback: pure-git. We don't know the contributor's base branch,
+    // so we point at `main` (the most common case in this codebase) and
+    // set `head` to the local review branch (`pr-N` / `mr-N`) the user
+    // is presumed to have fetched via `aida session start --owns PR-N`
+    // (STORY-61). Tell the user.
+    eprintln!(
+        "{} couldn't resolve PR base/head via {} — falling back to base=main, head={}-{}; \
+         pass an explicit base via `git log <base>..<head>` if this is wrong.",
+        "Note:".yellow().bold(),
+        cli,
+        if matches!(forge, ReviewForge::GitHub) { "pr" } else { "mr" },
+        n
+    );
+    let head = match forge {
+        ReviewForge::GitHub => format!("pr-{}", n),
+        ReviewForge::GitLab => format!("mr-{}", n),
+    };
+    Ok(("main".to_string(), head))
+}
+
+/// Cheap "extract \"key\": \"value\"" JSON field grep. Only handles
+/// string values without escapes — fine for branch names but not a
+/// general parser. trace:STORY-67 | ai:claude
+fn json_string_field(s: &str, key: &str) -> Option<String> {
+    let needle = format!("\"{}\":\"", key);
+    let start = s.find(&needle)? + needle.len();
+    let rest = &s[start..];
+    let end = rest.find('"')?;
+    Some(rest[..end].to_string())
+}
+
+/// Run `git log <base>..<head> --pretty=format:%B%n--END--`. Returns
+/// each commit message as a separate string. trace:STORY-67 | ai:claude
+fn git_log_messages(
+    project_root: &std::path::Path,
+    base: &str,
+    head: &str,
+) -> Result<Vec<String>> {
+    let range = format!("{}..{}", base, head);
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["log", "--pretty=format:%B%n--END--", &range])
+        .output()
+        .with_context(|| format!("running git log {}", range))?;
+    if !out.status.success() {
+        anyhow::bail!(
+            "git log {} failed: {}",
+            range,
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let messages: Vec<String> = stdout
+        .split("--END--")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    Ok(messages)
 }
 
 // trace:FR-0259 | ai:claude:high

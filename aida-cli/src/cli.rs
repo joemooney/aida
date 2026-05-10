@@ -310,6 +310,41 @@ pub enum ScaffoldCommand {
 /// can resume across shells — captures the working directory, last
 /// Inspect / resume past Claude Code sessions for this project, enriched
 /// with the AIDA role and most-recent spec from each session's .jsonl.
+/// STORY-67: review-prompt generation and related review-workflow
+/// helpers. v1: only `prompt`; future subcommands (e.g. `summary`,
+/// `checks`) can land here without bloating the top-level `aida` help.
+/// trace:STORY-67 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum ReviewCommand {
+    /// Generate a markdown review prompt from a set of linked
+    /// requirements' acceptance criteria. Specs come either from an
+    /// explicit `--specs` list (CSV) or from the commit-range of a
+    /// PR/MR (parsed `(REQ-ID)` trailers in commit messages).
+    /// trace:STORY-67 | ai:claude
+    Prompt {
+        /// Comma-separated list of spec IDs (e.g. "FR-1,STORY-2"). When
+        /// given, --pr is ignored.
+        #[clap(long, value_name = "SPEC-IDS")]
+        specs: Option<String>,
+
+        /// Pull spec IDs from the PR/MR's commit range. Forge auto-
+        /// detected from origin URL; override with --forge github|gitlab.
+        #[clap(long, value_name = "N", conflicts_with = "specs")]
+        pr: Option<u64>,
+
+        /// Forge override for self-hosted GHE / self-hosted GitLab
+        /// when --pr is used.
+        #[clap(long, value_name = "FORGE")]
+        forge: Option<String>,
+
+        /// Write the prompt to PATH instead of stdout. Useful when
+        /// piping into a freshly-launched Claude Code session
+        /// (`aida review prompt --pr 2 --write .aida-review-prompt.md`).
+        #[clap(long, value_name = "PATH")]
+        write: Option<String>,
+    },
+}
+
 /// trace:FR-1-043 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum SessionCommand {
@@ -1992,6 +2027,11 @@ pub enum Command {
     /// Code-to-requirement traceability commands
     #[clap(subcommand, hide = true)]
     Trace(TraceCommand),
+
+    /// Review-workflow helpers (review-prompt generation, etc.)
+    /// trace:STORY-67 | ai:claude
+    #[clap(subcommand)]
+    Review(ReviewCommand),
 
     /// Report generation commands
     #[clap(subcommand, hide = true)]
