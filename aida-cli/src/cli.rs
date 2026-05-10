@@ -945,10 +945,32 @@ pub enum DoctorCommand {
     /// trace comments and commit refs. trace:EPIC-19 | ai:claude
     ScrubCollisions,
 
+    /// Walk every requirement's `relationships` array and verify each
+    /// `target_id` resolves to an existing requirement UUID. Catches
+    /// dangling references from deleted reqs, bad imports, or
+    /// hand-edits. With --repair, strips dangling entries.
+    /// trace:EPIC-19 | ai:claude
+    VerifyRelationships {
+        /// Strip dangling references in-place. Without this flag, the
+        /// command reports only.
+        #[clap(long)]
+        repair: bool,
+        /// Skip the y/N confirmation when --repair would write.
+        #[clap(long, short = 'y')]
+        yes: bool,
+    },
+
+    /// Walk source files under the project root for `trace:<SPEC-ID>`
+    /// comments and verify each spec_id resolves to an existing
+    /// requirement. Catches dead trace comments left behind after a req
+    /// got deleted, or simple typos. Read-only. trace:EPIC-19 | ai:claude
+    ValidateTraceComments,
+
     /// Run every diagnostic in sequence and print a unified report.
     /// Composes `aida db block verify`, repair-stale-blocks --dry-run,
-    /// scrub-collisions, plus a few smaller checks. Exits non-zero if
-    /// any check found a problem. trace:EPIC-19 | ai:claude
+    /// scrub-collisions, verify-relationships, validate-trace-comments,
+    /// plus a few smaller checks. Exits non-zero if any check found a
+    /// problem. trace:EPIC-19 | ai:claude
     Fsck,
 }
 
