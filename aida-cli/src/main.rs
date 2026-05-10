@@ -1313,22 +1313,25 @@ fn handle_git_backend_command(
             interactive,
             ..
         } => {
-            // BUG-45: refuse to silently create `FR-N - Untitled`. Either
-            // the user passes `--title`, drops into interactive mode (prompt
-            // for title), or sees a usage hint and exits non-zero. Decided
-            // by: explicit --interactive flag, OR no title + stdin is a TTY
-            // (auto-interactive). trace:BUG-45 | ai:claude
+            // BUG-45 + interactive expansion: when the user doesn't pass
+            // --title, decide whether to prompt or bail. When prompting,
+            // also walk through type / description / priority for any
+            // field the user didn't already supply via flags. Title is
+            // always required; the rest skip cleanly when their flag is
+            // present. trace:BUG-45 | ai:claude
+            let interactive_mode = *interactive
+                || (title.is_none() && std::io::IsTerminal::is_terminal(&std::io::stdin()));
+
+            // Title — required. Either --title, an interactive prompt, or
+            // bail with help.
             let title_resolved: String = if let Some(t) = title.clone() {
                 t
-            } else if *interactive
-                || std::io::IsTerminal::is_terminal(&std::io::stdin())
-            {
-                use std::io::Write;
-                eprint!("Title: ");
-                std::io::stderr().flush()?;
-                let mut t = String::new();
-                std::io::stdin().read_line(&mut t)?;
-                let t = t.trim().to_string();
+            } else if interactive_mode {
+                let answer = inquire::Text::new("Title:")
+                    .with_help_message("Required. One sentence describing what this is.")
+                    .prompt()
+                    .context("Title prompt cancelled")?;
+                let t = answer.trim().to_string();
                 if t.is_empty() {
                     anyhow::bail!("title is required (got empty input)");
                 }
@@ -1339,13 +1342,77 @@ fn handle_git_backend_command(
                      for prompts. (See `aida add --help` for the full flag list.)"
                 );
             };
-            // trace:BUG-17 | ai:claude
-            let resolved_description =
-                resolve_description(description, description_from_file, *description_stdin)?;
             // trace:BUG-22 | ai:claude
             if let Some(msg) = suspicious_title_signal(&title_resolved) {
                 eprintln!("{} {}", "Warning:".yellow().bold(), msg);
             }
+
+            // Type — interactive picker when not provided.
+            let interactive_type: Option<String> = if r#type.is_none() && interactive_mode {
+                let choices = vec![
+                    "functional",
+                    "bug",
+                    "principle",
+                    "vision",
+                    "decision",
+                    "constraint",
+                    "term",
+                    "non-functional",
+                    "epic",
+                    "story",
+                    "task",
+                    "spike",
+                    "sprint",
+                    "system",
+                    "user",
+                    "folder",
+                    "meta",
+                ];
+                let pick = inquire::Select::new("Type:", choices)
+                    .with_help_message("functional / bug for everyday work; principle / vision / decision for the docs layer.")
+                    .prompt()
+                    .context("Type prompt cancelled")?;
+                Some(pick.to_string())
+            } else {
+                None
+            };
+            let effective_type: Option<String> = r#type.clone().or(interactive_type);
+
+            // Description — open the user's $EDITOR when not provided.
+            // trace:BUG-17 | ai:claude
+            let resolved_description = if interactive_mode
+                && description.is_none()
+                && description_from_file.is_none()
+                && !*description_stdin
+            {
+                let body = inquire::Editor::new("Description")
+                    .with_help_message("Multi-line. Save + close the editor to continue. Leave empty to skip.")
+                    .prompt()
+                    .context("Description prompt cancelled")?;
+                if body.trim().is_empty() {
+                    None
+                } else {
+                    Some(body)
+                }
+            } else {
+                resolve_description(description, description_from_file, *description_stdin)?
+            };
+
+            // Priority — picker when not provided.
+            let interactive_priority: Option<String> = if priority.is_none() && interactive_mode {
+                let pick = inquire::Select::new(
+                    "Priority:",
+                    vec!["medium", "high", "low"],
+                )
+                .with_help_message("medium covers most things; high for blockers; low for nice-to-haves.")
+                .prompt()
+                .context("Priority prompt cancelled")?;
+                Some(pick.to_string())
+            } else {
+                None
+            };
+            let effective_priority: Option<String> = priority.clone().or(interactive_priority);
+
             let mut req = Requirement::new(
                 title_resolved,
                 resolved_description.unwrap_or_default(),
@@ -1354,11 +1421,11 @@ fn handle_git_backend_command(
                 let canonical = validate_status_input(s).map_err(|e| anyhow::anyhow!(e))?;
                 req.set_status_from_str(canonical);
             }
-            if let Some(p) = priority {
+            if let Some(p) = &effective_priority {
                 let canonical = validate_priority_input(p).map_err(|e| anyhow::anyhow!(e))?;
                 req.set_priority_from_str(canonical);
             }
-            if let Some(t) = r#type {
+            if let Some(t) = &effective_type {
                 // BUG-48: surface the error instead of dropping silently.
                 let rt = parse_requirement_type(t).map_err(|e| {
                     anyhow::anyhow!(
