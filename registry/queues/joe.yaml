@@ -90,42 +90,42 @@
   for_scope: EPIC-20
 - user_id: joe
   requirement_id: 019e12fd-52ee-7220-b2d7-d2fb8b205596
-  position: 16000
+  position: 15000
   added_by: joe
   added_at: 2026-05-10T17:44:13.338667971Z
   for_role: implementer
   for_scope: EPIC-20
 - user_id: joe
   requirement_id: 019e1322-bf05-7e03-8790-9a907f9b9129
-  position: 17000
+  position: 16000
   added_by: joe
   added_at: 2026-05-10T18:25:05.773606007Z
   for_role: implementer
   for_scope: EPIC-20
 - user_id: joe
   requirement_id: 019e1328-674e-7dc0-9ff1-134fb5669e83
-  position: 18000
+  position: 17000
   added_by: joe
   added_at: 2026-05-10T18:31:22.358561964Z
   for_role: implementer
   for_scope: EPIC-20
 - user_id: joe
   requirement_id: 019e1328-72f4-71d3-95a3-c5f893c74c49
-  position: 19000
+  position: 18000
   added_by: joe
   added_at: 2026-05-10T18:31:23.327204189Z
   for_role: implementer
   for_scope: EPIC-20
 - user_id: joe
   requirement_id: 019e1337-4a9b-78a0-80f5-315d4281ddb7
-  position: 20000
+  position: 19000
   added_by: joe
   added_at: 2026-05-10T18:47:34.148624472Z
   for_role: implementer
   for_scope: EPIC-20
 - user_id: joe
   requirement_id: 019e12f8-7fac-7b00-978b-ea133369a89a
-  position: 9223372036854775807
+  position: 20000
   added_by: joe
   added_at: 2026-05-10T17:38:57.056878415Z
   for_role: implementer
