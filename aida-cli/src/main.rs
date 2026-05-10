@@ -954,32 +954,42 @@ fn complete_init_scaffolding(
 
 /// Detect if the current directory has a distributed store configured.
 /// Walks up from CWD looking for `.aida/config.toml` with a store_path.
+/// trace:BUG-57 | ai:claude
 fn detect_distributed_store() -> Option<std::path::PathBuf> {
     let cwd = std::env::current_dir().ok()?;
-    let config_path = cwd.join(".aida").join("config.toml");
+    detect_distributed_store_from(&cwd)
+}
 
-    if !config_path.exists() {
-        return None;
-    }
-
-    let content = std::fs::read_to_string(&config_path).ok()?;
-
-    // Parse store_path from config
-    // Format: store_path = "aida-store"
-    for line in content.lines() {
-        let line = line.trim();
-        if line.starts_with("store_path") {
-            if let Some(val) = line.split('=').nth(1) {
-                let val = val.trim().trim_matches('"').trim_matches('\'');
-                let store_path = cwd.join(val);
-                if store_path.exists() && store_path.is_dir() {
-                    return Some(store_path);
+/// Walk-up resolver split out from `detect_distributed_store` so the search
+/// path is testable without changing process cwd. Returns the absolute store
+/// path on the first ancestor whose `.aida/config.toml` declares one.
+/// trace:BUG-57 | ai:claude
+fn detect_distributed_store_from(start: &std::path::Path) -> Option<std::path::PathBuf> {
+    let mut current = start;
+    loop {
+        let config_path = current.join(".aida").join("config.toml");
+        if let Ok(content) = std::fs::read_to_string(&config_path) {
+            // store_path is relative to the directory containing config.toml,
+            // not to the original cwd — otherwise `aida edit` from a subdir
+            // would resolve the store against the wrong base.
+            for line in content.lines() {
+                let line = line.trim();
+                if let Some(rest) = line.strip_prefix("store_path") {
+                    if let Some(val) = rest.split('=').nth(1) {
+                        let val = val.trim().trim_matches('"').trim_matches('\'');
+                        let store_path = current.join(val);
+                        if store_path.exists() && store_path.is_dir() {
+                            return Some(store_path);
+                        }
+                    }
                 }
             }
         }
+        match current.parent() {
+            Some(p) => current = p,
+            None => return None,
+        }
     }
-
-    None
 }
 
 /// Read the `[id_format] policy` from `.aida/config.toml`. Honors the legacy
@@ -8998,6 +9008,70 @@ mod lease_enforcement_tests {
         let leases: Vec<SessionLease> = vec![];
         let owner = lease_owning_spec(&leases, None, a.id, a.spec_id.as_deref(), &store);
         assert!(owner.is_none());
+    }
+}
+
+#[cfg(test)]
+mod store_walkup_tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    /// `.aida/config.toml` only at the repo root → `aida edit` from a
+    /// nested subdir must still resolve the store.
+    /// trace:BUG-57 | ai:claude
+    #[test]
+    fn detect_distributed_store_walks_up_from_subdir() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        fs::create_dir_all(root.join(".aida")).unwrap();
+        fs::write(
+            root.join(".aida/config.toml"),
+            "[deployment]\nstore_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        fs::create_dir_all(root.join(".aida-store")).unwrap();
+
+        let nested = root.join("aida-cli/src/foo");
+        fs::create_dir_all(&nested).unwrap();
+
+        let resolved = detect_distributed_store_from(&nested).expect("should walk up");
+        assert_eq!(resolved, root.join(".aida-store"));
+    }
+
+    /// store_path is interpreted relative to the directory containing
+    /// config.toml, not relative to the starting cwd.
+    /// trace:BUG-57 | ai:claude
+    #[test]
+    fn detect_distributed_store_resolves_relative_to_config_dir() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        fs::create_dir_all(root.join(".aida")).unwrap();
+        fs::write(
+            root.join(".aida/config.toml"),
+            "store_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        fs::create_dir_all(root.join(".aida-store")).unwrap();
+
+        let nested = root.join("a/b/c");
+        fs::create_dir_all(&nested).unwrap();
+
+        // If we incorrectly resolved relative to nested, we'd look for
+        // `<nested>/.aida-store/` which doesn't exist.
+        let resolved = detect_distributed_store_from(&nested).unwrap();
+        assert_eq!(resolved, root.join(".aida-store"));
+    }
+
+    /// No `.aida/config.toml` anywhere up the tree → returns None (caller
+    /// falls through to legacy / registry resolution).
+    /// trace:BUG-57 | ai:claude
+    #[test]
+    fn detect_distributed_store_returns_none_when_absent() {
+        let tmp = TempDir::new().unwrap();
+        let nested = tmp.path().join("a/b");
+        std::fs::create_dir_all(&nested).unwrap();
+        assert!(detect_distributed_store_from(&nested).is_none());
     }
 }
 
