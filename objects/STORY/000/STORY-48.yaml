@@ -1,0 +1,18 @@
+id: 019e0fb8-e92a-7042-9f5e-69a7676b545c
+spec_id: STORY-48
+agreed_id: STORY-48
+title: 'EPIC-20 v2: lease enforcement — aida edit / aida-pickup honor session scope'
+description: |
+  v1 records leases at .aida/sessions/<id>.toml but doesn't ENFORCE them. v2 makes 'aida edit', 'aida-pickup', and possibly 'aida add --parent' consult the lease list and warn (or block under --strict) when a write would target a spec inside another session's scope.
+
+  Concrete behaviors:
+  - aida edit FR-42 from a session NOT owning EPIC-X (where FR-42 is part of EPIC-X) -> warning naming the owner session + worktree path
+  - aida-pickup skips items in another session's queue
+  - A new [session] enforcement = warn|block|off config knob (default warn for v2)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T02:30:37.098163669Z
+modified_at: 2026-05-10T02:30:37.098163669Z
+req_type: Story
