@@ -1,0 +1,48 @@
+id: 019e0ff9-c372-71d1-88df-2242fc337dcf
+spec_id: BUG-54
+agreed_id: BUG-54
+title: STORY-48 lease enforcement blocks the owning session from editing its own scope
+description: |
+  STORY-48 just shipped lease enforcement on `aida edit`. Observed 2026-05-09: the agent in session 019e0fc5 (worktree /home/joe/ai/aida-epic-20, scope EPIC-20) ran `aida edit STORY-55 --tags ""` and got:
+
+    Error: aida edit on STORY-55 blocked: scope owned by session 019e0fc5 (EPIC-20, worktree: /home/joe/ai/aida-epic-20). End that session first or set `[session] enforcement = "warn"` to downgrade.
+
+  The agent IS inside session 019e0fc5. Editing children of EPIC-20 from inside the EPIC-20 session is the INTENDED workflow — that's literally what the session was started for. The enforcement check is too coarse: it asks "is this scope leased?" but not "am I the owner?".
+
+  ## Fix
+
+  When evaluating enforcement on `aida edit <id>`:
+  1. Resolve the spec's scope (the closest ancestor EPIC, or the spec itself for direct EPIC-N edits)
+  2. Look up any active lease covering that scope
+  3. If a lease exists AND cwd is inside (or descends from) that lease's worktree_path → ALLOW (this is the owner editing in its own scope)
+  4. If a lease exists but cwd is NOT inside it → block as today (cross-session bleed)
+  5. If no lease → allow (no enforcement applies)
+
+  The owner-check is the missing condition.
+
+  ## Severity
+
+  High — without this fix, every session worktree is non-functional for AIDA edits. The EPIC-20 implementer agent that just landed STORY-48 cannot even mark its own STORY completed without first ending the session, which defeats the whole point.
+
+  ## Suggested test
+
+    aida session start --owns EPIC-X
+    cd <worktree>
+    aida edit <child-of-EPIC-X> --status in-progress    # MUST succeed
+    cd <parent-repo>
+    aida edit <child-of-EPIC-X> --status in-progress    # MUST block (with --strict) or warn
+
+  ## Implementation hint
+
+  The lease lookup helper from STORY-48 already finds the lease covering a spec's scope. Add a check `lease.worktree_path.is_ancestor_of(cwd)` (or use `canonicalize` + `starts_with`) before blocking.
+
+  ## Pairs with PR #1
+
+  This bug is in PR #1's STORY-48 implementation. Either request changes on the PR before merging, or merge + fix-forward immediately. Recommended: merge + fix-forward (PR is otherwise good and the reviewer is already paying attention).
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T03:41:27.282276585Z
+modified_at: 2026-05-10T03:41:27.282276585Z
+req_type: Bug
