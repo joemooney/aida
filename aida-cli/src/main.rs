@@ -9069,8 +9069,11 @@ fn session_start(
             .arg("-C")
             .arg(&project_root)
             .args(["fetch", "origin", refspec.as_str()])
-            .status()?;
-        if !fetch.success() {
+            .output()?;
+        use std::io::Write;
+        let _ = std::io::stderr().write_all(&fetch.stdout);
+        let _ = std::io::stderr().write_all(&fetch.stderr);
+        if !fetch.status.success() {
             anyhow::bail!(
                 "`git fetch origin {}` failed — is {} #{} valid? \
                  (For self-hosted forges, override with --forge github|gitlab.)",
@@ -9091,8 +9094,10 @@ fn session_start(
                 worktree_path.to_str().unwrap(),
                 branch_name.as_str(),
             ])
-            .status()?;
-        if !res.success() {
+            .output()?;
+        let _ = std::io::stderr().write_all(&res.stdout);
+        let _ = std::io::stderr().write_all(&res.stderr);
+        if !res.status.success() {
             anyhow::bail!("`git worktree add` failed");
         }
     } else {
@@ -9108,12 +9113,20 @@ fn session_start(
         if let Some(b) = base {
             args.push(b);
         }
+        // STORY-73: capture stdout and re-emit to stderr. `git worktree add`
+        // prints things like "HEAD is now at <sha>" to stdout, which would
+        // otherwise contaminate session_start's stdout (where the wrapper
+        // expects only `export AIDA_SESSION_ID=...` for eval).
+        // trace:STORY-73 | ai:claude
         let res = std::process::Command::new("git")
             .arg("-C")
             .arg(&project_root)
             .args(&args)
-            .status()?;
-        if !res.success() {
+            .output()?;
+        use std::io::Write;
+        let _ = std::io::stderr().write_all(&res.stdout);
+        let _ = std::io::stderr().write_all(&res.stderr);
+        if !res.status.success() {
             anyhow::bail!("`git worktree add` failed");
         }
     }
@@ -9205,98 +9218,215 @@ fn session_start(
     let lease_file = lease_path(&project_root, &id);
     std::fs::write(&lease_file, toml::to_string_pretty(&lease)?)?;
 
-    println!(
+    // STORY-73: human output to stderr, eval-friendly export to stdout when
+    // stdout is captured (i.e., the shell wrapper's `eval "$(...)"` is
+    // running). Direct invocation (TTY stdout) prints only the human output
+    // — no raw `export` lines bleeding into the terminal. The wrapper
+    // captures stdout into eval; stderr passes through to the user; stdin
+    // is unaffected so any prompts still work. trace:STORY-73 | ai:claude
+    eprintln!(
         "{} session {} started",
         "✓".green().bold(),
         id.yellow()
     );
-    println!("  {}: {}", "scope".bold(), owns.cyan());
-    println!("  {}: {}", "branch".bold(), branch_name.cyan());
-    println!(
+    eprintln!("  {}: {}", "scope".bold(), owns.cyan());
+    eprintln!("  {}: {}", "branch".bold(), branch_name.cyan());
+    eprintln!(
         "  {}: {}",
         "worktree".bold(),
         worktree_path.display().to_string().cyan()
     );
     if let Some(r) = &inherited_role {
-        println!("  {}: {} {}", "role".bold(), r.cyan(), "(inherited)".dimmed());
+        eprintln!("  {}: {} {}", "role".bold(), r.cyan(), "(inherited)".dimmed());
     }
-    println!("  {}: {}", "lease".bold(), lease_file.display().to_string().dimmed());
-    println!();
-    println!("Next:");
-    println!(
+    eprintln!("  {}: {}", "lease".bold(), lease_file.display().to_string().dimmed());
+    eprintln!();
+    eprintln!("Next:");
+    eprintln!(
         "  {}",
         format!("cd {}", worktree_path.display()).cyan()
     );
-    println!(
+    eprintln!(
         "  {}",
         format!("aida session end {}    # when done", &id[..8]).dimmed()
     );
+
+    if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
+        // Wrapped in eval — emit the env modification.
+        println!("export AIDA_SESSION_ID='{}'", id);
+    }
     Ok(())
+}
+
+/// STORY-73: resolution chain for `aida session end` (no arg). Tries in
+/// order, stopping at first hit:
+///
+///   1. cwd-based: lease whose worktree_path contains cwd. (existing flow)
+///   2. AIDA_SESSION_ID env var: exported by `session start` when wrapped
+///      via the shell helper; matches a live lease by id prefix.
+///   3. ancestor PID: walks the calling shell's ancestors via sysinfo and
+///      matches against any lease's `creator_pid`. Catches the common case
+///      where the user ran `start` then `end` from the same shell, never
+///      cd'd into the worktree, and AIDA_SESSION_ID isn't set (e.g., shell
+///      helpers not installed).
+///   4. single-active fallback: if exactly one lease is active for this
+///      project, prompt y/N (or auto-accept with -y).
+///   5. error: list active leases and ask for an explicit id.
+///
+/// trace:STORY-73 | ai:claude
+fn resolve_session_to_end(
+    id_query: Option<&str>,
+    leases: &[SessionLease],
+    yes: bool,
+) -> Result<SessionLease> {
+    if let Some(q) = id_query {
+        return find_lease_by_id_prefix(q, leases);
+    }
+
+    // 1. cwd
+    if let Ok(cwd) = std::env::current_dir() {
+        let canon = cwd.canonicalize().unwrap_or(cwd);
+        if let Some(l) = leases.iter().find(|l| {
+            canon == l.worktree_path || canon.starts_with(&l.worktree_path)
+        }) {
+            return Ok(l.clone());
+        }
+    }
+
+    // 2. AIDA_SESSION_ID env var
+    if let Ok(env_id) = std::env::var("AIDA_SESSION_ID") {
+        if !env_id.trim().is_empty() {
+            if let Ok(l) = find_lease_by_id_prefix(&env_id, leases) {
+                eprintln!(
+                    "{} resolved session via {} env var",
+                    "→".dimmed(),
+                    "AIDA_SESSION_ID".cyan()
+                );
+                return Ok(l);
+            }
+        }
+    }
+
+    // 3. ancestor PID
+    let my_chain = process_probe::walk_ancestor_pids(std::process::id());
+    let chain_set: std::collections::HashSet<u32> = my_chain.into_iter().collect();
+    let ancestor_match: Vec<&SessionLease> = leases
+        .iter()
+        .filter(|l| {
+            l.creator_pid
+                .map(|p| chain_set.contains(&p))
+                .unwrap_or(false)
+        })
+        .collect();
+    match ancestor_match.len() {
+        0 => {}
+        1 => {
+            eprintln!(
+                "{} resolved session via ancestor PID match (creator_pid {})",
+                "→".dimmed(),
+                ancestor_match[0].creator_pid.unwrap()
+            );
+            return Ok(ancestor_match[0].clone());
+        }
+        n => {
+            eprintln!(
+                "{} {} active leases all have an ancestor PID match — pass an id explicitly",
+                "Warning:".yellow().bold(),
+                n
+            );
+        }
+    }
+
+    // 4. single-active fallback
+    if leases.len() == 1 {
+        let only = &leases[0];
+        if yes {
+            eprintln!(
+                "{} only one active session ({}); -y given, ending it",
+                "→".dimmed(),
+                only.id[..8].yellow()
+            );
+            return Ok(only.clone());
+        }
+        eprintln!(
+            "Only one active session: {} (scope {}, branch {})",
+            only.id[..8].yellow(),
+            only.scope,
+            only.branch
+        );
+        eprint!("End it? [y/N] ");
+        use std::io::Write;
+        let _ = std::io::stderr().flush();
+        let mut ans = String::new();
+        std::io::stdin().read_line(&mut ans)?;
+        if matches!(ans.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+            return Ok(only.clone());
+        }
+        anyhow::bail!("aborted by user");
+    }
+
+    // 5. error with listing
+    let mut msg = String::from(
+        "no active session resolvable from this shell — pass an id or `aida session leases`\n\nActive sessions:",
+    );
+    for l in leases {
+        msg.push_str(&format!(
+            "\n  {} {} ({})",
+            &l.id[..8],
+            l.scope,
+            l.worktree_path.display()
+        ));
+    }
+    anyhow::bail!(msg)
+}
+
+/// Look up a lease by id prefix (case-insensitive). Errors on no-match
+/// or ambiguous prefix. trace:STORY-73 | ai:claude
+fn find_lease_by_id_prefix(query: &str, leases: &[SessionLease]) -> Result<SessionLease> {
+    let q = query.to_lowercase();
+    let matches: Vec<&SessionLease> = leases
+        .iter()
+        .filter(|l| l.id.to_lowercase().starts_with(&q))
+        .collect();
+    match matches.len() {
+        0 => anyhow::bail!("no session matching `{}`", query),
+        1 => Ok(matches[0].clone()),
+        n => anyhow::bail!(
+            "ambiguous session id `{}` — matches {} sessions, use a longer prefix",
+            query,
+            n
+        ),
+    }
 }
 
 fn session_end(id_query: Option<&str>, yes: bool) -> Result<()> {
     let project_root = find_project_root()?;
     let leases = list_leases(&project_root);
     if leases.is_empty() {
-        println!("(no active sessions)");
+        eprintln!("(no active sessions)");
         return Ok(());
     }
 
-    // Resolve the lease to end. If no id given, match by cwd.
-    let cwd = std::env::current_dir().ok();
-    let target = match id_query {
-        Some(q) => {
-            let q = q.to_lowercase();
-            let matches: Vec<&SessionLease> = leases
-                .iter()
-                .filter(|l| l.id.to_lowercase().starts_with(&q))
-                .collect();
-            match matches.len() {
-                0 => anyhow::bail!("no session matching `{}`", q),
-                1 => matches[0].clone(),
-                n => anyhow::bail!(
-                    "ambiguous session id `{}` — matches {} sessions, use a longer prefix",
-                    q,
-                    n
-                ),
-            }
-        }
-        None => {
-            let Some(cwd) = cwd else {
-                anyhow::bail!("cwd unavailable; pass an explicit session id");
-            };
-            let canon_cwd = cwd.canonicalize().unwrap_or(cwd);
-            leases
-                .iter()
-                .find(|l| {
-                    let p = &l.worktree_path;
-                    p == &canon_cwd
-                        || canon_cwd.starts_with(p)
-                })
-                .cloned()
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "no session lease covers cwd ({}). Pass an id explicitly.",
-                        canon_cwd.display()
-                    )
-                })?
-        }
-    };
+    let target = resolve_session_to_end(id_query, &leases, yes)?;
 
-    println!(
+    // STORY-73: human output to stderr, eval-friendly `unset` to stdout
+    // when wrapped — same shape as session_start's `export`. Stdin/stderr
+    // for the prompt still works inside `eval "$(...)"` because $(...)
+    // captures stdout only. trace:STORY-73 | ai:claude
+    eprintln!(
         "About to end session {}:",
         target.id.yellow()
     );
-    println!("  scope:    {}", target.scope);
-    println!("  branch:   {}", target.branch);
-    println!("  worktree: {}", target.worktree_path.display());
-    println!();
-    println!("Effects:");
-    println!(
+    eprintln!("  scope:    {}", target.scope);
+    eprintln!("  branch:   {}", target.branch);
+    eprintln!("  worktree: {}", target.worktree_path.display());
+    eprintln!();
+    eprintln!("Effects:");
+    eprintln!(
         "  - delete lease at {}",
         lease_path(&project_root, &target.id).display()
     );
-    println!(
+    eprintln!(
         "  - run `git worktree remove {}` (branch {} kept; merge/discard manually)",
         target.worktree_path.display(),
         target.branch
@@ -9304,12 +9434,12 @@ fn session_end(id_query: Option<&str>, yes: bool) -> Result<()> {
 
     if !yes {
         use std::io::Write;
-        print!("\nContinue? [y/N] ");
-        std::io::stdout().flush()?;
+        eprint!("\nContinue? [y/N] ");
+        std::io::stderr().flush()?;
         let mut ans = String::new();
         std::io::stdin().read_line(&mut ans)?;
         if !matches!(ans.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
-            println!("Aborted.");
+            eprintln!("Aborted.");
             return Ok(());
         }
     }
@@ -9379,7 +9509,7 @@ fn session_end(id_query: Option<&str>, yes: bool) -> Result<()> {
         .as_deref()
         .unwrap_or(&lease_file_via_symlink);
     match std::fs::remove_file(lease_target) {
-        Ok(_) => println!("{} lease deleted", "✓".green()),
+        Ok(_) => eprintln!("{} lease deleted", "✓".green()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             // Already gone — keep quiet.
         }
@@ -9420,23 +9550,42 @@ fn session_end(id_query: Option<&str>, yes: bool) -> Result<()> {
             "remove",
             target.worktree_path.to_str().unwrap_or_default(),
         ])
-        .status();
+        .output();
+    use std::io::Write;
     match res {
-        Ok(s) if s.success() => {
-            println!("{} worktree removed", "✓".green());
+        Ok(o) if o.status.success() => {
+            let _ = std::io::stderr().write_all(&o.stdout);
+            let _ = std::io::stderr().write_all(&o.stderr);
+            eprintln!("{} worktree removed", "✓".green());
         }
-        _ => {
+        Ok(o) => {
+            let _ = std::io::stderr().write_all(&o.stdout);
+            let _ = std::io::stderr().write_all(&o.stderr);
             eprintln!(
                 "{} `git worktree remove` failed; you may need to run it manually with --force",
                 "Warning:".yellow().bold()
             );
         }
+        Err(_) => {
+            eprintln!(
+                "{} `git worktree remove` failed to spawn; you may need to run it manually",
+                "Warning:".yellow().bold()
+            );
+        }
     }
-    println!(
+    eprintln!(
         "  branch {} retained — merge or `git branch -D {}` when ready",
         target.branch.cyan(),
         target.branch
     );
+
+    // STORY-73: emit `unset AIDA_SESSION_ID` to stdout when wrapped via the
+    // shell helper's `eval "$(...)"`, so the calling shell's env var
+    // doesn't go stale after the lease it pointed at is gone.
+    // trace:STORY-73 | ai:claude
+    if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
+        println!("unset AIDA_SESSION_ID");
+    }
     Ok(())
 }
 
@@ -10326,6 +10475,89 @@ mod store_walkup_tests {
 }
 
 #[cfg(test)]
+mod session_end_resolution_tests {
+    use super::*;
+
+    fn lease(id: &str, scope: &str, cwd: &str, creator_pid: Option<u32>) -> SessionLease {
+        SessionLease {
+            id: id.to_string(),
+            scope: scope.to_string(),
+            slug: scope.to_lowercase(),
+            owner: "u".into(),
+            worktree_path: std::path::PathBuf::from(cwd),
+            branch: format!("br-{}", id),
+            started_at: chrono::Utc::now(),
+            hostname: "h".into(),
+            role: None,
+            creator_pid,
+        }
+    }
+
+    /// Explicit id query short-circuits the resolution chain.
+    /// trace:STORY-73 | ai:claude
+    #[test]
+    fn id_query_takes_precedence() {
+        let leases = vec![
+            lease("019e10260000", "EPIC-1", "/tmp/wt-1", None),
+            lease("019e10271111", "EPIC-2", "/tmp/wt-2", None),
+        ];
+        let got = resolve_session_to_end(Some("019e1027"), &leases, false).unwrap();
+        assert_eq!(got.scope, "EPIC-2");
+    }
+
+    /// Ambiguous prefix bails clearly.
+    /// trace:STORY-73 | ai:claude
+    #[test]
+    fn ambiguous_id_query_bails() {
+        let leases = vec![
+            lease("019e10260000", "EPIC-1", "/tmp/wt-1", None),
+            lease("019e10271111", "EPIC-2", "/tmp/wt-2", None),
+        ];
+        // "019e10" matches both.
+        let err = resolve_session_to_end(Some("019e10"), &leases, false).unwrap_err();
+        assert!(err.to_string().contains("ambiguous"), "{}", err);
+    }
+
+    /// Empty id query miss bails (find_lease_by_id_prefix path).
+    /// trace:STORY-73 | ai:claude
+    #[test]
+    fn unknown_id_query_bails() {
+        let leases = vec![lease("019e10260000", "EPIC-1", "/tmp/wt-1", None)];
+        let err = resolve_session_to_end(Some("ffffffff"), &leases, false).unwrap_err();
+        assert!(err.to_string().contains("no session matching"));
+    }
+
+    /// No-arg + zero leases never reaches the chain (caller short-circuits)
+    /// — but multi-lease, no env, cwd not under any worktree yields the
+    /// "no resolvable" error with a listing.
+    /// trace:STORY-73 | ai:claude
+    #[test]
+    fn unresolvable_lists_active_leases() {
+        let leases = vec![
+            lease("019e10260000", "EPIC-1", "/nonexistent/wt-1", None),
+            lease("019e10271111", "EPIC-2", "/nonexistent/wt-2", None),
+        ];
+        // Clear env so #2 doesn't fire.
+        std::env::remove_var("AIDA_SESSION_ID");
+        let err = resolve_session_to_end(None, &leases, false).unwrap_err();
+        let s = err.to_string();
+        assert!(s.contains("no active session resolvable"), "{}", s);
+        assert!(s.contains("EPIC-1"), "{}", s);
+        assert!(s.contains("EPIC-2"), "{}", s);
+    }
+
+    /// -y on single-active fallback skips the prompt.
+    /// trace:STORY-73 | ai:claude
+    #[test]
+    fn single_active_with_yes_resolves() {
+        let leases = vec![lease("019e10260000", "EPIC-1", "/nonexistent/wt-1", None)];
+        std::env::remove_var("AIDA_SESSION_ID");
+        let got = resolve_session_to_end(None, &leases, true).unwrap();
+        assert_eq!(got.scope, "EPIC-1");
+    }
+}
+
+#[cfg(test)]
 mod auto_branch_tests {
     use super::*;
     use std::process::Command;
@@ -11123,7 +11355,12 @@ aida() {
     # disambiguate every eval-required subcommand we have.
     local _aida_cmd="${1:-} ${2:-}"
     case "$_aida_cmd" in
-        "dev activate"|"dev deactivate"|"role enter"|"role end"|"role add")
+        "dev activate"|"dev deactivate"|"role enter"|"role end"|"role add"|"session start"|"session end")
+            # session start/end split output: stderr for human messages
+            # (status, prompts), stdout for the shell-modifying lines
+            # (`export AIDA_SESSION_ID=...` / `unset AIDA_SESSION_ID`).
+            # `eval "$(...)"` captures stdout only — stderr passes through
+            # to the user, stdin still reaches the binary for prompts.
             eval "$(command aida "$@")"
             ;;
         *)
