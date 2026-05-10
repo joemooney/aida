@@ -315,7 +315,8 @@ pub enum ScaffoldCommand {
 pub enum SessionCommand {
     /// List recent Claude Code sessions for this project (cwd) with
     /// role + spec context extracted from each session's .jsonl. By
-    /// default shows the 20 most recent.
+    /// default shows sessions with activity in the last 24 hours, up
+    /// to 20 entries — `--all` bypasses the recency cutoff.
     List {
         /// Show at most N sessions (default 20).
         #[clap(long, short = 'n', default_value = "20")]
@@ -324,6 +325,11 @@ pub enum SessionCommand {
         /// Plain output (no color), suitable for piping.
         #[clap(long)]
         no_color: bool,
+
+        /// Bypass the default 24h recency cutoff and show every session
+        /// the limit allows. trace:STORY-59 | ai:claude
+        #[clap(long)]
+        all: bool,
     },
 
     /// Pick a session interactively and resume it via `claude --resume`.

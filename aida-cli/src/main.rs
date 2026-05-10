@@ -8177,7 +8177,7 @@ fn update_config_counter_scope(config_path: &std::path::Path, new_value: &str) -
 /// trace:FR-1-043 | ai:claude
 fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
     match cmd {
-        SessionCommand::List { limit, no_color } => session::list(*limit, *no_color),
+        SessionCommand::List { limit, no_color, all } => session::list(*limit, *no_color, *all),
         SessionCommand::Resume { id, limit } => session::resume(id.clone(), *limit),
         SessionCommand::New {
             title,
