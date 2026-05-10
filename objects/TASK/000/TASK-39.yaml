@@ -20,5 +20,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T05:01:54.814866713Z
-modified_at: 2026-05-10T05:01:54.814866713Z
+modified_at: 2026-05-10T05:02:13.047377152Z
 req_type: Task
+comments:
+- id: 019e1043-b437-7452-8294-3c24ad50c180
+  author: joe
+  content: Commit e462625f references this requirement
+  created_at: 2026-05-10T05:02:13.047377152Z
+  modified_at: 2026-05-10T05:02:13.047377152Z
