@@ -62,9 +62,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T04:41:46.578062063Z
-modified_at: 2026-05-10T06:35:28.934067997Z
+modified_at: 2026-05-10T06:47:34.060275530Z
 req_type: Story
 relationships:
 - rel_type: Child
   target_id: 019e0f6f-f9ad-7653-8336-12a7f09d7cb1
   created_at: 2026-05-10T04:41:47.608088293Z
+comments:
+- id: 019e10a4-27ac-7d82-adc1-4515e156525b
+  author: joe
+  content: Commit dad3fcb3 references this requirement
+  created_at: 2026-05-10T06:47:34.060275530Z
+  modified_at: 2026-05-10T06:47:34.060275530Z
