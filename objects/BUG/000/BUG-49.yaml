@@ -3,10 +3,10 @@ spec_id: BUG-49
 agreed_id: BUG-49
 title: aida edit --type silently keeps the old prefix on spec_id (no warning)
 description: When the user passes `--type principle` to a req with spec_id `FR-N`, the type changes but spec_id stays FR-N (correct — ids are stable). But the user expects the prefix to follow and gets confused by FR-N still showing. Now warns explicitly when the new type implies a different prefix. Surfaced 2026-05-09 walkthrough.
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T00:33:09.749048301Z
-modified_at: 2026-05-10T00:33:09.749048301Z
+modified_at: 2026-05-10T00:33:10.488756742Z
 req_type: Bug
