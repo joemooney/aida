@@ -58,10 +58,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T17:02:43.096552618Z
-modified_at: 2026-05-10T22:13:58.493443764Z
+modified_at: 2026-05-10T22:17:25.575278038Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019e0f6f-f9ad-7653-8336-12a7f09d7cb1
   created_at: 2026-05-10T22:13:58.493437038Z
   created_by: joe
+comments:
+- id: 019e13f7-7747-79f0-9fc6-491c414c418c
+  author: joe
+  content: Commit 511caf7d references this requirement
+  created_at: 2026-05-10T22:17:25.575278038Z
+  modified_at: 2026-05-10T22:17:25.575278038Z
