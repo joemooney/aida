@@ -6554,7 +6554,400 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             permission_mode,
             role,
         } => session::new_session(title.clone(), permission_mode, role.clone()),
+        SessionCommand::Start { owns, branch, base, path } => {
+            session_start(owns, branch.as_deref(), base.as_deref(), path.as_deref())
+        }
+        SessionCommand::End { id, yes } => session_end(id.as_deref(), *yes),
+        SessionCommand::Leases => session_leases(),
     }
+}
+
+// ----------------------------------------------------------------------------
+// EPIC-20 v1 — scoped session leases.
+// trace:EPIC-20 | ai:claude
+// ----------------------------------------------------------------------------
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct SessionLease {
+    /// 12-char hex id derived from the time-ordered uuid v7, for short refs.
+    id: String,
+    /// Raw scope string the user passed to `--owns`.
+    scope: String,
+    /// Resolved scope slug, used for branch + dir naming.
+    slug: String,
+    /// Owner email/user (best-effort from git config).
+    owner: String,
+    /// Worktree path (canonicalized).
+    worktree_path: std::path::PathBuf,
+    /// Branch the worktree is on.
+    branch: String,
+    /// ISO-8601 UTC.
+    started_at: chrono::DateTime<chrono::Utc>,
+    /// Hostname when started.
+    hostname: String,
+}
+
+fn leases_dir(project_root: &std::path::Path) -> std::path::PathBuf {
+    project_root.join(".aida").join("sessions")
+}
+
+fn lease_path(project_root: &std::path::Path, id: &str) -> std::path::PathBuf {
+    leases_dir(project_root).join(format!("{}.toml", id))
+}
+
+fn list_leases(project_root: &std::path::Path) -> Vec<SessionLease> {
+    let dir = leases_dir(project_root);
+    if !dir.exists() {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.extension().and_then(|s| s.to_str()) != Some("toml") {
+                continue;
+            }
+            if let Ok(content) = std::fs::read_to_string(&p) {
+                if let Ok(lease) = toml::from_str::<SessionLease>(&content) {
+                    out.push(lease);
+                }
+            }
+        }
+    }
+    out.sort_by_key(|l| l.started_at);
+    out
+}
+
+fn slugify(s: &str) -> String {
+    let lower = s.to_lowercase();
+    let mut out = String::with_capacity(lower.len());
+    let mut last_dash = false;
+    for c in lower.chars() {
+        if c.is_ascii_alphanumeric() {
+            out.push(c);
+            last_dash = false;
+        } else if !last_dash && !out.is_empty() {
+            out.push('-');
+            last_dash = true;
+        }
+    }
+    while out.ends_with('-') {
+        out.pop();
+    }
+    out
+}
+
+/// Walk up from cwd looking for a .git directory — the project root. We
+/// don't use git_ops::is_git_repo here because we need the *path*, not
+/// just a yes/no.
+fn find_project_root() -> Result<std::path::PathBuf> {
+    let mut cur = std::env::current_dir()?;
+    loop {
+        if cur.join(".git").exists() {
+            return Ok(cur);
+        }
+        match cur.parent() {
+            Some(p) => cur = p.to_path_buf(),
+            None => anyhow::bail!("not inside a git repository"),
+        }
+    }
+}
+
+fn session_start(
+    owns: &str,
+    branch: Option<&str>,
+    base: Option<&str>,
+    explicit_path: Option<&str>,
+) -> Result<()> {
+    let project_root = find_project_root()?;
+    let slug = slugify(owns);
+    if slug.is_empty() {
+        anyhow::bail!("scope `{}` slugifies to empty — pick something with letters/digits", owns);
+    }
+    let branch_name = branch.map(|s| s.to_string()).unwrap_or_else(|| slug.clone());
+    let repo_name = project_root
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("project")
+        .to_string();
+    let worktree_path = match explicit_path {
+        Some(p) => std::path::PathBuf::from(p),
+        None => project_root
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("project root has no parent"))?
+            .join(format!("{}-{}", repo_name, slug)),
+    };
+    if worktree_path.exists() {
+        anyhow::bail!(
+            "{} already exists — pick a different --path or remove it first",
+            worktree_path.display()
+        );
+    }
+
+    // Check the lease dir exists; create if not.
+    let leases = leases_dir(&project_root);
+    std::fs::create_dir_all(&leases)?;
+
+    // Don't double-claim the same scope from this project root.
+    for existing in list_leases(&project_root) {
+        if existing.scope.eq_ignore_ascii_case(owns) {
+            anyhow::bail!(
+                "scope `{}` is already owned by session {} ({}). \
+                 Run `aida session end {}` first.",
+                owns,
+                existing.id,
+                existing.worktree_path.display(),
+                existing.id
+            );
+        }
+    }
+
+    // Create worktree on new branch.
+    let mut args = vec![
+        "worktree",
+        "add",
+        "-b",
+        branch_name.as_str(),
+        worktree_path.to_str().unwrap(),
+    ];
+    if let Some(b) = base {
+        args.push(b);
+    }
+    let res = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&project_root)
+        .args(&args)
+        .status()?;
+    if !res.success() {
+        anyhow::bail!("`git worktree add` failed");
+    }
+
+    // Symlink .aida/ and .aida-store/ from the parent so AIDA commands
+    // run from the new worktree see the same state. Unix only; on Windows
+    // the user would need to copy or use a junction (deferred).
+    #[cfg(unix)]
+    {
+        for name in &[".aida", ".aida-store"] {
+            let src = project_root.join(name);
+            let dst = worktree_path.join(name);
+            if src.exists() && !dst.exists() {
+                std::os::unix::fs::symlink(&src, &dst).with_context(|| {
+                    format!(
+                        "symlink {} -> {} failed",
+                        dst.display(),
+                        src.display()
+                    )
+                })?;
+            }
+        }
+    }
+
+    // Compose lease.
+    let id_long = uuid::Uuid::now_v7().to_string();
+    let id = id_long.replace('-', "")[..12].to_string();
+    let owner = aida_core::git_ops::git_config_get("user.email")
+        .ok()
+        .or_else(|| std::env::var("USER").ok())
+        .unwrap_or_else(|| "unknown".to_string());
+    let lease = SessionLease {
+        id: id.clone(),
+        scope: owns.to_string(),
+        slug: slug.clone(),
+        owner,
+        worktree_path: worktree_path
+            .canonicalize()
+            .unwrap_or_else(|_| worktree_path.clone()),
+        branch: branch_name.clone(),
+        started_at: chrono::Utc::now(),
+        hostname: hostname(),
+    };
+    let lease_file = lease_path(&project_root, &id);
+    std::fs::write(&lease_file, toml::to_string_pretty(&lease)?)?;
+
+    println!(
+        "{} session {} started",
+        "✓".green().bold(),
+        id.yellow()
+    );
+    println!("  {}: {}", "scope".bold(), owns.cyan());
+    println!("  {}: {}", "branch".bold(), branch_name.cyan());
+    println!(
+        "  {}: {}",
+        "worktree".bold(),
+        worktree_path.display().to_string().cyan()
+    );
+    println!("  {}: {}", "lease".bold(), lease_file.display().to_string().dimmed());
+    println!();
+    println!("Next:");
+    println!(
+        "  {}",
+        format!("cd {}", worktree_path.display()).cyan()
+    );
+    println!(
+        "  {}",
+        format!("aida session end {}    # when done", &id[..8]).dimmed()
+    );
+    Ok(())
+}
+
+fn session_end(id_query: Option<&str>, yes: bool) -> Result<()> {
+    let project_root = find_project_root()?;
+    let leases = list_leases(&project_root);
+    if leases.is_empty() {
+        println!("(no active sessions)");
+        return Ok(());
+    }
+
+    // Resolve the lease to end. If no id given, match by cwd.
+    let cwd = std::env::current_dir().ok();
+    let target = match id_query {
+        Some(q) => {
+            let q = q.to_lowercase();
+            let matches: Vec<&SessionLease> = leases
+                .iter()
+                .filter(|l| l.id.to_lowercase().starts_with(&q))
+                .collect();
+            match matches.len() {
+                0 => anyhow::bail!("no session matching `{}`", q),
+                1 => matches[0].clone(),
+                n => anyhow::bail!(
+                    "ambiguous session id `{}` — matches {} sessions, use a longer prefix",
+                    q,
+                    n
+                ),
+            }
+        }
+        None => {
+            let Some(cwd) = cwd else {
+                anyhow::bail!("cwd unavailable; pass an explicit session id");
+            };
+            let canon_cwd = cwd.canonicalize().unwrap_or(cwd);
+            leases
+                .iter()
+                .find(|l| {
+                    let p = &l.worktree_path;
+                    p == &canon_cwd
+                        || canon_cwd.starts_with(p)
+                })
+                .cloned()
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "no session lease covers cwd ({}). Pass an id explicitly.",
+                        canon_cwd.display()
+                    )
+                })?
+        }
+    };
+
+    println!(
+        "About to end session {}:",
+        target.id.yellow()
+    );
+    println!("  scope:    {}", target.scope);
+    println!("  branch:   {}", target.branch);
+    println!("  worktree: {}", target.worktree_path.display());
+    println!();
+    println!("Effects:");
+    println!(
+        "  - delete lease at {}",
+        lease_path(&project_root, &target.id).display()
+    );
+    println!(
+        "  - run `git worktree remove {}` (branch {} kept; merge/discard manually)",
+        target.worktree_path.display(),
+        target.branch
+    );
+
+    if !yes {
+        use std::io::Write;
+        print!("\nContinue? [y/N] ");
+        std::io::stdout().flush()?;
+        let mut ans = String::new();
+        std::io::stdin().read_line(&mut ans)?;
+        if !matches!(ans.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+            println!("Aborted.");
+            return Ok(());
+        }
+    }
+
+    // Clean the symlinks we created at session start before git tries to
+    // remove the worktree — they count as untracked files and `git worktree
+    // remove` would otherwise refuse without --force.
+    for name in &[".aida", ".aida-store"] {
+        let p = target.worktree_path.join(name);
+        if p.is_symlink() || p.exists() {
+            let _ = std::fs::remove_file(&p);
+        }
+    }
+
+    let res = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&project_root)
+        .args([
+            "worktree",
+            "remove",
+            target.worktree_path.to_str().unwrap_or_default(),
+        ])
+        .status();
+    match res {
+        Ok(s) if s.success() => {
+            println!("{} worktree removed", "✓".green());
+        }
+        _ => {
+            eprintln!(
+                "{} `git worktree remove` failed; you may need to run it manually with --force",
+                "Warning:".yellow().bold()
+            );
+        }
+    }
+
+    let lease_file = lease_path(&project_root, &target.id);
+    let _ = std::fs::remove_file(&lease_file);
+    println!("{} lease deleted", "✓".green());
+    println!(
+        "  branch {} retained — merge or `git branch -D {}` when ready",
+        target.branch.cyan(),
+        target.branch
+    );
+    Ok(())
+}
+
+fn session_leases() -> Result<()> {
+    let project_root = find_project_root()?;
+    let leases = list_leases(&project_root);
+    if leases.is_empty() {
+        println!("(no active sessions)");
+        println!();
+        println!(
+            "Start one with: {} {}",
+            "aida session start --owns".cyan(),
+            "<scope>".dimmed()
+        );
+        return Ok(());
+    }
+    println!("{}", "Active session leases".bold());
+    println!();
+    println!(
+        "{:<14} {:<24} {:<22} {}",
+        "id", "scope", "branch", "worktree"
+    );
+    println!("{}", "─".repeat(96));
+    for l in &leases {
+        println!(
+            "{:<14} {:<24} {:<22} {}",
+            (&l.id[..8]).yellow(),
+            truncate(&l.scope, 24),
+            truncate(&l.branch, 22),
+            l.worktree_path.display()
+        );
+    }
+    println!();
+    println!(
+        "End one with: {} {}",
+        "aida session end".cyan(),
+        "<id>".dimmed()
+    );
+    Ok(())
 }
 
 /// True when one SHA is a (case-insensitive, hex) prefix of the other.
