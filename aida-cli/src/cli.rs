@@ -484,6 +484,18 @@ pub enum SessionCommand {
         #[clap(long, short = 'v')]
         verbose: bool,
     },
+
+    /// Show details for one session lease (defaults to the lease covering
+    /// cwd, or matched by ancestor PID). Accepts an 8-char id prefix.
+    /// Output: scope, branch, worktree, inherited role, owner, hostname,
+    /// lease file path, recent activity entries from the session log, and
+    /// liveness (live claude in the worktree). trace:STORY-68 | ai:claude
+    Show {
+        /// Session id (8-char prefix accepted). Omit to show the lease
+        /// covering cwd, or — if cwd doesn't help — the lease whose
+        /// creator_pid is in this shell's ancestor chain.
+        id: Option<String>,
+    },
 }
 
 /// activity, optional purpose, and acts as a label in the statusline.

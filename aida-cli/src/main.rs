@@ -8301,6 +8301,7 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
         }
         SessionCommand::End { id, yes, force } => session_end(id.as_deref(), *yes, *force),
         SessionCommand::Leases { verbose } => session_leases(*verbose),
+        SessionCommand::Show { id } => session_show(id.as_deref()),
     }
 }
 
@@ -9778,6 +9779,190 @@ fn session_leases(verbose: bool) -> Result<()> {
         "aida session end".cyan(),
         "<id>".dimmed()
     );
+    Ok(())
+}
+
+/// STORY-68: detail view for one session lease. Resolution: explicit id
+/// → cwd-based lease → ancestor-PID match (same chain as session end's
+/// resolution chain, minus the single-active prompt — `show` should be
+/// non-interactive). Errors with the active-lease listing if nothing
+/// resolves. trace:STORY-68 | ai:claude
+fn session_show(id: Option<&str>) -> Result<()> {
+    let project_root = find_project_root()?;
+    let leases = list_leases(&project_root);
+    if leases.is_empty() {
+        println!("(no active sessions)");
+        println!();
+        println!(
+            "Start one with: {} {}",
+            "aida session start --owns".cyan(),
+            "<scope>".dimmed()
+        );
+        return Ok(());
+    }
+
+    let lease = if let Some(q) = id {
+        find_lease_by_id_prefix(q, &leases)?
+    } else if let Some(l) = std::env::current_dir().ok().and_then(|cwd| {
+        let canon = cwd.canonicalize().unwrap_or(cwd);
+        leases
+            .iter()
+            .find(|l| canon == l.worktree_path || canon.starts_with(&l.worktree_path))
+            .cloned()
+    }) {
+        l
+    } else {
+        // Ancestor-PID fallback (no env-var lookup here — `show` is for
+        // human inspection, not env mutation, so we want a deterministic
+        // best-effort match without relying on the export side channel).
+        let chain: std::collections::HashSet<u32> =
+            process_probe::walk_ancestor_pids(std::process::id())
+                .into_iter()
+                .collect();
+        let candidates: Vec<&SessionLease> = leases
+            .iter()
+            .filter(|l| l.creator_pid.map(|p| chain.contains(&p)).unwrap_or(false))
+            .collect();
+        match candidates.len() {
+            1 => candidates[0].clone(),
+            _ => {
+                let mut msg = String::from(
+                    "no session lease covers cwd or this shell's ancestors — pass an id explicitly\n\nActive sessions:",
+                );
+                for l in &leases {
+                    msg.push_str(&format!(
+                        "\n  {} {} ({})",
+                        &l.id[..8],
+                        l.scope,
+                        l.worktree_path.display()
+                    ));
+                }
+                anyhow::bail!(msg)
+            }
+        }
+    };
+
+    let lease_file = lease_path(&project_root, &lease.id);
+    let started_local = lease.started_at.with_timezone(&chrono::Local);
+    let now = chrono::Utc::now();
+    let age = now.signed_duration_since(lease.started_at);
+    let age_human = humanize_relative(lease.started_at);
+
+    println!("{} {}", "Session".bold(), (&lease.id[..8]).yellow());
+    println!("  {}: {}", "scope".bold(), lease.scope.cyan());
+    println!("  {}: {}", "branch".bold(), lease.branch.cyan());
+    println!("  {}: {}", "worktree".bold(), lease.worktree_path.display());
+    if let Some(role) = &lease.role {
+        println!(
+            "  {}: {} {}",
+            "role".bold(),
+            role.cyan(),
+            "(inherited from shell at start time)".dimmed()
+        );
+    }
+    println!(
+        "  {}: {} ({})",
+        "started_at".bold(),
+        started_local.format("%Y-%m-%d %H:%M %Z"),
+        age_human.dimmed()
+    );
+    if age.num_seconds() < 0 {
+        // Future-dated lease (clock skew or hand-edited TOML) — flag it.
+        eprintln!(
+            "  {} lease started_at is in the future — clock skew?",
+            "Warning:".yellow().bold()
+        );
+    }
+    println!("  {}: {}", "owner".bold(), lease.owner);
+    println!("  {}: {}", "hostname".bold(), lease.hostname);
+    if let Some(pid) = lease.creator_pid {
+        let descendant = {
+            let chain: std::collections::HashSet<u32> =
+                process_probe::walk_ancestor_pids(std::process::id())
+                    .into_iter()
+                    .collect();
+            chain.contains(&pid)
+        };
+        let suffix = if descendant {
+            " (this shell is a descendant)".green().to_string()
+        } else {
+            String::new()
+        };
+        println!("  {}: {}{}", "creator_pid".bold(), pid, suffix);
+    }
+    println!("  {}: {}", "lease file".bold(), lease_file.display().to_string().dimmed());
+
+    // Activity rows from the session-local log.
+    let activity = load_session_activity(&project_root, &lease.id);
+    println!();
+    if activity.entries.is_empty() {
+        println!("{}", "Activity in this session: (none yet)".bold());
+    } else {
+        println!("{}", "Activity in this session:".bold());
+        let mut sorted = activity.entries.clone();
+        sorted.sort_by_key(|e| std::cmp::Reverse(e.at));
+        for e in sorted.iter().take(10) {
+            println!(
+                "  {:<14} {:<10} {} ({})",
+                e.spec_id.cyan(),
+                e.action,
+                e.role.dimmed(),
+                humanize_relative(e.at).dimmed()
+            );
+        }
+        if activity.entries.len() > 10 {
+            println!(
+                "  {} {} more",
+                "…".dimmed(),
+                (activity.entries.len() - 10).to_string().dimmed()
+            );
+        }
+    }
+
+    // Liveness: is there a live claude inside this worktree right now?
+    let live_in_wt = probe_live_claudes_in_worktree(&lease.worktree_path);
+    println!();
+    if live_in_wt.is_empty() {
+        println!("{}: (no live claude detected)", "Claude Code".bold());
+    } else {
+        println!(
+            "{}: {} live claude process{} in worktree",
+            "Claude Code".bold(),
+            live_in_wt.len().to_string().green(),
+            if live_in_wt.len() == 1 { "" } else { "es" }
+        );
+        for s in &live_in_wt {
+            let jsonl_note = match &s.jsonl {
+                Some(p) => format!(
+                    " (jsonl {})",
+                    p.file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("?")
+                        .dimmed()
+                ),
+                None => String::new(),
+            };
+            println!("  pid {}{}", s.pid.to_string().green(), jsonl_note);
+        }
+    }
+
+    let dangling = probe_dangling_claudes_at_path(&lease.worktree_path);
+    if !dangling.is_empty() {
+        println!();
+        println!(
+            "{} {} leaked claude process(es) with `(deleted)` cwd at this path:",
+            "Warning:".yellow().bold(),
+            dangling.len()
+        );
+        for s in &dangling {
+            println!(
+                "  pid {} — `kill {}` to clean up",
+                s.pid.to_string().yellow(),
+                s.pid
+            );
+        }
+    }
+
     Ok(())
 }
 
