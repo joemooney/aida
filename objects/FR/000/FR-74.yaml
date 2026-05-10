@@ -20,9 +20,6 @@ feature: 97-Uncategorized
 created_at: 2025-11-28T03:52:10.460760188Z
 modified_at: 2026-05-04T19:36:29.729114370Z
 req_type: Functional
-relationships:
-- rel_type: Parent
-  target_id: 5a8cda55-badf-48c6-82c9-b9ea53f3f69f
 comments:
 - id: 019df47c-fe72-7a80-811d-e87e8344bc7b
   author: joe
