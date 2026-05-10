@@ -1,0 +1,44 @@
+id: 019e10ab-309b-78e3-9386-1bbaaf81b535
+spec_id: BUG-64
+agreed_id: BUG-64
+title: aida add --parent silently accepts parent EPICs in completed/rejected status — no warning
+description: |
+  Caught 2026-05-10 while filing the aida-tutor v0.2 backlog. Ran 7 `aida add --parent EPIC-2 --type story ...` calls intending to parent under a freshly-minted EPIC-4. EPIC-2 in that store is the **completed** v1 epic. All 7 reqs silently landed under EPIC-2 with no warning. Took 21 `rel remove`/`rel add` calls to fix.
+
+  ## Today's behavior
+
+  `aida add --parent <X>` resolves X via `get_requirement_by_spec_id`, links the edge, and prints success. No status check on the parent.
+
+  ## Desired behavior
+
+  When the resolved parent is in a **terminal status** (Completed, Rejected), refuse by default with a clear hint:
+
+    $ aida add --parent EPIC-2 --type story ...
+    Error: parent EPIC-2 is Completed — adding new children to a closed
+           epic is usually a mistake. Pass --force-parent to override, or
+           use a different parent (e.g. `aida list --type epic --status approved`).
+
+  Allow `--force-parent` to bypass for legitimate cases (e.g., backfilling a forgotten child to an old epic for traceability).
+
+  ## Why low priority
+
+  This is an ergonomic gap, not a correctness bug. The wrong parent is fixable via `rel remove` + `rel add`. But mass-filing children under the wrong epic produces a confusing graph (completed epic with new in-progress children) that surfaces later in `aida list --parent`, `aida show --tree`, etc. The check is cheap and prevents a real footgun.
+
+  ## Composes with
+
+  - BUG-62 (FR-215 git-canonical --parent gaps) — same family of `--parent` flag polish
+  - STORY-70 (doctor convention-check) — the doctor-style lint could detect "open children under closed parent" retroactively
+
+  ## Acceptance
+
+  - [ ] `aida add --parent <completed/rejected EPIC>` errors by default with a clear hint
+  - [ ] `--force-parent` bypasses the check
+  - [ ] Same check applies to `aida rel add <X> <Y> --type child` when Y is terminal-status
+  - [ ] Test covers all four combos (parent status × --force-parent)
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T06:55:15.099630258Z
+modified_at: 2026-05-10T06:55:15.099630258Z
+req_type: Bug
