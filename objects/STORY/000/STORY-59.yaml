@@ -1,0 +1,42 @@
+id: 019e0fe1-2d8f-71c0-824f-2712d0ec8ca8
+spec_id: STORY-59
+agreed_id: STORY-59
+title: 'aida session list: liveness indicator, branch/worktree column, default-recent'
+description: |
+  Today aida session list shows ID, AGE, ROLE, SPEC, TITLE — and lists every Claude Code session ever launched from this project, including 5+ day-old abandoned ones. Three improvements that compose:
+
+  ## 1. Liveness indicator
+
+  Heuristic-based, no PID tracking. For each session, stat the .jsonl's mtime:
+  - mtime < 5 min ago → "●" (live, currently active)
+  - mtime < 1 hour → "◐" (recent)
+  - otherwise → " " (idle)
+
+  Render as a leading column. PID-based liveness is fragile (Claude forks; child PIDs ≠ launch PID), but recent activity is a reliable proxy.
+
+  ## 2. Branch / worktree column
+
+  Each session's cwd is recorded on every message (Claude Code stores it). For the most-recent message, parse cwd:
+  - basename of cwd (or repo root if cwd is a subdir)
+  - current branch when the session was last active (run git branch --show-current at cwd; cache result)
+
+  Display as "aida @ main", "aida-epic-20 @ epic-20-followups". Truncate if too long.
+
+  ## 3. Default-recent, --all to bypass
+
+  Default: sessions with activity in the last 24h. Prevents stale sessions from cluttering the everyday "what's running" view. --all shows everything (current behavior).
+
+  ## Out of scope (separate story)
+
+  aida session prune — explicit cleanup command for sessions older than N days. Filed separately so this story stays focused.
+
+  ## Why now
+
+  User concrete observation 2026-05-09: aida session list shows 6 entries on this repo, only one of which is current. Visual noise dominates the useful information. Branch/worktree context is missing entirely, which becomes critical with concurrent sessions running on different worktrees (EPIC-20 work + parent work).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T03:14:36.047248463Z
+modified_at: 2026-05-10T03:14:36.047248463Z
+req_type: Story
