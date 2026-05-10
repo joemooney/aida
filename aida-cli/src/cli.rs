@@ -532,9 +532,18 @@ pub enum SessionCommand {
     Leases {
         /// Probe live `claude` processes and warn about ones whose cwd is
         /// `(deleted)` (worktree was removed without ending claude — the
-        /// signature of BUG-61). trace:STORY-69 | ai:claude
+        /// signature of BUG-61). `-v` adds two columns: PID of the live
+        /// claude (when present) and the Claude Code session id from
+        /// `~/.claude/projects/<encoded>/<id>.jsonl`. trace:STORY-69, TASK-56 | ai:claude
         #[clap(long, short = 'v')]
         verbose: bool,
+        /// Include stale leases in the listing. Default hides leases
+        /// whose worktree no longer exists OR which have no live
+        /// claude AND are >24h old. With --all, every lease renders
+        /// with a state column (live ● / dormant ◐ / stale ⚠).
+        /// trace:TASK-55 | ai:claude
+        #[clap(long)]
+        all: bool,
     },
 
     /// Show details for one session lease (defaults to the lease covering

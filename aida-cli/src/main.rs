@@ -8907,7 +8907,7 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             role.clone(),
         ),
         SessionCommand::End { id, yes, force } => session_end(id.as_deref(), *yes, *force),
-        SessionCommand::Leases { verbose } => session_leases(*verbose),
+        SessionCommand::Leases { verbose, all } => session_leases(*verbose, *all),
         SessionCommand::Show { id } => session_show(id.as_deref()),
         SessionCommand::Prune { days, dry_run, yes } => session_prune(*days, *dry_run, *yes),
     }
@@ -11220,7 +11220,92 @@ fn try_auto_queue_pr_review(
     ))
 }
 
-fn session_leases(verbose: bool) -> Result<()> {
+/// TASK-55: lease liveness classification used by `session leases`.
+/// trace:TASK-55 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LeaseState {
+    /// Live claude found inside the worktree — actively working.
+    Live,
+    /// Worktree exists, no live claude inside, <24h old. Could be a
+    /// shell-only session or a paused claude — not yet abandoned.
+    Dormant,
+    /// Worktree missing OR (no live claude AND >24h old) — the lease
+    /// is almost certainly leaked.
+    Stale,
+}
+
+impl LeaseState {
+    fn glyph(self) -> &'static str {
+        match self {
+            LeaseState::Live => "●",
+            LeaseState::Dormant => "◐",
+            LeaseState::Stale => "⚠",
+        }
+    }
+    fn label(self) -> &'static str {
+        match self {
+            LeaseState::Live => "live",
+            LeaseState::Dormant => "dormant",
+            LeaseState::Stale => "stale",
+        }
+    }
+}
+
+/// TASK-55: classify a lease using its worktree existence, live-claude
+/// probe result, and age. Pure given pre-collected inputs so the
+/// decision matrix is unit-testable. trace:TASK-55 | ai:claude
+fn classify_lease_state(
+    worktree_exists: bool,
+    has_live_claude: bool,
+    age_hours: i64,
+) -> LeaseState {
+    if !worktree_exists {
+        return LeaseState::Stale;
+    }
+    if has_live_claude {
+        return LeaseState::Live;
+    }
+    if age_hours >= 24 {
+        return LeaseState::Stale;
+    }
+    LeaseState::Dormant
+}
+
+/// TASK-56: find the Claude Code session id matching a worktree path,
+/// derived from the newest `*.jsonl` file at
+/// `~/.claude/projects/<encoded-cwd>/`. Returns None when the project
+/// dir doesn't exist or has no jsonl files. trace:TASK-56 | ai:claude
+fn cc_session_id_for_worktree(worktree: &std::path::Path) -> Option<String> {
+    let dir = session::claude_project_dir(worktree).ok()?;
+    if !dir.exists() {
+        return None;
+    }
+    let mut newest: Option<(std::time::SystemTime, String)> = None;
+    for entry in std::fs::read_dir(&dir).ok()? {
+        let Ok(entry) = entry else { continue };
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) != Some("jsonl") {
+            continue;
+        }
+        let Ok(meta) = entry.metadata() else { continue };
+        let Ok(mtime) = meta.modified() else { continue };
+        let stem = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
+        if stem.is_empty() {
+            continue;
+        }
+        match &newest {
+            Some((best_mtime, _)) if mtime <= *best_mtime => {}
+            _ => newest = Some((mtime, stem)),
+        }
+    }
+    newest.map(|(_, s)| s)
+}
+
+fn session_leases(verbose: bool, all: bool) -> Result<()> {
     let project_root = find_project_root()?;
     let leases = list_leases(&project_root);
     if leases.is_empty() {
@@ -11233,34 +11318,107 @@ fn session_leases(verbose: bool) -> Result<()> {
         );
         return Ok(());
     }
+
+    // TASK-55: probe live claudes once + classify every lease so we
+    // can render the state column AND apply the hide-stale filter
+    // off the same data. trace:TASK-55 | ai:claude
+    let now = chrono::Utc::now();
+    let live = process_probe::probe_live_claude_sessions();
+    let classified: Vec<(SessionLease, LeaseState, Option<u32>)> = leases
+        .iter()
+        .map(|l| {
+            let worktree_exists = l.worktree_path.exists();
+            let live_in_worktree = live.iter().find(|s| {
+                !s.stale_cwd
+                    && (s.cwd == l.worktree_path
+                        || s.cwd.starts_with(&l.worktree_path))
+            });
+            let age_hours = now
+                .signed_duration_since(l.started_at)
+                .num_hours();
+            let state = classify_lease_state(
+                worktree_exists,
+                live_in_worktree.is_some(),
+                age_hours,
+            );
+            (l.clone(), state, live_in_worktree.map(|s| s.pid))
+        })
+        .collect();
+
+    let (shown, hidden_stale): (Vec<_>, Vec<_>) = if all {
+        (classified, Vec::new())
+    } else {
+        classified
+            .into_iter()
+            .partition(|(_, state, _)| !matches!(state, LeaseState::Stale))
+    };
+
     println!("{}", "Active session leases".bold());
     println!();
-    // STORY-65: role column shows the persona inherited at session start
-    // (blank when no role was active in the calling shell). Lets multi-
-    // session workflows see at a glance which seat each lease was opened
-    // under. trace:STORY-65 | ai:claude
-    println!(
-        "{:<14} {:<20} {:<18} {:<14} {}",
-        "id", "scope", "branch", "role", "worktree"
-    );
-    println!("{}", "─".repeat(102));
-    for l in &leases {
-        println!(
-            "{:<14} {:<20} {:<18} {:<14} {}",
+    // STORY-65: role column shows the persona inherited at session start.
+    // TASK-55: adds a `state` column when --all is set. TASK-56: adds
+    // `pid` + `cc-session` columns when --verbose is set.
+    // trace:STORY-65, TASK-55, TASK-56 | ai:claude
+    let mut header = format!("{:<14} {:<20} {:<18} {:<14}", "id", "scope", "branch", "role");
+    if all {
+        header.push_str(&format!(" {:<10}", "state"));
+    }
+    if verbose {
+        header.push_str(&format!(" {:<10} {:<20}", "pid", "cc-session"));
+    }
+    header.push_str(" worktree");
+    println!("{}", header);
+    println!("{}", "─".repeat(header.len().max(80)));
+    for (l, state, pid) in &shown {
+        let mut row = format!(
+            "{:<14} {:<20} {:<18} {:<14}",
             (&l.id[..8]).yellow(),
             truncate(&l.scope, 20),
             truncate(&l.branch, 18),
             truncate(l.role.as_deref().unwrap_or("-"), 14),
-            l.worktree_path.display()
+        );
+        if all {
+            let label = format!("{} {}", state.glyph(), state.label());
+            let colored = match state {
+                LeaseState::Live => label.green(),
+                LeaseState::Dormant => label.cyan(),
+                LeaseState::Stale => label.yellow(),
+            };
+            row.push_str(&format!(" {:<10}", colored));
+        }
+        if verbose {
+            let pid_col = pid
+                .map(|p| p.to_string())
+                .unwrap_or_else(|| "-".into());
+            let cc = cc_session_id_for_worktree(&l.worktree_path)
+                .map(|s| s.chars().take(20).collect::<String>())
+                .unwrap_or_else(|| "-".into());
+            row.push_str(&format!(" {:<10} {:<20}", pid_col, cc));
+        }
+        row.push_str(&format!(" {}", l.worktree_path.display()));
+        println!("{}", row);
+    }
+    if !hidden_stale.is_empty() {
+        println!();
+        println!(
+            "{}",
+            format!(
+                "({} stale lease{} hidden — pass --all to show)",
+                hidden_stale.len(),
+                if hidden_stale.len() == 1 { "" } else { "s" }
+            )
+            .dimmed()
         );
     }
 
-    // STORY-69: --verbose probes live claude processes to surface leaked
-    // ones with `(deleted)` cwd — a session ended its worktree but a
-    // claude inside the worktree never exited. Each WARN row points at a
-    // PID the user can `kill` to clean up. trace:STORY-69 | ai:claude
+    // STORY-69: --verbose warns about leaked claudes — processes whose
+    // cwd is `(deleted)` (worktree was removed without ending claude
+    // first, the BUG-61 signature). Note: live-in-lease claude PIDs
+    // now appear inline in the `pid` column for each lease row
+    // (TASK-56), so the previous "Live claude processes in lease
+    // worktrees" sub-section was redundant and was removed.
+    // trace:STORY-69 | ai:claude
     if verbose {
-        let live = process_probe::probe_live_claude_sessions();
         let leaked: Vec<_> = live.iter().filter(|s| s.stale_cwd).collect();
         if !leaked.is_empty() {
             println!();
@@ -11273,26 +11431,6 @@ fn session_leases(verbose: bool) -> Result<()> {
                     s.cwd.display(),
                     "(deleted)".dimmed(),
                     s.pid
-                );
-            }
-        }
-        let live_in_lease: Vec<_> = live
-            .iter()
-            .filter(|s| !s.stale_cwd)
-            .filter(|s| {
-                leases
-                    .iter()
-                    .any(|l| s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path))
-            })
-            .collect();
-        if !live_in_lease.is_empty() {
-            println!();
-            println!("{}", "Live claude processes in lease worktrees:".bold());
-            for s in &live_in_lease {
-                println!(
-                    "  pid {} cwd {}",
-                    s.pid.to_string().green(),
-                    s.cwd.display()
                 );
             }
         }
@@ -12530,6 +12668,53 @@ mod statusline_tests {
         );
         // Suffix is dropped entirely; falls back to scope-only truncation.
         assert!(!got.contains("@really"));
+    }
+
+    // ── classify_lease_state ──
+    // TASK-55: trace:TASK-55 | ai:claude
+
+    /// Worktree missing → Stale regardless of age / claude state.
+    #[test]
+    fn lease_missing_worktree_is_stale() {
+        assert_eq!(classify_lease_state(false, false, 0), LeaseState::Stale);
+        assert_eq!(classify_lease_state(false, true, 0), LeaseState::Stale);
+        assert_eq!(classify_lease_state(false, false, 48), LeaseState::Stale);
+    }
+
+    /// Worktree present + live claude → Live (regardless of age).
+    #[test]
+    fn lease_with_live_claude_is_live() {
+        assert_eq!(classify_lease_state(true, true, 0), LeaseState::Live);
+        assert_eq!(classify_lease_state(true, true, 100), LeaseState::Live);
+    }
+
+    /// Worktree present, no live claude, fresh (<24h) → Dormant.
+    /// Could be a shell-only session or a paused claude.
+    #[test]
+    fn lease_fresh_dormant() {
+        assert_eq!(classify_lease_state(true, false, 0), LeaseState::Dormant);
+        assert_eq!(classify_lease_state(true, false, 23), LeaseState::Dormant);
+    }
+
+    /// Worktree present, no live claude, >=24h old → Stale.
+    /// The cutoff is inclusive of 24 — exactly 1 day = stale.
+    #[test]
+    fn lease_aged_dormant_becomes_stale() {
+        assert_eq!(classify_lease_state(true, false, 24), LeaseState::Stale);
+        assert_eq!(classify_lease_state(true, false, 25), LeaseState::Stale);
+        assert_eq!(classify_lease_state(true, false, 1000), LeaseState::Stale);
+    }
+
+    /// State glyph / label mapping stays in sync with the rendering
+    /// contract documented in the section header.
+    #[test]
+    fn lease_state_renders() {
+        assert_eq!(LeaseState::Live.glyph(), "●");
+        assert_eq!(LeaseState::Dormant.glyph(), "◐");
+        assert_eq!(LeaseState::Stale.glyph(), "⚠");
+        assert_eq!(LeaseState::Live.label(), "live");
+        assert_eq!(LeaseState::Dormant.label(), "dormant");
+        assert_eq!(LeaseState::Stale.label(), "stale");
     }
 
     // ── local_lags_origin (fixture-backed) ──
