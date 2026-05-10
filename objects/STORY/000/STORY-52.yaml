@@ -10,12 +10,12 @@ description: |
   c. Pre-warm by running cargo build --release -p aida-cli before printing the cd hint (transparent, slow)
 
   Option b is probably right — recorded in the lease, sourced when the user cds into the worktree (or via aida session enter <id> when that exists).
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T02:31:25.866286615Z
-modified_at: 2026-05-10T02:31:25.866286615Z
+modified_at: 2026-05-10T16:51:32.282859483Z
 req_type: Story
 relationships:
 - rel_type: Child
