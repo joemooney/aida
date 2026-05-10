@@ -53,12 +53,12 @@ description: |
   - [ ] No chip shown when req has no parent EPIC (e.g., standalone TASKs like TASK-42, TASK-43)
   - [ ] Performance: relationships walk doesn't add >10ms to typical 20-item queue list
   - [ ] Tested with: explicitly-scoped items, parent-EPIC items, orphan TASKs, mixed queue
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T17:02:43.096552618Z
-modified_at: 2026-05-10T22:17:25.575278038Z
+modified_at: 2026-05-10T22:17:30.938091601Z
 req_type: Task
 relationships:
 - rel_type: Child
