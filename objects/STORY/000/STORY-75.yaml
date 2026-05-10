@@ -1,0 +1,43 @@
+id: 019e10a7-87cc-7322-8547-97f7094f40b9
+spec_id: STORY-75
+agreed_id: STORY-75
+title: 'Cross-project queue routing: aida queue add --to-project'
+description: |
+  Highest-leverage child of EPIC-22 — closes the manual aida↔aida-tutor sync.
+
+  ## Surface
+
+  ```
+  aida queue add <id> --to-project <name> [--for <role>]
+  aida queue list --from-project <name>           # incoming items addressed to me
+  aida queue list --to-project <name>             # outgoing items I sent
+  ```
+
+  ## Semantics
+
+  `--to-project aida-tutor TASK-X`:
+  1. Resolve `aida-tutor` via registry → get path
+  2. Open that project's req store; verify TASK-X exists there
+  3. Add a queue entry in *that* project's queue, tagged with `origin_project=aida` so the consumer can see where it came from
+  4. (Optional) Add a "sent to aida-tutor" marker in *this* project's queue so the sender can see outgoing items
+
+  ## Edge cases
+
+  - TASK-X doesn't exist in target project → error with suggestion: "did you mean to `add` it there first?"
+  - target project's store is unreachable (path moved, store corrupt) → error referencing `aida projects list` to see status
+  - Roles differ across projects → `--for <role>` interpreted in target project's role-namespace; warn if role doesn't exist there
+
+  ## Acceptance
+
+  - [ ] `aida queue add X --to-project Y` adds entry in Y's local queue
+  - [ ] origin_project metadata preserved through pickup/done cycle
+  - [ ] `queue list --from-project` filters incoming
+  - [ ] Composes with `--for <role>` and existing `--user`
+  - [ ] Tested against the aida↔aida-tutor pair (registry from STORY-foundation)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T06:51:15.276275091Z
+modified_at: 2026-05-10T06:51:15.276275091Z
+req_type: Story
