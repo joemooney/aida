@@ -1359,9 +1359,14 @@ fn handle_git_backend_command(
                 req.set_priority_from_str(canonical);
             }
             if let Some(t) = r#type {
-                if let Ok(rt) = parse_requirement_type(t) {
-                    req.req_type = rt;
-                }
+                // BUG-48: surface the error instead of dropping silently.
+                let rt = parse_requirement_type(t).map_err(|e| {
+                    anyhow::anyhow!(
+                        "{} — expected one of: functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term",
+                        e
+                    )
+                })?;
+                req.req_type = rt;
             }
             if let Some(o) = owner {
                 req.owner = o.clone();
@@ -1649,10 +1654,19 @@ fn handle_git_backend_command(
                 changed = true;
             }
             if let Some(t) = r#type {
-                if let Ok(rt) = parse_requirement_type(t) {
-                    req.req_type = rt;
-                    changed = true;
-                }
+                // BUG-48: an invalid --type used to be silently dropped,
+                // making the user think they passed no flags ("No changes
+                // specified" — misleading). Propagate the error so they
+                // see "Unknown requirement type: <input>" with the same
+                // valid-list hint as --status / --priority.
+                let rt = parse_requirement_type(t).map_err(|e| {
+                    anyhow::anyhow!(
+                        "{} — expected one of: functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term",
+                        e
+                    )
+                })?;
+                req.req_type = rt;
+                changed = true;
             }
             if let Some(o) = owner {
                 req.owner = o.clone();
