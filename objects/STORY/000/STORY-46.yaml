@@ -1,0 +1,12 @@
+id: 019e0f4f-3b33-7670-9ca5-3770544683dc
+spec_id: STORY-46
+agreed_id: STORY-46
+title: 'Expand aida add interactive prompts: title + type + description + priority'
+description: 'BUG-45 added a title prompt but stopped there. Interactive add now walks through type (Select with all 17 types, sensible-first ordering: functional/bug/principle/vision/decision/...), description (Editor — opens $EDITOR, multi-line), priority (Select: medium/high/low). Each field is skipped when its flag was already provided, so `aida add --interactive --type bug` only prompts for what''s missing. Surfaced 2026-05-09 walkthrough.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T00:35:11.283040898Z
+modified_at: 2026-05-10T00:35:11.283040898Z
+req_type: Story
