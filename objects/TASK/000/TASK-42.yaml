@@ -1,0 +1,47 @@
+id: 019e12c9-cdc6-7681-bf83-baeb76a424bf
+spec_id: TASK-42
+agreed_id: TASK-42
+title: 'aida role active: print just the active role name (one-line stub)'
+description: |
+  Caught 2026-05-10 — the batch5 implementer agent ran `aida role active` as the first command in `/aida-pickup`, expecting it to exist. It doesn't. Today the equivalents are:
+
+  - `aida role show` (defaults to active if no arg) — verbose output
+  - `aida role list` — table with `*` next to active
+  - `echo $AIDA_SESSION_ROLE` — raw env, no project context check
+
+  Adding `aida role active` matches the shape of `git branch --show-current`, `git config --get user.email`, etc. — one line, scriptable.
+
+  ## Surface
+
+  ```
+  $ aida role active
+  implementer
+  ```
+
+  Exit 0 if a role is active; exit 1 with empty stdout if none. Useful in shell scripts (`if [ -n "$(aida role active)" ]; then ...`) and in the kind of agent reasoning that just hit this gap.
+
+  ## Implementation
+
+  In `cli.rs` `RoleCommand` enum, add `Active` variant. Handler reads `$AIDA_SESSION_ROLE`, prints, exits non-zero if empty.
+
+  ```rust
+  RoleCommand::Active => {
+      match std::env::var("AIDA_SESSION_ROLE") {
+          Ok(role) if !role.is_empty() => { println!("{}", role); Ok(()) }
+          _ => std::process::exit(1),
+      }
+  }
+  ```
+
+  ## Acceptance
+
+  - [ ] `aida role active` prints just the role name when set, exits 0
+  - [ ] Exits 1 with empty stdout when no role active
+  - [ ] No project-store load needed — pure env read
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T16:47:55.846935935Z
+modified_at: 2026-05-10T16:47:55.846935935Z
+req_type: Task
