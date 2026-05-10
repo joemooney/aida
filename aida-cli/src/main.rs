@@ -2293,18 +2293,40 @@ fn handle_git_backend_command(
                     };
                     if let Some(target_req) = target {
                         let target_spec = target_req.spec_id.as_deref().unwrap_or("N/A");
-                        println!(
-                            "  {} {} - {}",
-                            description.cyan(),
-                            target_spec.yellow(),
-                            target_req.title
-                        );
+                        // BUG-53: tag rejected targets so a dangling-looking
+                        // edge is recognizable as still-resolvable rather
+                        // than removed. trace:BUG-53 | ai:claude
+                        if matches!(target_req.status, aida_core::RequirementStatus::Rejected) {
+                            println!(
+                                "  {} {} {} - {}",
+                                description.cyan(),
+                                target_spec.yellow(),
+                                "[REJECTED]".red().bold(),
+                                target_req.title
+                            );
+                        } else {
+                            println!(
+                                "  {} {} - {}",
+                                description.cyan(),
+                                target_spec.yellow(),
+                                target_req.title
+                            );
+                        }
                     } else {
+                        // BUG-53: a relationship pointing at a uuid with no
+                        // backing object means the target was deleted (its
+                        // YAML is gone, mapping back to spec_id is lost). We
+                        // show a short uuid + "(removed)" instead of the
+                        // full 36-char uuid + "(not found)" so the line
+                        // reads as a tombstone rather than a phantom.
+                        // trace:BUG-53 | ai:claude
+                        let uuid_str = relationship.target_id.to_string();
+                        let short = &uuid_str[..uuid_str.len().min(8)];
                         println!(
                             "  {} {} {}",
                             description.cyan(),
-                            relationship.target_id.to_string().yellow(),
-                            "(not found)".red()
+                            short.dimmed(),
+                            "(removed — run `aida doctor verify-relationships --repair` to clean up)".red()
                         );
                     }
                 }
@@ -14909,28 +14931,47 @@ fn list_relationships(storage: &Storage, id_str: &str) -> Result<()> {
 
             // Format the relationship description based on type
             let description = match &relationship.rel_type {
-                RelationshipType::Parent => format!("is parent of"),
-                RelationshipType::Child => format!("is child of"),
-                RelationshipType::Duplicate => format!("is duplicate of"),
-                RelationshipType::Verifies => format!("verifies"),
-                RelationshipType::VerifiedBy => format!("is verified by"),
-                RelationshipType::References => format!("references"),
-                RelationshipType::Custom(name) => format!("{}", name),
+                RelationshipType::Parent => "is parent of".to_string(),
+                RelationshipType::Child => "is child of".to_string(),
+                RelationshipType::Duplicate => "is duplicate of".to_string(),
+                RelationshipType::Verifies => "verifies".to_string(),
+                RelationshipType::VerifiedBy => "is verified by".to_string(),
+                RelationshipType::References => "references".to_string(),
+                RelationshipType::Custom(name) => name.clone(),
             };
 
-            println!(
-                "  {} {} ({}) - {}",
-                description.cyan(),
-                target_spec.yellow(),
-                target_req.id.to_string().dimmed(),
-                target_req.title
-            );
+            // BUG-53: tag rejected targets so a dangling-looking edge is
+            // recognizable as still-resolvable rather than removed.
+            // trace:BUG-53 | ai:claude
+            if matches!(target_req.status, RequirementStatus::Rejected) {
+                println!(
+                    "  {} {} {} ({}) - {}",
+                    description.cyan(),
+                    target_spec.yellow(),
+                    "[REJECTED]".red().bold(),
+                    target_req.id.to_string().dimmed(),
+                    target_req.title
+                );
+            } else {
+                println!(
+                    "  {} {} ({}) - {}",
+                    description.cyan(),
+                    target_spec.yellow(),
+                    target_req.id.to_string().dimmed(),
+                    target_req.title
+                );
+            }
         } else {
+            // BUG-53: shorten dangling target uuid + flag it as removed so
+            // the line reads as a tombstone rather than a phantom.
+            // trace:BUG-53 | ai:claude
+            let uuid_str = relationship.target_id.to_string();
+            let short = &uuid_str[..uuid_str.len().min(8)];
             println!(
                 "  {} {} {}",
                 relationship.rel_type.to_string().cyan(),
-                relationship.target_id.to_string().yellow(),
-                "(requirement not found)".red()
+                short.dimmed(),
+                "(removed — run `aida doctor verify-relationships --repair` to clean up)".red()
             );
         }
     }
