@@ -1903,7 +1903,12 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             if *sync {
                 maybe_sync_pull(store_path)?;
             }
-            record_role_activity(id, "show");
+            // BUG-68: record activity only AFTER the lookup succeeds, so
+            // a typo'd `aida show STORY-99` doesn't leave a phantom
+            // STORY-99 in the activity log (which would then surface
+            // as @SPEC in statusline). Each lookup branch below
+            // records the canonical spec_id from the resolved req.
+            // trace:BUG-68 | ai:claude
             // STORY-62: --tree replaces the detail view with an indented
             // hierarchy walk. Children are read via rel_type:Parent edges
             // on the parent's record; recursion descends until depth is
@@ -1913,7 +1918,13 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // in. trace:STORY-62 | ai:claude
             if *tree {
                 match backend.get_requirement_by_spec_id(id)? {
-                    Some(root) => render_tree(&backend, &root, *depth)?,
+                    Some(root) => {
+                        record_role_activity(
+                            root.spec_id.as_deref().unwrap_or(id),
+                            "show",
+                        );
+                        render_tree(&backend, &root, *depth)?;
+                    }
                     None => {
                         eprintln!("{}", not_found::requirement_not_found(id, Some(store_path)));
                     }
@@ -1922,6 +1933,10 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             }
             match backend.get_requirement_by_spec_id(id)? {
                 Some(req) => {
+                    record_role_activity(
+                        req.spec_id.as_deref().unwrap_or(id),
+                        "show",
+                    );
                     println!("{}: {}", "ID".bold(), req.display_id());
                     // Only show Agreed ID / Origin ID when they actually
                     // differ from the canonical display id — otherwise it's
@@ -2021,7 +2036,10 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             force,
             ..
         } => {
-            record_role_activity(id, "edit");
+            // BUG-68: record activity AFTER successful lookup AND
+            // after the TASK-47 terminal-status guard, so a refused
+            // re-open doesn't leave a phantom edit entry.
+            // trace:BUG-68 | ai:claude
             let mut req = backend
                 .get_requirement_by_spec_id(id)?
                 .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
@@ -2065,6 +2083,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     enforce_session_lease(&project_root, &req, &store, "aida edit", *strict)?;
                 }
             }
+            // BUG-68: all validation gates passed → safe to record the
+            // edit. Uses the canonical spec_id from the resolved req
+            // rather than the user's input (which might be a UUID or
+            // an agreed_id). trace:BUG-68 | ai:claude
+            record_role_activity(req.spec_id.as_deref().unwrap_or(id), "edit");
 
             let mut changed = false;
             if let Some(t) = title {
@@ -2211,7 +2234,8 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             author,
             ..
         }) => {
-            record_role_activity(req_id, "comment");
+            // BUG-68: lookup first, record activity after the body
+            // sanity check below also passes. trace:BUG-68 | ai:claude
             let mut req = backend
                 .get_requirement_by_spec_id(req_id)?
                 .ok_or_else(|| not_found::requirement_not_found(req_id, Some(store_path)))?;
@@ -2247,14 +2271,18 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             req.comments.push(comment);
             req.modified_at = now;
             backend.update_requirement(&req)?;
+            // BUG-68: record after successful write, with the canonical
+            // spec_id from the resolved req. trace:BUG-68 | ai:claude
+            record_role_activity(req.spec_id.as_deref().unwrap_or(req_id), "comment");
             println!("Comment added to {}", req_id);
         }
         Command::Comment(CommentCommand::List { id }) => {
             // trace:TASK-1-020 | ai:claude
-            record_role_activity(id, "show");
+            // BUG-68: record after successful lookup. trace:BUG-68 | ai:claude
             let req = backend
                 .get_requirement_by_spec_id(id)?
                 .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
+            record_role_activity(req.spec_id.as_deref().unwrap_or(id), "show");
             println!("{}: {}", "Requirement".cyan(), req.title);
             println!();
             if req.comments.is_empty() {
@@ -2276,10 +2304,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             content,
             interactive,
         }) => {
-            record_role_activity(req_id, "comment");
+            // BUG-68: record after successful lookup. trace:BUG-68 | ai:claude
             let mut req = backend
                 .get_requirement_by_spec_id(req_id)?
                 .ok_or_else(|| not_found::requirement_not_found(req_id, Some(store_path)))?;
+            record_role_activity(req.spec_id.as_deref().unwrap_or(req_id), "comment");
             let comment_uuid = resolve_comment_uuid(&req, comment_id)?;
 
             let new_content = if *interactive || content.is_none() {
@@ -2310,10 +2339,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             );
         }
         Command::Comment(CommentCommand::Delete { req_id, comment_id }) => {
-            record_role_activity(req_id, "comment");
+            // BUG-68: record after successful lookup. trace:BUG-68 | ai:claude
             let mut req = backend
                 .get_requirement_by_spec_id(req_id)?
                 .ok_or_else(|| not_found::requirement_not_found(req_id, Some(store_path)))?;
+            record_role_activity(req.spec_id.as_deref().unwrap_or(req_id), "comment");
             let comment_uuid = resolve_comment_uuid(&req, comment_id)?;
             req.delete_comment(&comment_uuid)?;
             backend.update_requirement(&req)?;
@@ -2488,10 +2518,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         }
         Command::Rel(RelationshipCommand::List { id }) => {
             // trace:TASK-1-020 | ai:claude
-            record_role_activity(id, "show");
+            // BUG-68: record after successful lookup. trace:BUG-68 | ai:claude
             let req = backend
                 .get_requirement_by_spec_id(id)?
                 .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
+            record_role_activity(req.spec_id.as_deref().unwrap_or(id), "show");
 
             println!("{}: {}", "Requirement".blue(), req.title);
             if let Some(spec_id) = &req.spec_id {
