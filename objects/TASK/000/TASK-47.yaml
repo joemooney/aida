@@ -42,10 +42,10 @@ description: |
   - [ ] Closing a req (any → Rejected/Completed) still works
   - [ ] Error message hints at "file a new req that supersedes" path
   - [ ] Test matrix: all source-status × target-status combinations × {force=true, force=false}
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T17:20:47.038861227Z
-modified_at: 2026-05-10T17:20:47.038861227Z
+modified_at: 2026-05-10T22:20:41.461927047Z
 req_type: Task
