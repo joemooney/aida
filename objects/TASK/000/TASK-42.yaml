@@ -38,10 +38,10 @@ description: |
   - [ ] `aida role active` prints just the role name when set, exits 0
   - [ ] Exits 1 with empty stdout when no role active
   - [ ] No project-store load needed — pure env read
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T16:47:55.846935935Z
-modified_at: 2026-05-10T16:47:55.846935935Z
+modified_at: 2026-05-10T19:11:24.312129924Z
 req_type: Task
