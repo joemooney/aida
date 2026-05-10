@@ -1,0 +1,12 @@
+id: 019e1005-7aba-78c2-a6dc-cdae4bc6d611
+spec_id: BUG-57
+agreed_id: BUG-57
+title: aida edit (and likely all read+write commands) fail to find store from subdirectory of project
+description: "Reproduced 2026-05-09:\n\n  $ cd /home/joe/ai/aida-epic-20 && aida edit STORY-55 --tags \"\"\n  Updated: STORY-55                              # works at project root\n  \n  $ cd /home/joe/ai/aida-epic-20/aida-cli && aida edit STORY-55 --tags \"\"\n  Error: Requirement not found: STORY-55\n    Searched in: (no aida store found at /home/joe/ai/aida-epic-20/aida-cli or any parent)\n    Hint: cd into the project root (...)\n\nThe error says \"or any parent\" but the store IS findable by walking up — the worktree at /home/joe/ai/aida-epic-20 has .aida-store/ (symlinked to parent's via BUG-52 fix). The store-find walker either:\n\n- Doesn't walk up at all (only checks cwd), OR\n- Walks up but doesn't follow the worktree's symlinks correctly, OR\n- Looks for a different marker than what BUG-52 ensures exists\n\n## Fix\n\nThe store-find logic should walk up from cwd looking for either:\n- `.aida-store/` (directory or symlink to one) — git-canonical marker\n- `requirements.db` (legacy)\n\nat any ancestor up to the filesystem root. Stop at the first found.\n\nCompare to find_project_root() already used by `aida session start`/`session end` which walks up looking for `.git/`. Same pattern.\n\n## Severity\n\nHigh — without this, agents working in subdirectories of a project (which is the natural workflow when editing source files) can't run `aida edit` / `aida add` / etc. without first cd-ing back to the project root. Surfaced 2026-05-09 in a fresh EPIC-20 session.\n\n## Test cases\n\n- aida edit from project root: works (current behavior)\n- aida edit from subdir 1 level deep: must work (currently fails)\n- aida edit from subdir N levels deep: must work\n- aida edit from outside any project: errors clearly with \"not in an aida project\"\n- aida edit from a session worktree's subdir: must work (verifies symlinks are followed during walk-up)\n"
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T03:54:15.098020508Z
+modified_at: 2026-05-10T03:54:15.098020508Z
+req_type: Bug
