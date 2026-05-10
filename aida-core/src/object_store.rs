@@ -29,6 +29,13 @@ use crate::models::Requirement;
 /// Maximum files per shard directory.
 const SHARD_SIZE: u32 = 1000;
 
+/// Canonicalize a user-supplied spec_id to ASCII uppercase. Spec IDs are
+/// always written uppercase (FR-1, BUG-1-042) but we accept any case from
+/// the CLI, hooks, and trace comments. trace:STORY-X | ai:claude
+pub fn canonical_spec_id(spec_id: &str) -> String {
+    spec_id.to_ascii_uppercase()
+}
+
 /// Compute the shard directory number for a given sequence number.
 /// Shard 000 holds sequences 1-1000, shard 001 holds 1001-2000, etc.
 fn shard_number(seq: u32) -> u32 {
@@ -48,8 +55,10 @@ fn shard_number(seq: u32) -> u32 {
 ///   → /repo/objects/FR/001/FR-7-1500.yaml
 ///
 /// The shard is computed from the sequence number (last numeric component).
+/// Input is canonicalized to uppercase so callers may pass user input verbatim.
 pub fn object_path(objects_root: &Path, spec_id: &str) -> Result<PathBuf> {
-    let (type_prefix, seq) = parse_spec_id(spec_id)?;
+    let spec_id = canonical_spec_id(spec_id);
+    let (type_prefix, seq) = parse_spec_id(&spec_id)?;
     let shard = format!("{:03}", shard_number(seq));
     let filename = format!("{}.yaml", spec_id);
     Ok(objects_root.join(&type_prefix).join(&shard).join(&filename))
@@ -59,7 +68,8 @@ pub fn object_path(objects_root: &Path, spec_id: &str) -> Result<PathBuf> {
 /// Matches `object_path()` but produces a relative `String` suitable for
 /// passing to `git add`. trace:BUG-1-040 | ai:claude
 pub fn relative_object_path(spec_id: &str) -> Result<String> {
-    let (type_prefix, seq) = parse_spec_id(spec_id)?;
+    let spec_id = canonical_spec_id(spec_id);
+    let (type_prefix, seq) = parse_spec_id(&spec_id)?;
     let shard = format!("{:03}", shard_number(seq));
     Ok(format!("objects/{}/{}/{}.yaml", type_prefix, shard, spec_id))
 }

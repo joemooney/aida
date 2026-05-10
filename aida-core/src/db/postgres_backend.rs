@@ -1218,6 +1218,7 @@ impl DatabaseBackend for PostgresBackend {
     }
 
     fn get_requirement_by_spec_id(&self, spec_id: &str) -> Result<Option<Requirement>> {
+        let spec_id = crate::object_store::canonical_spec_id(spec_id);
         let mut client = self
             .pool
             .get()

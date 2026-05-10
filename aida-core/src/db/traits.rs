@@ -137,13 +137,18 @@ pub trait DatabaseBackend: Send + Sync {
         Ok(store.requirements.iter().find(|r| &r.id == id).cloned())
     }
 
-    /// Gets a requirement by its spec_id (e.g., "FR-001")
+    /// Gets a requirement by its spec_id (e.g., "FR-001"). Match is
+    /// case-insensitive and also tries `agreed_id`, so callers may pass
+    /// user input verbatim.
     fn get_requirement_by_spec_id(&self, spec_id: &str) -> Result<Option<Requirement>> {
         let store = self.load()?;
         Ok(store
             .requirements
             .iter()
-            .find(|r| r.spec_id.as_deref() == Some(spec_id))
+            .find(|r| {
+                r.spec_id.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
+                    || r.agreed_id.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
+            })
             .cloned())
     }
 

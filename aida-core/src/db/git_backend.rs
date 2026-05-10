@@ -394,15 +394,16 @@ impl DatabaseBackend for GitBackend {
     // Override individual CRUD for efficiency — don't reload everything each time
 
     fn get_requirement_by_spec_id(&self, spec_id: &str) -> Result<Option<Requirement>> {
+        let spec_id = object_store::canonical_spec_id(spec_id);
         // Try direct lookup by spec_id (file name)
-        if let Ok(req) = object_store::read_object(&self.objects_root, spec_id) {
+        if let Ok(req) = object_store::read_object(&self.objects_root, &spec_id) {
             return Ok(Some(req));
         }
         // Fall back to scanning for agreed_id match
         let files = object_store::list_objects(&self.objects_root)?;
         for (_name, path) in &files {
             if let Ok(req) = object_store::read_object_from_path(path) {
-                if req.agreed_id.as_deref() == Some(spec_id) {
+                if req.agreed_id.as_deref() == Some(spec_id.as_str()) {
                     return Ok(Some(req));
                 }
             }
