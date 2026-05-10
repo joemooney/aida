@@ -487,6 +487,11 @@ pub struct ScaffoldConfig {
     pub include_commit_msg_hook: bool,
     /// Include pre-commit hook for trace comment validation
     pub include_pre_commit_hook: bool,
+    /// Include prepare-commit-msg hook that pins the orphan-store HEAD
+    /// SHA into every code commit's `Aida-Store:` trailer. Default true
+    /// — enables `aida store status` time-travel semantics.
+    /// trace:EPIC-21 | ai:claude
+    pub include_store_pair_hook: bool,
     /// Generate Claude Code hooks for AIDA integration
     pub generate_claude_code_hooks: bool,
     /// Include commit validation hook (PreToolUse)
@@ -535,6 +540,7 @@ impl Default for ScaffoldConfig {
             generate_git_hooks: true,
             include_commit_msg_hook: true,
             include_pre_commit_hook: false, // Optional, disabled by default
+            include_store_pair_hook: true,
             generate_claude_code_hooks: true,
             include_validate_commit_hook: true,
             include_track_commits_hook: true,
@@ -1421,6 +1427,37 @@ impl Scaffolder {
                 }
 
                 artifacts.push(artifact);
+            }
+
+            // prepare-commit-msg hook — pins the orphan store SHA into
+            // every code commit's `Aida-Store:` trailer. Pairs with
+            // `aida store status`. trace:EPIC-21 | ai:claude
+            if self.config.include_store_pair_hook {
+                let body = crate::templates::EMBEDDED_TEMPLATES
+                    .get("hooks/aida-store-pair.sh")
+                    .copied()
+                    .unwrap_or("")
+                    .to_string();
+                if !body.is_empty() {
+                    let path = PathBuf::from(".git/hooks/prepare-commit-msg");
+                    let artifact = self.create_artifact(
+                        path.clone(),
+                        body,
+                        "Git hook pinning orphan-store HEAD into commit trailer".to_string(),
+                        true, // shell script
+                    );
+                    match &artifact.file_status {
+                        FileStatus::New => new_files.push(path),
+                        FileStatus::Modified { .. } | FileStatus::NoHeader => {
+                            modified_files.push(artifact.path.clone())
+                        }
+                        FileStatus::OlderVersion { .. } => {
+                            upgradeable_files.push(artifact.path.clone())
+                        }
+                        FileStatus::Unmodified => overwrites.push(artifact.path.clone()),
+                    }
+                    artifacts.push(artifact);
+                }
             }
         }
 
