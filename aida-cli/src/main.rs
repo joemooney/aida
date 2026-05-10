@@ -12505,6 +12505,85 @@ mod statusline_tests {
         assert_eq!(CacheFreshness::Unknown.label(), Some("?"));
     }
 
+    // ── derive_session_branch_suffix ──
+    // TASK-60: trace:TASK-60 | ai:claude
+
+    /// branch == slugified scope → no suffix (the common case where
+    /// the user picked the obvious branch name).
+    #[test]
+    fn sess_suffix_matches_scope_slug_returns_empty() {
+        assert_eq!(derive_session_branch_suffix("EPIC-20", "epic-20"), "");
+        assert_eq!(derive_session_branch_suffix("PR-6", "pr-6"), "");
+    }
+
+    /// branch starts with `<slug>-` → suffix is `#<rest>` (the common
+    /// epic-N-batchM pattern).
+    #[test]
+    fn sess_suffix_batched_branch() {
+        assert_eq!(
+            derive_session_branch_suffix("EPIC-20", "epic-20-batch7"),
+            "#batch7"
+        );
+        assert_eq!(
+            derive_session_branch_suffix("PR-6", "pr-6-review"),
+            "#review"
+        );
+    }
+
+    /// Free-form branch (no scope-slug prefix) → suffix is `@<branch>`.
+    #[test]
+    fn sess_suffix_freeform_branch() {
+        assert_eq!(
+            derive_session_branch_suffix("EPIC-22", "feature-cross-project"),
+            "@feature-cross-project"
+        );
+    }
+
+    /// Empty scope-slug (after slugification) → empty suffix.
+    /// Defensive: don't crash on pathological scope strings.
+    #[test]
+    fn sess_suffix_empty_scope_returns_empty() {
+        assert_eq!(derive_session_branch_suffix("", "anything"), "");
+    }
+
+    // ── sess_label_with_suffix ──
+
+    /// No suffix → just truncated scope.
+    #[test]
+    fn sess_label_no_suffix() {
+        assert_eq!(sess_label_with_suffix("EPIC-20", "", 20), "EPIC-20");
+    }
+
+    /// Scope + suffix fit within budget → concatenated.
+    #[test]
+    fn sess_label_fits() {
+        assert_eq!(
+            sess_label_with_suffix("EPIC-20", "#batch7", 20),
+            "EPIC-20#batch7"
+        );
+    }
+
+    /// Combined length overflow → scope gets truncated, suffix stays.
+    /// The new signal (batch info) is preserved at the cost of scope detail.
+    #[test]
+    fn sess_label_truncates_scope_keeps_suffix() {
+        // budget 10, "#batch10" = 8 chars → scope budget 2
+        let got = sess_label_with_suffix("EPIC-20-LONG", "#batch10", 10);
+        assert!(got.ends_with("#batch10"), "{:?}", got);
+    }
+
+    /// Pathological: suffix alone overflows → just render scope-truncated.
+    #[test]
+    fn sess_label_pathological_long_suffix() {
+        let got = sess_label_with_suffix(
+            "EPIC-20",
+            "@really-long-branch-name-overflow",
+            10,
+        );
+        // Suffix is dropped entirely; falls back to scope-only truncation.
+        assert!(!got.contains("@really"));
+    }
+
     // ── local_lags_origin (fixture-backed) ──
     // STORY-78: direction-aware comparison via git rev-list --count.
     // trace:STORY-78 | ai:claude
@@ -15108,11 +15187,61 @@ fn handle_statusline_command(color: &str) -> Result<()> {
     // same budget as @SPEC so the line stays scannable.
     // trace:STORY-53 | ai:claude
     if let Some(l) = lease.as_ref() {
-        let label = truncate(&l.scope, SCOPE_LABEL_MAX);
+        // TASK-60: append a batch/branch indicator when the lease's
+        // branch differs meaningfully from the slugified scope.
+        // Without this, three sessions on EPIC-20 (batch3, batch4,
+        // batch5) all render as `sess:EPIC-20`, losing the batch
+        // context that's the only thing distinguishing them. The
+        // segment uses a slightly larger budget than SCOPE_LABEL_MAX
+        // (16 vs 12) so common `epic-N#batchM` shapes don't truncate
+        // the scope when the suffix is the new signal.
+        // trace:TASK-60 | ai:claude
+        const SESS_LABEL_MAX: usize = 20;
+        let suffix = derive_session_branch_suffix(&l.scope, &l.branch);
+        let label = sess_label_with_suffix(&l.scope, &suffix, SESS_LABEL_MAX);
         parts.push(format!("sess:{}", label).yellow().bold().to_string());
     }
     println!("{}", parts.join(&separator));
     Ok(())
+}
+
+/// TASK-60: pure function deciding what (if anything) to append to
+/// the `sess:` segment given the lease scope and branch. Returns an
+/// empty string when the branch already matches the slugified scope
+/// (no point repeating "epic-20" after "EPIC-20"). Otherwise either
+/// `#<suffix>` (when branch shares the scope's slug prefix — the
+/// common `epic-N-batchM` pattern) or `@<branch>` (free-form).
+/// trace:TASK-60 | ai:claude
+fn derive_session_branch_suffix(scope: &str, branch: &str) -> String {
+    let scope_slug = slugify(scope);
+    if scope_slug.is_empty() || branch == scope_slug {
+        return String::new();
+    }
+    let prefix = format!("{}-", scope_slug);
+    if let Some(rest) = branch.strip_prefix(&prefix) {
+        if !rest.is_empty() {
+            return format!("#{}", rest);
+        }
+    }
+    format!("@{}", branch)
+}
+
+/// TASK-60: assemble the `sess:` label, fitting scope + suffix into
+/// `max_total` characters. Scope is truncated first if the combined
+/// length overflows. trace:TASK-60 | ai:claude
+fn sess_label_with_suffix(scope: &str, suffix: &str, max_total: usize) -> String {
+    if suffix.is_empty() {
+        return truncate(scope, max_total).to_string();
+    }
+    let suffix_len = suffix.chars().count();
+    if suffix_len >= max_total {
+        // Pathological — suffix alone overflows. Render scope-truncated
+        // anyway so the segment still shows context.
+        return truncate(scope, max_total).to_string();
+    }
+    let scope_budget = max_total - suffix_len;
+    let scope_part = truncate(scope, scope_budget);
+    format!("{}{}", scope_part, suffix)
 }
 
 fn print_help_all() {
