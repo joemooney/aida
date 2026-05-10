@@ -45,9 +45,15 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T06:06:24.835272423Z
-modified_at: 2026-05-10T17:24:21.020798830Z
+modified_at: 2026-05-10T17:26:45.362794254Z
 req_type: Story
 relationships:
 - rel_type: Child
   target_id: 019e0f6f-f9ad-7653-8336-12a7f09d7cb1
   created_at: 2026-05-10T06:06:25.801765410Z
+comments:
+- id: 019e12ed-5972-7d82-b981-ac1e6e46b11c
+  author: joe
+  content: 'Implemented in epic-20-batch5 (PR pending). Summary: query_pr_metadata helper for gh/glab JSON; lease gains pr_head_sha/pr_base_sha/pr_base_ref (back-compat via #[serde(default)]); session start prints pr-head/pr-base lines; 4 new tests + 311 workspace pass. Note: the empty-branch symptom in the original bug filing predated STORY-61''s fix in earlier batch — no current regression. STORY-68''s session show extension on epic-20-batch4 will surface these new lease fields once batches merge.'
+  created_at: 2026-05-10T17:26:45.362794254Z
+  modified_at: 2026-05-10T17:26:45.362794254Z
