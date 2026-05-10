@@ -1,0 +1,17 @@
+id: 019e0fb9-1c08-79a3-b65b-efd9bdf0bd4f
+spec_id: STORY-49
+agreed_id: STORY-49
+title: 'EPIC-21 v2: aida store checkout <code-sha> time-travels orphan worktree'
+description: |
+  Pulled out of EPIC-21's body. v1 records the pairing trailer; v2 actually USES it.
+
+  aida store checkout HEAD reads the current commit's Aida-Store: trailer and resets .aida-store/ to that SHA. Read-only mode while time-traveled (writes from a rewound store would create branches the canonical orphan never sees). aida store reset returns the worktree to canonical HEAD.
+
+  aida status integration: warn when code/store are misaligned, suggest aida store checkout HEAD.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T02:30:50.120081171Z
+modified_at: 2026-05-10T02:30:50.120081171Z
+req_type: Story
