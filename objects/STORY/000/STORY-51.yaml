@@ -1,0 +1,17 @@
+id: 019e0fb9-992a-7a21-9d88-714abeb8f394
+spec_id: STORY-51
+agreed_id: STORY-51
+title: 'Source-wide pass: update or remove dangling trace comments after EPIC-21 v2'
+description: |
+  80 trace comments in source reference deleted/renumbered reqs (mostly pre-EPIC-1-052 node-aware ids like BUG-1-025). Today they show as a dot (informational) in aida doctor fsck.
+
+  Once EPIC-21 v2 ships time-travel, those traces become tractable: each refers to a real req in the orphan store at the original code commit. Decide per-trace: update to the current canonical id (if the req still exists), or strip via aida doctor validate-trace-comments --strip-dangling (if the req was genuinely deleted as part of a migration).
+
+  Blocked-by: EPIC-21 v2.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T02:31:22.154282946Z
+modified_at: 2026-05-10T02:31:22.154282946Z
+req_type: Story
