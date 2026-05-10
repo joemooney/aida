@@ -3,10 +3,10 @@ spec_id: BUG-45
 agreed_id: BUG-45
 title: aida add with no args silently creates 'FR-N - Untitled' instead of showing help or prompting
 description: '`aida add` with no flags creates a blank requirement (`Added: FR-N - Untitled`). Should either: (a) show `--help` and exit non-zero when stdin isn''t a TTY, or (b) drop into interactive mode (--interactive) when it IS a TTY. Surfaced 2026-05-09 walkthrough — user had typed `aida add` expecting to be prompted; instead they got a junk req filed silently.'
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T00:18:58.037985096Z
-modified_at: 2026-05-10T00:18:58.037985096Z
+modified_at: 2026-05-10T00:21:21.723670734Z
 req_type: Bug
