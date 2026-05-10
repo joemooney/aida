@@ -8326,6 +8326,13 @@ struct SessionLease {
     /// trace:STORY-52 | ai:claude
     #[serde(default)]
     cargo_target_dir: Option<std::path::PathBuf>,
+    /// Parent project root (the worktree where `aida session start` ran).
+    /// Recorded so cross-worktree views like `aida session list` can walk
+    /// the parent's Claude Code session directory in addition to the
+    /// session worktree's own. `None` for leases written before STORY-58.
+    /// trace:STORY-58 | ai:claude
+    #[serde(default)]
+    parent_project_root: Option<std::path::PathBuf>,
 }
 
 fn leases_dir(project_root: &std::path::Path) -> std::path::PathBuf {
@@ -8375,6 +8382,34 @@ fn active_lease_for_cwd(
     list_leases(project_root)
         .into_iter()
         .find(|l| canon == l.worktree_path || canon.starts_with(&l.worktree_path))
+}
+
+/// STORY-58: from inside a session worktree, return the parent project's
+/// root path so cross-worktree views (currently just `aida session list`)
+/// can also surface sessions launched from the parent. `None` when:
+///   - cwd isn't covered by an active lease (not in a session), OR
+///   - the lease was written before STORY-58 (no parent recorded), OR
+///   - we can't locate any project root to read leases from.
+/// trace:STORY-58 | ai:claude
+pub(crate) fn parent_project_root_for_session(
+    cwd: &std::path::Path,
+) -> Option<std::path::PathBuf> {
+    // The lease dir is `<root>/.aida/sessions/`. Inside a session worktree
+    // that dir is a symlink back to the parent project's, so `list_leases`
+    // returns the same set either way. Walk up from cwd looking for any
+    // ancestor that has `.aida/sessions/`, then ask for its lease set.
+    let canon = cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf());
+    let mut probe = canon.as_path();
+    loop {
+        if probe.join(".aida").join("sessions").is_dir() {
+            let lease = active_lease_for_cwd(probe, &canon)?;
+            return lease.parent_project_root;
+        }
+        match probe.parent() {
+            Some(p) => probe = p,
+            None => return None,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -9100,6 +9135,15 @@ fn session_start(
         started_at: chrono::Utc::now(),
         hostname: hostname(),
         cargo_target_dir: cargo_target_dir.clone(),
+        // STORY-58: record the parent project root so `aida session list`
+        // run from inside the new worktree can also walk the parent's
+        // Claude Code session storage and present a merged view.
+        // trace:STORY-58 | ai:claude
+        parent_project_root: Some(
+            project_root
+                .canonicalize()
+                .unwrap_or_else(|_| project_root.clone()),
+        ),
     };
     let lease_file = lease_path(&project_root, &id);
     std::fs::write(&lease_file, toml::to_string_pretty(&lease)?)?;
@@ -9803,6 +9847,7 @@ mod statusline_tests {
             started_at: now,
             hostname: "h".into(),
             cargo_target_dir: None,
+            parent_project_root: None,
         };
 
         // No routing tags = visible everywhere.
@@ -9956,6 +10001,89 @@ hostname = "h"
         let lease: SessionLease = toml::from_str(toml_text).unwrap();
         assert_eq!(lease.id, "abcdef123456");
         assert!(lease.cargo_target_dir.is_none());
+        // STORY-58 field carries forward the same back-compat contract.
+        assert!(lease.parent_project_root.is_none());
+    }
+
+    /// STORY-58: from inside a worktree covered by a lease that records a
+    /// parent, the helper returns that parent. Models the on-disk layout
+    /// session_start produces (lease lives at <root>/.aida/sessions/) so
+    /// we exercise the actual lookup path.
+    /// trace:STORY-58 | ai:claude
+    #[test]
+    fn parent_project_root_for_session_returns_recorded_parent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let parent_dir = root.join("aida");
+        let worktree = root.join("aida-epic-20");
+        std::fs::create_dir_all(&parent_dir).unwrap();
+        std::fs::create_dir_all(&worktree).unwrap();
+        let leases = worktree.join(".aida").join("sessions");
+        std::fs::create_dir_all(&leases).unwrap();
+
+        let lease = SessionLease {
+            id: "abcdef123456".into(),
+            scope: "EPIC-20".into(),
+            slug: "epic-20".into(),
+            owner: "u".into(),
+            worktree_path: worktree.canonicalize().unwrap(),
+            branch: "epic-20".into(),
+            started_at: chrono::Utc::now(),
+            hostname: "h".into(),
+            cargo_target_dir: None,
+            parent_project_root: Some(parent_dir.canonicalize().unwrap()),
+        };
+        std::fs::write(
+            leases.join("abcdef123456.toml"),
+            toml::to_string_pretty(&lease).unwrap(),
+        )
+        .unwrap();
+
+        let got = parent_project_root_for_session(&worktree).expect("active lease w/ parent");
+        assert_eq!(got, parent_dir.canonicalize().unwrap());
+    }
+
+    /// STORY-58: pre-STORY-58 leases (no parent recorded) return None
+    /// even when the cwd is squarely inside the lease's worktree, so the
+    /// list path falls back to the classic single-group output.
+    /// trace:STORY-58 | ai:claude
+    #[test]
+    fn parent_project_root_for_session_none_for_legacy_lease() {
+        let tmp = tempfile::tempdir().unwrap();
+        let worktree = tmp.path().join("wt");
+        std::fs::create_dir_all(&worktree).unwrap();
+        let leases = worktree.join(".aida").join("sessions");
+        std::fs::create_dir_all(&leases).unwrap();
+
+        // Old-format lease: no parent_project_root field.
+        let toml_text = format!(
+            r#"
+id = "legacylease01"
+scope = "EPIC-20"
+slug = "epic-20"
+owner = "u"
+worktree_path = "{}"
+branch = "br"
+started_at = "2026-05-04T00:00:00Z"
+hostname = "h"
+"#,
+            worktree.canonicalize().unwrap().display()
+        );
+        std::fs::write(leases.join("legacylease01.toml"), toml_text).unwrap();
+
+        assert!(parent_project_root_for_session(&worktree).is_none());
+    }
+
+    /// STORY-58: outside a session worktree (no lease covers cwd), the
+    /// helper returns None — list stays single-group as today.
+    /// trace:STORY-58 | ai:claude
+    #[test]
+    fn parent_project_root_for_session_none_when_no_lease() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("not-a-session");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::create_dir_all(dir.join(".aida").join("sessions")).unwrap();
+        assert!(parent_project_root_for_session(&dir).is_none());
     }
 }
 
@@ -9976,6 +10104,7 @@ mod lease_enforcement_tests {
             started_at: chrono::Utc::now(),
             hostname: "test".into(),
             cargo_target_dir: None,
+            parent_project_root: None,
         }
     }
 
@@ -10130,6 +10259,7 @@ mod scope_fallback_tests {
             started_at: chrono::Utc::now(),
             hostname: "h".into(),
             cargo_target_dir: None,
+            parent_project_root: None,
         }
     }
 
