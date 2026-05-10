@@ -1,0 +1,62 @@
+id: 019e12d7-5798-7722-aa5f-83fabd177705
+spec_id: TASK-44
+agreed_id: TASK-44
+title: 'aida queue list: auto-derive parent EPIC chip from req relationships when for_scope unset'
+description: |
+  Today `aida queue list` shows `[@SCOPE]` chips only when entries were queued with explicit `--scope` (STORY-57). Without explicit scope, each row shows just `[for:role]` — losing the visual cluster of "these 6 items all belong to EPIC-20."
+
+  User observation 2026-05-10: "knowing the epic may help" while looking at a queue dominated by EPIC-20 work alongside unrelated TASKs (TASK-42 aida role active, TASK-43 aida pull). Without an epic chip, the cluster boundary is invisible.
+
+  ## Today's behavior
+
+  ```
+  1. STORY-52 EPIC-20 v1.1: session worktree shares target/ with parent  [Approved]  [for:implementer]
+  2. STORY-54 aida session start could optionally launch Claude Code     [Approved]  [for:implementer]
+  3. TASK-42 aida role active: print just the active role name           [Approved]  [for:implementer]
+  4. TASK-43 aida pull: top-level symmetric counterpart of aida push     [Approved]  [for:implementer]
+  ```
+
+  User has to read titles to spot the cluster.
+
+  ## Desired behavior
+
+  When `for_scope` is unset on a queue entry AND the requirement has a parent EPIC in its relationships graph (Child edge pointing to a type=Epic req), render `[@<epic-id>]` chip auto-derived. Mark it visually distinct from explicit-scope chips (e.g. dimmed) so users know the difference.
+
+  ```
+  1. STORY-52 EPIC-20 v1.1: session worktree shares target/ with parent  [@EPIC-20*]  [Approved]  [for:implementer]
+  2. STORY-54 aida session start could optionally launch Claude Code     [@EPIC-20*]  [Approved]  [for:implementer]
+  3. TASK-42 aida role active: print just the active role name           [Approved]  [for:implementer]
+  4. TASK-43 aida pull: top-level symmetric counterpart of aida push     [Approved]  [for:implementer]
+  ```
+
+  (`*` = derived from relationships, not explicitly scoped)
+
+  ## Implementation
+
+  In the queue list rendering path (~main.rs queue list handler), for each entry without explicit `for_scope`:
+
+  1. Look up the req by entry.requirement_id
+  2. Walk relationships for a Child edge where target is a type=Epic req
+  3. If found, format `[@<epic-spec-id>*]` (dimmed) before the `[for:role]` chip
+
+  Cheap — relationships are loaded with the requirement; one extra walk per row.
+
+  ## Composes with
+
+  - STORY-57 (explicit `--scope` + `[@SCOPE]` chips) — same chip surface, this just derives instead of requires-explicit
+  - Future cross-project queue (STORY-75) — auto-derive could also pick up `[@aida-tutor:EPIC-2]` for cross-project items
+
+  ## Acceptance
+
+  - [ ] Queue list shows derived parent-EPIC chip when `for_scope` unset and req has parent EPIC
+  - [ ] Derived chips visually distinct from explicit (dimmed or `*` suffix or both)
+  - [ ] No chip shown when req has no parent EPIC (e.g., standalone TASKs like TASK-42, TASK-43)
+  - [ ] Performance: relationships walk doesn't add >10ms to typical 20-item queue list
+  - [ ] Tested with: explicitly-scoped items, parent-EPIC items, orphan TASKs, mixed queue
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T17:02:43.096552618Z
+modified_at: 2026-05-10T17:02:43.096552618Z
+req_type: Task
