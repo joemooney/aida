@@ -5,9 +5,9 @@
 //! quality score trends, cycle time distributions, and more from the
 //! existing requirement data (history entries, AI evaluations, timestamps).
 
-use chrono::{DateTime, Datelike, Utc};
 #[cfg(test)]
 use chrono::Duration;
+use chrono::{DateTime, Datelike, Utc};
 use serde::Serialize;
 use std::collections::HashMap;
 
@@ -157,7 +157,11 @@ fn compute_velocity_trend(reqs: &[Requirement]) -> Vec<TimeBucket> {
 
     for req in reqs {
         if matches!(req.status, RequirementStatus::Completed) {
-            let week = format!("{}-W{:02}", req.modified_at.year(), req.modified_at.iso_week().week());
+            let week = format!(
+                "{}-W{:02}",
+                req.modified_at.year(),
+                req.modified_at.iso_week().week()
+            );
             *weekly.entry(week).or_insert(0) += 1;
         }
     }
@@ -179,7 +183,11 @@ fn compute_creation_trend(reqs: &[Requirement]) -> Vec<TimeBucket> {
     let mut weekly: HashMap<String, usize> = HashMap::new();
 
     for req in reqs {
-        let week = format!("{}-W{:02}", req.created_at.year(), req.created_at.iso_week().week());
+        let week = format!(
+            "{}-W{:02}",
+            req.created_at.year(),
+            req.created_at.iso_week().week()
+        );
         *weekly.entry(week).or_insert(0) += 1;
     }
 
@@ -286,9 +294,11 @@ fn compute_ai_metrics(reqs: &[Requirement]) -> AiMetrics {
 
     for req in reqs {
         // Check for AI trace links
-        if req.trace_links.iter().any(|t| {
-            t.notes.as_deref().unwrap_or("").contains("ai:")
-        }) {
+        if req
+            .trace_links
+            .iter()
+            .any(|t| t.notes.as_deref().unwrap_or("").contains("ai:"))
+        {
             ai_traced += 1;
         }
 
@@ -299,7 +309,11 @@ fn compute_ai_metrics(reqs: &[Requirement]) -> AiMetrics {
             scores.push(score);
 
             // Bucket: 0-10, 10-20, ..., 90-100
-            let bucket = format!("{}-{}", (score as u32 / 10) * 10, ((score as u32 / 10) + 1) * 10);
+            let bucket = format!(
+                "{}-{}",
+                (score as u32 / 10) * 10,
+                ((score as u32 / 10) + 1) * 10
+            );
             *score_dist.entry(bucket).or_insert(0) += 1;
 
             // Check staleness
@@ -330,7 +344,11 @@ fn compute_quality_trend(reqs: &[Requirement]) -> Vec<QualityPoint> {
 
     for req in reqs {
         if let Some(ref eval) = req.ai_evaluation {
-            let month = format!("{}-{:02}", eval.evaluated_at.year(), eval.evaluated_at.month());
+            let month = format!(
+                "{}-{:02}",
+                eval.evaluated_at.year(),
+                eval.evaluated_at.month()
+            );
             let entry = monthly.entry(month).or_insert((0.0, 0));
             entry.0 += eval.evaluation.quality_score as f64;
             entry.1 += 1;
@@ -377,9 +395,9 @@ fn compute_traceability(reqs: &[Requirement]) -> TraceabilityMetrics {
     let with_commits = reqs
         .iter()
         .filter(|r| {
-            r.comments.iter().any(|c| {
-                c.content.contains("Committed in") || c.content.contains("commit")
-            })
+            r.comments
+                .iter()
+                .any(|c| c.content.contains("Committed in") || c.content.contains("commit"))
         })
         .count();
 

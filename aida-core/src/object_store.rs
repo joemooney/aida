@@ -71,7 +71,10 @@ pub fn relative_object_path(spec_id: &str) -> Result<String> {
     let spec_id = canonical_spec_id(spec_id);
     let (type_prefix, seq) = parse_spec_id(&spec_id)?;
     let shard = format!("{:03}", shard_number(seq));
-    Ok(format!("objects/{}/{}/{}.yaml", type_prefix, shard, spec_id))
+    Ok(format!(
+        "objects/{}/{}/{}.yaml",
+        type_prefix, shard, spec_id
+    ))
 }
 
 /// Parse a spec_id into (type_prefix, sequence_number).
@@ -99,7 +102,10 @@ fn parse_spec_id(spec_id: &str) -> Result<(String, u32)> {
                 .with_context(|| format!("Invalid sequence in spec_id: {}", spec_id))?;
             Ok((type_prefix, seq))
         }
-        _ => anyhow::bail!("Invalid spec_id format: {} (expected TYPE-SEQ or TYPE-NODE-SEQ)", spec_id),
+        _ => anyhow::bail!(
+            "Invalid spec_id format: {} (expected TYPE-SEQ or TYPE-NODE-SEQ)",
+            spec_id
+        ),
     }
 }
 
@@ -123,8 +129,7 @@ pub fn write_object(objects_root: &Path, req: &Requirement) -> Result<PathBuf> {
     let yaml = serde_yaml::to_string(req)
         .with_context(|| format!("Failed to serialize requirement {}", spec_id))?;
 
-    std::fs::write(&path, &yaml)
-        .with_context(|| format!("Failed to write {}", path.display()))?;
+    std::fs::write(&path, &yaml).with_context(|| format!("Failed to write {}", path.display()))?;
 
     Ok(path)
 }
@@ -160,8 +165,7 @@ pub fn write_object_if_changed(objects_root: &Path, req: &Requirement) -> Result
         std::fs::create_dir_all(parent)
             .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
     }
-    std::fs::write(&path, &yaml)
-        .with_context(|| format!("Failed to write {}", path.display()))?;
+    std::fs::write(&path, &yaml).with_context(|| format!("Failed to write {}", path.display()))?;
     Ok(true)
 }
 

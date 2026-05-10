@@ -129,7 +129,10 @@ pub fn init_workspace(
     for entry in std::fs::read_dir(workspace_root)? {
         let entry = entry?;
         let path = entry.path();
-        if path.is_dir() && path.join(".git").exists() && path.file_name().map(|n| n != "aida-store").unwrap_or(false) {
+        if path.is_dir()
+            && path.join(".git").exists()
+            && path.file_name().map(|n| n != "aida-store").unwrap_or(false)
+        {
             let dir_name = path.file_name().unwrap().to_string_lossy().to_string();
             manifest.add_repo(&dir_name, &dir_name);
         }
@@ -142,10 +145,9 @@ pub fn init_workspace(
 
     if !git_ops::is_git_repo(&store_full) {
         git_ops::init(&store_full)?;
-        let git_name = git_ops::git_config_get("user.name")
-            .unwrap_or_else(|_| "AIDA".to_string());
-        let git_email = git_ops::git_config_get("user.email")
-            .unwrap_or_else(|_| "aida@localhost".to_string());
+        let git_name = git_ops::git_config_get("user.name").unwrap_or_else(|_| "AIDA".to_string());
+        let git_email =
+            git_ops::git_config_get("user.email").unwrap_or_else(|_| "aida@localhost".to_string());
         git_ops::configure_user(&store_full, &git_name, &git_email)?;
     }
 

@@ -65,9 +65,12 @@ fn diff_slice_managed_merge(expected: &str, actual: &str, slots: &[&str]) -> Dif
         let mut s = String::new();
         for slot in &differing {
             s.push_str(&format!("slot: {}\n", slot));
-            let v = doc.pointer(slot).cloned().unwrap_or(serde_json::Value::Null);
-            let pretty = serde_json::to_string_pretty(&v)
-                .unwrap_or_else(|_| "<unrenderable>".to_string());
+            let v = doc
+                .pointer(slot)
+                .cloned()
+                .unwrap_or(serde_json::Value::Null);
+            let pretty =
+                serde_json::to_string_pretty(&v).unwrap_or_else(|_| "<unrenderable>".to_string());
             for line in pretty.lines() {
                 s.push_str("  ");
                 s.push_str(line);
@@ -95,10 +98,7 @@ pub enum DiffSlice {
     /// AIDA-managed portion matches on-disk content — nothing to show.
     Match,
     /// Full content differs — render `expected` vs `actual` as-is.
-    FullDiff {
-        expected: String,
-        actual: String,
-    },
+    FullDiff { expected: String, actual: String },
     /// Only a sub-slice differs (CLAUDE.md presence-check or AGENTS.md
     /// AUTOGEN block). The renderer should diff `expected` vs `actual`,
     /// and the (optional) `note` shown above the diff explains scope.
@@ -110,9 +110,7 @@ pub enum DiffSlice {
     /// Required marker / line is missing entirely from the on-disk file.
     /// Surfaced as a one-line warning (no diff body) so the user knows
     /// to restore it. trace:FR-1-027 | ai:claude
-    MarkerMissing {
-        message: String,
-    },
+    MarkerMissing { message: String },
 }
 
 /// Compute the diff slice for a scaffold artifact. Three files have AIDA-
@@ -268,7 +266,10 @@ pub fn wrap_with_aida_header(path: &std::path::Path, raw_content: &str) -> Strin
         let header = generate_aida_header_shell(raw_content);
         if raw_content.starts_with("#!") {
             // First line is a shebang; preserve it as-is, inject header after.
-            let split = raw_content.find('\n').map(|nl| nl + 1).unwrap_or(raw_content.len());
+            let split = raw_content
+                .find('\n')
+                .map(|nl| nl + 1)
+                .unwrap_or(raw_content.len());
             let (shebang_line, body) = raw_content.split_at(split);
             format!("{}{}{}", shebang_line, header, body)
         } else {
@@ -865,8 +866,7 @@ impl Scaffolder {
             let artifact = self.create_artifact(
                 path.clone(),
                 self.generate_aida_md(store),
-                "AIDA conventions (single source of truth, imported by CLAUDE.md)"
-                    .to_string(),
+                "AIDA conventions (single source of truth, imported by CLAUDE.md)".to_string(),
                 false,
             );
 
@@ -1305,7 +1305,10 @@ impl Scaffolder {
                 ("aida-implement", self.config.include_aida_implement_skill),
                 ("aida-capture", self.config.include_aida_capture_skill),
                 ("aida-docs", self.config.include_aida_docs_skill),
-                ("aida-docs-review", self.config.include_aida_docs_review_skill),
+                (
+                    "aida-docs-review",
+                    self.config.include_aida_docs_review_skill,
+                ),
                 ("aida-release", self.config.include_aida_release_skill),
                 ("aida-evaluate", self.config.include_aida_evaluate_skill),
                 ("aida-commit", self.config.include_aida_commit_skill),
@@ -2101,10 +2104,7 @@ mod tests {
         );
         // Without frontmatter: must hash the whole content.
         let no_fm = "# heading\n\nbody\n";
-        assert_eq!(
-            checksum_for_stored_header(no_fm),
-            compute_checksum(no_fm)
-        );
+        assert_eq!(checksum_for_stored_header(no_fm), compute_checksum(no_fm));
     }
 
     fn create_test_store() -> RequirementsStore {
@@ -2219,7 +2219,11 @@ mod tests {
         let expected = format!("DIFFERENT\n{}\nUSER STUFF", expected_block);
         let slice = aida_managed_diff_slice(Path::new("AGENTS.md"), &expected, &actual);
         match slice {
-            DiffSlice::SliceDiff { expected: e, actual: a, .. } => {
+            DiffSlice::SliceDiff {
+                expected: e,
+                actual: a,
+                ..
+            } => {
                 assert!(e.contains("new body") && !e.contains("DIFFERENT"));
                 assert!(a.contains("old body") && !a.contains("user1"));
             }
@@ -2260,12 +2264,11 @@ mod tests {
                 "PreToolUse": [{"hooks": [], "matcher": "Bash"}]
             }
         }"#;
-        let slice = aida_managed_diff_slice(
-            Path::new(".claude/settings.json"),
-            expected,
-            actual,
+        let slice = aida_managed_diff_slice(Path::new(".claude/settings.json"), expected, actual);
+        assert!(
+            matches!(slice, DiffSlice::Match),
+            "key reordering must not surface as drift"
         );
-        assert!(matches!(slice, DiffSlice::Match), "key reordering must not surface as drift");
     }
 
     #[test]
@@ -2287,13 +2290,13 @@ mod tests {
             },
             "statusLine": {"type": "command", "command": "echo hi"}
         }"#;
-        let slice = aida_managed_diff_slice(
-            Path::new(".claude/settings.json"),
-            expected,
-            actual,
-        );
+        let slice = aida_managed_diff_slice(Path::new(".claude/settings.json"), expected, actual);
         match slice {
-            DiffSlice::SliceDiff { expected, actual, note } => {
+            DiffSlice::SliceDiff {
+                expected,
+                actual,
+                note,
+            } => {
                 assert!(note.contains("AIDA-managed JSON slots"));
                 assert!(expected.contains("aida statusline"));
                 assert!(actual.contains("echo hi"));

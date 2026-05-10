@@ -21,6 +21,12 @@ mod traits;
 mod yaml_backend;
 
 #[cfg(feature = "native")]
+pub use cache::{Cache, ListFilter, RequirementSummary};
+#[cfg(feature = "native")]
+pub use cached_git_backend::CachedGitBackend;
+#[cfg(feature = "native")]
+pub use git_backend::GitBackend;
+#[cfg(feature = "native")]
 pub use migration::{
     export_to_json, import_from_json, migrate_sqlite_to_yaml, migrate_yaml_to_sqlite,
 };
@@ -28,12 +34,6 @@ pub use migration::{
 pub use migration::{migrate_from_postgres, migrate_to_postgres};
 #[cfg(feature = "postgres")]
 pub use postgres_backend::PostgresBackend;
-#[cfg(feature = "native")]
-pub use cache::{Cache, ListFilter, RequirementSummary};
-#[cfg(feature = "native")]
-pub use cached_git_backend::CachedGitBackend;
-#[cfg(feature = "native")]
-pub use git_backend::GitBackend;
 #[cfg(feature = "native")]
 pub use sqlite_backend::SqliteBackend;
 pub use traits::{BackendType, DatabaseBackend, DatabaseConfig, UpdateResult, VersionConflict};

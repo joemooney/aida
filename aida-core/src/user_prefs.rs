@@ -52,24 +52,20 @@ impl UserPreferences {
         }
         let content = std::fs::read_to_string(&path)
             .with_context(|| format!("reading {}", path.display()))?;
-        toml::from_str(&content)
-            .with_context(|| format!("parsing {}", path.display()))
+        toml::from_str(&content).with_context(|| format!("parsing {}", path.display()))
     }
 
     /// Write to `~/.aida/preferences.toml`, creating the parent dir if
     /// needed. Caller is responsible for validating fields (e.g.,
     /// `node::validate_node_id`).
     pub fn save(&self) -> Result<PathBuf> {
-        let path = Self::path()
-            .context("Cannot determine home directory for preferences file")?;
+        let path = Self::path().context("Cannot determine home directory for preferences file")?;
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)
                 .with_context(|| format!("creating {}", parent.display()))?;
         }
-        let content = toml::to_string_pretty(self)
-            .context("serializing preferences")?;
-        std::fs::write(&path, content)
-            .with_context(|| format!("writing {}", path.display()))?;
+        let content = toml::to_string_pretty(self).context("serializing preferences")?;
+        std::fs::write(&path, content).with_context(|| format!("writing {}", path.display()))?;
         Ok(path)
     }
 

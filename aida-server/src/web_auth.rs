@@ -133,15 +133,24 @@ impl OidcConfig {
         let client_id = std::env::var("AIDA_OIDC_CLIENT_ID").ok()?;
         let redirect_url = std::env::var("AIDA_OIDC_REDIRECT_URL").ok()?;
         let issuer_url = std::env::var("AIDA_OIDC_ISSUER_URL").ok();
-        let authorization_endpoint = std::env::var("AIDA_OIDC_AUTH_URL")
-            .ok()
-            .or_else(|| issuer_url.as_ref().map(|v| format!("{}/protocol/openid-connect/auth", v.trim_end_matches('/'))))?;
-        let token_endpoint = std::env::var("AIDA_OIDC_TOKEN_URL")
-            .ok()
-            .or_else(|| issuer_url.as_ref().map(|v| format!("{}/protocol/openid-connect/token", v.trim_end_matches('/'))))?;
-        let userinfo_endpoint = std::env::var("AIDA_OIDC_USERINFO_URL")
-            .ok()
-            .or_else(|| issuer_url.as_ref().map(|v| format!("{}/protocol/openid-connect/userinfo", v.trim_end_matches('/'))))?;
+        let authorization_endpoint = std::env::var("AIDA_OIDC_AUTH_URL").ok().or_else(|| {
+            issuer_url
+                .as_ref()
+                .map(|v| format!("{}/protocol/openid-connect/auth", v.trim_end_matches('/')))
+        })?;
+        let token_endpoint = std::env::var("AIDA_OIDC_TOKEN_URL").ok().or_else(|| {
+            issuer_url
+                .as_ref()
+                .map(|v| format!("{}/protocol/openid-connect/token", v.trim_end_matches('/')))
+        })?;
+        let userinfo_endpoint = std::env::var("AIDA_OIDC_USERINFO_URL").ok().or_else(|| {
+            issuer_url.as_ref().map(|v| {
+                format!(
+                    "{}/protocol/openid-connect/userinfo",
+                    v.trim_end_matches('/')
+                )
+            })
+        })?;
 
         Some(Self {
             issuer_url,
@@ -211,7 +220,10 @@ impl WebAuthState {
                     .ok()
                     .unwrap_or_else(|| "/tmp/aida-web-sessions.sqlite3".to_string());
                 if let Err(err) = initialize_sqlite_store(&path) {
-                    tracing::warn!("Failed to initialize SQLite session store ({}), using memory", err);
+                    tracing::warn!(
+                        "Failed to initialize SQLite session store ({}), using memory",
+                        err
+                    );
                     SessionStore::Memory(RwLock::new(HashMap::new()))
                 } else {
                     SessionStore::Sqlite { path }
@@ -247,25 +259,13 @@ impl WebAuthState {
 
     pub fn role_for_handle(&self, handle: &str) -> UserRole {
         let normalized = handle.to_ascii_lowercase();
-        if self
-            .role_admin_users
-            .iter()
-            .any(|u| u == &normalized)
-        {
+        if self.role_admin_users.iter().any(|u| u == &normalized) {
             return UserRole::Admin;
         }
-        if self
-            .role_editor_users
-            .iter()
-            .any(|u| u == &normalized)
-        {
+        if self.role_editor_users.iter().any(|u| u == &normalized) {
             return UserRole::Editor;
         }
-        if self
-            .role_viewer_users
-            .iter()
-            .any(|u| u == &normalized)
-        {
+        if self.role_viewer_users.iter().any(|u| u == &normalized) {
             return UserRole::Viewer;
         }
         self.role_default
@@ -317,7 +317,8 @@ impl WebAuthState {
                 let token = token.to_string();
                 let _ = tokio::task::spawn_blocking(move || {
                     if let Ok(conn) = Connection::open(path) {
-                        let _ = conn.execute("DELETE FROM web_sessions WHERE token=?1", params![token]);
+                        let _ =
+                            conn.execute("DELETE FROM web_sessions WHERE token=?1", params![token]);
                     }
                 })
                 .await;
@@ -381,7 +382,9 @@ impl WebAuthState {
                             ))
                         })
                         .ok()?;
-                    let expires_at = DateTime::parse_from_rfc3339(&row.5).ok()?.with_timezone(&Utc);
+                    let expires_at = DateTime::parse_from_rfc3339(&row.5)
+                        .ok()?
+                        .with_timezone(&Utc);
                     Some(Session {
                         user: AuthenticatedUser {
                             user_id: row.0,
@@ -475,12 +478,11 @@ impl WebAuthState {
     pub async fn consume_oidc_state(&self, state: &str) -> Option<String> {
         self.cleanup_expired().await;
         match &self.store {
-            SessionStore::Memory(map) => {
-                map.write()
-                    .await
-                    .remove(&format!("oidc:{}", state))
-                    .map(|s| s.user.project)
-            }
+            SessionStore::Memory(map) => map
+                .write()
+                .await
+                .remove(&format!("oidc:{}", state))
+                .map(|s| s.user.project),
             SessionStore::Sqlite { path } => {
                 let path = path.clone();
                 let state = state.to_string();
@@ -493,7 +495,8 @@ impl WebAuthState {
                             |r| r.get::<_, String>(0),
                         )
                         .ok()?;
-                    let _ = conn.execute("DELETE FROM web_oidc_state WHERE state=?1", params![state]);
+                    let _ =
+                        conn.execute("DELETE FROM web_oidc_state WHERE state=?1", params![state]);
                     Some(project)
                 })
                 .await
@@ -503,7 +506,10 @@ impl WebAuthState {
         }
     }
 
-    pub async fn build_oidc_authorize_url(&self, project: &str) -> Result<(String, String), OidcError> {
+    pub async fn build_oidc_authorize_url(
+        &self,
+        project: &str,
+    ) -> Result<(String, String), OidcError> {
         let cfg = self.oidc_config().ok_or(OidcError::NotConfigured)?;
         let state = self.create_oidc_state(project).await;
         let mut url = Url::parse(&cfg.authorization_endpoint)
@@ -543,8 +549,7 @@ impl WebAuthState {
             let body = token_resp.text().await.unwrap_or_else(|_| "".to_string());
             return Err(OidcError::ExchangeFailed(format!(
                 "Token exchange failed: {} {}",
-                status,
-                body
+                status, body
             )));
         }
 
@@ -562,11 +567,13 @@ impl WebAuthState {
 
         if !userinfo_resp.status().is_success() {
             let status = userinfo_resp.status();
-            let body = userinfo_resp.text().await.unwrap_or_else(|_| "".to_string());
+            let body = userinfo_resp
+                .text()
+                .await
+                .unwrap_or_else(|_| "".to_string());
             return Err(OidcError::UserInfoFailed(format!(
                 "Userinfo failed: {} {}",
-                status,
-                body
+                status, body
             )));
         }
 
@@ -683,7 +690,8 @@ pub async fn auth_middleware(
         return next.run(req).await;
     }
 
-    let token = extract_token(req.headers()).or_else(|| query_param(req.uri().query(), "session_token"));
+    let token =
+        extract_token(req.headers()).or_else(|| query_param(req.uri().query(), "session_token"));
     let token = match token {
         Some(token) => token,
         None => {

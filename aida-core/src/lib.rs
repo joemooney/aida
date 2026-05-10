@@ -6,7 +6,6 @@ pub mod daemon;
 pub mod db;
 pub mod dispenser;
 pub mod docs_review;
-pub mod review_config;
 pub mod export;
 #[cfg(feature = "native")]
 pub mod git_ops;
@@ -18,36 +17,27 @@ pub mod models;
 pub mod node;
 pub mod object_store;
 pub mod oplog;
-pub mod telemetry;
-#[cfg(feature = "native")]
-pub mod user_prefs;
-pub mod yaml_helpers;
-#[cfg(feature = "native")]
-pub mod workspace;
 #[cfg(feature = "native")]
 pub mod project;
 #[cfg(feature = "native")]
 pub mod registry;
 #[cfg(feature = "native")]
 pub mod report;
+pub mod review_config;
 #[cfg(feature = "native")]
 pub mod scaffolding;
 #[cfg(feature = "native")]
 pub mod storage;
+pub mod telemetry;
 #[cfg(feature = "native")]
 pub mod templates;
+#[cfg(feature = "native")]
+pub mod user_prefs;
+#[cfg(feature = "native")]
+pub mod workspace;
+pub mod yaml_helpers;
 
 // Re-export commonly used types
-pub use dispenser::{Dispenser, DispenserState, IdMode, MemoryDispenser};
-#[cfg(feature = "native")]
-pub use dispenser::{FileDispenser, SqliteDispenser};
-pub use hlc::{Hlc, HlcTimestamp};
-pub use node::{
-    AgreedCounters, AgreedIdBlock, BlockRegistry, DeploymentMode, IdCounterScope, IdFormatPolicy,
-    NodeConfig, NodeRegistry, NodeRegistryEntry, UserRegistry, UserRegistryEntry, WorkspaceConfig,
-};
-#[cfg(feature = "native")]
-pub use user_prefs::UserPreferences;
 pub use ai::{
     AiClient, AiMode, BackgroundEvaluator, EvaluationResponse, EvaluationResult, EvaluatorConfig,
     EvaluatorStatus, IssueReport, StoredAiEvaluation, SuggestedImprovement,
@@ -63,6 +53,10 @@ pub use db::{
 #[cfg(all(feature = "native", feature = "postgres"))]
 pub use db::{migrate_from_postgres, migrate_to_postgres};
 pub use db::{BackendType, DatabaseBackend, DatabaseConfig, UpdateResult, VersionConflict};
+pub use dispenser::{Dispenser, DispenserState, IdMode, MemoryDispenser};
+#[cfg(feature = "native")]
+pub use dispenser::{FileDispenser, SqliteDispenser};
+pub use hlc::{Hlc, HlcTimestamp};
 pub use import::{
     create_backup, execute_import, validate_import_content, validate_import_file, ImportConfig,
     ImportIssue, ImportIssueType, ImportMergeMode, ImportSummary, ImportValidation,
@@ -70,21 +64,10 @@ pub use import::{
 };
 #[cfg(feature = "github")]
 pub use integrations::github::{
-    ClientError as GitHubClientError, ConfigError as GitHubConfigError, GitHubClient, GitHubConfig,
-    GitHubIssue, GitHubLabel, GitHubRepo, GitHubUser,
-    CreateIssueRequest as GitHubCreateIssueRequest,
-    UpdateIssueRequest as GitHubUpdateIssueRequest,
-    IssueFilter as GitHubIssueFilter,
-    LabelConfig as GitHubLabelConfig,
-};
-#[cfg(feature = "jira")]
-pub use integrations::jira::{
-    ClientError as JiraClientError, ConfigError as JiraConfigError, JiraClient, JiraConfig,
-    JiraIssue, JiraProject, JiraSearchResults, FieldMapping as JiraFieldMapping,
-    CreateIssueRequest as JiraCreateIssueRequest, CreateIssueFields as JiraCreateIssueFields,
-    ProjectRef as JiraProjectRef, IssueTypeRef as JiraIssueTypeRef,
-    PriorityRef as JiraPriorityRef,
-    text_to_adf,
+    ClientError as GitHubClientError, ConfigError as GitHubConfigError,
+    CreateIssueRequest as GitHubCreateIssueRequest, GitHubClient, GitHubConfig, GitHubIssue,
+    GitHubLabel, GitHubRepo, GitHubUser, IssueFilter as GitHubIssueFilter,
+    LabelConfig as GitHubLabelConfig, UpdateIssueRequest as GitHubUpdateIssueRequest,
 };
 #[cfg(feature = "gitlab")]
 pub use integrations::gitlab::{
@@ -92,6 +75,14 @@ pub use integrations::gitlab::{
     CreateIssueRequest, CreateNoteRequest, FieldSyncDirection, FieldSyncRules, GitLabClient,
     GitLabConfig, GitLabIssue, GitLabLabel, GitLabMilestone, GitLabProject, GitLabUser,
     IssueFilter, IssueState, LabelConfig, PollingConfig, SyncConfig, SyncMode, UpdateIssueRequest,
+};
+#[cfg(feature = "jira")]
+pub use integrations::jira::{
+    text_to_adf, ClientError as JiraClientError, ConfigError as JiraConfigError,
+    CreateIssueFields as JiraCreateIssueFields, CreateIssueRequest as JiraCreateIssueRequest,
+    FieldMapping as JiraFieldMapping, IssueTypeRef as JiraIssueTypeRef, JiraClient, JiraConfig,
+    JiraIssue, JiraProject, JiraSearchResults, PriorityRef as JiraPriorityRef,
+    ProjectRef as JiraProjectRef,
 };
 pub use meta::{
     get_prompt_template, needs_meta_seeding, seed_meta_requirements, DEFAULT_DUPLICATES_PROMPT,
@@ -164,6 +155,10 @@ pub use models::{
     META_PREFIX_USER,
     META_PREFIX_VIEW,
 };
+pub use node::{
+    AgreedCounters, AgreedIdBlock, BlockRegistry, DeploymentMode, IdCounterScope, IdFormatPolicy,
+    NodeConfig, NodeRegistry, NodeRegistryEntry, UserRegistry, UserRegistryEntry, WorkspaceConfig,
+};
 #[cfg(feature = "native")]
 pub use project::{check_migration_status, determine_requirements_path, MigrationCheck};
 #[cfg(feature = "native")]
@@ -189,3 +184,5 @@ pub use templates::{
     get_embedded_templates, get_template_categories, get_templates_by_category, TemplateInfo,
     TemplateLoader, TemplateSource,
 };
+#[cfg(feature = "native")]
+pub use user_prefs::UserPreferences;

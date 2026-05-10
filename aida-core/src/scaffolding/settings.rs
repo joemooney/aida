@@ -152,9 +152,8 @@ mod tests {
     }
 
     fn parse_json(s: &str) -> serde_json::Value {
-        serde_json::from_str(s).unwrap_or_else(|e| {
-            panic!("settings.json output is not valid JSON: {}\n\n{}", e, s)
-        })
+        serde_json::from_str(s)
+            .unwrap_or_else(|e| panic!("settings.json output is not valid JSON: {}\n\n{}", e, s))
     }
 
     /// Default config produces both hooks AND statusLine.
@@ -187,7 +186,10 @@ mod tests {
         let v = parse_json(&json);
 
         assert_eq!(v["statusLine"]["type"], "command");
-        assert_eq!(v["statusLine"]["command"].as_str().unwrap(), STATUSLINE_COMMAND);
+        assert_eq!(
+            v["statusLine"]["command"].as_str().unwrap(),
+            STATUSLINE_COMMAND
+        );
         // hooks still present as an empty object — Claude Code accepts both
         // shapes, but a present-but-empty object signals "we considered it".
         assert!(v["hooks"].is_object());

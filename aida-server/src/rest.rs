@@ -10,10 +10,9 @@ use std::sync::Arc;
 use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
-    Extension,
     response::IntoResponse,
     routing::{delete, get, post, put},
-    Json, Router,
+    Extension, Json, Router,
 };
 use serde::{Deserialize, Serialize};
 
@@ -302,7 +301,8 @@ struct UpdateRequirementRequest {
     custom_priority: Option<String>,
     custom_fields: Option<std::collections::HashMap<String, String>>,
     replace_custom_fields: Option<bool>,
-    #[allow(dead_code)] // accepted from clients for audit; not yet stamped into the requirement record
+    #[allow(dead_code)]
+    // accepted from clients for audit; not yet stamped into the requirement record
     modified_by: Option<String>,
 }
 
@@ -311,7 +311,8 @@ struct UpdateRequirementRequest {
 struct AddCommentRequest {
     content: String,
     author: Option<String>,
-    #[allow(dead_code)] // accepted from clients for threading; not yet wired into the comment add path
+    #[allow(dead_code)]
+    // accepted from clients for threading; not yet wired into the comment add path
     parent_comment_id: Option<String>,
 }
 
@@ -584,11 +585,19 @@ async fn auth_oidc_callback(
             _ => ApiError::new(StatusCode::UNAUTHORIZED, "OIDC authentication failed"),
         })?;
 
-    let identifier = oidc_identifier(&userinfo)
-        .ok_or_else(|| ApiError::new(StatusCode::UNAUTHORIZED, "OIDC user payload missing identifier"))?;
+    let identifier = oidc_identifier(&userinfo).ok_or_else(|| {
+        ApiError::new(
+            StatusCode::UNAUTHORIZED,
+            "OIDC user payload missing identifier",
+        )
+    })?;
     let store = backend.store.read().await;
-    let user = find_user(&store.users, &identifier)
-        .ok_or_else(|| ApiError::new(StatusCode::UNAUTHORIZED, "No matching AIDA user for OIDC identity"))?;
+    let user = find_user(&store.users, &identifier).ok_or_else(|| {
+        ApiError::new(
+            StatusCode::UNAUTHORIZED,
+            "No matching AIDA user for OIDC identity",
+        )
+    })?;
 
     let role = auth.role_for_handle(&user.handle);
     let session_token = auth
@@ -685,15 +694,20 @@ async fn auth_register(
     // Check handle uniqueness
     {
         let store = backend.store.read().await;
-        if store.users.iter().any(|u| u.handle.to_lowercase() == handle) {
-            return Err(ApiError::new(
-                StatusCode::CONFLICT,
-                "Handle already taken",
-            ));
+        if store
+            .users
+            .iter()
+            .any(|u| u.handle.to_lowercase() == handle)
+        {
+            return Err(ApiError::new(StatusCode::CONFLICT, "Handle already taken"));
         }
     }
 
-    let mut user = models::User::new(body.name.trim().to_string(), body.email.trim().to_string(), handle.clone());
+    let mut user = models::User::new(
+        body.name.trim().to_string(),
+        body.email.trim().to_string(),
+        handle.clone(),
+    );
     if !body.pin.is_empty() {
         user.set_pin(&body.pin);
     }
@@ -776,24 +790,38 @@ async fn auth_register_legacy(
     Json(body): Json<RegisterRequest>,
 ) -> Result<Json<AuthLoginResponse>, (StatusCode, Json<ApiError>)> {
     if !auth.is_enabled() {
-        return Err(ApiError::new(StatusCode::BAD_REQUEST, "Authentication is disabled"));
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "Authentication is disabled",
+        ));
     }
 
     let handle = body.handle.trim().to_lowercase();
     if handle.is_empty() || handle.len() > 32 {
-        return Err(ApiError::new(StatusCode::BAD_REQUEST, "Handle must be 1-32 characters"));
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "Handle must be 1-32 characters",
+        ));
     }
 
     state.check_reload().await;
 
     {
         let store = state.store.read().await;
-        if store.users.iter().any(|u| u.handle.to_lowercase() == handle) {
+        if store
+            .users
+            .iter()
+            .any(|u| u.handle.to_lowercase() == handle)
+        {
             return Err(ApiError::new(StatusCode::CONFLICT, "Handle already taken"));
         }
     }
 
-    let mut user = models::User::new(body.name.trim().to_string(), body.email.trim().to_string(), handle.clone());
+    let mut user = models::User::new(
+        body.name.trim().to_string(),
+        body.email.trim().to_string(),
+        handle.clone(),
+    );
     if !body.pin.is_empty() {
         user.set_pin(&body.pin);
     }
@@ -806,7 +834,13 @@ async fn auth_register_legacy(
 
     let role = auth.role_for_handle(&user.handle);
     let session_token = auth
-        .create_session(user.id.to_string(), user.handle.clone(), user.name.clone(), "default".to_string(), role)
+        .create_session(
+            user.id.to_string(),
+            user.handle.clone(),
+            user.name.clone(),
+            "default".to_string(),
+            role,
+        )
         .await;
 
     Ok(Json(AuthLoginResponse {
@@ -824,10 +858,16 @@ async fn auth_set_pin_legacy(
     Json(body): Json<SetPinRequest>,
 ) -> Result<StatusCode, (StatusCode, Json<ApiError>)> {
     if !auth.mode().pin_enabled() {
-        return Err(ApiError::new(StatusCode::BAD_REQUEST, "PIN auth not enabled"));
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PIN auth not enabled",
+        ));
     }
     if body.new_pin.is_empty() {
-        return Err(ApiError::new(StatusCode::BAD_REQUEST, "New PIN cannot be empty"));
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "New PIN cannot be empty",
+        ));
     }
 
     state.check_reload().await;
@@ -840,7 +880,10 @@ async fn auth_set_pin_legacy(
         .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "User not found"))?;
 
     if user.has_pin() && !user.verify_pin(&body.current_pin) {
-        return Err(ApiError::new(StatusCode::UNAUTHORIZED, "Current PIN is incorrect"));
+        return Err(ApiError::new(
+            StatusCode::UNAUTHORIZED,
+            "Current PIN is incorrect",
+        ));
     }
 
     user.set_pin(&body.new_pin);
@@ -978,13 +1021,21 @@ async fn auth_oidc_callback_legacy(
             }
             _ => ApiError::new(StatusCode::UNAUTHORIZED, "OIDC authentication failed"),
         })?;
-    let identifier = oidc_identifier(&userinfo)
-        .ok_or_else(|| ApiError::new(StatusCode::UNAUTHORIZED, "OIDC user payload missing identifier"))?;
+    let identifier = oidc_identifier(&userinfo).ok_or_else(|| {
+        ApiError::new(
+            StatusCode::UNAUTHORIZED,
+            "OIDC user payload missing identifier",
+        )
+    })?;
 
     state.check_reload().await;
     let store = state.store.read().await;
-    let user = find_user(&store.users, &identifier)
-        .ok_or_else(|| ApiError::new(StatusCode::UNAUTHORIZED, "No matching AIDA user for OIDC identity"))?;
+    let user = find_user(&store.users, &identifier).ok_or_else(|| {
+        ApiError::new(
+            StatusCode::UNAUTHORIZED,
+            "No matching AIDA user for OIDC identity",
+        )
+    })?;
 
     let role = auth.role_for_handle(&user.handle);
     let session_token = auth
@@ -3762,12 +3813,20 @@ async fn get_jira_sync(
         .map_err(|e| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     // Find linked requirements (title starts with [KEY-N])
-    let linked: Vec<(&aida_core::Requirement, String)> = store.requirements.iter()
+    let linked: Vec<(&aida_core::Requirement, String)> = store
+        .requirements
+        .iter()
         .filter_map(|r| {
             if r.title.starts_with('[') {
                 if let Some(end) = r.title.find(']') {
                     let key = &r.title[1..end];
-                    if key.contains('-') && key.split('-').last().map(|n| n.parse::<u64>().is_ok()).unwrap_or(false) {
+                    if key.contains('-')
+                        && key
+                            .split('-')
+                            .last()
+                            .map(|n| n.parse::<u64>().is_ok())
+                            .unwrap_or(false)
+                    {
                         return Some((r, key.to_string()));
                     }
                 }
@@ -3793,7 +3852,8 @@ async fn get_jira_sync(
             match client.get_issue(jira_key).await {
                 Ok(issue) => {
                     let mut diffs = Vec::new();
-                    let aida_title = req.title
+                    let aida_title = req
+                        .title
                         .strip_prefix(&format!("[{}] ", jira_key))
                         .unwrap_or(&req.title);
 
@@ -3809,7 +3869,11 @@ async fn get_jira_sync(
                     if expected_status != issue.status_name() {
                         diffs.push(JiraSyncDiff {
                             field: "status".into(),
-                            aida_value: format!("{} (→{})", req.effective_status(), expected_status),
+                            aida_value: format!(
+                                "{} (→{})",
+                                req.effective_status(),
+                                expected_status
+                            ),
                             jira_value: issue.status_name().to_string(),
                         });
                     }

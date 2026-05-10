@@ -146,7 +146,7 @@ pub struct UpdateIssueRequest {
 /// Filter for listing issues.
 #[derive(Debug, Clone, Default)]
 pub struct IssueFilter {
-    pub state: Option<String>,     // "open", "closed", "all"
+    pub state: Option<String>, // "open", "closed", "all"
     pub labels: Vec<String>,
     pub assignee: Option<String>,
     pub creator: Option<String>,

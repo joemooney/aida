@@ -45,8 +45,12 @@ pub struct GlobalQueueEntry {
 pub fn queue_path(role: &str) -> Result<PathBuf> {
     let home = dirs::home_dir().context("Cannot determine home directory for global queue")?;
     let dir = home.join(".aida").join("queue");
-    std::fs::create_dir_all(&dir)
-        .with_context(|| format!("Failed to create global queue directory at {}", dir.display()))?;
+    std::fs::create_dir_all(&dir).with_context(|| {
+        format!(
+            "Failed to create global queue directory at {}",
+            dir.display()
+        )
+    })?;
     Ok(dir.join(format!("{}.yaml", role)))
 }
 

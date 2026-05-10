@@ -4257,8 +4257,12 @@ impl RequirementsStore {
     /// (e.g. "fr-1") without canonicalizing first.
     pub fn get_requirement_by_spec_id(&self, spec_id: &str) -> Option<&Requirement> {
         self.requirements.iter().find(|r| {
-            r.spec_id.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
-                || r.agreed_id.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
+            r.spec_id
+                .as_deref()
+                .is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
+                || r.agreed_id
+                    .as_deref()
+                    .is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
         })
     }
 
@@ -4266,8 +4270,12 @@ impl RequirementsStore {
     /// rules as `get_requirement_by_spec_id`.
     pub fn get_requirement_by_spec_id_mut(&mut self, spec_id: &str) -> Option<&mut Requirement> {
         self.requirements.iter_mut().find(|r| {
-            r.spec_id.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
-                || r.agreed_id.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
+            r.spec_id
+                .as_deref()
+                .is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
+                || r.agreed_id
+                    .as_deref()
+                    .is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
         })
     }
 
@@ -6017,11 +6025,16 @@ mod tests {
             req.custom_status = Some("stale".into()); // pretend a previous bad value
             req.set_status_from_str(s);
             assert_eq!(
-                req.status, RequirementStatus::InProgress,
+                req.status,
+                RequirementStatus::InProgress,
                 "{:?} should map to InProgress",
                 s
             );
-            assert_eq!(req.custom_status, None, "{:?} should clear custom_status", s);
+            assert_eq!(
+                req.custom_status, None,
+                "{:?} should clear custom_status",
+                s
+            );
         }
 
         // Same for Planned.

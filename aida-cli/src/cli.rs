@@ -617,9 +617,7 @@ pub enum RoleCommand {
     List,
 
     /// Show details for one role (defaults to the active role if any).
-    Show {
-        name: Option<String>,
-    },
+    Show { name: Option<String> },
 
     /// Print the active role's name and exit, or exit 1 with empty
     /// stdout when no role is active. Pure read of `$AIDA_SESSION_ROLE`

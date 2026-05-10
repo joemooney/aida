@@ -1,14 +1,14 @@
 mod cli;
+#[cfg(feature = "remote")]
+mod client;
 mod docs;
 mod global_queue;
 mod history;
+mod mcp;
 mod not_found;
 mod process_probe;
-mod session;
-#[cfg(feature = "remote")]
-mod client;
-mod mcp;
 mod prompts;
+mod session;
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -111,7 +111,14 @@ fn main() -> Result<()> {
         // the deprecated SQLite-canonical path.
         // trace:EPIC-1-001 | ai:claude
         if *centralized {
-            handle_init_command(*no_skills, agent, *no_hooks, *force, *verbose, name.as_deref())?;
+            handle_init_command(
+                *no_skills,
+                agent,
+                *no_hooks,
+                *force,
+                *verbose,
+                name.as_deref(),
+            )?;
         } else if *sibling {
             handle_init_distributed_sibling(
                 registry_remote.as_deref(),
@@ -124,7 +131,12 @@ fn main() -> Result<()> {
             )?;
         } else {
             handle_init_distributed_worktree(
-                *force, *no_skills, agent, *no_hooks, *verbose, name.as_deref(),
+                *force,
+                *no_skills,
+                agent,
+                *no_hooks,
+                *verbose,
+                name.as_deref(),
             )?;
         }
         return Ok(());
@@ -132,7 +144,14 @@ fn main() -> Result<()> {
 
     // Handle upgrade before storage resolution — it needs no DB.
     // trace:EPIC-1-001 | ai:claude
-    if let Command::Upgrade { check, version, yes, target, diff } = &cli.command {
+    if let Command::Upgrade {
+        check,
+        version,
+        yes,
+        target,
+        diff,
+    } = &cli.command
+    {
         return handle_upgrade_command(*check, version.as_deref(), *yes, target.as_deref(), *diff);
     }
 
@@ -201,22 +220,22 @@ fn main() -> Result<()> {
             Command::Jira(_) | Command::Github(_) | Command::Gitlab(_)
         );
         if !is_external_integration {
-        if let Some(store_path) = detect_distributed_store() {
-            // MCP server needs the Storage class — snapshot git backend to temp YAML
-            if matches!(&cli.command, Command::McpServe) {
-                let backend = aida_core::GitBackend::new(&store_path)?;
-                let store = aida_core::DatabaseBackend::load(&backend)?;
-                let cache_path = store_path.join(".aida").join("mcp-cache.yaml");
-                std::fs::create_dir_all(cache_path.parent().unwrap())?;
-                // Use the YAML backend to write the snapshot
-                let yaml_backend = aida_core::YamlBackend::new(&cache_path);
-                aida_core::DatabaseBackend::save(&yaml_backend, &store)?;
-                let mcp_storage = Storage::new(cache_path);
-                mcp::run_mcp_server(&mcp_storage)?;
-                return Ok(());
+            if let Some(store_path) = detect_distributed_store() {
+                // MCP server needs the Storage class — snapshot git backend to temp YAML
+                if matches!(&cli.command, Command::McpServe) {
+                    let backend = aida_core::GitBackend::new(&store_path)?;
+                    let store = aida_core::DatabaseBackend::load(&backend)?;
+                    let cache_path = store_path.join(".aida").join("mcp-cache.yaml");
+                    std::fs::create_dir_all(cache_path.parent().unwrap())?;
+                    // Use the YAML backend to write the snapshot
+                    let yaml_backend = aida_core::YamlBackend::new(&cache_path);
+                    aida_core::DatabaseBackend::save(&yaml_backend, &store)?;
+                    let mcp_storage = Storage::new(cache_path);
+                    mcp::run_mcp_server(&mcp_storage)?;
+                    return Ok(());
+                }
+                return handle_git_backend_command(&store_path, &cli.command);
             }
-            return handle_git_backend_command(&store_path, &cli.command);
-        }
         } // close is_external_integration check
 
         // Auto-detect: first find the base path, then check migration status
@@ -605,9 +624,7 @@ fn confirm_destructive_reset(count: usize, store_path: &std::path::Path) -> Resu
         count.to_string().red().bold()
     );
     eprintln!();
-    eprintln!(
-        "If you only wanted to refresh scaffolding (CLAUDE.md, .claude/skills/, hooks),"
-    );
+    eprintln!("If you only wanted to refresh scaffolding (CLAUDE.md, .claude/skills/, hooks),");
     eprintln!(
         "cancel here and run instead:  {}",
         "aida scaffold apply --force".cyan()
@@ -657,9 +674,7 @@ fn handle_init_command(
             "!".yellow()
         );
         eprintln!("  Use {} to reinitialize.", "--force".bold());
-        eprintln!(
-            "  To refresh just the scaffolding (CLAUDE.md, .claude/skills/, hooks),"
-        );
+        eprintln!("  To refresh just the scaffolding (CLAUDE.md, .claude/skills/, hooks),");
         eprintln!("  use `aida scaffold apply --force` instead — preserves your store.");
         return Ok(());
     }
@@ -1170,9 +1185,7 @@ fn hostname() -> String {
 /// Load or create the distributed dispenser for a git-backed store.
 /// Reads node config from {store}/.aida/node.toml; defaults to node_id=1
 /// if no node registration has happened yet.
-fn load_dispenser(
-    store_path: &std::path::Path,
-) -> Result<aida_core::models::DispenserHandle> {
+fn load_dispenser(store_path: &std::path::Path) -> Result<aida_core::models::DispenserHandle> {
     use aida_core::dispenser::{FileDispenser, IdMode};
     use aida_core::node::NodeConfig;
 
@@ -1193,14 +1206,13 @@ fn load_dispenser(
     let mode = IdMode::Distributed { node_id };
     let dispenser = FileDispenser::open(dispenser_path, mode)?;
 
-    Ok(aida_core::models::DispenserHandle(std::sync::Arc::new(dispenser)))
+    Ok(aida_core::models::DispenserHandle(std::sync::Arc::new(
+        dispenser,
+    )))
 }
 
 /// Handle commands routed to the GitBackend (when --file points to a directory).
-fn handle_git_backend_command(
-    store_path: &std::path::Path,
-    command: &Command,
-) -> Result<()> {
+fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -> Result<()> {
     // STORY-43: warn loudly when this clone has been hijacked. Runs once
     // per invocation before any command executes. The marker doesn't block
     // operations — issued ids remain valid — but the user needs to know
@@ -1213,7 +1225,10 @@ fn handle_git_backend_command(
             "HIJACK WARNING:".red().bold(),
             marker.node_id,
             marker.new_owner_hostname,
-            marker.hijacked_at.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M %Z"),
+            marker
+                .hijacked_at
+                .with_timezone(&chrono::Local)
+                .format("%Y-%m-%d %H:%M %Z"),
         );
         if let Some(p) = &marker.new_owner_clone_path {
             eprintln!("  New owner clone: {}", p.display());
@@ -1228,8 +1243,7 @@ fn handle_git_backend_command(
     }
 
     let dispenser = load_dispenser(store_path)?;
-    let inner = aida_core::GitBackend::new(store_path)?
-        .with_dispenser(dispenser);
+    let inner = aida_core::GitBackend::new(store_path)?.with_dispenser(dispenser);
     let cache_path = aida_core::CachedGitBackend::default_cache_path(store_path);
     let backend = aida_core::CachedGitBackend::with_inner(inner, &cache_path)?;
 
@@ -1248,10 +1262,24 @@ fn handle_git_backend_command(
         Command::Status { no_dev_context } => {
             return handle_status_command_distributed(*no_dev_context, store_path, &backend);
         }
-        Command::Push { code_only, store_only, message, no_rebase_check } => {
-            return handle_push_command(store_path, *code_only, *store_only, message.as_deref(), *no_rebase_check);
+        Command::Push {
+            code_only,
+            store_only,
+            message,
+            no_rebase_check,
+        } => {
+            return handle_push_command(
+                store_path,
+                *code_only,
+                *store_only,
+                message.as_deref(),
+                *no_rebase_check,
+            );
         }
-        Command::Pull { code_only, store_only } => {
+        Command::Pull {
+            code_only,
+            store_only,
+        } => {
             return handle_pull_command(store_path, *code_only, *store_only);
         }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
@@ -1263,7 +1291,18 @@ fn handle_git_backend_command(
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::BgFetch { .. } => unreachable!("_bg-fetch is dispatched before storage init"),
         Command::Session(_) => unreachable!("session is dispatched before storage init"),
-        Command::List { status, r#type, feature, tags, no_scope, show_origin, include_meta, parent, sync, .. } => {
+        Command::List {
+            status,
+            r#type,
+            feature,
+            tags,
+            no_scope,
+            show_origin,
+            include_meta,
+            parent,
+            sync,
+            ..
+        } => {
             // STORY-78: opt-in implicit sync-pull before reading. Quiet
             // on no-op (already current), warns + falls back on errors.
             // Must run BEFORE the cache-backed list query because the
@@ -1284,12 +1323,21 @@ fn handle_git_backend_command(
             // trace:TASK-1-021 | ai:claude
             let cli_tags: Vec<String> = tags
                 .as_deref()
-                .map(|t| t.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
+                .map(|t| {
+                    t.split(',')
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect()
+                })
                 .unwrap_or_default();
             let scope = if *no_scope { None } else { active_role_scope() };
             let (effective_tags, effective_status) = match scope {
                 Some((scope_tags, scope_status)) => {
-                    let final_tags = if !cli_tags.is_empty() { cli_tags } else { scope_tags };
+                    let final_tags = if !cli_tags.is_empty() {
+                        cli_tags
+                    } else {
+                        scope_tags
+                    };
                     let final_status = status.clone().or(scope_status);
                     (final_tags, final_status)
                 }
@@ -1311,11 +1359,14 @@ fn handle_git_backend_command(
             // interactive `aida list` cadence.
             // trace:STORY-62 | ai:claude
             if let Some(parent_ref) = parent {
-                let parent_req = backend.get_requirement_by_spec_id(parent_ref)?
-                    .ok_or_else(|| anyhow::anyhow!(
-                        "--parent {}: requirement not found", parent_ref
-                    ))?;
-                let child_ids: HashSet<Uuid> = parent_req.relationships
+                let parent_req =
+                    backend
+                        .get_requirement_by_spec_id(parent_ref)?
+                        .ok_or_else(|| {
+                            anyhow::anyhow!("--parent {}: requirement not found", parent_ref)
+                        })?;
+                let child_ids: HashSet<Uuid> = parent_req
+                    .relationships
                     .iter()
                     .filter(|r| r.rel_type == RelationshipType::Parent)
                     .map(|r| r.target_id)
@@ -1370,11 +1421,7 @@ fn handle_git_backend_command(
                         };
                         println!(
                             "{:<12} {}{:<12} {:<10} {}",
-                            display_id,
-                            origin_cell,
-                            req.req_type,
-                            req.status,
-                            req.title,
+                            display_id, origin_cell, req.req_type, req.status, req.title,
                         );
                     }
                 } else {
@@ -1391,11 +1438,7 @@ fn handle_git_backend_command(
                             .unwrap_or("?");
                         println!(
                             "{:<14} {:<12} {:<10} {:<10} {}",
-                            display_id,
-                            req.req_type,
-                            req.status,
-                            req.priority,
-                            req.title,
+                            display_id, req.req_type, req.status, req.priority, req.title,
                         );
                     }
                 }
@@ -1491,7 +1534,9 @@ fn handle_git_backend_command(
                 && !*description_stdin
             {
                 let body = inquire::Editor::new("Description")
-                    .with_help_message("Multi-line. Save + close the editor to continue. Leave empty to skip.")
+                    .with_help_message(
+                        "Multi-line. Save + close the editor to continue. Leave empty to skip.",
+                    )
                     .prompt()
                     .context("Description prompt cancelled")?;
                 if body.trim().is_empty() {
@@ -1505,23 +1550,20 @@ fn handle_git_backend_command(
 
             // Priority — picker when not provided.
             let interactive_priority: Option<String> = if priority.is_none() && interactive_mode {
-                let pick = inquire::Select::new(
-                    "Priority:",
-                    vec!["medium", "high", "low"],
-                )
-                .with_help_message("medium covers most things; high for blockers; low for nice-to-haves.")
-                .prompt()
-                .context("Priority prompt cancelled")?;
+                let pick = inquire::Select::new("Priority:", vec!["medium", "high", "low"])
+                    .with_help_message(
+                        "medium covers most things; high for blockers; low for nice-to-haves.",
+                    )
+                    .prompt()
+                    .context("Priority prompt cancelled")?;
                 Some(pick.to_string())
             } else {
                 None
             };
             let effective_priority: Option<String> = priority.clone().or(interactive_priority);
 
-            let mut req = Requirement::new(
-                title_resolved,
-                resolved_description.unwrap_or_default(),
-            );
+            let mut req =
+                Requirement::new(title_resolved, resolved_description.unwrap_or_default());
             if let Some(s) = status {
                 let canonical = validate_status_input(s).map_err(|e| anyhow::anyhow!(e))?;
                 req.set_status_from_str(canonical);
@@ -1612,7 +1654,9 @@ fn handle_git_backend_command(
                                         "id_format policy is `blocks-only` but node {} has no \
                                          {} block. Run `aida db block claim --type {} --size 100` \
                                          to allocate one (requires network).",
-                                        node_id, type_prefix, type_prefix
+                                        node_id,
+                                        type_prefix,
+                                        type_prefix
                                     );
                                 }
                             }
@@ -1673,7 +1717,10 @@ fn handle_git_backend_command(
                                         eprintln!("Warning: could not save blocks.yaml: {}", e);
                                     } else {
                                         // Commit the pointer advance to the store
-                                        let _ = aida_core::git_ops::add(store_path, &["registry/blocks.yaml"]);
+                                        let _ = aida_core::git_ops::add(
+                                            store_path,
+                                            &["registry/blocks.yaml"],
+                                        );
                                     }
                                     req.agreed_id = Some(agreed_id.clone());
                                     // Use the agreed ID as the spec_id so it is immediately
@@ -1698,22 +1745,23 @@ fn handle_git_backend_command(
             // the store untouched. The actual relationship insert still
             // happens post-write because the child has to exist before
             // it can receive a Child edge. trace:BUG-62, FR-215 | ai:claude
-            let parent_req: Option<aida_core::models::Requirement> = if let Some(parent_str) = parent {
-                let resolved = if let Ok(uuid) = uuid::Uuid::parse_str(parent_str) {
-                    backend.get_requirement(&uuid)?
-                } else {
-                    backend.get_requirement_by_spec_id(parent_str)?
-                };
-                Some(resolved.ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "parent `{}` not found — refusing to create child requirement \
+            let parent_req: Option<aida_core::models::Requirement> =
+                if let Some(parent_str) = parent {
+                    let resolved = if let Ok(uuid) = uuid::Uuid::parse_str(parent_str) {
+                        backend.get_requirement(&uuid)?
+                    } else {
+                        backend.get_requirement_by_spec_id(parent_str)?
+                    };
+                    Some(resolved.ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "parent `{}` not found — refusing to create child requirement \
                          without a valid parent (no child file written)",
-                        parent_str
-                    )
-                })?)
-            } else {
-                None
-            };
+                            parent_str
+                        )
+                    })?)
+                } else {
+                    None
+                };
             // BUG-64: refuse `--parent <X>` when X is in a terminal status
             // (Completed or Rejected). Filing a new child under a closed
             // epic produces a confusing graph (closed parent with open
@@ -1749,19 +1797,12 @@ fn handle_git_backend_command(
             // Use update_atomically to generate the ID with store's config
             let store = backend.update_atomically(|store| {
                 let type_prefix = store.get_type_prefix(&req.req_type);
-                store.add_requirement_with_id(
-                    req.clone(),
-                    None,
-                    type_prefix.as_deref(),
-                );
+                store.add_requirement_with_id(req.clone(), None, type_prefix.as_deref());
             })?;
 
             if let Some(last) = store.requirements.last() {
                 // Write the individual object file
-                aida_core::object_store::write_object(
-                    &store_path.join("objects"),
-                    last,
-                )?;
+                aida_core::object_store::write_object(&store_path.join("objects"), last)?;
                 println!(
                     "Added: {} - {}",
                     last.spec_id.as_deref().unwrap_or("?"),
@@ -1856,7 +1897,13 @@ fn handle_git_backend_command(
                 }
             }
         }
-        Command::Show { id, comments, tree, depth, sync } => {
+        Command::Show {
+            id,
+            comments,
+            tree,
+            depth,
+            sync,
+        } => {
             // STORY-78: opt-in sync-pull before show. trace:STORY-78 | ai:claude
             if *sync {
                 maybe_sync_pull(store_path)?;
@@ -1873,10 +1920,7 @@ fn handle_git_backend_command(
                 match backend.get_requirement_by_spec_id(id)? {
                     Some(root) => render_tree(&backend, &root, *depth)?,
                     None => {
-                        eprintln!(
-                            "{}",
-                            not_found::requirement_not_found(id, Some(store_path))
-                        );
+                        eprintln!("{}", not_found::requirement_not_found(id, Some(store_path)));
                     }
                 }
                 return Ok(());
@@ -1908,10 +1952,18 @@ fn handle_git_backend_command(
                         println!("{}: {}", "Owner".bold(), req.owner);
                     }
                     if !req.tags.is_empty() {
-                        println!("{}: {}", "Tags".bold(), req.tags.iter().cloned().collect::<Vec<_>>().join(", "));
+                        println!(
+                            "{}: {}",
+                            "Tags".bold(),
+                            req.tags.iter().cloned().collect::<Vec<_>>().join(", ")
+                        );
                     }
                     if !req.relationships.is_empty() {
-                        println!("{}: {} relationship(s)", "Relations".bold(), req.relationships.len());
+                        println!(
+                            "{}: {} relationship(s)",
+                            "Relations".bold(),
+                            req.relationships.len()
+                        );
                     }
                     if !req.comments.is_empty() {
                         println!("{}: {} comment(s)", "Comments".bold(), req.comments.len());
@@ -1924,17 +1976,12 @@ fn handle_git_backend_command(
                     // for reqs that were closed via `aida edit
                     // --status completed` directly (no queue done flow).
                     // trace:STORY-81 | ai:claude
-                    if let Some(info) = req
-                        .implementation_info
-                        .as_ref()
-                        .filter(|i| i.implemented)
-                    {
+                    if let Some(info) = req.implementation_info.as_ref().filter(|i| i.implemented) {
                         println!("\n{}:", "Implementation".green().bold());
                         if let Some(ts) = info.implemented_at {
                             println!(
                                 "  Completed: {}",
-                                ts.with_timezone(&chrono::Local)
-                                    .format("%Y-%m-%d %H:%M %Z")
+                                ts.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M %Z")
                             );
                         }
                         if let Some(ref who) = info.implemented_by {
@@ -2123,7 +2170,13 @@ fn handle_git_backend_command(
             backend.delete_requirement(&req.id)?;
             println!("Deleted: {}", id);
         }
-        Command::Search { query, status, limit, sync, .. } => {
+        Command::Search {
+            query,
+            status,
+            limit,
+            sync,
+            ..
+        } => {
             // STORY-78: opt-in sync-pull before search. trace:STORY-78 | ai:claude
             if *sync {
                 maybe_sync_pull(store_path)?;
@@ -2140,10 +2193,7 @@ fn handle_git_backend_command(
             if results.is_empty() {
                 println!("No results for: {}", query);
             } else {
-                println!(
-                    "{:<14} {:<12} {:<10} {}",
-                    "ID", "Type", "Status", "Title"
-                );
+                println!("{:<14} {:<12} {:<10} {}", "ID", "Type", "Status", "Title");
                 println!("{}", "─".repeat(65));
                 for req in &results {
                     let display_id = req
@@ -2153,10 +2203,7 @@ fn handle_git_backend_command(
                         .unwrap_or("?");
                     println!(
                         "{:<14} {:<12} {:<10} {}",
-                        display_id,
-                        req.req_type,
-                        req.status,
-                        req.title,
+                        display_id, req.req_type, req.status, req.title,
                     );
                 }
                 println!("\n{} results", results.len());
@@ -2260,7 +2307,12 @@ fn handle_git_backend_command(
             comment.touch();
             req.modified_at = chrono::Utc::now();
             backend.update_requirement(&req)?;
-            println!("{} comment {} on {}", "Updated".green(), comment_uuid, req_id);
+            println!(
+                "{} comment {} on {}",
+                "Updated".green(),
+                comment_uuid,
+                req_id
+            );
         }
         Command::Comment(CommentCommand::Delete { req_id, comment_id }) => {
             record_role_activity(req_id, "comment");
@@ -2270,7 +2322,12 @@ fn handle_git_backend_command(
             let comment_uuid = resolve_comment_uuid(&req, comment_id)?;
             req.delete_comment(&comment_uuid)?;
             backend.update_requirement(&req)?;
-            println!("{} comment {} from {}", "Deleted".green(), comment_uuid, req_id);
+            println!(
+                "{} comment {} from {}",
+                "Deleted".green(),
+                comment_uuid,
+                req_id
+            );
         }
         Command::Db(DbCommand::Path) => {
             // trace:FR-1-076 | ai:claude
@@ -2291,7 +2348,11 @@ fn handle_git_backend_command(
             // Show git status
             if aida_core::git_ops::is_git_repo(store_path) {
                 let has_changes = aida_core::git_ops::has_changes(store_path).unwrap_or(false);
-                let status_str = if has_changes { "uncommitted changes" } else { "clean" };
+                let status_str = if has_changes {
+                    "uncommitted changes"
+                } else {
+                    "clean"
+                };
                 println!("{}: {}", "Git".bold(), status_str);
                 if let Ok(sha) = aida_core::git_ops::head_sha(store_path) {
                     println!("{}: {}", "HEAD".bold(), sha);
@@ -2308,9 +2369,13 @@ fn handle_git_backend_command(
             bidirectional,
             force_parent,
         }) => {
-            let from = from_pos.as_deref().or(from_flag.as_deref())
+            let from = from_pos
+                .as_deref()
+                .or(from_flag.as_deref())
                 .ok_or_else(|| anyhow::anyhow!("missing FROM (positional or --from)"))?;
-            let to = to_pos.as_deref().or(to_flag.as_deref())
+            let to = to_pos
+                .as_deref()
+                .or(to_flag.as_deref())
                 .ok_or_else(|| anyhow::anyhow!("missing TO (positional or --to)"))?;
             let mut from_req = backend
                 .get_requirement_by_spec_id(from)?
@@ -2394,9 +2459,13 @@ fn handle_git_backend_command(
             to_flag,
             ..
         }) => {
-            let from = from_pos.as_deref().or(from_flag.as_deref())
+            let from = from_pos
+                .as_deref()
+                .or(from_flag.as_deref())
                 .ok_or_else(|| anyhow::anyhow!("missing FROM (positional or --from)"))?;
-            let to = to_pos.as_deref().or(to_flag.as_deref())
+            let to = to_pos
+                .as_deref()
+                .or(to_flag.as_deref())
                 .ok_or_else(|| anyhow::anyhow!("missing TO (positional or --to)"))?;
             let mut from_req = backend
                 .get_requirement_by_spec_id(from)?
@@ -2414,7 +2483,10 @@ fn handle_git_backend_command(
             if removed > 0 {
                 from_req.modified_at = chrono::Utc::now();
                 backend.update_requirement(&from_req)?;
-                println!("Removed {} relationship(s) from {} to {}", removed, from, to);
+                println!(
+                    "Removed {} relationship(s) from {} to {}",
+                    removed, from, to
+                );
             } else {
                 println!("No relationship found from {} to {}", from, to);
             }
@@ -2491,7 +2563,11 @@ fn handle_git_backend_command(
         }
 
         // Phase 1: Sync command
-        Command::Db(DbCommand::Sync { pull, push, message }) => {
+        Command::Db(DbCommand::Sync {
+            pull,
+            push,
+            message,
+        }) => {
             if !aida_core::git_ops::is_git_repo(store_path) {
                 anyhow::bail!("Not a git repository: {}", store_path.display());
             }
@@ -2537,9 +2613,7 @@ fn handle_git_backend_command(
             // rebase is the right default.
             if *pull {
                 // Snapshot local state before pull for conflict detection
-                let local_reqs = backend.load()
-                    .map(|s| s.requirements)
-                    .unwrap_or_default();
+                let local_reqs = backend.load().map(|s| s.requirements).unwrap_or_default();
 
                 println!("Pulling from origin/{}...", branch);
                 match aida_core::git_ops::pull_rebase(store_path, "origin", &branch) {
@@ -2547,14 +2621,11 @@ fn handle_git_backend_command(
                         println!("  Pull complete.");
 
                         // Detect conflicts with remote changes
-                        let remote_reqs = backend.load()
-                            .map(|s| s.requirements)
-                            .unwrap_or_default();
+                        let remote_reqs =
+                            backend.load().map(|s| s.requirements).unwrap_or_default();
 
-                        let conflicts = aida_core::conflict::detect_store_conflicts(
-                            &local_reqs,
-                            &remote_reqs,
-                        );
+                        let conflicts =
+                            aida_core::conflict::detect_store_conflicts(&local_reqs, &remote_reqs);
 
                         if !conflicts.is_empty() {
                             println!();
@@ -2610,7 +2681,9 @@ fn handle_git_backend_command(
             let store = backend.load()?;
 
             let total = store.requirements.len();
-            let with_agreed = store.requirements.iter()
+            let with_agreed = store
+                .requirements
+                .iter()
                 .filter(|r| r.agreed_id.is_some())
                 .count();
             let without_agreed = total - with_agreed;
@@ -2625,14 +2698,31 @@ fn handle_git_backend_command(
             if aida_core::git_ops::is_git_repo(store_path) {
                 let has_changes = aida_core::git_ops::has_changes(store_path).unwrap_or(false);
                 let head = aida_core::git_ops::head_sha(store_path).unwrap_or_else(|_| "?".into());
-                let branch = aida_core::git_ops::current_branch(store_path).unwrap_or_else(|_| "?".into());
+                let branch =
+                    aida_core::git_ops::current_branch(store_path).unwrap_or_else(|_| "?".into());
 
                 println!("{:<20} {}", "Branch:", branch);
                 println!("{:<20} {}", "HEAD:", head);
-                println!("{:<20} {}", "Working tree:", if has_changes { "uncommitted changes" } else { "clean" });
+                println!(
+                    "{:<20} {}",
+                    "Working tree:",
+                    if has_changes {
+                        "uncommitted changes"
+                    } else {
+                        "clean"
+                    }
+                );
 
                 let remote_ok = aida_core::git_ops::is_remote_reachable(store_path, "origin");
-                println!("{:<20} {}", "Remote:", if remote_ok { "reachable" } else { "not configured or unreachable" });
+                println!(
+                    "{:<20} {}",
+                    "Remote:",
+                    if remote_ok {
+                        "reachable"
+                    } else {
+                        "not configured or unreachable"
+                    }
+                );
             }
 
             // Show dispenser state
@@ -2640,7 +2730,9 @@ fn handle_git_backend_command(
                 if let Ok(state) = disp.state() {
                     let mode_str = match &state.mode {
                         aida_core::IdMode::Centralized => "centralized".to_string(),
-                        aida_core::IdMode::Distributed { node_id } => format!("distributed (node {})", node_id),
+                        aida_core::IdMode::Distributed { node_id } => {
+                            format!("distributed (node {})", node_id)
+                        }
                     };
                     println!("{:<20} {}", "ID mode:", mode_str);
                     let total_dispensed: u32 = state.sequences.values().sum();
@@ -2731,7 +2823,11 @@ fn handle_git_backend_command(
         // STORY-44: `aida config user` is a global op against
         // ~/.aida/preferences.toml — no store needed. Route it through the
         // git-backend path so it works in modern projects too.
-        Command::Config(ConfigCommand::User { node_id, email, toml: emit_toml }) => {
+        Command::Config(ConfigCommand::User {
+            node_id,
+            email,
+            toml: emit_toml,
+        }) => {
             handle_config_user(node_id.as_deref(), email.as_deref(), *emit_toml)?;
         }
         Command::Scaffold(scaffold_cmd) => {
@@ -2854,7 +2950,10 @@ fn suspicious_title_signal(title: &str) -> Option<String> {
     // An odd count of unescaped double-quotes is a strong signal of broken quoting.
     let dq_count = title.chars().filter(|c| *c == '"').count();
     if dq_count % 2 == 1 {
-        return Some("title contains an unbalanced double-quote — likely a shell-quoting artifact".to_string());
+        return Some(
+            "title contains an unbalanced double-quote — likely a shell-quoting artifact"
+                .to_string(),
+        );
     }
     None
 }
@@ -2865,9 +2964,8 @@ fn suspicious_title_signal(title: &str) -> Option<String> {
 /// trace:BUG-21 | ai:claude
 fn ensure_executable_if_hook(rel_path: &std::path::Path, full_path: &std::path::Path) {
     let s = rel_path.to_string_lossy();
-    let is_hook = s.starts_with(".git/hooks/")
-        || s.starts_with(".claude/hooks/")
-        || s.ends_with(".sh");
+    let is_hook =
+        s.starts_with(".git/hooks/") || s.starts_with(".claude/hooks/") || s.ends_with(".sh");
     if !is_hook {
         return;
     }
@@ -2975,12 +3073,15 @@ fn handle_init_distributed_worktree(
     // projects (notably AIDA itself) track .aida/config.toml in main.
     // trace:EPIC-1-052 Phase 4 | ai:claude
     let worktree_present = cwd.join(worktree_dir).exists();
-    if !force
-        && !worktree_present
-        && git_ops::remote_branch_exists(&cwd, "origin", branch_name)
-    {
+    if !force && !worktree_present && git_ops::remote_branch_exists(&cwd, "origin", branch_name) {
         return handle_init_post_clone(
-            &cwd, worktree_dir, branch_name, no_skills, agent, no_hooks, verbose,
+            &cwd,
+            worktree_dir,
+            branch_name,
+            no_skills,
+            agent,
+            no_hooks,
+            verbose,
         );
     }
 
@@ -2991,9 +3092,7 @@ fn handle_init_distributed_worktree(
             "!".yellow()
         );
         eprintln!("  Use {} to reinitialize.", "--force".bold());
-        eprintln!(
-            "  To refresh just the scaffolding (CLAUDE.md, .claude/skills/, hooks),"
-        );
+        eprintln!("  To refresh just the scaffolding (CLAUDE.md, .claude/skills/, hooks),");
         eprintln!("  use `aida scaffold apply --force` instead — preserves your store.");
         return Ok(());
     }
@@ -3010,7 +3109,10 @@ fn handle_init_distributed_worktree(
         }
     }
 
-    println!("{}", "Initializing AIDA in distributed mode (orphan branch + worktree)...".bold());
+    println!(
+        "{}",
+        "Initializing AIDA in distributed mode (orphan branch + worktree)...".bold()
+    );
     println!();
 
     // Ensure there's at least one commit on main (worktree requires it)
@@ -3020,10 +3122,10 @@ fn handle_init_distributed_worktree(
         std::fs::write(cwd.join(".gitkeep"), "")?;
         git_ops::add(&cwd, &[".gitkeep"])?;
 
-        let git_name = git_ops::git_config_get("user.name")
-            .unwrap_or_else(|_| "AIDA User".to_string());
-        let git_email = git_ops::git_config_get("user.email")
-            .unwrap_or_else(|_| "aida@localhost".to_string());
+        let git_name =
+            git_ops::git_config_get("user.name").unwrap_or_else(|_| "AIDA User".to_string());
+        let git_email =
+            git_ops::git_config_get("user.email").unwrap_or_else(|_| "aida@localhost".to_string());
         git_ops::configure_user(&cwd, &git_name, &git_email)?;
         git_ops::commit(&cwd, "chore: initial commit")?;
     }
@@ -3038,10 +3140,9 @@ fn handle_init_distributed_worktree(
     );
 
     // Configure git user in worktree
-    let git_name = git_ops::git_config_get("user.name")
-        .unwrap_or_else(|_| "AIDA User".to_string());
-    let git_email = git_ops::git_config_get("user.email")
-        .unwrap_or_else(|_| "aida@localhost".to_string());
+    let git_name = git_ops::git_config_get("user.name").unwrap_or_else(|_| "AIDA User".to_string());
+    let git_email =
+        git_ops::git_config_get("user.email").unwrap_or_else(|_| "aida@localhost".to_string());
     git_ops::configure_user(&store_path, &git_name, &git_email)?;
 
     // Initialize the git backend
@@ -3092,7 +3193,11 @@ fn handle_init_distributed_worktree(
         match push_result {
             Ok(out) if out.status.success() => {
                 origin_pushed = true;
-                println!("  {} pushed orphan branch to origin/{}", "Done".green(), branch_name);
+                println!(
+                    "  {} pushed orphan branch to origin/{}",
+                    "Done".green(),
+                    branch_name
+                );
             }
             _ => {
                 eprintln!(
@@ -3149,7 +3254,11 @@ fn handle_init_distributed_worktree(
 
         match git_ops::register_node_full(&store_path, requested_id, 1, &hn, email.clone()) {
             Ok(new_id) => {
-                let suffix = if has_origin { "" } else { " (local; will sync on next `aida push`)" };
+                let suffix = if has_origin {
+                    ""
+                } else {
+                    " (local; will sync on next `aida push`)"
+                };
                 println!(
                     "  {} acquired node id {} (hostname={}, email={}){}",
                     "Done".green(),
@@ -3162,15 +3271,13 @@ fn handle_init_distributed_worktree(
                 // (Global) explicitly. Reading config.toml here would
                 // return PerType because we haven't written the config
                 // yet (it's written further down in the init flow).
-                if let Ok(blocks) =
-                    auto_allocate_initial_blocks_with_scope(
-                        &store_path,
-                        &new_id,
-                        &hn,
-                        email.as_deref(),
-                        aida_core::IdCounterScope::Global,
-                    )
-                {
+                if let Ok(blocks) = auto_allocate_initial_blocks_with_scope(
+                    &store_path,
+                    &new_id,
+                    &hn,
+                    email.as_deref(),
+                    aida_core::IdCounterScope::Global,
+                ) {
                     if !blocks.is_empty() {
                         println!(
                             "  {} auto-allocated {} initial block{}",
@@ -3193,7 +3300,10 @@ fn handle_init_distributed_worktree(
 
     // Add .aida-store to .gitignore on main branch
     let gitignore_path = cwd.join(".gitignore");
-    let gitignore_entry = format!("\n# AIDA distributed store (orphan branch worktree)\n{}/\n", worktree_dir);
+    let gitignore_entry = format!(
+        "\n# AIDA distributed store (orphan branch worktree)\n{}/\n",
+        worktree_dir
+    );
     if gitignore_path.exists() {
         let content = std::fs::read_to_string(&gitignore_path)?;
         if !content.contains(worktree_dir) {
@@ -3260,11 +3370,17 @@ fn handle_init_distributed_worktree(
 
     println!();
     println!("  {}:", "Push code + store together".bold());
-    println!("    {}                        push your branch and the orphan store in one go", "aida push".cyan());
+    println!(
+        "    {}                        push your branch and the orphan store in one go",
+        "aida push".cyan()
+    );
     println!();
     println!("  {}:", "Onboard a teammate".bold());
     println!("    {}    they clone normally", "git clone <repo>".cyan());
-    println!("    {}            then `aida init` notices the orphan branch and attaches", "aida init".cyan());
+    println!(
+        "    {}            then `aida init` notices the orphan branch and attaches",
+        "aida init".cyan()
+    );
     println!();
 
     Ok(())
@@ -3312,22 +3428,30 @@ fn handle_init_post_clone(
     );
 
     // Configure git user in the worktree (so future commits attribute correctly)
-    let git_name = git_ops::git_config_get("user.name")
-        .unwrap_or_else(|_| "AIDA User".to_string());
-    let git_email = git_ops::git_config_get("user.email")
-        .unwrap_or_else(|_| "aida@localhost".to_string());
+    let git_name = git_ops::git_config_get("user.name").unwrap_or_else(|_| "AIDA User".to_string());
+    let git_email =
+        git_ops::git_config_get("user.email").unwrap_or_else(|_| "aida@localhost".to_string());
     git_ops::configure_user(&store_path, &git_name, &git_email)?;
 
     // Add .aida-store/ to root .gitignore (idempotent)
     let gitignore_path = cwd.join(".gitignore");
-    let gitignore_entry = format!("\n# AIDA distributed store (orphan branch worktree)\n{}/\n", worktree_dir);
+    let gitignore_entry = format!(
+        "\n# AIDA distributed store (orphan branch worktree)\n{}/\n",
+        worktree_dir
+    );
     if gitignore_path.exists() {
         let content = std::fs::read_to_string(&gitignore_path)?;
         if !content.contains(worktree_dir) {
             use std::io::Write;
-            let mut file = std::fs::OpenOptions::new().append(true).open(&gitignore_path)?;
+            let mut file = std::fs::OpenOptions::new()
+                .append(true)
+                .open(&gitignore_path)?;
             file.write_all(gitignore_entry.as_bytes())?;
-            println!("  {} updated {}", "Done".green(), ".gitignore".white().bold());
+            println!(
+                "  {} updated {}",
+                "Done".green(),
+                ".gitignore".white().bold()
+            );
         }
     } else {
         std::fs::write(&gitignore_path, gitignore_entry)?;
@@ -3373,7 +3497,9 @@ fn handle_init_post_clone(
     // Run scaffolding (CLAUDE.md, .claude/, hooks, etc.)
     // Load the store via GitBackend just for scaffolding metadata.
     let backend = aida_core::GitBackend::new(&store_path)?;
-    let store = backend.load().unwrap_or_else(|_| aida_core::models::RequirementsStore::new());
+    let store = backend
+        .load()
+        .unwrap_or_else(|_| aida_core::models::RequirementsStore::new());
     let storage_label = format!(
         "{}{}Git-canonical store ({}, orphan branch '{}')",
         worktree_dir.white().bold(),
@@ -3396,16 +3522,9 @@ fn handle_init_post_clone(
     // Prompt the user to acquire a node id. Auto-allocate happens inside
     // `aida node acquire` per Phase 3; we just wire up the same code path.
     println!();
-    println!(
-        "{}",
-        "Node identity setup".cyan().bold()
-    );
-    println!(
-        "  This clone needs a unique node id to issue requirement IDs without colliding"
-    );
-    println!(
-        "  with other clones. Acquire one now? (Recommended.)"
-    );
+    println!("{}", "Node identity setup".cyan().bold());
+    println!("  This clone needs a unique node id to issue requirement IDs without colliding");
+    println!("  with other clones. Acquire one now? (Recommended.)");
 
     let acquire_now = prompt_yes_no("Acquire a node id for this clone? [Y/n] ", true)?;
     if !acquire_now {
@@ -3491,10 +3610,7 @@ fn handle_init_post_clone(
     }
 
     println!();
-    println!(
-        "{} AIDA clone bootstrap complete.",
-        "".green().bold()
-    );
+    println!("{} AIDA clone bootstrap complete.", "".green().bold());
     Ok(())
 }
 
@@ -3537,9 +3653,7 @@ fn handle_init_distributed_sibling(
             "!".yellow()
         );
         eprintln!("  Use {} to reinitialize.", "--force".bold());
-        eprintln!(
-            "  To refresh just the scaffolding (CLAUDE.md, .claude/skills/, hooks),"
-        );
+        eprintln!("  To refresh just the scaffolding (CLAUDE.md, .claude/skills/, hooks),");
         eprintln!("  use `aida scaffold apply --force` instead — preserves your store.");
         return Ok(());
     }
@@ -3573,10 +3687,9 @@ fn handle_init_distributed_sibling(
     }
 
     // Configure git user from global git config or defaults
-    let git_name = git_ops::git_config_get("user.name")
-        .unwrap_or_else(|_| "AIDA User".to_string());
-    let git_email = git_ops::git_config_get("user.email")
-        .unwrap_or_else(|_| "aida@localhost".to_string());
+    let git_name = git_ops::git_config_get("user.name").unwrap_or_else(|_| "AIDA User".to_string());
+    let git_email =
+        git_ops::git_config_get("user.email").unwrap_or_else(|_| "aida@localhost".to_string());
     git_ops::configure_user(&store_dir, &git_name, &git_email)?;
 
     // Add remote if specified
@@ -3594,11 +3707,7 @@ fn handle_init_distributed_sibling(
                 .current_dir(&store_dir)
                 .args(["remote", "add", "origin", remote])
                 .output()?;
-            println!(
-                "  {} remote: {}",
-                "Added".green(),
-                remote.white().bold()
-            );
+            println!("  {} remote: {}", "Added".green(), remote.white().bold());
         }
     }
 
@@ -3647,33 +3756,25 @@ fn handle_init_distributed_sibling(
 
     // If we have a remote, push the initial commit and register the node
     if registry_remote.is_some() {
-        let branch = git_ops::current_branch(&store_dir)
-            .unwrap_or_else(|_| "main".to_string());
+        let branch = git_ops::current_branch(&store_dir).unwrap_or_else(|_| "main".to_string());
 
         // Push initial commit
         match git_ops::push(&store_dir, "origin", &branch) {
             Ok(true) => {
-                println!(
-                    "  {} initial commit to remote",
-                    "Pushed".green(),
-                );
+                println!("  {} initial commit to remote", "Pushed".green(),);
             }
             Ok(false) => {
                 // Remote has content — pull first then push
                 git_ops::pull_rebase(&store_dir, "origin", &branch)?;
                 git_ops::push(&store_dir, "origin", &branch)?;
-                println!(
-                    "  {} with remote and pushed",
-                    "Synced".green(),
-                );
+                println!("  {} with remote and pushed", "Synced".green(),);
             }
             Err(e) => {
+                eprintln!("  {} Failed to push to remote: {}", "Warning:".yellow(), e);
                 eprintln!(
-                    "  {} Failed to push to remote: {}",
-                    "Warning:".yellow(),
-                    e
+                    "  You can push later with: cd aida-store && git push -u origin {}",
+                    branch
                 );
-                eprintln!("  You can push later with: cd aida-store && git push -u origin {}", branch);
             }
         }
 
@@ -3692,20 +3793,13 @@ fn handle_init_distributed_sibling(
                 );
             }
             Err(e) => {
-                eprintln!(
-                    "  {} Node registration failed: {}",
-                    "Warning:".yellow(),
-                    e
-                );
+                eprintln!("  {} Node registration failed: {}", "Warning:".yellow(), e);
                 eprintln!("  You can register later when the remote is available.");
             }
         }
     } else {
         println!();
-        println!(
-            "  {} No --registry-remote specified.",
-            "Note:".yellow()
-        );
+        println!("  {} No --registry-remote specified.", "Note:".yellow());
         println!("  The store is local-only until you add a remote:");
         println!("    cd aida-store && git remote add origin <url>");
         println!("    aida init --distributed --registry-remote <url>");
@@ -3750,7 +3844,10 @@ fn handle_init_distributed_sibling(
 
     println!();
     println!("  {}:", "Push code + store together".bold());
-    println!("    {}                        push your branch and the orphan store in one go", "aida push".cyan());
+    println!(
+        "    {}                        push your branch and the orphan store in one go",
+        "aida push".cyan()
+    );
     println!();
 
     Ok(())
@@ -4585,7 +4682,6 @@ fn delete_requirement(storage: &Storage, id_str: &str, skip_confirm: bool) -> Re
     Ok(())
 }
 
-
 /// True when a requirement's status means "this work is done — no new
 /// children should be filed under it without explicit override". Used by
 /// the BUG-64 guard on `aida add --parent` and `aida rel add --type
@@ -4979,7 +5075,11 @@ fn handle_config_command(cmd: &ConfigCommand, storage: &Storage) -> Result<()> {
                 store.requirements.len()
             );
         }
-        ConfigCommand::User { node_id, email, toml: emit_toml } => {
+        ConfigCommand::User {
+            node_id,
+            email,
+            toml: emit_toml,
+        } => {
             // trace:STORY-44 | ai:claude
             handle_config_user(node_id.as_deref(), email.as_deref(), *emit_toml)?;
         }
@@ -4990,11 +5090,7 @@ fn handle_config_command(cmd: &ConfigCommand, storage: &Storage) -> Result<()> {
 
 /// Handle `aida config user` — show or update `~/.aida/preferences.toml`.
 /// trace:STORY-44 | ai:claude
-fn handle_config_user(
-    node_id: Option<&str>,
-    email: Option<&str>,
-    emit_toml: bool,
-) -> Result<()> {
+fn handle_config_user(node_id: Option<&str>, email: Option<&str>, emit_toml: bool) -> Result<()> {
     let mut prefs = aida_core::UserPreferences::load()?;
     let mut changed = false;
 
@@ -5290,7 +5386,9 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
                         }
                         eprintln!(
                             "{} Push rejected (concurrent claim), retrying ({}/{})...",
-                            "!".yellow(), attempt + 1, max_retries
+                            "!".yellow(),
+                            attempt + 1,
+                            max_retries
                         );
                     }
                     Err(e) => anyhow::bail!("Push failed: {}", e),
@@ -5335,7 +5433,11 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
 
         BlockCommand::Status => {
             let registry = BlockRegistry::load(&blocks_path)?;
-            let my_blocks: Vec<_> = registry.blocks.iter().filter(|b| b.node_id == node_id).collect();
+            let my_blocks: Vec<_> = registry
+                .blocks
+                .iter()
+                .filter(|b| b.node_id == node_id)
+                .collect();
             if my_blocks.is_empty() {
                 println!(
                     "No blocks for node {}. Run `aida db block claim` to allocate one.",
@@ -5397,11 +5499,8 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
                 .filter(|b| !b.is_exhausted())
                 .map(|b| b.node_id.clone())
                 .collect();
-            let registered: std::collections::HashSet<String> = nodes_registry
-                .nodes
-                .iter()
-                .map(|n| n.id.clone())
-                .collect();
+            let registered: std::collections::HashSet<String> =
+                nodes_registry.nodes.iter().map(|n| n.id.clone()).collect();
 
             let blocks_without_node: Vec<&str> = block_owners
                 .iter()
@@ -5429,7 +5528,10 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
             println!();
 
             if blocks_without_node.is_empty() && nodes_without_block.is_empty() {
-                println!("{} consistent — every block has a registered node, every node has a block.", "✓".green().bold());
+                println!(
+                    "{} consistent — every block has a registered node, every node has a block.",
+                    "✓".green().bold()
+                );
                 return Ok(());
             }
 
@@ -5439,7 +5541,11 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
                     "{} {} block-owning node{} not in registry/nodes.toml:",
                     "✗".red().bold(),
                     blocks_without_node.len(),
-                    if blocks_without_node.len() == 1 { "" } else { "s" }
+                    if blocks_without_node.len() == 1 {
+                        ""
+                    } else {
+                        "s"
+                    }
                 );
                 let mut sorted = blocks_without_node.clone();
                 sorted.sort();
@@ -5448,12 +5554,7 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
                         .blocks
                         .iter()
                         .filter(|b| &b.node_id.as_str() == id)
-                        .map(|b| {
-                            format!(
-                                "{}-{}..{}",
-                                b.type_prefix, b.range_start, b.range_end
-                            )
-                        })
+                        .map(|b| format!("{}-{}..{}", b.type_prefix, b.range_start, b.range_end))
                         .collect();
                     println!(
                         "    - node `{}` owns {} block(s): {}",
@@ -5479,14 +5580,22 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
                         "{} {} registered node{} with no claimed block (blocks-only policy):",
                         "✗".red().bold(),
                         nodes_without_block.len(),
-                        if nodes_without_block.len() == 1 { "" } else { "s" }
+                        if nodes_without_block.len() == 1 {
+                            ""
+                        } else {
+                            "s"
+                        }
                     );
                 } else {
                     println!(
                         "{} {} registered node{} with no claimed block (allowed under `{}`):",
                         "·".dimmed(),
                         nodes_without_block.len(),
-                        if nodes_without_block.len() == 1 { "" } else { "s" },
+                        if nodes_without_block.len() == 1 {
+                            ""
+                        } else {
+                            "s"
+                        },
                         policy.as_str()
                     );
                 }
@@ -5539,7 +5648,11 @@ fn handle_docs_with_store(cmd: &DocsCommand, store: &RequirementsStore) -> Resul
                 report.written.len() + report.unchanged.len() + report.drifted.len();
             println!(
                 "{} {} layer file{} ({} written, {} updated, {} unchanged)",
-                if *dry_run { "→ dry-run:".cyan() } else { "✓".green() },
+                if *dry_run {
+                    "→ dry-run:".cyan()
+                } else {
+                    "✓".green()
+                },
                 total_planned,
                 if total_planned == 1 { "" } else { "s" },
                 report.written.len(),
@@ -5607,7 +5720,9 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
         NodeCommand::List => {
             let registry = NodeRegistry::load(&registry_path).unwrap_or_default();
             let current_id = if node_config_path.exists() {
-                aida_core::NodeConfig::load(&node_config_path).ok().map(|c| c.node_id)
+                aida_core::NodeConfig::load(&node_config_path)
+                    .ok()
+                    .map(|c| c.node_id)
             } else {
                 None
             };
@@ -5623,12 +5738,25 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
             );
             println!("{}", "─".repeat(100));
             for n in &registry.nodes {
-                let marker = if current_id.as_deref() == Some(n.id.as_str()) { "*" } else { " " };
+                let marker = if current_id.as_deref() == Some(n.id.as_str()) {
+                    "*"
+                } else {
+                    " "
+                };
                 let email = n.email.clone().unwrap_or_else(|| "-".into());
-                let when = n.registered.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M").to_string();
+                let when = n
+                    .registered
+                    .with_timezone(&chrono::Local)
+                    .format("%Y-%m-%d %H:%M")
+                    .to_string();
                 println!(
                     "{:<2}  {:<6}  {:<8}  {:<28}  {:<22}  {}",
-                    marker, n.id, n.user_id, truncate(&email, 28), truncate(&n.hostname, 22), when
+                    marker,
+                    n.id,
+                    n.user_id,
+                    truncate(&email, 28),
+                    truncate(&n.hostname, 22),
+                    when
                 );
             }
         }
@@ -5656,7 +5784,13 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
             println!("  User ID:    {}", entry.user_id);
             println!("  Hostname:   {}", entry.hostname);
             println!("  Email:      {}", entry.email.as_deref().unwrap_or("-"));
-            println!("  Registered: {}", entry.registered.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M:%S %Z"));
+            println!(
+                "  Registered: {}",
+                entry
+                    .registered
+                    .with_timezone(&chrono::Local)
+                    .format("%Y-%m-%d %H:%M:%S %Z")
+            );
             if node_config_path.exists() {
                 let local = aida_core::NodeConfig::load(&node_config_path)?;
                 if local.node_id == entry.id {
@@ -5665,20 +5799,33 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
             }
         }
 
-        NodeCommand::Acquire { id: requested_id, hostname: hn_override, email: email_override, force, yes, hijack } => {
+        NodeCommand::Acquire {
+            id: requested_id,
+            hostname: hn_override,
+            email: email_override,
+            force,
+            yes,
+            hijack,
+        } => {
             // STORY-43 hijack path: re-claim an existing node id.
             if let Some(target_id) = hijack {
                 let hn = hn_override.clone().unwrap_or_else(hostname);
-                let email = email_override.clone().or_else(|| {
-                    aida_core::git_ops::git_config_get("user.email").ok()
-                });
+                let email = email_override
+                    .clone()
+                    .or_else(|| aida_core::git_ops::git_config_get("user.email").ok());
                 let user_id = 1;
                 println!(
                     "Hijacking node id '{}' for this clone (hostname={}, email={})...",
-                    target_id, hn, email.as_deref().unwrap_or("-")
+                    target_id,
+                    hn,
+                    email.as_deref().unwrap_or("-")
                 );
                 let outcome = aida_core::git_ops::hijack_node(
-                    store_path, target_id, user_id, &hn, email.clone(),
+                    store_path,
+                    target_id,
+                    user_id,
+                    &hn,
+                    email.clone(),
                 )?;
                 match &outcome {
                     aida_core::git_ops::HijackOutcome::MarkedInPlace { marker_path } => {
@@ -5688,9 +5835,7 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
                             target_id,
                             marker_path.display()
                         );
-                        println!(
-                            "  Next `aida` invocation in the old clone will warn the user."
-                        );
+                        println!("  Next `aida` invocation in the old clone will warn the user.");
                     }
                     aida_core::git_ops::HijackOutcome::Reattributed { reason } => {
                         println!(
@@ -5710,14 +5855,17 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
                     "This clone already has node id {} (registered {}). \
                      Pass --force to re-acquire (will allocate a new id).",
                     existing.node_id,
-                    existing.registered_at.with_timezone(&chrono::Local).format("%Y-%m-%d")
+                    existing
+                        .registered_at
+                        .with_timezone(&chrono::Local)
+                        .format("%Y-%m-%d")
                 );
             }
 
             let hn = hn_override.clone().unwrap_or_else(hostname);
-            let email = email_override.clone().or_else(|| {
-                aida_core::git_ops::git_config_get("user.email").ok()
-            });
+            let email = email_override
+                .clone()
+                .or_else(|| aida_core::git_ops::git_config_get("user.email").ok());
 
             // user_id resolution: for now we use a placeholder of 1 if we
             // can't find a UserRegistry entry. Phase 1 deliberately doesn't
@@ -5745,7 +5893,8 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
                                 anyhow::bail!(
                                     "Node id '{}' is taken. Try `aida node acquire --id {}` \
                                      (or pass --yes to auto-accept the suggestion).",
-                                    req, suggested
+                                    req,
+                                    suggested
                                 );
                             } else {
                                 use std::io::Write;
@@ -5846,9 +5995,9 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
 
         NodeCommand::Release { id, yes } => {
             let registry = NodeRegistry::load(&registry_path).unwrap_or_default();
-            let entry = registry.get(id).ok_or_else(|| {
-                anyhow::anyhow!("Node {} is not in the shared registry", id)
-            })?;
+            let entry = registry
+                .get(id)
+                .ok_or_else(|| anyhow::anyhow!("Node {} is not in the shared registry", id))?;
 
             println!("About to release node {}:", entry.id);
             println!("  Hostname: {}", entry.hostname);
@@ -5891,8 +6040,7 @@ fn handle_node_command(cmd: &NodeCommand, store_path: &std::path::Path) -> Resul
 /// trace:FR-1-073 | ai:claude
 /// trace:FR-1-074 | ai:claude
 const PHASE3_AUTO_ALLOC_TYPES: &[&str] = &[
-    "FR", "BUG", "TASK", "EPIC", "STORY", "SPIKE",
-    "PRIN", "VIS", "CON", "ADR", "TERM",
+    "FR", "BUG", "TASK", "EPIC", "STORY", "SPIKE", "PRIN", "VIS", "CON", "ADR", "TERM",
 ];
 
 /// Auto-allocate initial blocks for a freshly-acquired node. Claims one
@@ -6089,10 +6237,7 @@ fn truncate(s: &str, max: usize) -> String {
     }
 }
 
-fn handle_cache_command(
-    cmd: &CacheCommand,
-    backend: &aida_core::CachedGitBackend,
-) -> Result<()> {
+fn handle_cache_command(cmd: &CacheCommand, backend: &aida_core::CachedGitBackend) -> Result<()> {
     use aida_core::DatabaseBackend;
 
     match cmd {
@@ -6135,7 +6280,10 @@ fn handle_cache_command(
             );
             let stale = recorded_sha != actual_sha || recorded_sha.is_empty();
             if stale && !actual_sha.is_empty() {
-                println!("Status:           {} — run `aida cache rebuild`", "STALE".yellow());
+                println!(
+                    "Status:           {} — run `aida cache rebuild`",
+                    "STALE".yellow()
+                );
             } else {
                 println!("Status:           {}", "FRESH".green());
             }
@@ -6298,8 +6446,7 @@ fn save_role_at(state: &RoleState, path: &std::path::Path) -> Result<()> {
         std::fs::create_dir_all(parent)?;
     }
     let content = toml::to_string_pretty(state)?;
-    std::fs::write(path, content)
-        .with_context(|| format!("Failed to write {}", path.display()))?;
+    std::fs::write(path, content).with_context(|| format!("Failed to write {}", path.display()))?;
     Ok(())
 }
 
@@ -6499,7 +6646,9 @@ fn resolve_role_name(name: Option<&str>) -> Result<String> {
 /// and `aida queue list/next` to compose default filters.
 /// trace:TASK-1-021 | ai:claude
 fn active_role_scope() -> Option<(Vec<String>, Option<String>)> {
-    let role_name = std::env::var("AIDA_SESSION_ROLE").ok().filter(|s| !s.is_empty())?;
+    let role_name = std::env::var("AIDA_SESSION_ROLE")
+        .ok()
+        .filter(|s| !s.is_empty())?;
     let project = std::env::var("AIDA_SESSION_PROJECT")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|_| statusline_project_root());
@@ -6512,11 +6661,7 @@ fn active_role_scope() -> Option<(Vec<String>, Option<String>)> {
 
 fn handle_role_scope(project_root: &std::path::Path, cmd: &RoleScopeCommand) -> Result<()> {
     match cmd {
-        RoleScopeCommand::Set {
-            name,
-            tags,
-            status,
-        } => {
+        RoleScopeCommand::Set { name, tags, status } => {
             if tags.is_none() && status.is_none() {
                 anyhow::bail!(
                     "At least one of --tags or --status is required.\n\
@@ -6543,11 +6688,7 @@ fn handle_role_scope(project_root: &std::path::Path, cmd: &RoleScopeCommand) -> 
             let (state, _) = load_role(project_root, &role_name)?;
             print_role_scope(&state);
         }
-        RoleScopeCommand::Clear {
-            name,
-            tags,
-            status,
-        } => {
+        RoleScopeCommand::Clear { name, tags, status } => {
             let role_name = resolve_role_name(name.as_deref())?;
             let (mut state, path) = load_role(project_root, &role_name)?;
             // No flags = clear everything; otherwise clear only the specified field(s).
@@ -6579,11 +6720,7 @@ fn print_role_scope(state: &RoleState) {
     }
 }
 
-fn handle_role_enter(
-    project_root: &std::path::Path,
-    name: &str,
-    cd: bool,
-) -> Result<()> {
+fn handle_role_enter(project_root: &std::path::Path, name: &str, cd: bool) -> Result<()> {
     let (mut state, _) = load_role(project_root, name).map_err(|_| {
         anyhow::anyhow!(
             "No such role: {}\n\
@@ -6639,7 +6776,12 @@ fn handle_role_add(
     };
     let save_path = role_save_path(project_root, &state)?;
     save_role_at(&state, &save_path)?;
-    emit_role_enter_eval(project_root, &state, /* cd */ false, /* was_existing */ false);
+    emit_role_enter_eval(
+        project_root,
+        &state,
+        /* cd */ false,
+        /* was_existing */ false,
+    );
     Ok(())
 }
 
@@ -6690,7 +6832,11 @@ fn emit_role_enter_eval(
     if cd {
         println!("cd '{}'", cwd);
     }
-    let verb = if was_existing { "Resumed" } else { "Created and entered" };
+    let verb = if was_existing {
+        "Resumed"
+    } else {
+        "Created and entered"
+    };
     let scope = if state.global { " [global]" } else { "" };
     println!(
         "echo '✓ {} role: {}{}{}'",
@@ -6752,16 +6898,10 @@ fn emit_role_enter_eval(
         let show_n = total.min(5);
         if total == 0 {
             println!("echo ''");
-            println!(
-                "echo '  Queued for this role: {}'",
-                "(empty)"
-            );
+            println!("echo '  Queued for this role: {}'", "(empty)");
         } else {
             println!("echo ''");
-            println!(
-                "echo '  Queued for this role ({}):'",
-                total
-            );
+            println!("echo '  Queued for this role ({}):'", total);
             // Load store once more to look up reqs by uuid for title
             // resolution. The queue entry only stores uuid; we need the
             // spec_id + title from the store.
@@ -6774,13 +6914,13 @@ fn emit_role_enter_eval(
             for entry in queue_for_role.iter().take(show_n) {
                 let (spec_id, title) = store_snapshot
                     .as_ref()
-                    .and_then(|s| {
-                        s.requirements.iter().find(|r| r.id == entry.requirement_id)
+                    .and_then(|s| s.requirements.iter().find(|r| r.id == entry.requirement_id))
+                    .map(|r| {
+                        (
+                            r.spec_id.clone().unwrap_or_else(|| "?".into()),
+                            truncate(&r.title, 60).to_string(),
+                        )
                     })
-                    .map(|r| (
-                        r.spec_id.clone().unwrap_or_else(|| "?".into()),
-                        truncate(&r.title, 60).to_string(),
-                    ))
                     .unwrap_or_else(|| ("(deleted)".into(), String::new()));
                 println!(
                     "echo '    {:<12} {}'",
@@ -6804,9 +6944,7 @@ fn emit_role_enter_eval(
     // trace:TASK-49 | ai:claude
     if was_existing && !state.activity.is_empty() {
         println!("echo ''");
-        println!(
-            "echo '  Last touched while in this role:'"
-        );
+        println!("echo '  Last touched while in this role:'");
         for entry in state.activity.iter().take(5) {
             let when = humanize_relative(entry.at);
             let title = titles
@@ -6887,10 +7025,7 @@ fn handle_role_list(project_root: &std::path::Path) -> Result<()> {
             "aida role add".cyan(),
             "<name>".dimmed()
         );
-        println!(
-            "Or install a starter set: {}",
-            "aida role scaffold".cyan()
-        );
+        println!("Or install a starter set: {}", "aida role scaffold".cyan());
         return Ok(());
     }
     println!("Roles for {}:", project_root.display());
@@ -6927,11 +7062,21 @@ fn handle_role_show(project_root: &std::path::Path, name: Option<&str>) -> Resul
     let resolved = match name {
         Some(n) => n.to_string(),
         None => std::env::var("AIDA_SESSION_ROLE").map_err(|_| {
-            anyhow::anyhow!("No role active and no name given. Use `aida role list` to see options.")
+            anyhow::anyhow!(
+                "No role active and no name given. Use `aida role list` to see options."
+            )
         })?,
     };
     let (state, path) = load_role(project_root, &resolved)?;
-    println!("Role:        {}{}", state.name.bold(), if state.global { " [global]".dimmed().to_string() } else { String::new() });
+    println!(
+        "Role:        {}{}",
+        state.name.bold(),
+        if state.global {
+            " [global]".dimmed().to_string()
+        } else {
+            String::new()
+        }
+    );
     println!("Stored at:   {}", path.display());
     println!(
         "Purpose:     {}",
@@ -6963,7 +7108,11 @@ fn handle_role_show(project_root: &std::path::Path, name: Option<&str>) -> Resul
     // trace:TASK-1-022 | ai:claude
     if let Some(text) = &state.system_prompt {
         let preview: String = text.lines().next().unwrap_or("").chars().take(80).collect();
-        let suffix = if text.len() > preview.len() { "…" } else { "" };
+        let suffix = if text.len() > preview.len() {
+            "…"
+        } else {
+            ""
+        };
         println!("Addendum:    {} chars — {}{}", text.len(), preview, suffix);
     }
     if !state.activity.is_empty() {
@@ -7004,7 +7153,12 @@ fn handle_role_delete(project_root: &std::path::Path, name: &str, yes: bool) -> 
         }
     }
     std::fs::remove_file(&path)?;
-    println!("{}: deleted role '{}' ({})", "OK".green(), name, path.display());
+    println!(
+        "{}: deleted role '{}' ({})",
+        "OK".green(),
+        name,
+        path.display()
+    );
     Ok(())
 }
 
@@ -7215,20 +7369,31 @@ fn store_status() -> Result<()> {
     }
     match &store_head {
         Some(s) => println!("  current store:    {}", short_sha(s).cyan()),
-        None => println!("  current store:    {} (no .aida-store/)", "(missing)".yellow()),
+        None => println!(
+            "  current store:    {} (no .aida-store/)",
+            "(missing)".yellow()
+        ),
     }
     println!();
 
     match (paired_store_sha.as_deref(), store_head.as_deref()) {
         (Some(p), Some(c)) if p == c => {
-            println!("{} aligned — code commit was paired with the current store HEAD.", "✓".green());
+            println!(
+                "{} aligned — code commit was paired with the current store HEAD.",
+                "✓".green()
+            );
         }
         (Some(p), Some(c)) => {
             // Compute drift: how many commits is store HEAD ahead of/behind paired.
             let drift = std::process::Command::new("git")
                 .arg("-C")
                 .arg(&store_path)
-                .args(["rev-list", "--left-right", "--count", &format!("{}...{}", p, c)])
+                .args([
+                    "rev-list",
+                    "--left-right",
+                    "--count",
+                    &format!("{}...{}", p, c),
+                ])
                 .output()
                 .ok();
             let (behind, ahead) = match drift {
@@ -7330,7 +7495,10 @@ fn store_install_hook(force: bool) -> Result<()> {
     );
     println!();
     println!("Every future code commit will get an `Aida-Store: <sha>` trailer pinning the");
-    println!("orphan-store HEAD at commit time. Inspect alignment with: {}", "aida store status".cyan());
+    println!(
+        "orphan-store HEAD at commit time. Inspect alignment with: {}",
+        "aida store status".cyan()
+    );
     Ok(())
 }
 
@@ -7432,8 +7600,7 @@ fn doctor_convention_check(quiet: bool) -> Result<()> {
     );
     println!(
         "  ({})",
-        "run `aida edit <id>` to add — STORY-67 will pick it up automatically"
-            .dimmed()
+        "run `aida edit <id>` to add — STORY-67 will pick it up automatically".dimmed()
     );
     std::process::exit(1);
 }
@@ -7534,12 +7701,10 @@ fn doctor_verify_relationships(repair: bool, yes: bool) -> Result<()> {
                 continue;
             }
             if let Some(v) = trimmed.strip_prefix("rel_type:") {
-                current_rel_type =
-                    v.trim().trim_matches('"').trim_matches('\'').to_string();
+                current_rel_type = v.trim().trim_matches('"').trim_matches('\'').to_string();
             }
             if let Some(v) = trimmed.strip_prefix("target_id:") {
-                let target_uuid =
-                    v.trim().trim_matches('"').trim_matches('\'').to_string();
+                let target_uuid = v.trim().trim_matches('"').trim_matches('\'').to_string();
                 if !target_uuid.is_empty() && !all_uuids.contains(&target_uuid) {
                     dangling.push(Dangling {
                         source_path: path.clone(),
@@ -7615,7 +7780,10 @@ fn doctor_verify_relationships(repair: bool, yes: bool) -> Result<()> {
     let _ = aida_core::git_ops::add(&store_path, &["objects"]);
     let _ = aida_core::git_ops::commit(
         &store_path,
-        &format!("chore(repair): strip {} dangling relationship target(s)", dangling.len()),
+        &format!(
+            "chore(repair): strip {} dangling relationship target(s)",
+            dangling.len()
+        ),
     );
     println!("{} repaired {} requirement(s).", "✓".green().bold(), fixed);
     println!("  Push with: {}", "aida push".cyan());
@@ -7642,8 +7810,7 @@ fn doctor_validate_trace_comments(strip_dangling: bool, dry_run: bool, yes: bool
     // trace:EPIC-19 | ai:claude
     let mut yaml_files: Vec<std::path::PathBuf> = Vec::new();
     walk_yamls(&objects_root, &mut yaml_files);
-    let mut known_specs: std::collections::HashSet<String> =
-        std::collections::HashSet::new();
+    let mut known_specs: std::collections::HashSet<String> = std::collections::HashSet::new();
     for path in &yaml_files {
         let Ok(content) = std::fs::read_to_string(path) else {
             continue;
@@ -7666,8 +7833,7 @@ fn doctor_validate_trace_comments(strip_dangling: bool, dry_run: bool, yes: bool
     }
 
     // Collect every trace comment in the project tree.
-    let trace_re =
-        regex::Regex::new(r"trace:([A-Z]+(?:-[A-Z0-9]+)?-[0-9]+(?:-[0-9]+)?)").unwrap();
+    let trace_re = regex::Regex::new(r"trace:([A-Z]+(?:-[A-Z0-9]+)?-[0-9]+(?:-[0-9]+)?)").unwrap();
     let mut by_spec: std::collections::HashMap<String, Vec<(std::path::PathBuf, usize)>> =
         std::collections::HashMap::new();
 
@@ -7711,7 +7877,10 @@ fn doctor_validate_trace_comments(strip_dangling: bool, dry_run: bool, yes: bool
         println!("Likely causes: req was deleted, or a typo. Either delete the");
         println!("trace comment or update it to reference an existing spec_id.");
         println!();
-        println!("To strip these in-place: {}", "aida doctor validate-trace-comments --strip-dangling".cyan());
+        println!(
+            "To strip these in-place: {}",
+            "aida doctor validate-trace-comments --strip-dangling".cyan()
+        );
         std::process::exit(1);
     }
 
@@ -7761,10 +7930,7 @@ fn doctor_validate_trace_comments(strip_dangling: bool, dry_run: bool, yes: bool
         stats.lines_modified,
         stats.files_changed
     );
-    println!(
-        "  Review the diff: {}",
-        "git diff".cyan()
-    );
+    println!("  Review the diff: {}", "git diff".cyan());
     Ok(())
 }
 
@@ -7804,8 +7970,16 @@ fn strip_dangling_walk(
         if path.is_dir() {
             if matches!(
                 name,
-                ".git" | ".aida-store" | ".aida" | "target" | "node_modules"
-                    | "dist" | "build" | ".cache" | ".venv" | "venv"
+                ".git"
+                    | ".aida-store"
+                    | ".aida"
+                    | "target"
+                    | "node_modules"
+                    | "dist"
+                    | "build"
+                    | ".cache"
+                    | ".venv"
+                    | "venv"
             ) {
                 continue;
             }
@@ -7815,9 +7989,25 @@ fn strip_dangling_walk(
         let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
         let probably_text = matches!(
             ext,
-            "rs" | "py" | "ts" | "tsx" | "js" | "jsx" | "go" | "java"
-                | "c" | "cpp" | "h" | "hpp" | "cs" | "rb" | "sh" | "md"
-                | "toml" | "yaml" | "yml" | "json"
+            "rs" | "py"
+                | "ts"
+                | "tsx"
+                | "js"
+                | "jsx"
+                | "go"
+                | "java"
+                | "c"
+                | "cpp"
+                | "h"
+                | "hpp"
+                | "cs"
+                | "rb"
+                | "sh"
+                | "md"
+                | "toml"
+                | "yaml"
+                | "yml"
+                | "json"
         );
         if !probably_text {
             continue;
@@ -7894,7 +8084,9 @@ fn rewrite_strip_dangling(
                 if dangling_ids.contains(id) {
                     String::new()
                 } else {
-                    caps.get(0).map(|m| m.as_str().to_string()).unwrap_or_default()
+                    caps.get(0)
+                        .map(|m| m.as_str().to_string())
+                        .unwrap_or_default()
                 }
             })
             .into_owned();
@@ -7903,10 +8095,8 @@ fn rewrite_strip_dangling(
         // comment marker (no content), or modify (keep the line with
         // the fragment removed).
         let trimmed = stripped.trim();
-        let is_just_marker = matches!(
-            trimmed,
-            "" | "//" | "///" | "//!" | "/*" | "*/" | "*" | "#"
-        ) || trimmed.starts_with("// ") && trimmed.trim_end_matches(' ').len() <= 3;
+        let is_just_marker = matches!(trimmed, "" | "//" | "///" | "//!" | "/*" | "*/" | "*" | "#")
+            || trimmed.starts_with("// ") && trimmed.trim_end_matches(' ').len() <= 3;
 
         if is_just_marker {
             deleted += 1;
@@ -7914,10 +8104,7 @@ fn rewrite_strip_dangling(
         } else {
             modified += 1;
             // Clean up double-spaces left behind by the strip.
-            let cleaned = stripped
-                .replace("  ", " ")
-                .trim_end()
-                .to_string();
+            let cleaned = stripped.replace("  ", " ").trim_end().to_string();
             out.push_str(&cleaned);
             out.push('\n');
         }
@@ -7970,9 +8157,25 @@ fn walk_source_for_traces(
         let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
         let probably_text = matches!(
             ext,
-            "rs" | "py" | "ts" | "tsx" | "js" | "jsx" | "go" | "java"
-                | "c" | "cpp" | "h" | "hpp" | "cs" | "rb" | "sh" | "md"
-                | "toml" | "yaml" | "yml" | "json"
+            "rs" | "py"
+                | "ts"
+                | "tsx"
+                | "js"
+                | "jsx"
+                | "go"
+                | "java"
+                | "c"
+                | "cpp"
+                | "h"
+                | "hpp"
+                | "cs"
+                | "rb"
+                | "sh"
+                | "md"
+                | "toml"
+                | "yaml"
+                | "yml"
+                | "json"
         );
         if !probably_text {
             continue;
@@ -8040,7 +8243,10 @@ fn doctor_repair_stale_blocks(dry_run: bool, yes: bool) -> Result<()> {
         .collect();
 
     if stale.is_empty() {
-        println!("{} no stale blocks — every active block has a registered node.", "✓".green());
+        println!(
+            "{} no stale blocks — every active block has a registered node.",
+            "✓".green()
+        );
         return Ok(());
     }
 
@@ -8087,7 +8293,10 @@ fn doctor_repair_stale_blocks(dry_run: bool, yes: bool) -> Result<()> {
     let _ = aida_core::git_ops::add(&store_path, &["registry/blocks.yaml"]);
     let _ = aida_core::git_ops::commit(
         &store_path,
-        &format!("chore(registry): tombstone {} stale block(s) (no node owner)", count),
+        &format!(
+            "chore(registry): tombstone {} stale block(s) (no node owner)",
+            count
+        ),
     );
 
     println!("{} tombstoned {} block(s).", "✓".green().bold(), count);
@@ -8169,13 +8378,12 @@ fn doctor_scrub_collisions() -> Result<()> {
     for (spec, entries) in &collisions {
         println!("{}:", spec.bold());
         for (uuid, title, path) in entries.iter() {
-            let title_disp = if title.is_empty() { "(no title)".dimmed().to_string() } else { title.clone() };
-            println!(
-                "  {} {} — {}",
-                uuid.yellow(),
-                title_disp,
-                path.dimmed()
-            );
+            let title_disp = if title.is_empty() {
+                "(no title)".dimmed().to_string()
+            } else {
+                title.clone()
+            };
+            println!("  {} {} — {}", uuid.yellow(), title_disp, path.dimmed());
         }
         println!();
     }
@@ -8226,7 +8434,10 @@ fn doctor_fsck() -> Result<()> {
             .map(|s| s.as_str())
             .collect();
         if orphan_blocks.is_empty() {
-            println!("  {} every active block has a registered node owner.", "✓".green());
+            println!(
+                "  {} every active block has a registered node owner.",
+                "✓".green()
+            );
         } else {
             had_problem = true;
             println!(
@@ -8235,13 +8446,13 @@ fn doctor_fsck() -> Result<()> {
                 orphan_blocks.len(),
                 orphan_blocks.join(", ")
             );
-            println!(
-                "    fix: {}",
-                "aida doctor repair-stale-blocks".cyan()
-            );
+            println!("    fix: {}", "aida doctor repair-stale-blocks".cyan());
         }
     } else {
-        println!("  {} no blocks.yaml — skipping (project may be node-aware-only).", "·".dimmed());
+        println!(
+            "  {} no blocks.yaml — skipping (project may be node-aware-only).",
+            "·".dimmed()
+        );
     }
     println!();
 
@@ -8300,9 +8511,16 @@ fn doctor_fsck() -> Result<()> {
     if cache_path.exists() {
         // Simple heuristic: cache exists. Detailed staleness check
         // requires reading cache HEAD — defer to `aida cache status`.
-        println!("  {} cache exists at {} (run `aida cache status` for HEAD-vs-store check).", "·".dimmed(), cache_path.display());
+        println!(
+            "  {} cache exists at {} (run `aida cache status` for HEAD-vs-store check).",
+            "·".dimmed(),
+            cache_path.display()
+        );
     } else {
-        println!("  {} cache missing — run `aida cache rebuild` if list/search are slow.", "·".dimmed());
+        println!(
+            "  {} cache missing — run `aida cache rebuild` if list/search are slow.",
+            "·".dimmed()
+        );
     }
     println!();
 
@@ -8311,8 +8529,7 @@ fn doctor_fsck() -> Result<()> {
     if objects_root.exists() {
         let mut yaml_files: Vec<std::path::PathBuf> = Vec::new();
         walk_yamls(&objects_root, &mut yaml_files);
-        let mut all_uuids: std::collections::HashSet<String> =
-            std::collections::HashSet::new();
+        let mut all_uuids: std::collections::HashSet<String> = std::collections::HashSet::new();
         for path in &yaml_files {
             if let Ok(content) = std::fs::read_to_string(path) {
                 for line in content.lines() {
@@ -8329,7 +8546,9 @@ fn doctor_fsck() -> Result<()> {
         }
         let mut dangling = 0usize;
         for path in &yaml_files {
-            let Ok(content) = std::fs::read_to_string(path) else { continue; };
+            let Ok(content) = std::fs::read_to_string(path) else {
+                continue;
+            };
             let mut in_rel = false;
             for raw in content.lines() {
                 let trimmed = raw.trim_start();
@@ -8337,11 +8556,7 @@ fn doctor_fsck() -> Result<()> {
                     in_rel = true;
                     continue;
                 }
-                if in_rel
-                    && !raw.starts_with(' ')
-                    && !trimmed.is_empty()
-                    && trimmed.contains(':')
-                {
+                if in_rel && !raw.starts_with(' ') && !trimmed.is_empty() && trimmed.contains(':') {
                     in_rel = false;
                     continue;
                 }
@@ -8365,7 +8580,10 @@ fn doctor_fsck() -> Result<()> {
                 "✗".red(),
                 dangling
             );
-            println!("    fix: {}", "aida doctor verify-relationships --repair".cyan());
+            println!(
+                "    fix: {}",
+                "aida doctor verify-relationships --repair".cyan()
+            );
         }
     } else {
         println!("  {} no objects/ — skipping.", "·".dimmed());
@@ -8383,8 +8601,7 @@ fn doctor_fsck() -> Result<()> {
             regex::Regex::new(r"trace:([A-Z]+(?:-[A-Z0-9]+)?-[0-9]+(?:-[0-9]+)?)").unwrap();
         let mut yaml_files: Vec<std::path::PathBuf> = Vec::new();
         walk_yamls(&objects_root, &mut yaml_files);
-        let mut known_specs: std::collections::HashSet<String> =
-            std::collections::HashSet::new();
+        let mut known_specs: std::collections::HashSet<String> = std::collections::HashSet::new();
         for path in &yaml_files {
             if let Ok(content) = std::fs::read_to_string(path) {
                 for line in content.lines() {
@@ -8403,10 +8620,8 @@ fn doctor_fsck() -> Result<()> {
                 }
             }
         }
-        let mut by_spec: std::collections::HashMap<
-            String,
-            Vec<(std::path::PathBuf, usize)>,
-        > = std::collections::HashMap::new();
+        let mut by_spec: std::collections::HashMap<String, Vec<(std::path::PathBuf, usize)>> =
+            std::collections::HashMap::new();
         walk_source_for_traces(&project_root, &project_root, &trace_re, &mut by_spec);
         let total_refs: usize = by_spec.values().map(|v| v.len()).sum();
         let dangling: usize = by_spec
@@ -8455,7 +8670,10 @@ fn doctor_fsck() -> Result<()> {
             .unwrap_or(false);
     match (scope, has_global_block) {
         (aida_core::IdCounterScope::Global, true) => {
-            println!("  {} config=global, blocks have a `*` block. Consistent.", "✓".green());
+            println!(
+                "  {} config=global, blocks have a `*` block. Consistent.",
+                "✓".green()
+            );
         }
         (aida_core::IdCounterScope::Global, false) => {
             had_problem = true;
@@ -8475,7 +8693,10 @@ fn doctor_fsck() -> Result<()> {
             );
         }
         (aida_core::IdCounterScope::PerType, false) => {
-            println!("  {} config=per-type, no `*` block. Consistent.", "✓".green());
+            println!(
+                "  {} config=per-type, no `*` block. Consistent.",
+                "✓".green()
+            );
         }
     }
     println!();
@@ -8582,7 +8803,11 @@ fn doctor_migrate_counter_scope(
     println!();
     println!("After this migration:");
     println!("  - existing requirement spec_ids stay UNCHANGED");
-    println!("  - new requirements use the global counter (FR-{}, BUG-{}, etc.)", new_start, new_start + 1);
+    println!(
+        "  - new requirements use the global counter (FR-{}, BUG-{}, etc.)",
+        new_start,
+        new_start + 1
+    );
     println!("  - the retired per-type blocks remain in blocks.yaml as history");
     println!();
 
@@ -8647,7 +8872,10 @@ fn doctor_migrate_counter_scope(
         "  new global block: {}",
         format!("*-{}..{}", new_start, new_end).cyan()
     );
-    println!("  next `aida add` will dispense {}", format!("<TYPE>-{}", new_start).cyan());
+    println!(
+        "  next `aida add` will dispense {}",
+        format!("<TYPE>-{}", new_start).cyan()
+    );
     println!();
     println!("Don't forget to push:");
     println!("  {}", "aida push".cyan());
@@ -8701,7 +8929,11 @@ fn update_config_counter_scope(config_path: &std::path::Path, new_value: &str) -
 /// trace:FR-1-043 | ai:claude
 fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
     match cmd {
-        SessionCommand::List { limit, no_color, all } => session::list(*limit, *no_color, *all),
+        SessionCommand::List {
+            limit,
+            no_color,
+            all,
+        } => session::list(*limit, *no_color, *all),
         SessionCommand::Resume { id, limit } => session::resume(id.clone(), *limit),
         SessionCommand::New {
             title,
@@ -8734,9 +8966,7 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
         SessionCommand::End { id, yes, force } => session_end(id.as_deref(), *yes, *force),
         SessionCommand::Leases { verbose } => session_leases(*verbose),
         SessionCommand::Show { id } => session_show(id.as_deref()),
-        SessionCommand::Prune { days, dry_run, yes } => {
-            session_prune(*days, *dry_run, *yes)
-        }
+        SessionCommand::Prune { days, dry_run, yes } => session_prune(*days, *dry_run, *yes),
     }
 }
 
@@ -8867,9 +9097,7 @@ fn active_lease_for_cwd(
 ///   - the lease was written before STORY-58 (no parent recorded), OR
 ///   - we can't locate any project root to read leases from.
 /// trace:STORY-58 | ai:claude
-pub(crate) fn parent_project_root_for_session(
-    cwd: &std::path::Path,
-) -> Option<std::path::PathBuf> {
+pub(crate) fn parent_project_root_for_session(cwd: &std::path::Path) -> Option<std::path::PathBuf> {
     // The lease dir is `<root>/.aida/sessions/`. Inside a session worktree
     // that dir is a symlink back to the parent project's, so `list_leases`
     // returns the same set either way. Walk up from cwd looking for any
@@ -8932,10 +9160,7 @@ fn session_activity_path(project_root: &std::path::Path, id: &str) -> std::path:
     leases_dir(project_root).join(format!("{}.activity.toml", id))
 }
 
-fn load_session_activity(
-    project_root: &std::path::Path,
-    id: &str,
-) -> SessionActivityLog {
+fn load_session_activity(project_root: &std::path::Path, id: &str) -> SessionActivityLog {
     let path = session_activity_path(project_root, id);
     let Ok(content) = std::fs::read_to_string(&path) else {
         return SessionActivityLog::default();
@@ -8982,9 +9207,7 @@ fn append_session_activity(
     // specs no longer accumulate stale duplicates.
     // trace:BUG-65 | ai:claude
     log.entries.retain(|prev| {
-        !(prev.role == entry.role
-            && prev.spec_id == entry.spec_id
-            && prev.action == entry.action)
+        !(prev.role == entry.role && prev.spec_id == entry.spec_id && prev.action == entry.action)
     });
     log.entries.insert(0, entry);
     log.entries.truncate(SESSION_ACTIVITY_MAX);
@@ -9084,10 +9307,7 @@ fn entry_scope_session_match(
 /// ACTIVITY_MAX. Best-effort — malformed/missing role files are skipped
 /// (the project role might have been deleted while the session ran).
 /// trace:STORY-56 | ai:claude
-fn aggregate_session_activity_into_roles(
-    project_root: &std::path::Path,
-    session_id: &str,
-) {
+fn aggregate_session_activity_into_roles(project_root: &std::path::Path, session_id: &str) {
     let log = load_session_activity(project_root, session_id);
     if log.entries.is_empty() {
         return;
@@ -9112,8 +9332,7 @@ fn aggregate_session_activity_into_roles(
         };
         // Merge: prepend session-newest entries, then append project's
         // existing entries skipping any spec_id already brought forward.
-        let promoted: BTreeSet<String> =
-            new_entries.iter().map(|e| e.spec_id.clone()).collect();
+        let promoted: BTreeSet<String> = new_entries.iter().map(|e| e.spec_id.clone()).collect();
         new_entries.extend(
             state
                 .activity
@@ -9546,7 +9765,12 @@ fn branch_exists_anywhere(project_root: &std::path::Path, branch: &str) -> bool 
     let local = std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["rev-parse", "--verify", "--quiet", &format!("refs/heads/{}", branch)])
+        .args([
+            "rev-parse",
+            "--verify",
+            "--quiet",
+            &format!("refs/heads/{}", branch),
+        ])
         .output();
     if matches!(&local, Ok(o) if o.status.success()) {
         return true;
@@ -9611,8 +9835,7 @@ fn resolve_session_branch(
 /// platform that didn't make it into the probe). trace:STORY-73 | ai:claude
 fn creator_shell_pid() -> Option<u32> {
     let mut sys = sysinfo::System::new_with_specifics(
-        sysinfo::RefreshKind::new()
-            .with_processes(sysinfo::ProcessRefreshKind::new()),
+        sysinfo::RefreshKind::new().with_processes(sysinfo::ProcessRefreshKind::new()),
     );
     sys.refresh_processes_specifics(sysinfo::ProcessRefreshKind::new());
     let me = sysinfo::Pid::from_u32(std::process::id());
@@ -9634,7 +9857,10 @@ fn session_start(
     let project_root = find_project_root()?;
     let slug = slugify(owns);
     if slug.is_empty() {
-        anyhow::bail!("scope `{}` slugifies to empty — pick something with letters/digits", owns);
+        anyhow::bail!(
+            "scope `{}` slugifies to empty — pick something with letters/digits",
+            owns
+        );
     }
 
     // STORY-61: review-mode dispatch. When the scope is `PR-N` / `MR-N`
@@ -9642,14 +9868,13 @@ fn session_start(
     // hand off to the review flow which fetches the PR head ref into a
     // local branch and creates the worktree on that existing branch
     // (rather than `git worktree add -b <new-branch>`).
-    let review_target: Option<(ReviewForge, u64)> = parse_review_scope(owns)
-        .map(|(f, n)| {
-            let resolved_forge = match forge_override.and_then(ReviewForge::parse) {
-                Some(f) => f,
-                None => detect_forge_from_origin(&project_root).unwrap_or(f),
-            };
-            (resolved_forge, n)
-        });
+    let review_target: Option<(ReviewForge, u64)> = parse_review_scope(owns).map(|(f, n)| {
+        let resolved_forge = match forge_override.and_then(ReviewForge::parse) {
+            Some(f) => f,
+            None => detect_forge_from_origin(&project_root).unwrap_or(f),
+        };
+        (resolved_forge, n)
+    });
 
     // STORY-65: auto-branch with collision-aware naming. If --branch isn't
     // given (and we're not in review mode, which has its own deterministic
@@ -9696,7 +9921,10 @@ fn session_start(
             dangling.len()
         );
         for p in &dangling {
-            msg.push_str(&format!("\n  pid {}    `kill {}` to clean up", p.pid, p.pid));
+            msg.push_str(&format!(
+                "\n  pid {}    `kill {}` to clean up",
+                p.pid, p.pid
+            ));
         }
         msg.push_str("\n\nThen retry `aida session start`.");
         anyhow::bail!(msg)
@@ -9862,11 +10090,7 @@ fn session_start(
                 let dst = worktree_aida.join(runtime);
                 if src.exists() && !dst.exists() {
                     std::os::unix::fs::symlink(&src, &dst).with_context(|| {
-                        format!(
-                            "symlink {} -> {} failed",
-                            dst.display(),
-                            src.display()
-                        )
+                        format!("symlink {} -> {} failed", dst.display(), src.display())
                     })?;
                 }
             }
@@ -9882,10 +10106,7 @@ fn session_start(
     let cargo_target_dir = detect_cargo_target_dir(&project_root);
     if let Some(target) = &cargo_target_dir {
         write_session_env_file(&worktree_path, target).with_context(|| {
-            format!(
-                "writing session env shim under {}",
-                worktree_path.display()
-            )
+            format!("writing session env shim under {}", worktree_path.display())
         })?;
     }
 
@@ -9949,11 +10170,7 @@ fn session_start(
     // — no raw `export` lines bleeding into the terminal. The wrapper
     // captures stdout into eval; stderr passes through to the user; stdin
     // is unaffected so any prompts still work. trace:STORY-73 | ai:claude
-    eprintln!(
-        "{} session {} started",
-        "✓".green().bold(),
-        id.yellow()
-    );
+    eprintln!("{} session {} started", "✓".green().bold(), id.yellow());
     eprintln!("  {}: {}", "scope".bold(), owns.cyan());
     eprintln!("  {}: {}", "branch".bold(), branch_name.cyan());
     eprintln!(
@@ -9962,7 +10179,12 @@ fn session_start(
         worktree_path.display().to_string().cyan()
     );
     if let Some(r) = &inherited_role {
-        eprintln!("  {}: {} {}", "role".bold(), r.cyan(), "(inherited)".dimmed());
+        eprintln!(
+            "  {}: {} {}",
+            "role".bold(),
+            r.cyan(),
+            "(inherited)".dimmed()
+        );
     }
 
     // TASK-53: pre-flight conflict detection. Look for OTHER active
@@ -10000,8 +10222,7 @@ fn session_start(
                         started_ago.dimmed()
                     );
                 } else {
-                    let preview: Vec<&str> =
-                        files.iter().take(5).map(|s| s.as_str()).collect();
+                    let preview: Vec<&str> = files.iter().take(5).map(|s| s.as_str()).collect();
                     let extra = if files.len() > 5 {
                         format!(" (+{} more)", files.len() - 5)
                     } else {
@@ -10019,7 +10240,8 @@ fn session_start(
             }
             eprintln!(
                 "  {}",
-                "Informational — coordinate with the other session if you'll touch the same files.".dimmed()
+                "Informational — coordinate with the other session if you'll touch the same files."
+                    .dimmed()
             );
         }
     }
@@ -10040,7 +10262,11 @@ fn session_start(
         eprintln!("  {}: {}", "pr-head".bold(), head_short.cyan());
         eprintln!("  {}: {}", "pr-base".bold(), base_disp.cyan());
     }
-    eprintln!("  {}: {}", "lease".bold(), lease_file.display().to_string().dimmed());
+    eprintln!(
+        "  {}: {}",
+        "lease".bold(),
+        lease_file.display().to_string().dimmed()
+    );
 
     if launch_claude {
         // STORY-54: --launch collapses "start → cd → session new" into one
@@ -10072,18 +10298,14 @@ fn session_start(
             )
             .cyan()
         );
-        std::env::set_current_dir(&worktree_path).with_context(|| {
-            format!("failed to chdir into {}", worktree_path.display())
-        })?;
+        std::env::set_current_dir(&worktree_path)
+            .with_context(|| format!("failed to chdir into {}", worktree_path.display()))?;
         return session::new_session(launch_title, launch_permission_mode, launch_role);
     }
 
     eprintln!();
     eprintln!("Next:");
-    eprintln!(
-        "  {}",
-        format!("cd {}", worktree_path.display()).cyan()
-    );
+    eprintln!("  {}", format!("cd {}", worktree_path.display()).cyan());
     if cargo_target_dir.is_some() {
         eprintln!(
             "  {}    {}",
@@ -10111,7 +10333,9 @@ fn session_start(
 /// session op proceed than to block on a probe failure.
 /// trace:BUG-61 | ai:claude
 fn probe_live_claudes_in_worktree(worktree: &std::path::Path) -> Vec<process_probe::LiveSession> {
-    let canon = worktree.canonicalize().unwrap_or_else(|_| worktree.to_path_buf());
+    let canon = worktree
+        .canonicalize()
+        .unwrap_or_else(|_| worktree.to_path_buf());
     process_probe::probe_live_claude_sessions()
         .into_iter()
         .filter(|s| !s.stale_cwd && (s.cwd == canon || s.cwd.starts_with(&canon)))
@@ -10142,10 +10366,7 @@ fn probe_dangling_claudes_at_path(worktree: &std::path::Path) -> Vec<process_pro
 ///     pretending we know the answer).
 /// Prefers `origin/main` when present so users with stale local
 /// `main` still see the right delta. trace:TASK-54 | ai:claude
-fn branch_behind_main(
-    repo: &std::path::Path,
-    branch: &str,
-) -> Option<(u64, Vec<String>)> {
+fn branch_behind_main(repo: &std::path::Path, branch: &str) -> Option<(u64, Vec<String>)> {
     if branch == "main" || branch == "HEAD" {
         return None;
     }
@@ -10184,12 +10405,7 @@ fn branch_behind_main(
     let log_out = std::process::Command::new("git")
         .arg("-C")
         .arg(repo)
-        .args([
-            "log",
-            &range,
-            "--pretty=format:%h %s",
-            "--no-merges",
-        ])
+        .args(["log", &range, "--pretty=format:%h %s", "--no-merges"])
         .output()
         .ok()?;
     let sample: Vec<String> = String::from_utf8_lossy(&log_out.stdout)
@@ -10268,9 +10484,8 @@ fn worktree_dirty_entries(worktree: &std::path::Path) -> Vec<String> {
 /// are still alive. trace:BUG-61 | ai:claude
 fn terminate_pids_with_grace(pids: &[u32], grace_secs: u64) {
     use sysinfo::{ProcessRefreshKind, RefreshKind, Signal, System};
-    let mut sys = System::new_with_specifics(
-        RefreshKind::new().with_processes(ProcessRefreshKind::new()),
-    );
+    let mut sys =
+        System::new_with_specifics(RefreshKind::new().with_processes(ProcessRefreshKind::new()));
     sys.refresh_processes_specifics(ProcessRefreshKind::new());
     for &pid in pids {
         if let Some(p) = sys.process(sysinfo::Pid::from_u32(pid)) {
@@ -10318,9 +10533,10 @@ fn resolve_session_to_end(
     // 1. cwd
     if let Ok(cwd) = std::env::current_dir() {
         let canon = cwd.canonicalize().unwrap_or(cwd);
-        if let Some(l) = leases.iter().find(|l| {
-            canon == l.worktree_path || canon.starts_with(&l.worktree_path)
-        }) {
+        if let Some(l) = leases
+            .iter()
+            .find(|l| canon == l.worktree_path || canon.starts_with(&l.worktree_path))
+        {
             return Ok(l.clone());
         }
     }
@@ -10540,10 +10756,7 @@ fn session_end(id_query: Option<&str>, yes: bool, force: bool) -> Result<()> {
     // when wrapped — same shape as session_start's `export`. Stdin/stderr
     // for the prompt still works inside `eval "$(...)"` because $(...)
     // captures stdout only. trace:STORY-73 | ai:claude
-    eprintln!(
-        "About to end session {}:",
-        target.id.yellow()
-    );
+    eprintln!("About to end session {}:", target.id.yellow());
     eprintln!("  scope:    {}", target.scope);
     eprintln!("  branch:   {}", target.branch);
     eprintln!("  worktree: {}", target.worktree_path.display());
@@ -10741,9 +10954,7 @@ fn session_end(id_query: Option<&str>, yes: bool, force: bool) -> Result<()> {
     // effort: any failure here logs a warning and is otherwise silent — we
     // never fail `session_end` because of a queue side-effect.
     // trace:STORY-66 | ai:claude
-    if let Some(summary) =
-        try_auto_queue_pr_review(&project_root, &target.branch, &target.id)
-    {
+    if let Some(summary) = try_auto_queue_pr_review(&project_root, &target.branch, &target.id) {
         println!("{} {}", "✓".green(), summary);
     }
 
@@ -10770,19 +10981,22 @@ struct OpenPrInfo {
 /// isn't installed, the user isn't authenticated, the branch has no open
 /// PR, or the output can't be parsed. All paths are best-effort —
 /// session_end never fails because of this hook. trace:STORY-66 | ai:claude
-fn detect_open_pr_for_branch(
-    project_root: &std::path::Path,
-    branch: &str,
-) -> Option<OpenPrInfo> {
+fn detect_open_pr_for_branch(project_root: &std::path::Path, branch: &str) -> Option<OpenPrInfo> {
     let out = std::process::Command::new("gh")
         .current_dir(project_root)
         .args([
-            "pr", "list",
-            "--head", branch,
-            "--state", "open",
-            "--limit", "1",
-            "--json", "number,title,url",
-            "-q", r#".[] | "\(.number)\t\(.title)\t\(.url)""#,
+            "pr",
+            "list",
+            "--head",
+            branch,
+            "--state",
+            "open",
+            "--limit",
+            "1",
+            "--json",
+            "number,title,url",
+            "-q",
+            r#".[] | "\(.number)\t\(.title)\t\(.url)""#,
         ])
         .output()
         .ok()?;
@@ -10809,12 +11023,8 @@ fn detect_open_pr_for_branch(
 /// Detect whether a `Review PR-<n>:` story already exists in the local
 /// store, so calling `aida session end` twice on the same branch doesn't
 /// create duplicate queue entries. trace:STORY-66 | ai:claude
-fn pr_review_story_already_exists(
-    project_root: &std::path::Path,
-    pr_number: u64,
-) -> bool {
-    let aida = std::env::current_exe()
-        .unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+fn pr_review_story_already_exists(project_root: &std::path::Path, pr_number: u64) -> bool {
+    let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
     let Ok(out) = std::process::Command::new(&aida)
         .current_dir(project_root)
         .args(["list", "--type", "story"])
@@ -10861,17 +11071,21 @@ fn aida_subcmd_add_review_story(
     title: &str,
     description: &str,
 ) -> Option<String> {
-    let aida = std::env::current_exe()
-        .unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
     let out = std::process::Command::new(&aida)
         .current_dir(project_root)
         .args([
             "add",
-            "--type", "story",
-            "--status", "approved",
-            "--priority", "medium",
-            "--title", title,
-            "--description", description,
+            "--type",
+            "story",
+            "--status",
+            "approved",
+            "--priority",
+            "medium",
+            "--title",
+            title,
+            "--description",
+            description,
         ])
         .output()
         .ok()?;
@@ -10917,23 +11131,13 @@ fn parse_spec_id_from_add_output(stdout: &str) -> Option<String> {
 /// in core, so `--bidirectional` is a no-op for them — we add both
 /// directions manually instead. Logs and continues on failure.
 /// trace:STORY-66 | ai:claude
-fn aida_subcmd_rel_add_implements(
-    project_root: &std::path::Path,
-    from: &str,
-    to: &str,
-) {
+fn aida_subcmd_rel_add_implements(project_root: &std::path::Path, from: &str, to: &str) {
     aida_subcmd_rel_add(project_root, from, to, "implements");
     aida_subcmd_rel_add(project_root, to, from, "implemented-by");
 }
 
-fn aida_subcmd_rel_add(
-    project_root: &std::path::Path,
-    from: &str,
-    to: &str,
-    rel_type: &str,
-) {
-    let aida = std::env::current_exe()
-        .unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+fn aida_subcmd_rel_add(project_root: &std::path::Path, from: &str, to: &str, rel_type: &str) {
+    let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
     match std::process::Command::new(&aida)
         .current_dir(project_root)
         .args(["rel", "add", from, to, "--type", rel_type])
@@ -10958,20 +11162,19 @@ fn aida_subcmd_rel_add(
 
 /// Best-effort `aida queue add <id> --for reviewer --no-scope --note <...>`.
 /// trace:STORY-66 | ai:claude
-fn aida_subcmd_queue_add_for_reviewer(
-    project_root: &std::path::Path,
-    spec_id: &str,
-    note: &str,
-) {
-    let aida = std::env::current_exe()
-        .unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+fn aida_subcmd_queue_add_for_reviewer(project_root: &std::path::Path, spec_id: &str, note: &str) {
+    let aida = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
     let out = std::process::Command::new(&aida)
         .current_dir(project_root)
         .args([
-            "queue", "add", spec_id,
-            "--for", "reviewer",
+            "queue",
+            "add",
+            spec_id,
+            "--for",
+            "reviewer",
             "--no-scope",
-            "--note", note,
+            "--note",
+            note,
         ])
         .output();
     match out {
@@ -11293,14 +11496,20 @@ fn session_prune(days: u32, dry_run: bool, yes: bool) -> Result<()> {
             }
             continue;
         }
-        let Ok(read) = std::fs::read_dir(dir) else { continue };
+        let Ok(read) = std::fs::read_dir(dir) else {
+            continue;
+        };
         for entry in read.filter_map(|e| e.ok()) {
             let path = entry.path();
             if path.extension().and_then(|s| s.to_str()) != Some("jsonl") {
                 continue;
             }
-            let Ok(metadata) = entry.metadata() else { continue };
-            let Ok(mtime) = metadata.modified() else { continue };
+            let Ok(metadata) = entry.metadata() else {
+                continue;
+            };
+            let Ok(mtime) = metadata.modified() else {
+                continue;
+            };
             if mtime >= cutoff {
                 continue;
             }
@@ -11348,11 +11557,7 @@ fn session_prune(days: u32, dry_run: bool, yes: bool) -> Result<()> {
     );
     println!();
     for c in &candidates {
-        let id = c
-            .path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("?");
+        let id = c.path.file_stem().and_then(|s| s.to_str()).unwrap_or("?");
         let id_short = &id[..id.len().min(8)];
         println!(
             "  {:>6}  {:>10}  {}  {}",
@@ -11381,7 +11586,11 @@ fn session_prune(days: u32, dry_run: bool, yes: bool) -> Result<()> {
 
     if !yes {
         use std::io::Write;
-        print!("Delete {} file{}? [y/N] ", count, if count == 1 { "" } else { "s" });
+        print!(
+            "Delete {} file{}? [y/N] ",
+            count,
+            if count == 1 { "" } else { "s" }
+        );
         std::io::stdout().flush().ok();
         let mut ans = String::new();
         if std::io::stdin().read_line(&mut ans).is_err()
@@ -11552,10 +11761,7 @@ fn session_show(id: Option<&str>) -> Result<()> {
     // they're working against. Omit the line entirely for non-PR
     // sessions so non-review output stays clean.
     // trace:STORY-71, TASK-51 | ai:claude
-    if lease.pr_head_sha.is_some()
-        || lease.pr_base_sha.is_some()
-        || lease.pr_base_ref.is_some()
-    {
+    if lease.pr_head_sha.is_some() || lease.pr_base_sha.is_some() || lease.pr_base_ref.is_some() {
         let head = lease
             .pr_head_sha
             .as_deref()
@@ -11589,7 +11795,11 @@ fn session_show(id: Option<&str>) -> Result<()> {
         };
         println!("  {}: {}{}", "creator_pid".bold(), pid, suffix);
     }
-    println!("  {}: {}", "lease file".bold(), lease_file.display().to_string().dimmed());
+    println!(
+        "  {}: {}",
+        "lease file".bold(),
+        lease_file.display().to_string().dimmed()
+    );
 
     // Activity rows from the session-local log.
     let activity = load_session_activity(&project_root, &lease.id);
@@ -11788,10 +11998,7 @@ fn local_lags_origin(
     if !out.status.success() {
         return None;
     }
-    let count: u64 = String::from_utf8_lossy(&out.stdout)
-        .trim()
-        .parse()
-        .ok()?;
+    let count: u64 = String::from_utf8_lossy(&out.stdout).trim().parse().ok()?;
     Some(count > 0)
 }
 
@@ -11820,7 +12027,11 @@ fn read_last_fetch_age_secs(project_root: &std::path::Path) -> Option<u64> {
     let now = chrono::Utc::now();
     let age = now.signed_duration_since(ts.with_timezone(&chrono::Utc));
     let secs = age.num_seconds();
-    if secs < 0 { Some(0) } else { Some(secs as u64) }
+    if secs < 0 {
+        Some(0)
+    } else {
+        Some(secs as u64)
+    }
 }
 
 /// `git rev-parse origin/aida-store` against the orphan-store worktree.
@@ -11846,7 +12057,11 @@ fn rev_parse_origin_aida_store(project_root: &std::path::Path) -> Option<String>
         return None;
     }
     let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    if s.is_empty() { None } else { Some(s) }
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
 }
 
 /// Threshold above which a last-fetch timestamp is treated as "stale"
@@ -11893,13 +12108,11 @@ fn maybe_sync_pull(store_path: &std::path::Path) -> Result<()> {
             "{} --sync: orphan store has uncommitted changes; skipping pull",
             "Warning:".yellow().bold()
         );
-        eprintln!(
-            "  Run `aida db sync --pull` manually after committing or stashing."
-        );
+        eprintln!("  Run `aida db sync --pull` manually after committing or stashing.");
         return Ok(());
     }
-    let branch = aida_core::git_ops::current_branch(store_path)
-        .unwrap_or_else(|_| "aida-store".to_string());
+    let branch =
+        aida_core::git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
     eprintln!("{} pulling origin/{} (--sync)", "→".dimmed(), branch);
     match aida_core::git_ops::pull_rebase(store_path, "origin", &branch) {
         Ok(()) => {
@@ -12085,8 +12298,12 @@ fn maybe_spawn_bg_fetch(project_root: &std::path::Path, store_path: &std::path::
     if !bg_fetch_enabled() {
         return;
     }
-    let Some(_cache_dir) = ensure_cache_dir() else { return };
-    let Some(lock_path) = bg_fetch_lock_path(store_path) else { return };
+    let Some(_cache_dir) = ensure_cache_dir() else {
+        return;
+    };
+    let Some(lock_path) = bg_fetch_lock_path(store_path) else {
+        return;
+    };
     let interval = bg_fetch_interval_secs();
     let last_fetch_age = read_last_fetch_age_secs(project_root);
     let lock_age = std::fs::metadata(&lock_path)
@@ -12146,8 +12363,8 @@ fn handle_bg_fetch_command(store_path: &std::path::Path) -> Result<()> {
         let _ = write_last_fetch_entry(store_path, "error: not a git repo");
         return Ok(());
     }
-    let branch = aida_core::git_ops::current_branch(store_path)
-        .unwrap_or_else(|_| "aida-store".to_string());
+    let branch =
+        aida_core::git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(store_path)
@@ -12214,13 +12431,7 @@ mod statusline_tests {
     /// Cache matches local AND fetch is recent AND we're not behind → Fresh.
     #[test]
     fn freshness_all_aligned_is_fresh() {
-        let r = classify_cache_freshness(
-            Some("abc1234"),
-            "abc1234",
-            Some(false),
-            Some(60),
-            300,
-        );
+        let r = classify_cache_freshness(Some("abc1234"), "abc1234", Some(false), Some(60), 300);
         assert_eq!(r, CacheFreshness::Fresh);
     }
 
@@ -12228,13 +12439,7 @@ mod statusline_tests {
     /// the next read will pay the rebuild cost regardless of remote.
     #[test]
     fn freshness_cache_mismatch_is_stale_even_when_origin_fresh() {
-        let r = classify_cache_freshness(
-            Some("aaaaaaa"),
-            "bbbbbbb",
-            Some(false),
-            Some(60),
-            300,
-        );
+        let r = classify_cache_freshness(Some("aaaaaaa"), "bbbbbbb", Some(false), Some(60), 300);
         assert_eq!(r, CacheFreshness::Stale);
     }
 
@@ -12242,22 +12447,14 @@ mod statusline_tests {
     /// or schema row is missing).
     #[test]
     fn freshness_missing_cache_sha_is_stale() {
-        let r = classify_cache_freshness(
-            None, "abc1234", Some(false), Some(60), 300,
-        );
+        let r = classify_cache_freshness(None, "abc1234", Some(false), Some(60), 300);
         assert_eq!(r, CacheFreshness::Stale);
     }
 
     /// Cache matches local, fetch is recent, local lags origin → Behind.
     #[test]
     fn freshness_local_lags_origin_is_behind() {
-        let r = classify_cache_freshness(
-            Some("aaaaaaa"),
-            "aaaaaaa",
-            Some(true),
-            Some(60),
-            300,
-        );
+        let r = classify_cache_freshness(Some("aaaaaaa"), "aaaaaaa", Some(true), Some(60), 300);
         assert_eq!(r, CacheFreshness::Behind);
     }
 
@@ -12265,9 +12462,7 @@ mod statusline_tests {
     /// (we don't render false-fresh).
     #[test]
     fn freshness_direction_unknown_is_unknown() {
-        let r = classify_cache_freshness(
-            Some("aaaaaaa"), "aaaaaaa", None, Some(60), 300,
-        );
+        let r = classify_cache_freshness(Some("aaaaaaa"), "aaaaaaa", None, Some(60), 300);
         assert_eq!(r, CacheFreshness::Unknown);
     }
 
@@ -12277,13 +12472,7 @@ mod statusline_tests {
     /// trace:STORY-78 | ai:claude
     #[test]
     fn freshness_local_ahead_of_origin_is_fresh() {
-        let r = classify_cache_freshness(
-            Some("aaaaaaa"),
-            "aaaaaaa",
-            Some(false),
-            Some(60),
-            300,
-        );
+        let r = classify_cache_freshness(Some("aaaaaaa"), "aaaaaaa", Some(false), Some(60), 300);
         assert_eq!(r, CacheFreshness::Fresh);
     }
 
@@ -12291,9 +12480,7 @@ mod statusline_tests {
     /// dominant state until STORY-79 starts writing last-fetch.toml.
     #[test]
     fn freshness_no_last_fetch_is_unknown() {
-        let r = classify_cache_freshness(
-            Some("aaaaaaa"), "aaaaaaa", Some(false), None, 300,
-        );
+        let r = classify_cache_freshness(Some("aaaaaaa"), "aaaaaaa", Some(false), None, 300);
         assert_eq!(r, CacheFreshness::Unknown);
     }
 
@@ -12301,9 +12488,7 @@ mod statusline_tests {
     /// Equal-to-threshold counts as fresh (<= boundary).
     #[test]
     fn freshness_stale_fetch_is_unknown() {
-        let r = classify_cache_freshness(
-            Some("aaaaaaa"), "aaaaaaa", Some(false), Some(301), 300,
-        );
+        let r = classify_cache_freshness(Some("aaaaaaa"), "aaaaaaa", Some(false), Some(301), 300);
         assert_eq!(r, CacheFreshness::Unknown);
     }
 
@@ -12312,9 +12497,7 @@ mod statusline_tests {
     /// but the classifier shouldn't claim Stale or Fresh from nothing.
     #[test]
     fn freshness_no_local_store_is_unknown() {
-        let r = classify_cache_freshness(
-            Some("aaaaaaa"), "", Some(true), Some(60), 300,
-        );
+        let r = classify_cache_freshness(Some("aaaaaaa"), "", Some(true), Some(60), 300);
         assert_eq!(r, CacheFreshness::Unknown);
     }
 
@@ -12342,40 +12525,80 @@ mod statusline_tests {
         let p = tmp.path();
         let run = |args: &[&str]| {
             let r = Command::new("git")
-                .arg("-C").arg(p)
+                .arg("-C")
+                .arg(p)
                 .args(args)
-                .env("GIT_AUTHOR_NAME", "t").env("GIT_AUTHOR_EMAIL", "t@t")
-                .env("GIT_COMMITTER_NAME", "t").env("GIT_COMMITTER_EMAIL", "t@t")
-                .output().unwrap();
-            assert!(r.status.success(), "git {:?} failed: {}",
-                args, String::from_utf8_lossy(&r.stderr));
+                .env("GIT_AUTHOR_NAME", "t")
+                .env("GIT_AUTHOR_EMAIL", "t@t")
+                .env("GIT_COMMITTER_NAME", "t")
+                .env("GIT_COMMITTER_EMAIL", "t@t")
+                .output()
+                .unwrap();
+            assert!(
+                r.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&r.stderr)
+            );
         };
         run(&["init", "--initial-branch=main", "--quiet"]);
         run(&["commit", "--allow-empty", "-m", "base", "--quiet"]);
         // Create a fake "origin/main" tracking ref by branching here.
         run(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
         for i in 0..advance_local {
-            run(&["commit", "--allow-empty", "-m", &format!("local{}", i), "--quiet"]);
+            run(&[
+                "commit",
+                "--allow-empty",
+                "-m",
+                &format!("local{}", i),
+                "--quiet",
+            ]);
         }
         let local = String::from_utf8(
-            Command::new("git").arg("-C").arg(p)
+            Command::new("git")
+                .arg("-C")
+                .arg(p)
                 .args(["rev-parse", "--short", "HEAD"])
-                .output().unwrap().stdout
-        ).unwrap().trim().to_string();
+                .output()
+                .unwrap()
+                .stdout,
+        )
+        .unwrap()
+        .trim()
+        .to_string();
         // Advance the "origin" ref by committing while pointed there.
         if advance_origin > 0 {
-            run(&["checkout", "-q", "-b", "tmp-origin", "refs/remotes/origin/main"]);
+            run(&[
+                "checkout",
+                "-q",
+                "-b",
+                "tmp-origin",
+                "refs/remotes/origin/main",
+            ]);
             for i in 0..advance_origin {
-                run(&["commit", "--allow-empty", "-m", &format!("origin{}", i), "--quiet"]);
+                run(&[
+                    "commit",
+                    "--allow-empty",
+                    "-m",
+                    &format!("origin{}", i),
+                    "--quiet",
+                ]);
             }
             run(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
             run(&["checkout", "-q", "main"]);
         }
         let origin = String::from_utf8(
-            Command::new("git").arg("-C").arg(p)
+            Command::new("git")
+                .arg("-C")
+                .arg(p)
                 .args(["rev-parse", "--short", "refs/remotes/origin/main"])
-                .output().unwrap().stdout
-        ).unwrap().trim().to_string();
+                .output()
+                .unwrap()
+                .stdout,
+        )
+        .unwrap()
+        .trim()
+        .to_string();
         (tmp, local, origin)
     }
 
@@ -12563,11 +12786,15 @@ mod statusline_tests {
         std::fs::create_dir_all(&store).unwrap();
         let run = |args: &[&str]| {
             Command::new("git")
-                .arg("-C").arg(&store)
+                .arg("-C")
+                .arg(&store)
                 .args(args)
-                .env("GIT_AUTHOR_NAME", "t").env("GIT_AUTHOR_EMAIL", "t@t")
-                .env("GIT_COMMITTER_NAME", "t").env("GIT_COMMITTER_EMAIL", "t@t")
-                .output().unwrap();
+                .env("GIT_AUTHOR_NAME", "t")
+                .env("GIT_AUTHOR_EMAIL", "t@t")
+                .env("GIT_COMMITTER_NAME", "t")
+                .env("GIT_COMMITTER_EMAIL", "t@t")
+                .output()
+                .unwrap();
         };
         run(&["init", "--initial-branch=aida-store", "--quiet"]);
         run(&["commit", "--allow-empty", "-m", "base", "--quiet"]);
@@ -12584,7 +12811,11 @@ mod statusline_tests {
         assert!(result.is_ok());
 
         let toml_path = fake_home.join(".aida/cache/last-fetch.toml");
-        assert!(toml_path.exists(), "expected {} to exist", toml_path.display());
+        assert!(
+            toml_path.exists(),
+            "expected {} to exist",
+            toml_path.display()
+        );
         let raw = std::fs::read_to_string(&toml_path).unwrap();
         // Expected: error result keyed by the canonical project path.
         assert!(raw.contains("result"), "{}", raw);
@@ -12592,7 +12823,11 @@ mod statusline_tests {
 
         // Lockfile must be cleaned up on worker exit (drop guard).
         let lock_path = bg_fetch_lock_path(&store).unwrap();
-        assert!(!lock_path.exists(), "lockfile {} should be removed", lock_path.display());
+        assert!(
+            !lock_path.exists(),
+            "lockfile {} should be removed",
+            lock_path.display()
+        );
     }
 
     /// STORY-66: the auto-queue hook parses `aida add`'s spec_id out of a
@@ -12710,10 +12945,7 @@ mod statusline_tests {
             Some("STORY-99".to_string())
         );
         // Output with no recognizable line.
-        assert_eq!(
-            parse_spec_id_from_add_output("something unrelated\n"),
-            None
-        );
+        assert_eq!(parse_spec_id_from_add_output("something unrelated\n"), None);
     }
 
     /// STORY-55: scope-fallback decision table for the `@<…>` segment.
@@ -12742,12 +12974,22 @@ mod statusline_tests {
 
         // In-session activity wins over scope.
         assert_eq!(
-            pick(Some(after_lease), Some(lease_started), "STORY-48", "EPIC-20"),
+            pick(
+                Some(after_lease),
+                Some(lease_started),
+                "STORY-48",
+                "EPIC-20"
+            ),
             Some("STORY-48".into())
         );
         // Pre-session activity is shadowed by the scope.
         assert_eq!(
-            pick(Some(before_lease), Some(lease_started), "STORY-54", "EPIC-20"),
+            pick(
+                Some(before_lease),
+                Some(lease_started),
+                "STORY-54",
+                "EPIC-20"
+            ),
             Some("EPIC-20".into())
         );
         // Lease but no activity at all → scope.
@@ -12783,15 +13025,39 @@ mod statusline_tests {
     /// trace:STORY-48 | ai:claude
     #[test]
     fn session_enforcement_parsing() {
-        assert_eq!(SessionEnforcement::from_config_str("off"), SessionEnforcement::Off);
-        assert_eq!(SessionEnforcement::from_config_str("OFF"), SessionEnforcement::Off);
-        assert_eq!(SessionEnforcement::from_config_str("none"), SessionEnforcement::Off);
-        assert_eq!(SessionEnforcement::from_config_str(" warn "), SessionEnforcement::Warn);
-        assert_eq!(SessionEnforcement::from_config_str("Warn"), SessionEnforcement::Warn);
-        assert_eq!(SessionEnforcement::from_config_str("block"), SessionEnforcement::Block);
-        assert_eq!(SessionEnforcement::from_config_str("strict"), SessionEnforcement::Block);
+        assert_eq!(
+            SessionEnforcement::from_config_str("off"),
+            SessionEnforcement::Off
+        );
+        assert_eq!(
+            SessionEnforcement::from_config_str("OFF"),
+            SessionEnforcement::Off
+        );
+        assert_eq!(
+            SessionEnforcement::from_config_str("none"),
+            SessionEnforcement::Off
+        );
+        assert_eq!(
+            SessionEnforcement::from_config_str(" warn "),
+            SessionEnforcement::Warn
+        );
+        assert_eq!(
+            SessionEnforcement::from_config_str("Warn"),
+            SessionEnforcement::Warn
+        );
+        assert_eq!(
+            SessionEnforcement::from_config_str("block"),
+            SessionEnforcement::Block
+        );
+        assert_eq!(
+            SessionEnforcement::from_config_str("strict"),
+            SessionEnforcement::Block
+        );
         // Unknown → Warn (the safe default).
-        assert_eq!(SessionEnforcement::from_config_str("xyzzy"), SessionEnforcement::Warn);
+        assert_eq!(
+            SessionEnforcement::from_config_str("xyzzy"),
+            SessionEnforcement::Warn
+        );
     }
 
     /// STORY-53: the `sess:<scope>` segment reuses SCOPE_LABEL_MAX, the
@@ -12877,18 +13143,13 @@ mod statusline_tests {
         assert!(requirement_missing_acceptance(&story));
 
         // STORY with `## Acceptance` → not flagged.
-        let mut story_ok = Requirement::new(
-            "S".into(),
-            "Intro.\n\n## Acceptance\n\n- alpha\n".into(),
-        );
+        let mut story_ok =
+            Requirement::new("S".into(), "Intro.\n\n## Acceptance\n\n- alpha\n".into());
         story_ok.req_type = RequirementType::Story;
         assert!(!requirement_missing_acceptance(&story_ok));
 
         // BUG with `## Verify` (alias) → not flagged.
-        let mut bug_ok = Requirement::new(
-            "B".into(),
-            "Repro.\n\n## Verify\n\n- behaves\n".into(),
-        );
+        let mut bug_ok = Requirement::new("B".into(), "Repro.\n\n## Verify\n\n- behaves\n".into());
         bug_ok.req_type = RequirementType::Bug;
         assert!(!requirement_missing_acceptance(&bug_ok));
 
@@ -12950,7 +13211,13 @@ mod statusline_tests {
     /// trace:STORY-67 | ai:claude
     #[test]
     fn extract_acceptance_section_aliases() {
-        for heading in &["Acceptance", "Verify", "Test cases", "Tests", "Verification"] {
+        for heading in &[
+            "Acceptance",
+            "Verify",
+            "Test cases",
+            "Tests",
+            "Verification",
+        ] {
             let desc = format!("blah\n\n## {}\n\nbody text\n", heading);
             assert!(
                 extract_acceptance_section(&desc).is_some(),
@@ -13025,7 +13292,10 @@ mod statusline_tests {
         assert_eq!(parse_review_scope("PR-1"), Some((ReviewForge::GitHub, 1)));
         assert_eq!(parse_review_scope("pr-42"), Some((ReviewForge::GitHub, 42)));
         assert_eq!(parse_review_scope("MR-7"), Some((ReviewForge::GitLab, 7)));
-        assert_eq!(parse_review_scope("mr-2024"), Some((ReviewForge::GitLab, 2024)));
+        assert_eq!(
+            parse_review_scope("mr-2024"),
+            Some((ReviewForge::GitLab, 2024))
+        );
         // Non-PR scopes pass through unchanged.
         assert_eq!(parse_review_scope("EPIC-20"), None);
         assert_eq!(parse_review_scope("FR-42"), None);
@@ -13103,25 +13373,61 @@ mod statusline_tests {
         };
 
         // No routing tags = visible everywhere.
-        assert!(entry_scope_session_match(&mk(None, None), Some(&lease), false));
+        assert!(entry_scope_session_match(
+            &mk(None, None),
+            Some(&lease),
+            false
+        ));
         assert!(entry_scope_session_match(&mk(None, None), None, false));
 
         // Scope match passes; mismatch filters out.
-        assert!(entry_scope_session_match(&mk(Some("EPIC-20"), None), Some(&lease), false));
-        assert!(!entry_scope_session_match(&mk(Some("OTHER"), None), Some(&lease), false));
+        assert!(entry_scope_session_match(
+            &mk(Some("EPIC-20"), None),
+            Some(&lease),
+            false
+        ));
+        assert!(!entry_scope_session_match(
+            &mk(Some("OTHER"), None),
+            Some(&lease),
+            false
+        ));
         // Scope-tagged entry without a lease → filtered (entry was for
         // a session, this shell isn't in one).
-        assert!(!entry_scope_session_match(&mk(Some("EPIC-20"), None), None, false));
+        assert!(!entry_scope_session_match(
+            &mk(Some("EPIC-20"), None),
+            None,
+            false
+        ));
 
         // Session prefix matches case-insensitively.
-        assert!(entry_scope_session_match(&mk(None, Some("abcdef12")), Some(&lease), false));
-        assert!(entry_scope_session_match(&mk(None, Some("ABCDEF12")), Some(&lease), false));
+        assert!(entry_scope_session_match(
+            &mk(None, Some("abcdef12")),
+            Some(&lease),
+            false
+        ));
+        assert!(entry_scope_session_match(
+            &mk(None, Some("ABCDEF12")),
+            Some(&lease),
+            false
+        ));
         // Wrong session prefix is filtered.
-        assert!(!entry_scope_session_match(&mk(None, Some("99999999")), Some(&lease), false));
+        assert!(!entry_scope_session_match(
+            &mk(None, Some("99999999")),
+            Some(&lease),
+            false
+        ));
 
         // Bypass shows everything regardless.
-        assert!(entry_scope_session_match(&mk(Some("OTHER"), None), Some(&lease), true));
-        assert!(entry_scope_session_match(&mk(Some("EPIC-20"), Some("99999999")), None, true));
+        assert!(entry_scope_session_match(
+            &mk(Some("OTHER"), None),
+            Some(&lease),
+            true
+        ));
+        assert!(entry_scope_session_match(
+            &mk(Some("EPIC-20"), Some("99999999")),
+            None,
+            true
+        ));
     }
 
     /// STORY-56: aggregating a session log into the project role keeps
@@ -13498,7 +13804,10 @@ mod lease_enforcement_tests {
         store.requirements.push(story.clone());
         let leases = vec![lease("EPIC-20", "epic")];
         let owner = lease_owning_spec(&leases, None, story.id, story.spec_id.as_deref(), &store);
-        assert!(owner.is_some(), "EPIC-scope lease should own descendant story");
+        assert!(
+            owner.is_some(),
+            "EPIC-scope lease should own descendant story"
+        );
         assert_eq!(owner.unwrap().scope, "EPIC-20");
     }
 
@@ -13512,7 +13821,13 @@ mod lease_enforcement_tests {
         store.requirements.push(target.clone());
         let mine = lease("STORY-48", "self");
         let leases = vec![mine.clone()];
-        let owner = lease_owning_spec(&leases, Some(&mine), target.id, target.spec_id.as_deref(), &store);
+        let owner = lease_owning_spec(
+            &leases,
+            Some(&mine),
+            target.id,
+            target.spec_id.as_deref(),
+            &store,
+        );
         assert!(owner.is_none(), "should not flag the caller's own lease");
     }
 
@@ -13763,8 +14078,7 @@ mod scope_fallback_tests {
         // Role requires the "session" tag — the untagged High-prio item
         // is dropped, the tagged Low-prio item wins.
         let role_scope = (vec!["session".to_string()], None);
-        let res = scope_fallback_pick(&store, &lease, Some(&role_scope))
-            .expect("expected a pick");
+        let res = scope_fallback_pick(&store, &lease, Some(&role_scope)).expect("expected a pick");
         assert_eq!(res.pick.spec_id.as_deref(), Some("STORY-TAGGED"));
     }
 }
@@ -13967,8 +14281,12 @@ mod terminal_status_guard_tests {
         let terminals = [Completed, Rejected];
         for old in &opens {
             for new in &terminals {
-                assert!(!would_block_status_change(old, new, false),
-                    "{:?} → {:?} should be allowed", old, new);
+                assert!(
+                    !would_block_status_change(old, new, false),
+                    "{:?} → {:?} should be allowed",
+                    old,
+                    new
+                );
             }
         }
     }
@@ -13979,8 +14297,12 @@ mod terminal_status_guard_tests {
         let opens = [Draft, Approved, Planned, InProgress];
         for old in &opens {
             for new in &opens {
-                assert!(!would_block_status_change(old, new, false),
-                    "{:?} → {:?} should be allowed", old, new);
+                assert!(
+                    !would_block_status_change(old, new, false),
+                    "{:?} → {:?} should be allowed",
+                    old,
+                    new
+                );
             }
         }
     }
@@ -13992,8 +14314,12 @@ mod terminal_status_guard_tests {
         let all = [Draft, Approved, Planned, InProgress, Completed, Rejected];
         for old in &all {
             for new in &all {
-                assert!(!would_block_status_change(old, new, true),
-                    "--force should never block {:?} → {:?}", old, new);
+                assert!(
+                    !would_block_status_change(old, new, true),
+                    "--force should never block {:?} → {:?}",
+                    old,
+                    new
+                );
             }
         }
     }
@@ -14002,9 +14328,7 @@ mod terminal_status_guard_tests {
 #[cfg(test)]
 mod derive_parent_epic_label_tests {
     use super::*;
-    use aida_core::{
-        Relationship, Requirement, RequirementType, RequirementsStore,
-    };
+    use aida_core::{Relationship, Requirement, RequirementType, RequirementsStore};
     use uuid::Uuid;
 
     /// Build a Requirement via the canonical `::new()` constructor and
@@ -14032,7 +14356,8 @@ mod derive_parent_epic_label_tests {
     fn child_into_epic_derives_label() {
         let epic = req("EPIC-20", None, RequirementType::Epic);
         let mut task = req("TASK-44", None, RequirementType::Task);
-        task.relationships.push(rel(epic.id, RelationshipType::Child));
+        task.relationships
+            .push(rel(epic.id, RelationshipType::Child));
         let store = RequirementsStore {
             requirements: vec![epic, task.clone()],
             ..Default::default()
@@ -14048,7 +14373,8 @@ mod derive_parent_epic_label_tests {
     fn child_into_non_epic_returns_none() {
         let story = req("STORY-9", None, RequirementType::Story);
         let mut task = req("TASK-44", None, RequirementType::Task);
-        task.relationships.push(rel(story.id, RelationshipType::Child));
+        task.relationships
+            .push(rel(story.id, RelationshipType::Child));
         let store = RequirementsStore {
             requirements: vec![story, task.clone()],
             ..Default::default()
@@ -14077,7 +14403,8 @@ mod derive_parent_epic_label_tests {
         // Wrong direction: TASK has a Parent edge pointing at EPIC
         // (semantically: TASK is parent of EPIC — nonsense, but the
         // helper shouldn't be fooled by it).
-        task.relationships.push(rel(epic.id, RelationshipType::Parent));
+        task.relationships
+            .push(rel(epic.id, RelationshipType::Parent));
         let store = RequirementsStore {
             requirements: vec![epic, task.clone()],
             ..Default::default()
@@ -14089,7 +14416,8 @@ mod derive_parent_epic_label_tests {
     #[test]
     fn dangling_target_returns_none() {
         let mut task = req("TASK-44", None, RequirementType::Task);
-        task.relationships.push(rel(Uuid::now_v7(), RelationshipType::Child));
+        task.relationships
+            .push(rel(Uuid::now_v7(), RelationshipType::Child));
         let store = RequirementsStore {
             requirements: vec![task.clone()],
             ..Default::default()
@@ -14103,7 +14431,8 @@ mod derive_parent_epic_label_tests {
     fn prefers_agreed_id_over_spec_id() {
         let epic = req("EPIC-7-001", Some("EPIC-20"), RequirementType::Epic);
         let mut task = req("TASK-44", None, RequirementType::Task);
-        task.relationships.push(rel(epic.id, RelationshipType::Child));
+        task.relationships
+            .push(rel(epic.id, RelationshipType::Child));
         let store = RequirementsStore {
             requirements: vec![epic, task.clone()],
             ..Default::default()
@@ -14122,8 +14451,10 @@ mod derive_parent_epic_label_tests {
         let epic = req("EPIC-20", None, RequirementType::Epic);
         let story = req("STORY-9", None, RequirementType::Story);
         let mut task = req("TASK-44", None, RequirementType::Task);
-        task.relationships.push(rel(story.id, RelationshipType::Child));
-        task.relationships.push(rel(epic.id, RelationshipType::Child));
+        task.relationships
+            .push(rel(story.id, RelationshipType::Child));
+        task.relationships
+            .push(rel(epic.id, RelationshipType::Child));
         let store = RequirementsStore {
             requirements: vec![epic, story, task.clone()],
             ..Default::default()
@@ -14235,20 +14566,28 @@ mod worktree_dirty_entries_tests {
         let tmp = TempDir::new().unwrap();
         let p = tmp.path();
         Command::new("git")
-            .arg("-C").arg(p)
+            .arg("-C")
+            .arg(p)
             .args(["init", "--initial-branch=main", "--quiet"])
-            .status().unwrap();
+            .status()
+            .unwrap();
         std::fs::write(p.join(".gitignore"), "target/\n.aida/cache.db\n").unwrap();
         Command::new("git")
-            .arg("-C").arg(p)
+            .arg("-C")
+            .arg(p)
             .args(["add", ".gitignore"])
-            .status().unwrap();
+            .status()
+            .unwrap();
         Command::new("git")
-            .arg("-C").arg(p)
+            .arg("-C")
+            .arg(p)
             .args(["commit", "-m", "init", "--quiet"])
-            .env("GIT_AUTHOR_NAME", "t").env("GIT_AUTHOR_EMAIL", "t@t")
-            .env("GIT_COMMITTER_NAME", "t").env("GIT_COMMITTER_EMAIL", "t@t")
-            .status().unwrap();
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@t")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@t")
+            .status()
+            .unwrap();
         tmp
     }
 
@@ -14284,7 +14623,11 @@ mod worktree_dirty_entries_tests {
     fn tracked_modified_file_is_dirty() {
         let tmp = init_repo_with_gitignore();
         // Modify the tracked .gitignore so it shows as "M".
-        std::fs::write(tmp.path().join(".gitignore"), "target/\n.aida/cache.db\n# touched\n").unwrap();
+        std::fs::write(
+            tmp.path().join(".gitignore"),
+            "target/\n.aida/cache.db\n# touched\n",
+        )
+        .unwrap();
         let entries = worktree_dirty_entries(tmp.path());
         assert_eq!(entries.len(), 1, "{:?}", entries);
         assert!(entries[0].contains(".gitignore"), "{:?}", entries);
@@ -14311,7 +14654,11 @@ mod worktree_dirty_entries_tests {
         let entries = worktree_dirty_entries(tmp.path());
         assert_eq!(entries.len(), 1, "{:?}", entries);
         assert!(entries[0].contains("scratch.rs"), "{:?}", entries);
-        assert!(!entries.iter().any(|e| e.contains("target")), "{:?}", entries);
+        assert!(
+            !entries.iter().any(|e| e.contains("target")),
+            "{:?}",
+            entries
+        );
     }
 
     /// Non-git path → empty vec (git errors, we treat as clean and let
@@ -14340,12 +14687,18 @@ mod recent_files_for_branch_tests {
                 .arg("-C")
                 .arg(p)
                 .args(args)
-                .env("GIT_AUTHOR_NAME", "t").env("GIT_AUTHOR_EMAIL", "t@t")
-                .env("GIT_COMMITTER_NAME", "t").env("GIT_COMMITTER_EMAIL", "t@t")
+                .env("GIT_AUTHOR_NAME", "t")
+                .env("GIT_AUTHOR_EMAIL", "t@t")
+                .env("GIT_COMMITTER_NAME", "t")
+                .env("GIT_COMMITTER_EMAIL", "t@t")
                 .status()
                 .unwrap();
         };
-        run(&["init", &format!("--initial-branch={}", branch_name), "--quiet"]);
+        run(&[
+            "init",
+            &format!("--initial-branch={}", branch_name),
+            "--quiet",
+        ]);
         for (i, f) in files.iter().enumerate() {
             // Create the file (with subdirs if needed) and commit it.
             let path = p.join(f);
@@ -14411,32 +14764,48 @@ mod branch_behind_main_tests {
 
     /// Init a repo with `main` and a feature branch in one of three
     /// configurations: behind / ahead / diverged / equal.
-    fn fixture(
-        feat_ahead: u32,
-        main_ahead: u32,
-    ) -> (TempDir, &'static str) {
+    fn fixture(feat_ahead: u32, main_ahead: u32) -> (TempDir, &'static str) {
         let tmp = TempDir::new().unwrap();
         let p = tmp.path();
         let run = |args: &[&str]| {
             let r = Command::new("git")
-                .arg("-C").arg(p)
+                .arg("-C")
+                .arg(p)
                 .args(args)
-                .env("GIT_AUTHOR_NAME", "t").env("GIT_AUTHOR_EMAIL", "t@t")
-                .env("GIT_COMMITTER_NAME", "t").env("GIT_COMMITTER_EMAIL", "t@t")
-                .output().unwrap();
-            assert!(r.status.success(),
-                "git {:?} failed: {}", args,
-                String::from_utf8_lossy(&r.stderr));
+                .env("GIT_AUTHOR_NAME", "t")
+                .env("GIT_AUTHOR_EMAIL", "t@t")
+                .env("GIT_COMMITTER_NAME", "t")
+                .env("GIT_COMMITTER_EMAIL", "t@t")
+                .output()
+                .unwrap();
+            assert!(
+                r.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&r.stderr)
+            );
         };
         run(&["init", "--initial-branch=main", "--quiet"]);
         run(&["commit", "--allow-empty", "-m", "root", "--quiet"]);
         run(&["checkout", "-q", "-b", "feat-x"]);
         for i in 0..feat_ahead {
-            run(&["commit", "--allow-empty", "-m", &format!("feat{}", i), "--quiet"]);
+            run(&[
+                "commit",
+                "--allow-empty",
+                "-m",
+                &format!("feat{}", i),
+                "--quiet",
+            ]);
         }
         run(&["checkout", "-q", "main"]);
         for i in 0..main_ahead {
-            run(&["commit", "--allow-empty", "-m", &format!("main{}", i), "--quiet"]);
+            run(&[
+                "commit",
+                "--allow-empty",
+                "-m",
+                &format!("main{}", i),
+                "--quiet",
+            ]);
         }
         run(&["checkout", "-q", "feat-x"]);
         (tmp, "feat-x")
@@ -14489,15 +14858,21 @@ mod branch_behind_main_tests {
         let tmp = TempDir::new().unwrap();
         let p = tmp.path();
         Command::new("git")
-            .arg("-C").arg(p)
+            .arg("-C")
+            .arg(p)
             .args(["init", "--initial-branch=trunk", "--quiet"])
-            .status().unwrap();
+            .status()
+            .unwrap();
         Command::new("git")
-            .arg("-C").arg(p)
+            .arg("-C")
+            .arg(p)
             .args(["commit", "--allow-empty", "-m", "x", "--quiet"])
-            .env("GIT_AUTHOR_NAME", "t").env("GIT_AUTHOR_EMAIL", "t@t")
-            .env("GIT_COMMITTER_NAME", "t").env("GIT_COMMITTER_EMAIL", "t@t")
-            .status().unwrap();
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@t")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@t")
+            .status()
+            .unwrap();
         assert!(branch_behind_main(p, "trunk").is_none());
     }
 }
@@ -14569,7 +14944,10 @@ fn handle_statusline_command(color: &str) -> Result<()> {
         .and_then(|content| {
             content
                 .lines()
-                .find_map(|l| l.strip_prefix("name:").map(|v| v.trim().trim_matches('"').trim_matches('\'').to_string()))
+                .find_map(|l| {
+                    l.strip_prefix("name:")
+                        .map(|v| v.trim().trim_matches('"').trim_matches('\'').to_string())
+                })
                 .filter(|s| !s.is_empty())
         });
     let project_label = store_name.unwrap_or(project_name);
@@ -14609,14 +14987,10 @@ fn handle_statusline_command(color: &str) -> Result<()> {
                         |r| r.get(0),
                     )
                     .ok();
-                let local_sha = aida_core::git_ops::head_sha(
-                    &project_root.join(".aida-store"),
-                )
-                .ok()
-                .or_else(|| {
-                    aida_core::git_ops::head_sha(&project_root.join("aida-store")).ok()
-                })
-                .unwrap_or_default();
+                let local_sha = aida_core::git_ops::head_sha(&project_root.join(".aida-store"))
+                    .ok()
+                    .or_else(|| aida_core::git_ops::head_sha(&project_root.join("aida-store")).ok())
+                    .unwrap_or_default();
                 let origin_sha = rev_parse_origin_aida_store(&project_root);
                 let last_fetch_age = read_last_fetch_age_secs(&project_root);
                 // Resolve direction (local behind / equal / ahead /
@@ -14629,9 +15003,7 @@ fn handle_statusline_command(color: &str) -> Result<()> {
                     project_root.join("aida-store")
                 };
                 let local_behind = match (&local_sha, origin_sha.as_deref()) {
-                    (l, Some(o)) if !l.is_empty() => {
-                        local_lags_origin(&store_path, l, o)
-                    }
+                    (l, Some(o)) if !l.is_empty() => local_lags_origin(&store_path, l, o),
                     _ => None,
                 };
                 Some(classify_cache_freshness(
@@ -14679,21 +15051,22 @@ fn handle_statusline_command(color: &str) -> Result<()> {
         // active but no role activity yet inside it, fall back to
         // `@<scope>` so the prompt advertises the session anchor instead
         // of a pre-session spec. trace:STORY-55 | ai:claude
-        let session_latest: Option<RoleActivity> = lease
-            .as_ref()
-            .and_then(|l| {
-                load_session_activity(&project_root, &l.id)
-                    .entries
-                    .into_iter()
-                    .find(|e| e.role == *r)
-                    .map(|e| RoleActivity {
-                        spec_id: e.spec_id,
-                        action: e.action,
-                        at: e.at,
-                    })
-            });
+        let session_latest: Option<RoleActivity> = lease.as_ref().and_then(|l| {
+            load_session_activity(&project_root, &l.id)
+                .entries
+                .into_iter()
+                .find(|e| e.role == *r)
+                .map(|e| RoleActivity {
+                    spec_id: e.spec_id,
+                    action: e.action,
+                    at: e.at,
+                })
+        });
         let role_state = load_role(&project_root, r).ok().map(|(s, _)| s);
-        let project_latest = role_state.as_ref().and_then(|s| s.activity.first()).cloned();
+        let project_latest = role_state
+            .as_ref()
+            .and_then(|s| s.activity.first())
+            .cloned();
         let latest: Option<RoleActivity> = match (lease.as_ref(), session_latest, project_latest) {
             // In-session: prefer session log; only consider project-level
             // entries that are newer than the lease (i.e. a freshly
@@ -14752,46 +15125,58 @@ fn print_help_all() {
         (
             "Daily use",
             &[
-                ("add",     "Add a new requirement"),
-                ("list",    "List all requirements"),
-                ("show",    "Show details for a specific requirement"),
-                ("edit",    "Edit an existing requirement"),
-                ("del",     "Delete a requirement"),
-                ("search",  "Simple search for requirements (case-insensitive)"),
+                ("add", "Add a new requirement"),
+                ("list", "List all requirements"),
+                ("show", "Show details for a specific requirement"),
+                ("edit", "Edit an existing requirement"),
+                ("del", "Delete a requirement"),
+                (
+                    "search",
+                    "Simple search for requirements (case-insensitive)",
+                ),
                 ("comment", "Manage comments on requirements"),
-                ("status",  "Show this project's status (storage, counts, sync, recent activity)"),
+                (
+                    "status",
+                    "Show this project's status (storage, counts, sync, recent activity)",
+                ),
             ],
         ),
         (
             "Project lifecycle",
             &[
-                ("init",     "Initialize AIDA in the current project"),
-                ("upgrade",  "Upgrade aida to the latest release"),
+                ("init", "Initialize AIDA in the current project"),
+                ("upgrade", "Upgrade aida to the latest release"),
                 ("scaffold", "Scaffolding management (skills, hooks, MCP)"),
             ],
         ),
         (
             "Requirements graph",
             &[
-                ("rel",     "Relationship management commands"),
+                ("rel", "Relationship management commands"),
                 ("rel-def", "Relationship-type definitions"),
-                ("trace",   "Code-to-requirement traceability"),
-                ("queue",   "Personal work queue"),
+                ("trace", "Code-to-requirement traceability"),
+                ("queue", "Personal work queue"),
             ],
         ),
         (
             "Configuration & metadata",
             &[
-                ("config",  "ID configuration (prefixes, formats, etc.)"),
-                ("type",    "Requirement-type management"),
+                ("config", "ID configuration (prefixes, formats, etc.)"),
+                ("type", "Requirement-type management"),
                 ("feature", "Feature management"),
             ],
         ),
         (
             "Storage management",
             &[
-                ("db",    "Database management commands (migrate, sync, merge-gate, etc.)"),
-                ("cache", "SQLite cache view (rebuild, status) — git-canonical mode only"),
+                (
+                    "db",
+                    "Database management commands (migrate, sync, merge-gate, etc.)",
+                ),
+                (
+                    "cache",
+                    "SQLite cache view (rebuild, status) — git-canonical mode only",
+                ),
             ],
         ),
         (
@@ -14799,32 +15184,33 @@ fn print_help_all() {
             &[
                 ("export", "Export requirements to different formats"),
                 ("import", "Import requirements from a tree JSON file"),
-                ("grep",   "Advanced regex search across requirements"),
+                ("grep", "Advanced regex search across requirements"),
                 ("report", "Report generation"),
             ],
         ),
         (
             "Integrations & servers",
             &[
-                ("server",     "Connect to or manage a remote AIDA server"),
-                ("mcp-serve",  "Start MCP server over stdio (for Claude Code)"),
-                ("github",     "GitHub Issues integration"),
-                ("gitlab",     "GitLab Issues integration"),
-                ("jira",       "Jira integration"),
+                ("server", "Connect to or manage a remote AIDA server"),
+                ("mcp-serve", "Start MCP server over stdio (for Claude Code)"),
+                ("github", "GitHub Issues integration"),
+                ("gitlab", "GitLab Issues integration"),
+                ("jira", "Jira integration"),
             ],
         ),
         (
             "AIDA development (working on aida itself)",
             &[
-                ("dev",        "Activate dev binary, run dev servers, install shell helpers"),
-                ("help-all",   "This command — full inventory grouped by topic"),
+                (
+                    "dev",
+                    "Activate dev binary, run dev servers, install shell helpers",
+                ),
+                ("help-all", "This command — full inventory grouped by topic"),
             ],
         ),
         (
             "Misc",
-            &[
-                ("user-guide", "Open the user guide in the default browser"),
-            ],
+            &[("user-guide", "Open the user guide in the default browser")],
         ),
     ];
 
@@ -14851,9 +15237,13 @@ fn print_help_all() {
 
 fn handle_dev_command(cmd: &DevCommand) -> Result<()> {
     match cmd {
-        DevCommand::Activate { repo, profile, debug, release, auto } => {
-            handle_dev_activate(repo.as_deref(), profile.as_deref(), *debug, *release, *auto)
-        }
+        DevCommand::Activate {
+            repo,
+            profile,
+            debug,
+            release,
+            auto,
+        } => handle_dev_activate(repo.as_deref(), profile.as_deref(), *debug, *release, *auto),
         DevCommand::Deactivate => handle_dev_deactivate(),
         DevCommand::Status => handle_dev_status(),
         DevCommand::ShellInit { install } => handle_dev_shell_init(*install),
@@ -14882,7 +15272,11 @@ fn resolve_aida_repo(repo_arg: Option<&str>) -> Result<std::path::PathBuf> {
     };
 
     let canonical = candidate.canonicalize().with_context(|| {
-        format!("Cannot resolve AIDA repo path ({}): {}", source, candidate.display())
+        format!(
+            "Cannot resolve AIDA repo path ({}): {}",
+            source,
+            candidate.display()
+        )
     })?;
 
     if !is_aida_repo(&canonical) {
@@ -14999,7 +15393,11 @@ fn pick_dev_binary_dir(
 /// Used for the stale-build warning + PS1 marker.
 /// trace:FR-1-068 | ai:claude
 fn alternate_build_is_newer(repo: &std::path::Path, active: &str) -> bool {
-    let other = if active == "debug" { "release" } else { "debug" };
+    let other = if active == "debug" {
+        "release"
+    } else {
+        "debug"
+    };
     let active_mtime = std::fs::metadata(repo.join(format!("target/{}/aida", active)))
         .and_then(|m| m.modified())
         .ok();
@@ -15050,7 +15448,11 @@ fn handle_dev_activate(
         "# aida dev activate — using {} build at {}{}",
         profile,
         bin_dir.display(),
-        if stale { "  (alternate build is newer)" } else { "" }
+        if stale {
+            "  (alternate build is newer)"
+        } else {
+            ""
+        }
     );
     println!("export AIDA_DEV_REPO='{}'", repo.display());
     println!("export AIDA_DEV_BIN='{}'", bin_dir.display());
@@ -15118,7 +15520,9 @@ fn handle_dev_deactivate() -> Result<()> {
     println!("fi");
     // Clean up the legacy save/restore env var if any prior session set it.
     println!("unset AIDA_DEV_PREV_PS1");
-    println!("unset AIDA_DEV_REPO AIDA_DEV_BIN AIDA_DEV_PROFILE AIDA_DEV_ACTIVE AIDA_DEV_PROFILE_PIN");
+    println!(
+        "unset AIDA_DEV_REPO AIDA_DEV_BIN AIDA_DEV_PROFILE AIDA_DEV_ACTIVE AIDA_DEV_PROFILE_PIN"
+    );
     println!("echo '✓ aida dev deactivated'");
     Ok(())
 }
@@ -15145,9 +15549,10 @@ fn handle_dev_status() -> Result<()> {
             if let Ok(meta) = std::fs::metadata(&aida_path) {
                 if let Ok(modified) = meta.modified() {
                     if let Ok(d) = modified.duration_since(std::time::UNIX_EPOCH) {
-                        let dt = chrono::DateTime::<chrono::Utc>::from_timestamp(d.as_secs() as i64, 0)
-                            .map(|t| t.to_rfc3339())
-                            .unwrap_or_else(|| "?".into());
+                        let dt =
+                            chrono::DateTime::<chrono::Utc>::from_timestamp(d.as_secs() as i64, 0)
+                                .map(|t| t.to_rfc3339())
+                                .unwrap_or_else(|| "?".into());
                         println!("Built at:     {}", dt);
                     }
                 }
@@ -15179,7 +15584,11 @@ fn handle_dev_status() -> Result<()> {
         if let (Some(repo), Some(profile)) = (repo, profile) {
             let repo_path = std::path::PathBuf::from(&repo);
             if alternate_build_is_newer(&repo_path, &profile) {
-                let other = if profile == "debug" { "release" } else { "debug" };
+                let other = if profile == "debug" {
+                    "release"
+                } else {
+                    "debug"
+                };
                 println!();
                 println!(
                     "{}: the {} build is newer than the active {} build.",
@@ -15293,7 +15702,10 @@ fn handle_dev_shell_init(install: bool) -> Result<()> {
     if !install {
         // Preview mode — show what would land in the helpers file, marker-wrapped
         // so the user can also paste it directly into a shell rc if they prefer.
-        print!("{}\n{}{}\n", HELPERS_BEGIN_MARKER, helpers_body, HELPERS_END_MARKER);
+        print!(
+            "{}\n{}{}\n",
+            HELPERS_BEGIN_MARKER, helpers_body, HELPERS_END_MARKER
+        );
         return Ok(());
     }
 
@@ -15428,10 +15840,7 @@ fn handle_dev_shell_init(install: bool) -> Result<()> {
     if let Some(note) = migration_note {
         eprintln!("{}", note);
     }
-    eprintln!(
-        "{}: helpers installed.",
-        "OK".green()
-    );
+    eprintln!("{}: helpers installed.", "OK".green());
     eprintln!(
         "  Helpers file: {} ({} lines)",
         helpers_path.display(),
@@ -15467,9 +15876,7 @@ fn handle_dev_shell_init(install: bool) -> Result<()> {
         "aida role list".cyan(),
         "aida role enter <name>".cyan()
     );
-    eprintln!(
-        "  All eval-required commands now Just Work — the wrapper handles the eval."
-    );
+    eprintln!("  All eval-required commands now Just Work — the wrapper handles the eval.");
     Ok(())
 }
 
@@ -15567,7 +15974,9 @@ fn handle_dev_serve(
         }
 
         // Helper future: wait for a child to exit naturally.
-        async fn wait_child(child: &mut tokio::process::Child) -> std::io::Result<std::process::ExitStatus> {
+        async fn wait_child(
+            child: &mut tokio::process::Child,
+        ) -> std::io::Result<std::process::ExitStatus> {
             child.wait().await
         }
 
@@ -15652,12 +16061,9 @@ fn handle_dev_release(bump: &str) -> Result<()> {
 
     // ── Step 1/5: sync store (pull) ──────────────────────────────────────
     if let Some(ref sp) = store_path {
-        println!(
-            "{}",
-            "─── Step 1/5: syncing aida-store (pull) ───".bold()
-        );
-        let branch = aida_core::git_ops::current_branch(sp)
-            .unwrap_or_else(|_| "aida-store".to_string());
+        println!("{}", "─── Step 1/5: syncing aida-store (pull) ───".bold());
+        let branch =
+            aida_core::git_ops::current_branch(sp).unwrap_or_else(|_| "aida-store".to_string());
         // Use rebase: bare `git pull` fails on divergent branches when
         // the user has no pull.rebase/pull.ff config; the orphan-store
         // model wants linear history. trace:BUG-1-051 | ai:claude
@@ -15668,7 +16074,8 @@ fn handle_dev_release(bump: &str) -> Result<()> {
                     "aida-store pull failed: {}\n\
                      Resolve store conflicts first: aida db sync --pull\n\
                      Then re-run `aida dev release {}`.",
-                    e, bump
+                    e,
+                    bump
                 );
             }
         }
@@ -15708,7 +16115,11 @@ fn handle_dev_release(bump: &str) -> Result<()> {
     println!();
     println!(
         "{}",
-        format!("─── Step 3/5: waiting for {} release artifacts ───", new_tag).bold()
+        format!(
+            "─── Step 3/5: waiting for {} release artifacts ───",
+            new_tag
+        )
+        .bold()
     );
     let target = release_target().ok_or_else(|| {
         anyhow::anyhow!(
@@ -15727,7 +16138,11 @@ fn handle_dev_release(bump: &str) -> Result<()> {
     println!();
     println!(
         "{}",
-        format!("─── Step 4/5: upgrading sibling installs to {} ───", new_tag).bold()
+        format!(
+            "─── Step 4/5: upgrading sibling installs to {} ───",
+            new_tag
+        )
+        .bold()
     );
     let bare_version = strip_v(&new_tag).to_string();
     upgrade_dev_mode_sibling_scan(false, Some(&bare_version), true, false)?;
@@ -15737,10 +16152,14 @@ fn handle_dev_release(bump: &str) -> Result<()> {
         println!();
         println!(
             "{}",
-            format!("─── Step 5/5: syncing aida-store (push) for {} ───", new_tag).bold()
+            format!(
+                "─── Step 5/5: syncing aida-store (push) for {} ───",
+                new_tag
+            )
+            .bold()
         );
-        let branch = aida_core::git_ops::current_branch(sp)
-            .unwrap_or_else(|_| "aida-store".to_string());
+        let branch =
+            aida_core::git_ops::current_branch(sp).unwrap_or_else(|_| "aida-store".to_string());
 
         // Commit any pending store changes (e.g., block pointer updates)
         if aida_core::git_ops::has_changes(sp).unwrap_or(false) {
@@ -15895,7 +16314,10 @@ fn locate_aida_server_binary(cwd: &std::path::Path) -> Result<std::path::PathBuf
         }
     }
     // Fall back to PATH.
-    if let Ok(out) = std::process::Command::new("which").arg("aida-server").output() {
+    if let Ok(out) = std::process::Command::new("which")
+        .arg("aida-server")
+        .output()
+    {
         let p = String::from_utf8_lossy(&out.stdout).trim().to_string();
         if !p.is_empty() {
             return Ok(std::path::PathBuf::from(p));
@@ -15926,10 +16348,13 @@ fn handle_push_command(
     // ---- Code push (current branch on the project repo) ----
     if !store_only {
         if !git_ops::has_remote(&project_root, "origin") {
-            println!("  {} no `origin` remote — skipping code push", "Note:".dimmed());
+            println!(
+                "  {} no `origin` remote — skipping code push",
+                "Note:".dimmed()
+            );
         } else {
-            let branch = git_ops::current_branch(&project_root)
-                .unwrap_or_else(|_| "HEAD".to_string());
+            let branch =
+                git_ops::current_branch(&project_root).unwrap_or_else(|_| "HEAD".to_string());
 
             // TASK-54: pre-flight "behind main" check. If the current
             // branch lags `main` by N commits, prompt before pushing
@@ -15938,9 +16363,7 @@ fn handle_push_command(
             // pushing main itself, no upstream main locally, branch
             // is exactly up-to-date. trace:TASK-54 | ai:claude
             if !no_rebase_check {
-                if let Some((behind, sample)) =
-                    branch_behind_main(&project_root, &branch)
-                {
+                if let Some((behind, sample)) = branch_behind_main(&project_root, &branch) {
                     eprintln!(
                         "{} {} is {} commit{} behind {}:",
                         "⚠".yellow().bold(),
@@ -15970,10 +16393,7 @@ fn handle_push_command(
                     let _ = std::io::stderr().flush();
                     let mut answer = String::new();
                     let _ = std::io::stdin().read_line(&mut answer);
-                    if !matches!(
-                        answer.trim().to_ascii_lowercase().as_str(),
-                        "y" | "yes"
-                    ) {
+                    if !matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
                         eprintln!(
                             "{}",
                             "Push aborted. Rebase and re-run `aida push`.".dimmed()
@@ -15983,11 +16403,7 @@ fn handle_push_command(
                 }
             }
 
-            println!(
-                "{} {} → origin",
-                "Pushing code".cyan().bold(),
-                branch
-            );
+            println!("{} {} → origin", "Pushing code".cyan().bold(), branch);
             let res = std::process::Command::new("git")
                 .arg("-C")
                 .arg(&project_root)
@@ -16015,14 +16431,20 @@ fn handle_push_command(
     // a Note line when there's no origin.
     if !code_only {
         if !git_ops::is_git_repo(store_path) {
-            println!("  {} no orphan worktree — skipping store push", "Note:".dimmed());
+            println!(
+                "  {} no orphan worktree — skipping store push",
+                "Note:".dimmed()
+            );
             return Ok(());
         }
         let store_has_origin = git_ops::has_remote(store_path, "origin");
         if store_has_origin {
             println!("{} aida-store → origin", "Pushing store".cyan().bold());
         } else {
-            println!("  {} orphan store has no `origin` — skipping store push", "Note:".dimmed());
+            println!(
+                "  {} orphan store has no `origin` — skipping store push",
+                "Note:".dimmed()
+            );
         }
         // Commit any pending orphan-branch changes regardless of origin —
         // the user's local edits should land in a commit either way so
@@ -16034,8 +16456,8 @@ fn handle_push_command(
             println!("  Committed: {}", msg);
         }
         if store_has_origin {
-            let branch = git_ops::current_branch(store_path)
-                .unwrap_or_else(|_| "aida-store".to_string());
+            let branch =
+                git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
             match git_ops::push(store_path, "origin", &branch) {
                 Ok(true) => println!("  {}", "store push complete".green()),
                 Ok(false) => {
@@ -16072,15 +16494,14 @@ fn handle_pull_command(
     // ---- Code pull (current branch on the project repo) ----
     if !store_only {
         if !git_ops::has_remote(&project_root, "origin") {
-            println!("  {} no `origin` remote — skipping code pull", "Note:".dimmed());
-        } else {
-            let branch = git_ops::current_branch(&project_root)
-                .unwrap_or_else(|_| "HEAD".to_string());
             println!(
-                "{} {} ← origin",
-                "Pulling code".cyan().bold(),
-                branch
+                "  {} no `origin` remote — skipping code pull",
+                "Note:".dimmed()
             );
+        } else {
+            let branch =
+                git_ops::current_branch(&project_root).unwrap_or_else(|_| "HEAD".to_string());
+            println!("{} {} ← origin", "Pulling code".cyan().bold(), branch);
             // --ff-only refuses if the local branch has diverged from
             // origin (user has unpushed commits AND origin has new
             // commits). Safer default than --rebase for a working
@@ -16116,11 +16537,17 @@ fn handle_pull_command(
     // ---- Store pull (orphan branch via pull_rebase) ----
     if !code_only {
         if !git_ops::is_git_repo(store_path) {
-            println!("  {} no orphan worktree — skipping store pull", "Note:".dimmed());
+            println!(
+                "  {} no orphan worktree — skipping store pull",
+                "Note:".dimmed()
+            );
             return Ok(());
         }
         if !git_ops::has_remote(store_path, "origin") {
-            println!("  {} orphan store has no `origin` — skipping store pull", "Note:".dimmed());
+            println!(
+                "  {} orphan store has no `origin` — skipping store pull",
+                "Note:".dimmed()
+            );
             return Ok(());
         }
         // Mirror `aida db sync --pull`: commit any pending orphan
@@ -16132,8 +16559,8 @@ fn handle_pull_command(
             let _ = git_ops::commit(store_path, "chore: sync pending changes");
             println!("  Committed pending orphan changes before pull");
         }
-        let branch = git_ops::current_branch(store_path)
-            .unwrap_or_else(|_| "aida-store".to_string());
+        let branch =
+            git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
         println!("{} aida-store ← origin", "Pulling store".cyan().bold());
         match git_ops::pull_rebase(store_path, "origin", &branch) {
             Ok(()) => println!("  {}", "store pull complete".green()),
@@ -16172,9 +16599,16 @@ fn handle_status_command_distributed(
     let project_root = std::env::current_dir()?;
 
     println!("{}", "─── Project ───".bold());
-    let name = if store.name.is_empty() { "(unnamed)" } else { &store.name };
+    let name = if store.name.is_empty() {
+        "(unnamed)"
+    } else {
+        &store.name
+    };
     println!("  Name:         {}", name.white().bold());
-    println!("  Mode:         {} (orphan branch)", "distributed git-canonical".cyan());
+    println!(
+        "  Mode:         {} (orphan branch)",
+        "distributed git-canonical".cyan()
+    );
     println!("  Store path:   {}", store_path.display());
     println!();
 
@@ -16184,7 +16618,8 @@ fn handle_status_command_distributed(
         ..Default::default()
     })?;
     let total = summaries.len();
-    let mut by_status: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    let mut by_status: std::collections::BTreeMap<String, usize> =
+        std::collections::BTreeMap::new();
     for s in &summaries {
         *by_status.entry(s.status.clone()).or_insert(0) += 1;
     }
@@ -16254,10 +16689,7 @@ fn handle_status_command_distributed(
             .or(r.spec_id.as_deref())
             .unwrap_or("?");
         let modified = r.modified_at.split('T').next().unwrap_or(&r.modified_at);
-        println!(
-            "  {:<14} {:<12} {} — {}",
-            id, r.status, modified, r.title
-        );
+        println!("  {:<14} {:<12} {} — {}", id, r.status, modified, r.title);
     }
     if recent.is_empty() {
         println!("  (no user requirements yet — try `aida add --type vision --title \"...\"`)");
@@ -16299,11 +16731,8 @@ fn print_scaffolding_freshness(
     // any mismatch on either input falsely reports drift on a fresh
     // init. trace:BUG-43 | ai:claude
     let config = ScaffoldConfig::default();
-    let mut scaffolder = Scaffolder::with_database(
-        project_root.to_path_buf(),
-        config,
-        db_path.to_path_buf(),
-    );
+    let mut scaffolder =
+        Scaffolder::with_database(project_root.to_path_buf(), config, db_path.to_path_buf());
     let preview = scaffolder.preview(store);
 
     use aida_core::scaffolding::FileCategory;
@@ -16351,7 +16780,10 @@ fn print_scaffolding_freshness(
     }
 
     println!("{}", "─── Scaffolding ───".bold());
-    println!("  Templates compared: {} total, {} present in project", total, present);
+    println!(
+        "  Templates compared: {} total, {} present in project",
+        total, present
+    );
     if template_drift.is_empty() {
         println!(
             "  Status:             {} — all {} AIDA-owned file(s) match the embedded templates",
@@ -16404,7 +16836,11 @@ fn handle_status_command(
     let project_root = std::env::current_dir()?;
 
     println!("{}", "─── Project ───".bold());
-    let name = if store.name.is_empty() { "(unnamed)" } else { &store.name };
+    let name = if store.name.is_empty() {
+        "(unnamed)"
+    } else {
+        &store.name
+    };
     println!("  Name:         {}", name.white().bold());
     let mode = if storage.is_sqlite() {
         "centralized SQLite (deprecated)"
@@ -16416,7 +16852,8 @@ fn handle_status_command(
     println!();
 
     let total = store.requirements.len();
-    let mut by_status: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    let mut by_status: std::collections::BTreeMap<String, usize> =
+        std::collections::BTreeMap::new();
     for r in &store.requirements {
         *by_status.entry(r.effective_status()).or_insert(0) += 1;
     }
@@ -16496,8 +16933,16 @@ fn print_aida_dev_context(project_root: &std::path::Path) {
 
     println!();
     println!("  Helpful:");
-    println!("    {}    {}", "scripts/release.sh".cyan(), "— bump version + tag + push");
-    println!("    {}    {}", "scripts/publish.sh".cyan(), "— cargo publish to crates.io");
+    println!(
+        "    {}    {}",
+        "scripts/release.sh".cyan(),
+        "— bump version + tag + push"
+    );
+    println!(
+        "    {}    {}",
+        "scripts/publish.sh".cyan(),
+        "— cargo publish to crates.io"
+    );
     println!();
 }
 
@@ -16599,10 +17044,7 @@ fn orphan_branch_sync_state(store_path: &std::path::Path) -> Option<(usize, usiz
     if !ahead.status.success() || !behind.status.success() {
         return None;
     }
-    let a: usize = String::from_utf8_lossy(&ahead.stdout)
-        .trim()
-        .parse()
-        .ok()?;
+    let a: usize = String::from_utf8_lossy(&ahead.stdout).trim().parse().ok()?;
     let b: usize = String::from_utf8_lossy(&behind.stdout)
         .trim()
         .parse()
@@ -16797,7 +17239,12 @@ fn upgrade_running_binary(
         return Ok(());
     }
 
-    if !yes && !confirm(&format!("\nUpgrade from v{} to {}? [y/N]: ", current, target_tag)) {
+    if !yes
+        && !confirm(&format!(
+            "\nUpgrade from v{} to {}? [y/N]: ",
+            current, target_tag
+        ))
+    {
         println!("Cancelled.");
         return Ok(());
     }
@@ -16841,7 +17288,12 @@ fn upgrade_specific_binary(
     }
 
     if current_version.as_deref() == Some(strip_v(&target_tag)) {
-        println!("\n{}: {} already on {}.", "OK".green(), target_path.display(), target_tag);
+        println!(
+            "\n{}: {} already on {}.",
+            "OK".green(),
+            target_path.display(),
+            target_tag
+        );
         return Ok(());
     }
 
@@ -16882,13 +17334,8 @@ fn upgrade_dev_mode_sibling_scan(
 ) -> Result<()> {
     let exe = std::env::current_exe()?;
     println!("Current version: {}", build_banner());
-    println!(
-        "Installed via:   developer build ({})",
-        exe.display()
-    );
-    println!(
-        "Note: developer build doesn't need upgrading. Looking for other installs..."
-    );
+    println!("Installed via:   developer build ({})", exe.display());
+    println!("Note: developer build doesn't need upgrading. Looking for other installs...");
     println!();
 
     let target_tag = resolve_target_tag(version)?;
@@ -16942,7 +17389,11 @@ fn upgrade_dev_mode_sibling_scan(
 
     if check {
         if stale.is_empty() {
-            println!("{}: all sibling installs are at {}.", "OK".green(), target_tag);
+            println!(
+                "{}: all sibling installs are at {}.",
+                "OK".green(),
+                target_tag
+            );
             print_unreleased_dev_hint(&exe, &target_tag, diff);
         } else {
             println!(
@@ -16955,7 +17406,11 @@ fn upgrade_dev_mode_sibling_scan(
     }
 
     if stale.is_empty() {
-        println!("{}: nothing to do — all sibling installs are at {}.", "OK".green(), target_tag);
+        println!(
+            "{}: nothing to do — all sibling installs are at {}.",
+            "OK".green(),
+            target_tag
+        );
         print_unreleased_dev_hint(&exe, &target_tag, diff);
         return Ok(());
     }
@@ -17050,7 +17505,12 @@ fn query_binary_version(path: &std::path::Path) -> Option<(String, String)> {
     let version = banner
         .split_whitespace()
         .next()
-        .filter(|v| v.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false))?
+        .filter(|v| {
+            v.chars()
+                .next()
+                .map(|c| c.is_ascii_digit())
+                .unwrap_or(false)
+        })?
         .to_string();
     Some((version, banner))
 }
@@ -17114,7 +17574,10 @@ fn print_unreleased_dev_hint(exe: &std::path::Path, target_tag: &str, with_diff:
 
     if with_diff {
         println!();
-        println!("{}", format!("Unreleased commits ({}..HEAD):", latest).bold());
+        println!(
+            "{}",
+            format!("Unreleased commits ({}..HEAD):", latest).bold()
+        );
         println!("{}", "─".repeat(72));
         let log = std::process::Command::new("git")
             .args([
@@ -17147,9 +17610,7 @@ fn print_unreleased_dev_hint(exe: &std::path::Path, target_tag: &str, with_diff:
 
     println!("      To ship those changes AND refresh your sibling installs in one shot:");
     println!("        {}", "aida dev patch".cyan());
-    println!(
-        "      (or `aida dev release {{minor|major|<version>}}` for a different bump)"
-    );
+    println!("      (or `aida dev release {{minor|major|<version>}}` for a different bump)");
     println!();
     println!(
         "      Or do it manually: `cd {} && ./scripts/release.sh patch`,",
@@ -17614,12 +18075,8 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
 
             println!("{}", "Initializing AIDA workspace...".bold());
 
-            let manifest = aida_core::workspace::init_workspace(
-                &cwd,
-                ws_name,
-                None,
-                remote.as_deref(),
-            )?;
+            let manifest =
+                aida_core::workspace::init_workspace(&cwd, ws_name, None, remote.as_deref())?;
 
             println!();
             println!("{} Workspace '{}' initialized", "✓".green(), manifest.name);
@@ -17633,7 +18090,10 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
             println!();
             println!("  {}:", "Usage from any repo".bold());
             println!("    {}", "cd <repo> && aida list".cyan());
-            println!("    {}", "cd <repo> && aida add --title \"...\" --type functional".cyan());
+            println!(
+                "    {}",
+                "cd <repo> && aida add --title \"...\" --type functional".cyan()
+            );
         }
         DbCommand::ExportGit { output } => {
             let output_path = std::path::PathBuf::from(output);
@@ -17732,11 +18192,7 @@ fn handle_export_command(
 /// `update_atomically` path for non-git backends (SQLite / YAML), since the
 /// bulk-writer's optimization only applies to the git path.
 /// trace:FR-1-002 | ai:claude
-fn bulk_import_via_writer<I>(
-    storage: &Storage,
-    commit_subject: &str,
-    reqs: I,
-) -> Result<usize>
+fn bulk_import_via_writer<I>(storage: &Storage, commit_subject: &str, reqs: I) -> Result<usize>
 where
     I: IntoIterator<Item = Requirement>,
 {
@@ -17844,9 +18300,13 @@ fn handle_relationship_command(cmd: &RelationshipCommand, storage: &Storage) -> 
             bidirectional,
             force_parent,
         } => {
-            let from = from_pos.as_deref().or(from_flag.as_deref())
+            let from = from_pos
+                .as_deref()
+                .or(from_flag.as_deref())
                 .ok_or_else(|| anyhow::anyhow!("missing FROM (positional or --from)"))?;
-            let to = to_pos.as_deref().or(to_flag.as_deref())
+            let to = to_pos
+                .as_deref()
+                .or(to_flag.as_deref())
                 .ok_or_else(|| anyhow::anyhow!("missing TO (positional or --to)"))?;
             add_relationship(storage, from, to, r#type, *bidirectional, *force_parent)?;
         }
@@ -17858,9 +18318,13 @@ fn handle_relationship_command(cmd: &RelationshipCommand, storage: &Storage) -> 
             r#type,
             bidirectional,
         } => {
-            let from = from_pos.as_deref().or(from_flag.as_deref())
+            let from = from_pos
+                .as_deref()
+                .or(from_flag.as_deref())
                 .ok_or_else(|| anyhow::anyhow!("missing FROM (positional or --from)"))?;
-            let to = to_pos.as_deref().or(to_flag.as_deref())
+            let to = to_pos
+                .as_deref()
+                .or(to_flag.as_deref())
                 .ok_or_else(|| anyhow::anyhow!("missing TO (positional or --to)"))?;
             remove_relationship(storage, from, to, r#type, *bidirectional)?;
         }
@@ -18382,11 +18846,7 @@ fn render_tree_node(
     let id_label = req.display_id();
     println!(
         "{}{} {:<14} {:<12} {}",
-        indent,
-        glyph,
-        id_label,
-        status,
-        req.title,
+        indent, glyph, id_label, status, req.title,
     );
     if depth >= max_depth {
         return Ok(());
@@ -19255,7 +19715,10 @@ fn print_trace_link(trace: &TraceLink, indent: &str) {
         println!(
             "{}Created: {} by {}",
             indent,
-            trace.created_at.with_timezone(&chrono::Local).format("%Y-%m-%d %H:%M"),
+            trace
+                .created_at
+                .with_timezone(&chrono::Local)
+                .format("%Y-%m-%d %H:%M"),
             created_by
         );
     }
@@ -19498,11 +19961,11 @@ fn trace_scan(
             found_traces
         {
             // Find requirement by spec_id (case-insensitive — trace comments may be lowercase)
-            if let Some(req) = store
-                .requirements
-                .iter_mut()
-                .find(|r| r.spec_id.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(&req_id)))
-            {
+            if let Some(req) = store.requirements.iter_mut().find(|r| {
+                r.spec_id
+                    .as_deref()
+                    .is_some_and(|s| s.eq_ignore_ascii_case(&req_id))
+            }) {
                 // Check if trace link already exists for this file and line
                 let exists = req
                     .trace_links
@@ -19654,11 +20117,11 @@ fn trace_sweep(
 
         for (commit_hash, req_id, subject) in found_refs {
             // Find requirement by spec_id (case-insensitive — commit refs may be lowercase)
-            if let Some(req) = store
-                .requirements
-                .iter_mut()
-                .find(|r| r.spec_id.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(&req_id)))
-            {
+            if let Some(req) = store.requirements.iter_mut().find(|r| {
+                r.spec_id
+                    .as_deref()
+                    .is_some_and(|s| s.eq_ignore_ascii_case(&req_id))
+            }) {
                 // Check if this commit is already linked
                 let exists = req
                     .trace_links
@@ -19692,8 +20155,13 @@ fn trace_sweep(
 /// that heading until the next `## ` heading or end-of-string is the
 /// extracted body.
 /// trace:STORY-67 | ai:claude
-const ACCEPTANCE_SECTION_HEADINGS: &[&str] =
-    &["Acceptance", "Verify", "Test cases", "Tests", "Verification"];
+const ACCEPTANCE_SECTION_HEADINGS: &[&str] = &[
+    "Acceptance",
+    "Verify",
+    "Test cases",
+    "Tests",
+    "Verification",
+];
 
 /// Extract the acceptance-criteria body from a requirement description.
 /// Returns the body text (without the heading line) when one of the
@@ -19746,7 +20214,9 @@ fn extract_spec_ids_from_commit(message: &str) -> Vec<String> {
         // Walk until the LAST `(...)` group on the subject line, which
         // is where the REQ-ID lives. Body lines occasionally mention
         // other reqs in prose; we ignore those to avoid false matches.
-        let Some(open_at) = trimmed.rfind('(') else { continue };
+        let Some(open_at) = trimmed.rfind('(') else {
+            continue;
+        };
         let Some(close_at) = trimmed[open_at..].find(')').map(|n| open_at + n) else {
             continue;
         };
@@ -19794,7 +20264,13 @@ fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
             pr,
             forge,
             write,
-        } => generate_review_prompt(storage, specs.as_deref(), *pr, forge.as_deref(), write.as_deref()),
+        } => generate_review_prompt(
+            storage,
+            specs.as_deref(),
+            *pr,
+            forge.as_deref(),
+            write.as_deref(),
+        ),
     }
 }
 
@@ -19835,7 +20311,10 @@ fn generate_review_prompt(
         let mut ids: Vec<String> = Vec::new();
         for msg in &messages {
             for id in extract_spec_ids_from_commit(msg) {
-                if !ids.iter().any(|existing| existing.eq_ignore_ascii_case(&id)) {
+                if !ids
+                    .iter()
+                    .any(|existing| existing.eq_ignore_ascii_case(&id))
+                {
                     ids.push(id);
                 }
             }
@@ -19875,10 +20354,7 @@ fn generate_review_prompt(
                     .and_then(|u| store.requirements.iter().find(|r| r.id == u))
             });
         let Some(req) = req else {
-            out.push_str(&format!(
-                "### {}\n\n_(not found in store)_\n\n",
-                id
-            ));
+            out.push_str(&format!("### {}\n\n_(not found in store)_\n\n", id));
             missing.push(id.clone());
             continue;
         };
@@ -19943,13 +20419,17 @@ fn pr_base_head(
     let (cli, args): (&str, &[&str]) = match forge {
         ReviewForge::GitHub => (
             "gh",
-            &["pr", "view", "", "--json", "baseRefName,headRefName", "-q",
-              ".baseRefName + \"\\t\" + .headRefName"],
+            &[
+                "pr",
+                "view",
+                "",
+                "--json",
+                "baseRefName,headRefName",
+                "-q",
+                ".baseRefName + \"\\t\" + .headRefName",
+            ],
         ),
-        ReviewForge::GitLab => (
-            "glab",
-            &["mr", "view", "", "-F", "json"],
-        ),
+        ReviewForge::GitLab => ("glab", &["mr", "view", "", "-F", "json"]),
     };
     // The CLI invocation needs the PR number injected — clone args and
     // overwrite the empty placeholder.
@@ -19999,7 +20479,11 @@ fn pr_base_head(
          pass an explicit base via `git log <base>..<head>` if this is wrong.",
         "Note:".yellow().bold(),
         cli,
-        if matches!(forge, ReviewForge::GitHub) { "pr" } else { "mr" },
+        if matches!(forge, ReviewForge::GitHub) {
+            "pr"
+        } else {
+            "mr"
+        },
         n
     );
     let head = match forge {
@@ -20022,11 +20506,7 @@ fn json_string_field(s: &str, key: &str) -> Option<String> {
 
 /// Run `git log <base>..<head> --pretty=format:%B%n--END--`. Returns
 /// each commit message as a separate string. trace:STORY-67 | ai:claude
-fn git_log_messages(
-    project_root: &std::path::Path,
-    base: &str,
-    head: &str,
-) -> Result<Vec<String>> {
+fn git_log_messages(project_root: &std::path::Path, base: &str, head: &str) -> Result<Vec<String>> {
     let range = format!("{}..{}", base, head);
     let out = std::process::Command::new("git")
         .arg("-C")
@@ -20721,7 +21201,8 @@ fn run_scaffold_upgrade(
         unchanged: usize,
     }
 
-    let mut by_cat: std::collections::BTreeMap<&str, CategoryStats> = std::collections::BTreeMap::new();
+    let mut by_cat: std::collections::BTreeMap<&str, CategoryStats> =
+        std::collections::BTreeMap::new();
 
     for artifact in &preview.artifacts {
         let cat = artifact.category();
@@ -20767,20 +21248,26 @@ fn run_scaffold_upgrade(
             match cat {
                 FileCategory::Template => UpgradeAction::Overwrite,
                 FileCategory::Seed => {
-                    let name = artifact.path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+                    let name = artifact
+                        .path
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("");
                     let actual_text = std::fs::read_to_string(&on_disk_path).ok();
                     match name {
-                        "AGENTS.md" if actual_text
-                            .as_deref()
-                            .and_then(aida_core::scaffolding::extract_aida_block)
-                            .is_some() =>
+                        "AGENTS.md"
+                            if actual_text
+                                .as_deref()
+                                .and_then(aida_core::scaffolding::extract_aida_block)
+                                .is_some() =>
                         {
                             UpgradeAction::RewriteAidaBlock
                         }
-                        "CLAUDE.md" if !actual_text
-                            .as_deref()
-                            .map(aida_core::scaffolding::claude_md_has_import)
-                            .unwrap_or(true) =>
+                        "CLAUDE.md"
+                            if !actual_text
+                                .as_deref()
+                                .map(aida_core::scaffolding::claude_md_has_import)
+                                .unwrap_or(true) =>
                         {
                             // The only AIDA-managed bit of CLAUDE.md is the
                             // import line; if it's missing we can fix that
@@ -20791,11 +21278,9 @@ fn run_scaffold_upgrade(
                         _ => UpgradeAction::LeaveAlone,
                     }
                 }
-                FileCategory::ManagedMerge => decide_managed_merge(
-                    &artifact.path,
-                    &on_disk_path,
-                    &artifact.content,
-                ),
+                FileCategory::ManagedMerge => {
+                    decide_managed_merge(&artifact.path, &on_disk_path, &artifact.content)
+                }
             }
         };
 
@@ -20872,7 +21357,9 @@ fn run_scaffold_upgrade(
     let order = ["template", "seed", "managed-merge"];
     let mut total_changes = 0usize;
     for cat in order {
-        let Some(stats) = by_cat.get(cat) else { continue };
+        let Some(stats) = by_cat.get(cat) else {
+            continue;
+        };
         let header = match cat {
             "template" => "Templates (AIDA-owned)".cyan().bold(),
             "seed" => "Seed (user-owned post-init)".yellow().bold(),
@@ -20898,7 +21385,9 @@ fn run_scaffold_upgrade(
         if !stats.left_alone.is_empty() {
             let why = match cat {
                 "seed" => "user-owned; drift expected. Edit by hand or `apply --force`",
-                "managed-merge" => "slot-merge deferred (FR-1-028 v2). Edit by hand or `apply --force`",
+                "managed-merge" => {
+                    "slot-merge deferred (FR-1-028 v2). Edit by hand or `apply --force`"
+                }
                 _ => "left alone",
             };
             println!(
@@ -20928,13 +21417,12 @@ fn run_scaffold_upgrade(
             total_changes
         );
     } else if total_changes == 0 {
-        println!("{} Scaffold up to date — nothing to do.", "✓".green().bold());
-    } else {
         println!(
-            "{} {} file(s) changed.",
-            "✓".green().bold(),
-            total_changes
+            "{} Scaffold up to date — nothing to do.",
+            "✓".green().bold()
         );
+    } else {
+        println!("{} {} file(s) changed.", "✓".green().bold(), total_changes);
     }
     Ok(())
 }
@@ -20969,14 +21457,16 @@ fn print_scaffold_diffs(
         // Missing-file handling stays in this layer because the slice helper
         // doesn't see the filesystem. trace:FR-1-027 | ai:claude
         let slice = match &actual_result {
-            Ok(actual) => aida_core::aida_managed_diff_slice(&artifact.path, &artifact.content, actual),
+            Ok(actual) => {
+                aida_core::aida_managed_diff_slice(&artifact.path, &artifact.content, actual)
+            }
             Err(_) => {
                 // Single-file mode: explicit user asked for this path → surface.
                 // Bulk mode: only surface for known-required files (Template
                 // category — AIDA owns those).
                 let category = artifact.category();
-                let surface = artifacts.len() == 1
-                    || matches!(category, aida_core::FileCategory::Template);
+                let surface =
+                    artifacts.len() == 1 || matches!(category, aida_core::FileCategory::Template);
                 if !surface {
                     continue;
                 }
@@ -20985,8 +21475,7 @@ fn print_scaffold_diffs(
                 } else {
                     println!(
                         "{}",
-                        format!("# {} is missing on disk", artifact.path.display())
-                            .yellow()
+                        format!("# {} is missing on disk", artifact.path.display()).yellow()
                     );
                 }
                 any_drift = true;
@@ -21022,11 +21511,21 @@ fn print_scaffold_diffs(
                 }
                 printed_count += 1;
 
-                println!("{}", format!("--- a/{}  (template)", artifact.path.display()).red());
-                println!("{}", format!("+++ b/{}  (on disk)", artifact.path.display()).green());
+                println!(
+                    "{}",
+                    format!("--- a/{}  (template)", artifact.path.display()).red()
+                );
+                println!(
+                    "{}",
+                    format!("+++ b/{}  (on disk)", artifact.path.display()).green()
+                );
                 render_unified_diff(&expected, &actual, context_lines);
             }
-            DiffSlice::SliceDiff { expected, actual, note } => {
+            DiffSlice::SliceDiff {
+                expected,
+                actual,
+                note,
+            } => {
                 any_drift = true;
                 if list_only {
                     println!("{}", artifact.path.display());
@@ -21037,8 +21536,14 @@ fn print_scaffold_diffs(
                 }
                 printed_count += 1;
 
-                println!("{}", format!("--- a/{}  (template)", artifact.path.display()).red());
-                println!("{}", format!("+++ b/{}  (on disk)", artifact.path.display()).green());
+                println!(
+                    "{}",
+                    format!("--- a/{}  (template)", artifact.path.display()).red()
+                );
+                println!(
+                    "{}",
+                    format!("+++ b/{}  (on disk)", artifact.path.display()).green()
+                );
                 println!("{}", format!("# {}", note).dimmed());
                 render_unified_diff(&expected, &actual, context_lines);
             }
@@ -21057,7 +21562,11 @@ fn render_unified_diff(expected: &str, actual: &str, context_lines: usize) {
     let diff = TextDiff::configure()
         .algorithm(similar::Algorithm::Myers)
         .diff_lines(expected, actual);
-    for hunk in diff.unified_diff().context_radius(context_lines).iter_hunks() {
+    for hunk in diff
+        .unified_diff()
+        .context_radius(context_lines)
+        .iter_hunks()
+    {
         println!("{}", format!("{}", hunk.header()).cyan());
         for change in hunk.iter_changes() {
             let line = change.value();
@@ -21886,21 +22395,26 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     Some(r.clone())
                 }
             } else {
-                std::env::var("AIDA_SESSION_ROLE").ok().filter(|s| !s.is_empty())
+                std::env::var("AIDA_SESSION_ROLE")
+                    .ok()
+                    .filter(|s| !s.is_empty())
             };
 
             // Phase 3 scope: AND the active role's scope_tags / scope_status
             // on top of the role-routing filter. --all and --no-scope both
             // bypass; --all also bypasses role routing.
             // trace:TASK-1-021 | ai:claude
-            let scope = if *all || *no_scope { None } else { active_role_scope() };
+            let scope = if *all || *no_scope {
+                None
+            } else {
+                active_role_scope()
+            };
 
             // STORY-57: scope/session routing filter — when in a session,
             // an entry tagged for_scope=X is only visible if X matches the
             // active lease (or `--all` bypasses).
-            let self_lease_for_routing: Option<SessionLease> = std::env::current_dir()
-                .ok()
-                .and_then(|cwd| {
+            let self_lease_for_routing: Option<SessionLease> =
+                std::env::current_dir().ok().and_then(|cwd| {
                     let project_root = storage
                         .path()
                         .parent()
@@ -21926,29 +22440,25 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 Match(Vec<String>),
                 NoScope,
             }
-            let scope_filter_parsed: Option<ScopeFilterKind> = scope_filter
-                .as_deref()
-                .map(|raw| {
-                    let parts: Vec<String> = raw
-                        .split(',')
-                        .map(|s| s.trim().to_string())
-                        .filter(|s| !s.is_empty())
-                        .collect();
-                    if parts.iter().any(|p| p.eq_ignore_ascii_case("none")) {
-                        ScopeFilterKind::NoScope
-                    } else {
-                        ScopeFilterKind::Match(parts)
-                    }
-                });
+            let scope_filter_parsed: Option<ScopeFilterKind> = scope_filter.as_deref().map(|raw| {
+                let parts: Vec<String> = raw
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                if parts.iter().any(|p| p.eq_ignore_ascii_case("none")) {
+                    ScopeFilterKind::NoScope
+                } else {
+                    ScopeFilterKind::Match(parts)
+                }
+            });
             let entries: Vec<&aida_core::QueueEntry> = raw_entries
                 .iter()
                 .filter(|e| match &role_filter {
                     Some(r) => e.for_role.as_deref() == Some(r.as_str()),
                     None => true,
                 })
-                .filter(|e| {
-                    entry_scope_session_match(e, self_lease_for_routing.as_ref(), *all)
-                })
+                .filter(|e| entry_scope_session_match(e, self_lease_for_routing.as_ref(), *all))
                 .filter(|e| {
                     // TASK-46: hide Completed/Rejected entries by default.
                     // Counts them for the footer hint, so the user can
@@ -21956,7 +22466,8 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     if *include_terminal {
                         return true;
                     }
-                    let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id) else {
+                    let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id)
+                    else {
                         return true;
                     };
                     if is_terminal_status(&req.status) {
@@ -21982,7 +22493,9 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                                 }
                             }
                             // Fall through to derived parent-EPIC label.
-                            let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id) else {
+                            let Some(req) =
+                                store.requirements.iter().find(|r| r.id == e.requirement_id)
+                            else {
                                 return false;
                             };
                             if let Some(derived) = derive_parent_epic_label(req, &store) {
@@ -21997,7 +22510,8 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     let Some((scope_tags, scope_status)) = &scope else {
                         return true;
                     };
-                    let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id) else {
+                    let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id)
+                    else {
                         return true;
                     };
                     if let Some(want) = scope_status {
@@ -22045,7 +22559,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     println!(
                         "  ({} terminal-status entr{} hidden; pass --include-terminal to show)",
                         hidden_terminal_count,
-                        if hidden_terminal_count == 1 { "y" } else { "ies" }
+                        if hidden_terminal_count == 1 {
+                            "y"
+                        } else {
+                            "ies"
+                        }
                     );
                 }
                 return Ok(());
@@ -22070,7 +22588,8 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
 
             // Local-project name for tagging local entries when global is also
             // shown (so the user can tell at a glance which is which).
-            let local_project_name = global_queue::project_name_for(storage.path().parent().unwrap_or(storage.path()));
+            let local_project_name =
+                global_queue::project_name_for(storage.path().parent().unwrap_or(storage.path()));
 
             for (i, entry) in entries.iter().enumerate() {
                 let req = store
@@ -22178,7 +22697,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     format!(
                         "{} terminal-status entr{} hidden",
                         hidden_terminal_count,
-                        if hidden_terminal_count == 1 { "y" } else { "ies" }
+                        if hidden_terminal_count == 1 {
+                            "y"
+                        } else {
+                            "ies"
+                        }
                     )
                     .dimmed(),
                     "Completed/Rejected;".dimmed()
@@ -22223,9 +22746,8 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // specific than --scope and overrides it for filtering, but we
             // keep both fields in the entry — the consumer side ANDs them.
             // trace:STORY-57 | ai:claude
-            let active_lease_for_routing: Option<SessionLease> = std::env::current_dir()
-                .ok()
-                .and_then(|cwd| {
+            let active_lease_for_routing: Option<SessionLease> =
+                std::env::current_dir().ok().and_then(|cwd| {
                     let project_root = storage
                         .path()
                         .parent()
@@ -22287,11 +22809,17 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             if *global {
                 let role = r#for
                     .clone()
-                    .or_else(|| std::env::var("AIDA_SESSION_ROLE").ok().filter(|s| !s.is_empty()))
-                    .ok_or_else(|| anyhow::anyhow!(
+                    .or_else(|| {
+                        std::env::var("AIDA_SESSION_ROLE")
+                            .ok()
+                            .filter(|s| !s.is_empty())
+                    })
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
                         "--global requires --for <role> or an active role (AIDA_SESSION_ROLE). \
                          The global queue is keyed by role."
-                    ))?;
+                    )
+                    })?;
                 let project_root = storage
                     .path()
                     .parent()
@@ -22383,7 +22911,12 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 routing
             );
         }
-        QueueCommand::Remove { id, user, global, r#for } => {
+        QueueCommand::Remove {
+            id,
+            user,
+            global,
+            r#for,
+        } => {
             let user_id = get_user(user);
 
             // --global removes from ~/.aida/queue/<role>.yaml. Role from
@@ -22391,15 +22924,25 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             if *global {
                 let role = r#for
                     .clone()
-                    .or_else(|| std::env::var("AIDA_SESSION_ROLE").ok().filter(|s| !s.is_empty()))
-                    .ok_or_else(|| anyhow::anyhow!(
-                        "--global requires --for <role> or an active role (AIDA_SESSION_ROLE)."
-                    ))?;
+                    .or_else(|| {
+                        std::env::var("AIDA_SESSION_ROLE")
+                            .ok()
+                            .filter(|s| !s.is_empty())
+                    })
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "--global requires --for <role> or an active role (AIDA_SESSION_ROLE)."
+                        )
+                    })?;
                 // Match by spec_id from the global entries (no local store needed).
                 let entries = global_queue::load(&role).unwrap_or_default();
                 let target = entries.iter().find(|e| {
-                    e.spec_id.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(id))
-                        || uuid::Uuid::parse_str(id).map(|u| u == e.requirement_id).unwrap_or(false)
+                    e.spec_id
+                        .as_deref()
+                        .is_some_and(|s| s.eq_ignore_ascii_case(id))
+                        || uuid::Uuid::parse_str(id)
+                            .map(|u| u == e.requirement_id)
+                            .unwrap_or(false)
                 });
                 let Some(target) = target else {
                     anyhow::bail!("{} not found in global queue for role:{}", id, role);
@@ -22485,9 +23028,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 entries
                     .iter()
                     .find(|e| e.requirement_id == before_req.id)
-                    .ok_or_else(|| anyhow::anyhow!(
-                        "{} is not in the queue", before_id
-                    ))
+                    .ok_or_else(|| anyhow::anyhow!("{} is not in the queue", before_id))
                     .map(|e| e.position - 1)?
             } else if let Some(ref after_id) = after {
                 // STORY-72: --after Y places X immediately after Y in the
@@ -22508,9 +23049,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 let anchor_pos = entries
                     .iter()
                     .find(|e| e.requirement_id == after_req.id)
-                    .ok_or_else(|| anyhow::anyhow!(
-                        "{} is not in the queue", after_id
-                    ))?
+                    .ok_or_else(|| anyhow::anyhow!("{} is not in the queue", after_id))?
                     .position;
                 // Successor is the next entry strictly after the anchor in
                 // sorted-by-position order. queue_list already returns sorted.
@@ -22537,7 +23076,14 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             }
         }
         // trace:EPIC-1-001 | ai:claude
-        QueueCommand::Next { role, all, user, no_scope, global, local } => {
+        QueueCommand::Next {
+            role,
+            all,
+            user,
+            no_scope,
+            global,
+            local,
+        } => {
             let user_id = get_user(user);
             let raw_entries = if *global {
                 Vec::new()
@@ -22552,7 +23098,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             let role_filter: Option<String> = if *all {
                 None
             } else if let Some(r) = role {
-                if r == "any" { None } else { Some(r.clone()) }
+                if r == "any" {
+                    None
+                } else {
+                    Some(r.clone())
+                }
             } else {
                 std::env::var("AIDA_SESSION_ROLE")
                     .ok()
@@ -22561,7 +23111,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
 
             // Phase 3 scope filter (see queue list).
             // trace:TASK-1-021 | ai:claude
-            let scope = if *all || *no_scope { None } else { active_role_scope() };
+            let scope = if *all || *no_scope {
+                None
+            } else {
+                active_role_scope()
+            };
 
             // STORY-48: skip queue items whose target spec is owned by
             // another active session. Honors `[session].enforcement`:
@@ -22589,8 +23143,8 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 .as_ref()
                 .map(|p| session_enforcement(p))
                 .unwrap_or(SessionEnforcement::Warn);
-            let lease_filter_active = !leases.is_empty()
-                && enforcement_mode != SessionEnforcement::Off;
+            let lease_filter_active =
+                !leases.is_empty() && enforcement_mode != SessionEnforcement::Off;
             let mut skipped_for_lease: Vec<(String, String)> = Vec::new();
 
             let next_entry = raw_entries
@@ -22612,7 +23166,8 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     // override here because the whole point of `next`
                     // is "what should I pick up", and the answer is
                     // never "this Completed thing". trace:TASK-46 | ai:claude
-                    let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id) else {
+                    let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id)
+                    else {
                         return true;
                     };
                     !is_terminal_status(&req.status)
@@ -22621,8 +23176,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     if !lease_filter_active {
                         return true;
                     }
-                    let Some(req) =
-                        store.requirements.iter().find(|r| r.id == e.requirement_id)
+                    let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id)
                     else {
                         return true;
                     };
@@ -22648,7 +23202,8 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     let Some((scope_tags, scope_status)) = &scope else {
                         return true;
                     };
-                    let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id) else {
+                    let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id)
+                    else {
                         return true;
                     };
                     if let Some(want) = scope_status {
@@ -22670,14 +23225,15 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // Local wins on tiebreak — the FR specifies that local-context
             // work takes precedence. Only fall through to global when local
             // is empty (or --global was passed). trace:FR-1-012
-            let global_next: Option<global_queue::GlobalQueueEntry> = if *local || next_entry.is_some() {
-                None
-            } else if let Some(role_name) = &role_filter {
-                let entries = global_queue::load(role_name).unwrap_or_default();
-                entries.into_iter().min_by_key(|e| e.position)
-            } else {
-                None
-            };
+            let global_next: Option<global_queue::GlobalQueueEntry> =
+                if *local || next_entry.is_some() {
+                    None
+                } else if let Some(role_name) = &role_filter {
+                    let entries = global_queue::load(role_name).unwrap_or_default();
+                    entries.into_iter().min_by_key(|e| e.position)
+                } else {
+                    None
+                };
 
             if next_entry.is_none() && global_next.is_none() {
                 // STORY-63: scope fallback. If the personal+global queues
@@ -22766,7 +23322,10 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         "scope has no approved+ready children either — try `aida list --status approved`".dimmed()
                     );
                 } else {
-                    println!("  ({})", "pick up new work via `aida role enter dialog` or wait for items".dimmed());
+                    println!(
+                        "  ({})",
+                        "pick up new work via `aida role enter dialog` or wait for items".dimmed()
+                    );
                 }
                 return Ok(());
             }
@@ -22916,9 +23475,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             let req_id = req.id;
             let now = chrono::Utc::now();
             let completer = get_default_author();
-            let source_tool = std::env::var("AIDA_AI_TOOL")
-                .ok()
-                .filter(|s| !s.is_empty());
+            let source_tool = std::env::var("AIDA_AI_TOOL").ok().filter(|s| !s.is_empty());
             storage.update_atomically(|s| {
                 if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
                     r.set_status_from_str("Completed");
@@ -22970,16 +23527,50 @@ fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
     let rt = tokio::runtime::Runtime::new()?;
 
     match cmd {
-        JiraCommand::Config { url, project, email, show, show_mapping } => {
+        JiraCommand::Config {
+            url,
+            project,
+            email,
+            show,
+            show_mapping,
+        } => {
             let mut config = aida_core::JiraConfig::load()?;
 
             if *show {
                 println!("{}", "Jira Configuration".bold());
                 println!("{}", "─".repeat(40));
-                println!("Instance:  {}", if config.instance_url.is_empty() { "(not set)" } else { &config.instance_url });
-                println!("Project:   {}", if config.project_key.is_empty() { "(not set)" } else { &config.project_key });
-                println!("Email:     {}", if config.user_email.is_empty() { "(not set)" } else { &config.user_email });
-                println!("Token:     {}", if config.effective_token().is_ok() { "configured (AIDA_JIRA_TOKEN)" } else { "not configured" });
+                println!(
+                    "Instance:  {}",
+                    if config.instance_url.is_empty() {
+                        "(not set)"
+                    } else {
+                        &config.instance_url
+                    }
+                );
+                println!(
+                    "Project:   {}",
+                    if config.project_key.is_empty() {
+                        "(not set)"
+                    } else {
+                        &config.project_key
+                    }
+                );
+                println!(
+                    "Email:     {}",
+                    if config.user_email.is_empty() {
+                        "(not set)"
+                    } else {
+                        &config.user_email
+                    }
+                );
+                println!(
+                    "Token:     {}",
+                    if config.effective_token().is_ok() {
+                        "configured (AIDA_JIRA_TOKEN)"
+                    } else {
+                        "not configured"
+                    }
+                );
                 println!("Enabled:   {}", config.enabled);
                 return Ok(());
             }
@@ -23007,13 +23598,22 @@ fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
                 for (jira, aida) in &config.mapping.reverse_statuses {
                     println!("  {:<20} → {}", jira, aida);
                 }
-                println!("\nEdit mapping at: {}", aida_core::JiraConfig::config_path()?.display());
+                println!(
+                    "\nEdit mapping at: {}",
+                    aida_core::JiraConfig::config_path()?.display()
+                );
                 return Ok(());
             }
 
-            if let Some(u) = url { config.instance_url = u.clone(); }
-            if let Some(p) = project { config.project_key = p.clone(); }
-            if let Some(e) = email { config.user_email = e.clone(); }
+            if let Some(u) = url {
+                config.instance_url = u.clone();
+            }
+            if let Some(p) = project {
+                config.project_key = p.clone();
+            }
+            if let Some(e) = email {
+                config.user_email = e.clone();
+            }
 
             config.save()?;
             println!("{} Jira configuration saved.", "✓".green());
@@ -23039,10 +23639,14 @@ fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
             if results.issues.is_empty() {
                 println!("No issues found.");
             } else {
-                println!("{:<12} {:<10} {:<12} {:<10} {}", "Key", "Type", "Status", "Priority", "Summary");
+                println!(
+                    "{:<12} {:<10} {:<12} {:<10} {}",
+                    "Key", "Type", "Status", "Priority", "Summary"
+                );
                 println!("{}", "─".repeat(75));
                 for issue in &results.issues {
-                    println!("{:<12} {:<10} {:<12} {:<10} {}",
+                    println!(
+                        "{:<12} {:<10} {:<12} {:<10} {}",
                         issue.key,
                         truncate_str(issue.issue_type_name(), 9),
                         truncate_str(issue.status_name(), 11),
@@ -23079,7 +23683,9 @@ fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
             let client = aida_core::JiraClient::new(config.clone())?;
 
             let store = storage.load()?;
-            let req = store.requirements.iter()
+            let req = store
+                .requirements
+                .iter()
                 .find(|r| r.matches_id(id))
                 .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
 
@@ -23100,19 +23706,27 @@ fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
 
             let request = aida_core::JiraCreateIssueRequest {
                 fields: aida_core::JiraCreateIssueFields {
-                    project: aida_core::JiraProjectRef { key: config.project_key.clone() },
+                    project: aida_core::JiraProjectRef {
+                        key: config.project_key.clone(),
+                    },
                     summary: format!("[{}] {}", display_id, req.title),
                     description: Some(aida_core::text_to_adf(&description_text)),
                     issuetype: aida_core::JiraIssueTypeRef { name: type_name },
-                    priority: Some(aida_core::JiraPriorityRef { name: priority_name }),
+                    priority: Some(aida_core::JiraPriorityRef {
+                        name: priority_name,
+                    }),
                     assignee: None,
                     labels,
                 },
             };
 
             let created = rt.block_on(client.create_issue(&request))?;
-            println!("{} Created Jira issue {} for {}",
-                "✓".green(), created.key.white().bold(), display_id);
+            println!(
+                "{} Created Jira issue {} for {}",
+                "✓".green(),
+                created.key.white().bold(),
+                display_id
+            );
             println!("  URL: {}/browse/{}", config.instance_url, created.key);
         }
         JiraCommand::Sync { apply } => {
@@ -23123,13 +23737,21 @@ fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
 
             // Find AIDA requirements linked to Jira issues
             // Link detection: title starts with [DEV-N] or [PROJ-N], or has jira: tags
-            let linked: Vec<(&Requirement, String)> = store.requirements.iter()
+            let linked: Vec<(&Requirement, String)> = store
+                .requirements
+                .iter()
                 .filter_map(|r| {
                     // Check [KEY-N] prefix in title
                     if r.title.starts_with('[') {
                         if let Some(end) = r.title.find(']') {
                             let key = &r.title[1..end];
-                            if key.contains('-') && key.split('-').last().map(|n| n.parse::<u64>().is_ok()).unwrap_or(false) {
+                            if key.contains('-')
+                                && key
+                                    .split('-')
+                                    .last()
+                                    .map(|n| n.parse::<u64>().is_ok())
+                                    .unwrap_or(false)
+                            {
                                 return Some((r, key.to_string()));
                             }
                         }
@@ -23146,15 +23768,17 @@ fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
 
             // Also find Jira issues with aida: labels that aren't linked from AIDA side
             // (TODO: tighten JQL to filter on aida:label_prefix once verified)
-            let jira_issues = rt.block_on(client.search(
-                &format!("project = {} ORDER BY updated DESC", config.project_key),
-                50,
-            )).unwrap_or_else(|_| aida_core::JiraSearchResults {
-                issues: Vec::new(),
-                next_page_token: None,
-                is_last: Some(true),
-                total: 0,
-            });
+            let jira_issues = rt
+                .block_on(client.search(
+                    &format!("project = {} ORDER BY updated DESC", config.project_key),
+                    50,
+                ))
+                .unwrap_or_else(|_| aida_core::JiraSearchResults {
+                    issues: Vec::new(),
+                    next_page_token: None,
+                    is_last: Some(true),
+                    total: 0,
+                });
 
             if linked.is_empty() && jira_issues.issues.is_empty() {
                 println!("No linked items found.");
@@ -23175,44 +23799,61 @@ fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
                         let mut diffs = Vec::new();
 
                         // Compare title (strip [KEY] prefix for comparison)
-                        let aida_title = req.title
+                        let aida_title = req
+                            .title
                             .strip_prefix(&format!("[{}] ", jira_key))
                             .unwrap_or(&req.title);
                         if aida_title != issue.summary() {
-                            diffs.push(format!("  title: AIDA='{}' Jira='{}'",
+                            diffs.push(format!(
+                                "  title: AIDA='{}' Jira='{}'",
                                 truncate_str(aida_title, 25),
-                                truncate_str(issue.summary(), 25)));
+                                truncate_str(issue.summary(), 25)
+                            ));
                         }
 
                         // Compare status using mapping
                         let expected_jira_status = config.map_status(&req.effective_status());
                         let actual_jira_status = issue.status_name();
                         if expected_jira_status != actual_jira_status {
-                            diffs.push(format!("  status: AIDA={} (→{}) Jira={}",
+                            diffs.push(format!(
+                                "  status: AIDA={} (→{}) Jira={}",
                                 req.effective_status(),
                                 expected_jira_status,
-                                actual_jira_status));
+                                actual_jira_status
+                            ));
                         }
 
                         // Compare priority
                         let expected_priority = config.map_priority(&req.effective_priority());
                         let actual_priority = issue.priority_name();
                         if expected_priority != actual_priority {
-                            diffs.push(format!("  priority: AIDA={} (→{}) Jira={}",
+                            diffs.push(format!(
+                                "  priority: AIDA={} (→{}) Jira={}",
                                 req.effective_priority(),
                                 expected_priority,
-                                actual_priority));
+                                actual_priority
+                            ));
                         }
 
                         let spec_id = req.display_id();
                         if diffs.is_empty() {
                             in_sync += 1;
-                            println!("{} {:<12} ↔ {:<10} {} — in sync",
-                                "✓".green(), spec_id, jira_key, truncate_str(aida_title, 35));
+                            println!(
+                                "{} {:<12} ↔ {:<10} {} — in sync",
+                                "✓".green(),
+                                spec_id,
+                                jira_key,
+                                truncate_str(aida_title, 35)
+                            );
                         } else {
                             drifted += 1;
-                            println!("{} {:<12} ↔ {:<10} {} — DRIFTED",
-                                "△".yellow(), spec_id, jira_key, truncate_str(aida_title, 35));
+                            println!(
+                                "{} {:<12} ↔ {:<10} {} — DRIFTED",
+                                "△".yellow(),
+                                spec_id,
+                                jira_key,
+                                truncate_str(aida_title, 35)
+                            );
                             for d in &diffs {
                                 println!("    {}", d);
                             }
@@ -23220,18 +23861,25 @@ fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
                     }
                     Err(e) => {
                         errors += 1;
-                        println!("{} {} ↔ {} — error: {}",
+                        println!(
+                            "{} {} ↔ {} — error: {}",
                             "✗".red(),
                             req.display_id(),
                             jira_key,
-                            e);
+                            e
+                        );
                     }
                 }
             }
 
             println!();
-            println!("{} in sync, {} drifted, {} errors (of {} linked)",
-                in_sync, drifted, errors, linked.len());
+            println!(
+                "{} in sync, {} drifted, {} errors (of {} linked)",
+                in_sync,
+                drifted,
+                errors,
+                linked.len()
+            );
 
             if drifted > 0 && !apply {
                 println!("\nUse --apply to push AIDA state to Jira.");
@@ -23240,7 +23888,8 @@ fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
             if *apply && drifted > 0 {
                 println!("\nApplying changes...");
                 for (req, jira_key) in &linked {
-                    let aida_title = req.title
+                    let aida_title = req
+                        .title
                         .strip_prefix(&format!("[{}] ", jira_key))
                         .unwrap_or(&req.title);
 
@@ -23256,12 +23905,19 @@ fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
                 }
             }
         }
-        JiraCommand::Pull { jql, limit, dry_run } => {
+        JiraCommand::Pull {
+            jql,
+            limit,
+            dry_run,
+        } => {
             let config = aida_core::JiraConfig::load()?;
             let client = aida_core::JiraClient::new(config.clone())?;
 
             let query = jql.clone().unwrap_or_else(|| {
-                format!("project = {} AND status != Done ORDER BY updated DESC", config.project_key)
+                format!(
+                    "project = {} AND status != Done ORDER BY updated DESC",
+                    config.project_key
+                )
             });
             let results = rt.block_on(client.search(&query, *limit))?;
 
@@ -23271,9 +23927,8 @@ fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
             }
 
             let store = storage.load()?;
-            let existing_titles: std::collections::HashSet<String> = store.requirements.iter()
-                .map(|r| r.title.clone())
-                .collect();
+            let existing_titles: std::collections::HashSet<String> =
+                store.requirements.iter().map(|r| r.title.clone()).collect();
 
             let mut to_import = Vec::new();
             let mut skipped = 0;
@@ -23281,7 +23936,10 @@ fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
             for issue in &results.issues {
                 let jira_prefix = format!("[{}]", issue.key);
                 if existing_titles.contains(&issue.fields.summary)
-                    || store.requirements.iter().any(|r| r.title.starts_with(&jira_prefix))
+                    || store
+                        .requirements
+                        .iter()
+                        .any(|r| r.title.starts_with(&jira_prefix))
                 {
                     skipped += 1;
                 } else {
@@ -23290,14 +23948,27 @@ fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
             }
 
             if to_import.is_empty() {
-                println!("All {} issues already imported ({} skipped).", results.issues.len(), skipped);
+                println!(
+                    "All {} issues already imported ({} skipped).",
+                    results.issues.len(),
+                    skipped
+                );
                 return Ok(());
             }
 
-            println!("Found {} issues to import ({} already exist):", to_import.len(), skipped);
+            println!(
+                "Found {} issues to import ({} already exist):",
+                to_import.len(),
+                skipped
+            );
             for issue in &to_import {
                 let aida_type = config.reverse_map_type(issue.issue_type_name());
-                println!("  {:<12} {:<10} {}", issue.key, aida_type, truncate_str(issue.summary(), 50));
+                println!(
+                    "  {:<12} {:<10} {}",
+                    issue.key,
+                    aida_type,
+                    truncate_str(issue.summary(), 50)
+                );
             }
 
             if *dry_run {
@@ -23317,7 +23988,8 @@ fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
                         format!("[{}] {}", issue.key, issue.fields.summary),
                         issue.description_text(),
                     );
-                    req.req_type = parse_requirement_type(&aida_type_str).unwrap_or(RequirementType::Task);
+                    req.req_type =
+                        parse_requirement_type(&aida_type_str).unwrap_or(RequirementType::Task);
                     req.set_status_from_str(&aida_status_str);
                     for label in issue.labels() {
                         req.tags.insert(format!("jira:{}", label));
@@ -23326,7 +23998,11 @@ fn handle_jira_command(cmd: &JiraCommand, storage: &Storage) -> Result<()> {
                 }),
             )?;
 
-            println!("\n{} Imported {} issues as requirements.", "✓".green(), imported);
+            println!(
+                "\n{} Imported {} issues as requirements.",
+                "✓".green(),
+                imported
+            );
         }
     }
     Ok(())
@@ -23348,7 +24024,14 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
                 println!("{}", "GitHub Configuration".bold());
                 println!("{}", "─".repeat(40));
                 println!("API URL:  {}", config.api_url);
-                println!("Repo:     {}", if config.repo.is_empty() { "(not set)" } else { &config.repo });
+                println!(
+                    "Repo:     {}",
+                    if config.repo.is_empty() {
+                        "(not set)"
+                    } else {
+                        &config.repo
+                    }
+                );
                 println!(
                     "Token:    {}",
                     if config.effective_token().is_ok() {
@@ -23367,7 +24050,10 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
             if let Some(t) = token {
                 std::env::set_var("AIDA_GITHUB_TOKEN", t);
                 config.token = Some(t.clone());
-                println!("{} Token set for this session. Set AIDA_GITHUB_TOKEN env var for persistence.", "!".yellow());
+                println!(
+                    "{} Token set for this session. Set AIDA_GITHUB_TOKEN env var for persistence.",
+                    "!".yellow()
+                );
             }
             if let Some(u) = api_url {
                 config.api_url = u.clone();
@@ -23389,7 +24075,11 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
             println!("  Default:    {}", repo.default_branch);
             println!("  Private:    {}", repo.is_private);
         }
-        GitHubCommand::List { state, labels, limit } => {
+        GitHubCommand::List {
+            state,
+            labels,
+            limit,
+        } => {
             let config = aida_core::GitHubConfig::load()?;
             let client = aida_core::GitHubClient::new(config)?;
 
@@ -23405,10 +24095,7 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
             if issues.is_empty() {
                 println!("No issues found.");
             } else {
-                println!(
-                    "{:<8} {:<10} {:<40} {}",
-                    "#", "State", "Title", "Labels"
-                );
+                println!("{:<8} {:<10} {:<40} {}", "#", "State", "Title", "Labels");
                 println!("{}", "─".repeat(75));
                 for issue in &issues {
                     let labels_str: String = issue
@@ -23491,9 +24178,7 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
             let display_id = req.display_id();
             let body = format!(
                 "{}\n\n---\n_AIDA: {} | UUID: {}_",
-                req.description,
-                display_id,
-                req.id,
+                req.description, display_id, req.id,
             );
 
             let request = aida_core::GitHubCreateIssueRequest {
@@ -23567,42 +24252,54 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
                         let mut diffs = Vec::new();
 
                         // Compare title (strip [GH-N] prefix for comparison)
-                        let aida_title = req.title
+                        let aida_title = req
+                            .title
                             .strip_prefix(&format!("[GH-{}] ", issue_number))
                             .unwrap_or(&req.title);
                         if aida_title != issue.title {
-                            diffs.push(format!("  title: AIDA='{}' GitHub='{}'",
+                            diffs.push(format!(
+                                "  title: AIDA='{}' GitHub='{}'",
                                 truncate_str(aida_title, 30),
-                                truncate_str(&issue.title, 30)));
+                                truncate_str(&issue.title, 30)
+                            ));
                         }
 
                         // Compare state
-                        let aida_closed = matches!(req.status, RequirementStatus::Completed | RequirementStatus::Rejected);
+                        let aida_closed = matches!(
+                            req.status,
+                            RequirementStatus::Completed | RequirementStatus::Rejected
+                        );
                         let gh_closed = issue.state == "closed";
                         if aida_closed != gh_closed {
-                            diffs.push(format!("  state: AIDA={} GitHub={}",
-                                req.effective_status(), issue.state));
+                            diffs.push(format!(
+                                "  state: AIDA={} GitHub={}",
+                                req.effective_status(),
+                                issue.state
+                            ));
                         }
 
                         if diffs.is_empty() {
-                            println!("{} #{:<5} {} — in sync",
+                            println!(
+                                "{} #{:<5} {} — in sync",
                                 "✓".green(),
                                 issue_number,
-                                truncate_str(aida_title, 45));
+                                truncate_str(aida_title, 45)
+                            );
                         } else {
                             drift_count += 1;
-                            println!("{} #{:<5} {} — DRIFTED",
+                            println!(
+                                "{} #{:<5} {} — DRIFTED",
                                 "△".yellow(),
                                 issue_number,
-                                truncate_str(aida_title, 45));
+                                truncate_str(aida_title, 45)
+                            );
                             for d in &diffs {
                                 println!("    {}", d);
                             }
                         }
                     }
                     Err(e) => {
-                        println!("{} #{:<5} — error: {}",
-                            "✗".red(), issue_number, e);
+                        println!("{} #{:<5} — error: {}", "✗".red(), issue_number, e);
                     }
                 }
             }
@@ -23621,16 +24318,24 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
                 println!();
                 println!("Applying changes...");
                 for (req, issue_number) in &linked {
-                    let aida_title = req.title
+                    let aida_title = req
+                        .title
                         .strip_prefix(&format!("[GH-{}] ", issue_number))
                         .unwrap_or(&req.title);
 
-                    let aida_closed = matches!(req.status, RequirementStatus::Completed | RequirementStatus::Rejected);
+                    let aida_closed = matches!(
+                        req.status,
+                        RequirementStatus::Completed | RequirementStatus::Rejected
+                    );
 
                     let update = aida_core::GitHubUpdateIssueRequest {
                         title: Some(aida_title.to_string()),
                         body: Some(req.description.clone()),
-                        state: Some(if aida_closed { "closed".into() } else { "open".into() }),
+                        state: Some(if aida_closed {
+                            "closed".into()
+                        } else {
+                            "open".into()
+                        }),
                         labels: None,
                         assignees: None,
                         milestone: None,
@@ -23668,11 +24373,8 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
 
             // Check which issues are already imported (by matching title pattern)
             let store = storage.load()?;
-            let existing_titles: std::collections::HashSet<String> = store
-                .requirements
-                .iter()
-                .map(|r| r.title.clone())
-                .collect();
+            let existing_titles: std::collections::HashSet<String> =
+                store.requirements.iter().map(|r| r.title.clone()).collect();
 
             let mut to_import: Vec<&aida_core::GitHubIssue> = Vec::new();
             let mut skipped = 0;
@@ -23681,7 +24383,10 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
                 // Skip if already imported (check for [GH-N] prefix or exact title match)
                 let gh_prefix = format!("[GH-{}]", issue.number);
                 let already_exists = existing_titles.contains(&issue.title)
-                    || store.requirements.iter().any(|r| r.title.starts_with(&gh_prefix));
+                    || store
+                        .requirements
+                        .iter()
+                        .any(|r| r.title.starts_with(&gh_prefix));
 
                 if already_exists {
                     skipped += 1;
@@ -23691,7 +24396,11 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
             }
 
             if to_import.is_empty() {
-                println!("All {} issues already imported ({} skipped).", issues.len(), skipped);
+                println!(
+                    "All {} issues already imported ({} skipped).",
+                    issues.len(),
+                    skipped
+                );
                 return Ok(());
             }
 
@@ -23728,7 +24437,8 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
                 "feat(github)",
                 to_import.iter().map(|issue| {
                     let req_type = determine_type_from_labels(&issue.label_names(), &config.labels);
-                    let priority = determine_priority_from_labels(&issue.label_names(), &config.labels);
+                    let priority =
+                        determine_priority_from_labels(&issue.label_names(), &config.labels);
                     let mut req = Requirement::new(
                         format!("[GH-{}] {}", issue.number, issue.title),
                         issue.body.clone().unwrap_or_default(),
@@ -23776,8 +24486,12 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
             println!("{}", "Repository Labels".bold());
             println!("{}", "─".repeat(40));
             for label in &existing {
-                println!("  {} (#{}) {}", label.name, label.color,
-                    label.description.as_deref().unwrap_or(""));
+                println!(
+                    "  {} (#{}) {}",
+                    label.name,
+                    label.color,
+                    label.description.as_deref().unwrap_or("")
+                );
             }
             println!("\n{} labels", existing.len());
 
@@ -23852,8 +24566,12 @@ fn determine_type_from_labels(
         }
         // Also check common GitHub labels directly
         let l = label.to_lowercase();
-        if l == "bug" { return RequirementType::Bug; }
-        if l == "enhancement" || l == "feature" { return RequirementType::Story; }
+        if l == "bug" {
+            return RequirementType::Bug;
+        }
+        if l == "enhancement" || l == "feature" {
+            return RequirementType::Story;
+        }
     }
     RequirementType::Task // default
 }
@@ -24106,7 +24824,9 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
             let sync_states = if let Some(req_id) = id {
                 // Find the requirement by spec_id or UUID
                 let requirement = store.requirements.iter().find(|r| {
-                    r.spec_id.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(req_id))
+                    r.spec_id
+                        .as_deref()
+                        .is_some_and(|s| s.eq_ignore_ascii_case(req_id))
                         || r.id.to_string() == *req_id
                 });
 
@@ -24393,7 +25113,9 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
             let sync_states = if let Some(req_id) = id {
                 // Find the requirement by spec_id or UUID
                 let requirement = store.requirements.iter().find(|r| {
-                    r.spec_id.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(req_id))
+                    r.spec_id
+                        .as_deref()
+                        .is_some_and(|s| s.eq_ignore_ascii_case(req_id))
                         || r.id.to_string() == *req_id
                 });
 
