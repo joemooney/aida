@@ -1,0 +1,34 @@
+id: 019e135d-2752-76f1-bb47-83639aec4f5a
+spec_id: BUG-68
+agreed_id: BUG-68
+title: record_role_activity fires even when aida add fails or gets renumbered — phantom spec_ids in activity log
+description: |
+  Caught 2026-05-10 — activity log at `.aida/sessions/<id>.activity.toml` recorded `spec_id="STORY-88" action="add" at 19:08:54` but STORY-88 doesn't exist anywhere (not in any worktree's .aida-store, not on origin).
+
+  Likely sequence:
+  1. Agent ran `aida add --type story --title ...` intending to file a new req
+  2. `record_role_activity` fired with the ID the dispenser was about to assign (STORY-88)
+  3. The add itself failed OR got reassigned a different ID due to concurrent dispenser contention (my STORY-86 filing landed in the same window)
+  4. Activity log retains the phantom STORY-88 reference; statusline @SPEC could pick it up
+
+  ## Fix
+
+  `record_role_activity` should fire AFTER the req is successfully written to the orphan store, not before. Or transactionally — bind activity to the same atomic op as the file write so a failure rolls back both.
+
+  ## Why low priority
+
+  Phantom entries in activity log are cosmetic — they show as @SPEC briefly but no operation works (`aida show <phantom>` errors, `aida edit` errors). Self-cleaning in practice. But: misleading when investigating activity, and could confuse the agent if they rely on @SPEC to verify their own work.
+
+  ## Acceptance
+
+  - [ ] `record_role_activity` only fires after successful req write (or full transaction)
+  - [ ] Failed `aida add` doesn't leave activity log entries
+  - [ ] Dispenser-renumbering case: activity log gets the FINAL assigned ID, not the initially-attempted one
+  - [ ] Manual test: force an add failure (invalid type), verify no activity entry
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T19:28:52.562127810Z
+modified_at: 2026-05-10T19:28:52.562127810Z
+req_type: Bug
