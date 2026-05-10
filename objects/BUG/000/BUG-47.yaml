@@ -1,0 +1,12 @@
+id: 019e0f46-70f0-7a30-be86-ce7b6a4ec378
+spec_id: BUG-47
+agreed_id: BUG-47
+title: aida edit/add accepts arbitrary --status (typos land as custom_status silently)
+description: '`aida edit VIS-1 --status approvedxxx` was accepted and stored as `custom_status: approvedxxx`. The model intentionally supports custom_status for project-specific statuses, but the CLI shouldn''t make typos a fast-path to that. CLI now validates --status (and --priority) against the canonical set before calling the model. Surfaced 2026-05-09 walkthrough.'
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T00:25:35.216480524Z
+modified_at: 2026-05-10T00:25:35.216480524Z
+req_type: Bug
