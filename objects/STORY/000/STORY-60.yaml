@@ -1,0 +1,32 @@
+id: 019e0fe1-3b47-7170-a2cf-b1a91a7b15ca
+spec_id: STORY-60
+agreed_id: STORY-60
+title: 'aida session prune: delete Claude Code session metadata older than N days'
+description: |
+  Companion to the session-list-enrichment story. After running aida session list --all, users will inevitably want a cleanup command:
+
+    aida session prune --days 30 [--dry-run] [--yes]
+
+  Walks ~/.claude/projects/<projecthash>/ for the current project + any session-worktree projects, finds .jsonl files with mtime older than threshold, deletes them.
+
+  ## Constraints
+
+  - Read-only by default; --yes to actually delete
+  - --dry-run prints what would be deleted with size/count
+  - Skip any session whose id appears in an active aida lease (defensive)
+  - Log deletions to .aida/session-prune.log so the action is auditable
+
+  ## Not auto-prune
+
+  Manual command, not background daemon. The user is the one who decides when to clean up.
+
+  ## Why low priority
+
+  aida session list --all + manual rm covers the use case today. Worth a dedicated command once the list-enrichment story lands and users start running --all routinely.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T03:14:39.559592459Z
+modified_at: 2026-05-10T03:14:39.559592459Z
+req_type: Story
