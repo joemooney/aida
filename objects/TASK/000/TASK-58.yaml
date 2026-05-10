@@ -37,10 +37,10 @@ description: |-
   - [ ] Reports the count of removed edges
   - [ ] Idempotent (re-running on a clean store does nothing)
   - [ ] Test covers: parent uuid deleted, child still references it; cross-cutting relations (verifies/blocks) handled the same way
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T19:24:17.766577311Z
-modified_at: 2026-05-10T19:24:17.766577311Z
+modified_at: 2026-05-10T22:45:39.480785329Z
 req_type: Task
