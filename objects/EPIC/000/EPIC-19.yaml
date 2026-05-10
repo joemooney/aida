@@ -1,0 +1,29 @@
+id: 019e0f5e-c6f3-7130-9eb4-fae2e3010bbc
+spec_id: EPIC-19
+agreed_id: EPIC-19
+title: 'aida doctor: maintenance & migration commands (per-repo, hidden top-level)'
+description: |-
+  User-suggested 2026-05-09. Idea: a tree of repair/migration commands under `aida doctor ...` (hidden via #[clap(hide = true)] so it doesn't pollute daily `aida --help`).
+
+  Existing piecemeal pieces that would consolidate here:
+  - aida cache rebuild (already exists)
+  - aida db block verify (FR-281, just shipped)
+  - migrate per-type counter_scope to global (no tool yet; needed by FR-271 for projects already on per-type)
+  - repair stale block registrations (the FR-1..100 orphan we found 2026-05-09)
+  - detect+fix dispenser collisions (BUG-31 fix prevents new ones; doesn't clean existing)
+  - stale worktree pruning (already auto-runs in init via BUG-39)
+  - migrate legacy YAML/SQLite to git-canonical (already exists as `aida db export-git` — could reroute under `doctor migrate-storage`)
+
+  Design questions to settle before implementation:
+  1. Same repo (current preference per Claude's read) vs. separate repo. Same-repo + hidden subcommand keeps version-skew pain low.
+  2. Should each operation be idempotent + dry-runnable by default? Yes — `--dry-run` everywhere.
+  3. Scope: just data migrations? Or also "my project's broken, help me" runbooks? Probably both, but data-migrations land first since they're testable.
+
+  First implementation candidate: `aida doctor migrate-counter-scope --to global` — operates on a per-type project, computes the next free global counter floor (max across all type blocks), allocates a new `*` block above it, and writes counter_scope=global to config. Per-type blocks remain in place but no longer dispense from (find_active_block_or_global will hit the `*` block first... actually we'd need to retire per-type blocks too, so they don't keep dispensing FR-3 alongside the global counter's BUG-3).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T00:52:10.099963275Z
+modified_at: 2026-05-10T00:52:10.099963275Z
+req_type: Epic
