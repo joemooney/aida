@@ -894,6 +894,102 @@ pub enum BlockCommand {
     Verify,
 }
 
+/// Maintenance + migration ops on the AIDA store. Hidden from `aida
+/// --help`; surface via `aida doctor --help`. trace:EPIC-19 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum DoctorCommand {
+    /// Migrate this project from per-type counters (FR-1, BUG-1, EPIC-1
+    /// each independent) to global counters (FR-1, BUG-2, EPIC-3 — one
+    /// shared counter). Allocates a new `*` block above the existing
+    /// per-type blocks' max range_end, marks per-type blocks as
+    /// exhausted, sets `[id_format] counter_scope = "global"`. Existing
+    /// requirement spec_ids stay unchanged — only newly-added reqs use
+    /// the global counter. trace:EPIC-19, FR-271 | ai:claude
+    MigrateCounterScope {
+        /// Target scope. Today only `global` is supported. (Going from
+        /// global back to per-type is harder — no migration path yet.)
+        #[clap(long, value_parser = ["global"])]
+        to: String,
+
+        /// Print the planned changes without writing anything.
+        #[clap(long)]
+        dry_run: bool,
+
+        /// Skip the y/N confirmation.
+        #[clap(long, short = 'y')]
+        yes: bool,
+
+        /// Block size for the new shared block (default 1000, matching
+        /// `aida init` Global default).
+        #[clap(long, default_value = "1000")]
+        size: u32,
+    },
+
+    /// Find and tombstone blocks whose `node_id` isn't in nodes.toml
+    /// (orphaned from a clone that never registered, or from a
+    /// pre-EPIC-1-052 store). The block range stays reserved so other
+    /// clones don't reallocate over it; `next` is bumped past `range_end`
+    /// so the dispenser skips it. trace:EPIC-19 | ai:claude
+    RepairStaleBlocks {
+        /// Print what would change without writing.
+        #[clap(long)]
+        dry_run: bool,
+        /// Skip confirmation.
+        #[clap(long, short = 'y')]
+        yes: bool,
+    },
+
+    /// Detect duplicate spec_ids in the orphan store — multiple YAMLs
+    /// claiming the same id (BUG-31-era leftovers, imports gone wrong).
+    /// Reports only; v1 doesn't auto-renumber because that would orphan
+    /// trace comments and commit refs. trace:EPIC-19 | ai:claude
+    ScrubCollisions,
+
+    /// Walk every requirement's `relationships` array and verify each
+    /// `target_id` resolves to an existing requirement UUID. Catches
+    /// dangling references from deleted reqs, bad imports, or
+    /// hand-edits. With --repair, strips dangling entries.
+    /// trace:EPIC-19 | ai:claude
+    VerifyRelationships {
+        /// Strip dangling references in-place. Without this flag, the
+        /// command reports only.
+        #[clap(long)]
+        repair: bool,
+        /// Skip the y/N confirmation when --repair would write.
+        #[clap(long, short = 'y')]
+        yes: bool,
+    },
+
+    /// Walk source files under the project root for `trace:<SPEC-ID>`
+    /// comments and verify each spec_id resolves to an existing
+    /// requirement. Catches dead trace comments left behind after a req
+    /// got deleted, or simple typos. Default is read-only; pass
+    /// `--strip-dangling` to remove trace markers pointing at unknown
+    /// spec_ids (whole comment line deleted if the trace was its only
+    /// content; otherwise just the trace fragment is excised).
+    /// trace:EPIC-19 | ai:claude
+    ValidateTraceComments {
+        /// Rewrite source files to remove `trace:<DANGLING>` annotations.
+        /// Lossy — comments around the trace are preserved, but the
+        /// trace pointer itself is gone. trace:EPIC-19 | ai:claude
+        #[clap(long)]
+        strip_dangling: bool,
+        /// Print what would change without writing.
+        #[clap(long)]
+        dry_run: bool,
+        /// Skip the y/N confirmation when --strip-dangling would write.
+        #[clap(long, short = 'y')]
+        yes: bool,
+    },
+
+    /// Run every diagnostic in sequence and print a unified report.
+    /// Composes `aida db block verify`, repair-stale-blocks --dry-run,
+    /// scrub-collisions, verify-relationships, validate-trace-comments,
+    /// plus a few smaller checks. Exits non-zero if any check found a
+    /// problem. trace:EPIC-19 | ai:claude
+    Fsck,
+}
+
 #[derive(Subcommand, Debug)]
 pub enum FeatureCommand {
     /// Add a new feature with a prefix for IDs
@@ -1681,6 +1777,12 @@ pub enum Command {
     /// run dev servers, install shell helpers. End users don't need these.
     #[clap(subcommand, hide = true)]
     Dev(DevCommand),
+
+    /// Maintenance and migration operations on the AIDA store. Hidden from
+    /// `aida --help` because these aren't daily-driver commands; they're
+    /// for repairing or migrating an existing project. trace:EPIC-19
+    #[clap(subcommand, hide = true)]
+    Doctor(DoctorCommand),
 
     /// Manage personas / hats — persistent named contexts that resume
     /// across shells. `aida role enter <name>` switches; `aida role list`
