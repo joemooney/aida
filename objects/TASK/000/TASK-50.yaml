@@ -42,10 +42,10 @@ description: |
   - [ ] Hint still discoverable (user can find install instructions)
   - [ ] Both gh-missing and glab-missing paths fixed
   - [ ] Snapshot test (or string assertion) prevents regression
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T17:44:12.270391521Z
-modified_at: 2026-05-10T17:44:12.270391521Z
+modified_at: 2026-05-10T22:30:05.225501136Z
 req_type: Task
