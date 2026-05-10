@@ -1,0 +1,46 @@
+id: 019e0fce-c079-78e1-9bfc-406a99870358
+spec_id: BUG-52
+agreed_id: BUG-52
+title: aida session start fails to symlink .aida/ runtime subdirs when .aida/ has tracked content
+description: |
+  v1 of `aida session start` (EPIC-20) does:
+
+  ```rust
+  if src.exists() && !dst.exists() {
+      std::os::unix::fs::symlink(&src, &dst)?;
+  }
+  ```
+
+  for both `.aida` and `.aida-store`. `.aida-store` is gitignored so the dst doesn't exist in the new worktree → symlink succeeds. But `.aida/` has tracked content (config.toml, setup.sh, docker-compose.yml, web-sessions.sqlite3) which git checks out into the worktree → dst exists → symlink SKIPPED.
+
+  Result: the worktree has its own (tracked) `.aida/` but is missing the runtime subdirs (sessions/, pgdata/, cache.db is wrong). `aida session leases` from the worktree returns "(no active sessions)" because `.aida/sessions/` doesn't exist there. Agent inside the session can't see its own lease.
+
+  Surfaced 2026-05-09 — fresh Claude session in the EPIC-20 worktree couldn't see its lease.
+
+  ## Fix
+
+  Replace the per-top-level-dir symlink with per-runtime-subdir symlinks. The runtime subdirs are:
+
+  - `.aida/sessions/` — session leases (EPIC-20)
+  - `.aida/cache.db` (and -shm/-wal) — SQLite cache
+  - `.aida/roles/` — role activity (when present)
+  - `.aida/pgdata/` — Postgres dev data (when present, gitignored already)
+
+  For each: if it exists in parent, ensure a symlink (not a real file/dir) at the same path in the worktree. If a real file/dir is in the way (because git checked out something tracked), leave a clear error message and bail.
+
+  Tracked content (`.aida/config.toml`, `.aida/setup.sh`, etc.) stays per-worktree, which is correct — those can legitimately diverge per branch.
+
+  ## Also
+
+  While here: add `.aida/sessions/` and `.aida/roles/` to .gitignore. They're runtime state, not tracked content.
+
+  ## Workaround
+
+  Manually symlink: `ln -sfn ~/ai/<repo>/.aida/sessions ~/ai/<repo>-<slug>/.aida/sessions` after `aida session start`. Already applied to the in-flight EPIC-20 session.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T02:54:28.473859126Z
+modified_at: 2026-05-10T02:54:28.473859126Z
+req_type: Bug
