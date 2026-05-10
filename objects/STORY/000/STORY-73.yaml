@@ -75,12 +75,12 @@ description: |
   - [ ] `end` clears `AIDA_SESSION_ID` from env via stdout `unset` line
   - [ ] Single-active fallback prompts confirmation; `-y` skips
   - [ ] Error message lists active leases when nothing resolves
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T06:27:12.610752220Z
-modified_at: 2026-05-10T07:00:48.202435499Z
+modified_at: 2026-05-10T07:00:53.050718163Z
 req_type: Story
 relationships:
 - rel_type: Child
