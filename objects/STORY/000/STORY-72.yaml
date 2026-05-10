@@ -31,12 +31,12 @@ description: |
   - [ ] If Y is at the bottom, X lands at new bottom
   - [ ] Errors if Y not in queue (same error shape as `--before`)
   - [ ] Errors if X == Y
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T06:19:40.751502153Z
-modified_at: 2026-05-10T06:23:17.280750537Z
+modified_at: 2026-05-10T18:48:28.215564824Z
 req_type: Story
 relationships:
 - rel_type: Child
