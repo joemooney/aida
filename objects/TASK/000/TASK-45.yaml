@@ -44,10 +44,10 @@ description: |
   - [ ] Hint suggests `--force` when relevant
   - [ ] Same check on `aida queue move <Completed-req>` (lower priority — log a warning instead of erroring)
   - [ ] Test covers race scenario: completed-then-add returns clear error
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T17:06:13.469356813Z
-modified_at: 2026-05-10T22:20:39.013783985Z
+modified_at: 2026-05-10T22:26:19.742429674Z
 req_type: Task
