@@ -1,0 +1,66 @@
+id: 019e1337-4a9b-78a0-80f5-315d4281ddb7
+spec_id: BUG-67
+agreed_id: BUG-67
+title: 'aida session end: ''git worktree remove'' fails on build artifacts and runtime state — should auto-force when only gitignored files differ'
+description: |
+  Caught 2026-05-10 after the PR-4 reviewer session. `aida session end 019e132d` deleted the lease cleanly but `git worktree remove` refused:
+
+  ```
+  ✓ lease deleted
+  fatal: '/home/joe/ai/aida-pr-4' contains modified or untracked files, use --force to delete it
+  Warning: `git worktree remove` failed; you may need to run it manually with --force
+  ```
+
+  The "modified or untracked files" were `target/` build artifacts (the reviewer ran `cargo build --release` before reviewing) plus `.aida/cache.db` (runtime cache that gets recreated). All gitignored. None worth preserving.
+
+  ## Today's behavior
+
+  `aida session end` calls `git worktree remove <path>` without `--force`. Git refuses if the worktree has any uncommitted state, even if it's all gitignored. Lease is deleted; worktree path remains; user has to clean up manually.
+
+  ## Desired behavior
+
+  `aida session end` should:
+
+  1. Check `git -C <worktree> status --porcelain --ignored=no` for tracked-and-modified or untracked-but-not-ignored files
+  2. If only ignored files differ (target/, .aida/cache.db, etc.): pass `--force` to `git worktree remove` automatically — these are by definition disposable
+  3. If tracked-and-modified files exist: warn loudly with the file list and require explicit `--force` flag to proceed. Don't silently nuke real changes.
+  4. The lease-delete order is correct (already fixed in BUG-56) — happens after successful worktree remove, not before
+
+  Pseudocode:
+
+  ```rust
+  let status = git_status(worktree, exclude_ignored=true);
+  if status.has_tracked_or_unignored_untracked() && !flags.force {
+      bail!("worktree {} has uncommitted changes:\n{}\nPass --force to discard.", worktree.display(), status);
+  }
+  // Only gitignored differences → safe to force-remove
+  git_worktree_remove(worktree, force=true)?;
+  delete_lease(lease_path)?;
+  ```
+
+  ## Why this matters
+
+  - Reviewer sessions almost always have build artifacts (cargo build before reviewing) — every reviewer session-end hits this
+  - Implementer sessions also build artifacts; same problem
+  - The current cleanup is manual: `git worktree remove --force <path>` — easy to forget; leaves the worktree path occupied next session-start
+  - Composes badly with STORY-71 (auto-checkout PR-N) — if the worktree dir collides because cleanup failed, the next reviewer session-start fails
+
+  ## Composes with
+
+  - BUG-61 (refuse session end with live claude inside) — same family of "session_end hygiene"
+  - STORY-52 (cargo_target_dir sharing) — if implementer worktrees share parent target/, this issue softens (no local target/ to clean), but reviewer worktrees still have it
+
+  ## Acceptance
+
+  - [ ] `aida session end` succeeds when only gitignored files differ (target/, .aida/cache.db)
+  - [ ] `aida session end` warns + refuses when tracked-and-modified files exist (without --force)
+  - [ ] `--force` flag bypasses the tracked-file check
+  - [ ] Lease deletion order preserved (after worktree remove succeeds, not before)
+  - [ ] Tested with: clean worktree, only target/, only .aida/cache.db, tracked modified file, mix
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T18:47:31.227610038Z
+modified_at: 2026-05-10T18:47:31.227610038Z
+req_type: Bug
