@@ -40,10 +40,10 @@ description: |
   - [ ] Composes with BUG-68's fix — both phantom-effects gone when one root cause is fixed
   - [ ] Test: try `aida add --parent <Completed>` 5 times; counter advances by 0
   - [ ] Test: try `aida add` with invalid type; same — no counter advance
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T21:45:13.231475420Z
-modified_at: 2026-05-10T21:45:13.231475420Z
+modified_at: 2026-05-10T22:41:40.284605231Z
 req_type: Task
