@@ -76,11 +76,3 @@
   added_by: joe
   added_at: 2026-05-10T04:43:24.325047155Z
   for_role: implementer
-- user_id: joe
-  requirement_id: 019e101e-941e-7b23-be99-b98ceee37d29
-  position: 9223372036854775807
-  added_by: joe
-  note: explicit other scope
-  added_at: 2026-05-10T04:45:06.622627706Z
-  for_role: implementer
-  for_scope: SOMETHING-ELSE
