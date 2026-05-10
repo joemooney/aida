@@ -1,0 +1,84 @@
+id: 019e1091-8462-7e02-9f65-2d822b24a8d8
+spec_id: STORY-73
+agreed_id: STORY-73
+title: 'aida session end: resolve session from creator shell (env var or ancestor PID) when cwd doesn''t help'
+description: |
+  Today `aida session end` (no arg) only works if cwd is inside the session's worktree. From the shell where the user ran `aida session start` (typically the parent project root), `session end` can't figure out which lease to kill — they have to either cd into the worktree or pass the lease ID explicitly.
+
+  User asked 2026-05-10: "If I did `aida session start` could I not do `aida session end` in the same shell without a lease id?"
+
+  ## Resolution chain
+
+  `aida session end` (no arg) tries in order, stopping at first match:
+
+  1. **cwd-based** (existing): lease whose `worktree_path` contains cwd. ← already works.
+  2. **env var** (new): `$AIDA_SESSION_ID` if set and matches a live lease. Cleared on end.
+  3. **ancestor PID** (new): walk current shell's ancestors; match against any lease whose `creator_pid` is in the chain. Uses STORY-69's sysinfo helper.
+  4. **single-active fallback**: if exactly one active lease exists for this project, offer to end it with a `[y/N]` confirm (already-yes mode `-y` skips).
+  5. **error**: list active leases and ask for explicit ID.
+
+  ## Implementation outline
+
+  ### `aida session start` changes
+
+  - Capture `std::env::var("PPID").or(parent_pid_from_proc())` → record as `creator_pid` in lease toml.
+  - Print to stdout (eval-friendly) at the end:
+    ```
+    export AIDA_SESSION_ID='<8-char>'
+    ```
+    Stderr keeps the human "✓ Session started" message.
+  - Shell helper (the same one that auto-evals `role enter`) detects `aida session start` output and evals.
+
+  ### Lease schema
+
+  ```toml
+  # .aida/sessions/<id>.toml
+  id = "019e1026"
+  scope = "EPIC-20"
+  branch = "epic-20-batch3"
+  worktree_path = "/home/joe/ai/aida-epic-20"
+  creator_pid = 12345          # NEW
+  creator_hostname = "imac"    # already
+  started_at = "..."
+  ```
+
+  ### `aida session end` changes
+
+  ```rust
+  fn resolve_session_to_end(arg: Option<&str>) -> Result<Lease> {
+      if let Some(id) = arg { return find_by_id_prefix(id); }
+      if let Some(l) = lease_for_cwd() { return Ok(l); }
+      if let Ok(env_id) = env::var("AIDA_SESSION_ID") { return find_by_id_prefix(&env_id); }
+      if let Some(l) = lease_for_ancestor_pid() { return Ok(l); }
+      if let Some(l) = single_active_lease()? {
+          if confirm("End the only active session?")? { return Ok(l); }
+      }
+      bail!("no active session resolvable from this shell — pass an id or `aida session leases`")
+  }
+  ```
+
+  After successful end, also emit `unset AIDA_SESSION_ID` to stdout if the helper is active (so the env doesn't go stale).
+
+  ## Composes with
+
+  - STORY-69 (sysinfo liveness probe) — provides `walk_ancestor_pids()` helper
+  - STORY-68 (`aida session show`) — display creator_pid + show whether current shell is a descendant
+  - BUG-61 (leaked claude on session end) — same family of "session lifecycle hygiene"
+
+  ## Acceptance
+
+  - [ ] `aida session end` from parent project shell (where `start` ran) ends the session without an arg
+  - [ ] `aida session end` from inside the worktree still works (existing behavior preserved)
+  - [ ] Lease records `creator_pid` at start time
+  - [ ] `start` prints eval-friendly `export AIDA_SESSION_ID=...` to stdout, human message to stderr
+  - [ ] Shell helper auto-evals `aida session start` output (same pattern as `role enter`)
+  - [ ] `end` clears `AIDA_SESSION_ID` from env via stdout `unset` line
+  - [ ] Single-active fallback prompts confirmation; `-y` skips
+  - [ ] Error message lists active leases when nothing resolves
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T06:27:12.610752220Z
+modified_at: 2026-05-10T06:27:12.610752220Z
+req_type: Story
