@@ -1254,7 +1254,15 @@ fn handle_git_backend_command(
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::Session(_) => unreachable!("session is dispatched before storage init"),
-        Command::List { status, r#type, feature, tags, no_scope, show_origin, include_meta, parent, .. } => {
+        Command::List { status, r#type, feature, tags, no_scope, show_origin, include_meta, parent, sync, .. } => {
+            // STORY-78: opt-in implicit sync-pull before reading. Quiet
+            // on no-op (already current), warns + falls back on errors.
+            // Must run BEFORE the cache-backed list query because the
+            // cache rebuild on next read will pick up the new orphan
+            // HEAD. trace:STORY-78 | ai:claude
+            if *sync {
+                maybe_sync_pull(store_path)?;
+            }
             // Cache-backed list (EPIC-1-001 Phase 2). The CachedGitBackend
             // ensures the cache is fresh before querying, so this is one
             // SQLite query instead of ~360 YAML reads.
@@ -1839,7 +1847,11 @@ fn handle_git_backend_command(
                 }
             }
         }
-        Command::Show { id, comments, tree, depth } => {
+        Command::Show { id, comments, tree, depth, sync } => {
+            // STORY-78: opt-in sync-pull before show. trace:STORY-78 | ai:claude
+            if *sync {
+                maybe_sync_pull(store_path)?;
+            }
             record_role_activity(id, "show");
             // STORY-62: --tree replaces the detail view with an indented
             // hierarchy walk. Children are read via rel_type:Parent edges
@@ -2040,7 +2052,11 @@ fn handle_git_backend_command(
             backend.delete_requirement(&req.id)?;
             println!("Deleted: {}", id);
         }
-        Command::Search { query, status, limit, .. } => {
+        Command::Search { query, status, limit, sync, .. } => {
+            // STORY-78: opt-in sync-pull before search. trace:STORY-78 | ai:claude
+            if *sync {
+                maybe_sync_pull(store_path)?;
+            }
             // Cache-backed FTS5 search (EPIC-1-001 Phase 2). Replaces a
             // full-store load + in-memory substring scan.
             // trace:EPIC-1-001 | ai:claude
@@ -2620,6 +2636,13 @@ fn handle_git_backend_command(
         }
 
         Command::Queue(queue_cmd) => {
+            // STORY-78: `aida queue list --sync` pulls before listing.
+            // Done here at dispatch (not inside handle_queue_command) so
+            // the helper has direct store_path access. Other queue
+            // subcommands have no --sync. trace:STORY-78 | ai:claude
+            if let QueueCommand::List { sync: true, .. } = queue_cmd {
+                maybe_sync_pull(store_path)?;
+            }
             // Reuse the legacy Storage handler — it works against any
             // DatabaseBackend via Storage trait shims, and our GitBackend
             // already implements queue_list/add/remove/reorder/clear.
@@ -11298,11 +11321,23 @@ impl CacheFreshness {
 
 /// Decide which freshness state to render given pre-collected inputs.
 /// Pure — no I/O, no env reads — so the precedence rules can be
-/// exhaustively tested. trace:STORY-78 | ai:claude
+/// exhaustively tested.
+///
+/// `local_behind_origin` is a tri-state:
+///   - Some(true)  → origin has commits local doesn't (pull needed)
+///   - Some(false) → local is equal-to or strictly-ahead-of origin
+///                   (push may be needed but no pull) — render Fresh
+///   - None        → we couldn't determine direction (no recent fetch,
+///                   no origin ref, or rev-list lookup failed)
+///
+/// The "strictly ahead → Fresh" semantics keep us from nagging the user
+/// to pull when they have unpushed local commits — `cache:behind` would
+/// be misleading because there's nothing on origin to pull.
+/// trace:STORY-78 | ai:claude
 fn classify_cache_freshness(
     recorded_cache_sha: Option<&str>,
     local_sha: &str,
-    origin_sha: Option<&str>,
+    local_behind_origin: Option<bool>,
     last_fetch_age_secs: Option<u64>,
     freshness_threshold_secs: u64,
 ) -> CacheFreshness {
@@ -11319,22 +11354,55 @@ fn classify_cache_freshness(
     if !cache_matches_local {
         return CacheFreshness::Stale;
     }
-    // Axis 2: local vs origin. Requires both a recent fetch AND a known
-    // origin SHA — either missing collapses to Unknown rather than
-    // false-fresh. STORY-79 is the producer of the last-fetch timestamp;
-    // until it ships, last_fetch_age_secs is always None and we render
-    // `?` whenever cache matches local. trace:STORY-79 | ai:claude
+    // Axis 2: local vs origin. Requires both a recent fetch AND a
+    // direction signal — either missing collapses to Unknown rather
+    // than false-fresh. STORY-79 is the producer of the last-fetch
+    // timestamp; until it ships, last_fetch_age_secs is always None and
+    // we render `?` whenever cache matches local. trace:STORY-79 | ai:claude
     let fetch_is_recent = last_fetch_age_secs
         .map(|age| age <= freshness_threshold_secs)
         .unwrap_or(false);
     if !fetch_is_recent {
         return CacheFreshness::Unknown;
     }
-    match origin_sha {
+    match local_behind_origin {
         None => CacheFreshness::Unknown,
-        Some(o) if sha_prefix_match(o, local_sha) => CacheFreshness::Fresh,
-        Some(_) => CacheFreshness::Behind,
+        Some(true) => CacheFreshness::Behind,
+        Some(false) => CacheFreshness::Fresh,
     }
+}
+
+/// Decide whether `local_sha` is strictly behind `origin_sha` in the
+/// orphan store at `store_path`. "Strictly behind" means: origin has at
+/// least one commit not reachable from local. Returns None when git
+/// can't answer (e.g. unknown commit, fork without merge-base).
+///
+/// `local == origin` short-circuits to Some(false). Strictly-ahead also
+/// returns Some(false) — we explicitly do NOT report "behind" for the
+/// have-unpushed-commits case. trace:STORY-78 | ai:claude
+fn local_lags_origin(
+    store_path: &std::path::Path,
+    local_sha: &str,
+    origin_sha: &str,
+) -> Option<bool> {
+    if sha_prefix_match(local_sha, origin_sha) {
+        return Some(false);
+    }
+    let range = format!("{}..{}", local_sha, origin_sha);
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(store_path)
+        .args(["rev-list", "--count", &range])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let count: u64 = String::from_utf8_lossy(&out.stdout)
+        .trim()
+        .parse()
+        .ok()?;
+    Some(count > 0)
 }
 
 /// Read `~/.aida/cache/last-fetch.toml` and return the age (in seconds)
@@ -11403,6 +11471,122 @@ fn cache_freshness_threshold_secs() -> u64 {
         .unwrap_or(300)
 }
 
+/// STORY-78 Part 2: the implementation of `--sync` on read commands.
+/// Mirrors `aida db sync --pull` but without the commit-pending step
+/// (read commands have no pending work to commit) and without conflict
+/// detection (the caller is about to read the result anyway). Designed
+/// to NEVER fail the caller: every failure mode is converted to a
+/// warning and the command continues with the local view.
+///
+/// Failure modes handled here:
+///   - store missing / not a git repo → warn, skip
+///   - orphan store has uncommitted changes → warn, skip (pull --rebase
+///     would abort partway and leave weirder state than we started with)
+///   - offline / unreachable origin → warn, skip
+///   - any other git error during rebase → abort the rebase, warn, skip
+///
+/// On success, updates `~/.aida/cache/last-fetch.toml` so the statusline
+/// `cache:behind|?` indicator immediately reflects the pull (instead of
+/// waiting for STORY-79's background fetcher).
+/// trace:STORY-78 | ai:claude
+fn maybe_sync_pull(store_path: &std::path::Path) -> Result<()> {
+    if !aida_core::git_ops::is_git_repo(store_path) {
+        eprintln!(
+            "{} --sync: store at {} is not a git repo; skipping pull",
+            "Warning:".yellow().bold(),
+            store_path.display()
+        );
+        return Ok(());
+    }
+    if matches!(aida_core::git_ops::has_changes(store_path), Ok(true)) {
+        eprintln!(
+            "{} --sync: orphan store has uncommitted changes; skipping pull",
+            "Warning:".yellow().bold()
+        );
+        eprintln!(
+            "  Run `aida db sync --pull` manually after committing or stashing."
+        );
+        return Ok(());
+    }
+    let branch = aida_core::git_ops::current_branch(store_path)
+        .unwrap_or_else(|_| "aida-store".to_string());
+    eprintln!("{} pulling origin/{} (--sync)", "→".dimmed(), branch);
+    match aida_core::git_ops::pull_rebase(store_path, "origin", &branch) {
+        Ok(()) => {
+            // Best-effort: refresh the statusline freshness signal so
+            // the user doesn't see `cache:?` on the very next prompt
+            // after they explicitly pulled. Silent on failure — losing
+            // this write costs us a stale-looking indicator for one
+            // render cycle, no worse.
+            let _ = touch_last_fetch_ok(store_path);
+        }
+        Err(e) => {
+            // pull --rebase can leave the repo mid-rebase on conflicts
+            // or network drops partway through. Abort defensively so
+            // the next command doesn't trip on `.git/rebase-merge/`.
+            // `git rebase --abort` is harmless when no rebase is in
+            // progress (exit code != 0, ignored). trace:STORY-78 | ai:claude
+            let _ = std::process::Command::new("git")
+                .arg("-C")
+                .arg(store_path)
+                .args(["rebase", "--abort"])
+                .output();
+            let first_line = e
+                .to_string()
+                .lines()
+                .next()
+                .unwrap_or("unknown error")
+                .to_string();
+            eprintln!(
+                "{} --sync pull failed: {}",
+                "Warning:".yellow().bold(),
+                first_line
+            );
+            eprintln!("  Falling back to local view.");
+        }
+    }
+    Ok(())
+}
+
+/// Stamp `~/.aida/cache/last-fetch.toml` with "ok"/now for the project
+/// whose orphan store is `store_path`. Best-effort — keys on the
+/// canonicalized parent of `store_path` so reads (via
+/// `read_last_fetch_age_secs(project_root)`) match writes.
+/// trace:STORY-78 | ai:claude
+fn touch_last_fetch_ok(store_path: &std::path::Path) -> Result<()> {
+    let project_root = store_path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("store path has no parent"))?;
+    let canon = project_root
+        .canonicalize()
+        .unwrap_or_else(|_| project_root.to_path_buf());
+    let home = dirs::home_dir().context("no home dir")?;
+    let cache_dir = home.join(".aida/cache");
+    std::fs::create_dir_all(&cache_dir)?;
+    let path = cache_dir.join("last-fetch.toml");
+
+    let mut root: toml::value::Table = match std::fs::read_to_string(&path) {
+        Ok(s) => toml::from_str::<toml::Value>(&s)
+            .ok()
+            .and_then(|v| v.as_table().cloned())
+            .unwrap_or_default(),
+        Err(_) => toml::value::Table::new(),
+    };
+    let mut entry = toml::value::Table::new();
+    entry.insert(
+        "last_fetch".into(),
+        toml::Value::String(chrono::Utc::now().to_rfc3339()),
+    );
+    entry.insert("result".into(), toml::Value::String("ok".into()));
+    root.insert(
+        canon.to_string_lossy().to_string(),
+        toml::Value::Table(entry),
+    );
+    let serialized = toml::to_string(&toml::Value::Table(root))?;
+    std::fs::write(&path, serialized)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod statusline_tests {
     use super::*;
@@ -11436,29 +11620,30 @@ mod statusline_tests {
 
     // ── classify_cache_freshness ──
     // STORY-78: pure decision function for cache:fresh|stale|behind|?.
-    // trace:STORY-78 | ai:claude
+    // Tri-state `local_behind_origin`: Some(true)=behind, Some(false)=
+    // equal-or-ahead, None=can't tell. trace:STORY-78 | ai:claude
 
-    /// Cache SHA matches local AND fetch is recent AND origin matches → Fresh.
+    /// Cache matches local AND fetch is recent AND we're not behind → Fresh.
     #[test]
     fn freshness_all_aligned_is_fresh() {
         let r = classify_cache_freshness(
             Some("abc1234"),
             "abc1234",
-            Some("abc1234"),
+            Some(false),
             Some(60),
             300,
         );
         assert_eq!(r, CacheFreshness::Fresh);
     }
 
-    /// Cache SHA != local → Stale. Wins over every other axis because the
-    /// next read will pay the rebuild cost regardless of origin state.
+    /// Cache SHA != local → Stale. Wins over every other axis because
+    /// the next read will pay the rebuild cost regardless of remote.
     #[test]
     fn freshness_cache_mismatch_is_stale_even_when_origin_fresh() {
         let r = classify_cache_freshness(
             Some("aaaaaaa"),
             "bbbbbbb",
-            Some("bbbbbbb"),
+            Some(false),
             Some(60),
             300,
         );
@@ -11470,32 +11655,48 @@ mod statusline_tests {
     #[test]
     fn freshness_missing_cache_sha_is_stale() {
         let r = classify_cache_freshness(
-            None, "abc1234", Some("abc1234"), Some(60), 300,
+            None, "abc1234", Some(false), Some(60), 300,
         );
         assert_eq!(r, CacheFreshness::Stale);
     }
 
-    /// Cache matches local, fetch is recent, origin differs → Behind.
+    /// Cache matches local, fetch is recent, local lags origin → Behind.
     #[test]
     fn freshness_local_lags_origin_is_behind() {
         let r = classify_cache_freshness(
             Some("aaaaaaa"),
             "aaaaaaa",
-            Some("bbbbbbb"),
+            Some(true),
             Some(60),
             300,
         );
         assert_eq!(r, CacheFreshness::Behind);
     }
 
-    /// Cache matches local, fetch is recent, origin ref missing → Unknown
-    /// (we don't know whether we lag, so don't render false-fresh).
+    /// Cache matches local, fetch is recent, direction unknown → Unknown
+    /// (we don't render false-fresh).
     #[test]
-    fn freshness_origin_ref_missing_is_unknown() {
+    fn freshness_direction_unknown_is_unknown() {
         let r = classify_cache_freshness(
             Some("aaaaaaa"), "aaaaaaa", None, Some(60), 300,
         );
         assert_eq!(r, CacheFreshness::Unknown);
+    }
+
+    /// Local strictly ahead of origin → Fresh (no pull needed; cache:behind
+    /// would be misleading since there's nothing to pull). The user may
+    /// still need to push, but that's a different signal.
+    /// trace:STORY-78 | ai:claude
+    #[test]
+    fn freshness_local_ahead_of_origin_is_fresh() {
+        let r = classify_cache_freshness(
+            Some("aaaaaaa"),
+            "aaaaaaa",
+            Some(false),
+            Some(60),
+            300,
+        );
+        assert_eq!(r, CacheFreshness::Fresh);
     }
 
     /// Cache matches local, fetch timestamp absent → Unknown. This is the
@@ -11503,7 +11704,7 @@ mod statusline_tests {
     #[test]
     fn freshness_no_last_fetch_is_unknown() {
         let r = classify_cache_freshness(
-            Some("aaaaaaa"), "aaaaaaa", Some("aaaaaaa"), None, 300,
+            Some("aaaaaaa"), "aaaaaaa", Some(false), None, 300,
         );
         assert_eq!(r, CacheFreshness::Unknown);
     }
@@ -11513,7 +11714,7 @@ mod statusline_tests {
     #[test]
     fn freshness_stale_fetch_is_unknown() {
         let r = classify_cache_freshness(
-            Some("aaaaaaa"), "aaaaaaa", Some("aaaaaaa"), Some(301), 300,
+            Some("aaaaaaa"), "aaaaaaa", Some(false), Some(301), 300,
         );
         assert_eq!(r, CacheFreshness::Unknown);
     }
@@ -11524,7 +11725,7 @@ mod statusline_tests {
     #[test]
     fn freshness_no_local_store_is_unknown() {
         let r = classify_cache_freshness(
-            Some("aaaaaaa"), "", Some("bbbbbbb"), Some(60), 300,
+            Some("aaaaaaa"), "", Some(true), Some(60), 300,
         );
         assert_eq!(r, CacheFreshness::Unknown);
     }
@@ -11536,6 +11737,102 @@ mod statusline_tests {
         assert_eq!(CacheFreshness::Stale.label(), Some("stale"));
         assert_eq!(CacheFreshness::Behind.label(), Some("behind"));
         assert_eq!(CacheFreshness::Unknown.label(), Some("?"));
+    }
+
+    // ── local_lags_origin (fixture-backed) ──
+    // STORY-78: direction-aware comparison via git rev-list --count.
+    // trace:STORY-78 | ai:claude
+
+    /// Build a two-branch fixture: `main` at the same commit as a tracked
+    /// "origin/main" ref, then advance one side as the test requires.
+    fn fixture_local_origin(
+        advance_local: u32,
+        advance_origin: u32,
+    ) -> (tempfile::TempDir, String, String) {
+        use std::process::Command;
+        let tmp = tempfile::TempDir::new().unwrap();
+        let p = tmp.path();
+        let run = |args: &[&str]| {
+            let r = Command::new("git")
+                .arg("-C").arg(p)
+                .args(args)
+                .env("GIT_AUTHOR_NAME", "t").env("GIT_AUTHOR_EMAIL", "t@t")
+                .env("GIT_COMMITTER_NAME", "t").env("GIT_COMMITTER_EMAIL", "t@t")
+                .output().unwrap();
+            assert!(r.status.success(), "git {:?} failed: {}",
+                args, String::from_utf8_lossy(&r.stderr));
+        };
+        run(&["init", "--initial-branch=main", "--quiet"]);
+        run(&["commit", "--allow-empty", "-m", "base", "--quiet"]);
+        // Create a fake "origin/main" tracking ref by branching here.
+        run(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
+        for i in 0..advance_local {
+            run(&["commit", "--allow-empty", "-m", &format!("local{}", i), "--quiet"]);
+        }
+        let local = String::from_utf8(
+            Command::new("git").arg("-C").arg(p)
+                .args(["rev-parse", "--short", "HEAD"])
+                .output().unwrap().stdout
+        ).unwrap().trim().to_string();
+        // Advance the "origin" ref by committing while pointed there.
+        if advance_origin > 0 {
+            run(&["checkout", "-q", "-b", "tmp-origin", "refs/remotes/origin/main"]);
+            for i in 0..advance_origin {
+                run(&["commit", "--allow-empty", "-m", &format!("origin{}", i), "--quiet"]);
+            }
+            run(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
+            run(&["checkout", "-q", "main"]);
+        }
+        let origin = String::from_utf8(
+            Command::new("git").arg("-C").arg(p)
+                .args(["rev-parse", "--short", "refs/remotes/origin/main"])
+                .output().unwrap().stdout
+        ).unwrap().trim().to_string();
+        (tmp, local, origin)
+    }
+
+    /// local == origin → Some(false) (caught by SHA prefix-match shortcut).
+    #[test]
+    fn lags_equal_shas_returns_false() {
+        let (tmp, sha, _) = fixture_local_origin(0, 0);
+        let r = local_lags_origin(tmp.path(), &sha, &sha);
+        assert_eq!(r, Some(false));
+    }
+
+    /// origin has 2 commits local doesn't → Some(true).
+    #[test]
+    fn lags_local_behind_returns_true() {
+        let (tmp, local, origin) = fixture_local_origin(0, 2);
+        assert_ne!(local, origin);
+        let r = local_lags_origin(tmp.path(), &local, &origin);
+        assert_eq!(r, Some(true));
+    }
+
+    /// local has 3 commits origin doesn't → Some(false) (strictly ahead).
+    #[test]
+    fn lags_local_ahead_returns_false() {
+        let (tmp, local, origin) = fixture_local_origin(3, 0);
+        assert_ne!(local, origin);
+        let r = local_lags_origin(tmp.path(), &local, &origin);
+        assert_eq!(r, Some(false));
+    }
+
+    /// Both sides advanced (diverged) → Some(true) because origin has
+    /// commits we don't, regardless of our own ahead-ness.
+    #[test]
+    fn lags_diverged_returns_true() {
+        let (tmp, local, origin) = fixture_local_origin(2, 1);
+        let r = local_lags_origin(tmp.path(), &local, &origin);
+        assert_eq!(r, Some(true));
+    }
+
+    /// Unknown SHA → None (rev-list errors, we collapse to Unknown
+    /// freshness rather than guessing).
+    #[test]
+    fn lags_unknown_sha_returns_none() {
+        let (tmp, local, _) = fixture_local_origin(0, 0);
+        let r = local_lags_origin(tmp.path(), &local, "deadbee");
+        assert_eq!(r, None);
     }
 
     /// STORY-66: the auto-queue hook parses `aida add`'s spec_id out of a
@@ -13156,10 +13453,25 @@ fn handle_statusline_command(color: &str) -> Result<()> {
                 .unwrap_or_default();
                 let origin_sha = rev_parse_origin_aida_store(&project_root);
                 let last_fetch_age = read_last_fetch_age_secs(&project_root);
+                // Resolve direction (local behind / equal / ahead /
+                // unknown) before passing to the pure classifier, so
+                // unpushed-local-commits don't false-positive as
+                // "behind". trace:STORY-78 | ai:claude
+                let store_path = if project_root.join(".aida-store").exists() {
+                    project_root.join(".aida-store")
+                } else {
+                    project_root.join("aida-store")
+                };
+                let local_behind = match (&local_sha, origin_sha.as_deref()) {
+                    (l, Some(o)) if !l.is_empty() => {
+                        local_lags_origin(&store_path, l, o)
+                    }
+                    _ => None,
+                };
                 Some(classify_cache_freshness(
                     recorded_sha.as_deref(),
                     &local_sha,
-                    origin_sha.as_deref(),
+                    local_behind,
                     last_fetch_age,
                     cache_freshness_threshold_secs(),
                 ))
@@ -20326,6 +20638,9 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             no_scope,
             global,
             local,
+            // --sync is handled at the dispatch site (it needs store_path
+            // access); silently consume it here. trace:STORY-78 | ai:claude
+            sync: _,
         } => {
             let user_id = get_user(user);
             let raw_entries = if *global {

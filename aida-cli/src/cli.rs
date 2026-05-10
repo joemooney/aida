@@ -1683,6 +1683,13 @@ pub enum QueueCommand {
         /// Mutually exclusive with --global. trace:FR-1-012 | ai:claude
         #[clap(long)]
         local: bool,
+        /// Pull from `origin/aida-store` before listing. Opt-in freshness
+        /// for collaborators / multi-session workflows; fast path stays
+        /// default. No-op when the local orphan branch is already
+        /// current; warns and falls back to the local view when offline.
+        /// trace:STORY-78 | ai:claude
+        #[clap(long)]
+        sync: bool,
     },
     /// Add a requirement to your queue
     Add {
@@ -1933,6 +1940,14 @@ pub enum Command {
         /// what's still open under that EPIC. trace:STORY-62 | ai:claude
         #[clap(long, value_name = "ID")]
         parent: Option<String>,
+
+        /// Pull from `origin/aida-store` before listing. Opt-in
+        /// freshness for collaborators / multi-session workflows;
+        /// fast path stays default. No-op when the local orphan
+        /// branch is already current; warns and falls back to the
+        /// local view when offline. trace:STORY-78 | ai:claude
+        #[clap(long)]
+        sync: bool,
     },
 
     /// Show details for a specific requirement
@@ -1955,6 +1970,11 @@ pub enum Command {
         /// `--tree`. trace:STORY-62 | ai:claude
         #[clap(long, default_value = "3", value_name = "N")]
         depth: usize,
+
+        /// Pull from `origin/aida-store` before reading the requirement.
+        /// See `aida list --sync`. trace:STORY-78 | ai:claude
+        #[clap(long)]
+        sync: bool,
     },
 
     /// Edit an existing requirement
@@ -2396,6 +2416,11 @@ pub enum Command {
         /// Maximum number of matches to return (default: 200)
         #[clap(long, short = 'n', default_value = "200")]
         limit: usize,
+
+        /// Pull from `origin/aida-store` before searching. See
+        /// `aida list --sync`. trace:STORY-78 | ai:claude
+        #[clap(long)]
+        sync: bool,
     },
 
     /// Project activity — what's been touched and how it stands now.
