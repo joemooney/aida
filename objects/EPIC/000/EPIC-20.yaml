@@ -1,0 +1,38 @@
+id: 019e0f6f-f9ad-7653-8336-12a7f09d7cb1
+spec_id: EPIC-20
+agreed_id: EPIC-20
+title: 'aida session start: scoped concurrent sessions with worktree + lease'
+description: |-
+  User-driven 2026-05-09. Goal: `aida session start --owns <scope>` gives a Claude Code (or terminal) session declared ownership over an EPIC / SPEC-ID / path scope, with a separate git worktree so file edits can't conflict between sessions running in parallel.
+
+  ## v1 scope
+
+  - `aida session start --owns <scope> [--branch <name>]`:
+    - Creates a sibling git worktree at `<repo-parent>/<repo>-<slug>/` on a new branch (slug derived from scope, e.g. `epic-19`)
+    - Symlinks `.aida/` and `.aida-store/` from the original into the worktree (unix-only; both sessions share the same AIDA state — the lease differentiates ownership)
+    - Records a lease at `.aida/sessions/<session-id>.toml` with owner / scope / worktree path / branch / started_at
+    - Prints the cd command for the user
+  - `aida session end [<session-id>]`:
+    - Optional: prompts to merge/discard the branch (defer to v2 — for v1 just leave the branch alone)
+    - `git worktree remove` the sibling
+    - Delete the lease file
+  - `aida session list` extended: show active leases section at top alongside historical sessions
+
+  ## Out of scope for v1
+
+  - Enforcement (no "owned by session X" error from `aida edit` / `aida-pickup`). Leases are recorded but advisory.
+  - Auto-merge / auto-PR on `session end`.
+  - Claude Code auto-launch on `session start`.
+  - Multi-host sessions.
+  - Windows symlink alternative (junction points / dev-mode).
+
+  ## Why now
+
+  The user is about to start `aida doctor` work concurrent with other ongoing efforts and wants confidence that file edits won't tangle. Worktrees are git's native answer; this just bundles "git worktree add + new branch + lease record + symlink AIDA state" into one command.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T01:10:57.197579751Z
+modified_at: 2026-05-10T01:10:57.197579751Z
+req_type: Epic
