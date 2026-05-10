@@ -1366,6 +1366,27 @@ fn handle_git_backend_command(
                         e
                     )
                 })?;
+                // BUG-49: when the new type implies a different prefix
+                // than the existing spec_id, the spec_id does NOT auto-
+                // renumber (it would orphan trace comments, commit
+                // messages, and external references). Warn the user so
+                // they don't expect FR-4 to become PRIN-4.
+                if let Some(ref sid) = req.spec_id {
+                    let new_prefix = rt.default_prefix();
+                    let current_prefix = sid.split('-').next().unwrap_or("");
+                    if !current_prefix.is_empty() && current_prefix != new_prefix {
+                        eprintln!(
+                            "{} type changed to `{}` but spec_id stays `{}` — \
+                             AIDA spec_ids are stable so existing trace comments \
+                             and commit refs keep working. To get a `{}-N` id, \
+                             recreate the requirement with the new type.",
+                            "Note:".dimmed(),
+                            t,
+                            sid,
+                            new_prefix
+                        );
+                    }
+                }
                 req.req_type = rt;
             }
             if let Some(o) = owner {
@@ -1665,6 +1686,26 @@ fn handle_git_backend_command(
                         e
                     )
                 })?;
+                // BUG-49: spec_id is stable; type changes don't auto-
+                // renumber. Warn when the new type implies a different
+                // prefix so the user isn't surprised by FR-4 still saying
+                // FR-4 after `--type principle`.
+                if let Some(ref sid) = req.spec_id {
+                    let new_prefix = rt.default_prefix();
+                    let current_prefix = sid.split('-').next().unwrap_or("");
+                    if !current_prefix.is_empty() && current_prefix != new_prefix {
+                        eprintln!(
+                            "{} type changed to `{}` but spec_id stays `{}` — \
+                             AIDA spec_ids are stable so existing trace comments \
+                             and commit refs keep working. To get a `{}-N` id, \
+                             recreate the requirement with the new type.",
+                            "Note:".dimmed(),
+                            t,
+                            sid,
+                            new_prefix
+                        );
+                    }
+                }
                 req.req_type = rt;
                 changed = true;
             }
