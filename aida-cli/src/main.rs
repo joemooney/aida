@@ -1007,15 +1007,35 @@ fn read_agreed_counter(store_path: &std::path::Path, type_prefix: &str) -> u32 {
 }
 
 fn read_id_format_policy(project_dir: &std::path::Path) -> aida_core::IdFormatPolicy {
+    read_id_format_settings(project_dir).0
+}
+
+/// Read counter_scope from `.aida/config.toml`. When absent, defaults to
+/// PerType (back-compat — flipping a live store would conflate FR-100
+/// and BUG-100 numerically). Projects created from 2026-05-09 onwards
+/// have `counter_scope = "global"` written explicitly at init.
+/// trace:FR-271 | ai:claude
+#[allow(dead_code)]
+fn read_id_counter_scope(project_dir: &std::path::Path) -> aida_core::IdCounterScope {
+    read_id_format_settings(project_dir).1
+}
+
+/// Single pass over `.aida/config.toml` returning both the policy and
+/// the counter scope. Cheaper than two separate reads when a caller
+/// needs both. trace:FR-271 | ai:claude
+fn read_id_format_settings(
+    project_dir: &std::path::Path,
+) -> (aida_core::IdFormatPolicy, aida_core::IdCounterScope) {
     let config_path = project_dir.join(".aida").join("config.toml");
-    let default = aida_core::IdFormatPolicy::default();
+    let default_policy = aida_core::IdFormatPolicy::default();
+    let default_scope = aida_core::IdCounterScope::default();
     let Ok(content) = std::fs::read_to_string(&config_path) else {
-        return default;
+        return (default_policy, default_scope);
     };
 
-    // Naive section walker — sufficient for our shallow config.toml shape.
     let mut in_id_format = false;
     let mut policy_explicit: Option<aida_core::IdFormatPolicy> = None;
+    let mut scope_explicit: Option<aida_core::IdCounterScope> = None;
     let mut legacy_use_blocks: Option<bool> = None;
 
     for raw in content.lines() {
@@ -1032,9 +1052,16 @@ fn read_id_format_policy(project_dir: &std::path::Path) -> aida_core::IdFormatPo
                 let s = val.trim().trim_matches('"').trim_matches('\'');
                 match aida_core::IdFormatPolicy::parse(s) {
                     Ok(p) => policy_explicit = Some(p),
-                    Err(e) => {
-                        eprintln!("Warning: {} — using default", e);
-                    }
+                    Err(e) => eprintln!("Warning: {} — using default", e),
+                }
+            }
+        }
+        if in_id_format && line.starts_with("counter_scope") {
+            if let Some(val) = line.split('=').nth(1) {
+                let s = val.trim().trim_matches('"').trim_matches('\'');
+                match aida_core::IdCounterScope::parse(s) {
+                    Ok(c) => scope_explicit = Some(c),
+                    Err(e) => eprintln!("Warning: {} — using default", e),
                 }
             }
         }
@@ -1045,14 +1072,13 @@ fn read_id_format_policy(project_dir: &std::path::Path) -> aida_core::IdFormatPo
         }
     }
 
-    if let Some(p) = policy_explicit {
-        return p;
-    }
-    match legacy_use_blocks {
+    let policy = policy_explicit.unwrap_or_else(|| match legacy_use_blocks {
         Some(false) => aida_core::IdFormatPolicy::NodeAwareOnly,
         Some(true) => aida_core::IdFormatPolicy::BlocksThenFallback,
-        None => default,
-    }
+        None => default_policy,
+    });
+    let scope = scope_explicit.unwrap_or(default_scope);
+    (policy, scope)
 }
 
 /// Read node_id from the store's node.toml; defaults to 1 for unregistered nodes.
@@ -1496,7 +1522,7 @@ fn handle_git_backend_command(
                     };
 
                     if let Ok(mut registry) = aida_core::BlockRegistry::load(&blocks_path) {
-                        match registry.find_active_block(&node_id, &type_prefix) {
+                        match registry.find_active_block_or_global(&node_id, &type_prefix) {
                             None => {
                                 // No block for this type. Under `blocks-only`
                                 // this is fatal — the project requires every
@@ -2775,8 +2801,18 @@ fn handle_init_distributed_worktree(
                     email.as_deref().unwrap_or("-"),
                     suffix
                 );
+                // FR-271: at init time, force the new-project default
+                // (Global) explicitly. Reading config.toml here would
+                // return PerType because we haven't written the config
+                // yet (it's written further down in the init flow).
                 if let Ok(blocks) =
-                    auto_allocate_initial_blocks(&store_path, &new_id, &hn, email.as_deref())
+                    auto_allocate_initial_blocks_with_scope(
+                        &store_path,
+                        &new_id,
+                        &hn,
+                        email.as_deref(),
+                        aida_core::IdCounterScope::Global,
+                    )
                 {
                     if !blocks.is_empty() {
                         println!(
@@ -2829,8 +2865,15 @@ fn handle_init_distributed_worktree(
          #   node-aware-only      — never use blocks; always FR-<NODE>-<SEQ>\n\
          #   blocks-then-fallback — try block first; fall through silently (default)\n\
          #   blocks-only          — error if no block is allocated for the type\n\
+         #\n\
+         # counter_scope (FR-271):\n\
+         #   global               — single counter shared across all types (default for new projects)\n\
+         #                          → FR-1, BUG-2, EPIC-3, ... ids globally unique by number\n\
+         #   per-type             — separate counter per type prefix (legacy default)\n\
+         #                          → FR-1, BUG-1, EPIC-1, ... each type starts fresh\n\
          [id_format]\n\
-         policy = \"blocks-then-fallback\"\n",
+         policy = \"blocks-then-fallback\"\n\
+         counter_scope = \"global\"\n",
         worktree_dir, branch_name
     );
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
@@ -2949,8 +2992,15 @@ fn handle_init_post_clone(
          #   node-aware-only      — never use blocks; always FR-<NODE>-<SEQ>\n\
          #   blocks-then-fallback — try block first; fall through silently (default)\n\
          #   blocks-only          — error if no block is allocated for the type\n\
+         #\n\
+         # counter_scope (FR-271):\n\
+         #   global               — single counter shared across all types (default for new projects)\n\
+         #                          → FR-1, BUG-2, EPIC-3, ... ids globally unique by number\n\
+         #   per-type             — separate counter per type prefix (legacy default)\n\
+         #                          → FR-1, BUG-1, EPIC-1, ... each type starts fresh\n\
          [id_format]\n\
-         policy = \"blocks-then-fallback\"\n",
+         policy = \"blocks-then-fallback\"\n\
+         counter_scope = \"global\"\n",
         worktree_dir, branch_name
     );
     std::fs::write(aida_dir.join("config.toml"), &config_content)?;
@@ -5456,7 +5506,44 @@ fn auto_allocate_initial_blocks(
     hn: &str,
     email: Option<&str>,
 ) -> Result<Vec<String>> {
+    // Read counter_scope from config.toml. When called from `aida init`,
+    // the config might not exist yet (init writes it later in the flow);
+    // the explicit-scope variant below is the right call there.
+    let project_dir = store_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+    let scope = read_id_counter_scope(&project_dir);
+    auto_allocate_initial_blocks_with_scope(store_path, node_id, hn, email, scope)
+}
+
+/// Same as `auto_allocate_initial_blocks` but with an explicit scope —
+/// for use by `aida init` which decides scope before writing config.toml.
+/// trace:FR-271 | ai:claude
+fn auto_allocate_initial_blocks_with_scope(
+    store_path: &std::path::Path,
+    node_id: &str,
+    hn: &str,
+    email: Option<&str>,
+    scope: aida_core::IdCounterScope,
+) -> Result<Vec<String>> {
     let mut allocated = Vec::new();
+    if scope == aida_core::IdCounterScope::Global {
+        // One shared block per node, size 1000. Dispense formats with
+        // the caller-requested type prefix at dispense time.
+        if let Some(label) = auto_allocate_block_with_size(
+            store_path,
+            node_id,
+            hn,
+            email,
+            aida_core::IdCounterScope::GLOBAL_TYPE_PREFIX,
+            1000,
+        )? {
+            allocated.push(label);
+        }
+        return Ok(allocated);
+    }
+
     for type_prefix in PHASE3_AUTO_ALLOC_TYPES {
         if let Some(label) =
             auto_allocate_block_for_type(store_path, node_id, hn, email, type_prefix)?
@@ -5465,6 +5552,20 @@ fn auto_allocate_initial_blocks(
         }
     }
     Ok(allocated)
+}
+
+/// Like `auto_allocate_block_for_type` but with an explicit size — used
+/// by the Global counter-scope path which wants a larger shared block.
+/// trace:FR-271 | ai:claude
+fn auto_allocate_block_with_size(
+    store_path: &std::path::Path,
+    node_id: &str,
+    hn: &str,
+    email: Option<&str>,
+    type_prefix: &str,
+    size: u32,
+) -> Result<Option<String>> {
+    auto_allocate_block_inner(store_path, node_id, hn, email, type_prefix, size)
 }
 
 /// Allocate a single block for the given (node_id, type_prefix) if one
@@ -5478,6 +5579,23 @@ fn auto_allocate_block_for_type(
     email: Option<&str>,
     type_prefix: &str,
 ) -> Result<Option<String>> {
+    auto_allocate_block_inner(store_path, node_id, hn, email, type_prefix, 100)
+}
+
+/// Shared CAS-loop allocator. Size differs by caller: per-type defaults
+/// to 100; global scope uses 1000. The label format `<TYPE>-<start>..<end>`
+/// is preserved verbatim so existing user-facing output looks unchanged
+/// under per-type, and the global label reads as `*-1..1000` (a clear
+/// visual signal that this is the shared block).
+/// trace:FR-271 | ai:claude
+fn auto_allocate_block_inner(
+    store_path: &std::path::Path,
+    node_id: &str,
+    hn: &str,
+    email: Option<&str>,
+    type_prefix: &str,
+    size: u32,
+) -> Result<Option<String>> {
     use aida_core::BlockRegistry;
 
     let blocks_path = store_path.join("registry").join("blocks.yaml");
@@ -5487,9 +5605,7 @@ fn auto_allocate_block_for_type(
 
     // BUG-40: same local-only short-circuit as register_node_full —
     // claim the block on the local orphan branch and let the next
-    // `aida push` upload it. Without this, a solo user on a no-origin
-    // project would get clean ids for register but fall through to
-    // node-aware ids on every `aida add` because no block was claimed.
+    // `aida push` upload it.
     let local_only = !aida_core::git_ops::has_remote(store_path, "origin");
 
     let max_retries = 3;
@@ -5511,7 +5627,7 @@ fn auto_allocate_block_for_type(
             owner.clone(),
             hn.to_string(),
             type_prefix.to_string(),
-            100,
+            size,
             counter_floor,
         );
         registry.save(&blocks_path)?;
