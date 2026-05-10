@@ -166,6 +166,65 @@ impl IdFormatPolicy {
     }
 }
 
+/// Whether the dispenser maintains a separate counter per type prefix
+/// (`FR-1`, `BUG-1`, `EPIC-1` independent) or a single global counter
+/// (`FR-1`, `BUG-2`, `EPIC-3`). Configured via `.aida/config.toml`:
+///
+/// ```toml
+/// [id_format]
+/// counter_scope = "global"  # or "per-type"
+/// ```
+///
+/// **Global** is the default for projects created from 2026-05-09 onwards
+/// — it makes the id space unambiguous on first contact ("did I make 5
+/// reqs or 1?"). Existing projects without the field default to PerType
+/// for back-compat — flipping a live store would conflate FR-100 and
+/// BUG-100 numerically. trace:FR-271 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum IdCounterScope {
+    /// One counter per type prefix. `FR-1`, `BUG-1`, `EPIC-1` are all
+    /// distinct and start fresh.
+    PerType,
+    /// One counter shared across all types. `FR-1`, `BUG-2`, `EPIC-3` —
+    /// the prefix labels what each id is *for*, but the number is
+    /// globally unique within a node's block range.
+    Global,
+}
+
+impl Default for IdCounterScope {
+    fn default() -> Self {
+        // Per-type for back-compat. New projects override at init time.
+        Self::PerType
+    }
+}
+
+impl IdCounterScope {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::PerType => "per-type",
+            Self::Global => "global",
+        }
+    }
+
+    pub fn parse(s: &str) -> Result<Self, String> {
+        match s {
+            "per-type" | "pertype" | "PerType" => Ok(Self::PerType),
+            "global" | "Global" => Ok(Self::Global),
+            other => Err(format!(
+                "unknown counter_scope '{}': expected 'per-type' or 'global'",
+                other
+            )),
+        }
+    }
+
+    /// Sentinel `type_prefix` value used by the block registry to mark a
+    /// block that covers all types under [`IdCounterScope::Global`]. Not a
+    /// valid type prefix on its own — the dispenser substitutes the
+    /// caller-requested prefix at dispense time.
+    pub const GLOBAL_TYPE_PREFIX: &'static str = "*";
+}
+
 // ---------------------------------------------------------------------------
 // Node Identity
 // ---------------------------------------------------------------------------
@@ -549,11 +608,21 @@ impl AgreedIdBlock {
 
     /// Dispense the next agreed ID from this block, updating `next`.
     /// Returns the formatted ID (e.g., "FR-300") or None if exhausted.
+    /// For global-scope blocks (type_prefix = `*`), prefer
+    /// [`dispense_with_prefix`] so the caller's requested type label is
+    /// used in the output instead of the literal `*`.
     pub fn dispense(&mut self) -> Option<String> {
+        self.dispense_with_prefix(&self.type_prefix.clone())
+    }
+
+    /// Dispense the next id and format it with `prefix` instead of the
+    /// block's own `type_prefix`. Lets a single global block (`*`) serve
+    /// any type request. trace:FR-271 | ai:claude
+    pub fn dispense_with_prefix(&mut self, prefix: &str) -> Option<String> {
         if self.is_exhausted() {
             return None;
         }
-        let id = format!("{}-{}", self.type_prefix.to_uppercase(), self.next);
+        let id = format!("{}-{}", prefix.to_uppercase(), self.next);
         self.next += 1;
         Some(id)
     }
@@ -606,6 +675,22 @@ impl BlockRegistry {
                     && !b.is_exhausted()
             })
             .map(|(i, _)| i)
+    }
+
+    /// Like [`find_active_block`] but falls back to the node's
+    /// [`IdCounterScope::GLOBAL_TYPE_PREFIX`] (`*`) block when no exact
+    /// match exists. Used at dispense time so a global-scope project
+    /// (single shared counter per node) can serve any type request.
+    /// trace:FR-271 | ai:claude
+    pub fn find_active_block_or_global(
+        &self,
+        node_id: &str,
+        type_prefix: &str,
+    ) -> Option<usize> {
+        if let Some(idx) = self.find_active_block(node_id, type_prefix) {
+            return Some(idx);
+        }
+        self.find_active_block(node_id, IdCounterScope::GLOBAL_TYPE_PREFIX)
     }
 
     /// Return the next range_start for a new block of the given type prefix.
@@ -679,11 +764,15 @@ impl BlockRegistry {
     }
 
     /// Dispense the next agreed ID for a node+type, updating the block in-place.
+    /// Falls back to the node's global (`*`) block when no per-type
+    /// match exists — formats the id with `type_prefix` either way so
+    /// global-scope projects produce `FR-1`, `BUG-2`, `EPIC-3` from a
+    /// single shared counter. trace:FR-271 | ai:claude
     /// Returns `(id, is_low)` or None if no active block / exhausted.
     pub fn dispense(&mut self, node_id: &str, type_prefix: &str) -> Option<(String, bool)> {
-        let idx = self.find_active_block(node_id, type_prefix)?;
+        let idx = self.find_active_block_or_global(node_id, type_prefix)?;
         let block = &mut self.blocks[idx];
-        let id = block.dispense()?;
+        let id = block.dispense_with_prefix(type_prefix)?;
         let is_low = block.is_low();
         Some((id, is_low))
     }

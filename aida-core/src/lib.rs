@@ -43,8 +43,8 @@ pub use dispenser::{Dispenser, DispenserState, IdMode, MemoryDispenser};
 pub use dispenser::{FileDispenser, SqliteDispenser};
 pub use hlc::{Hlc, HlcTimestamp};
 pub use node::{
-    AgreedCounters, AgreedIdBlock, BlockRegistry, DeploymentMode, IdFormatPolicy, NodeConfig,
-    NodeRegistry, NodeRegistryEntry, UserRegistry, UserRegistryEntry, WorkspaceConfig,
+    AgreedCounters, AgreedIdBlock, BlockRegistry, DeploymentMode, IdCounterScope, IdFormatPolicy,
+    NodeConfig, NodeRegistry, NodeRegistryEntry, UserRegistry, UserRegistryEntry, WorkspaceConfig,
 };
 #[cfg(feature = "native")]
 pub use user_prefs::UserPreferences;
