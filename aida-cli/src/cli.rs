@@ -464,6 +464,15 @@ pub enum SessionCommand {
         /// Skip the y/N confirmation.
         #[clap(long, short = 'y')]
         yes: bool,
+
+        /// Force-terminate any live `claude` processes inside the
+        /// worktree before removing it. Sends SIGTERM, waits 5s, then
+        /// SIGKILL. Without this flag, `session end` refuses if it
+        /// finds a live claude in the worktree (BUG-61: prevents the
+        /// orphaned-claude-with-dangling-cwd leak).
+        /// trace:BUG-61 | ai:claude
+        #[clap(long)]
+        force: bool,
     },
 
     /// List active session leases (separately from the historical list

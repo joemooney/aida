@@ -8299,7 +8299,7 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
                 branch_style,
             )
         }
-        SessionCommand::End { id, yes } => session_end(id.as_deref(), *yes),
+        SessionCommand::End { id, yes, force } => session_end(id.as_deref(), *yes, *force),
         SessionCommand::Leases { verbose } => session_leases(*verbose),
     }
 }
@@ -9037,6 +9037,26 @@ fn session_start(
         );
     }
 
+    // BUG-61: refuse to recreate a worktree at a path that still has a
+    // leaked claude process pinning the old (now-dangling) inode. Even
+    // though `worktree_path.exists()` is false (the dir was unlinked),
+    // a live claude with `cwd=<path> (deleted)` will silently misroute
+    // hooks and writes against the new worktree we're about to create.
+    // The user must `kill <pid>` first. trace:BUG-61 | ai:claude
+    let dangling = probe_dangling_claudes_at_path(&worktree_path);
+    if !dangling.is_empty() {
+        let mut msg = format!(
+            "refusing to start session at {} — {} leaked claude process(es) still hold the previous (deleted) inode:",
+            worktree_path.display(),
+            dangling.len()
+        );
+        for p in &dangling {
+            msg.push_str(&format!("\n  pid {}    `kill {}` to clean up", p.pid, p.pid));
+        }
+        msg.push_str("\n\nThen retry `aida session start`.");
+        anyhow::bail!(msg)
+    }
+
     // Check the lease dir exists; create if not.
     let leases = leases_dir(&project_root);
     std::fs::create_dir_all(&leases)?;
@@ -9258,6 +9278,60 @@ fn session_start(
     Ok(())
 }
 
+/// BUG-61: enumerate live `claude` processes whose cwd is at-or-under
+/// `worktree`. Used by both `session end` (refuse to remove a worktree
+/// with live claudes inside) and `session start` (refuse to recreate a
+/// worktree path that has a leaked claude pinning its dangling inode).
+/// Returns an empty vec when probing isn't possible — better to let the
+/// session op proceed than to block on a probe failure.
+/// trace:BUG-61 | ai:claude
+fn probe_live_claudes_in_worktree(worktree: &std::path::Path) -> Vec<process_probe::LiveSession> {
+    let canon = worktree.canonicalize().unwrap_or_else(|_| worktree.to_path_buf());
+    process_probe::probe_live_claude_sessions()
+        .into_iter()
+        .filter(|s| !s.stale_cwd && (s.cwd == canon || s.cwd.starts_with(&canon)))
+        .collect()
+}
+
+/// BUG-61: enumerate dangling-cwd claude processes that USED to be inside
+/// `worktree` (cwd matches the path with `(deleted)` suffix). Used by
+/// `session start` to refuse recreating a worktree path that has an
+/// orphan claude attached — the new worktree's writes would be ignored
+/// by the leaked process and any hook it fires would resolve against a
+/// stale inode. trace:BUG-61 | ai:claude
+fn probe_dangling_claudes_at_path(worktree: &std::path::Path) -> Vec<process_probe::LiveSession> {
+    process_probe::probe_live_claude_sessions()
+        .into_iter()
+        .filter(|s| s.stale_cwd && (s.cwd == worktree || s.cwd.starts_with(worktree)))
+        .collect()
+}
+
+/// BUG-61: SIGTERM each pid, sleep `grace_secs`, then SIGKILL any that
+/// are still alive. trace:BUG-61 | ai:claude
+fn terminate_pids_with_grace(pids: &[u32], grace_secs: u64) {
+    use sysinfo::{ProcessRefreshKind, RefreshKind, Signal, System};
+    let mut sys = System::new_with_specifics(
+        RefreshKind::new().with_processes(ProcessRefreshKind::new()),
+    );
+    sys.refresh_processes_specifics(ProcessRefreshKind::new());
+    for &pid in pids {
+        if let Some(p) = sys.process(sysinfo::Pid::from_u32(pid)) {
+            let _ = p.kill_with(Signal::Term);
+        }
+    }
+    std::thread::sleep(std::time::Duration::from_secs(grace_secs));
+    sys.refresh_processes_specifics(ProcessRefreshKind::new());
+    for &pid in pids {
+        if let Some(p) = sys.process(sysinfo::Pid::from_u32(pid)) {
+            eprintln!(
+                "  pid {} still alive after SIGTERM — sending SIGKILL",
+                pid.to_string().yellow()
+            );
+            let _ = p.kill_with(Signal::Kill);
+        }
+    }
+}
+
 /// STORY-73: resolution chain for `aida session end` (no arg). Tries in
 /// order, stopping at first hit:
 ///
@@ -9399,7 +9473,7 @@ fn find_lease_by_id_prefix(query: &str, leases: &[SessionLease]) -> Result<Sessi
     }
 }
 
-fn session_end(id_query: Option<&str>, yes: bool) -> Result<()> {
+fn session_end(id_query: Option<&str>, yes: bool, force: bool) -> Result<()> {
     let project_root = find_project_root()?;
     let leases = list_leases(&project_root);
     if leases.is_empty() {
@@ -9408,6 +9482,37 @@ fn session_end(id_query: Option<&str>, yes: bool) -> Result<()> {
     }
 
     let target = resolve_session_to_end(id_query, &leases, yes)?;
+
+    // BUG-61: detect live `claude` processes whose cwd is under the
+    // worktree we're about to remove. If we don't, `git worktree remove`
+    // succeeds (cwd is just a soft handle), the dir is unlinked, and the
+    // claude keeps running with `(deleted)` as its cwd — leaking memory,
+    // confusing future liveness probes, and potentially firing hooks at
+    // paths that no longer exist. Default refuses with a clear message;
+    // `--force` SIGTERMs them with a 5s grace, then SIGKILLs.
+    // trace:BUG-61 | ai:claude
+    let leaked = probe_live_claudes_in_worktree(&target.worktree_path);
+    if !leaked.is_empty() {
+        if !force {
+            let mut msg = format!(
+                "{} live claude process{} inside worktree {} — would leak with `(deleted)` cwd if we removed the worktree:",
+                leaked.len(),
+                if leaked.len() == 1 { "" } else { "es" },
+                target.worktree_path.display()
+            );
+            for p in &leaked {
+                msg.push_str(&format!("\n  pid {} cwd {}", p.pid, p.cwd.display()));
+            }
+            msg.push_str("\n\nExit those claude(s) first, or pass --force to SIGTERM them.");
+            anyhow::bail!(msg)
+        }
+        eprintln!(
+            "{} {} live claude process(es) inside worktree — sending SIGTERM, then SIGKILL after 5s",
+            "→".dimmed(),
+            leaked.len()
+        );
+        terminate_pids_with_grace(&leaked.iter().map(|p| p.pid).collect::<Vec<_>>(), 5);
+    }
 
     // STORY-73: human output to stderr, eval-friendly `unset` to stdout
     // when wrapped — same shape as session_start's `export`. Stdin/stderr
