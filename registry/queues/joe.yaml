@@ -1,91 +1,126 @@
 - user_id: joe
   requirement_id: 019e108a-9f4f-7203-8260-ec5842e8cd2b
-  position: 9223372036854775807
+  position: 1000
   added_by: joe
   added_at: 2026-05-10T06:20:07.114758590Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e108e-acf6-7921-9f8f-ecd82eb27635
-  position: 9223372036854775807
+  position: 2000
   added_by: joe
   added_at: 2026-05-10T06:24:07.492962201Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e10ab-309b-78e3-9386-1bbaaf81b535
-  position: 9223372036854775807
+  position: 3000
   added_by: joe
   added_at: 2026-05-10T06:55:40.177793300Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e12c9-cdc6-7681-bf83-baeb76a424bf
-  position: 9223372036854775807
+  position: 4000
   added_by: joe
   added_at: 2026-05-10T16:47:56.839482035Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e12cf-a115-7652-8cad-393b164fe633
-  position: 9223372036854775807
+  position: 5000
   added_by: joe
   added_at: 2026-05-10T16:54:20.605192500Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e12d2-aeb6-7ee2-897b-d47c1ef3200c
-  position: 9223372036854775807
+  position: 6000
   added_by: joe
   added_at: 2026-05-10T16:57:40.009300861Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e12d2-b239-7810-ae79-f6a84b70064e
-  position: 9223372036854775807
+  position: 7000
   added_by: joe
   added_at: 2026-05-10T16:57:40.779470927Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e12d7-5798-7722-aa5f-83fabd177705
-  position: 9223372036854775807
+  position: 8000
   added_by: joe
   added_at: 2026-05-10T17:02:44.190730738Z
   for_role: implementer
 - user_id: joe
   requirement_id: 019e12da-8d5d-7361-a7e6-7d447027bfa6
-  position: 9223372036854775807
+  position: 9000
   added_by: joe
   added_at: 2026-05-10T17:06:14.373608906Z
   for_role: implementer
   for_scope: EPIC-20
 - user_id: joe
   requirement_id: 019e12e7-dd36-7b70-9adb-8eab02173b13
-  position: 9223372036854775807
+  position: 10000
   added_by: joe
   added_at: 2026-05-10T17:20:48.101520107Z
   for_role: implementer
   for_scope: EPIC-20
 - user_id: joe
   requirement_id: 019e12e7-e1be-7661-87e8-c8d4177583d7
-  position: 9223372036854775807
+  position: 11000
   added_by: joe
   added_at: 2026-05-10T17:20:49.310763160Z
   for_role: implementer
   for_scope: EPIC-20
 - user_id: joe
   requirement_id: 019e12ea-5350-78e0-b627-ac288ec7c46e
-  position: 9223372036854775807
+  position: 12000
   added_by: joe
   added_at: 2026-05-10T17:23:28.659338735Z
   for_role: implementer
   for_scope: EPIC-20
 - user_id: joe
   requirement_id: 019e12ec-abf4-7a81-9e1d-6b4ce759e752
-  position: 9223372036854775807
+  position: 13000
   added_by: joe
   added_at: 2026-05-10T17:26:01.867020458Z
   for_role: implementer
   for_scope: EPIC-20
 - user_id: joe
   requirement_id: 019e12f7-93b1-7eb3-aeab-1e3b1fed837e
-  position: 9223372036854775807
+  position: 14000
   added_by: joe
   added_at: 2026-05-10T17:38:06.604659958Z
+  for_role: implementer
+  for_scope: EPIC-20
+- user_id: joe
+  requirement_id: 019e12fd-52ee-7220-b2d7-d2fb8b205596
+  position: 16000
+  added_by: joe
+  added_at: 2026-05-10T17:44:13.338667971Z
+  for_role: implementer
+  for_scope: EPIC-20
+- user_id: joe
+  requirement_id: 019e1322-bf05-7e03-8790-9a907f9b9129
+  position: 17000
+  added_by: joe
+  added_at: 2026-05-10T18:25:05.773606007Z
+  for_role: implementer
+  for_scope: EPIC-20
+- user_id: joe
+  requirement_id: 019e1328-674e-7dc0-9ff1-134fb5669e83
+  position: 18000
+  added_by: joe
+  added_at: 2026-05-10T18:31:22.358561964Z
+  for_role: implementer
+  for_scope: EPIC-20
+- user_id: joe
+  requirement_id: 019e1328-72f4-71d3-95a3-c5f893c74c49
+  position: 19000
+  added_by: joe
+  added_at: 2026-05-10T18:31:23.327204189Z
+  for_role: implementer
+  for_scope: EPIC-20
+- user_id: joe
+  requirement_id: 019e1337-4a9b-78a0-80f5-315d4281ddb7
+  position: 20000
+  added_by: joe
+  added_at: 2026-05-10T18:47:34.148624472Z
   for_role: implementer
   for_scope: EPIC-20
 - user_id: joe
@@ -93,40 +128,5 @@
   position: 9223372036854775807
   added_by: joe
   added_at: 2026-05-10T17:38:57.056878415Z
-  for_role: implementer
-  for_scope: EPIC-20
-- user_id: joe
-  requirement_id: 019e12fd-52ee-7220-b2d7-d2fb8b205596
-  position: 9223372036854775807
-  added_by: joe
-  added_at: 2026-05-10T17:44:13.338667971Z
-  for_role: implementer
-  for_scope: EPIC-20
-- user_id: joe
-  requirement_id: 019e1322-bf05-7e03-8790-9a907f9b9129
-  position: 9223372036854775807
-  added_by: joe
-  added_at: 2026-05-10T18:25:05.773606007Z
-  for_role: implementer
-  for_scope: EPIC-20
-- user_id: joe
-  requirement_id: 019e1328-674e-7dc0-9ff1-134fb5669e83
-  position: 9223372036854775807
-  added_by: joe
-  added_at: 2026-05-10T18:31:22.358561964Z
-  for_role: implementer
-  for_scope: EPIC-20
-- user_id: joe
-  requirement_id: 019e1328-72f4-71d3-95a3-c5f893c74c49
-  position: 9223372036854775807
-  added_by: joe
-  added_at: 2026-05-10T18:31:23.327204189Z
-  for_role: implementer
-  for_scope: EPIC-20
-- user_id: joe
-  requirement_id: 019e1337-4a9b-78a0-80f5-315d4281ddb7
-  position: 9223372036854775807
-  added_by: joe
-  added_at: 2026-05-10T18:47:34.148624472Z
   for_role: implementer
   for_scope: EPIC-20
