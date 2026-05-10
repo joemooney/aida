@@ -1,0 +1,24 @@
+id: 019e1026-2e4c-7892-926a-40f5a0b3e21f
+spec_id: BUG-59
+agreed_id: BUG-59
+title: Stop hook ENOENT when cwd was a removed worktree
+description: |
+  After `aida session end --yes` removes the current worktree, Claude Code's Stop hook fires with the now-deleted cwd. Output:
+
+    Stop hook error: Failed with non-blocking status code: Error occurred while executing hook command:
+    ENOENT: no such file or directory, posix_spawn '/bin/sh'
+
+  Cosmetic — non-blocking — but the error appears in every session-end output. Two fixes:
+
+  1. AIDA's `aida session end` command emits a final `cd ${HOME}` (or shell-out to print "cd elsewhere before retry") when stdin is a TTY. Caller's responsibility to actually cd; we can't directly mutate parent shell.
+
+  2. Claude Code's Stop hook itself should detect "cwd doesn't exist" before spawning sh — orthogonal, file upstream if it persists.
+
+  The user observation 2026-05-09 is just the post-end shell error — harmless but noisy. Most notable as a "first impression" bug for new users.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T04:29:58.220437208Z
+modified_at: 2026-05-10T04:29:58.220437208Z
+req_type: Bug
