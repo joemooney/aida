@@ -1,0 +1,12 @@
+id: 019e0f4a-0d9e-7d91-94ac-968f29ee6341
+spec_id: BUG-48
+agreed_id: BUG-48
+title: aida edit/add silently drops invalid --type, says 'No changes specified'
+description: Sister bug to BUG-47 (status). `aida edit FR-N --type principlexxx` was silently dropping the error from parse_requirement_type and falling through to print 'No changes specified. Use --title, --status...' — misleading because the user DID specify a change, the value was just invalid. CLI now propagates the error with a valid-list hint matching --status/--priority. Surfaced 2026-05-09 walkthrough.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T00:29:31.934185932Z
+modified_at: 2026-05-10T00:29:31.934185932Z
+req_type: Bug
