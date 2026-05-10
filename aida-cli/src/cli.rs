@@ -2022,6 +2022,20 @@ pub enum Command {
         message: Option<String>,
     },
 
+    /// Pull code AND the AIDA orphan store in one shot. Symmetric to
+    /// `aida push`: equivalent to `git pull --ff-only` on the current
+    /// branch followed by `aida db sync --pull`. Skips a leg cleanly
+    /// when there's nothing to pull (no upstream tracked, no orphan
+    /// remote). trace:TASK-43 | ai:claude
+    Pull {
+        /// Skip the code pull (only sync the orphan store).
+        #[clap(long, conflicts_with = "store_only")]
+        code_only: bool,
+        /// Skip the orphan-store sync (only `git pull`).
+        #[clap(long, conflicts_with = "code_only")]
+        store_only: bool,
+    },
+
     /// AIDA-developer-only commands: activate the in-repo dev binary,
     /// run dev servers, install shell helpers. End users don't need these.
     #[clap(subcommand, hide = true)]

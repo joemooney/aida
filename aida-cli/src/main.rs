@@ -401,6 +401,12 @@ fn main() -> Result<()> {
                  the deprecated centralized backend with `aida db export-git`)."
             );
         }
+        Command::Pull { .. } => {
+            anyhow::bail!(
+                "`aida pull` requires a git-canonical store. Run `aida init` (or upgrade from \
+                 the deprecated centralized backend with `aida db export-git`)."
+            );
+        }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::Doctor(_) => unreachable!("doctor is dispatched before storage init"),
@@ -1235,6 +1241,9 @@ fn handle_git_backend_command(
         }
         Command::Push { code_only, store_only, message } => {
             return handle_push_command(store_path, *code_only, *store_only, message.as_deref());
+        }
+        Command::Pull { code_only, store_only } => {
+            return handle_pull_command(store_path, *code_only, *store_only);
         }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
@@ -13254,6 +13263,107 @@ fn handle_push_command(
                     );
                 }
                 Err(e) => anyhow::bail!("store push failed: {}", e),
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// `aida pull` — symmetric counterpart of `aida push`. Pulls both the
+/// current code branch (via `git pull --ff-only`) and the orphan store
+/// (via `git_ops::pull_rebase`, matching `aida db sync --pull`). Each
+/// leg skips cleanly when its remote isn't configured, so the command
+/// is safe to run in any project state. trace:TASK-43 | ai:claude
+fn handle_pull_command(
+    store_path: &std::path::Path,
+    code_only: bool,
+    store_only: bool,
+) -> Result<()> {
+    use aida_core::git_ops;
+
+    let project_root = store_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+    // ---- Code pull (current branch on the project repo) ----
+    if !store_only {
+        if !git_ops::has_remote(&project_root, "origin") {
+            println!("  {} no `origin` remote — skipping code pull", "Note:".dimmed());
+        } else {
+            let branch = git_ops::current_branch(&project_root)
+                .unwrap_or_else(|_| "HEAD".to_string());
+            println!(
+                "{} {} ← origin",
+                "Pulling code".cyan().bold(),
+                branch
+            );
+            // --ff-only refuses if the local branch has diverged from
+            // origin (user has unpushed commits AND origin has new
+            // commits). Safer default than --rebase for a working
+            // branch — the user gets a clear error and can decide
+            // whether to rebase, merge, or stash. Matches the task's
+            // acceptance shape ("equivalent to `git pull --ff-only`").
+            // trace:TASK-43 | ai:claude
+            let res = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&project_root)
+                .args(["pull", "--ff-only", "origin", &branch])
+                .status();
+            match res {
+                Ok(s) if s.success() => {
+                    println!("  {}", "code pull complete".green());
+                }
+                Ok(s) => {
+                    eprintln!(
+                        "  {} git pull --ff-only exited with status {} — \
+                         your branch may have diverged from origin/{}. Use \
+                         `git pull --rebase` or `git pull --no-rebase` once \
+                         you've decided how to reconcile.",
+                        "Warning:".yellow().bold(),
+                        s,
+                        branch
+                    );
+                }
+                Err(e) => anyhow::bail!("git pull failed: {}", e),
+            }
+        }
+    }
+
+    // ---- Store pull (orphan branch via pull_rebase) ----
+    if !code_only {
+        if !git_ops::is_git_repo(store_path) {
+            println!("  {} no orphan worktree — skipping store pull", "Note:".dimmed());
+            return Ok(());
+        }
+        if !git_ops::has_remote(store_path, "origin") {
+            println!("  {} orphan store has no `origin` — skipping store pull", "Note:".dimmed());
+            return Ok(());
+        }
+        // Mirror `aida db sync --pull`: commit any pending orphan
+        // changes first, then pull --rebase. Without the pre-commit
+        // step, rebase refuses on a dirty tree and leaves the user
+        // half-pulled.
+        if git_ops::has_changes(store_path).unwrap_or(false) {
+            let _ = git_ops::add(store_path, &["."]);
+            let _ = git_ops::commit(store_path, "chore: sync pending changes");
+            println!("  Committed pending orphan changes before pull");
+        }
+        let branch = git_ops::current_branch(store_path)
+            .unwrap_or_else(|_| "aida-store".to_string());
+        println!("{} aida-store ← origin", "Pulling store".cyan().bold());
+        match git_ops::pull_rebase(store_path, "origin", &branch) {
+            Ok(()) => println!("  {}", "store pull complete".green()),
+            Err(e) => {
+                eprintln!(
+                    "  {} {}\n  The orphan store may be mid-rebase. To recover:\n    \
+                         cd {} && git rebase --abort\n  \
+                     Then re-run `aida pull` or `aida db sync --pull`.",
+                    "Warning:".yellow().bold(),
+                    e,
+                    store_path.display()
+                );
             }
         }
     }
