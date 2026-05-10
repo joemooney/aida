@@ -35,9 +35,27 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T03:54:12.333617718Z
-modified_at: 2026-05-10T03:54:12.333617718Z
+modified_at: 2026-05-10T06:30:55.591162918Z
 req_type: Story
 relationships:
 - rel_type: Child
   target_id: 019e0f6f-f9ad-7653-8336-12a7f09d7cb1
   created_at: 2026-05-10T03:54:13.193572130Z
+comments:
+- id: 019e1094-eb67-7453-a148-577da76de139
+  author: joe
+  content: |-
+    Add explicit `--role <name>` flag to `aida session start`. Current STORY-65 only covers inheritance from `$AIDA_SESSION_ROLE`. With explicit flag:
+
+      aida session start --owns EPIC-20 --branch epic-20-batch4 --role implementer
+      aida session start --owns PR-3 --role reviewer    # for PR review sessions
+
+    Resolution order in start handler:
+      1. --role <name> if passed (highest priority)
+      2. inherit from $AIDA_SESSION_ROLE if set
+      3. derive from scope: PR-N/MR-N → reviewer; else → implementer (with `--role-derive=off` to skip the heuristic)
+      4. unset (current behavior)
+
+    User asked 2026-05-10 — this is the natural shape after running session start a few times and finding "set role first, then start, then enter worktree, then re-enter role" tedious. trace:STORY-65 | ai:claude
+  created_at: 2026-05-10T06:30:55.591162918Z
+  modified_at: 2026-05-10T06:30:55.591162918Z
