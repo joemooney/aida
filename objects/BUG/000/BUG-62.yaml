@@ -1,0 +1,42 @@
+id: 019e108e-acf6-7921-9f8f-ecd82eb27635
+spec_id: BUG-62
+agreed_id: BUG-62
+title: 'FR-215 git-canonical --parent: doesn''t accept UUIDs and isn''t atomic'
+description: |
+  Caught by the PR-3 reviewer 2026-05-10 (predates PR-3, surfaced while verifying FR-215). Two related gaps in the git-canonical `aida add --parent` path that violate FR-215's acceptance criteria:
+
+  ## Gap 1 — UUID rejected on git-canonical path
+
+  `aida-cli/src/main.rs:1737-1738` resolves `--parent <X>` via `backend.get_requirement_by_spec_id(parent_str)?` only. `git_backend.rs:396-411` searches by spec_id and agreed_id but NOT by UUID.
+
+  The legacy SQLite path (line 12504) uses `parse_requirement_id` which tries UUID first, then SPEC-ID — accepting both. The git-canonical path silently rejects UUIDs.
+
+  FR-215 acceptance criteria explicitly says "accepts SPEC-ID or UUID" — the git path doesn't satisfy this.
+
+  ## Gap 2 — git-canonical --parent is post-hoc, not atomic
+
+  `main.rs:1660-1667` writes the new requirement, THEN at :1735+ resolves the parent. If parent lookup fails AFTER the child was written, the child file is already on disk with no parent relationship and a confusing error.
+
+  FR-215 acceptance criteria says "Relationship is created atomically with the requirement" — the git path doesn't satisfy this. The legacy path validates parent BEFORE add (atomic).
+
+  ## Fix sketch
+
+  1. Add a UUID branch to `get_requirement_by_spec_id` (or layer a thin `resolve_id` helper that tries UUID → spec_id → agreed_id)
+  2. In the git-canonical add handler, resolve --parent BEFORE write; on failure, return error without writing the child file. The relationship insert can stay post-write (the child has to exist first to receive a Child edge), but parent VALIDATION should be pre-write.
+
+  ## Acceptance
+
+  - [ ] `aida add --parent <UUID>` works on git-canonical path
+  - [ ] If --parent doesn't resolve, no child file is written
+  - [ ] Same behavior tested in `aida-cli/src/main.rs` integration tests for both UUID and SPEC-ID parents
+
+  ## Why now
+
+  PR-3 reviewer caught these while verifying FR-215. They're not PR-3 regressions (they predate `08009bc7` on main) so they didn't block the merge. Filing as standalone bug rather than reopening FR-215.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T06:24:06.390087322Z
+modified_at: 2026-05-10T06:24:06.390087322Z
+req_type: Bug
