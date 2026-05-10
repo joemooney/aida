@@ -8406,6 +8406,24 @@ struct SessionLease {
     /// trace:STORY-58 | ai:claude
     #[serde(default)]
     parent_project_root: Option<std::path::PathBuf>,
+    /// STORY-71: for PR/MR review sessions (--owns PR-N / MR-N), the
+    /// PR head commit SHA captured via `gh pr view` / `glab mr view` at
+    /// session-start time. `None` when the scope isn't a PR/MR or when
+    /// the forge CLI wasn't available. Surfaced by `aida session show`.
+    /// trace:STORY-71 | ai:claude
+    #[serde(default)]
+    pr_head_sha: Option<String>,
+    /// STORY-71: PR base commit SHA at session-start time (companion to
+    /// pr_head_sha). Lets the reviewer recompute the diff range later
+    /// without round-tripping to the forge.
+    /// trace:STORY-71 | ai:claude
+    #[serde(default)]
+    pr_base_sha: Option<String>,
+    /// STORY-71: PR base ref name (e.g. `main`). Mostly informational —
+    /// for reporting in `aida session show`.
+    /// trace:STORY-71 | ai:claude
+    #[serde(default)]
+    pr_base_ref: Option<String>,
 }
 
 fn leases_dir(project_root: &std::path::Path) -> std::path::PathBuf {
@@ -8943,6 +8961,116 @@ impl ReviewForge {
             Self::GitLab => format!("mr-{}", n),
         }
     }
+
+    /// STORY-71: forge CLI binary name used to enrich the lease with the
+    /// PR's head/base SHAs (and to surface a clear stderr note when it's
+    /// not on PATH).
+    /// trace:STORY-71 | ai:claude
+    fn cli_name(&self) -> &'static str {
+        match self {
+            Self::GitHub => "gh",
+            Self::GitLab => "glab",
+        }
+    }
+
+    fn cli_install_url(&self) -> &'static str {
+        match self {
+            Self::GitHub => "https://cli.github.com",
+            Self::GitLab => "https://gitlab.com/gitlab-org/cli",
+        }
+    }
+}
+
+/// STORY-71: PR/MR head + base metadata captured at session-start time.
+/// Recorded into the lease so `aida session show` can display it without
+/// re-querying the forge, and so a reviewer can recompute the diff range
+/// later even after the PR has moved on.
+/// trace:STORY-71 | ai:claude
+#[derive(Debug, Clone, Default)]
+struct PrMetadata {
+    head_sha: Option<String>,
+    base_sha: Option<String>,
+    base_ref: Option<String>,
+}
+
+/// STORY-71: query the forge CLI for a PR/MR's head/base SHAs + base ref.
+/// Returns `Err(reason)` when the CLI isn't installed or the query fails
+/// (caller turns that into a stderr note + Default fallback) and
+/// `Ok(None)` when the JSON parsed but key fields were missing.
+/// trace:STORY-71 | ai:claude
+fn query_pr_metadata(
+    forge: ReviewForge,
+    n: u64,
+    project_root: &std::path::Path,
+) -> std::result::Result<PrMetadata, String> {
+    let cli = forge.cli_name();
+    let n_str = n.to_string();
+    let args: Vec<&str> = match forge {
+        ReviewForge::GitHub => vec![
+            "pr",
+            "view",
+            n_str.as_str(),
+            "--json",
+            "headRefOid,baseRefOid,baseRefName",
+        ],
+        ReviewForge::GitLab => vec!["mr", "view", n_str.as_str(), "--output", "json"],
+    };
+    // gh/glab inherit the working directory; both honor cwd to find the
+    // matching repo for the PR/MR number, so we set current_dir rather
+    // than relying on `-C` which neither CLI accepts.
+    let out = std::process::Command::new(cli)
+        .current_dir(project_root)
+        .args(&args)
+        .output()
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                format!(
+                    "`{}` not on PATH ({} not installed?)",
+                    cli,
+                    forge.cli_install_url()
+                )
+            } else {
+                format!("`{}` failed to spawn: {}", cli, e)
+            }
+        })?;
+    if !out.status.success() {
+        return Err(format!(
+            "`{} {}` exited {}",
+            cli,
+            args.join(" "),
+            out.status
+        ));
+    }
+    let json: serde_json::Value = serde_json::from_slice(&out.stdout)
+        .map_err(|e| format!("`{}` JSON parse failed: {}", cli, e))?;
+    Ok(parse_pr_metadata_json(forge, &json))
+}
+
+/// STORY-71: extract the head SHA / base SHA / base ref out of the JSON
+/// the forge CLI returned. Pulled out of `query_pr_metadata` so unit
+/// tests can pin the parsing without invoking the CLI.
+/// trace:STORY-71 | ai:claude
+fn parse_pr_metadata_json(forge: ReviewForge, json: &serde_json::Value) -> PrMetadata {
+    let s = |v: &serde_json::Value| -> Option<String> {
+        v.as_str().map(|s| s.to_string()).filter(|s| !s.is_empty())
+    };
+    match forge {
+        ReviewForge::GitHub => PrMetadata {
+            head_sha: s(&json["headRefOid"]),
+            base_sha: s(&json["baseRefOid"]),
+            base_ref: s(&json["baseRefName"]),
+        },
+        ReviewForge::GitLab => {
+            // glab's mr view --output json field names mirror GitLab's
+            // REST API: `sha` (head), `diff_refs.base_sha`, `target_branch`.
+            // Source-of-truth list: `glab api projects/:id/merge_requests/N`.
+            PrMetadata {
+                head_sha: s(&json["sha"]),
+                base_sha: s(&json["diff_refs"]["base_sha"]),
+                base_ref: s(&json["target_branch"]),
+            }
+        }
+    }
 }
 
 /// STORY-61: parse `PR-N` / `MR-N` scope strings (case-insensitive).
@@ -9056,6 +9184,12 @@ fn session_start(
         }
     }
 
+    // STORY-71: PR metadata captured from `gh`/`glab` for review sessions.
+    // Populated below and stitched into the lease so `aida session show`
+    // can display head/base SHAs without a round-trip to the forge.
+    // trace:STORY-71 | ai:claude
+    let mut pr_metadata: PrMetadata = PrMetadata::default();
+
     if let Some((forge, n)) = review_target {
         // STORY-61 review flow:
         //   1. fetch the PR/MR head ref from origin into the local branch
@@ -9095,6 +9229,30 @@ fn session_start(
             .status()?;
         if !res.success() {
             anyhow::bail!("`git worktree add` failed");
+        }
+
+        // STORY-71: enrich the lease with PR metadata via gh/glab. The
+        // worktree is already on the PR's code (the fetch above did the
+        // real work) — this pass is just for the head/base SHAs the
+        // reviewer wants to see in `aida session show`. CLI-not-installed
+        // is a soft failure: the session start succeeds and we print one
+        // stderr line so the user knows what they're missing.
+        // trace:STORY-71 | ai:claude
+        match query_pr_metadata(forge, n, &project_root) {
+            Ok(meta) => pr_metadata = meta,
+            Err(reason) => {
+                eprintln!(
+                    "{} {}",
+                    "ℹ".cyan(),
+                    format!(
+                        "skipped PR metadata capture: {} \u{2014} install {} from {} for richer `aida session show` output",
+                        reason,
+                        forge.cli_name(),
+                        forge.cli_install_url()
+                    )
+                    .dimmed()
+                );
+            }
         }
     } else {
         // Default flow: create worktree on a NEW branch (the original
@@ -9211,6 +9369,11 @@ fn session_start(
                 .canonicalize()
                 .unwrap_or_else(|_| project_root.clone()),
         ),
+        // STORY-71: PR/MR head/base metadata when this is a review session.
+        // trace:STORY-71 | ai:claude
+        pr_head_sha: pr_metadata.head_sha.clone(),
+        pr_base_sha: pr_metadata.base_sha.clone(),
+        pr_base_ref: pr_metadata.base_ref.clone(),
     };
     let lease_file = lease_path(&project_root, &id);
     std::fs::write(&lease_file, toml::to_string_pretty(&lease)?)?;
@@ -9227,6 +9390,23 @@ fn session_start(
         "worktree".bold(),
         worktree_path.display().to_string().cyan()
     );
+    // STORY-71: surface captured PR head/base in the summary so the user
+    // sees what the reviewer flow recorded (matches `aida session show`).
+    // trace:STORY-71 | ai:claude
+    if let Some(head) = pr_metadata.head_sha.as_deref() {
+        let head_short = &head[..head.len().min(12)];
+        let base_disp = match (
+            pr_metadata.base_ref.as_deref(),
+            pr_metadata.base_sha.as_deref(),
+        ) {
+            (Some(r), Some(b)) => format!("{} ({})", r, &b[..b.len().min(12)]),
+            (Some(r), None) => r.to_string(),
+            (None, Some(b)) => b[..b.len().min(12)].to_string(),
+            (None, None) => "-".to_string(),
+        };
+        println!("  {}: {}", "pr-head".bold(), head_short.cyan());
+        println!("  {}: {}", "pr-base".bold(), base_disp.cyan());
+    }
     println!("  {}: {}", "lease".bold(), lease_file.display().to_string().dimmed());
 
     if launch_claude {
@@ -10016,6 +10196,9 @@ mod statusline_tests {
             hostname: "h".into(),
             cargo_target_dir: None,
             parent_project_root: None,
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
         };
 
         // No routing tags = visible everywhere.
@@ -10200,6 +10383,9 @@ hostname = "h"
             hostname: "h".into(),
             cargo_target_dir: None,
             parent_project_root: Some(parent_dir.canonicalize().unwrap()),
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
         };
         std::fs::write(
             leases.join("abcdef123456.toml"),
@@ -10253,6 +10439,90 @@ hostname = "h"
         std::fs::create_dir_all(dir.join(".aida").join("sessions")).unwrap();
         assert!(parent_project_root_for_session(&dir).is_none());
     }
+
+    /// STORY-71: parsing the JSON shape `gh pr view --json
+    /// headRefOid,baseRefOid,baseRefName` returns. Pinned so a future
+    /// refactor of the field list can't silently break the lease enrichment.
+    /// trace:STORY-71 | ai:claude
+    #[test]
+    fn parse_pr_metadata_json_github_shape() {
+        let body = serde_json::json!({
+            "headRefOid": "deadbeefcafe1234567890abcdef1234567890ab",
+            "baseRefOid": "0011223344556677889900112233445566778899",
+            "baseRefName": "main",
+        });
+        let m = parse_pr_metadata_json(ReviewForge::GitHub, &body);
+        assert_eq!(
+            m.head_sha.as_deref(),
+            Some("deadbeefcafe1234567890abcdef1234567890ab")
+        );
+        assert_eq!(
+            m.base_sha.as_deref(),
+            Some("0011223344556677889900112233445566778899")
+        );
+        assert_eq!(m.base_ref.as_deref(), Some("main"));
+    }
+
+    /// STORY-71: glab's `mr view --output json` mirrors the GitLab REST
+    /// API — head SHA in `sha`, base SHA in `diff_refs.base_sha`, base
+    /// ref in `target_branch`. Test pins all three lookups.
+    /// trace:STORY-71 | ai:claude
+    #[test]
+    fn parse_pr_metadata_json_gitlab_shape() {
+        let body = serde_json::json!({
+            "sha": "1111222233334444555566667777888899990000",
+            "diff_refs": {
+                "base_sha": "aaaabbbbccccddddeeeeffff0000111122223333",
+                "head_sha": "1111222233334444555566667777888899990000",
+            },
+            "target_branch": "develop",
+        });
+        let m = parse_pr_metadata_json(ReviewForge::GitLab, &body);
+        assert_eq!(
+            m.head_sha.as_deref(),
+            Some("1111222233334444555566667777888899990000")
+        );
+        assert_eq!(
+            m.base_sha.as_deref(),
+            Some("aaaabbbbccccddddeeeeffff0000111122223333")
+        );
+        assert_eq!(m.base_ref.as_deref(), Some("develop"));
+    }
+
+    /// STORY-71: missing or empty fields drop through as None rather than
+    /// pinning empty strings into the lease. Forwards-compat for forge
+    /// CLIs that omit some keys (auth scope, schema drift, etc.).
+    /// trace:STORY-71 | ai:claude
+    #[test]
+    fn parse_pr_metadata_json_missing_fields_yield_none() {
+        let body = serde_json::json!({ "headRefOid": "" });
+        let m = parse_pr_metadata_json(ReviewForge::GitHub, &body);
+        assert!(m.head_sha.is_none());
+        assert!(m.base_sha.is_none());
+        assert!(m.base_ref.is_none());
+    }
+
+    /// STORY-71: leases written before the new PR fields existed must
+    /// still deserialize cleanly (so an in-flight session survives an
+    /// aida upgrade). Test pins the back-compat contract.
+    /// trace:STORY-71 | ai:claude
+    #[test]
+    fn lease_without_pr_fields_deserializes() {
+        let toml_text = r#"
+id = "abcdef123456"
+scope = "PR-3"
+slug = "pr-3"
+owner = "u"
+worktree_path = "/tmp/wt"
+branch = "pr-3"
+started_at = "2026-05-04T00:00:00Z"
+hostname = "h"
+"#;
+        let lease: SessionLease = toml::from_str(toml_text).unwrap();
+        assert!(lease.pr_head_sha.is_none());
+        assert!(lease.pr_base_sha.is_none());
+        assert!(lease.pr_base_ref.is_none());
+    }
 }
 
 #[cfg(test)]
@@ -10273,6 +10543,9 @@ mod lease_enforcement_tests {
             hostname: "test".into(),
             cargo_target_dir: None,
             parent_project_root: None,
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
         }
     }
 
@@ -10428,6 +10701,9 @@ mod scope_fallback_tests {
             hostname: "h".into(),
             cargo_target_dir: None,
             parent_project_root: None,
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
         }
     }
 
