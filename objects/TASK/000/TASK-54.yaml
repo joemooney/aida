@@ -1,0 +1,67 @@
+id: 019e1328-72f4-71d3-95a3-c5f893c74c49
+spec_id: TASK-54
+agreed_id: TASK-54
+title: 'aida push: detect ''branch behind main'' and prompt for rebase'
+description: |
+  Caught 2026-05-10 from the PR-4 vs PR-5 timeline. Batch4 was 7 commits behind main when its update was needed (after PR-5 merged). Nobody noticed until the rebase attempt — by then conflicts were inevitable.
+
+  ## Today's behavior
+
+  `aida push` pushes the current branch + orphan store. Doesn't check if branch is behind upstream main.
+
+  ## Desired behavior
+
+  Before push, check if branch is behind its merge-base with main (or configurable upstream):
+
+  ```
+  $ aida push
+  Current branch: epic-20-batch4
+  ⚠ Branch is 7 commits behind main:
+      27a4f1b  fix(ci): feature-gate postgres/reqwest (BUG-66)
+      abc1234  feat(session): aida session show <id> detail view (STORY-68)
+      ...
+
+  Rebase before push? [y/N/abort]
+    y      = git rebase main, then push (interactive on conflicts)
+    N      = push current state, ignore drift
+    abort  = don't push, do nothing
+  ```
+
+  Default `N` (skip rebase) is the conservative choice — doesn't change history without consent. But surfaces the drift loudly.
+
+  `--no-rebase-check` flag to skip the prompt entirely (for CI / scripted use).
+
+  ## Implementation
+
+  - After committing pending changes, before invoking `git push`:
+    - `git rev-list --count main..HEAD` (commits ahead) and `HEAD..main` (commits behind) on the merge-base
+    - If `commits behind > 0`, print the commits and prompt
+  - Skip on first push (no upstream tracked) or when on main itself
+
+  ## Why this composes
+
+  - Catches the PR-4-style drift early — user sees "you're 7 behind" before they spend time on rebase prep
+  - Encourages frequent main-pulls — staying close to main reduces conflict surface
+  - Pairs naturally with the companion task (session start conflict detection) — both surface latent rebase pain before it bites
+
+  ## Composes with
+
+  - TASK-43 (aida pull) — natural follow-up after the prompt suggests rebasing
+  - The session-start conflict-detection task (companion) — proactive at start, reactive at push
+  - BUG-66 (CI fix) — once CI is reliable, "behind main" is more meaningful (you'd want green main as your rebase target)
+
+  ## Acceptance
+
+  - [ ] `aida push` detects "behind main" and prompts before pushing
+  - [ ] Shows the commits the user would be rebasing onto (titles + spec ids)
+  - [ ] User can choose: rebase, push anyway, or abort
+  - [ ] `--no-rebase-check` skips the prompt
+  - [ ] Silent when on main itself or no upstream
+  - [ ] Tested with: 0 behind, 1 behind, many behind, conflicts during rebase (drops user into manual resolution)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T18:31:18.516132752Z
+modified_at: 2026-05-10T18:31:18.516132752Z
+req_type: Task
