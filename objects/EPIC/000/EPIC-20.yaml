@@ -29,10 +29,10 @@ description: |-
   ## Why now
 
   The user is about to start `aida doctor` work concurrent with other ongoing efforts and wants confidence that file edits won't tangle. Worktrees are git's native answer; this just bundles "git worktree add + new branch + lease record + symlink AIDA state" into one command.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T01:10:57.197579751Z
-modified_at: 2026-05-10T01:10:57.197579751Z
+modified_at: 2026-05-10T01:16:37.044398826Z
 req_type: Epic
