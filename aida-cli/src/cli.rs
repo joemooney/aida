@@ -963,8 +963,24 @@ pub enum DoctorCommand {
     /// Walk source files under the project root for `trace:<SPEC-ID>`
     /// comments and verify each spec_id resolves to an existing
     /// requirement. Catches dead trace comments left behind after a req
-    /// got deleted, or simple typos. Read-only. trace:EPIC-19 | ai:claude
-    ValidateTraceComments,
+    /// got deleted, or simple typos. Default is read-only; pass
+    /// `--strip-dangling` to remove trace markers pointing at unknown
+    /// spec_ids (whole comment line deleted if the trace was its only
+    /// content; otherwise just the trace fragment is excised).
+    /// trace:EPIC-19 | ai:claude
+    ValidateTraceComments {
+        /// Rewrite source files to remove `trace:<DANGLING>` annotations.
+        /// Lossy — comments around the trace are preserved, but the
+        /// trace pointer itself is gone. trace:EPIC-19 | ai:claude
+        #[clap(long)]
+        strip_dangling: bool,
+        /// Print what would change without writing.
+        #[clap(long)]
+        dry_run: bool,
+        /// Skip the y/N confirmation when --strip-dangling would write.
+        #[clap(long, short = 'y')]
+        yes: bool,
+    },
 
     /// Run every diagnostic in sequence and print a unified report.
     /// Composes `aida db block verify`, repair-stale-blocks --dry-run,
