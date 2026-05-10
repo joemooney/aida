@@ -14060,11 +14060,11 @@ fn trace_scan(
         for (req_id, file_path, _, line_num, tool, confidence, _title, impl_date, by_user) in
             found_traces
         {
-            // Find requirement by spec_id
+            // Find requirement by spec_id (case-insensitive — trace comments may be lowercase)
             if let Some(req) = store
                 .requirements
                 .iter_mut()
-                .find(|r| r.spec_id.as_deref() == Some(&req_id))
+                .find(|r| r.spec_id.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(&req_id)))
             {
                 // Check if trace link already exists for this file and line
                 let exists = req
@@ -14216,11 +14216,11 @@ fn trace_sweep(
         let mut updated = 0;
 
         for (commit_hash, req_id, subject) in found_refs {
-            // Find requirement by spec_id
+            // Find requirement by spec_id (case-insensitive — commit refs may be lowercase)
             if let Some(req) = store
                 .requirements
                 .iter_mut()
-                .find(|r| r.spec_id.as_deref() == Some(&req_id))
+                .find(|r| r.spec_id.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(&req_id)))
             {
                 // Check if this commit is already linked
                 let exists = req
@@ -16266,10 +16266,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             let req = if let Ok(uuid) = uuid::Uuid::parse_str(id) {
                 store.requirements.iter().find(|r| r.id == uuid)
             } else {
-                store
-                    .requirements
-                    .iter()
-                    .find(|r| r.spec_id.as_deref() == Some(id.as_str()))
+                store.get_requirement_by_spec_id(id)
             }
             .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
 
@@ -16377,7 +16374,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 // Match by spec_id from the global entries (no local store needed).
                 let entries = global_queue::load(&role).unwrap_or_default();
                 let target = entries.iter().find(|e| {
-                    e.spec_id.as_deref() == Some(id.as_str())
+                    e.spec_id.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(id))
                         || uuid::Uuid::parse_str(id).map(|u| u == e.requirement_id).unwrap_or(false)
                 });
                 let Some(target) = target else {
@@ -16404,10 +16401,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             let req = if let Ok(uuid) = uuid::Uuid::parse_str(id) {
                 store.requirements.iter().find(|r| r.id == uuid)
             } else {
-                store
-                    .requirements
-                    .iter()
-                    .find(|r| r.spec_id.as_deref() == Some(id.as_str()))
+                store.get_requirement_by_spec_id(id)
             }
             .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
 
@@ -16429,10 +16423,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             let req = if let Ok(uuid) = uuid::Uuid::parse_str(id) {
                 store.requirements.iter().find(|r| r.id == uuid)
             } else {
-                store
-                    .requirements
-                    .iter()
-                    .find(|r| r.spec_id.as_deref() == Some(id.as_str()))
+                store.get_requirement_by_spec_id(id)
             }
             .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
 
@@ -16445,10 +16436,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 let before_req = if let Ok(uuid) = uuid::Uuid::parse_str(before_id) {
                     store.requirements.iter().find(|r| r.id == uuid)
                 } else {
-                    store
-                        .requirements
-                        .iter()
-                        .find(|r| r.spec_id.as_deref() == Some(before_id.as_str()))
+                    store.get_requirement_by_spec_id(before_id)
                 }
                 .ok_or_else(|| not_found::requirement_not_found(before_id, Some(storage.path())))?;
 
@@ -16797,10 +16785,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             let req = if let Ok(uuid) = uuid::Uuid::parse_str(id) {
                 store.requirements.iter().find(|r| r.id == uuid)
             } else {
-                store
-                    .requirements
-                    .iter()
-                    .find(|r| r.spec_id.as_deref() == Some(id.as_str()))
+                store.get_requirement_by_spec_id(id)
             }
             .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
 
@@ -17995,7 +17980,8 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
             let sync_states = if let Some(req_id) = id {
                 // Find the requirement by spec_id or UUID
                 let requirement = store.requirements.iter().find(|r| {
-                    r.spec_id.as_deref() == Some(req_id.as_str()) || r.id.to_string() == *req_id
+                    r.spec_id.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(req_id))
+                        || r.id.to_string() == *req_id
                 });
 
                 if let Some(req) = requirement {
@@ -18281,7 +18267,8 @@ fn handle_gitlab_command(cmd: &GitLabCommand, storage: &Storage) -> Result<()> {
             let sync_states = if let Some(req_id) = id {
                 // Find the requirement by spec_id or UUID
                 let requirement = store.requirements.iter().find(|r| {
-                    r.spec_id.as_deref() == Some(req_id.as_str()) || r.id.to_string() == *req_id
+                    r.spec_id.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(req_id))
+                        || r.id.to_string() == *req_id
                 });
 
                 if let Some(req) = requirement {

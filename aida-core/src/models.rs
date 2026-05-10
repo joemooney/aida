@@ -4252,18 +4252,23 @@ impl RequirementsStore {
         }
     }
 
-    /// Gets a requirement by SPEC-ID
+    /// Gets a requirement by SPEC-ID. Match is case-insensitive on the
+    /// spec_id and the agreed short id, so callers may pass user input
+    /// (e.g. "fr-1") without canonicalizing first.
     pub fn get_requirement_by_spec_id(&self, spec_id: &str) -> Option<&Requirement> {
-        self.requirements
-            .iter()
-            .find(|r| r.spec_id.as_ref().map(|s| s.as_str()) == Some(spec_id))
+        self.requirements.iter().find(|r| {
+            r.spec_id.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
+                || r.agreed_id.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
+        })
     }
 
-    /// Gets a mutable reference to a requirement by SPEC-ID
+    /// Gets a mutable reference to a requirement by SPEC-ID. Same matching
+    /// rules as `get_requirement_by_spec_id`.
     pub fn get_requirement_by_spec_id_mut(&mut self, spec_id: &str) -> Option<&mut Requirement> {
-        self.requirements
-            .iter_mut()
-            .find(|r| r.spec_id.as_ref().map(|s| s.as_str()) == Some(spec_id))
+        self.requirements.iter_mut().find(|r| {
+            r.spec_id.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
+                || r.agreed_id.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
+        })
     }
 
     /// Assigns SPEC-IDs to requirements that don't have them

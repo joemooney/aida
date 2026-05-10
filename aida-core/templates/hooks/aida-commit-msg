@@ -27,13 +27,17 @@ fi
 AI_TAG_PATTERN='^\[AI:[a-zA-Z]+(:(high|med|low))?\]'
 CONVENTIONAL_PATTERN='^(\[AI:[a-zA-Z]+(:(high|med|low))?\] )?(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-zA-Z0-9_-]+\))?: .+'
 # Match a REQ-ID at end of line in any of:
-#   - single id:           (FR-42) or (FR-1-042)
-#   - comma list:          (TASK-20, TASK-27)
-#   - shorthand range:     (BUG-25..30)  — same prefix, two-digit dot-dot tail
-#   - mix of the above:    (BUG-25..30, FR-264)
+#   - single id (centralized):    (FR-42)
+#   - single id (distributed):    (FR-1-042) or (FR-JPM-42) — node id may be alphanumeric
+#   - comma list:                 (TASK-20, TASK-27)
+#   - shorthand range:            (BUG-25..30)  — same prefix, dot-dot tail on seq
+#   - mix of the above:           (BUG-25..30, FR-JPM-264)
 # trace:BUG-24 | ai:claude
-# Where "atom" is `<PREFIX>-<N>(-<N>)?` optionally followed by `..<N>` range.
-ID_ATOM='[A-Z]+(-[0-9]+){1,2}(\.\.[0-9]+)?'
+# Where atom = <PREFIX>(-<NODE>)?-<SEQ>(..<N>)?
+#   PREFIX is letters (case-insensitive — canonicalized at storage layer)
+#   NODE   is optional, alphanumeric + `_-` per validate_node_id
+#   SEQ    is required digits at the end
+ID_ATOM='[A-Za-z]+(-[A-Za-z0-9_]+)?-[0-9]+(\.\.[0-9]+)?'
 REQ_ID_PATTERN="\\(${ID_ATOM}(,[[:space:]]*${ID_ATOM})*\\)\$"
 FEAT_FIX_PATTERN='^(\[AI:[a-zA-Z]+(:(high|med|low))?\] )?(feat|fix)'
 
@@ -61,7 +65,7 @@ for file in $STAGED_FILES; do
     [ "$skip" = true ] && continue
 
     if [ -f "$file" ]; then
-        if grep -q "trace:[A-Z]*-[0-9]*" "$file" 2>/dev/null; then
+        if grep -qiE "trace:[A-Z]+(-[A-Z0-9_]+)?-[0-9]+" "$file" 2>/dev/null; then
             HAS_TRACE_FILES=true
             break
         fi
@@ -119,7 +123,13 @@ if [ "$HAS_TRACE_FILES" = true ]; then
         [ "$skip" = true ] && continue
 
         if [ -f "$file" ]; then
-            FILE_SPECS=$(grep -oE "trace:[A-Z]+-[0-9]+" "$file" 2>/dev/null | sed 's/trace://' | sort -u)
+            # Trace comments may be lowercase and node id may be alphanumeric;
+            # canonicalize to uppercase so the dedup and reference-check below
+            # operate on a single case.
+            FILE_SPECS=$(grep -oiE "trace:[A-Z]+(-[A-Z0-9_]+)?-[0-9]+" "$file" 2>/dev/null \
+                | sed 's/[Tt][Rr][Aa][Cc][Ee]://' \
+                | tr '[:lower:]' '[:upper:]' \
+                | sort -u)
             if [ -n "$FILE_SPECS" ]; then
                 SPEC_IDS="$SPEC_IDS $FILE_SPECS"
             fi
@@ -129,9 +139,10 @@ if [ "$HAS_TRACE_FILES" = true ]; then
 
     if [ -n "$SPEC_IDS" ]; then
         # Check if commit message references at least one of these specs
+        # (case-insensitive — commit body may reference (fr-1) or (FR-1)).
         FOUND_REF=false
         for spec in $SPEC_IDS; do
-            if echo "$COMMIT_MSG" | grep -q "$spec"; then
+            if echo "$COMMIT_MSG" | grep -qi "$spec"; then
                 FOUND_REF=true
                 break
             fi
