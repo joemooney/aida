@@ -66,12 +66,12 @@ description: |
   - [ ] Statusline `@<spec>` reflects the most recently edited spec after a status flip
   - [ ] Activity entries dedupe by (spec_id, action) — bump timestamp instead of duplicating
   - [ ] Test: shipping 3 stories sequentially leaves the statusline pointing at the 3rd, not the 1st
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T07:06:18.697080695Z
-modified_at: 2026-05-10T17:06:11.122124859Z
+modified_at: 2026-05-10T17:10:39.798099751Z
 req_type: Bug
 relationships:
 - rel_type: Child
