@@ -10,3 +10,7 @@ feature: Uncategorized
 created_at: 2026-05-10T19:08:52.285436148Z
 modified_at: 2026-05-10T19:08:52.285436148Z
 req_type: Story
+relationships:
+- rel_type: Child
+  target_id: 019e108a-9f4f-7203-8260-ec5842e8cd2b
+  created_at: 2026-05-10T19:08:54.091790708Z
