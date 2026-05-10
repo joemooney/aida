@@ -1,0 +1,55 @@
+id: 019e102a-74d6-7cd1-94d4-ace1b515dec6
+spec_id: STORY-68
+agreed_id: STORY-68
+title: 'aida session show: detail view for a single session lease'
+description: |
+  Today AIDA has:
+    aida session leases   → list active session leases (table)
+    aida session list     → list past Claude Code sessions for cwd's project
+
+  Missing: a detail view for a specific session — `aida session show [<id>]`.
+
+  ## Surface
+
+    aida session show              # show the lease covering cwd, or current shell's
+    aida session show <8char-id>   # explicit lookup
+
+  Output (rough):
+
+    Session 019e1026
+      scope:        EPIC-20
+      branch:       epic-20-batch3
+      worktree:     /home/joe/ai/aida-epic-20
+      role:         implementer (inherited from shell at start time)
+      started_at:   2026-05-09 20:55 PT (37 min ago)
+      owner:        joe.mooney@gmail.com
+      hostname:     imac
+      lease file:   /home/joe/ai/aida/.aida/sessions/019e1026f234.toml
+
+    Activity in this session:
+      STORY-53      In Progress  edited 12 min ago
+      STORY-56      Approved     viewed 8 min ago
+      STORY-57      In Progress  edited 4 min ago
+
+    PR / MR:        (none yet — open with `gh pr create` or `glab mr create`)
+
+    Claude Code session:  e56ecb6a  (live — last message 30s ago)
+
+  ## Why now
+
+  Surfaced 2026-05-09: agent in batch3 session ran `aida session show` expecting it to exist, got `unrecognized subcommand`. It's a natural shape for "tell me about my session" — strictly more useful than `aida session leases | grep`.
+
+  ## Composes with
+
+  - STORY-56 (per-session role activity) — the activity rows are a visible payoff
+  - STORY-66 (PR auto-queue) — the PR/MR row gets populated when that lands
+  - STORY-59 (list liveness) — the Claude Code session row's "live" status uses the same heuristic
+
+  If those aren't shipped yet, this story's output gracefully omits the rows that depend on them.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T04:34:38.422416204Z
+modified_at: 2026-05-10T04:34:38.422416204Z
+req_type: Story
