@@ -35,12 +35,12 @@ description: |
   ## Pairs with BUG-54
 
   Same flavor — STORY-48 work shipped enforcement that didn't account for the owner case. session_end's lease-delete didn't account for the worktree-removed case. Both are "we know enough to work in the simple case, didn't think through the edge."
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T03:47:13.568720034Z
-modified_at: 2026-05-10T03:47:13.568720034Z
+modified_at: 2026-05-10T04:02:22.382375099Z
 req_type: Bug
 relationships:
 - rel_type: Child
