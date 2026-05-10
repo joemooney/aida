@@ -1,0 +1,25 @@
+id: 019e0fc3-7c93-78c2-b9be-d4c8d9b5af99
+spec_id: STORY-54
+agreed_id: STORY-54
+title: aida session start could optionally launch Claude Code in the new worktree
+description: |
+  Today the workflow to spin up a scoped Claude Code session is two commands:
+
+    aida session start --owns EPIC-N --branch epic-n-foo   # creates worktree + lease
+    cd ~/ai/<repo>-<slug>                                   # manual cd
+    aida session new --title "..."                          # records metadata + execs claude
+
+  Three steps, two of which are conceptually one ("start a session and put me in it"). Two paths forward:
+
+  a. Add `--launch-claude` (or `--exec`) flag to `aida session start` that, after creating the worktree + lease, cds into it and execs claude --permission-mode bypassPermissions. Inherits all of session-new's metadata-recording.
+
+  b. Merge: `aida session new --owns <scope>` does both the worktree+lease creation and the Claude Code launch. Existing `aida session new` keeps working when --owns is absent (just records metadata for the current cwd).
+
+  Option b is probably cleaner long-term but more disruptive. Start with option a as a small additive change; revisit merging if both forms feel redundant after a few weeks.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T02:42:10.195950307Z
+modified_at: 2026-05-10T02:42:10.195950307Z
+req_type: Story
