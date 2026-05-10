@@ -33,10 +33,10 @@ description: |
   ## Why now
 
   PR-3 reviewer caught these while verifying FR-215. They're not PR-3 regressions (they predate `08009bc7` on main) so they didn't block the merge. Filing as standalone bug rather than reopening FR-215.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T06:24:06.390087322Z
-modified_at: 2026-05-10T18:58:30.758609006Z
+modified_at: 2026-05-10T19:01:26.198611584Z
 req_type: Bug
