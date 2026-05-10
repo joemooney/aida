@@ -1351,10 +1351,12 @@ fn handle_git_backend_command(
                 resolved_description.unwrap_or_default(),
             );
             if let Some(s) = status {
-                req.set_status_from_str(&capitalize(s));
+                let canonical = validate_status_input(s).map_err(|e| anyhow::anyhow!(e))?;
+                req.set_status_from_str(canonical);
             }
             if let Some(p) = priority {
-                req.set_priority_from_str(&capitalize(p));
+                let canonical = validate_priority_input(p).map_err(|e| anyhow::anyhow!(e))?;
+                req.set_priority_from_str(canonical);
             }
             if let Some(t) = r#type {
                 if let Ok(rt) = parse_requirement_type(t) {
@@ -1637,11 +1639,13 @@ fn handle_git_backend_command(
                 changed = true;
             }
             if let Some(s) = status {
-                req.set_status_from_str(&capitalize(s));
+                let canonical = validate_status_input(s).map_err(|e| anyhow::anyhow!(e))?;
+                req.set_status_from_str(canonical);
                 changed = true;
             }
             if let Some(p) = priority {
-                req.set_priority_from_str(&capitalize(p));
+                let canonical = validate_priority_input(p).map_err(|e| anyhow::anyhow!(e))?;
+                req.set_priority_from_str(canonical);
                 changed = true;
             }
             if let Some(t) = r#type {
@@ -2284,6 +2288,48 @@ fn capitalize(s: &str) -> String {
     match c.next() {
         None => String::new(),
         Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+    }
+}
+
+/// Validate a status string against the canonical set. Accepts case-
+/// insensitive matches and common spelling variants (`in-progress`,
+/// `inprogress`, `in_progress`). Returns Ok with the canonical form, or
+/// Err with a list-of-valid-values message. Use at the CLI layer before
+/// calling `Requirement::set_status_from_str` to prevent typos like
+/// `approvedxxx` from silently landing as a `custom_status`. trace:BUG-47
+pub fn validate_status_input(raw: &str) -> Result<&'static str, String> {
+    let normalized: String = raw
+        .chars()
+        .filter_map(|c| match c {
+            ' ' | '-' | '_' => None,
+            c if c.is_ascii_alphabetic() => Some(c.to_ascii_lowercase()),
+            c => Some(c),
+        })
+        .collect();
+    match normalized.as_str() {
+        "draft" => Ok("Draft"),
+        "approved" => Ok("Approved"),
+        "planned" => Ok("Planned"),
+        "inprogress" => Ok("InProgress"),
+        "completed" | "done" => Ok("Completed"),
+        "rejected" => Ok("Rejected"),
+        _ => Err(format!(
+            "invalid status `{}` — expected one of: draft, approved, planned, in-progress, completed, rejected",
+            raw
+        )),
+    }
+}
+
+/// Same shape, for priority. trace:BUG-47
+pub fn validate_priority_input(raw: &str) -> Result<&'static str, String> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "high" => Ok("High"),
+        "medium" | "med" => Ok("Medium"),
+        "low" => Ok("Low"),
+        _ => Err(format!(
+            "invalid priority `{}` — expected one of: high, medium, low",
+            raw
+        )),
     }
 }
 
