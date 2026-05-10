@@ -1,0 +1,60 @@
+id: 019e12f7-93b1-7eb3-aeab-1e3b1fed837e
+spec_id: TASK-48
+agreed_id: TASK-48
+title: 'aida role enter: show current queue head alongside Last-touched'
+description: |
+  Caught 2026-05-10 — user observed that `aida role enter reviewer` shows past activity ("Last touched while in this role: STORY-55, STORY-53, ...") but not the **current queue** routed to that role. Once STORY-66 ships (auto-queue PR/MR for reviewer when opened from a session), this becomes the natural "what should I do right now?" answer at role-entry time.
+
+  ## Today's behavior
+
+  ```
+  $ aida role enter reviewer
+  ✓ Resumed role: reviewer [global] — Code/PR review. ...
+
+    Last touched while in this role:
+      STORY-55 — edit (11h ago)
+      STORY-53 — edit (11h ago)
+      ...
+  ```
+
+  Useful for picking up where you left off — but doesn't surface what's been routed TO this role since.
+
+  ## Desired behavior
+
+  ```
+  $ aida role enter reviewer
+  ✓ Resumed role: reviewer [global] — Code/PR review. ...
+
+    Queued for this role (3):
+      PR-5      EPIC-20 batch 5: session ergonomics + activity tracking + review polish  [@PR-5]
+      PR-7      EPIC-22 batch 1: project registry foundation                              [@PR-7]
+      BUG-93    rel list dangling targets persist after referent deletion
+
+    Last touched while in this role:
+      STORY-55 — edit (11h ago)
+      ...
+  ```
+
+  `Queued for this role` lists up to 5 entries from `aida queue list --for <role>` — same data, presented at the moment of role entry where it's most actionable.
+
+  ## Composes with
+
+  - STORY-66 (auto-queue PR/MR for reviewer when opened from a session) — provides the data; without it, reviewer queue is mostly empty
+  - TASK-44 (auto-derive parent EPIC chip) — the PR/MR rows would carry their epic chip naturally
+  - STORY-78 (cache:behind indicator + --sync) — role-enter could call sync if cache is stale, ensuring the queue snapshot is fresh
+  - BUG-65 (activity log) — Last-touched entries become honest once that lands
+
+  ## Acceptance
+
+  - [ ] `aida role enter <role>` shows "Queued for this role (N):" section above "Last touched"
+  - [ ] Empty case rendered as "Queued for this role: (empty)" so the section isn't hidden — the absence is itself signal
+  - [ ] Up to 5 entries shown; truncate longer with `… and N more (run \`aida queue list\`)`
+  - [ ] Each row shows: id, title, scope chip if set
+  - [ ] Performance: no extra orphan-store reads (queue is already loaded)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T17:37:55.633174408Z
+modified_at: 2026-05-10T17:37:55.633174408Z
+req_type: Task
