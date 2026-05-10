@@ -16,12 +16,12 @@ description: |
   b. Merge: `aida session new --owns <scope>` does both the worktree+lease creation and the Claude Code launch. Existing `aida session new` keeps working when --owns is absent (just records metadata for the current cwd).
 
   Option b is probably cleaner long-term but more disruptive. Start with option a as a small additive change; revisit merging if both forms feel redundant after a few weeks.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T02:42:10.195950307Z
-modified_at: 2026-05-10T02:42:10.195950307Z
+modified_at: 2026-05-10T16:58:17.582231043Z
 req_type: Story
 relationships:
 - rel_type: Child
