@@ -1,0 +1,37 @@
+id: 019e102a-7148-7ac2-9f01-e9bf33adb3cc
+spec_id: BUG-60
+agreed_id: BUG-60
+title: aida role enter accumulates PS1 prefixes when called over an already-active role
+description: |
+  Reproduced 2026-05-09: PS1 visible as `(role:implementer) (role:implementer) (role:reviewer) (aida-debug) joe@imac:~/...`
+
+  `aida role enter <new>` splices `(role:<new>) ` onto PS1. It doesn't check whether AIDA_SESSION_ROLE is already set and strip the previous role's prefix first. So consecutive `aida role enter` calls accumulate prefixes:
+
+    PS1='joe$ '
+    aida role enter A         → '(role:A) joe$ '
+    aida role enter B         → '(role:B) (role:A) joe$ '   ← bug
+    aida role enter C         → '(role:C) (role:B) (role:A) joe$ '
+
+  ## Fix
+
+  When `aida role enter <new>` runs, check if AIDA_SESSION_ROLE is set:
+  - If yes → emit shell code that strips `(role:$AIDA_SESSION_ROLE) ` from PS1 first, then prepends `(role:<new>) `
+  - Otherwise → current behavior (just prepend)
+
+  This mirrors the pattern in TASK-19 (PS1 splice for dev activate/deactivate). The `aida role end` already strips correctly via `${PS1/(role:$NAME) /}` parameter expansion — same trick on enter.
+
+  ## Related
+
+  - TASK-19 (already shipped) — same splice semantics for `aida dev activate/deactivate`
+  - BUG-54 (just merged in PR-2) — owner check on enforcement; this is unrelated but cousin in "polish that emerged from real session use"
+
+  ## Severity
+
+  Medium — cosmetic but visually distracting, makes the PS1 long enough to wrap on narrow terminals. Easy fix.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T04:34:37.512633417Z
+modified_at: 2026-05-10T04:34:37.512633417Z
+req_type: Bug
