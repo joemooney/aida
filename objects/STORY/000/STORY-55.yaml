@@ -1,0 +1,36 @@
+id: 019e0fc8-6338-7cf1-ab8c-fad27d31d4ef
+spec_id: STORY-55
+agreed_id: STORY-55
+title: 'aida statusline: @SPEC defaults to session scope when no in-session activity yet'
+description: |
+  When a fresh Claude Code session starts inside a session worktree (cwd resolves to an active lease's worktree_path), the `@SPEC` segment of the statusline currently shows the active role's last-touched spec from BEFORE the session started — because role activity is recorded per-role in .aida/roles/<name>.toml which is shared across sessions via the symlinked .aida/.
+
+  Surfaced 2026-05-09: a fresh Claude session in the EPIC-20 worktree showed `@STORY-54` because that was the last thing the implementer role did (in a different conversation) before the session started.
+
+  ## Fix
+
+  When statusline render detects cwd inside an active session lease AND the active role has no activity recorded with a timestamp >= lease.started_at, fall back to displaying `@<lease.scope>` instead of the last-touched spec.
+
+  Implementation:
+  - aida-cli/src/main.rs handle_statusline_command: after computing the role's last activity, check if there's an active lease covering cwd. If yes, compare the activity's timestamp to lease.started_at. If activity is older OR none exists, render `@<scope>` instead.
+  - Truncate scope at the same length budget as @SPEC (8-12 chars).
+  - Color the same as @SPEC so the visual category is identical.
+
+  ## When this kicks in
+
+  - Agent enters new session worktree → @SCOPE
+  - Agent runs `aida show STORY-48` (first in-session activity) → @STORY-48 (real activity wins)
+  - Agent does nothing AIDA-related, just works on code → stays at @SCOPE
+
+  Pairs cleanly with STORY-53 (which adds `sess:<scope>` as a separate segment) — together they make session presence first-class in the statusline.
+
+  ## Out of scope (queued for later)
+
+  - Per-session role activity log (the "bigger fix" mentioned in the conversation): each session has its own activity log so role state is shared but per-session "what I'm on" is independent. Defer until STORY-48 (lease enforcement) lands — both touch the same per-session-state plumbing.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T02:47:31.384872919Z
+modified_at: 2026-05-10T02:47:31.384872919Z
+req_type: Story
