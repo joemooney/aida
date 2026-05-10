@@ -41,10 +41,10 @@ description: |
   - [ ] Last-touched rows show id + title (truncated to fit) + action + relative time
   - [ ] Title resolution falls back gracefully if req was deleted/renamed
   - [ ] Same column alignment as `aida queue list`
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T17:38:56.044230560Z
-modified_at: 2026-05-10T17:38:56.044230560Z
+modified_at: 2026-05-10T22:31:55.678461521Z
 req_type: Task
