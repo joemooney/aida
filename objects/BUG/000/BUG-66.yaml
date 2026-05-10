@@ -1,0 +1,51 @@
+id: 019e12fb-3eae-7a73-b580-6a0611ebfbd9
+spec_id: BUG-66
+agreed_id: BUG-66
+title: CI failing on main on all 3 platforms — missing postgres/reqwest/r2d2 crates
+description: |
+  Reported 2026-05-10 by the PR-5 reviewer agent. CI runs at https://github.com/joemooney/aida/actions show failures on all 3 platforms (likely linux/macos/windows) with errors like:
+
+  ```
+  22 | use postgres::{GenericClient, Row};
+     |     ^^^^^^^^ use of unresolved module or unlinked crate `postgres`
+  ```
+
+  Affects unrelated PRs — every new PR opens red on CI even when its diff is unrelated to postgres/reqwest/r2d2. Reviewers have to manually verify "is this pre-existing or introduced by my PR?" before they can read the actual signal.
+
+  ## Likely root cause
+
+  CI workflow builds the workspace with `--all-features` (or a feature combo that activates postgres + http surfaces) but those optional crates require system dependencies (libpq for postgres, OpenSSL for reqwest) that aren't installed on the GitHub Actions runners, especially Windows.
+
+  The default git-canonical backend doesn't need any of these — they're opt-in feature flags per CLAUDE.md ("PostgreSQL is opt-in via the `postgres` feature flag").
+
+  ## Proposed fix
+
+  In `.github/workflows/<ci>.yml`:
+
+  1. **Default leg**: build with default features only (no postgres, no http) — should be green on all 3 platforms with no runner-side deps
+  2. **postgres leg** (linux only or with apt-get/brew install libpq): `cargo build --features postgres` — gates the postgres surface
+  3. **all-features leg** (linux only with the right deps installed): `cargo build --all-features` — sanity check that everything compiles when configured
+
+  Skip postgres/all-features on Windows entirely (or install via vcpkg, more complex). Document in CI comments: "postgres backend is opt-in; Windows users must install libpq separately."
+
+  ## Why high priority
+
+  - Red CI on main blocks signal-from-CI on every PR (PR-3, PR-4, PR-5 all opened red)
+  - Reviewers spend cycles confirming "is this me or pre-existing?" — wastes time
+  - Future contributors see red CI and assume the project is broken
+  - The fix is mechanical (CI yaml edit) and doesn't touch product code
+
+  ## Acceptance
+
+  - [ ] CI is green on main (post-fix) on all 3 platforms
+  - [ ] Default-features build succeeds without runner-side native deps
+  - [ ] postgres feature build succeeds on linux (with libpq installed)
+  - [ ] Workflow documented (which legs run on which platforms, why)
+  - [ ] Tested by re-running PR-5's CI and seeing green
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T17:41:56.014022424Z
+modified_at: 2026-05-10T17:41:56.014022424Z
+req_type: Bug
