@@ -1,0 +1,38 @@
+id: 019e0fdd-4204-7df0-99b1-8f6139ff5058
+spec_id: STORY-58
+agreed_id: STORY-58
+title: 'aida session list: include parent-project sessions when invoked from a session worktree'
+description: |
+  Claude Code stores per-project session metadata at ~/.claude/projects/<projecthash>/ where <projecthash> is derived from cwd. Each `aida session start` worktree is a different cwd → different project hash → different session list. Result:
+
+  - `~/ai/aida-epic-20$ aida session list` → only the agent running THIS worktree
+  - `~/ai/aida$ aida session list` → only sessions ever launched from the parent worktree, NOT the agent in `aida-epic-20`
+
+  Surfaced 2026-05-09. Confusing because the two worktrees ARE the same project from AIDA's perspective (shared .aida-store), but Claude Code's session storage doesn't know that.
+
+  ## Proposal
+
+  When `aida session list` runs from a worktree that's covered by an active session lease (i.e., the worktree was created by `aida session start`), additionally walk the PARENT project's Claude Code session storage and show those sessions too. Output groups them:
+
+    ── This worktree (aida-epic-20) ──
+    ID        AGE  ROLE         SPEC     TITLE
+    e56ecb6a  7s   implementer  EPIC-20  Implement EPIC-20 ...
+
+    ── Parent project (aida) ──
+    ID        AGE  ROLE         SPEC        TITLE
+    1bf450af  32s  implementer  FR-1-042    Clarify CLI naming
+    ... (older sessions)
+
+  Mechanism: read the lease at .aida/sessions/<id>.toml to find the parent's worktree path (already recorded as worktree_path's parent), compute Claude Code's project hash for that path, walk both directories.
+
+  ## Out of scope
+
+  - Cross-worktree session resume (`aida session resume <id>` from a worktree resuming a session in the parent) — defer until user has wanted it more than once
+  - Unifying Claude Code's per-cwd project model — that's Claude Code's model; we just wrap it
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T03:10:19.140282624Z
+modified_at: 2026-05-10T03:10:19.140282624Z
+req_type: Story
