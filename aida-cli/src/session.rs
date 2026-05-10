@@ -64,16 +64,32 @@ pub fn list(limit: usize, no_color: bool, all: bool) -> Result<()> {
     if no_color {
         colored::control::set_override(false);
     }
-    let mut sessions = collect_sessions(limit)?;
-    let total = sessions.len();
+    let cwd = std::env::current_dir().context("could not determine cwd")?;
+    let mut here = collect_sessions_from_cwd(&cwd, limit)?;
+
+    // STORY-58: when this cwd is inside an active session worktree, also
+    // walk the parent project's Claude Code session storage so the user
+    // gets a merged view (their parent shell's sessions + this worktree's
+    // sessions) instead of half a story.
+    // trace:STORY-58 | ai:claude
+    let parent_root = crate::parent_project_root_for_session(&cwd);
+    let mut parent: Vec<SessionMeta> = match parent_root.as_ref() {
+        Some(root) if root != &cwd => collect_sessions_from_cwd(root, limit).unwrap_or_default(),
+        _ => Vec::new(),
+    };
+
+    let total_here = here.len();
+    let total_parent = parent.len();
     // STORY-59: by default, hide sessions with no activity in the last
     // 24h — long-tail abandoned sessions clutter the everyday view. The
     // `--all` flag bypasses; we still note how many were elided.
     if !all {
-        sessions.retain(|s| s.age_seconds < RECENT_WINDOW_SECS);
+        here.retain(|s| s.age_seconds < RECENT_WINDOW_SECS);
+        parent.retain(|s| s.age_seconds < RECENT_WINDOW_SECS);
     }
-    let hidden = total.saturating_sub(sessions.len());
-    if sessions.is_empty() {
+    let hidden = (total_here - here.len()) + (total_parent - parent.len());
+
+    if here.is_empty() && parent.is_empty() {
         if hidden > 0 {
             eprintln!(
                 "{}",
@@ -89,8 +105,30 @@ pub fn list(limit: usize, no_color: bool, all: bool) -> Result<()> {
         }
         return Ok(());
     }
-    fill_branches(&mut sessions);
-    print_table(&sessions);
+    fill_branches(&mut here);
+    fill_branches(&mut parent);
+
+    // STORY-58: when there's nothing to merge, render the classic single
+    // table — keep the existing one-group output untouched. Only switch
+    // to grouped headers once we actually have a parent group to show.
+    if parent.is_empty() {
+        print_table(&here);
+    } else {
+        // Compute widths over the union so both tables align column-for-column.
+        let widths = TableWidths::compute(here.iter().chain(parent.iter()));
+        let here_label = group_label(&cwd);
+        let parent_label = parent_root
+            .as_ref()
+            .map(|p| group_label(p))
+            .unwrap_or_else(|| "parent".to_string());
+        if !here.is_empty() {
+            print_group_header(&format!("This worktree ({})", here_label));
+            print_table_with_widths(&here, &widths);
+            println!();
+        }
+        print_group_header(&format!("Parent project ({})", parent_label));
+        print_table_with_widths(&parent, &widths);
+    }
     if hidden > 0 {
         eprintln!(
             "{}",
@@ -103,6 +141,24 @@ pub fn list(limit: usize, no_color: bool, all: bool) -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// STORY-58: a friendly label for a project-root path — the basename when
+/// available, the full path otherwise. Used in `── This worktree (foo) ──`
+/// headers so the user sees which dir each group represents.
+/// trace:STORY-58 | ai:claude
+fn group_label(path: &Path) -> String {
+    path.file_name()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| path.display().to_string())
+}
+
+/// STORY-58: render a `── Label ──` separator above each group. Dimmed so
+/// it doesn't compete with the table content.
+/// trace:STORY-58 | ai:claude
+fn print_group_header(label: &str) {
+    println!("{}", format!("── {} ──", label).dimmed());
 }
 
 /// STORY-59: resolve `branch` per session by running `git -C <cwd>
@@ -306,7 +362,15 @@ fn match_launch(
 /// and return the most recent N parsed `SessionMeta` entries.
 fn collect_sessions(limit: usize) -> Result<Vec<SessionMeta>> {
     let cwd = std::env::current_dir().context("could not determine cwd")?;
-    let dir = claude_project_dir(&cwd)?;
+    collect_sessions_from_cwd(&cwd, limit)
+}
+
+/// STORY-58: same as `collect_sessions` but for an arbitrary project root,
+/// so `aida session list` can pull a second batch from the parent project's
+/// Claude Code session storage when it's invoked inside a session worktree.
+/// trace:STORY-58 | ai:claude
+fn collect_sessions_from_cwd(cwd: &Path, limit: usize) -> Result<Vec<SessionMeta>> {
+    let dir = claude_project_dir(cwd)?;
     if !dir.is_dir() {
         return Ok(Vec::new());
     }
@@ -327,7 +391,7 @@ fn collect_sessions(limit: usize) -> Result<Vec<SessionMeta>> {
     entries.truncate(limit);
 
     let now = SystemTime::now();
-    let launches = read_launches_for_cwd(&cwd);
+    let launches = read_launches_for_cwd(cwd);
     let metas = entries
         .into_iter()
         .filter_map(|(path, mtime)| {
@@ -549,26 +613,50 @@ fn first_spec_id(line: &str) -> Option<String> {
     None
 }
 
-fn print_table(sessions: &[SessionMeta]) {
-    let id_w = 8;
-    let role_w = sessions
-        .iter()
-        .map(|s| s.role.as_deref().unwrap_or("-").len())
-        .max()
-        .unwrap_or(4)
-        .max(4);
-    let spec_w = sessions
-        .iter()
-        .map(|s| s.spec.as_deref().unwrap_or("-").len())
-        .max()
-        .unwrap_or(4)
-        .max(4);
-    // STORY-59: worktree column = "<basename> @ <branch>" (truncated).
-    // 28 chars is enough for "aida-epic-20 @ epic-20-batch3" without
-    // squeezing the title.
-    const WORKTREE_W: usize = 28;
-    let age_w = 6;
+/// STORY-58: column widths for the session-list table, computed over a
+/// chosen set of rows. Lifted out of `print_table` so the grouped path can
+/// compute one shared width set from the union of "this worktree" + parent
+/// rows, keeping columns aligned across both sections.
+/// trace:STORY-58 | ai:claude
+struct TableWidths {
+    id_w: usize,
+    age_w: usize,
+    role_w: usize,
+    spec_w: usize,
+    worktree_w: usize,
+}
 
+impl TableWidths {
+    /// Worktree column = `<basename> @ <branch>` (truncated). 28 chars is
+    /// enough for "aida-epic-20 @ epic-20-batch3" without squeezing TITLE.
+    const WORKTREE_W: usize = 28;
+
+    fn compute<'a, I: Iterator<Item = &'a SessionMeta>>(sessions: I) -> Self {
+        let mut role_w = 4usize;
+        let mut spec_w = 4usize;
+        for s in sessions {
+            role_w = role_w.max(s.role.as_deref().unwrap_or("-").len());
+            spec_w = spec_w.max(s.spec.as_deref().unwrap_or("-").len());
+        }
+        Self {
+            id_w: 8,
+            age_w: 6,
+            role_w,
+            spec_w,
+            worktree_w: Self::WORKTREE_W,
+        }
+    }
+}
+
+fn print_table(sessions: &[SessionMeta]) {
+    let widths = TableWidths::compute(sessions.iter());
+    print_table_with_widths(sessions, &widths);
+}
+
+/// STORY-58: render the session-list table using caller-supplied widths
+/// (so two grouped sections can share one column layout).
+/// trace:STORY-58 | ai:claude
+fn print_table_with_widths(sessions: &[SessionMeta], w: &TableWidths) {
     println!(
         "{}",
         format!(
@@ -579,22 +667,22 @@ fn print_table(sessions: &[SessionMeta]) {
             "SPEC",
             "WORKTREE",
             "TITLE",
-            id_w = id_w,
-            age_w = age_w,
-            role_w = role_w,
-            spec_w = spec_w,
-            wt_w = WORKTREE_W,
+            id_w = w.id_w,
+            age_w = w.age_w,
+            role_w = w.role_w,
+            spec_w = w.spec_w,
+            wt_w = w.worktree_w,
         )
         .dimmed()
     );
 
     for s in sessions {
-        let id_short = &s.id[..s.id.len().min(id_w)];
+        let id_short = &s.id[..s.id.len().min(w.id_w)];
         let age = humanize_age(s.age_seconds);
         let role = s.role.as_deref().unwrap_or("-");
         let spec = s.spec.as_deref().unwrap_or("-");
         let title = s.title.as_deref().unwrap_or("(untitled)");
-        let worktree = format_worktree_label(s.last_cwd.as_deref(), s.branch.as_deref(), WORKTREE_W);
+        let worktree = format_worktree_label(s.last_cwd.as_deref(), s.branch.as_deref(), w.worktree_w);
         let live = liveness_indicator(s.age_seconds);
         // Color the indicator: bright green when truly live, yellow for
         // recent, dim for idle. Width of the indicator slot is one cell.
@@ -612,11 +700,11 @@ fn print_table(sessions: &[SessionMeta]) {
             spec.cyan(),
             worktree.cyan(),
             title.dimmed(),
-            id_w = id_w,
-            age_w = age_w,
-            role_w = role_w,
-            spec_w = spec_w,
-            wt_w = WORKTREE_W,
+            id_w = w.id_w,
+            age_w = w.age_w,
+            role_w = w.role_w,
+            spec_w = w.spec_w,
+            wt_w = w.worktree_w,
         );
     }
 }
