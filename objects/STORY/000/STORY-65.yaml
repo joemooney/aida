@@ -30,12 +30,12 @@ description: |
   - STORY-54 (--launch-claude) — the natural composition is `aida session start --owns X` doing all three: auto-branch + inherit-role + launch-claude. Together they reduce 4 commands to 1.
   - STORY-61 (PR/MR review) — that story's example flow already assumes auto-branch and role inheritance; this story makes that real.
   - BUG-54 (owner-check on enforcement) — once the in-flight lease records the role, the owner check has more context.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T03:54:12.333617718Z
-modified_at: 2026-05-10T06:52:28.243085428Z
+modified_at: 2026-05-10T06:52:33.176265680Z
 req_type: Story
 relationships:
 - rel_type: Child
