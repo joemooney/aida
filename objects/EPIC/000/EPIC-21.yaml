@@ -33,10 +33,10 @@ description: |-
   ## Connects to: dangling trace cleanup (EPIC-19)
 
   The 80 dangling trace comments we found in 2026-05-09 fsck would resolve correctly under v2 — checking out an old commit would also rewind the store, restoring the deleted reqs that those traces reference. Without this pairing, the dangling state is permanent.
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T02:10:27.104063912Z
-modified_at: 2026-05-10T02:10:27.104063912Z
+modified_at: 2026-05-10T02:23:02.128633746Z
 req_type: Epic
