@@ -9000,6 +9000,34 @@ mod lease_enforcement_tests {
         assert!(owner.is_none(), "should not flag the caller's own lease");
     }
 
+    /// BUG-54: a session whose scope is an EPIC must be allowed to edit
+    /// children of that EPIC from inside the worktree. Direct-spec-match
+    /// covers `aida edit EPIC-X` from the EPIC-X session; this exercises
+    /// the parent-chain case (`aida edit <child-of-EPIC-X>`), which is
+    /// the actual flow that triggered the in-session enforcement bug.
+    /// trace:BUG-54 | ai:claude
+    #[test]
+    fn lease_owning_skips_self_via_parent_chain() {
+        let epic = req_with_parents("EPIC-20", &[]);
+        let story = req_with_parents("STORY-55", &[epic.id]);
+        let mut store = RequirementsStore::new();
+        store.requirements.push(epic.clone());
+        store.requirements.push(story.clone());
+        let mine = lease("EPIC-20", "ownsepic");
+        let leases = vec![mine.clone()];
+        let owner = lease_owning_spec(
+            &leases,
+            Some(&mine),
+            story.id,
+            story.spec_id.as_deref(),
+            &store,
+        );
+        assert!(
+            owner.is_none(),
+            "owner-of-EPIC-X session must be allowed to edit children of EPIC-X"
+        );
+    }
+
     /// Path-glob / free-form scopes that don't resolve to a spec id are
     /// treated as non-enforced.
     /// trace:STORY-48 | ai:claude
