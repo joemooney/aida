@@ -58,12 +58,12 @@ description: |
   - [ ] `--no-rebase-check` skips the prompt
   - [ ] Silent when on main itself or no upstream
   - [ ] Tested with: 0 behind, 1 behind, many behind, conflicts during rebase (drops user into manual resolution)
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T18:31:18.516132752Z
-modified_at: 2026-05-10T18:31:18.516132752Z
+modified_at: 2026-05-10T22:37:05.490370474Z
 req_type: Task
 relationships:
 - rel_type: Child
