@@ -1,0 +1,46 @@
+id: 019e1358-f5e6-7df1-b115-f27f8cd60e25
+spec_id: TASK-58
+agreed_id: TASK-58
+title: 'aida doctor verify-relationships --repair: sweep dangling refs from deleted targets'
+description: |-
+  Surfaced 2026-05-10 by BUG-53 (PR-6). When a requirement is deleted, other reqs that referenced it via relationship edges keep dangling pointers (target uuid with no backing object). PR-6's BUG-53 fix made these tombstones display gracefully (`is parent of <short-uuid> (removed — run \`aida doctor verify-relationships --repair\` to clean up)`) — but the suggested repair tool doesn't actually remove these dangling entries.
+
+  ## Repro
+
+    $ aida add --type story --title "smoke" --parent EPIC-20  # creates STORY-N
+    $ aida del STORY-N --yes
+    $ aida rel show EPIC-20  # still shows `is parent of <short-uuid> (removed — ...)`
+    $ aida doctor verify-relationships --repair
+    ✓ every relationship target resolves to an existing requirement.  # WRONG
+    $ aida rel show EPIC-20  # dangling entry STILL there
+
+  Reproduced in epic-20-batch6 work; the dangling edge survives because the doctor's check resolves uuids against the cache, which seems to either skip the check or look at a different scope than `rel show`.
+
+  ## Fix sketch
+
+  `aida doctor verify-relationships --repair` should walk every requirement's `relationships` array and:
+
+  1. Look up each `target_id` against the orphan-store backend.
+  2. If `None`, remove that entry from the source's `relationships` array.
+  3. Save + report `removed N dangling edges`.
+
+  This is the BUG-53 follow-up referenced in its commit body ("Option 1 (auto-unlink on status=rejected or on delete) is left as future work — it's the cleaner long-term fix but requires walking the inverse-edge set on delete, which is a separate refactor"). The repair-side fix here is the gentler half — sweep on demand rather than at delete time.
+
+  ## Composes with
+
+  - BUG-53 (PR-6) — display fix for the same orphan state
+  - The deeper "delete-time inverse cleanup" from BUG-53's Option 1 would prevent NEW orphans; this task cleans up existing ones
+
+  ## Acceptance
+
+  - [ ] `aida doctor verify-relationships --repair` removes dangling target uuids from any requirement's `relationships` array
+  - [ ] Reports the count of removed edges
+  - [ ] Idempotent (re-running on a clean store does nothing)
+  - [ ] Test covers: parent uuid deleted, child still references it; cross-cutting relations (verifies/blocks) handled the same way
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T19:24:17.766577311Z
+modified_at: 2026-05-10T19:24:17.766577311Z
+req_type: Task
