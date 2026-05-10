@@ -41,12 +41,12 @@ description: |
   - [ ] Truncation respects SCOPE_LABEL_MAX (combined scope + suffix fits)
   - [ ] No regression when branch == scope_slug (unchanged behavior)
   - [ ] Renders cleanly for PR/MR sessions and free-form scopes
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T21:46:34.411727466Z
-modified_at: 2026-05-10T21:46:34.411727466Z
+modified_at: 2026-05-10T22:43:46.808509875Z
 req_type: Task
 relationships:
 - rel_type: Child
