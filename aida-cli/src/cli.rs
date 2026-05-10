@@ -450,6 +450,16 @@ pub enum SessionCommand {
         #[clap(long, value_name = "FORGE")]
         forge: Option<String>,
 
+        /// Branch naming style when --branch isn't given.
+        ///   `auto` (default): try slug, then slug-2..-10, then
+        ///                     slug-YYYY-MM-DD, then slug-YYYY-MM-DD-2..-10.
+        ///   `date`:           always slug-YYYY-MM-DD (with -N suffix on
+        ///                     collision). Useful when every session
+        ///                     should be traceable to its date.
+        /// trace:STORY-65 | ai:claude
+        #[clap(long, value_name = "STYLE", default_value = "auto")]
+        branch_style: String,
+
         /// After creating the worktree + lease, launch Claude Code inside
         /// it: chdirs into the worktree, records launch metadata in the
         /// same log as `aida session new`, then execs
@@ -492,11 +502,38 @@ pub enum SessionCommand {
         /// Skip the y/N confirmation.
         #[clap(long, short = 'y')]
         yes: bool,
+
+        /// Force-terminate any live `claude` processes inside the
+        /// worktree before removing it. Sends SIGTERM, waits 5s, then
+        /// SIGKILL. Without this flag, `session end` refuses if it
+        /// finds a live claude in the worktree (BUG-61: prevents the
+        /// orphaned-claude-with-dangling-cwd leak).
+        /// trace:BUG-61 | ai:claude
+        #[clap(long)]
+        force: bool,
     },
 
     /// List active session leases (separately from the historical list
     /// of past Claude Code sessions in `aida session list`).
-    Leases,
+    Leases {
+        /// Probe live `claude` processes and warn about ones whose cwd is
+        /// `(deleted)` (worktree was removed without ending claude — the
+        /// signature of BUG-61). trace:STORY-69 | ai:claude
+        #[clap(long, short = 'v')]
+        verbose: bool,
+    },
+
+    /// Show details for one session lease (defaults to the lease covering
+    /// cwd, or matched by ancestor PID). Accepts an 8-char id prefix.
+    /// Output: scope, branch, worktree, inherited role, owner, hostname,
+    /// lease file path, recent activity entries from the session log, and
+    /// liveness (live claude in the worktree). trace:STORY-68 | ai:claude
+    Show {
+        /// Session id (8-char prefix accepted). Omit to show the lease
+        /// covering cwd, or — if cwd doesn't help — the lease whose
+        /// creator_pid is in this shell's ancestor chain.
+        id: Option<String>,
+    },
 }
 
 /// activity, optional purpose, and acts as a label in the statusline.
