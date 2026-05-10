@@ -59,12 +59,12 @@ description: |
   ### Why now
 
   User concrete observation 2026-05-09: noticed that opening a PR didn't queue a review item (STORY-66). The followup question — "would all those manual review instructions be auto-generated too?" — exposed this missing piece. Without it, even with STORY-66 + STORY-61 + STORY-65 landed, the reviewer would still need a manually-written prompt for every PR.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T04:21:39.998228723Z
-modified_at: 2026-05-10T04:21:39.998228723Z
+modified_at: 2026-05-10T04:58:37.124524619Z
 req_type: Story
 relationships:
 - rel_type: Child
