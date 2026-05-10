@@ -65,10 +65,14 @@ description: |
   - [ ] `aida show <id>` displays Implementation section when populated
   - [ ] `aida search` indexes the summary text
   - [ ] Tested with: clean PR (one spec → one comment), squashed PR (multi-spec → multi-comment), trivial fix (skip summary)
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T17:26:00.948116613Z
-modified_at: 2026-05-10T17:26:00.948116613Z
+modified_at: 2026-05-10T22:31:32.403605460Z
 req_type: Story
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-10T22:31:32.403605460Z
+  implemented_by: joe
