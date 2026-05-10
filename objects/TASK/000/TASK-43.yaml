@@ -1,0 +1,47 @@
+id: 019e12cf-a115-7652-8cad-393b164fe633
+spec_id: TASK-43
+agreed_id: TASK-43
+title: 'aida pull: top-level symmetric counterpart of aida push (git pull + aida db sync --pull)'
+description: |
+  Caught 2026-05-10 — user typed `aida pull` expecting it to exist (symmetric with `aida push`). It doesn't. The right invocation today is `aida db sync --pull`, which is verbose and not discoverable.
+
+  ## Today's behavior
+
+  `aida push` is top-level: runs `git push` on current branch + `aida db sync --push` (orphan store) in one shot. Skips legs cleanly when nothing's pending. Documented in `--help`.
+
+  `aida pull` errors with "unrecognized subcommand." User has to know about `aida db sync --pull`, which only handles the orphan store, NOT the code branch. So users still need a separate `git pull`.
+
+  ## Desired behavior
+
+  ```
+  aida pull        # equivalent to: git pull --ff-only && aida db sync --pull
+  ```
+
+  Mirrors `aida push` exactly:
+  - Skips a leg cleanly when nothing's behind upstream
+  - Reports both legs in output
+  - Same warning shape if conflicts
+
+  ## Implementation
+
+  Add `Command::Pull` parallel to `Command::Push`. Reuse the helper that drives `aida db sync --pull` internally. Add a thin wrapper around `git pull --ff-only` (or `git fetch && git merge --ff-only origin/<current-branch>`).
+
+  ## Composes with
+
+  - `aida push` (FR-264) — the symmetric counterpart, same shape
+  - `aida store status` — useful precondition check ("nothing behind, skip pull")
+
+  ## Acceptance
+
+  - [ ] `aida pull` is a top-level subcommand
+  - [ ] Equivalent to `git pull --ff-only` + `aida db sync --pull`
+  - [ ] Skips each leg when nothing's pending (matches `aida push` skip behavior)
+  - [ ] Help text + man page updated
+  - [ ] Behavior tested when: (a) only code is behind, (b) only orphan store is behind, (c) both, (d) neither
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T16:54:17.621496941Z
+modified_at: 2026-05-10T16:54:17.621496941Z
+req_type: Task
