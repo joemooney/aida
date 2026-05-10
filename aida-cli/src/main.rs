@@ -954,32 +954,42 @@ fn complete_init_scaffolding(
 
 /// Detect if the current directory has a distributed store configured.
 /// Walks up from CWD looking for `.aida/config.toml` with a store_path.
+/// trace:BUG-57 | ai:claude
 fn detect_distributed_store() -> Option<std::path::PathBuf> {
     let cwd = std::env::current_dir().ok()?;
-    let config_path = cwd.join(".aida").join("config.toml");
+    detect_distributed_store_from(&cwd)
+}
 
-    if !config_path.exists() {
-        return None;
-    }
-
-    let content = std::fs::read_to_string(&config_path).ok()?;
-
-    // Parse store_path from config
-    // Format: store_path = "aida-store"
-    for line in content.lines() {
-        let line = line.trim();
-        if line.starts_with("store_path") {
-            if let Some(val) = line.split('=').nth(1) {
-                let val = val.trim().trim_matches('"').trim_matches('\'');
-                let store_path = cwd.join(val);
-                if store_path.exists() && store_path.is_dir() {
-                    return Some(store_path);
+/// Walk-up resolver split out from `detect_distributed_store` so the search
+/// path is testable without changing process cwd. Returns the absolute store
+/// path on the first ancestor whose `.aida/config.toml` declares one.
+/// trace:BUG-57 | ai:claude
+fn detect_distributed_store_from(start: &std::path::Path) -> Option<std::path::PathBuf> {
+    let mut current = start;
+    loop {
+        let config_path = current.join(".aida").join("config.toml");
+        if let Ok(content) = std::fs::read_to_string(&config_path) {
+            // store_path is relative to the directory containing config.toml,
+            // not to the original cwd — otherwise `aida edit` from a subdir
+            // would resolve the store against the wrong base.
+            for line in content.lines() {
+                let line = line.trim();
+                if let Some(rest) = line.strip_prefix("store_path") {
+                    if let Some(val) = rest.split('=').nth(1) {
+                        let val = val.trim().trim_matches('"').trim_matches('\'');
+                        let store_path = current.join(val);
+                        if store_path.exists() && store_path.is_dir() {
+                            return Some(store_path);
+                        }
+                    }
                 }
             }
         }
+        match current.parent() {
+            Some(p) => current = p,
+            None => return None,
+        }
     }
-
-    None
 }
 
 /// Read the `[id_format] policy` from `.aida/config.toml`. Honors the legacy
@@ -1229,7 +1239,7 @@ fn handle_git_backend_command(
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::Session(_) => unreachable!("session is dispatched before storage init"),
-        Command::List { status, r#type, feature, tags, no_scope, show_origin, include_meta, .. } => {
+        Command::List { status, r#type, feature, tags, no_scope, show_origin, include_meta, parent, .. } => {
             // Cache-backed list (EPIC-1-001 Phase 2). The CachedGitBackend
             // ensures the cache is fresh before querying, so this is one
             // SQLite query instead of ~360 YAML reads.
@@ -1261,6 +1271,25 @@ fn handle_git_backend_command(
                 ..Default::default()
             };
             let mut reqs = backend.list_summaries(&filter)?;
+
+            // STORY-62: --parent <id> restricts to direct children of <id>.
+            // We don't materialize a parent->children index in the cache;
+            // for one parent it's a single YAML read to grab the
+            // relationships array, which is fast enough for the
+            // interactive `aida list` cadence.
+            // trace:STORY-62 | ai:claude
+            if let Some(parent_ref) = parent {
+                let parent_req = backend.get_requirement_by_spec_id(parent_ref)?
+                    .ok_or_else(|| anyhow::anyhow!(
+                        "--parent {}: requirement not found", parent_ref
+                    ))?;
+                let child_ids: HashSet<Uuid> = parent_req.relationships
+                    .iter()
+                    .filter(|r| r.rel_type == RelationshipType::Parent)
+                    .map(|r| r.target_id)
+                    .collect();
+                reqs.retain(|r| child_ids.contains(&r.id));
+            }
 
             // Hide META reqs (AI prompt customization seeded by init) from
             // the default view — they're plumbing, not user-authored work.
@@ -1715,8 +1744,27 @@ fn handle_git_backend_command(
                 }
             }
         }
-        Command::Show { id, comments } => {
+        Command::Show { id, comments, tree, depth } => {
             record_role_activity(id, "show");
+            // STORY-62: --tree replaces the detail view with an indented
+            // hierarchy walk. Children are read via rel_type:Parent edges
+            // on the parent's record; recursion descends until depth is
+            // exhausted or no more children. Hidden tradeoff: each level
+            // hits one more YAML read per visited node, but for typical
+            // EPIC trees (~50 nodes max) that's fine, and the user opts
+            // in. trace:STORY-62 | ai:claude
+            if *tree {
+                match backend.get_requirement_by_spec_id(id)? {
+                    Some(root) => render_tree(&backend, &root, *depth)?,
+                    None => {
+                        eprintln!(
+                            "{}",
+                            not_found::requirement_not_found(id, Some(store_path))
+                        );
+                    }
+                }
+                return Ok(());
+            }
             match backend.get_requirement_by_spec_id(id)? {
                 Some(req) => {
                     println!("{}: {}", "ID".bold(), req.display_id());
@@ -8656,6 +8704,18 @@ fn session_end(id_query: Option<&str>, yes: bool) -> Result<()> {
         }
     }
 
+    // Snapshot the lease file's authoritative on-disk location BEFORE we
+    // touch the worktree's symlinks. When session_end runs from inside the
+    // worktree (the natural flow), `project_root` IS the worktree path —
+    // and `<worktree>/.aida/sessions/<id>.toml` traverses the symlink
+    // installed at session_start to reach the parent's real file. Once we
+    // strip that symlink (or git removes the whole worktree), the
+    // worktree-relative path stops resolving. canonicalize() follows the
+    // symlink now and gives us a stable target for the unlink later.
+    // trace:BUG-56 | ai:claude
+    let lease_file_via_symlink = lease_path(&project_root, &target.id);
+    let canonical_lease = lease_file_via_symlink.canonicalize().ok();
+
     // Clean the symlinks we created at session start before git tries to
     // remove the worktree — they count as untracked files and `git worktree
     // remove` would otherwise refuse without --force.
@@ -8682,6 +8742,32 @@ fn session_end(id_query: Option<&str>, yes: bool) -> Result<()> {
         }
     }
 
+    // Delete the lease file BEFORE removing the worktree. The canonical
+    // path resolved above points at the parent's sessions dir, so the
+    // unlink succeeds regardless of whether the worktree's symlink chain
+    // is still intact. Reporting is honest: success printed only on
+    // actual success; missing file is a quiet no-op (already-released
+    // lease from a previous partial run is fine); other errors warn so
+    // the user can clean up manually instead of trusting a stale "✓".
+    // trace:BUG-56 | ai:claude
+    let lease_target: &std::path::Path = canonical_lease
+        .as_deref()
+        .unwrap_or(&lease_file_via_symlink);
+    match std::fs::remove_file(lease_target) {
+        Ok(_) => println!("{} lease deleted", "✓".green()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // Already gone — keep quiet.
+        }
+        Err(e) => {
+            eprintln!(
+                "{} could not delete lease at {}: {} — remove manually",
+                "Warning:".yellow().bold(),
+                lease_target.display(),
+                e
+            );
+        }
+    }
+
     let res = std::process::Command::new("git")
         .arg("-C")
         .arg(&project_root)
@@ -8702,10 +8788,6 @@ fn session_end(id_query: Option<&str>, yes: bool) -> Result<()> {
             );
         }
     }
-
-    let lease_file = lease_path(&project_root, &target.id);
-    let _ = std::fs::remove_file(&lease_file);
-    println!("{} lease deleted", "✓".green());
     println!(
         "  branch {} retained — merge or `git branch -D {}` when ready",
         target.branch.cyan(),
@@ -8956,6 +9038,34 @@ mod lease_enforcement_tests {
         assert!(owner.is_none(), "should not flag the caller's own lease");
     }
 
+    /// BUG-54: a session whose scope is an EPIC must be allowed to edit
+    /// children of that EPIC from inside the worktree. Direct-spec-match
+    /// covers `aida edit EPIC-X` from the EPIC-X session; this exercises
+    /// the parent-chain case (`aida edit <child-of-EPIC-X>`), which is
+    /// the actual flow that triggered the in-session enforcement bug.
+    /// trace:BUG-54 | ai:claude
+    #[test]
+    fn lease_owning_skips_self_via_parent_chain() {
+        let epic = req_with_parents("EPIC-20", &[]);
+        let story = req_with_parents("STORY-55", &[epic.id]);
+        let mut store = RequirementsStore::new();
+        store.requirements.push(epic.clone());
+        store.requirements.push(story.clone());
+        let mine = lease("EPIC-20", "ownsepic");
+        let leases = vec![mine.clone()];
+        let owner = lease_owning_spec(
+            &leases,
+            Some(&mine),
+            story.id,
+            story.spec_id.as_deref(),
+            &store,
+        );
+        assert!(
+            owner.is_none(),
+            "owner-of-EPIC-X session must be allowed to edit children of EPIC-X"
+        );
+    }
+
     /// Path-glob / free-form scopes that don't resolve to a spec id are
     /// treated as non-enforced.
     /// trace:STORY-48 | ai:claude
@@ -8998,6 +9108,243 @@ mod lease_enforcement_tests {
         let leases: Vec<SessionLease> = vec![];
         let owner = lease_owning_spec(&leases, None, a.id, a.spec_id.as_deref(), &store);
         assert!(owner.is_none());
+    }
+}
+
+#[cfg(test)]
+mod scope_fallback_tests {
+    use super::*;
+    use aida_core::models::Relationship;
+
+    fn lease_for(scope: &str) -> SessionLease {
+        SessionLease {
+            id: "selflease0001".into(),
+            scope: scope.to_string(),
+            slug: scope.to_lowercase(),
+            owner: "tester".into(),
+            worktree_path: std::path::PathBuf::from("/tmp/x"),
+            branch: "br".into(),
+            started_at: chrono::Utc::now(),
+            hostname: "h".into(),
+        }
+    }
+
+    fn child_of(parent_uuid: Uuid, spec_id: &str) -> Requirement {
+        let mut r = Requirement::new(format!("Title for {}", spec_id), "".into());
+        r.spec_id = Some(spec_id.into());
+        r.relationships = vec![Relationship {
+            rel_type: RelationshipType::Child,
+            target_id: parent_uuid,
+            created_at: Some(chrono::Utc::now()),
+            created_by: None,
+        }];
+        r.status = RequirementStatus::Approved;
+        r.priority = RequirementPriority::Medium;
+        r
+    }
+
+    fn scope_root(spec_id: &str, child_uuids: &[Uuid]) -> Requirement {
+        let mut r = Requirement::new(format!("Title for {}", spec_id), "".into());
+        r.spec_id = Some(spec_id.into());
+        r.relationships = child_uuids
+            .iter()
+            .map(|cid| Relationship {
+                rel_type: RelationshipType::Parent,
+                target_id: *cid,
+                created_at: Some(chrono::Utc::now()),
+                created_by: None,
+            })
+            .collect();
+        r
+    }
+
+    /// Highest-priority approved child wins.
+    /// trace:STORY-63 | ai:claude
+    #[test]
+    fn picks_highest_priority_approved_child() {
+        let mut a = child_of(Uuid::nil(), "STORY-1");
+        let mut b = child_of(Uuid::nil(), "STORY-2");
+        let mut c = child_of(Uuid::nil(), "STORY-3");
+        a.priority = RequirementPriority::Low;
+        b.priority = RequirementPriority::High;
+        c.priority = RequirementPriority::Medium;
+        let epic = scope_root("EPIC-20", &[a.id, b.id, c.id]);
+        // Patch ancestors so child rels point at the EPIC's actual id.
+        for child in [&mut a, &mut b, &mut c] {
+            child.relationships[0].target_id = epic.id;
+        }
+        let mut store = RequirementsStore::new();
+        store.requirements.extend([epic.clone(), a, b.clone(), c]);
+        let lease = lease_for("EPIC-20");
+        let res = scope_fallback_pick(&store, &lease, None).expect("expected a pick");
+        assert_eq!(res.pick.spec_id.as_deref(), Some("STORY-2"));
+        assert_eq!(res.approved_count, 3);
+    }
+
+    /// Created_at breaks ties at equal priority — older wins.
+    /// trace:STORY-63 | ai:claude
+    #[test]
+    fn ties_break_on_created_at_oldest_first() {
+        let mut older = child_of(Uuid::nil(), "STORY-A");
+        let mut newer = child_of(Uuid::nil(), "STORY-B");
+        older.priority = RequirementPriority::High;
+        newer.priority = RequirementPriority::High;
+        let now = chrono::Utc::now();
+        older.created_at = now - chrono::Duration::hours(2);
+        newer.created_at = now;
+        let epic = scope_root("EPIC-20", &[older.id, newer.id]);
+        for child in [&mut older, &mut newer] {
+            child.relationships[0].target_id = epic.id;
+        }
+        let mut store = RequirementsStore::new();
+        store.requirements.extend([epic.clone(), older, newer]);
+        let lease = lease_for("EPIC-20");
+        let res = scope_fallback_pick(&store, &lease, None).expect("expected a pick");
+        assert_eq!(res.pick.spec_id.as_deref(), Some("STORY-A"));
+    }
+
+    /// Any sibling InProgress → no pick (don't run two children in
+    /// parallel under the same EPIC).
+    /// trace:STORY-63 | ai:claude
+    #[test]
+    fn skips_when_sibling_in_progress() {
+        let mut active = child_of(Uuid::nil(), "STORY-ACTIVE");
+        let mut waiting = child_of(Uuid::nil(), "STORY-WAITING");
+        active.status = RequirementStatus::InProgress;
+        waiting.priority = RequirementPriority::High;
+        let epic = scope_root("EPIC-20", &[active.id, waiting.id]);
+        for child in [&mut active, &mut waiting] {
+            child.relationships[0].target_id = epic.id;
+        }
+        let mut store = RequirementsStore::new();
+        store.requirements.extend([epic, active, waiting]);
+        let lease = lease_for("EPIC-20");
+        let res = scope_fallback_pick(&store, &lease, None);
+        assert!(res.is_none(), "should not double-pick under the same EPIC");
+    }
+
+    /// Path-glob / free-form scope can't resolve to a Requirement → None.
+    /// trace:STORY-63 | ai:claude
+    #[test]
+    fn unresolved_scope_returns_none() {
+        let store = RequirementsStore::new();
+        let lease = lease_for("src/**/*.rs");
+        assert!(scope_fallback_pick(&store, &lease, None).is_none());
+    }
+
+    /// Scope resolves but has no children → None (caller falls through
+    /// to the normal "queue empty" message + nudge).
+    /// trace:STORY-63 | ai:claude
+    #[test]
+    fn scope_with_no_children_returns_none() {
+        let epic = scope_root("EPIC-20", &[]);
+        let mut store = RequirementsStore::new();
+        store.requirements.push(epic);
+        let lease = lease_for("EPIC-20");
+        assert!(scope_fallback_pick(&store, &lease, None).is_none());
+    }
+
+    /// Children exist but none are Approved → None.
+    /// trace:STORY-63 | ai:claude
+    #[test]
+    fn no_approved_children_returns_none() {
+        let mut draft = child_of(Uuid::nil(), "STORY-DRAFT");
+        draft.status = RequirementStatus::Draft;
+        let epic = scope_root("EPIC-20", &[draft.id]);
+        draft.relationships[0].target_id = epic.id;
+        let mut store = RequirementsStore::new();
+        store.requirements.extend([epic, draft]);
+        let lease = lease_for("EPIC-20");
+        assert!(scope_fallback_pick(&store, &lease, None).is_none());
+    }
+
+    /// Role scope filter on tags is honored — a candidate without all
+    /// the role's required tags is dropped.
+    /// trace:STORY-63 | ai:claude
+    #[test]
+    fn role_scope_filter_drops_untagged_candidates() {
+        let mut tagged = child_of(Uuid::nil(), "STORY-TAGGED");
+        let mut untagged = child_of(Uuid::nil(), "STORY-PLAIN");
+        tagged.priority = RequirementPriority::Low;
+        untagged.priority = RequirementPriority::High;
+        tagged.tags.insert("session".into());
+        let epic = scope_root("EPIC-20", &[tagged.id, untagged.id]);
+        for child in [&mut tagged, &mut untagged] {
+            child.relationships[0].target_id = epic.id;
+        }
+        let mut store = RequirementsStore::new();
+        store.requirements.extend([epic, tagged, untagged]);
+        let lease = lease_for("EPIC-20");
+        // Role requires the "session" tag — the untagged High-prio item
+        // is dropped, the tagged Low-prio item wins.
+        let role_scope = (vec!["session".to_string()], None);
+        let res = scope_fallback_pick(&store, &lease, Some(&role_scope))
+            .expect("expected a pick");
+        assert_eq!(res.pick.spec_id.as_deref(), Some("STORY-TAGGED"));
+    }
+}
+
+#[cfg(test)]
+mod store_walkup_tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    /// `.aida/config.toml` only at the repo root → `aida edit` from a
+    /// nested subdir must still resolve the store.
+    /// trace:BUG-57 | ai:claude
+    #[test]
+    fn detect_distributed_store_walks_up_from_subdir() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        fs::create_dir_all(root.join(".aida")).unwrap();
+        fs::write(
+            root.join(".aida/config.toml"),
+            "[deployment]\nstore_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        fs::create_dir_all(root.join(".aida-store")).unwrap();
+
+        let nested = root.join("aida-cli/src/foo");
+        fs::create_dir_all(&nested).unwrap();
+
+        let resolved = detect_distributed_store_from(&nested).expect("should walk up");
+        assert_eq!(resolved, root.join(".aida-store"));
+    }
+
+    /// store_path is interpreted relative to the directory containing
+    /// config.toml, not relative to the starting cwd.
+    /// trace:BUG-57 | ai:claude
+    #[test]
+    fn detect_distributed_store_resolves_relative_to_config_dir() {
+        let tmp = TempDir::new().unwrap();
+        let root = tmp.path();
+        fs::create_dir_all(root.join(".aida")).unwrap();
+        fs::write(
+            root.join(".aida/config.toml"),
+            "store_path = \".aida-store\"\n",
+        )
+        .unwrap();
+        fs::create_dir_all(root.join(".aida-store")).unwrap();
+
+        let nested = root.join("a/b/c");
+        fs::create_dir_all(&nested).unwrap();
+
+        // If we incorrectly resolved relative to nested, we'd look for
+        // `<nested>/.aida-store/` which doesn't exist.
+        let resolved = detect_distributed_store_from(&nested).unwrap();
+        assert_eq!(resolved, root.join(".aida-store"));
+    }
+
+    /// No `.aida/config.toml` anywhere up the tree → returns None (caller
+    /// falls through to legacy / registry resolution).
+    /// trace:BUG-57 | ai:claude
+    #[test]
+    fn detect_distributed_store_returns_none_when_absent() {
+        let tmp = TempDir::new().unwrap();
+        let nested = tmp.path().join("a/b");
+        std::fs::create_dir_all(&nested).unwrap();
+        assert!(detect_distributed_store_from(&nested).is_none());
     }
 }
 
@@ -12435,6 +12782,193 @@ fn list_comments(storage: &Storage, req_id: &str) -> Result<()> {
         print_comment(comment, 0);
     }
 
+    Ok(())
+}
+
+/// Result of the STORY-63 scope-fallback resolver.
+/// trace:STORY-63 | ai:claude
+struct ScopeFallback<'a> {
+    /// Total number of Approved children of the scope (informational —
+    /// we display this count in the rendered message).
+    approved_count: usize,
+    /// The chosen pick after priority + created_at sort.
+    pick: &'a Requirement,
+}
+
+/// Find the highest-priority approved child of `lease.scope` that no
+/// session is already mid-work on. Returns `None` when:
+///   - the scope is a path-glob / free-form string we can't resolve to
+///     a spec (no ancestry to walk)
+///   - any child of the scope is already InProgress (don't pick a
+///     parallel within the same EPIC)
+///   - no child satisfies status=Approved + the role scope filter
+///
+/// Priority order: High > Medium > Low, then created_at ascending so
+/// the oldest approved item wins ties (closest to the project's
+/// implicit work order).
+/// trace:STORY-63 | ai:claude
+fn scope_fallback_pick<'a>(
+    store: &'a RequirementsStore,
+    lease: &SessionLease,
+    role_scope: Option<&(Vec<String>, Option<String>)>,
+) -> Option<ScopeFallback<'a>> {
+    let scope_lc = lease.scope.to_ascii_lowercase();
+    let scope_req = store.requirements.iter().find(|r| {
+        let spec_match = r
+            .spec_id
+            .as_deref()
+            .map(|s| s.to_ascii_lowercase() == scope_lc)
+            .unwrap_or(false);
+        let agreed_match = r
+            .agreed_id
+            .as_deref()
+            .map(|s| s.to_ascii_lowercase() == scope_lc)
+            .unwrap_or(false);
+        spec_match || agreed_match
+    })?;
+
+    let child_ids: HashSet<Uuid> = scope_req
+        .relationships
+        .iter()
+        .filter(|r| r.rel_type == RelationshipType::Parent)
+        .map(|r| r.target_id)
+        .collect();
+    if child_ids.is_empty() {
+        return None;
+    }
+    let children: Vec<&Requirement> = store
+        .requirements
+        .iter()
+        .filter(|r| child_ids.contains(&r.id))
+        .collect();
+
+    // If anything under this scope is already in flight, the session's
+    // attention belongs to that — don't suggest a second item.
+    if children
+        .iter()
+        .any(|r| r.status == RequirementStatus::InProgress)
+    {
+        return None;
+    }
+
+    let approved_count = children
+        .iter()
+        .filter(|r| r.status == RequirementStatus::Approved)
+        .count();
+
+    let mut candidates: Vec<&Requirement> = children
+        .iter()
+        .copied()
+        .filter(|r| r.status == RequirementStatus::Approved)
+        .filter(|r| {
+            // Apply the active role's tag/status scope filter if present
+            // (mirrors the existing queue-next post-filter so the two
+            // entry points behave consistently).
+            let Some((scope_tags, scope_status)) = role_scope else {
+                return true;
+            };
+            if let Some(want) = scope_status {
+                if !format!("{}", r.status).eq_ignore_ascii_case(want)
+                    && !format!("{:?}", r.status).eq_ignore_ascii_case(want)
+                {
+                    return false;
+                }
+            }
+            for tag in scope_tags {
+                if !r.tags.iter().any(|t| t == tag) {
+                    return false;
+                }
+            }
+            true
+        })
+        .collect();
+    if candidates.is_empty() {
+        return None;
+    }
+    candidates.sort_by(|a, b| {
+        priority_rank(&a.priority)
+            .cmp(&priority_rank(&b.priority))
+            .then_with(|| a.created_at.cmp(&b.created_at))
+    });
+    Some(ScopeFallback {
+        approved_count,
+        pick: candidates[0],
+    })
+}
+
+/// Sort key for priority — lower rank wins (High = 0, Medium = 1,
+/// Low = 2) so an ascending sort puts High first.
+/// trace:STORY-63 | ai:claude
+fn priority_rank(p: &RequirementPriority) -> u8 {
+    match p {
+        RequirementPriority::High => 0,
+        RequirementPriority::Medium => 1,
+        RequirementPriority::Low => 2,
+    }
+}
+
+/// Render `root` and its descendants as an indented tree, two spaces per
+/// level. Each node prints as `<status-glyph> <ID>  <Status>  <title>`.
+/// Children are walked via rel_type:Parent edges (AIDA's
+/// parent-points-at-child storage convention). Recursion stops at
+/// `max_depth` (the root is depth 0). Cycles are guarded by a visited
+/// set — defensive only; the data model shouldn't allow them.
+/// trace:STORY-62 | ai:claude
+fn render_tree(
+    backend: &aida_core::CachedGitBackend,
+    root: &Requirement,
+    max_depth: usize,
+) -> Result<()> {
+    let mut visited: HashSet<Uuid> = HashSet::new();
+    render_tree_node(backend, root, 0, max_depth, &mut visited)
+}
+
+fn render_tree_node(
+    backend: &aida_core::CachedGitBackend,
+    req: &Requirement,
+    depth: usize,
+    max_depth: usize,
+    visited: &mut HashSet<Uuid>,
+) -> Result<()> {
+    if !visited.insert(req.id) {
+        return Ok(()); // already rendered — treat as cycle, skip silently
+    }
+    let indent = "  ".repeat(depth);
+    let status = format!("{}", req.effective_status());
+    // Glyph hint without emoji (CLAUDE.md house rule): two-state mark on
+    // the most useful axis — completed vs everything else.
+    let glyph = if status.eq_ignore_ascii_case("completed") {
+        "✓".green().to_string()
+    } else {
+        "○".dimmed().to_string()
+    };
+    let id_label = req.display_id();
+    println!(
+        "{}{} {:<14} {:<12} {}",
+        indent,
+        glyph,
+        id_label,
+        status,
+        req.title,
+    );
+    if depth >= max_depth {
+        return Ok(());
+    }
+    // Collect direct children (Parent edges on this req point to children).
+    let mut children: Vec<Requirement> = Vec::new();
+    for rel in &req.relationships {
+        if rel.rel_type == RelationshipType::Parent {
+            if let Some(child) = backend.get_requirement(&rel.target_id)? {
+                children.push(child);
+            }
+        }
+    }
+    // Stable order: by display_id ascending so the same tree prints the
+    // same way across runs.
+    children.sort_by(|a, b| a.display_id().cmp(&b.display_id()));
+    for child in &children {
+        render_tree_node(backend, child, depth + 1, max_depth, visited)?;
+    }
     Ok(())
 }
 
@@ -16066,6 +16600,64 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             };
 
             if next_entry.is_none() && global_next.is_none() {
+                // STORY-63: scope fallback. If the personal+global queues
+                // are both empty AND we're inside a session lease, surface
+                // the EPIC's approved children — `aida session start
+                // --owns EPIC-X` should make picking work feel automatic,
+                // not require pre-queueing every story.
+                //
+                // Rules:
+                //   - resolve self_lease.scope to a Requirement (path-glob
+                //     scopes don't qualify and fall through to the empty
+                //     message)
+                //   - if any child of that scope is already InProgress,
+                //     don't auto-pick a parallel one — the session is
+                //     already busy, even if the user got here looking for
+                //     "what's next." Better to surface the in-flight item
+                //     than start a second one
+                //   - candidates: status=Approved, plus the active role's
+                //     scope filter (tags/status) when set, same as the
+                //     existing queue path
+                //   - sort: priority High → Medium → Low, then created_at
+                //     oldest-first as tiebreak
+                // trace:STORY-63 | ai:claude
+                if let Some(self_l) = self_lease.as_ref() {
+                    if let Some(picked) = scope_fallback_pick(&store, self_l, scope.as_ref()) {
+                        let approved_count = picked.approved_count;
+                        let pick = picked.pick;
+                        println!(
+                            "{} {} has {} approved child(ren); picking {} {}",
+                            "Queue empty —".dimmed(),
+                            self_l.scope.cyan().bold(),
+                            approved_count,
+                            pick.spec_id.as_deref().unwrap_or("?").green().bold(),
+                            "(scope fallback)".dimmed(),
+                        );
+                        println!();
+                        println!("  {}: {}", "Title".bold(), pick.title);
+                        println!("  {}: {}", "Status".bold(), pick.status);
+                        println!("  {}: {}", "Priority".bold(), pick.priority);
+                        if !pick.tags.is_empty() {
+                            let mut tags: Vec<&String> = pick.tags.iter().collect();
+                            tags.sort();
+                            let tags_str = tags
+                                .iter()
+                                .map(|s| s.as_str())
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                            println!("  {}: {}", "Tags".bold(), tags_str);
+                        }
+                        println!();
+                        println!("{}", "Suggested:".dimmed());
+                        let id_for_cmd = pick.spec_id.as_deref().unwrap_or("?");
+                        println!(
+                            "  aida show {}  &&  aida edit {} --status in-progress",
+                            id_for_cmd, id_for_cmd
+                        );
+                        return Ok(());
+                    }
+                }
+
                 let scope = match &role_filter {
                     Some(r) => format!(" for role {}", r.cyan()),
                     None => String::new(),
@@ -16085,7 +16677,17 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         eprintln!("  · {}  →  scope {}", spec.cyan(), scope.cyan());
                     }
                 }
-                println!("  ({})", "pick up new work via `aida role enter dialog` or wait for items".dimmed());
+                // STORY-63: nudge toward `aida list --status approved` when
+                // even the scope fallback came up empty, so the user has a
+                // concrete next step rather than a dead-end.
+                if self_lease.is_some() {
+                    println!(
+                        "  ({})",
+                        "scope has no approved+ready children either — try `aida list --status approved`".dimmed()
+                    );
+                } else {
+                    println!("  ({})", "pick up new work via `aida role enter dialog` or wait for items".dimmed());
+                }
                 return Ok(());
             }
             // STORY-48: surface non-fatal skips before rendering the next
