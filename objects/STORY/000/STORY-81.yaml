@@ -1,0 +1,74 @@
+id: 019e12ec-abf4-7a81-9e1d-6b4ce759e752
+spec_id: STORY-81
+agreed_id: STORY-81
+title: Auto-attach implementation summary to req on completion (comment + structured implementation_info)
+description: |
+  Caught 2026-05-10 — implementer agent produced a rich completion summary for STORY-71 (5+ paragraphs covering verified-prior-work, new helpers, lease schema changes, test counts, follow-up note). The summary lives in chat + commit body, but `aida show STORY-71 --comments` after merge will show none of it. The req's implementation context evaporates as soon as the session ends.
+
+  ## Two-part fix
+
+  ### Part 1 — Convention via /aida-pr skill (quick, manual)
+
+  Extend `/aida-pr` (STORY-80) so that for each completed REQ-ID it identifies in `git log main..HEAD`, the agent runs `aida comment add <id> "<3-5 line implementation summary>"` *before* opening the PR. The summary is mechanically derived:
+
+    Implemented via PR-N (commit <sha>):
+    - <one-line bullet from commit body>
+    - <one-line bullet from commit body>
+    Test status: <count from cargo test output>
+    Follow-up: <any note from the agent's chat output, optional>
+
+  After PR merge, `aida show <id> --comments` shows the implementation context.
+
+  ### Part 2 — Structured implementation_info auto-population (longer-term)
+
+  The `Requirement` model already has `implementation_info: Option<ImplementationInfo>` (reserved field). Populate it on `aida queue done`:
+
+  ```rust
+  ImplementationInfo {
+      completed_at: chrono::Utc::now(),
+      completed_by: get_default_author(),
+      commit_shas: vec![/* derived from git log filtered by trace:<id> */],
+      pr_url: /* if we can detect from gh */,
+      summary: /* the comment text? or separate field? */,
+  }
+  ```
+
+  Surface in `aida show <id>`:
+
+    ID: STORY-71
+    ...
+    Implementation:
+      Completed: 2026-05-10 by Joe Mooney
+      Commits: 1a2b3c4d, 5e6f7a8b
+      PR: https://github.com/joemooney/aida/pull/5
+      Summary: <comment text>
+
+  Search would index this too — `aida search "lease pr_head"` finds STORY-71 via its implementation summary, not just title/description.
+
+  ## Composes with
+
+  - STORY-80 (/aida-pr skill) — Part 1 lives in there
+  - BUG-65 (activity log not bumping on edit) — once fixed, queue done activity will be visible alongside this implementation_info
+  - Cross-project search (STORY-77) — implementation_info indexed across projects
+
+  ## Open questions
+
+  - Should the summary be a single field or structured (sub-bullets, follow-ups, test results)?
+  - When PRs are squashed at merge, what counts as "the commit" — the squash or the originals? Probably PR URL is canonical, fall back to local commits if no PR detected.
+  - For trivial work (typo fix, doc bump), do we still demand a summary? Probably skip if commit body is one line.
+
+  ## Acceptance
+
+  - [ ] `/aida-pr` skill posts an implementation summary comment per spec before opening the PR
+  - [ ] Comments link to the commit + PR URL
+  - [ ] `Requirement.implementation_info` populated on `aida queue done` (when activity context is available)
+  - [ ] `aida show <id>` displays Implementation section when populated
+  - [ ] `aida search` indexes the summary text
+  - [ ] Tested with: clean PR (one spec → one comment), squashed PR (multi-spec → multi-comment), trivial fix (skip summary)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T17:26:00.948116613Z
+modified_at: 2026-05-10T17:26:00.948116613Z
+req_type: Story
