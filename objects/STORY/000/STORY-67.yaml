@@ -1,0 +1,68 @@
+id: 019e101e-941e-7b23-be99-b98ceee37d29
+spec_id: STORY-67
+agreed_id: STORY-67
+title: Generate review prompt for PR sessions from linked reqs' acceptance criteria
+description: |
+  Today, when a reviewer starts a session for a PR, they need a written prompt explaining what to verify. Currently composed by hand (e.g., user generated 5-paragraph prompt for PR #2 covering 5 reqs). Tedious and inconsistent.
+
+  ## Proposal
+
+  Auto-generate the review prompt from the PR's linked specs. Composes with STORY-66 (auto-queue PR for reviewer), STORY-61 (--owns PR-N), STORY-65 (auto-branch + role + launch-claude).
+
+  ### Mechanism
+
+  1. PR-N's queue item carries a list of referenced spec_ids (parsed from commit messages' `(REQ-ID)` trailers in the PR's commit range)
+  2. When a reviewer session starts via `aida session start --owns PR-N --launch-claude`, AIDA composes a prompt by:
+     - Walking each linked spec_id
+     - Pulling its description's "Acceptance" / "Test cases" / "## Verify" section if present
+     - Concatenating into a structured review checklist
+     - Adding a header (PR title, branch) and footer (merge or request-changes guidance)
+  3. Pipe the prompt to claude as the initial message, OR write it to `.aida-review-prompt.md` in the worktree for the agent to read.
+
+  ### Format (rough)
+
+  ```
+  # Review PR #2
+
+  Branch: epic-20-batch2 (5 commits)
+  Covers: BUG-57, BUG-56, BUG-54, STORY-62, STORY-63
+
+  ## What to verify
+
+  ### BUG-57 — aida edit fails from project subdirectory
+  <acceptance/test section from BUG-57's description>
+
+  ### BUG-56 — session end doesn't delete lease
+  <acceptance/test section from BUG-56's description>
+
+  ... (one section per linked spec)
+
+  ## Decide
+
+  If all pass: `gh pr merge 2 --squash` and mark each linked req completed.
+  If any fails: `gh pr review 2 --request-changes` with specifics.
+  ```
+
+  ### Convention reinforcement
+
+  This depends on STORY/BUG descriptions having a recognizable "Acceptance" section. We've mostly been writing them (see BUG-54, STORY-63 for examples). To make this reliable:
+
+  - Add a section to `.claude/AIDA.md`: "Every BUG and STORY description should include `## Verify` or `## Acceptance` with concrete test cases. The review-prompt generator pulls from this section verbatim."
+  - Optional lint in `aida doctor convention-check`: warn when a STORY/BUG description has no recognized acceptance section.
+
+  ### Out of scope
+
+  - AI-paraphrased prompts (just verbatim concatenation in v1; cleaner and predictable)
+  - Multi-PR cross-references (a PR that depends on another PR — defer)
+  - Per-reviewer customization (e.g., a senior reviewer wants security-focused prompts) — defer
+
+  ### Why now
+
+  User concrete observation 2026-05-09: noticed that opening a PR didn't queue a review item (STORY-66). The followup question — "would all those manual review instructions be auto-generated too?" — exposed this missing piece. Without it, even with STORY-66 + STORY-61 + STORY-65 landed, the reviewer would still need a manually-written prompt for every PR.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T04:21:39.998228723Z
+modified_at: 2026-05-10T04:21:39.998228723Z
+req_type: Story
