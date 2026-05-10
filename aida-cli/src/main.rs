@@ -170,6 +170,12 @@ fn main() -> Result<()> {
     if let Command::Statusline { color } = &cli.command {
         return handle_statusline_command(color);
     }
+    // STORY-79: hidden background-fetch worker spawned by statusline.
+    // Dispatch before storage init — this is a self-contained worker
+    // that owns its own git/toml side effects. trace:STORY-79 | ai:claude
+    if let Command::BgFetch { store_path } = &cli.command {
+        return handle_bg_fetch_command(store_path);
+    }
     // trace:FR-1-043 | ai:claude
     if let Command::Session(session_cmd) = &cli.command {
         return handle_session_command(session_cmd);
@@ -415,6 +421,7 @@ fn main() -> Result<()> {
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
+        Command::BgFetch { .. } => unreachable!("_bg-fetch is dispatched before storage init"),
         Command::Session(_) => unreachable!("session is dispatched before storage init"),
         Command::Rel(rel_cmd) => {
             handle_relationship_command(rel_cmd, &storage)?;
@@ -1253,6 +1260,7 @@ fn handle_git_backend_command(
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
+        Command::BgFetch { .. } => unreachable!("_bg-fetch is dispatched before storage init"),
         Command::Session(_) => unreachable!("session is dispatched before storage init"),
         Command::List { status, r#type, feature, tags, no_scope, show_origin, include_meta, parent, sync, .. } => {
             // STORY-78: opt-in implicit sync-pull before reading. Quiet
@@ -11554,6 +11562,15 @@ fn maybe_sync_pull(store_path: &std::path::Path) -> Result<()> {
 /// `read_last_fetch_age_secs(project_root)`) match writes.
 /// trace:STORY-78 | ai:claude
 fn touch_last_fetch_ok(store_path: &std::path::Path) -> Result<()> {
+    write_last_fetch_entry(store_path, "ok")
+}
+
+/// Write a result string (`"ok"` for success, `"error: <msg>"` for
+/// failure) plus a fresh timestamp into `~/.aida/cache/last-fetch.toml`
+/// for the project whose orphan store is `store_path`. Shared between
+/// the `--sync` path (STORY-78) and the background fetch worker
+/// (STORY-79). trace:STORY-78 | ai:claude
+fn write_last_fetch_entry(store_path: &std::path::Path, result: &str) -> Result<()> {
     let project_root = store_path
         .parent()
         .ok_or_else(|| anyhow::anyhow!("store path has no parent"))?;
@@ -11577,13 +11594,202 @@ fn touch_last_fetch_ok(store_path: &std::path::Path) -> Result<()> {
         "last_fetch".into(),
         toml::Value::String(chrono::Utc::now().to_rfc3339()),
     );
-    entry.insert("result".into(), toml::Value::String("ok".into()));
+    entry.insert("result".into(), toml::Value::String(result.into()));
     root.insert(
         canon.to_string_lossy().to_string(),
         toml::Value::Table(entry),
     );
     let serialized = toml::to_string(&toml::Value::Table(root))?;
     std::fs::write(&path, serialized)?;
+    Ok(())
+}
+
+// ───────────────────────────────────────────────────────────────────
+// STORY-79 — background fetch from statusline (auto-freshness)
+// ───────────────────────────────────────────────────────────────────
+
+/// Default seconds between background fetches. Statusline skips spawning
+/// when the most recent fetch (or attempt) is within this window. Overridable
+/// via `AIDA_BG_FETCH_INTERVAL_SECS`. trace:STORY-79 | ai:claude
+fn bg_fetch_interval_secs() -> u64 {
+    std::env::var("AIDA_BG_FETCH_INTERVAL_SECS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(300)
+}
+
+/// Whether the background fetcher is enabled. `AIDA_BG_FETCH=false`
+/// (or `0`, `no`, `off`) disables it entirely. Any other value (or
+/// unset) leaves it enabled. trace:STORY-79 | ai:claude
+fn bg_fetch_enabled() -> bool {
+    match std::env::var("AIDA_BG_FETCH") {
+        Ok(v) => !matches!(
+            v.trim().to_ascii_lowercase().as_str(),
+            "false" | "0" | "no" | "off"
+        ),
+        Err(_) => true,
+    }
+}
+
+/// Path to the per-project lockfile used to coordinate background
+/// fetches across concurrent shells. The basename mixes the project
+/// dir name and a hex digest of the canonical path: dir name keeps it
+/// debuggable, digest disambiguates two projects with the same
+/// basename. trace:STORY-79 | ai:claude
+fn bg_fetch_lock_path(store_path: &std::path::Path) -> Option<std::path::PathBuf> {
+    let project_root = store_path.parent()?;
+    let canon = project_root
+        .canonicalize()
+        .unwrap_or_else(|_| project_root.to_path_buf());
+    let basename = project_root
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "project".into());
+    // Cheap deterministic digest — we just need enough disambiguation
+    // for human + scripted use, not collision resistance. FNV-1a 64-bit
+    // by hand to avoid pulling in `siphasher`/`twox-hash`.
+    let mut h: u64 = 0xcbf29ce484222325;
+    for b in canon.to_string_lossy().as_bytes() {
+        h ^= *b as u64;
+        h = h.wrapping_mul(0x100000001b3);
+    }
+    let home = dirs::home_dir()?;
+    Some(
+        home.join(".aida/cache")
+            .join(format!(".bg-fetch-{}-{:016x}.lock", basename, h)),
+    )
+}
+
+/// Best-effort: ensure `~/.aida/cache/` exists for the lock + toml writes.
+/// Returns Ok even if creation fails — caller treats missing dir as
+/// "skip background fetch this render". trace:STORY-79 | ai:claude
+fn ensure_cache_dir() -> Option<std::path::PathBuf> {
+    let home = dirs::home_dir()?;
+    let cache = home.join(".aida/cache");
+    std::fs::create_dir_all(&cache).ok()?;
+    Some(cache)
+}
+
+/// Should statusline kick off a fresh background fetch for this project?
+/// Returns true when ALL conditions hold: feature enabled, no recent
+/// fetch attempt (per `last-fetch.toml`), and no live lockfile.
+/// Stale lockfiles (>3× interval) are considered dead and overridden.
+/// Pure decision: callers do the lockfile create + spawn separately.
+/// trace:STORY-79 | ai:claude
+fn should_spawn_bg_fetch(
+    last_fetch_age_secs: Option<u64>,
+    lock_age_secs: Option<u64>,
+    interval_secs: u64,
+) -> bool {
+    // Recent successful fetch (or attempt) means we're current.
+    if matches!(last_fetch_age_secs, Some(age) if age < interval_secs) {
+        return false;
+    }
+    // Live lockfile: another shell beat us to it. Treat as live for
+    // 3× the interval to absorb slow git fetches on weak networks
+    // without permanently wedging if a fetch crashed mid-flight.
+    if matches!(lock_age_secs, Some(age) if age < interval_secs.saturating_mul(3)) {
+        return false;
+    }
+    true
+}
+
+/// Spawn the `_bg-fetch` worker for `store_path` if the project is due
+/// for a fetch and no other shell is already on it. All failure modes
+/// (no home dir, can't create cache dir, lockfile-create race lost,
+/// spawn failed) collapse to "skip silently" so statusline stays
+/// silent and sub-50ms regardless. trace:STORY-79 | ai:claude
+fn maybe_spawn_bg_fetch(project_root: &std::path::Path, store_path: &std::path::Path) {
+    if !bg_fetch_enabled() {
+        return;
+    }
+    let Some(_cache_dir) = ensure_cache_dir() else { return };
+    let Some(lock_path) = bg_fetch_lock_path(store_path) else { return };
+    let interval = bg_fetch_interval_secs();
+    let last_fetch_age = read_last_fetch_age_secs(project_root);
+    let lock_age = std::fs::metadata(&lock_path)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| std::time::SystemTime::now().duration_since(t).ok())
+        .map(|d| d.as_secs());
+    if !should_spawn_bg_fetch(last_fetch_age, lock_age, interval) {
+        return;
+    }
+    // Atomic claim: O_EXCL create. If another shell beat us between the
+    // staleness check above and this call, the create fails and we
+    // back off. trace:STORY-79 | ai:claude
+    let claim = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&lock_path);
+    let Ok(mut f) = claim else { return };
+    use std::io::Write;
+    let _ = writeln!(f, "{}", std::process::id());
+    // Spawn ourselves as the hidden `_bg-fetch` worker, detached with
+    // all stdio nulled. The current binary path comes from argv[0] when
+    // it's absolute (cargo dev / installed); otherwise fall back to
+    // `aida` on PATH. trace:STORY-79 | ai:claude
+    let exe = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    let _ = std::process::Command::new(exe)
+        .arg("_bg-fetch")
+        .arg(store_path)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
+}
+
+/// Worker entry point — runs `git fetch origin <branch> --prune` against
+/// the orphan store at `store_path`, then stamps `last-fetch.toml` with
+/// the outcome and removes the lockfile. Never panics; every error
+/// path is silent. Called from `aida _bg-fetch <store-path>`, which
+/// statusline spawns detached. trace:STORY-79 | ai:claude
+fn handle_bg_fetch_command(store_path: &std::path::Path) -> Result<()> {
+    // Always try to clean up the lockfile, even on early-exit paths.
+    // Drop guard via a small helper struct so panics / early returns
+    // never leave a stale lock.
+    struct LockGuard(Option<std::path::PathBuf>);
+    impl Drop for LockGuard {
+        fn drop(&mut self) {
+            if let Some(p) = &self.0 {
+                let _ = std::fs::remove_file(p);
+            }
+        }
+    }
+    let _guard = LockGuard(bg_fetch_lock_path(store_path));
+
+    if !aida_core::git_ops::is_git_repo(store_path) {
+        // No git repo → record an error so the user gets `cache:?` not
+        // a false-fresh next render. trace:STORY-79 | ai:claude
+        let _ = write_last_fetch_entry(store_path, "error: not a git repo");
+        return Ok(());
+    }
+    let branch = aida_core::git_ops::current_branch(store_path)
+        .unwrap_or_else(|_| "aida-store".to_string());
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(store_path)
+        .args(["fetch", "origin", &branch, "--prune"])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .output();
+    match out {
+        Ok(o) if o.status.success() => {
+            let _ = write_last_fetch_entry(store_path, "ok");
+        }
+        Ok(o) => {
+            let msg = String::from_utf8_lossy(&o.stderr)
+                .lines()
+                .next()
+                .unwrap_or("unknown")
+                .to_string();
+            let _ = write_last_fetch_entry(store_path, &format!("error: {}", msg));
+        }
+        Err(e) => {
+            let _ = write_last_fetch_entry(store_path, &format!("error: {}", e));
+        }
+    }
     Ok(())
 }
 
@@ -11833,6 +12039,178 @@ mod statusline_tests {
         let (tmp, local, _) = fixture_local_origin(0, 0);
         let r = local_lags_origin(tmp.path(), &local, "deadbee");
         assert_eq!(r, None);
+    }
+
+    // ── should_spawn_bg_fetch ──
+    // STORY-79: pure decision function for the background fetch spawner.
+    // trace:STORY-79 | ai:claude
+
+    /// No prior fetch and no live lock → spawn.
+    #[test]
+    fn bg_spawn_cold_start() {
+        assert!(should_spawn_bg_fetch(None, None, 300));
+    }
+
+    /// Recent successful fetch → skip.
+    #[test]
+    fn bg_spawn_skips_when_fetch_fresh() {
+        assert!(!should_spawn_bg_fetch(Some(60), None, 300));
+    }
+
+    /// Fetch older than interval → spawn (assuming no live lock).
+    #[test]
+    fn bg_spawn_after_interval() {
+        assert!(should_spawn_bg_fetch(Some(301), None, 300));
+    }
+
+    /// Live lockfile (another shell mid-fetch) → skip even when stale.
+    #[test]
+    fn bg_spawn_yields_to_live_lock() {
+        assert!(!should_spawn_bg_fetch(Some(301), Some(10), 300));
+    }
+
+    /// Stale lockfile (>3× interval, presumed dead worker) → spawn.
+    #[test]
+    fn bg_spawn_overrides_stale_lock() {
+        // 3 * 300 = 900; lock age 1000 > 900 → considered dead.
+        assert!(should_spawn_bg_fetch(Some(301), Some(1000), 300));
+    }
+
+    /// Equal-to-interval is still "fresh" (strict less-than boundary).
+    /// Tests the boundary so future refactors don't silently flip it.
+    #[test]
+    fn bg_spawn_fresh_boundary_is_strict_less_than() {
+        assert!(!should_spawn_bg_fetch(Some(299), None, 300));
+        assert!(should_spawn_bg_fetch(Some(300), None, 300));
+    }
+
+    // ── bg_fetch_enabled (env-driven) ──
+    // STORY-79: explicit disable values must turn the feature off.
+    // trace:STORY-79 | ai:claude
+
+    /// Run a closure with `AIDA_BG_FETCH` set to `val`, restoring the
+    /// previous value afterwards. Some tests run in parallel inside
+    /// the same process; we serialize via a static mutex so they
+    /// don't trample each other's env.
+    fn with_bg_fetch_env<R>(val: Option<&str>, f: impl FnOnce() -> R) -> R {
+        use std::sync::Mutex;
+        static LOCK: Mutex<()> = Mutex::new(());
+        let _guard = LOCK.lock().unwrap();
+        let prev = std::env::var("AIDA_BG_FETCH").ok();
+        match val {
+            Some(v) => std::env::set_var("AIDA_BG_FETCH", v),
+            None => std::env::remove_var("AIDA_BG_FETCH"),
+        }
+        let result = f();
+        match prev {
+            Some(v) => std::env::set_var("AIDA_BG_FETCH", v),
+            None => std::env::remove_var("AIDA_BG_FETCH"),
+        }
+        result
+    }
+
+    #[test]
+    fn bg_enabled_default_is_on() {
+        let r = with_bg_fetch_env(None, || bg_fetch_enabled());
+        assert!(r);
+    }
+
+    #[test]
+    fn bg_enabled_false_disables() {
+        for v in ["false", "FALSE", "0", "no", "off", "  off  "] {
+            let r = with_bg_fetch_env(Some(v), || bg_fetch_enabled());
+            assert!(!r, "value {:?} should disable", v);
+        }
+    }
+
+    #[test]
+    fn bg_enabled_truthy_keeps_on() {
+        for v in ["true", "1", "yes", ""] {
+            let r = with_bg_fetch_env(Some(v), || bg_fetch_enabled());
+            assert!(r, "value {:?} should leave enabled", v);
+        }
+    }
+
+    // ── bg_fetch_lock_path ──
+    // STORY-79: lockfile naming. trace:STORY-79 | ai:claude
+
+    /// Two stores under different project roots get different lockfiles
+    /// (collision would deadlock both projects' fetchers).
+    #[test]
+    fn bg_lock_path_is_per_project() {
+        let a = tempfile::TempDir::new().unwrap();
+        let b = tempfile::TempDir::new().unwrap();
+        std::fs::create_dir_all(a.path().join(".aida-store")).unwrap();
+        std::fs::create_dir_all(b.path().join(".aida-store")).unwrap();
+        let pa = bg_fetch_lock_path(&a.path().join(".aida-store")).unwrap();
+        let pb = bg_fetch_lock_path(&b.path().join(".aida-store")).unwrap();
+        assert_ne!(pa, pb);
+    }
+
+    /// Same store yields the same lockfile path across calls — lock
+    /// coordination depends on this stability.
+    #[test]
+    fn bg_lock_path_is_stable() {
+        let a = tempfile::TempDir::new().unwrap();
+        std::fs::create_dir_all(a.path().join(".aida-store")).unwrap();
+        let p1 = bg_fetch_lock_path(&a.path().join(".aida-store")).unwrap();
+        let p2 = bg_fetch_lock_path(&a.path().join(".aida-store")).unwrap();
+        assert_eq!(p1, p2);
+    }
+
+    // ── handle_bg_fetch_command (worker, end-to-end) ──
+    // STORY-79: full fixture round-trip — set up a real git project,
+    // run the worker, verify last-fetch.toml ends up with the expected
+    // result string. Skipped under restricted sandboxes that block
+    // `git fetch` on file:// remotes (rare; CI rolls everything).
+    // trace:STORY-79 | ai:claude
+
+    /// Worker writes `result = "error: ..."` to last-fetch.toml when the
+    /// store has no `origin` remote configured. Exercises the failure
+    /// path without needing network. Uses an isolated HOME so the test
+    /// doesn't clobber the real ~/.aida/cache/last-fetch.toml.
+    #[test]
+    fn bg_worker_records_error_on_missing_remote() {
+        use std::process::Command;
+        let tmp = tempfile::TempDir::new().unwrap();
+        let fake_home = tmp.path().join("home");
+        std::fs::create_dir_all(&fake_home).unwrap();
+        let project = tmp.path().join("proj");
+        std::fs::create_dir_all(&project).unwrap();
+        let store = project.join(".aida-store");
+        std::fs::create_dir_all(&store).unwrap();
+        let run = |args: &[&str]| {
+            Command::new("git")
+                .arg("-C").arg(&store)
+                .args(args)
+                .env("GIT_AUTHOR_NAME", "t").env("GIT_AUTHOR_EMAIL", "t@t")
+                .env("GIT_COMMITTER_NAME", "t").env("GIT_COMMITTER_EMAIL", "t@t")
+                .output().unwrap();
+        };
+        run(&["init", "--initial-branch=aida-store", "--quiet"]);
+        run(&["commit", "--allow-empty", "-m", "base", "--quiet"]);
+        // No `origin` remote configured → fetch fails.
+
+        // Redirect HOME so write_last_fetch_entry lands under our temp dir.
+        let prev_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", &fake_home);
+        let result = handle_bg_fetch_command(&store);
+        match prev_home {
+            Some(v) => std::env::set_var("HOME", v),
+            None => std::env::remove_var("HOME"),
+        }
+        assert!(result.is_ok());
+
+        let toml_path = fake_home.join(".aida/cache/last-fetch.toml");
+        assert!(toml_path.exists(), "expected {} to exist", toml_path.display());
+        let raw = std::fs::read_to_string(&toml_path).unwrap();
+        // Expected: error result keyed by the canonical project path.
+        assert!(raw.contains("result"), "{}", raw);
+        assert!(raw.contains("error"), "expected error result, got: {}", raw);
+
+        // Lockfile must be cleaned up on worker exit (drop guard).
+        let lock_path = bg_fetch_lock_path(&store).unwrap();
+        assert!(!lock_path.exists(), "lockfile {} should be removed", lock_path.display());
     }
 
     /// STORY-66: the auto-queue hook parses `aida add`'s spec_id out of a
@@ -13423,6 +13801,20 @@ fn handle_statusline_command(color: &str) -> Result<()> {
     let project_label = store_name.unwrap_or(project_name);
 
     let role = std::env::var("AIDA_SESSION_ROLE").ok();
+
+    // STORY-79: opportunistic background fetch. Fire-and-forget; uses
+    // current state for this render, refreshed state next render.
+    // trace:STORY-79 | ai:claude
+    {
+        let store_path = if project_root.join(".aida-store").exists() {
+            project_root.join(".aida-store")
+        } else {
+            project_root.join("aida-store")
+        };
+        if store_path.exists() {
+            maybe_spawn_bg_fetch(&project_root, &store_path);
+        }
+    }
 
     // Cache freshness state. Folds two axes (cache vs local, local vs
     // origin) into one severity-ordered label. None when there's no

@@ -2146,6 +2146,18 @@ pub enum Command {
         color: String,
     },
 
+    /// (internal) Background fetch worker spawned by `aida statusline`.
+    /// Fetches `origin/<branch>` for the orphan store at <store-path>,
+    /// updates `~/.aida/cache/last-fetch.toml`, and removes the
+    /// per-project lockfile. Not intended for direct invocation —
+    /// statusline forks this as a detached process with stdio nulled.
+    /// trace:STORY-79 | ai:claude
+    #[clap(name = "_bg-fetch", hide = true)]
+    BgFetch {
+        /// Absolute path to the orphan-store worktree (`.aida-store/`).
+        store_path: std::path::PathBuf,
+    },
+
     /// Upgrade aida to the latest release (or a specified version).
     /// Detects how aida was installed (cargo / pre-built binary) and uses
     /// the matching upgrade strategy. From a developer build with no
