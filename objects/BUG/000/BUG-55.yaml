@@ -1,0 +1,21 @@
+id: 019e0ff9-d14a-7333-9f1b-84d0d311920a
+spec_id: BUG-55
+agreed_id: BUG-55
+title: aida del doesn't accept --force / --yes; help text doesn't show how to skip confirmation
+description: |
+  Observed 2026-05-09: agent ran `aida del TASK-36 --force` and got `unexpected argument '--force' found`.
+
+  Two small fixes:
+
+  1. `aida del` should accept `--yes` / `-y` to skip the confirmation prompt (matching `aida session end --yes`, `aida doctor migrate-counter-scope --yes`, etc. — established convention).
+
+  2. If `--force` is more familiar, alias it. Or update --help to point at the right flag.
+
+  Today's behavior: `aida del <ID>` prompts y/N. There's no documented way to skip the prompt non-interactively, which makes scripted cleanup awkward.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T03:41:30.826422184Z
+modified_at: 2026-05-10T03:41:30.826422184Z
+req_type: Bug
