@@ -2118,11 +2118,17 @@ fn handle_git_backend_command(
         }
         // Phase 2: Relationship commands
         Command::Rel(RelationshipCommand::Add {
-            from,
-            to,
+            from_pos,
+            to_pos,
+            from_flag,
+            to_flag,
             r#type,
             bidirectional,
         }) => {
+            let from = from_pos.as_deref().or(from_flag.as_deref())
+                .ok_or_else(|| anyhow::anyhow!("missing FROM (positional or --from)"))?;
+            let to = to_pos.as_deref().or(to_flag.as_deref())
+                .ok_or_else(|| anyhow::anyhow!("missing TO (positional or --to)"))?;
             let mut from_req = backend
                 .get_requirement_by_spec_id(from)?
                 .ok_or_else(|| not_found::requirement_not_found(from, Some(store_path)))?;
@@ -2174,7 +2180,17 @@ fn handle_git_backend_command(
                 println!("Added inverse: {} --[{:?}]--> {}", to, inverse_type, from);
             }
         }
-        Command::Rel(RelationshipCommand::Remove { from, to, .. }) => {
+        Command::Rel(RelationshipCommand::Remove {
+            from_pos,
+            to_pos,
+            from_flag,
+            to_flag,
+            ..
+        }) => {
+            let from = from_pos.as_deref().or(from_flag.as_deref())
+                .ok_or_else(|| anyhow::anyhow!("missing FROM (positional or --from)"))?;
+            let to = to_pos.as_deref().or(to_flag.as_deref())
+                .ok_or_else(|| anyhow::anyhow!("missing TO (positional or --to)"))?;
             let mut from_req = backend
                 .get_requirement_by_spec_id(from)?
                 .ok_or_else(|| not_found::requirement_not_found(from, Some(store_path)))?;
@@ -12452,19 +12468,31 @@ fn handle_import_command(
 fn handle_relationship_command(cmd: &RelationshipCommand, storage: &Storage) -> Result<()> {
     match cmd {
         RelationshipCommand::Add {
-            from,
-            to,
+            from_pos,
+            to_pos,
+            from_flag,
+            to_flag,
             r#type,
             bidirectional,
         } => {
+            let from = from_pos.as_deref().or(from_flag.as_deref())
+                .ok_or_else(|| anyhow::anyhow!("missing FROM (positional or --from)"))?;
+            let to = to_pos.as_deref().or(to_flag.as_deref())
+                .ok_or_else(|| anyhow::anyhow!("missing TO (positional or --to)"))?;
             add_relationship(storage, from, to, r#type, *bidirectional)?;
         }
         RelationshipCommand::Remove {
-            from,
-            to,
+            from_pos,
+            to_pos,
+            from_flag,
+            to_flag,
             r#type,
             bidirectional,
         } => {
+            let from = from_pos.as_deref().or(from_flag.as_deref())
+                .ok_or_else(|| anyhow::anyhow!("missing FROM (positional or --from)"))?;
+            let to = to_pos.as_deref().or(to_flag.as_deref())
+                .ok_or_else(|| anyhow::anyhow!("missing TO (positional or --to)"))?;
             remove_relationship(storage, from, to, r#type, *bidirectional)?;
         }
         RelationshipCommand::List { id } => {
