@@ -27,12 +27,12 @@ description: |
   ## Out of scope (queued for later)
 
   - Per-session role activity log (the "bigger fix" mentioned in the conversation): each session has its own activity log so role state is shared but per-session "what I'm on" is independent. Defer until STORY-48 (lease enforcement) lands — both touch the same per-session-state plumbing.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T02:47:31.384872919Z
-modified_at: 2026-05-10T02:47:31.384872919Z
+modified_at: 2026-05-10T03:12:08.662938162Z
 req_type: Story
 relationships:
 - rel_type: Child
