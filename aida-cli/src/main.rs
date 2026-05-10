@@ -21463,6 +21463,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // access); silently consume it here. trace:STORY-78 | ai:claude
             sync: _,
             include_terminal,
+            scope: scope_filter,
         } => {
             let user_id = get_user(user);
             let raw_entries = if *global {
@@ -21514,6 +21515,32 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // user knows the listing isn't the whole queue.
             // trace:TASK-46 | ai:claude
             let mut hidden_terminal_count: usize = 0;
+
+            // TASK-52: parse --scope <CSV>. `none` (case-insensitive) is
+            // a sentinel meaning "entries with no for_scope set". Any
+            // other token (or comma-separated list) matches against
+            // explicit `for_scope` AND the auto-derived parent EPIC
+            // label from TASK-44 (so the displayed chip and the filter
+            // agree). trace:TASK-52 | ai:claude
+            #[derive(Debug, Clone)]
+            enum ScopeFilterKind {
+                Match(Vec<String>),
+                NoScope,
+            }
+            let scope_filter_parsed: Option<ScopeFilterKind> = scope_filter
+                .as_deref()
+                .map(|raw| {
+                    let parts: Vec<String> = raw
+                        .split(',')
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect();
+                    if parts.iter().any(|p| p.eq_ignore_ascii_case("none")) {
+                        ScopeFilterKind::NoScope
+                    } else {
+                        ScopeFilterKind::Match(parts)
+                    }
+                });
             let entries: Vec<&aida_core::QueueEntry> = raw_entries
                 .iter()
                 .filter(|e| match &role_filter {
@@ -21538,6 +21565,34 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         return false;
                     }
                     true
+                })
+                .filter(|e| {
+                    // TASK-52: --scope filter. Matches explicit
+                    // for_scope first, then the auto-derived parent
+                    // EPIC label so the displayed chip and the filter
+                    // agree. trace:TASK-52 | ai:claude
+                    let Some(ref kind) = scope_filter_parsed else {
+                        return true;
+                    };
+                    match kind {
+                        ScopeFilterKind::NoScope => e.for_scope.is_none(),
+                        ScopeFilterKind::Match(wants) => {
+                            if let Some(ref fs) = e.for_scope {
+                                if wants.iter().any(|w| w.eq_ignore_ascii_case(fs)) {
+                                    return true;
+                                }
+                            }
+                            // Fall through to derived parent-EPIC label.
+                            let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id) else {
+                                return false;
+                            };
+                            if let Some(derived) = derive_parent_epic_label(req, &store) {
+                                wants.iter().any(|w| w.eq_ignore_ascii_case(&derived))
+                            } else {
+                                false
+                            }
+                        }
+                    }
                 })
                 .filter(|e| {
                     let Some((scope_tags, scope_status)) = &scope else {

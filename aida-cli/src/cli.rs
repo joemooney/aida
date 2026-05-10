@@ -1695,6 +1695,15 @@ pub enum QueueCommand {
         /// focused on actionable work. trace:TASK-46 | ai:claude
         #[clap(long)]
         include_terminal: bool,
+        /// Filter to entries whose `for_scope` matches one of these
+        /// scopes (comma list). Pass `none` to filter to entries with
+        /// no `for_scope` set (the "uncategorized" pile).
+        /// Mirrors STORY-57's `--scope` shape on `queue add`. Distinct
+        /// from `--no-scope`, which bypasses the active role's
+        /// scope_tags/scope_status filters — different axis.
+        /// trace:TASK-52 | ai:claude
+        #[clap(long, value_name = "CSV")]
+        scope: Option<String>,
     },
     /// Add a requirement to your queue
     Add {
