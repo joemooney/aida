@@ -1702,6 +1702,13 @@ pub enum QueueCommand {
         /// Move before this requirement ID
         #[clap(long)]
         before: Option<String>,
+        /// Move immediately after this requirement ID — symmetric to
+        /// `--before`. Useful for "put X right after Y" reasoning, and
+        /// for inserting a cluster of items after a single anchor
+        /// without each move shifting the previous one further from the
+        /// anchor. trace:STORY-72 | ai:claude
+        #[clap(long)]
+        after: Option<String>,
     },
     /// Clear queue entries
     Clear {

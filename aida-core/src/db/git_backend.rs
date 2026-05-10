@@ -540,8 +540,27 @@ impl DatabaseBackend for GitBackend {
         } else {
             Vec::new()
         };
-        // Upsert: replace if same requirement_id exists
+        // Upsert: replace if same requirement_id exists.
         entries.retain(|e| e.requirement_id != entry.requirement_id);
+
+        // STORY-72: callers pass `i64::MAX` as a "append to bottom"
+        // sentinel (queue add path in aida-cli) and expect the backend to
+        // resolve it to `existing_max + 1000`. Earlier this path stored
+        // the sentinel as-is, so every item ended up with `position:
+        // i64::MAX` and any subsequent reorder math (`--before`, the new
+        // `--after`) either silently no-op'd or overflowed. Resolve here
+        // so the on-disk YAML always carries real positions.
+        // trace:STORY-72 | ai:claude
+        let mut entry = entry;
+        if entry.position == i64::MAX {
+            let max_existing = entries
+                .iter()
+                .filter(|e| e.position != i64::MAX)
+                .map(|e| e.position)
+                .max()
+                .unwrap_or(0);
+            entry.position = max_existing.saturating_add(1000);
+        }
         entries.push(entry);
         entries.sort_by_key(|e| e.position);
         let yaml = serde_yaml::to_string(&entries)?;

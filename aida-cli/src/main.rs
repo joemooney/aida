@@ -10156,6 +10156,28 @@ fn humanize_size(bytes: u64) -> String {
     }
 }
 
+/// Compute the new queue position for `aida queue move X --after Y`.
+/// `anchor` is Y's current position; `successor` is the position of the
+/// next entry strictly after Y, or `None` when Y is at the bottom.
+///
+/// Returns a position that sorts strictly between `anchor` and the next
+/// entry. Midpoint math when there's room; +1 fallback when adjacent
+/// (collision risk acknowledged — safe in practice because positions are
+/// initially gapped by 1000); +1000 when Y is at the bottom. All math is
+/// saturating so a corrupt-state queue (every item at `i64::MAX` from a
+/// pre-fix queue_add, see git_backend.rs) doesn't panic on overflow —
+/// the callsite is expected to surface a friendlier hint instead.
+/// trace:STORY-72 | ai:claude
+fn position_after(anchor: i64, successor: Option<i64>) -> i64 {
+    match successor {
+        Some(np) if np > anchor.saturating_add(1) => {
+            anchor.saturating_add((np.saturating_sub(anchor)) / 2)
+        }
+        Some(_) => anchor.saturating_add(1),
+        None => anchor.saturating_add(1000),
+    }
+}
+
 fn humanize_age_secs(secs: u64) -> String {
     if secs < 86_400 {
         format!("{}h", secs / 3600)
@@ -10470,6 +10492,36 @@ mod statusline_tests {
         assert_eq!(humanize_size(1024 * 1024), "1.0 MB");
         assert_eq!(humanize_size(1024 * 1024 * 3 / 2), "1.5 MB");
         assert_eq!(humanize_size(1024 * 1024 * 1024), "1.0 GB");
+    }
+
+    /// STORY-72: position math for `queue move --after`. Three regimes —
+    /// gapped (typical), adjacent (collision fallback), bottom (no
+    /// successor). trace:STORY-72 | ai:claude
+    #[test]
+    fn position_after_picks_midpoint_when_gapped() {
+        // Typical case: anchor + successor with the standard 1000 gap.
+        assert_eq!(position_after(0, Some(1000)), 500);
+        // Wider gap still midpoints.
+        assert_eq!(position_after(2000, Some(4000)), 3000);
+        // Anchor at bottom — no successor — uses the +1000 step that
+        // matches the existing `--bottom` convention.
+        assert_eq!(position_after(7000, None), 8000);
+        // Adjacent positions: midpoint would land on the anchor (collision).
+        // Fall through to +1 even though it risks colliding with the next
+        // entry — the situation only arises in pathologically dense queues.
+        assert_eq!(position_after(5, Some(6)), 6);
+        assert_eq!(position_after(5, Some(5)), 6);
+        // Negative anchor (queue items moved to top via `--top` use
+        // negative positions) still produces a sortable midpoint.
+        assert_eq!(position_after(-1000, Some(0)), -500);
+        // Saturating arithmetic: a pre-fix corrupt queue where every
+        // entry has `position: i64::MAX` (see git_backend's queue_add
+        // sentinel resolution) must not overflow. The result clamps to
+        // i64::MAX rather than wrapping. The user-visible result is a
+        // no-op move, which is fine — better than a panic.
+        assert_eq!(position_after(i64::MAX, None), i64::MAX);
+        assert_eq!(position_after(i64::MAX, Some(i64::MAX)), i64::MAX);
+        assert_eq!(position_after(i64::MAX - 1, None), i64::MAX);
     }
 
     /// STORY-60: age formatter for the prune candidate list. Resolution
@@ -19217,6 +19269,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             top,
             bottom,
             before,
+            after,
         } => {
             let user_id = std::env::var("AIDA_USER")
                 .or_else(|_| std::env::var("USER"))
@@ -19230,7 +19283,22 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             }
             .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
 
-            let entries = storage.queue_list(&user_id, true)?;
+            let mut entries = storage.queue_list(&user_id, true)?;
+            // STORY-72: queues created before the queue_add sentinel-fix
+            // can have every entry at `position: i64::MAX`, which makes
+            // any --before/--after/--top math unable to produce a
+            // distinct-sorting result. Detect that state and lay down
+            // properly-gapped positions (preserving display order) before
+            // we compute the new slot. trace:STORY-72 | ai:claude
+            if entries.iter().any(|e| e.position == i64::MAX) {
+                let renumber: Vec<(uuid::Uuid, i64)> = entries
+                    .iter()
+                    .enumerate()
+                    .map(|(i, e)| (e.requirement_id, (i as i64 + 1) * 1000))
+                    .collect();
+                storage.queue_reorder(&user_id, &renumber)?;
+                entries = storage.queue_list(&user_id, true)?;
+            }
             let new_position = if *top {
                 entries.first().map(|e| e.position - 1000).unwrap_or(0)
             } else if *bottom {
@@ -19242,14 +19310,48 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     store.get_requirement_by_spec_id(before_id)
                 }
                 .ok_or_else(|| not_found::requirement_not_found(before_id, Some(storage.path())))?;
-
+                if before_req.id == req.id {
+                    anyhow::bail!("--before target is the same as the moved item");
+                }
                 entries
                     .iter()
                     .find(|e| e.requirement_id == before_req.id)
-                    .map(|e| e.position - 1)
-                    .unwrap_or(0)
+                    .ok_or_else(|| anyhow::anyhow!(
+                        "{} is not in the queue", before_id
+                    ))
+                    .map(|e| e.position - 1)?
+            } else if let Some(ref after_id) = after {
+                // STORY-72: --after Y places X immediately after Y in the
+                // queue. Symmetric to --before. Midpoint math against the
+                // successor avoids the naive `Y.pos + 1` collision when the
+                // queue happens to be densely-packed; falls back to
+                // `Y.pos + 1000` when Y is at the bottom.
+                // trace:STORY-72 | ai:claude
+                let after_req = if let Ok(uuid) = uuid::Uuid::parse_str(after_id) {
+                    store.requirements.iter().find(|r| r.id == uuid)
+                } else {
+                    store.get_requirement_by_spec_id(after_id)
+                }
+                .ok_or_else(|| not_found::requirement_not_found(after_id, Some(storage.path())))?;
+                if after_req.id == req.id {
+                    anyhow::bail!("--after target is the same as the moved item");
+                }
+                let anchor_pos = entries
+                    .iter()
+                    .find(|e| e.requirement_id == after_req.id)
+                    .ok_or_else(|| anyhow::anyhow!(
+                        "{} is not in the queue", after_id
+                    ))?
+                    .position;
+                // Successor is the next entry strictly after the anchor in
+                // sorted-by-position order. queue_list already returns sorted.
+                let successor_pos = entries
+                    .iter()
+                    .find(|e| e.position > anchor_pos)
+                    .map(|e| e.position);
+                position_after(anchor_pos, successor_pos)
             } else {
-                anyhow::bail!("Specify --top, --bottom, or --before <ID>");
+                anyhow::bail!("Specify --top, --bottom, --before <ID>, or --after <ID>");
             };
 
             storage.queue_reorder(&user_id, &[(req.id, new_position)])?;
