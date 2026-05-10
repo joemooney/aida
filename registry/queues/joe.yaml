@@ -101,3 +101,10 @@
   added_at: 2026-05-10T17:26:01.867020458Z
   for_role: implementer
   for_scope: EPIC-20
+- user_id: joe
+  requirement_id: 019e12f7-93b1-7eb3-aeab-1e3b1fed837e
+  position: 9223372036854775807
+  added_by: joe
+  added_at: 2026-05-10T17:38:06.604659958Z
+  for_role: implementer
+  for_scope: EPIC-20
