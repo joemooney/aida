@@ -1,0 +1,24 @@
+id: 019e1043-6cfe-75b1-ac65-7f3dbaf03b87
+spec_id: TASK-39
+agreed_id: TASK-39
+title: Case-insensitive SPEC-ID lookup in CLI + commit-msg hook + alphanumeric node id support
+description: |
+  User asked 2026-05-09 for `aida show fr-1` etc. to work case-insensitively. Implemented:
+
+  - `object_store::canonical_spec_id()` helper; applied in `object_path` and `relative_object_path` so on-disk filename lookup is case-insensitive
+  - `RequirementsStore::get_requirement_by_spec_id` matches both spec_id and agreed_id case-insensitively
+  - Same change in `Storage` trait default impl, `GitBackend`, `PostgresBackend`
+  - CLI inline `.find(|r| r.spec_id.as_deref() == Some(...))` callsites in queue add/remove/move/done converted to use the canonical helper
+  - `aida-commit-msg` hook regex broadened to `[A-Za-z]+` (case-insensitive) AND alphanumeric node id support (FR-JM-42, FR-JPM-42 forms now valid)
+  - `trace:` regex in the hook also accepts alphanumeric node id
+
+  User reasoning:
+  - Typing speed: lowercase on the CLI is faster
+  - Alphanumeric node id: `validate_node_id` already accepts `[A-Za-z0-9][A-Za-z0-9_-]*` (e.g. id="JM"), but the hook regex required digits-only — inconsistent
+status: InProgress
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T05:01:54.814866713Z
+modified_at: 2026-05-10T05:01:54.814866713Z
+req_type: Task
