@@ -38,10 +38,10 @@ description: |
   - [ ] Skips each leg when nothing's pending (matches `aida push` skip behavior)
   - [ ] Help text + man page updated
   - [ ] Behavior tested when: (a) only code is behind, (b) only orphan store is behind, (c) both, (d) neither
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T16:54:17.621496941Z
-modified_at: 2026-05-10T16:54:17.621496941Z
+modified_at: 2026-05-10T19:13:56.096302099Z
 req_type: Task
