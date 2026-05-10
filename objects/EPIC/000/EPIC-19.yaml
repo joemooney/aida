@@ -20,10 +20,10 @@ description: |-
   3. Scope: just data migrations? Or also "my project's broken, help me" runbooks? Probably both, but data-migrations land first since they're testable.
 
   First implementation candidate: `aida doctor migrate-counter-scope --to global` — operates on a per-type project, computes the next free global counter floor (max across all type blocks), allocates a new `*` block above it, and writes counter_scope=global to config. Per-type blocks remain in place but no longer dispense from (find_active_block_or_global will hit the `*` block first... actually we'd need to retire per-type blocks too, so they don't keep dispensing FR-3 alongside the global counter's BUG-3).
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T00:52:10.099963275Z
-modified_at: 2026-05-10T00:52:10.099963275Z
+modified_at: 2026-05-10T01:41:48.845901851Z
 req_type: Epic
