@@ -8289,8 +8289,15 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             permission_mode,
             role,
         } => session::new_session(title.clone(), permission_mode, role.clone()),
-        SessionCommand::Start { owns, branch, base, path, forge } => {
-            session_start(owns, branch.as_deref(), base.as_deref(), path.as_deref(), forge.as_deref())
+        SessionCommand::Start { owns, branch, base, path, forge, branch_style } => {
+            session_start(
+                owns,
+                branch.as_deref(),
+                base.as_deref(),
+                path.as_deref(),
+                forge.as_deref(),
+                branch_style,
+            )
         }
         SessionCommand::End { id, yes } => session_end(id.as_deref(), *yes),
         SessionCommand::Leases { verbose } => session_leases(*verbose),
@@ -8320,6 +8327,19 @@ struct SessionLease {
     started_at: chrono::DateTime<chrono::Utc>,
     /// Hostname when started.
     hostname: String,
+    /// Role active in the calling shell at session-start time, if any.
+    /// Lets `aida session leases` / `aida session show` display role per
+    /// session, and gives subsequent role-aware tooling inside the worktree
+    /// the right starting persona. Optional for back-compat with older
+    /// leases written before STORY-65. trace:STORY-65 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    role: Option<String>,
+    /// PID of the shell that ran `aida session start`. Used by
+    /// `aida session end` to resolve the right lease when the user runs
+    /// `end` from the same parent shell that ran `start` (cwd is outside
+    /// the worktree). Optional for back-compat. trace:STORY-73 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    creator_pid: Option<u32>,
 }
 
 fn leases_dir(project_root: &std::path::Path) -> std::path::PathBuf {
@@ -8876,12 +8896,95 @@ fn detect_forge_from_origin(project_root: &std::path::Path) -> Option<ReviewForg
     }
 }
 
+/// True if `branch` exists either locally or as `origin/<branch>`. Used by
+/// STORY-65 auto-branch resolution. Treats any git error as "doesn't exist"
+/// — better to try the name and let `git worktree add -b` fail loudly than
+/// to refuse to start a session because origin is unreachable.
+/// trace:STORY-65 | ai:claude
+fn branch_exists_anywhere(project_root: &std::path::Path, branch: &str) -> bool {
+    let local = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["rev-parse", "--verify", "--quiet", &format!("refs/heads/{}", branch)])
+        .output();
+    if matches!(&local, Ok(o) if o.status.success()) {
+        return true;
+    }
+    aida_core::git_ops::remote_branch_exists(project_root, "origin", branch)
+}
+
+/// Walk a candidate list of branch names and return the first that's free
+/// locally and on origin. STORY-65: auto for slug → slug-2..-10 →
+/// slug-YYYY-MM-DD → slug-YYYY-MM-DD-2..-10; date for slug-YYYY-MM-DD
+/// (with -N suffix on collision). Bails if 21 candidates all collide —
+/// that's a strong signal the user wants an explicit --branch.
+/// trace:STORY-65 | ai:claude
+fn resolve_session_branch(
+    project_root: &std::path::Path,
+    slug: &str,
+    branch_style: &str,
+) -> Result<String> {
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let dated = format!("{}-{}", slug, today);
+    let candidates: Vec<String> = match branch_style {
+        "auto" => {
+            let mut v = vec![slug.to_string()];
+            for n in 2..=10 {
+                v.push(format!("{}-{}", slug, n));
+            }
+            v.push(dated.clone());
+            for n in 2..=10 {
+                v.push(format!("{}-{}", dated, n));
+            }
+            v
+        }
+        "date" => {
+            let mut v = vec![dated.clone()];
+            for n in 2..=10 {
+                v.push(format!("{}-{}", dated, n));
+            }
+            v
+        }
+        other => anyhow::bail!(
+            "unknown --branch-style `{}` (expected `auto` or `date`)",
+            other
+        ),
+    };
+    for cand in &candidates {
+        if !branch_exists_anywhere(project_root, cand) {
+            return Ok(cand.clone());
+        }
+    }
+    anyhow::bail!(
+        "all {} candidate branch names are taken (slug `{}`); pass --branch explicitly",
+        candidates.len(),
+        slug
+    )
+}
+
+/// Best-effort PID of the shell that invoked `aida session start`. The
+/// `aida` shell wrapper is a function (not a forked process) so the
+/// binary's parent IS the user's interactive shell. Goes through sysinfo
+/// — already on for STORY-69 — so we don't add a libc dep just for
+/// `getppid`. Returns None if sysinfo can't see this process at all (a
+/// platform that didn't make it into the probe). trace:STORY-73 | ai:claude
+fn creator_shell_pid() -> Option<u32> {
+    let mut sys = sysinfo::System::new_with_specifics(
+        sysinfo::RefreshKind::new()
+            .with_processes(sysinfo::ProcessRefreshKind::new()),
+    );
+    sys.refresh_processes_specifics(sysinfo::ProcessRefreshKind::new());
+    let me = sysinfo::Pid::from_u32(std::process::id());
+    sys.process(me)?.parent().map(|p| p.as_u32())
+}
+
 fn session_start(
     owns: &str,
     branch: Option<&str>,
     base: Option<&str>,
     explicit_path: Option<&str>,
     forge_override: Option<&str>,
+    branch_style: &str,
 ) -> Result<()> {
     let project_root = find_project_root()?;
     let slug = slugify(owns);
@@ -8903,9 +9006,17 @@ fn session_start(
             (resolved_forge, n)
         });
 
+    // STORY-65: auto-branch with collision-aware naming. If --branch isn't
+    // given (and we're not in review mode, which has its own deterministic
+    // naming), walk a candidate list — slug, slug-2..-10, slug-YYYY-MM-DD,
+    // slug-YYYY-MM-DD-2..-10 — and pick the first that doesn't exist
+    // locally OR on origin. `--branch-style date` skips straight to the
+    // dated form for callers that want every session traceable to a date.
+    // trace:STORY-65 | ai:claude
     let branch_name = match (&review_target, branch) {
         (Some((forge, n)), None) => forge.local_branch_for(*n),
-        _ => branch.map(|s| s.to_string()).unwrap_or_else(|| slug.clone()),
+        (_, Some(b)) => b.to_string(),
+        (None, None) => resolve_session_branch(&project_root, &slug, branch_style)?,
     };
     let repo_name = project_root
         .file_name()
@@ -9062,6 +9173,21 @@ fn session_start(
         .ok()
         .or_else(|| std::env::var("USER").ok())
         .unwrap_or_else(|| "unknown".to_string());
+    // STORY-65: inherit the calling shell's role (if any) into the lease so
+    // `aida session leases`, `aida session show`, and tooling inside the
+    // worktree all know which persona this session was started under.
+    // trace:STORY-65 | ai:claude
+    let inherited_role = std::env::var("AIDA_SESSION_ROLE")
+        .ok()
+        .filter(|s| !s.trim().is_empty());
+
+    // STORY-73: capture the parent shell PID so `aida session end` (without
+    // an arg) can resolve the right lease from the shell that ran `start`,
+    // even when cwd doesn't help. Best effort — if PPID isn't set / process
+    // self-introspection fails, we leave the field None and fall back to
+    // the cwd / single-active heuristics. trace:STORY-73 | ai:claude
+    let creator_pid = creator_shell_pid();
+
     let lease = SessionLease {
         id: id.clone(),
         scope: owns.to_string(),
@@ -9073,6 +9199,8 @@ fn session_start(
         branch: branch_name.clone(),
         started_at: chrono::Utc::now(),
         hostname: hostname(),
+        role: inherited_role.clone(),
+        creator_pid,
     };
     let lease_file = lease_path(&project_root, &id);
     std::fs::write(&lease_file, toml::to_string_pretty(&lease)?)?;
@@ -9089,6 +9217,9 @@ fn session_start(
         "worktree".bold(),
         worktree_path.display().to_string().cyan()
     );
+    if let Some(r) = &inherited_role {
+        println!("  {}: {} {}", "role".bold(), r.cyan(), "(inherited)".dimmed());
+    }
     println!("  {}: {}", "lease".bold(), lease_file.display().to_string().dimmed());
     println!();
     println!("Next:");
@@ -9324,17 +9455,22 @@ fn session_leases(verbose: bool) -> Result<()> {
     }
     println!("{}", "Active session leases".bold());
     println!();
+    // STORY-65: role column shows the persona inherited at session start
+    // (blank when no role was active in the calling shell). Lets multi-
+    // session workflows see at a glance which seat each lease was opened
+    // under. trace:STORY-65 | ai:claude
     println!(
-        "{:<14} {:<24} {:<22} {}",
-        "id", "scope", "branch", "worktree"
+        "{:<14} {:<20} {:<18} {:<14} {}",
+        "id", "scope", "branch", "role", "worktree"
     );
-    println!("{}", "─".repeat(96));
+    println!("{}", "─".repeat(102));
     for l in &leases {
         println!(
-            "{:<14} {:<24} {:<22} {}",
+            "{:<14} {:<20} {:<18} {:<14} {}",
             (&l.id[..8]).yellow(),
-            truncate(&l.scope, 24),
-            truncate(&l.branch, 22),
+            truncate(&l.scope, 20),
+            truncate(&l.branch, 18),
+            truncate(l.role.as_deref().unwrap_or("-"), 14),
             l.worktree_path.display()
         );
     }
@@ -9711,6 +9847,8 @@ mod statusline_tests {
             branch: "br".into(),
             started_at: now,
             hostname: "h".into(),
+            role: None,
+            creator_pid: None,
         };
 
         // No routing tags = visible everywhere.
@@ -9808,6 +9946,8 @@ mod lease_enforcement_tests {
             branch: format!("br-{}", id),
             started_at: chrono::Utc::now(),
             hostname: "test".into(),
+            role: None,
+            creator_pid: None,
         }
     }
 
@@ -9961,6 +10101,8 @@ mod scope_fallback_tests {
             branch: "br".into(),
             started_at: chrono::Utc::now(),
             hostname: "h".into(),
+            role: None,
+            creator_pid: None,
         }
     }
 
@@ -10180,6 +10322,93 @@ mod store_walkup_tests {
         let nested = tmp.path().join("a/b");
         std::fs::create_dir_all(&nested).unwrap();
         assert!(detect_distributed_store_from(&nested).is_none());
+    }
+}
+
+#[cfg(test)]
+mod auto_branch_tests {
+    use super::*;
+    use std::process::Command;
+    use tempfile::TempDir;
+
+    fn init_repo() -> TempDir {
+        let tmp = TempDir::new().unwrap();
+        Command::new("git")
+            .arg("-C")
+            .arg(tmp.path())
+            .args(["init", "--initial-branch=main", "--quiet"])
+            .status()
+            .unwrap();
+        // Need at least one commit so subsequent branch creates work.
+        Command::new("git")
+            .arg("-C")
+            .arg(tmp.path())
+            .args(["commit", "--allow-empty", "-m", "init", "--quiet"])
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@t")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@t")
+            .status()
+            .unwrap();
+        tmp
+    }
+
+    fn create_branch(repo: &std::path::Path, name: &str) {
+        Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(["branch", name])
+            .status()
+            .unwrap();
+    }
+
+    /// First call returns the slug as-is. trace:STORY-65 | ai:claude
+    #[test]
+    fn auto_branch_slug_when_free() {
+        let tmp = init_repo();
+        let got = resolve_session_branch(tmp.path(), "epic-20", "auto").unwrap();
+        assert_eq!(got, "epic-20");
+    }
+
+    /// Slug taken → `-2`. trace:STORY-65 | ai:claude
+    #[test]
+    fn auto_branch_appends_2_on_first_collision() {
+        let tmp = init_repo();
+        create_branch(tmp.path(), "epic-20");
+        let got = resolve_session_branch(tmp.path(), "epic-20", "auto").unwrap();
+        assert_eq!(got, "epic-20-2");
+    }
+
+    /// Slug + slug-2..-10 all taken → falls through to dated form.
+    /// trace:STORY-65 | ai:claude
+    #[test]
+    fn auto_branch_falls_back_to_dated_form() {
+        let tmp = init_repo();
+        create_branch(tmp.path(), "epic-20");
+        for n in 2..=10 {
+            create_branch(tmp.path(), &format!("epic-20-{}", n));
+        }
+        let got = resolve_session_branch(tmp.path(), "epic-20", "auto").unwrap();
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        assert_eq!(got, format!("epic-20-{}", today));
+    }
+
+    /// `--branch-style date` skips the slug attempt and goes straight to
+    /// the dated form. trace:STORY-65 | ai:claude
+    #[test]
+    fn date_branch_style_uses_date_form_even_when_slug_free() {
+        let tmp = init_repo();
+        let got = resolve_session_branch(tmp.path(), "epic-20", "date").unwrap();
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        assert_eq!(got, format!("epic-20-{}", today));
+    }
+
+    /// Unknown style errors clearly. trace:STORY-65 | ai:claude
+    #[test]
+    fn unknown_branch_style_errors() {
+        let tmp = init_repo();
+        let err = resolve_session_branch(tmp.path(), "epic-20", "wat").unwrap_err();
+        assert!(err.to_string().contains("unknown --branch-style"));
     }
 }
 

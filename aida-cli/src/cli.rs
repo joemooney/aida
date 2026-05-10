@@ -440,6 +440,16 @@ pub enum SessionCommand {
         /// trace:STORY-61 | ai:claude
         #[clap(long, value_name = "FORGE")]
         forge: Option<String>,
+
+        /// Branch naming style when --branch isn't given.
+        ///   `auto` (default): try slug, then slug-2..-10, then
+        ///                     slug-YYYY-MM-DD, then slug-YYYY-MM-DD-2..-10.
+        ///   `date`:           always slug-YYYY-MM-DD (with -N suffix on
+        ///                     collision). Useful when every session
+        ///                     should be traceable to its date.
+        /// trace:STORY-65 | ai:claude
+        #[clap(long, value_name = "STYLE", default_value = "auto")]
+        branch_style: String,
     },
 
     /// End a scoped session: remove the worktree, delete the lease,
