@@ -1,0 +1,43 @@
+id: 019e12fe-e886-7833-af00-7c1f58015639
+spec_id: TASK-51
+agreed_id: TASK-51
+title: 'PR-4 followup: wire aida session show to print pr_head_sha/pr_base_sha/pr_base_ref from STORY-71'
+description: |
+  Tracked from PR-5 reviewer's verdict 2026-05-10 — STORY-71's acceptance includes "aida session show <id> displays the PR head/base SHAs" but `session_show` (which lives in PR-4 / epic-20-batch4) doesn't currently read or print these fields. PR-5 ships the lease schema + capture path; the read-out half lives in PR-4.
+
+  ## What's needed
+
+  In `epic-20-batch4`'s session_show implementation (post-rebase on merged-PR-5 main):
+
+  1. Read the new lease fields: `pr_head_sha`, `pr_base_sha`, `pr_base_ref` (all `Option<String>`)
+  2. When any are set, render in `aida session show` output:
+     ```
+     PR / MR:        head <pr_head_sha[..12]>  base <pr_base_ref> (<pr_base_sha[..12]>)
+     ```
+  3. When all are None (regular non-PR session), omit the line entirely (don't render an empty placeholder)
+
+  ## Sequence
+
+  1. Wait for PR-5 to be merged to main
+  2. The PR-4 implementer rebases epic-20-batch4 on merged main → lease fields now visible
+  3. Add a small commit to PR-4 wiring the print path
+  4. PR-4 reviewer re-reads (mostly stable since prior review)
+  5. Merge PR-4
+  6. Mark STORY-71 as Completed (this TASK gets the credit for closing the read-side gap)
+
+  ## Why high priority
+
+  Without this TASK getting picked up, STORY-71 sits in Approved status indefinitely — the user's mental model says "STORY-71 is done" but the data says otherwise. Closing the loop requires explicit work on PR-4.
+
+  ## Acceptance
+
+  - [ ] After PR-5 + this TASK + PR-4 all merge: `aida session show <pr-session-id>` prints PR head/base lines
+  - [ ] Non-PR sessions still render cleanly (no empty PR/MR row)
+  - [ ] STORY-71 marked Completed after merge
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T17:45:56.102182332Z
+modified_at: 2026-05-10T17:45:56.102182332Z
+req_type: Task
