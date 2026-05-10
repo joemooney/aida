@@ -1,0 +1,46 @@
+id: 019e108f-202b-7800-9d8f-4cc4dd4c0fbf
+spec_id: BUG-63
+agreed_id: BUG-63
+title: 'FR-215 git-canonical --parent: doesn''t accept UUID, not strictly atomic'
+description: |-
+  Surfaced 2026-05-10 during PR-3 review. Two pre-existing gaps in FR-215's git-canonical add path (aida-cli/src/main.rs:1660-1794), both relative to FR-215's stated acceptance criteria.
+
+  ## Gap 1 — UUID lookups not supported
+
+  `--parent` resolution calls `backend.get_requirement_by_spec_id(parent_str)?` only. `git_backend.rs:396-411` searches by spec_id (file name) and agreed_id, but never tries `Uuid::parse_str(parent_str)`. So passing a raw UUID for `--parent` errors as 'parent not found' even when the requirement exists.
+
+  The legacy SQLite path (`aida-cli/src/main.rs:3682-3686`) handles this via `parse_requirement_id`, which tries UUID first, then SPEC-ID. Bring the git-canonical path to parity.
+
+  ## Gap 2 — child requirement created before parent lookup
+
+  Order of operations in the git-canonical Add handler:
+    1. line 1660: `backend.update_atomically` — adds the requirement
+    2. line 1671: `object_store::write_object` — persists to disk
+    3. line 1737: parent lookup; errors with 'child req X created but the parent relationship was NOT recorded' on miss
+
+  Result: when `--parent` resolves to nothing, the child req is left in the store dangling (no parent edge). FR-215's AC says 'Relationship is created atomically with the requirement'. Either resolve+validate the parent before `update_atomically`, or wrap both in a single `update_atomically` block that rolls back the child on parent-resolve failure.
+
+  ## Verify
+
+    # Setup: known-existing requirement
+    aida add --type story --title 'parent' --status draft  # note its UUID
+
+    # Gap 1 reproduction (currently fails):
+    aida add --type story --title 'child by uuid' --parent <UUID-of-parent>
+    # Should succeed and link bidirectionally.
+
+    # Gap 2 reproduction (currently leaves orphan):
+    aida add --type story --title 'orphan attempt' --parent NONEXISTENT-999
+    aida list | grep 'orphan attempt'
+    # Should be absent (whole add rolled back), not present-without-parent.
+
+  ## Notes
+
+  Not introduced by PR #3 — the git-canonical `--parent` path was wired up in commit 08009bc7 on main. PR #3's BUG-58 fix brings the legacy path INTO ALIGNMENT with the (imperfect) git-canonical convention; this bug is the next step.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T06:24:35.883151110Z
+modified_at: 2026-05-10T06:24:35.883151110Z
+req_type: Bug
