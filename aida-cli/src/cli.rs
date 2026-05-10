@@ -1227,17 +1227,29 @@ pub enum RelDefCommand {
 #[derive(Subcommand, Debug)]
 pub enum RelationshipCommand {
     /// Add a relationship between requirements
+    ///
+    /// Both positional and flag forms work:
+    ///   aida rel add STORY-72 EPIC-13 --type child
+    ///   aida rel add --from STORY-72 --to EPIC-13 --type child
     Add {
-        /// Source requirement ID (UUID or SPEC-ID)
-        #[clap(long)]
-        from: String,
+        /// Source requirement ID (UUID or SPEC-ID). Positional or via --from.
+        #[clap(value_name = "FROM")]
+        from_pos: Option<String>,
 
-        /// Target requirement ID (UUID or SPEC-ID)
-        #[clap(long)]
-        to: String,
+        /// Target requirement ID (UUID or SPEC-ID). Positional or via --to.
+        #[clap(value_name = "TO")]
+        to_pos: Option<String>,
+
+        /// Source requirement ID (UUID or SPEC-ID). Alias for the FROM positional.
+        #[clap(long = "from", value_name = "FROM", hide = true)]
+        from_flag: Option<String>,
+
+        /// Target requirement ID (UUID or SPEC-ID). Alias for the TO positional.
+        #[clap(long = "to", value_name = "TO", hide = true)]
+        to_flag: Option<String>,
 
         /// Relationship type (parent, child, duplicate, verifies, verified-by, references, or custom)
-        #[clap(long)]
+        #[clap(long = "type", short = 't')]
         r#type: String,
 
         /// Create bidirectional relationship (adds inverse relationship automatically)
@@ -1246,17 +1258,29 @@ pub enum RelationshipCommand {
     },
 
     /// Remove a relationship between requirements
+    ///
+    /// Both positional and flag forms work:
+    ///   aida rel remove STORY-72 EPIC-13 --type child
+    ///   aida rel remove --from STORY-72 --to EPIC-13 --type child
     Remove {
-        /// Source requirement ID (UUID or SPEC-ID)
-        #[clap(long)]
-        from: String,
+        /// Source requirement ID (UUID or SPEC-ID). Positional or via --from.
+        #[clap(value_name = "FROM")]
+        from_pos: Option<String>,
 
-        /// Target requirement ID (UUID or SPEC-ID)
-        #[clap(long)]
-        to: String,
+        /// Target requirement ID (UUID or SPEC-ID). Positional or via --to.
+        #[clap(value_name = "TO")]
+        to_pos: Option<String>,
+
+        /// Source requirement ID (UUID or SPEC-ID). Alias for the FROM positional.
+        #[clap(long = "from", value_name = "FROM", hide = true)]
+        from_flag: Option<String>,
+
+        /// Target requirement ID (UUID or SPEC-ID). Alias for the TO positional.
+        #[clap(long = "to", value_name = "TO", hide = true)]
+        to_flag: Option<String>,
 
         /// Relationship type
-        #[clap(long)]
+        #[clap(long = "type", short = 't')]
         r#type: String,
 
         /// Remove bidirectional relationship (removes inverse relationship too)
