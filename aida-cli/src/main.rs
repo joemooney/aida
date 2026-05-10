@@ -4995,9 +4995,14 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
             let blocks_registry = BlockRegistry::load(&blocks_path).unwrap_or_default();
             let nodes_registry = NodeRegistry::load(&nodes_path).unwrap_or_default();
 
+            // Only active (non-exhausted) blocks count as "owning" a range.
+            // Tombstoned blocks (post `aida doctor repair-stale-blocks`)
+            // intentionally have an unregistered owner — that's the repair
+            // outcome, not a problem to flag.
             let block_owners: std::collections::HashSet<String> = blocks_registry
                 .blocks
                 .iter()
+                .filter(|b| !b.is_exhausted())
                 .map(|b| b.node_id.clone())
                 .collect();
             let registered: std::collections::HashSet<String> = nodes_registry
@@ -6790,15 +6795,23 @@ fn doctor_fsck() -> Result<()> {
         let nodes = NodeRegistry::load(&nodes_path).unwrap_or_default();
         let registered: std::collections::HashSet<String> =
             nodes.nodes.iter().map(|n| n.id.clone()).collect();
-        let block_owners: std::collections::HashSet<String> =
-            blocks.blocks.iter().map(|b| b.node_id.clone()).collect();
+        // Only ACTIVE (non-exhausted) blocks count — tombstoned blocks
+        // are explicitly retired (next > range_end) and no longer
+        // dispense, so an unregistered owner on a tombstoned block is
+        // expected (it's the post-repair state).
+        let block_owners: std::collections::HashSet<String> = blocks
+            .blocks
+            .iter()
+            .filter(|b| !b.is_exhausted())
+            .map(|b| b.node_id.clone())
+            .collect();
         let orphan_blocks: Vec<&str> = block_owners
             .iter()
             .filter(|id| !registered.contains(*id))
             .map(|s| s.as_str())
             .collect();
         if orphan_blocks.is_empty() {
-            println!("  {} every block has a registered node owner.", "✓".green());
+            println!("  {} every active block has a registered node owner.", "✓".green());
         } else {
             had_problem = true;
             println!(
