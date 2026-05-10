@@ -1,0 +1,39 @@
+id: 019e1005-6fed-7982-800b-5230a26fc9e2
+spec_id: STORY-65
+agreed_id: STORY-65
+title: 'aida session start: auto-branch + inherit current role'
+description: |
+  Today `aida session start --owns EPIC-20` requires explicit `--branch <name>` if the slug-derived default already exists (a previous session reused the same scope). User-driven workflow: starting a 2nd, 3rd, Nth session on the same scope.
+
+  Two ergonomic improvements (companion to STORY-54's --launch-claude):
+
+  ## Auto-branch with collision-aware naming
+
+  If --branch not provided:
+  1. Try the slug-derived default (current behavior). E.g., scope=EPIC-20 → branch `epic-20`.
+  2. If that branch already exists locally OR on origin, append `-2`, `-3`, ... up to `-10`.
+  3. If all are taken, fall back to slug + ISO date: `epic-20-2026-05-09`.
+  4. If THAT exists too, append `-2` again to the dated form.
+
+  Print the resolved branch name in session-start output.
+
+  Alternative: always-date form via flag — `--branch-style date` always uses `epic-20-2026-05-09` even when slug is free. Useful when the user wants every session traceable to a date.
+
+  ## Inherit current role
+
+  If a role is active in the calling shell (`AIDA_SESSION_ROLE=implementer`), the new session should inherit it — recording it in the lease so `aida session leases` can show role per session, and so subsequent `aida role` commands inside the worktree know the right role.
+
+  If no role is active and the user is starting a session for an EPIC, suggest a default: `implementer` for code work, `reviewer` for PR/MR scopes.
+
+  ## Pairs with
+
+  - STORY-54 (--launch-claude) — the natural composition is `aida session start --owns X` doing all three: auto-branch + inherit-role + launch-claude. Together they reduce 4 commands to 1.
+  - STORY-61 (PR/MR review) — that story's example flow already assumes auto-branch and role inheritance; this story makes that real.
+  - BUG-54 (owner-check on enforcement) — once the in-flight lease records the role, the owner check has more context.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T03:54:12.333617718Z
+modified_at: 2026-05-10T03:54:12.333617718Z
+req_type: Story
