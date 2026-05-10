@@ -46,12 +46,12 @@ description: |
   - STORY-59 (list liveness) — the Claude Code session row's "live" status uses the same heuristic
 
   If those aren't shipped yet, this story's output gracefully omits the rows that depend on them.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T04:34:38.422416204Z
-modified_at: 2026-05-10T06:35:34.722358302Z
+modified_at: 2026-05-10T07:04:55.574180364Z
 req_type: Story
 relationships:
 - rel_type: Child
