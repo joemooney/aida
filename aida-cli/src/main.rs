@@ -7603,7 +7603,13 @@ fn doctor_convention_check(quiet: bool) -> Result<()> {
 /// Walk every YAML in objects/, collect every `relationships[*].target_id`
 /// reference, and verify each resolves to an existing req's UUID. Reports
 /// dangling references, optionally repairs by stripping the bad entries.
-/// trace:EPIC-19 | ai:claude
+///
+/// TASK-58: rewrote the original line-scanner — which exited the
+/// `relationships:` block on the first `- rel_type:` array entry
+/// (any line starting with `-` matched the "exiting top-level key"
+/// heuristic) and so never inspected any `target_id`. Now uses
+/// `object_store::load_all_objects()` for proper serde-driven
+/// deserialization. trace:TASK-58 | ai:claude
 fn doctor_verify_relationships(repair: bool, yes: bool) -> Result<()> {
     let project_root = find_project_root()?;
     let store_path = project_root.join(".aida-store");
@@ -7613,101 +7619,40 @@ fn doctor_verify_relationships(repair: bool, yes: bool) -> Result<()> {
         return Ok(());
     }
 
-    let mut yaml_files: Vec<std::path::PathBuf> = Vec::new();
-    walk_yamls(&objects_root, &mut yaml_files);
+    let reqs = aida_core::object_store::load_all_objects(&objects_root)?;
 
-    // First pass: collect every uuid present in the store.
-    let mut all_uuids: std::collections::HashSet<String> = std::collections::HashSet::new();
-    let mut spec_by_uuid: std::collections::HashMap<String, String> =
-        std::collections::HashMap::new();
-    for path in &yaml_files {
-        let Ok(content) = std::fs::read_to_string(path) else {
-            continue;
-        };
-        let mut uuid = String::new();
-        let mut spec_id = String::new();
-        for raw in content.lines() {
-            let line = raw.trim_start();
-            if uuid.is_empty() {
-                if let Some(v) = line.strip_prefix("id:") {
-                    uuid = v.trim().trim_matches('"').trim_matches('\'').to_string();
-                }
-            }
-            if spec_id.is_empty() {
-                if let Some(v) = line.strip_prefix("spec_id:") {
-                    spec_id = v.trim().trim_matches('"').trim_matches('\'').to_string();
-                }
-            }
-            if !uuid.is_empty() && !spec_id.is_empty() {
-                break;
-            }
-        }
-        if !uuid.is_empty() {
-            all_uuids.insert(uuid.clone());
-            if !spec_id.is_empty() {
-                spec_by_uuid.insert(uuid, spec_id);
-            }
-        }
-    }
+    // First pass: collect every uuid present in the store + the spec
+    // mapping for nicer dangling-edge reporting.
+    let all_uuids: std::collections::HashSet<uuid::Uuid> =
+        reqs.iter().map(|r| r.id).collect();
+    let _spec_by_uuid: std::collections::HashMap<uuid::Uuid, String> = reqs
+        .iter()
+        .filter_map(|r| r.spec_id.as_ref().map(|s| (r.id, s.clone())))
+        .collect();
 
-    // Second pass: collect (source_uuid, target_uuid, rel_type) triples
-    // and check each target.
+    // Second pass: walk each req's relationships array and check each
+    // target_id resolves to an existing uuid.
     #[derive(Debug)]
     struct Dangling {
-        source_path: std::path::PathBuf,
+        source_uuid: uuid::Uuid,
         source_spec: String,
-        target_uuid: String,
+        target_uuid: uuid::Uuid,
         rel_type: String,
     }
     let mut dangling: Vec<Dangling> = Vec::new();
-
-    for path in &yaml_files {
-        let Ok(content) = std::fs::read_to_string(path) else {
-            continue;
-        };
-        // Find the source spec_id once for nicer reporting.
-        let source_spec = content
-            .lines()
-            .find_map(|l| l.trim_start().strip_prefix("spec_id:"))
-            .map(|v| v.trim().trim_matches('"').trim_matches('\'').to_string())
-            .unwrap_or_else(|| "?".to_string());
-
-        // Scan for relationships block. The shape (in serde-flavored YAML):
-        //   relationships:
-        //   - rel_type: parent
-        //     target_id: <uuid>
-        //     ...
-        let mut in_rel_block = false;
-        let mut current_rel_type = String::new();
-        for raw in content.lines() {
-            let trimmed = raw.trim_start();
-            if !raw.starts_with(' ') && trimmed.starts_with("relationships:") {
-                in_rel_block = true;
-                continue;
-            }
-            // Leaving the relationships block — heuristic: any non-indented
-            // top-level YAML key.
-            if in_rel_block && !raw.starts_with(' ') && !trimmed.is_empty() && trimmed.contains(':')
-            {
-                in_rel_block = false;
-                continue;
-            }
-            if !in_rel_block {
-                continue;
-            }
-            if let Some(v) = trimmed.strip_prefix("rel_type:") {
-                current_rel_type = v.trim().trim_matches('"').trim_matches('\'').to_string();
-            }
-            if let Some(v) = trimmed.strip_prefix("target_id:") {
-                let target_uuid = v.trim().trim_matches('"').trim_matches('\'').to_string();
-                if !target_uuid.is_empty() && !all_uuids.contains(&target_uuid) {
-                    dangling.push(Dangling {
-                        source_path: path.clone(),
-                        source_spec: source_spec.clone(),
-                        target_uuid,
-                        rel_type: current_rel_type.clone(),
-                    });
-                }
+    for req in &reqs {
+        let source_spec = req
+            .spec_id
+            .clone()
+            .unwrap_or_else(|| req.id.to_string());
+        for rel in &req.relationships {
+            if !all_uuids.contains(&rel.target_id) {
+                dangling.push(Dangling {
+                    source_uuid: req.id,
+                    source_spec: source_spec.clone(),
+                    target_uuid: rel.target_id,
+                    rel_type: format!("{:?}", rel.rel_type),
+                });
             }
         }
     }
@@ -7731,9 +7676,8 @@ fn doctor_verify_relationships(repair: bool, yes: bool) -> Result<()> {
             "  {} → {}: target uuid {} not found",
             d.source_spec.bold(),
             d.rel_type.dimmed(),
-            d.target_uuid.yellow()
+            d.target_uuid.to_string().yellow()
         );
-        println!("    in {}", d.source_path.display().to_string().dimmed());
     }
     println!();
 
@@ -7757,16 +7701,20 @@ fn doctor_verify_relationships(repair: bool, yes: bool) -> Result<()> {
         }
     }
 
-    // Repair: load each affected req via aida-core, filter relationships,
-    // save back. trace:EPIC-19 | ai:claude
-    let store = aida_core::GitBackend::new(&store_path)?.load()?;
-    let dangling_uuids: std::collections::HashSet<String> =
-        dangling.iter().map(|d| d.target_uuid.clone()).collect();
+    // Repair: filter dangling edges out of each affected req's
+    // relationships array and rewrite the YAML. trace:TASK-58 | ai:claude
+    let dangling_target_uuids: std::collections::HashSet<uuid::Uuid> =
+        dangling.iter().map(|d| d.target_uuid).collect();
+    let affected_source_uuids: std::collections::HashSet<uuid::Uuid> =
+        dangling.iter().map(|d| d.source_uuid).collect();
     let mut fixed = 0usize;
-    for mut req in store.requirements.into_iter() {
+    for mut req in reqs.into_iter() {
+        if !affected_source_uuids.contains(&req.id) {
+            continue;
+        }
         let before = req.relationships.len();
         req.relationships
-            .retain(|r| !dangling_uuids.contains(&r.target_id.to_string()));
+            .retain(|r| !dangling_target_uuids.contains(&r.target_id));
         if req.relationships.len() != before {
             aida_core::object_store::write_object(&store_path.join("objects"), &req)?;
             fixed += 1;
