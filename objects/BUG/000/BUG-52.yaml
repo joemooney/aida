@@ -37,12 +37,12 @@ description: |
   ## Workaround
 
   Manually symlink: `ln -sfn ~/ai/<repo>/.aida/sessions ~/ai/<repo>-<slug>/.aida/sessions` after `aida session start`. Already applied to the in-flight EPIC-20 session.
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T02:54:28.473859126Z
-modified_at: 2026-05-10T02:54:28.473859126Z
+modified_at: 2026-05-10T03:03:17.416752777Z
 req_type: Bug
 relationships:
 - rel_type: Child
