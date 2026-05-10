@@ -51,10 +51,14 @@ description: |
   - [ ] Up to 5 entries shown; truncate longer with `… and N more (run \`aida queue list\`)`
   - [ ] Each row shows: id, title, scope chip if set
   - [ ] Performance: no extra orphan-store reads (queue is already loaded)
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T17:37:55.633174408Z
-modified_at: 2026-05-10T22:31:54.237954674Z
+modified_at: 2026-05-10T22:33:15.452911853Z
 req_type: Task
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-10T22:33:15.452911853Z
+  implemented_by: joe
