@@ -17,10 +17,10 @@ description: |
   Option 2 is gentler (no destructive auto-edit). Option 1 is cleaner long-term.
 
   Also resolvable via aida doctor verify-relationships --repair (already exists; would strip the dangling entry). User can run that at any point.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T03:34:37.798460883Z
-modified_at: 2026-05-10T03:34:37.798460883Z
+modified_at: 2026-05-10T18:42:13.309961416Z
 req_type: Bug
