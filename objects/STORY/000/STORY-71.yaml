@@ -45,7 +45,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T06:06:24.835272423Z
-modified_at: 2026-05-10T17:44:14.877109195Z
+modified_at: 2026-05-10T17:44:24.144522186Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -62,3 +62,8 @@ comments:
   content: 'PR #5 (merged 2026-05-10) shipped the data-write half: lease now records pr_head_sha/pr_base_sha/pr_base_ref, gh/glab JSON parsers are unit-tested, session-start summary prints the captured SHAs, and CLI-missing path soft-falls-back with a stderr hint. Read-side acceptance (''aida session show <id> displays the PR head/base SHAs'') still pending — completes when PR #4 (epic-20-batch4, contains STORY-68''s session_show) wires the printout. Keeping status=approved until then.'
   created_at: 2026-05-10T17:44:05.619686593Z
   modified_at: 2026-05-10T17:44:05.619686593Z
+- id: 019e12fd-8150-77f3-98a3-6e40a27a20bd
+  author: joe
+  content: 'Reverted status Completed → Approved on 2026-05-10 after PR #5 review. PR-5 shipped the data-write half (lease fields + start-summary print + gh/glab JSON parsers + CLI-missing soft-fallback). Read-side acceptance (''aida session show <id> displays the PR head/base SHAs'') ships in PR #4 (epic-20-batch4, contains STORY-68''s session_show) once it''s rebased on main and wires the printout. Bump back to Completed when that lands.'
+  created_at: 2026-05-10T17:44:24.144522186Z
+  modified_at: 2026-05-10T17:44:24.144522186Z
