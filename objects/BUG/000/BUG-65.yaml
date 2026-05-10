@@ -1,0 +1,75 @@
+id: 019e10b5-50c9-7f12-8fb6-290594675e0d
+spec_id: BUG-65
+agreed_id: BUG-65
+title: aida edit --status and queue done don't bump role activity log — statusline @SPEC stuck on stale spec
+description: |
+  Caught 2026-05-10 from observing the live statusline. After the batch4 implementer agent shipped 5 stories (STORY-69 → STORY-65 → STORY-73 → BUG-61 → STORY-68 — all squash-committed in epic-20-batch4 worktree), the statusline still shows `@STORY-73` despite STORY-68 being the most recently in-progress and the most recently completed item.
+
+  ## Concrete evidence
+
+  `~/ai/aida/.aida/sessions/019e10953f17.activity.toml`:
+
+  ```toml
+  [[entries]]
+  role = "implementer"
+  spec_id = "STORY-73"
+  action = "comment"
+  at = "2026-05-10T07:00:48.200880410Z"
+
+  [[entries]]
+  role = "implementer"
+  spec_id = "STORY-73"
+  action = "show"
+  at = "2026-05-10T07:00:48.187101131Z"
+  ```
+
+  Only TWO entries total. Both `comment`/`show` on STORY-73. No entries from:
+  - `aida edit STORY-69 --status in-progress` then `--status completed`
+  - `aida edit STORY-65 --status in-progress` then `--status completed`
+  - `aida edit STORY-73 --status in-progress` then `--status completed`
+  - `aida edit BUG-61 --status in-progress` then `--status completed`
+  - `aida edit STORY-68 --status in-progress` (still in flight)
+  - `aida queue done STORY-69`, `queue done STORY-65`, `queue done STORY-73`, `queue done BUG-61`
+
+  Of the call sites that should bump activity, only `aida show` and `aida comment add` are wired today.
+
+  ## Root cause
+
+  `record_role_activity` (aida-cli/src/main.rs around line 1748) is called in `Command::Show` and `Command::Comment::Add` handlers but NOT in:
+  - `Command::Edit` (status flips, field changes — these are by far the highest-signal events)
+  - `Command::Queue::Done` (atomic completion + dequeue)
+  - `Command::Queue::Add` (would be lower priority but still useful — picks up "started caring about X")
+
+  ## User-visible effect
+
+  - statusline `@<spec>` is stuck pointing at the last-show-or-commented spec, not the most-recently-edited one
+  - this strongly understates the agent's productive activity — looks idle when actively shipping
+  - STORY-55's `@<scope>` fallback never fires because the activity log isn't empty (it has the stale STORY-73 entries) and isn't older than lease.started_at (those entries ARE post-lease-start)
+
+  ## Fix
+
+  Add `record_role_activity(id, "edit")` to `Command::Edit` handler and `record_role_activity(id, "done")` to `Command::Queue::Done` handler. Probably also `record_role_activity(id, "add-to-queue")` to `Command::Queue::Add` for symmetry, but that's lower priority.
+
+  While at it, consider: should activity entries dedupe by `(spec_id, action)` and only bump timestamp? Today the agent's STORY-73 has 2 entries (comment + show) at the same instant. With edit+done added, a typical lifecycle would emit 5+ entries per spec. Dedupe-by-action keeps the file small.
+
+  ## Composes with
+
+  - STORY-55 (@SPEC fallback to @SCOPE) — depends on activity log freshness; this bug explains why the fallback rarely triggers
+  - STORY-56 (per-session role activity) — same file (`<lease-id>.activity.toml`); this bug is the missing call sites, STORY-56 was the routing
+  - STORY-68 (`aida session show`) — its "Activity in this session" output will be incomplete with this bug
+
+  ## Acceptance
+
+  - [ ] `aida edit X --status Y` records an activity entry with action="edit"
+  - [ ] `aida queue done X` records action="done"
+  - [ ] `aida queue add X` records action="queue-add" (low priority, OK to defer)
+  - [ ] Statusline `@<spec>` reflects the most recently edited spec after a status flip
+  - [ ] Activity entries dedupe by (spec_id, action) — bump timestamp instead of duplicating
+  - [ ] Test: shipping 3 stories sequentially leaves the statusline pointing at the 3rd, not the 1st
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T07:06:18.697080695Z
+modified_at: 2026-05-10T07:06:18.697080695Z
+req_type: Bug
