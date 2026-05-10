@@ -364,6 +364,53 @@ pub enum SessionCommand {
         #[clap(long)]
         role: Option<String>,
     },
+
+    /// Start a scoped session: create a sibling git worktree on a fresh
+    /// branch, symlink AIDA state, and record a lease declaring this
+    /// session owns a logical or physical scope (an EPIC, SPEC-ID, or
+    /// path glob). v1 leases are advisory — `aida edit` / `aida-pickup`
+    /// don't enforce them yet, but multiple sessions running concurrently
+    /// can use the lease list to coordinate. trace:EPIC-20 | ai:claude
+    Start {
+        /// Scope this session owns. Examples:
+        ///   - `EPIC-19` / `epic-19` (resolved against the store)
+        ///   - `FR-42` (any spec id)
+        ///   - `src/scaffolding/**` (path glob — stored, not validated)
+        ///   - `feature:auth` (free-form tag)
+        #[clap(long, value_name = "SCOPE")]
+        owns: String,
+
+        /// Branch name for the new worktree (default: derived from --owns).
+        #[clap(long)]
+        branch: Option<String>,
+
+        /// Base branch to fork from (default: current branch).
+        #[clap(long)]
+        base: Option<String>,
+
+        /// Worktree directory (default: sibling of project root,
+        /// `<repo-parent>/<repo-name>-<scope-slug>/`).
+        #[clap(long, value_name = "PATH")]
+        path: Option<String>,
+    },
+
+    /// End a scoped session: remove the worktree, delete the lease,
+    /// leave the branch alone (merge/discard is up to the user). When
+    /// `id` is omitted, ends the session whose lease names this cwd's
+    /// worktree.
+    End {
+        /// Session id (8-char prefix accepted) to end. Omit to end the
+        /// session matching the current cwd.
+        id: Option<String>,
+
+        /// Skip the y/N confirmation.
+        #[clap(long, short = 'y')]
+        yes: bool,
+    },
+
+    /// List active session leases (separately from the historical list
+    /// of past Claude Code sessions in `aida session list`).
+    Leases,
 }
 
 /// activity, optional purpose, and acts as a label in the statusline.
