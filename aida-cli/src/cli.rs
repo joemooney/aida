@@ -1085,6 +1085,19 @@ pub enum DoctorCommand {
     /// plus a few smaller checks. Exits non-zero if any check found a
     /// problem. trace:EPIC-19 | ai:claude
     Fsck,
+
+    /// Check that STORY / BUG descriptions contain a recognized
+    /// acceptance heading (`## Acceptance`, `## Verify`, `## Tests`,
+    /// `## Test cases`, `## Verification` — case-insensitive). Surfaced
+    /// by STORY-67's review-prompt generator: missing sections produce
+    /// a placeholder downstream, this lint catches them at write-time.
+    /// Exits non-zero if any STORY/BUG is missing a section.
+    /// trace:STORY-70 | ai:claude
+    ConventionCheck {
+        /// Quiet mode — print only the summary line, omit per-spec rows.
+        #[clap(long, short = 'q')]
+        quiet: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]

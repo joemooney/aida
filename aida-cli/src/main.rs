@@ -6993,7 +6993,83 @@ fn handle_doctor_command(cmd: &cli::DoctorCommand) -> Result<()> {
             yes,
         } => doctor_validate_trace_comments(*strip_dangling, *dry_run, *yes),
         cli::DoctorCommand::Fsck => doctor_fsck(),
+        cli::DoctorCommand::ConventionCheck { quiet } => doctor_convention_check(*quiet),
     }
+}
+
+/// STORY-70: a STORY or BUG description should carry an acceptance
+/// section that STORY-67's review-prompt generator can lift verbatim.
+/// Returns true when the requirement's type is in the lint scope and
+/// its description doesn't carry one of the recognized headings.
+/// trace:STORY-70 | ai:claude
+fn requirement_missing_acceptance(req: &aida_core::Requirement) -> bool {
+    matches!(
+        req.req_type,
+        aida_core::RequirementType::Story | aida_core::RequirementType::Bug
+    ) && extract_acceptance_section(&req.description).is_none()
+}
+
+/// STORY-70: walk the orphan store, flag STORY/BUG requirements whose
+/// descriptions don't contain a recognized acceptance heading. Output
+/// shape mirrors the other doctor commands (per-finding rows + a final
+/// summary). Exits non-zero on findings so CI/scripts can gate on it.
+/// trace:STORY-70 | ai:claude
+fn doctor_convention_check(quiet: bool) -> Result<()> {
+    let project_root = find_project_root()?;
+    let objects_root = project_root.join(".aida-store").join("objects");
+    if !objects_root.exists() {
+        println!("(no objects/ tree — nothing to check)");
+        return Ok(());
+    }
+
+    let reqs = aida_core::object_store::load_all_objects(&objects_root)?;
+    let mut total_in_scope: usize = 0;
+    let mut missing: Vec<(String, String)> = Vec::new();
+    for req in &reqs {
+        if !matches!(
+            req.req_type,
+            aida_core::RequirementType::Story | aida_core::RequirementType::Bug
+        ) {
+            continue;
+        }
+        total_in_scope += 1;
+        if requirement_missing_acceptance(req) {
+            let id = req.spec_id.clone().unwrap_or_else(|| req.id.to_string());
+            missing.push((id, req.title.clone()));
+        }
+    }
+    missing.sort_by(|a, b| a.0.cmp(&b.0));
+
+    if missing.is_empty() {
+        println!(
+            "{} all {} STORY/BUG description(s) carry an acceptance section.",
+            "✓".green(),
+            total_in_scope
+        );
+        return Ok(());
+    }
+
+    if !quiet {
+        for (id, title) in &missing {
+            println!(
+                "{} {}  no `## Acceptance` / `## Verify` section  {}",
+                "⚠".yellow(),
+                id.bold(),
+                title.dimmed()
+            );
+        }
+    }
+    println!(
+        "{} of {} STORY/BUG descriptions missing acceptance criteria",
+        format!("{}", missing.len()).bold(),
+        total_in_scope
+    );
+    println!(
+        "  ({})",
+        "run `aida edit <id>` to add — STORY-67 will pick it up automatically"
+            .dimmed()
+    );
+    std::process::exit(1);
 }
 
 /// Walk every YAML in objects/, collect every `relationships[*].target_id`
@@ -9705,6 +9781,51 @@ mod statusline_tests {
         assert_eq!(log.entries[0].spec_id, "STORY-A", "newest first");
         assert_eq!(log.entries[0].action, "show");
         assert_eq!(log.entries[1].spec_id, "STORY-B");
+    }
+
+    /// STORY-70: convention-check predicate flags STORY/BUG with no
+    /// acceptance section, accepts STORY/BUG that has one (any of the
+    /// recognized headings), and ignores other types entirely. Pins the
+    /// scope of the lint so it doesn't grow over-eagerly.
+    /// trace:STORY-70 | ai:claude
+    #[test]
+    fn requirement_missing_acceptance_scope() {
+        use aida_core::{Requirement, RequirementType};
+
+        // STORY without acceptance → flagged.
+        let mut story = Requirement::new("S".into(), "Just a paragraph.".into());
+        story.req_type = RequirementType::Story;
+        assert!(requirement_missing_acceptance(&story));
+
+        // STORY with `## Acceptance` → not flagged.
+        let mut story_ok = Requirement::new(
+            "S".into(),
+            "Intro.\n\n## Acceptance\n\n- alpha\n".into(),
+        );
+        story_ok.req_type = RequirementType::Story;
+        assert!(!requirement_missing_acceptance(&story_ok));
+
+        // BUG with `## Verify` (alias) → not flagged.
+        let mut bug_ok = Requirement::new(
+            "B".into(),
+            "Repro.\n\n## Verify\n\n- behaves\n".into(),
+        );
+        bug_ok.req_type = RequirementType::Bug;
+        assert!(!requirement_missing_acceptance(&bug_ok));
+
+        // BUG without acceptance → flagged.
+        let mut bug = Requirement::new("B".into(), "Repro only.".into());
+        bug.req_type = RequirementType::Bug;
+        assert!(requirement_missing_acceptance(&bug));
+
+        // EPIC / TASK / etc. are out of scope — even with no section,
+        // they're never flagged.
+        let mut epic = Requirement::new("E".into(), "No section.".into());
+        epic.req_type = RequirementType::Epic;
+        assert!(!requirement_missing_acceptance(&epic));
+        let mut task = Requirement::new("T".into(), "No section.".into());
+        task.req_type = RequirementType::Task;
+        assert!(!requirement_missing_acceptance(&task));
     }
 
     /// BUG-65 acceptance: shipping 3 specs sequentially via a typical
