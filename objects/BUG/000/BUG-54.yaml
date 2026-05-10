@@ -39,12 +39,12 @@ description: |
   ## Pairs with PR #1
 
   This bug is in PR #1's STORY-48 implementation. Either request changes on the PR before merging, or merge + fix-forward immediately. Recommended: merge + fix-forward (PR is otherwise good and the reviewer is already paying attention).
-status: Approved
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T03:41:27.282276585Z
-modified_at: 2026-05-10T04:03:31.806532262Z
+modified_at: 2026-05-10T04:03:33.364074165Z
 req_type: Bug
 relationships:
 - rel_type: Child
