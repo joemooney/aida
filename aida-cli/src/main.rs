@@ -8365,6 +8365,9 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
         ),
         SessionCommand::End { id, yes } => session_end(id.as_deref(), *yes),
         SessionCommand::Leases => session_leases(),
+        SessionCommand::Prune { days, dry_run, yes } => {
+            session_prune(*days, *dry_run, *yes)
+        }
     }
 }
 
@@ -10103,6 +10106,276 @@ fn session_leases() -> Result<()> {
     Ok(())
 }
 
+/// One `.jsonl` file old enough to prune. Captured up-front so the
+/// confirmation list and the deletion loop see the same set.
+/// trace:STORY-60 | ai:claude
+struct PruneCandidate {
+    path: std::path::PathBuf,
+    size: u64,
+    age_seconds: u64,
+}
+
+/// Format a byte count with a human-readable unit (KB/MB/GB). One
+/// decimal place so a 1.5 MB file doesn't read as "1 MB" or "1500000 B".
+/// trace:STORY-60 | ai:claude
+fn humanize_size(bytes: u64) -> String {
+    const KB: f64 = 1024.0;
+    const MB: f64 = 1024.0 * 1024.0;
+    const GB: f64 = 1024.0 * 1024.0 * 1024.0;
+    let b = bytes as f64;
+    if b < KB {
+        format!("{} B", bytes)
+    } else if b < MB {
+        format!("{:.1} KB", b / KB)
+    } else if b < GB {
+        format!("{:.1} MB", b / MB)
+    } else {
+        format!("{:.1} GB", b / GB)
+    }
+}
+
+fn humanize_age_secs(secs: u64) -> String {
+    if secs < 86_400 {
+        format!("{}h", secs / 3600)
+    } else if secs < 7 * 86_400 {
+        format!("{}d", secs / 86_400)
+    } else if secs < 30 * 86_400 {
+        format!("{}w", secs / (7 * 86_400))
+    } else if secs < 365 * 86_400 {
+        format!("{}mo", secs / (30 * 86_400))
+    } else {
+        format!("{}y", secs / (365 * 86_400))
+    }
+}
+
+/// `aida session prune` — walk Claude Code's per-project session
+/// directories under `~/.claude/projects/<encoded>/` and delete `.jsonl`
+/// files whose mtime is older than `days`. Skips any project dir
+/// corresponding to an active session lease so a long-running session
+/// doesn't self-delete from a forgotten cron-like usage. Logs each
+/// deletion to `<project>/.aida/session-prune.log` for auditing.
+/// trace:STORY-60 | ai:claude
+fn session_prune(days: u32, dry_run: bool, yes: bool) -> Result<()> {
+    let cwd = std::env::current_dir().context("could not determine cwd")?;
+    let project_root = find_project_root().unwrap_or_else(|_| cwd.clone());
+
+    let cutoff = std::time::SystemTime::now()
+        .checked_sub(std::time::Duration::from_secs(u64::from(days) * 86_400))
+        .ok_or_else(|| anyhow::anyhow!("--days {} is too large", days))?;
+    let now = std::time::SystemTime::now();
+
+    // Project dirs to walk: the current cwd's encoded dir, plus the parent
+    // project's (when run from inside a session worktree). De-dup since
+    // they collapse to the same dir for plain non-worktree usage.
+    let mut search_dirs: Vec<std::path::PathBuf> = Vec::new();
+    let push_dir = |dirs: &mut Vec<std::path::PathBuf>, p: std::path::PathBuf| {
+        if p.is_dir() && !dirs.iter().any(|d| d == &p) {
+            dirs.push(p);
+        }
+    };
+    if let Ok(d) = session::claude_project_dir(&cwd) {
+        push_dir(&mut search_dirs, d);
+    }
+    if let Some(parent) = parent_project_root_for_session(&cwd) {
+        if let Ok(d) = session::claude_project_dir(&parent) {
+            push_dir(&mut search_dirs, d);
+        }
+    }
+    // Also include encoded dirs for every active lease's worktree path —
+    // they often live OUTSIDE the parent project root (sibling worktrees),
+    // so the parent-walk doesn't catch them. We'll skip these in the
+    // candidate loop (see active_dirs below) but we still need to know
+    // about them for the "skipped active" tally. trace:STORY-60 | ai:claude
+    let active_leases = list_leases(&project_root);
+    let mut active_dirs: std::collections::HashSet<std::path::PathBuf> =
+        std::collections::HashSet::new();
+    for l in &active_leases {
+        if let Ok(d) = session::claude_project_dir(&l.worktree_path) {
+            active_dirs.insert(d.clone());
+            push_dir(&mut search_dirs, d);
+        }
+    }
+
+    if search_dirs.is_empty() {
+        println!("(no Claude Code session directories found for this project)");
+        return Ok(());
+    }
+
+    let mut candidates: Vec<PruneCandidate> = Vec::new();
+    let mut skipped_active = 0usize;
+    for dir in &search_dirs {
+        if active_dirs.contains(dir) {
+            // Defensive: anything in here belongs to an in-progress
+            // session, regardless of mtime. Skip wholesale.
+            // trace:STORY-60 | ai:claude
+            if let Ok(read) = std::fs::read_dir(dir) {
+                skipped_active += read
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("jsonl"))
+                    .count();
+            }
+            continue;
+        }
+        let Ok(read) = std::fs::read_dir(dir) else { continue };
+        for entry in read.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("jsonl") {
+                continue;
+            }
+            let Ok(metadata) = entry.metadata() else { continue };
+            let Ok(mtime) = metadata.modified() else { continue };
+            if mtime >= cutoff {
+                continue;
+            }
+            let age_seconds = now.duration_since(mtime).map(|d| d.as_secs()).unwrap_or(0);
+            candidates.push(PruneCandidate {
+                path,
+                size: metadata.len(),
+                age_seconds,
+            });
+        }
+    }
+
+    if candidates.is_empty() {
+        println!(
+            "(no .jsonl files older than {} day{} in {} session director{})",
+            days,
+            if days == 1 { "" } else { "s" },
+            search_dirs.len(),
+            if search_dirs.len() == 1 { "y" } else { "ies" },
+        );
+        if skipped_active > 0 {
+            println!(
+                "  ({} file{} skipped — belong to {} active session{})",
+                skipped_active,
+                if skipped_active == 1 { "" } else { "s" },
+                active_dirs.len(),
+                if active_dirs.len() == 1 { "" } else { "s" },
+            );
+        }
+        return Ok(());
+    }
+
+    // Sort oldest-first so the user sees the most-stale entries up top.
+    candidates.sort_by(|a, b| b.age_seconds.cmp(&a.age_seconds));
+
+    let total_size: u64 = candidates.iter().map(|c| c.size).sum();
+    let count = candidates.len();
+    println!(
+        "Found {} .jsonl file{} older than {} day{} ({} total):",
+        count,
+        if count == 1 { "" } else { "s" },
+        days,
+        if days == 1 { "" } else { "s" },
+        humanize_size(total_size)
+    );
+    println!();
+    for c in &candidates {
+        let id = c
+            .path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("?");
+        let id_short = &id[..id.len().min(8)];
+        println!(
+            "  {:>6}  {:>10}  {}  {}",
+            humanize_age_secs(c.age_seconds),
+            humanize_size(c.size),
+            id_short.dimmed(),
+            c.path.display()
+        );
+    }
+    println!();
+    if skipped_active > 0 {
+        println!(
+            "{} {} file{} from {} active session{} excluded.",
+            "Note:".yellow().bold(),
+            skipped_active,
+            if skipped_active == 1 { "" } else { "s" },
+            active_dirs.len(),
+            if active_dirs.len() == 1 { "" } else { "s" },
+        );
+    }
+
+    if dry_run {
+        println!("{}", "(--dry-run; nothing deleted)".dimmed());
+        return Ok(());
+    }
+
+    if !yes {
+        use std::io::Write;
+        print!("Delete {} file{}? [y/N] ", count, if count == 1 { "" } else { "s" });
+        std::io::stdout().flush().ok();
+        let mut ans = String::new();
+        if std::io::stdin().read_line(&mut ans).is_err()
+            || !matches!(ans.trim().to_ascii_lowercase().as_str(), "y" | "yes")
+        {
+            println!("Aborted.");
+            return Ok(());
+        }
+    }
+
+    let log_path = project_root.join(".aida").join("session-prune.log");
+    if let Some(parent) = log_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut log_handle = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .ok();
+
+    let mut deleted = 0usize;
+    let mut bytes_freed = 0u64;
+    let mut errors = 0usize;
+    let now_iso = chrono::Utc::now().to_rfc3339();
+    for c in &candidates {
+        match std::fs::remove_file(&c.path) {
+            Ok(_) => {
+                deleted += 1;
+                bytes_freed += c.size;
+                if let Some(f) = log_handle.as_mut() {
+                    use std::io::Write;
+                    let _ = writeln!(
+                        f,
+                        "{}\t{}\t{}\t{}",
+                        now_iso,
+                        c.size,
+                        c.age_seconds,
+                        c.path.display()
+                    );
+                }
+            }
+            Err(e) => {
+                errors += 1;
+                eprintln!(
+                    "{} could not delete {}: {}",
+                    "Warning:".yellow().bold(),
+                    c.path.display(),
+                    e
+                );
+            }
+        }
+    }
+
+    println!(
+        "{} Deleted {} file{} ({} freed){}",
+        "✓".green(),
+        deleted,
+        if deleted == 1 { "" } else { "s" },
+        humanize_size(bytes_freed),
+        if errors > 0 {
+            format!("; {} error{}", errors, if errors == 1 { "" } else { "s" })
+        } else {
+            String::new()
+        }
+    );
+    if log_handle.is_some() {
+        println!("  log: {}", log_path.display().to_string().dimmed());
+    }
+    Ok(())
+}
+
 /// True when one SHA is a (case-insensitive, hex) prefix of the other.
 /// Used by statusline to compare a cache-stored SHA (potentially full,
 /// 40 chars) against the current `git rev-parse --short HEAD` output (7
@@ -10161,6 +10434,36 @@ mod statusline_tests {
         );
         // Lone ESC without `[` survives — we only strip well-formed SGR.
         assert_eq!(strip_ansi_color("a\x1bb"), "a\x1bb");
+    }
+
+    /// STORY-60: byte-count formatter — boundary cases at KB/MB/GB
+    /// crossover. Below 1KB renders as bytes; otherwise one decimal.
+    /// trace:STORY-60 | ai:claude
+    #[test]
+    fn humanize_size_buckets() {
+        assert_eq!(humanize_size(0), "0 B");
+        assert_eq!(humanize_size(512), "512 B");
+        assert_eq!(humanize_size(1024), "1.0 KB");
+        assert_eq!(humanize_size(1536), "1.5 KB");
+        assert_eq!(humanize_size(1024 * 1024), "1.0 MB");
+        assert_eq!(humanize_size(1024 * 1024 * 3 / 2), "1.5 MB");
+        assert_eq!(humanize_size(1024 * 1024 * 1024), "1.0 GB");
+    }
+
+    /// STORY-60: age formatter for the prune candidate list. Resolution
+    /// drops as we cross day/week/month/year boundaries; sub-day uses
+    /// hours since `--days 30` makes anything finer than that
+    /// uninteresting (and 0d would be confusing).
+    /// trace:STORY-60 | ai:claude
+    #[test]
+    fn humanize_age_secs_buckets() {
+        assert_eq!(humanize_age_secs(3600), "1h");
+        assert_eq!(humanize_age_secs(86_399), "23h");
+        assert_eq!(humanize_age_secs(86_400), "1d");
+        assert_eq!(humanize_age_secs(7 * 86_400 - 1), "6d");
+        assert_eq!(humanize_age_secs(7 * 86_400), "1w");
+        assert_eq!(humanize_age_secs(30 * 86_400), "1mo");
+        assert_eq!(humanize_age_secs(365 * 86_400), "1y");
     }
 
     /// STORY-66: parse spec_id out of `aida add` stdout. Cover both backend

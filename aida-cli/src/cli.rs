@@ -504,6 +504,34 @@ pub enum SessionCommand {
     /// List active session leases (separately from the historical list
     /// of past Claude Code sessions in `aida session list`).
     Leases,
+
+    /// Delete Claude Code session metadata (`.jsonl` files under
+    /// `~/.claude/projects/<encoded>/`) older than N days. Walks the
+    /// current project + the parent project (when run inside a session
+    /// worktree). Skips any project dir corresponding to an active
+    /// `aida session` lease — a defensive guard so the user can run
+    /// prune from anywhere without clobbering work in progress.
+    ///
+    /// Default behavior shows the candidates and asks for confirmation.
+    /// Use `--dry-run` to preview without prompting, `--yes` to skip
+    /// the prompt and delete. Each deletion is appended to
+    /// `<project>/.aida/session-prune.log` so the action is auditable.
+    /// trace:STORY-60 | ai:claude
+    Prune {
+        /// Delete `.jsonl` files older than N days. Default 30.
+        #[clap(long, default_value = "30")]
+        days: u32,
+
+        /// Show what would be deleted without touching anything. Use
+        /// to preview before committing to a real prune.
+        #[clap(long)]
+        dry_run: bool,
+
+        /// Skip the y/N confirmation. Without `--dry-run`, deletes
+        /// immediately after printing the candidate list.
+        #[clap(long, short = 'y')]
+        yes: bool,
+    },
 }
 
 /// activity, optional purpose, and acts as a label in the statusline.
