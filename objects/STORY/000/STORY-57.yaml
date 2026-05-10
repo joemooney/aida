@@ -1,0 +1,61 @@
+id: 019e0fda-3c1c-78c1-8b01-afe2d8a9d531
+spec_id: STORY-57
+agreed_id: STORY-57
+title: 'aida queue routing: support scope and session filters in addition to role'
+description: |
+  Today queue routing is role-only:
+
+    aida queue add BUG-52 --for implementer
+
+  When two concurrent sessions share a role (common: each EPIC's session has an implementer agent), queue items bleed across them. Both implementer-role agents see BUG-52 even if it only makes sense for one specific scope.
+
+  ## Proposal
+
+  Extend the queue entry routing field with two more dimensions:
+
+    aida queue add <id> --for implementer                      # current — any agent in role
+    aida queue add <id> --for implementer --scope EPIC-20      # any implementer in an EPIC-20 session
+    aida queue add <id> --for-session <8char-id>               # only that specific session
+
+  Queue YAML representation:
+
+    - spec_id: BUG-52
+      routing:
+        role: implementer
+        scope: EPIC-20      # optional
+        session: 019e0fc5   # optional, mutually exclusive with role+scope
+
+  ## Display
+
+  aida queue list shows the routing inline:
+
+    1. BUG-52 ... [for:implementer @EPIC-20]
+    2. STORY-55 ... [for:implementer @EPIC-20]
+    3. TASK-1 ... [for:dialog]
+
+  So users can see at a glance which session owns what.
+
+  ## Filtering
+
+  aida queue list defaults to "items routed to me":
+  - if AIDA_SESSION_ROLE set → role match
+  - if cwd inside a session lease → role match AND (scope match OR no scope)
+  - aida queue list --all bypasses
+
+  aida queue add inside a session worktree: default to filing with the session's scope unless --no-scope is passed. That way the common case "I'm in EPIC-20, queue this for an implementer agent" auto-routes to "implementer @EPIC-20" without the user typing it.
+
+  ## Why now
+
+  We just had a concrete confusion: BUG-52 was queued for implementer role across both this conversation's parent and the in-flight EPIC-20 session. With scope filtering, the in-flight session would only see EPIC-20 items, and items targeted at the parent context (e.g., one-off bugs not in any EPIC) wouldn't bleed in.
+
+  ## Out of scope
+
+  - Queue archive / history of items routed elsewhere — defer
+  - Cross-session queue stealing ("session A reassigns item to session B") — defer; manual queue-remove + queue-add suffices
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T03:07:01.020971773Z
+modified_at: 2026-05-10T03:07:01.020971773Z
+req_type: Story
