@@ -398,6 +398,13 @@ pub enum SessionCommand {
         /// `<repo-parent>/<repo-name>-<scope-slug>/`).
         #[clap(long, value_name = "PATH")]
         path: Option<String>,
+
+        /// Forge override for `PR-N` / `MR-N` scopes when the origin
+        /// URL doesn't auto-detect (self-hosted GHE/GitLab, multi-remote
+        /// setups, etc.). Accepts `github` or `gitlab`.
+        /// trace:STORY-61 | ai:claude
+        #[clap(long, value_name = "FORGE")]
+        forge: Option<String>,
     },
 
     /// End a scoped session: remove the worktree, delete the lease,

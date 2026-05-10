@@ -8184,8 +8184,8 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             permission_mode,
             role,
         } => session::new_session(title.clone(), permission_mode, role.clone()),
-        SessionCommand::Start { owns, branch, base, path } => {
-            session_start(owns, branch.as_deref(), base.as_deref(), path.as_deref())
+        SessionCommand::Start { owns, branch, base, path, forge } => {
+            session_start(owns, branch.as_deref(), base.as_deref(), path.as_deref(), forge.as_deref())
         }
         SessionCommand::End { id, yes } => session_end(id.as_deref(), *yes),
         SessionCommand::Leases => session_leases(),
@@ -8695,18 +8695,113 @@ fn find_project_root() -> Result<std::path::PathBuf> {
     }
 }
 
+/// STORY-61: forge-specific PR/MR scope. When `aida session start
+/// --owns PR-1` or `--owns MR-42` is invoked, we route through a
+/// review-branch fetch + worktree-on-existing-branch flow instead of
+/// the default new-branch flow.
+/// trace:STORY-61 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReviewForge {
+    GitHub,
+    GitLab,
+}
+
+impl ReviewForge {
+    fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "github" | "gh" => Some(Self::GitHub),
+            "gitlab" | "glab" => Some(Self::GitLab),
+            _ => None,
+        }
+    }
+
+    /// Standard refspec for the head of a PR/MR (works for fork PRs
+    /// too because both forges expose the head ref on origin).
+    fn pr_head_ref(&self, n: u64) -> String {
+        match self {
+            Self::GitHub => format!("pull/{}/head", n),
+            Self::GitLab => format!("merge-requests/{}/head", n),
+        }
+    }
+
+    fn local_branch_for(&self, n: u64) -> String {
+        match self {
+            Self::GitHub => format!("pr-{}", n),
+            Self::GitLab => format!("mr-{}", n),
+        }
+    }
+}
+
+/// STORY-61: parse `PR-N` / `MR-N` scope strings (case-insensitive).
+/// Returns the implied forge + PR number when the scope matches; None
+/// otherwise (lets normal scope handling proceed).
+/// trace:STORY-61 | ai:claude
+fn parse_review_scope(scope: &str) -> Option<(ReviewForge, u64)> {
+    let trimmed = scope.trim();
+    let (prefix, rest) = trimmed.split_once('-')?;
+    let n: u64 = rest.parse().ok()?;
+    match prefix.to_ascii_uppercase().as_str() {
+        "PR" => Some((ReviewForge::GitHub, n)),
+        "MR" => Some((ReviewForge::GitLab, n)),
+        _ => None,
+    }
+}
+
+/// STORY-61: detect the project's forge by inspecting `origin`'s URL.
+/// Returns None for hosts we don't recognize (Bitbucket, self-hosted
+/// without telltale domain, etc.) — caller can require `--forge`.
+/// trace:STORY-61 | ai:claude
+fn detect_forge_from_origin(project_root: &std::path::Path) -> Option<ReviewForge> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["remote", "get-url", "origin"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let url = String::from_utf8_lossy(&out.stdout).trim().to_lowercase();
+    if url.contains("github.com") {
+        Some(ReviewForge::GitHub)
+    } else if url.contains("gitlab.com") || url.contains("/gitlab/") {
+        Some(ReviewForge::GitLab)
+    } else {
+        None
+    }
+}
+
 fn session_start(
     owns: &str,
     branch: Option<&str>,
     base: Option<&str>,
     explicit_path: Option<&str>,
+    forge_override: Option<&str>,
 ) -> Result<()> {
     let project_root = find_project_root()?;
     let slug = slugify(owns);
     if slug.is_empty() {
         anyhow::bail!("scope `{}` slugifies to empty — pick something with letters/digits", owns);
     }
-    let branch_name = branch.map(|s| s.to_string()).unwrap_or_else(|| slug.clone());
+
+    // STORY-61: review-mode dispatch. When the scope is `PR-N` / `MR-N`
+    // and the forge resolves (via override or origin-URL detection), we
+    // hand off to the review flow which fetches the PR head ref into a
+    // local branch and creates the worktree on that existing branch
+    // (rather than `git worktree add -b <new-branch>`).
+    let review_target: Option<(ReviewForge, u64)> = parse_review_scope(owns)
+        .map(|(f, n)| {
+            let resolved_forge = match forge_override.and_then(ReviewForge::parse) {
+                Some(f) => f,
+                None => detect_forge_from_origin(&project_root).unwrap_or(f),
+            };
+            (resolved_forge, n)
+        });
+
+    let branch_name = match (&review_target, branch) {
+        (Some((forge, n)), None) => forge.local_branch_for(*n),
+        _ => branch.map(|s| s.to_string()).unwrap_or_else(|| slug.clone()),
+    };
     let repo_name = project_root
         .file_name()
         .and_then(|s| s.to_str())
@@ -8744,24 +8839,67 @@ fn session_start(
         }
     }
 
-    // Create worktree on new branch.
-    let mut args = vec![
-        "worktree",
-        "add",
-        "-b",
-        branch_name.as_str(),
-        worktree_path.to_str().unwrap(),
-    ];
-    if let Some(b) = base {
-        args.push(b);
-    }
-    let res = std::process::Command::new("git")
-        .arg("-C")
-        .arg(&project_root)
-        .args(&args)
-        .status()?;
-    if !res.success() {
-        anyhow::bail!("`git worktree add` failed");
+    if let Some((forge, n)) = review_target {
+        // STORY-61 review flow:
+        //   1. fetch the PR/MR head ref from origin into the local branch
+        //      <forge>-<N>; safe to re-run (creates or fast-forwards).
+        //   2. `git worktree add <path> <local-branch>` checks out the
+        //      existing branch — does NOT create a new one. Reviewer can
+        //      then commit feedback / try fixes locally without disturbing
+        //      the contributor's branch on origin.
+        let head_ref = forge.pr_head_ref(n);
+        let refspec = format!("+{}:{}", head_ref, branch_name);
+        let fetch = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&project_root)
+            .args(["fetch", "origin", refspec.as_str()])
+            .status()?;
+        if !fetch.success() {
+            anyhow::bail!(
+                "`git fetch origin {}` failed — is {} #{} valid? \
+                 (For self-hosted forges, override with --forge github|gitlab.)",
+                refspec,
+                match forge {
+                    ReviewForge::GitHub => "PR",
+                    ReviewForge::GitLab => "MR",
+                },
+                n
+            );
+        }
+        let res = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&project_root)
+            .args([
+                "worktree",
+                "add",
+                worktree_path.to_str().unwrap(),
+                branch_name.as_str(),
+            ])
+            .status()?;
+        if !res.success() {
+            anyhow::bail!("`git worktree add` failed");
+        }
+    } else {
+        // Default flow: create worktree on a NEW branch (the original
+        // EPIC-20 behavior — work-in-progress sessions, not reviews).
+        let mut args = vec![
+            "worktree",
+            "add",
+            "-b",
+            branch_name.as_str(),
+            worktree_path.to_str().unwrap(),
+        ];
+        if let Some(b) = base {
+            args.push(b);
+        }
+        let res = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&project_root)
+            .args(&args)
+            .status()?;
+        if !res.success() {
+            anyhow::bail!("`git worktree add` failed");
+        }
     }
 
     // Make AIDA state from the parent visible inside the new worktree.
@@ -9264,6 +9402,53 @@ mod statusline_tests {
         let log = load_session_activity(root, id);
         assert_eq!(log.entries.len(), 2);
         assert_eq!(log.entries[0].action, "show", "newest first");
+    }
+
+    /// STORY-61: PR-N / MR-N scope parsing — case-insensitive, requires
+    /// the trailing number, and rejects everything else (so the normal
+    /// scope flow is preserved for non-review scopes like EPIC-20).
+    /// trace:STORY-61 | ai:claude
+    #[test]
+    fn review_scope_parsing() {
+        assert_eq!(parse_review_scope("PR-1"), Some((ReviewForge::GitHub, 1)));
+        assert_eq!(parse_review_scope("pr-42"), Some((ReviewForge::GitHub, 42)));
+        assert_eq!(parse_review_scope("MR-7"), Some((ReviewForge::GitLab, 7)));
+        assert_eq!(parse_review_scope("mr-2024"), Some((ReviewForge::GitLab, 2024)));
+        // Non-PR scopes pass through unchanged.
+        assert_eq!(parse_review_scope("EPIC-20"), None);
+        assert_eq!(parse_review_scope("FR-42"), None);
+        assert_eq!(parse_review_scope("feature:auth"), None);
+        // Missing number rejects.
+        assert_eq!(parse_review_scope("PR-"), None);
+        assert_eq!(parse_review_scope("MR-abc"), None);
+    }
+
+    /// STORY-61: refspec format — same-repo and fork PRs both work
+    /// because `pull/N/head` (GitHub) and `merge-requests/N/head`
+    /// (GitLab) are populated on origin in both cases.
+    /// trace:STORY-61 | ai:claude
+    #[test]
+    fn review_forge_refspec() {
+        assert_eq!(ReviewForge::GitHub.pr_head_ref(1), "pull/1/head");
+        assert_eq!(ReviewForge::GitHub.pr_head_ref(123), "pull/123/head");
+        assert_eq!(ReviewForge::GitLab.pr_head_ref(7), "merge-requests/7/head");
+        assert_eq!(ReviewForge::GitHub.local_branch_for(1), "pr-1");
+        assert_eq!(ReviewForge::GitLab.local_branch_for(7), "mr-7");
+    }
+
+    /// STORY-61: --forge string parsing accepts both the long form
+    /// (`github`/`gitlab`) and the CLI-tool short form (`gh`/`glab`)
+    /// since users usually have one or the other muscle-memory'd.
+    /// trace:STORY-61 | ai:claude
+    #[test]
+    fn review_forge_override_parsing() {
+        assert_eq!(ReviewForge::parse("github"), Some(ReviewForge::GitHub));
+        assert_eq!(ReviewForge::parse("GitHub"), Some(ReviewForge::GitHub));
+        assert_eq!(ReviewForge::parse("gh"), Some(ReviewForge::GitHub));
+        assert_eq!(ReviewForge::parse("gitlab"), Some(ReviewForge::GitLab));
+        assert_eq!(ReviewForge::parse("glab"), Some(ReviewForge::GitLab));
+        assert_eq!(ReviewForge::parse("bitbucket"), None);
+        assert_eq!(ReviewForge::parse(""), None);
     }
 
     /// STORY-57: routing-filter decision table for the consumer side.
