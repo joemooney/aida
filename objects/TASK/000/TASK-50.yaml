@@ -1,0 +1,51 @@
+id: 019e12fd-52ee-7220-b2d7-d2fb8b205596
+spec_id: TASK-50
+agreed_id: TASK-50
+title: 'STORY-71 polish: ''skipped PR metadata capture'' stderr hint duplicates install URL'
+description: |
+  Reported 2026-05-10 by the PR-5 reviewer. STORY-71 added a soft-fail stderr hint when `gh`/`glab` isn't available during `aida session start --owns PR-N`. The install URL gets interpolated into both the `reason` string AND the outer template, producing duplicated content.
+
+  ## Today's output (cosmetic)
+
+  ```
+  Note: skipped PR metadata capture (gh not on PATH — install: https://cli.github.com).
+        Install gh: https://cli.github.com to enable PR head/base capture.
+  ```
+
+  The URL appears twice. Reader gets the message but the duplication is jarring.
+
+  ## Fix
+
+  Pick one — either the inline `reason` mentions the URL OR the outer template appends it, not both. Cleanest is to keep the URL in the reason (closer to context) and drop the outer Install line:
+
+  ```
+  Note: skipped PR metadata capture (gh not on PATH — install: https://cli.github.com).
+  ```
+
+  Or the inverse: reason stays terse ("gh not on PATH"), URL goes in the standalone hint line:
+
+  ```
+  Note: skipped PR metadata capture (gh not on PATH).
+        Install gh: https://cli.github.com to enable PR head/base capture.
+  ```
+
+  Author's call. The first is shorter and more common.
+
+  ## Composes with
+
+  - STORY-71 (PR head/base capture) — this is the cleanup; STORY-71 itself is correct, just chatty
+  - TASK-40 (gh/glab dependency doc) — same family of "discoverable when missing" UX
+
+  ## Acceptance
+
+  - [ ] Install URL appears at most once in the stderr hint
+  - [ ] Hint still discoverable (user can find install instructions)
+  - [ ] Both gh-missing and glab-missing paths fixed
+  - [ ] Snapshot test (or string assertion) prevents regression
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T17:44:12.270391521Z
+modified_at: 2026-05-10T17:44:12.270391521Z
+req_type: Task
