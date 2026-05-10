@@ -8269,9 +8269,27 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             permission_mode,
             role,
         } => session::new_session(title.clone(), permission_mode, role.clone()),
-        SessionCommand::Start { owns, branch, base, path, forge } => {
-            session_start(owns, branch.as_deref(), base.as_deref(), path.as_deref(), forge.as_deref())
-        }
+        SessionCommand::Start {
+            owns,
+            branch,
+            base,
+            path,
+            forge,
+            launch,
+            title,
+            permission_mode,
+            role,
+        } => session_start(
+            owns,
+            branch.as_deref(),
+            base.as_deref(),
+            path.as_deref(),
+            forge.as_deref(),
+            *launch,
+            title.clone(),
+            permission_mode,
+            role.clone(),
+        ),
         SessionCommand::End { id, yes } => session_end(id.as_deref(), *yes),
         SessionCommand::Leases => session_leases(),
     }
@@ -8870,6 +8888,10 @@ fn session_start(
     base: Option<&str>,
     explicit_path: Option<&str>,
     forge_override: Option<&str>,
+    launch_claude: bool,
+    launch_title: Option<String>,
+    launch_permission_mode: &str,
+    launch_role: Option<String>,
 ) -> Result<()> {
     let project_root = find_project_root()?;
     let slug = slugify(owns);
@@ -9095,6 +9117,43 @@ fn session_start(
         worktree_path.display().to_string().cyan()
     );
     println!("  {}: {}", "lease".bold(), lease_file.display().to_string().dimmed());
+
+    if launch_claude {
+        // STORY-54: --launch collapses "start → cd → session new" into one
+        // command. We chdir into the new worktree (so claude inherits it
+        // and the launch-log records the worktree path, not the parent),
+        // then delegate to session::new_session for the title prompt,
+        // launch-log append, and `exec claude --permission-mode <mode>`.
+        // exec replaces this process; control doesn't return here on
+        // success.
+        // trace:STORY-54 | ai:claude
+        if cargo_target_dir.is_some() {
+            println!();
+            println!(
+                "{} {}",
+                "ℹ".cyan(),
+                "tip: source .aida/session-env.sh in your shell to share \
+                 the parent's cargo target/ between sessions"
+                    .dimmed()
+            );
+        }
+        println!();
+        println!(
+            "{} {}",
+            "▶".green().bold(),
+            format!(
+                "launching claude in {} (permission-mode {})",
+                worktree_path.display(),
+                launch_permission_mode
+            )
+            .cyan()
+        );
+        std::env::set_current_dir(&worktree_path).with_context(|| {
+            format!("failed to chdir into {}", worktree_path.display())
+        })?;
+        return session::new_session(launch_title, launch_permission_mode, launch_role);
+    }
+
     println!();
     println!("Next:");
     println!(

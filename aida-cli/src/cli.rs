@@ -440,6 +440,35 @@ pub enum SessionCommand {
         /// trace:STORY-61 | ai:claude
         #[clap(long, value_name = "FORGE")]
         forge: Option<String>,
+
+        /// After creating the worktree + lease, launch Claude Code inside
+        /// it: chdirs into the worktree, records launch metadata in the
+        /// same log as `aida session new`, then execs
+        /// `claude --permission-mode <mode>`. Collapses the usual
+        /// "start → cd → session new" three-step into one command.
+        /// trace:STORY-54 | ai:claude
+        #[clap(long, short = 'l')]
+        launch: bool,
+
+        /// Title for the launched session (only used with --launch).
+        /// Shown in `aida session list`. Prompted interactively when
+        /// omitted; pass an empty string to skip the prompt.
+        /// trace:STORY-54 | ai:claude
+        #[clap(long, short = 't')]
+        title: Option<String>,
+
+        /// Claude Code permission mode for the launch. Common values:
+        /// `bypassPermissions` (default), `acceptEdits`, `default`,
+        /// `plan`. Ignored without --launch.
+        /// trace:STORY-54 | ai:claude
+        #[clap(long, default_value = "bypassPermissions")]
+        permission_mode: String,
+
+        /// Override the role recorded for the launched session
+        /// (defaults to $AIDA_SESSION_ROLE). Ignored without --launch.
+        /// trace:STORY-54 | ai:claude
+        #[clap(long)]
+        role: Option<String>,
     },
 
     /// End a scoped session: remove the worktree, delete the lease,
