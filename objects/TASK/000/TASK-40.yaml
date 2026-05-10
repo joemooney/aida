@@ -1,0 +1,23 @@
+id: 019e1046-b74d-7032-91e9-19b63be8f4a4
+spec_id: TASK-40
+agreed_id: TASK-40
+title: Document gh/glab dependency for aida review prompt --pr
+description: |-
+  STORY-67 (`aida review prompt --pr N`) shells out to `gh pr view N` (GitHub) or `glab mr view N` (GitLab) to resolve base/head. When neither CLI is installed, it falls back to `base=main, head=pr-N` (or `mr-N`) and prints a stderr note. The fallback works for the common case (PR was checked out via `aida session start --owns PR-N` from STORY-61) but is surprising the first time a user hits it.
+
+  ## Action
+
+  Document the gh/glab dependency in `.claude/AIDA.md` (review-workflow section) and in `aida review prompt --help` text:
+
+  > For best results with --pr, install `gh` (https://cli.github.com) for GitHub or `glab` (https://gitlab.com/gitlab-org/cli) for GitLab. Without them, AIDA falls back to base=main + local review branch — works when the PR was started via `aida session start --owns PR-N`, surprising otherwise.
+
+  ## Why now
+
+  Surfaced 2026-05-09 while implementing STORY-67. The fallback behavior is correct but invisible in --help, so users without gh/glab get a stderr note they don't expect. Trivial doc fix.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T05:05:30.445790391Z
+modified_at: 2026-05-10T05:05:30.445790391Z
+req_type: Task
