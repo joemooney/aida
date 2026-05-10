@@ -1,0 +1,26 @@
+id: 019e0ff3-83e6-7f23-a0f4-0099505260a8
+spec_id: BUG-53
+agreed_id: BUG-53
+title: aida rel list shows dangling target uuid '019e0fdc...' on EPIC-20 (rejected STORY-47)
+description: |
+  EPIC-20's rel list output ends with:
+    is parent of 019e0fdc-4995-7952-ba91-a80113190a45 (not found)
+
+  This is the uuid of STORY-47, which was rejected (made obsolete by STORY-48). When a req is rejected, its relationships should ideally be cleaned up — or rel list should at least show the rejected req's spec_id rather than the bare uuid.
+
+  Two small fixes (do either, both not strictly needed):
+
+  1. aida edit FR-X --status rejected unlinks the req from any parent relationships (and reciprocally removes the parent's "is parent of <uuid>" entry). Surgical: only same-direction relationships, leaves cross-cutting "blocks" / "duplicates" intact.
+
+  2. aida rel list resolves uuids against the cache including rejected reqs, showing "is parent of STORY-47 [REJECTED] - title" instead of "(not found)".
+
+  Option 2 is gentler (no destructive auto-edit). Option 1 is cleaner long-term.
+
+  Also resolvable via aida doctor verify-relationships --repair (already exists; would strip the dangling entry). User can run that at any point.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T03:34:37.798460883Z
+modified_at: 2026-05-10T03:34:37.798460883Z
+req_type: Bug
