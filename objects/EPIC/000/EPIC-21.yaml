@@ -1,0 +1,42 @@
+id: 019e0fa6-72a0-7e83-9705-ce293487413d
+spec_id: EPIC-21
+agreed_id: EPIC-21
+title: 'Code↔store commit pairing: pin orphan store SHA per code commit'
+description: |-
+  User-driven 2026-05-09. The orphan store and the code repo evolve independently today. When you check out an old code commit, your code references reqs that the now-current store may have renamed/deleted. Trace comments dangle. Time-travel through history is broken — old branches don't "know" which store version they were written against.
+
+  ## v1: trailer-based pin (~1hr)
+
+  - Pre-commit hook reads the orphan branch HEAD SHA and appends a trailer to the commit message:
+      ```
+      Aida-Store: <40-char-sha>
+      ```
+  - New `aida store status` command shows: code at X, paired store at Y, current store at Z, drift: N commits.
+  - Hook degrades gracefully: missing orphan worktree, no remote, etc. → trailer omitted, commit proceeds.
+
+  ## v2: time-travel + drift detection (~2hr)
+
+  - `aida store checkout <code-sha>` time-travels the orphan worktree to the code commit's paired store SHA. Read-only mode while time-traveled (writes from a rewound store would create branches the canonical orphan doesn't see).
+  - `aida status` warns when code↔store are misaligned: `(code commit X expects store Y; current store at Z — `aida store checkout HEAD` to align)`.
+  - `aida store reset` returns the orphan worktree to canonical HEAD.
+
+  ## v3: agent + release integration (bigger)
+
+  - Agents (Claude, Codex) working on an old branch see the right store version transparently.
+  - Release tags carry both code SHA + store SHA. `git checkout v1.2.0` reproducibly gives you code v1.2.0 + the store as it was at v1.2.0.
+  - Branch-aware: feature branches can have their own store snapshot diverging from main; merge resolves both.
+
+  ## Why not git submodules
+
+  The orphan store is intentionally same-repo (one .git directory) so a single `git clone` covers everything. A submodule would split that and reintroduce the "forgot to push the store" problem. Trailer-pinning gives the same time-travel semantics without the submodule split.
+
+  ## Connects to: dangling trace cleanup (EPIC-19)
+
+  The 80 dangling trace comments we found in 2026-05-09 fsck would resolve correctly under v2 — checking out an old commit would also rewind the store, restoring the deleted reqs that those traces reference. Without this pairing, the dangling state is permanent.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T02:10:27.104063912Z
+modified_at: 2026-05-10T02:10:27.104063912Z
+req_type: Epic
