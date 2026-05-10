@@ -1,0 +1,32 @@
+id: 019e1358-b8a8-7b11-8bbe-0868d556da5a
+spec_id: TASK-57
+agreed_id: TASK-57
+title: cargo fmt drift in aida-server/src/web_auth.rs:686
+description: |-
+  Surfaced 2026-05-10 by BUG-66 (PR-6). With the CI build green again, the `Check formatting` CI step will start failing on `aida-server/src/web_auth.rs:686` — a pre-existing one-line wrap that `cargo fmt` wants reformatted. Detected locally via `cargo fmt --all -- --check`:
+
+    Diff in /home/joe/ai/aida-epic-20/aida-server/src/web_auth.rs:683:
+         return next.run(req).await;
+     }
+
+    -    let token = extract_token(req.headers()).or_else(|| query_param(req.uri().query(), "session_token"));
+    +    let token =
+    +        extract_token(req.headers()).or_else(|| query_param(req.uri().query(), "session_token"));
+
+  The drift predates BUG-66 — it was hidden behind the build failure. Was never fixed because CI never reached the fmt step.
+
+  ## Fix
+
+  Run `cargo fmt --all` from the repo root and commit. One file, mechanical. Could ship as a tiny standalone PR or fold into the next batch.
+
+  ## Acceptance
+
+  - [ ] `cargo fmt --all -- --check` is clean
+  - [ ] CI 'Check formatting' step passes on main
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T19:24:02.088640698Z
+modified_at: 2026-05-10T19:24:02.088640698Z
+req_type: Task
