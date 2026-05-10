@@ -8375,6 +8375,55 @@ fn append_session_activity(
     save_session_activity(project_root, session_id, &log)
 }
 
+/// STORY-57: queue routing filter. Returns true if `entry`'s scope/session
+/// routing tags are compatible with the consumer side (the shell calling
+/// `queue list` / `queue next`).
+///
+/// Rules:
+///   - `for_scope` set on the entry must match the consumer's lease scope
+///     (case-insensitive). No lease + scope-tagged entry → filtered out
+///     (the entry is targeted at a session that isn't this shell).
+///   - `for_session` set on the entry must match the consumer lease's id
+///     (8+ char prefix on either side, since a user might have typed a
+///     short prefix).
+///   - Either field absent on the entry = unrouted on that axis = visible
+///     to all consumers.
+///
+/// Bypass with `bypass=true` (used for `--all` / explicit `--scope any`).
+/// trace:STORY-57 | ai:claude
+fn entry_scope_session_match(
+    entry: &aida_core::QueueEntry,
+    self_lease: Option<&SessionLease>,
+    bypass: bool,
+) -> bool {
+    if bypass {
+        return true;
+    }
+    if let Some(want_scope) = entry.for_scope.as_deref() {
+        let Some(lease) = self_lease else {
+            return false;
+        };
+        if !lease.scope.eq_ignore_ascii_case(want_scope) {
+            return false;
+        }
+    }
+    if let Some(want_sess) = entry.for_session.as_deref() {
+        let Some(lease) = self_lease else {
+            return false;
+        };
+        let n = want_sess.len().min(lease.id.len());
+        if n < 4 {
+            // Too short to be safely matched — bail out as no-match
+            // rather than risk a false positive.
+            return false;
+        }
+        if !lease.id[..n].eq_ignore_ascii_case(&want_sess[..n]) {
+            return false;
+        }
+    }
+    true
+}
+
 /// Fold a closed session's activity entries back into each participating
 /// role's project-level `activity` stream. Called from `session_end` so
 /// long-running views (`aida role show`, `aida statusline` outside any
@@ -9215,6 +9264,60 @@ mod statusline_tests {
         let log = load_session_activity(root, id);
         assert_eq!(log.entries.len(), 2);
         assert_eq!(log.entries[0].action, "show", "newest first");
+    }
+
+    /// STORY-57: routing-filter decision table for the consumer side.
+    /// Entries with `for_scope` only route to sessions whose lease scope
+    /// matches; entries with `for_session` only route to that exact lease
+    /// (8+ char prefix). No lease + scope-tagged entry → filtered. The
+    /// `--all` bypass (the boolean param) lets users see everything.
+    /// trace:STORY-57 | ai:claude
+    #[test]
+    fn entry_scope_session_match_decision_table() {
+        use aida_core::QueueEntry;
+        let now = chrono::Utc::now();
+        let mk = |scope: Option<&str>, sess: Option<&str>| QueueEntry {
+            user_id: "u".into(),
+            requirement_id: uuid::Uuid::nil(),
+            position: 0,
+            added_by: "u".into(),
+            note: None,
+            added_at: now,
+            for_role: Some("implementer".into()),
+            for_scope: scope.map(|s| s.to_string()),
+            for_session: sess.map(|s| s.to_string()),
+        };
+        let lease = SessionLease {
+            id: "abcdef123456".into(),
+            scope: "EPIC-20".into(),
+            slug: "epic-20".into(),
+            owner: "u".into(),
+            worktree_path: std::path::PathBuf::from("/tmp/wt"),
+            branch: "br".into(),
+            started_at: now,
+            hostname: "h".into(),
+        };
+
+        // No routing tags = visible everywhere.
+        assert!(entry_scope_session_match(&mk(None, None), Some(&lease), false));
+        assert!(entry_scope_session_match(&mk(None, None), None, false));
+
+        // Scope match passes; mismatch filters out.
+        assert!(entry_scope_session_match(&mk(Some("EPIC-20"), None), Some(&lease), false));
+        assert!(!entry_scope_session_match(&mk(Some("OTHER"), None), Some(&lease), false));
+        // Scope-tagged entry without a lease → filtered (entry was for
+        // a session, this shell isn't in one).
+        assert!(!entry_scope_session_match(&mk(Some("EPIC-20"), None), None, false));
+
+        // Session prefix matches case-insensitively.
+        assert!(entry_scope_session_match(&mk(None, Some("abcdef12")), Some(&lease), false));
+        assert!(entry_scope_session_match(&mk(None, Some("ABCDEF12")), Some(&lease), false));
+        // Wrong session prefix is filtered.
+        assert!(!entry_scope_session_match(&mk(None, Some("99999999")), Some(&lease), false));
+
+        // Bypass shows everything regardless.
+        assert!(entry_scope_session_match(&mk(Some("OTHER"), None), Some(&lease), true));
+        assert!(entry_scope_session_match(&mk(Some("EPIC-20"), Some("99999999")), None, true));
     }
 
     /// STORY-56: aggregating a session log into the project role keeps
@@ -16441,11 +16544,28 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // trace:TASK-1-021 | ai:claude
             let scope = if *all || *no_scope { None } else { active_role_scope() };
 
+            // STORY-57: scope/session routing filter — when in a session,
+            // an entry tagged for_scope=X is only visible if X matches the
+            // active lease (or `--all` bypasses).
+            let self_lease_for_routing: Option<SessionLease> = std::env::current_dir()
+                .ok()
+                .and_then(|cwd| {
+                    let project_root = storage
+                        .path()
+                        .parent()
+                        .map(|p| p.to_path_buf())
+                        .unwrap_or_else(|| std::path::PathBuf::from("."));
+                    active_lease_for_cwd(&project_root, &cwd)
+                });
+
             let entries: Vec<&aida_core::QueueEntry> = raw_entries
                 .iter()
                 .filter(|e| match &role_filter {
                     Some(r) => e.for_role.as_deref() == Some(r.as_str()),
                     None => true,
+                })
+                .filter(|e| {
+                    entry_scope_session_match(e, self_lease_for_routing.as_ref(), *all)
                 })
                 .filter(|e| {
                     let Some((scope_tags, scope_status)) = &scope else {
@@ -16546,10 +16666,23 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 if entry.added_by != user_id {
                     print!("  {}", format!("(from @{})", entry.added_by).dimmed());
                 }
+                // STORY-57: inline routing tags. Show for: only when the
+                // user isn't already filtering on a specific role (avoids
+                // repeating "for:implementer" on every line in the
+                // role-filtered view). Always show scope/session — those
+                // are session-axis filters that don't get hoisted into
+                // the title bar.
                 if role_filter.is_none() {
                     if let Some(ref r) = entry.for_role {
                         print!("  {}", format!("[for:{}]", r).cyan());
                     }
+                }
+                if let Some(ref s) = entry.for_scope {
+                    print!("  {}", format!("[@{}]", s).cyan());
+                }
+                if let Some(ref s) = entry.for_session {
+                    let short = &s[..s.len().min(8)];
+                    print!("  {}", format!("[session:{}]", short).cyan());
                 }
                 // When the global queue is also being shown, tag local entries
                 // with their origin so the merge view is unambiguous.
@@ -16597,6 +16730,9 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             user,
             note,
             r#for,
+            scope,
+            for_session,
+            no_scope,
             global,
         } => {
             let user_id = get_user(user);
@@ -16616,6 +16752,36 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     .ok()
                     .filter(|s| !s.is_empty()),
             };
+
+            // STORY-57: default scope routing. When adding inside a session
+            // worktree without --scope or --no-scope, fill `for_scope` with
+            // the active lease's scope so concurrent sessions sharing a
+            // role don't see each other's work. --for-session is more
+            // specific than --scope and overrides it for filtering, but we
+            // keep both fields in the entry — the consumer side ANDs them.
+            // trace:STORY-57 | ai:claude
+            let active_lease_for_routing: Option<SessionLease> = std::env::current_dir()
+                .ok()
+                .and_then(|cwd| {
+                    let project_root = storage
+                        .path()
+                        .parent()
+                        .map(|p| p.to_path_buf())
+                        .unwrap_or_else(|| std::path::PathBuf::from("."));
+                    active_lease_for_cwd(&project_root, &cwd)
+                });
+            let for_scope_routing: Option<String> = if *no_scope {
+                None
+            } else if let Some(s) = scope.as_deref() {
+                Some(s.to_string())
+            } else if for_session.is_some() {
+                // --for-session is the more specific axis; don't also
+                // auto-add a scope filter unless the user asked for it.
+                None
+            } else {
+                active_lease_for_routing.as_ref().map(|l| l.scope.clone())
+            };
+            let for_session_routing: Option<String> = for_session.clone();
 
             // Resolve requirement ID
             let req = if let Ok(uuid) = uuid::Uuid::parse_str(id) {
@@ -16702,12 +16868,26 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 note: note.clone(),
                 added_at: chrono::Utc::now(),
                 for_role: r#for.clone(),
+                for_scope: for_scope_routing.clone(),
+                for_session: for_session_routing.clone(),
             };
             storage.queue_add(entry)?;
 
-            let routing = match r#for {
-                Some(r) => format!(" [for:{}]", r.cyan()),
-                None => String::new(),
+            // trace:STORY-57 | ai:claude
+            let mut routing_parts: Vec<String> = Vec::new();
+            if let Some(r) = &r#for {
+                routing_parts.push(format!("for:{}", r));
+            }
+            if let Some(s) = &for_scope_routing {
+                routing_parts.push(format!("@{}", s));
+            }
+            if let Some(s) = &for_session_routing {
+                routing_parts.push(format!("session:{}", &s[..s.len().min(8)]));
+            }
+            let routing = if routing_parts.is_empty() {
+                String::new()
+            } else {
+                format!(" [{}]", routing_parts.join(" ").cyan())
             };
             println!(
                 "{} Added {} ({}) to queue{}",
@@ -16891,6 +17071,12 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 .filter(|e| match &role_filter {
                     Some(r) => e.for_role.as_deref() == Some(r.as_str()),
                     None => true,
+                })
+                .filter(|e| {
+                    // STORY-57: scope/session routing — only show items
+                    // targeted at this session (or unrouted on that axis).
+                    // --all bypasses; consistent with queue list.
+                    entry_scope_session_match(e, self_lease.as_ref(), *all)
                 })
                 .filter(|e| {
                     if !lease_filter_active {

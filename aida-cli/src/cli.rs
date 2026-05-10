@@ -1490,6 +1490,25 @@ pub enum QueueCommand {
         /// while in that role to see incoming work.
         #[clap(long)]
         r#for: Option<String>,
+        /// Restrict routing to sessions whose lease scope matches this
+        /// (e.g., "EPIC-20"). Default-populated to the active session's
+        /// scope when adding from inside a session worktree, unless
+        /// --no-scope is passed. Pairs with --for so two implementer
+        /// sessions don't see each other's incoming work.
+        /// trace:STORY-57 | ai:claude
+        #[clap(long)]
+        scope: Option<String>,
+        /// Restrict routing to one specific session, by 8+ char lease id
+        /// prefix. Mutually exclusive with --no-scope (passing both is
+        /// nonsense — --for-session implies a scope match too).
+        /// trace:STORY-57 | ai:claude
+        #[clap(long = "for-session", conflicts_with = "no_scope")]
+        for_session: Option<String>,
+        /// Suppress the auto-default scope when adding from inside a
+        /// session worktree. The entry stays scope-unrouted (visible to
+        /// any session in --for's role). trace:STORY-57 | ai:claude
+        #[clap(long)]
+        no_scope: bool,
         /// Add to the role's GLOBAL queue at `~/.aida/queue/<role>.yaml`
         /// instead of the local per-project queue. Requires --for or an
         /// active role context (AIDA_SESSION_ROLE). trace:FR-1-012 | ai:claude

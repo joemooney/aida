@@ -6325,4 +6325,18 @@ pub struct QueueEntry {
     /// trace:EPIC-1-001 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub for_role: Option<String>,
+    /// Routing tag: this item is meant for sessions whose lease scope
+    /// matches this string (e.g. "EPIC-20"). Filters items so a session
+    /// sees only what's targeted at its scope (or unrouted). Default-
+    /// populated when `aida queue add` runs inside a session worktree
+    /// without `--no-scope`. trace:STORY-57 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub for_scope: Option<String>,
+    /// Routing tag: this item is meant for one specific session,
+    /// identified by its lease id (12-char prefix). Mutually exclusive
+    /// with `for_scope` in the typical workflow but the queue layer is
+    /// permissive — both filters apply if both are set.
+    /// trace:STORY-57 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub for_session: Option<String>,
 }
