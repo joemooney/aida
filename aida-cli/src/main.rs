@@ -6444,12 +6444,23 @@ fn emit_role_enter_eval(
         .unwrap_or(project_root)
         .display();
     println!("# aida role enter — {}", state.name);
-    // Strip any prior role prefix from PS1 (anywhere in the string, not just
-    // at the front — `aida dev activate` may have prepended its own prefix
-    // since this role was entered). Keyed off the prior AIDA_SESSION_ROLE
-    // so the match is a literal substring. ${VAR/pat/} works in bash and zsh.
-    println!("if [ -n \"${{PS1+x}}\" ] && [ -n \"${{AIDA_SESSION_ROLE:-}}\" ]; then");
-    println!("    PS1=\"${{PS1/(role:$AIDA_SESSION_ROLE) /}}\"");
+    // Strip ALL `(role:NAME) ` prefixes from PS1, regardless of which role
+    // is currently in AIDA_SESSION_ROLE. The earlier single-pattern strip
+    // (keyed off AIDA_SESSION_ROLE) leaked prefixes whenever the env var
+    // went stale: a subshell that didn't inherit the var, a manual unset,
+    // or a `role end` that fired without `role enter` having matched —
+    // each leaves an orphan `(role:foo) ` in PS1 that the next `role enter`
+    // wouldn't see. The loop walks PS1, extracts each `(role:NAME)` token,
+    // and strips it globally. trace:BUG-60 | ai:claude
+    println!("if [ -n \"${{PS1+x}}\" ]; then");
+    println!("    while case \"$PS1\" in *'(role:'*') '*) true;; *) false;; esac; do");
+    println!("        _aida_old_ps1=\"$PS1\"");
+    println!("        _aida_after=\"${{PS1#*'(role:'}}\"");
+    println!("        _aida_name=\"${{_aida_after%%') '*}}\"");
+    println!("        PS1=\"${{PS1//'(role:'$_aida_name') '/}}\"");
+    println!("        [ \"$PS1\" = \"$_aida_old_ps1\" ] && break");
+    println!("    done");
+    println!("    unset _aida_old_ps1 _aida_after _aida_name");
     println!("fi");
     println!("export AIDA_SESSION_ROLE='{}'", state.name);
     if let Some(p) = &state.purpose {
@@ -6499,10 +6510,18 @@ fn handle_role_end() -> Result<()> {
     // both at the shell top level and inside a wrapper function.
     println!("# aida role end");
     println!("__AIDA_ROLE_END_PREV=\"${{AIDA_SESSION_ROLE:-}}\"");
-    // Strip the role's PS1 prefix before unsetting, while we still know
-    // the role name to match against.
-    println!("if [ -n \"${{PS1+x}}\" ] && [ -n \"$__AIDA_ROLE_END_PREV\" ]; then");
-    println!("    PS1=\"${{PS1/(role:$__AIDA_ROLE_END_PREV) /}}\"");
+    // Strip ALL `(role:NAME) ` prefixes from PS1 — same rationale as the
+    // entry path: stale env state can leave orphan prefixes that a single
+    // pattern strip misses. trace:BUG-60 | ai:claude
+    println!("if [ -n \"${{PS1+x}}\" ]; then");
+    println!("    while case \"$PS1\" in *'(role:'*') '*) true;; *) false;; esac; do");
+    println!("        _aida_old_ps1=\"$PS1\"");
+    println!("        _aida_after=\"${{PS1#*'(role:'}}\"");
+    println!("        _aida_name=\"${{_aida_after%%') '*}}\"");
+    println!("        PS1=\"${{PS1//'(role:'$_aida_name') '/}}\"");
+    println!("        [ \"$PS1\" = \"$_aida_old_ps1\" ] && break");
+    println!("    done");
+    println!("    unset _aida_old_ps1 _aida_after _aida_name");
     println!("fi");
     println!("unset AIDA_SESSION_ROLE AIDA_SESSION_PURPOSE AIDA_SESSION_PROJECT");
     println!("if [ -n \"$__AIDA_ROLE_END_PREV\" ]; then");
