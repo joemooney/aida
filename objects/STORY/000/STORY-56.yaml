@@ -1,0 +1,34 @@
+id: 019e0fc8-c21c-7442-82f5-52046a0c53b2
+spec_id: STORY-56
+agreed_id: STORY-56
+title: 'aida session: per-session role activity log (current-spec scoped to session lifetime)'
+description: |
+  The bigger fix beneath STORY-55. Role activity (last-touched spec, last-touched-at) currently lives at .aida/roles/<name>.toml, project-wide. When two sessions for the same project both have role:implementer active, they share one "current spec" — last write wins, neither sees what the other is doing.
+
+  ## Goal
+
+  Each session gets its own activity log scoped to the session's lifetime. Role STATE (name, scope_tags, scope_status) stays shared since that's a project-wide definition; activity (last spec, last action, recent log) becomes session-local.
+
+  ## Shape
+
+  - A new `.aida/sessions/<id>.activity.toml` per session, owned by the lease
+  - aida statusline prefers session-local activity when cwd is in a session, falls back to project-level role activity otherwise
+  - Project-level `.aida/roles/<name>.toml` keeps a `recent` activity stream for the no-session case
+  - aida session end aggregates the session's activity into the project-level stream (so an "I worked on X for 2 days under EPIC-19" period still shows up in long-term recent activity after the session closes) — design decision: aggregate as a single rollup vs. flatten all entries; probably aggregate for cleanliness
+
+  ## Why defer to v2
+
+  - STORY-55's quick fix solves 90% of the surprise (@SPEC shows scope until in-session activity)
+  - Doing per-session activity right requires answering: how do `aida queue add`, `aida edit FR-X` route activity? Per-session, project-wide, both? Each touches the activity log differently.
+  - Better to ship STORY-48 (lease enforcement) first since that's the load-bearing concept; this story builds on the same per-session plumbing.
+
+  ## Blocked by
+
+  - STORY-48 (lease enforcement) — establishes the "per-session state" infrastructure this story extends
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T02:47:55.676427534Z
+modified_at: 2026-05-10T02:47:55.676427534Z
+req_type: Story
