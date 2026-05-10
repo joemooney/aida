@@ -6703,8 +6703,105 @@ fn emit_role_enter_eval(
             .map(|p| format!(" — {}", p))
             .unwrap_or_default()
     );
+    // TASK-48 / TASK-49: load store + queue once (best-effort) so both
+    // sections below can resolve spec_id → title and surface the
+    // role's queue head. Failures are silent — falls back to the
+    // legacy minimal rendering. trace:TASK-48 | ai:claude
+    let store_path = project_root.join(".aida-store");
+    let (titles, queue_for_role): (
+        std::collections::HashMap<String, String>,
+        Vec<aida_core::QueueEntry>,
+    ) = if store_path.exists() {
+        let storage = Storage::new(store_path);
+        let titles = storage
+            .load()
+            .map(|s| {
+                s.requirements
+                    .iter()
+                    .filter_map(|r| {
+                        r.spec_id
+                            .as_deref()
+                            .or(r.agreed_id.as_deref())
+                            .map(|sid| (sid.to_string(), r.title.clone()))
+                    })
+                    .collect::<std::collections::HashMap<_, _>>()
+            })
+            .unwrap_or_default();
+        let user_id = std::env::var("AIDA_USER")
+            .or_else(|_| std::env::var("USER"))
+            .unwrap_or_else(|_| "default".to_string());
+        let queue_for_role = storage
+            .queue_list(&user_id, /* include_completed */ false)
+            .map(|entries| {
+                entries
+                    .into_iter()
+                    .filter(|e| e.for_role.as_deref() == Some(state.name.as_str()))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        (titles, queue_for_role)
+    } else {
+        (Default::default(), Vec::new())
+    };
+
+    // TASK-48: queue head, capped at 5, with a "+N more" hint when the
+    // role queue is deeper. Empty case still renders so the absence
+    // itself is signal. trace:TASK-48 | ai:claude
+    if was_existing {
+        let total = queue_for_role.len();
+        let show_n = total.min(5);
+        if total == 0 {
+            println!("echo ''");
+            println!(
+                "echo '  Queued for this role: {}'",
+                "(empty)"
+            );
+        } else {
+            println!("echo ''");
+            println!(
+                "echo '  Queued for this role ({}):'",
+                total
+            );
+            // Load store once more to look up reqs by uuid for title
+            // resolution. The queue entry only stores uuid; we need the
+            // spec_id + title from the store.
+            let store_snapshot = if !queue_for_role.is_empty() {
+                let storage = Storage::new(project_root.join(".aida-store"));
+                storage.load().ok()
+            } else {
+                None
+            };
+            for entry in queue_for_role.iter().take(show_n) {
+                let (spec_id, title) = store_snapshot
+                    .as_ref()
+                    .and_then(|s| {
+                        s.requirements.iter().find(|r| r.id == entry.requirement_id)
+                    })
+                    .map(|r| (
+                        r.spec_id.clone().unwrap_or_else(|| "?".into()),
+                        truncate(&r.title, 60).to_string(),
+                    ))
+                    .unwrap_or_else(|| ("(deleted)".into(), String::new()));
+                println!(
+                    "echo '    {:<12} {}'",
+                    spec_id,
+                    title.replace('\'', "'\\''")
+                );
+            }
+            if total > show_n {
+                let remaining = total - show_n;
+                println!(
+                    "echo '    … and {} more (run `aida queue list`)'",
+                    remaining
+                );
+            }
+        }
+    }
+
     // Surface what the user was last working on under this role —
     // makes "resume" feel like a real session, not just a label switch.
+    // TASK-49: add titles alongside spec_ids in the activity rows.
+    // trace:TASK-49 | ai:claude
     if was_existing && !state.activity.is_empty() {
         println!("echo ''");
         println!(
@@ -6712,10 +6809,26 @@ fn emit_role_enter_eval(
         );
         for entry in state.activity.iter().take(5) {
             let when = humanize_relative(entry.at);
-            println!(
-                "echo '    {} — {} ({})'",
-                entry.spec_id, entry.action, when
-            );
+            let title = titles
+                .get(&entry.spec_id)
+                .map(|t| truncate(t, 60).to_string())
+                .unwrap_or_default();
+            // Match the queue-head column widths so the two sections
+            // line up: 12-wide spec_id, then title, then action+time.
+            if title.is_empty() {
+                println!(
+                    "echo '    {:<12} {} ({})'",
+                    entry.spec_id, entry.action, when
+                );
+            } else {
+                println!(
+                    "echo '    {:<12} {:<60} {} ({})'",
+                    entry.spec_id,
+                    title.replace('\'', "'\\''"),
+                    entry.action,
+                    when
+                );
+            }
         }
     }
 }
