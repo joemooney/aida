@@ -34,5 +34,11 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T01:10:57.197579751Z
-modified_at: 2026-05-10T01:16:37.044398826Z
+modified_at: 2026-05-10T01:16:40.812043099Z
 req_type: Epic
+comments:
+- id: 019e0f75-37ec-7053-8b7c-bb99c0ccd392
+  author: joe
+  content: Commit 0984cc8 references this requirement
+  created_at: 2026-05-10T01:16:40.812043099Z
+  modified_at: 2026-05-10T01:16:40.812043099Z
