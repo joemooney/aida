@@ -1,0 +1,53 @@
+id: 019e12d2-aeb6-7ee2-897b-d47c1ef3200c
+spec_id: STORY-78
+agreed_id: STORY-78
+title: cache:behind indicator + aida queue list --sync flag for opt-in freshness
+description: |
+  Caught 2026-05-10 — user ran `aida queue list` and saw STORY-52 as Approved while the agent in another session had already flipped it to In Progress. Local view was lagging origin/aida-store by ~5 commits. `aida db sync --pull` fixed it.
+
+  Today `aida statusline` shows `cache:stale` when cache.db lags the LOCAL orphan branch HEAD. It does NOT detect when the local orphan branch lags ORIGIN. So a user with two concurrent sessions (or anyone collaborating) sees stale data with no warning.
+
+  ## Two-part fix
+
+  ### Part 1 — `cache:behind` indicator
+
+  Extend statusline's cache check. Today (per STORY-something already shipped):
+
+    cache:fresh   — cache.db HEAD == local orphan branch HEAD
+    cache:stale   — cache.db HEAD != local orphan branch HEAD (rebuild needed)
+
+  Add a third state:
+
+    cache:behind  — local orphan branch HEAD != origin/aida-store HEAD (pull needed)
+
+  Compute via `git -C .aida-store/ rev-parse HEAD` vs `git -C .aida-store/ rev-parse origin/aida-store`. The latter requires recent fetch — see STORY for background fetch. If origin ref isn't fetched recently (>5min old), show `cache:?` (unknown) to avoid false-fresh.
+
+  Statusline format extends to:
+
+    aida · <project> · role:<name> · @SPEC · q:N · cache:fresh|stale|behind|?
+
+  ### Part 2 — `--sync` flag on read commands
+
+  `aida queue list --sync` does an implicit `aida db sync --pull` before listing. Same for `aida list --sync`, `aida show --sync <id>`, `aida search --sync`. Opt-in, fast path stays default.
+
+  If the orphan branch is already current, `--sync` is a no-op (no network).
+
+  ## Composes with
+
+  - The "background fetch in statusline" STORY (separate filing) — provides the freshness data so `cache:behind` is accurate without forcing a fetch on every render
+  - TASK-43 (`aida pull`) — `--sync` is essentially a one-shot embedded `aida pull`
+
+  ## Acceptance
+
+  - [ ] `cache:behind` rendered in statusline when local lags origin
+  - [ ] `cache:?` rendered when origin freshness unknown (no recent fetch)
+  - [ ] `aida queue list --sync` pulls then lists (fast path no-op when already current)
+  - [ ] `aida list --sync` and `aida search --sync` work the same way
+  - [ ] No-op when offline (warn, fall back to local view, don't crash)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T16:57:37.718813556Z
+modified_at: 2026-05-10T16:57:37.718813556Z
+req_type: Story
