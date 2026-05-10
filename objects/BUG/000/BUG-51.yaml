@@ -1,0 +1,19 @@
+id: 019e0fb9-a413-78f2-997b-2779c1cc1b1d
+spec_id: BUG-51
+agreed_id: BUG-51
+title: REQ_ID_PATTERN rejects (EPIC-19 v1) suffix variants
+description: |
+  Commit-msg validator's regex accepts (FR-42), (FR-1-042), comma-lists (TASK-20, TASK-27), ranges (BUG-25..30), but not version-suffixed forms like (EPIC-19 v1) or (STORY-47 phase-2). Hit on commits shipping doctor v1/v2/v3.
+
+  Two fixes possible:
+  1. Allow optional suffix (any non-paren content) after the id list, before the closing paren
+  2. Require strict id-only and document that version progress should go in commit body, not subject
+
+  Mild preference for option 1 — version suffixes in commit subjects are useful real-world signal.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T02:31:24.947853399Z
+modified_at: 2026-05-10T02:31:24.947853399Z
+req_type: Bug
