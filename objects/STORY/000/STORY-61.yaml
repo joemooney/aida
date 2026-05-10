@@ -1,0 +1,72 @@
+id: 019e0ff1-098e-7492-a169-d68fb1bb190f
+spec_id: STORY-61
+agreed_id: STORY-61
+title: aida session for PR/MR review (GitHub + GitLab support)
+description: |
+  PR/MR review fits the AIDA session model: a PR is a scope, the work is "review + merge or request changes", a session lease records "this clone is reviewing PR-N" so concurrent sessions don't double-review.
+
+  ## Surface
+
+  ```
+  aida session start --owns PR-1
+  aida session start --owns MR-42        # GitLab merge requests use MR-N
+  ```
+
+  `aida session start` recognizes the `PR-N` and `MR-N` scope forms specially:
+  - Detects forge from .git/config (origin URL → github.com vs gitlab.com vs self-hosted)
+  - Auto-fetches the PR/MR branch via `gh pr checkout N` or `glab mr checkout N`
+  - Worktree base = the PR/MR branch tip, so the reviewer worktree IS the PR's code
+
+  ## Forge support
+
+  aida-core already has GitHub + GitLab integration (aida-cli/src/main.rs has GitHubCommand and GitLabCommand). The session-PR helper just routes:
+  - github.com / GHE → uses `gh` (or aida_core::integrations::github)
+  - gitlab.com / self-hosted GitLab → uses `glab` (or aida_core::integrations::gitlab)
+  - Bitbucket / others → defer; could fall back to "manually check out the branch with --branch"
+
+  Detection: read `git remote get-url origin`, match the host. Allow override via `--forge github|gitlab` for ambiguous setups.
+
+  ## Conventional reviewer role
+
+  Document a `reviewer` role with sensible defaults:
+  - scope_status = "in-review"  (so reviewer's queue shows PRs/MRs in flight)
+  - the role's PS1 prefix shows in the prompt: `(role:reviewer)`
+
+  `aida role add reviewer --purpose "review PRs/MRs"` is enough to set up; document the convention in CLAUDE.md / AIDA.md.
+
+  ## Workflow
+
+  ```
+  # Open a review session
+  aida role enter reviewer
+  aida session start --owns PR-1
+  cd ~/ai/<repo>-pr-1   # auto-resolved by session start
+  claude                # fresh agent in PR's branch worktree
+
+  # Agent reviews, runs tests, decides
+  gh pr review 1 --approve     # or --request-changes
+  gh pr merge 1 --squash       # if approving
+  # OR for GitLab:
+  glab mr approve 42
+  glab mr merge 42 --squash
+
+  # Cleanup
+  aida session end
+  ```
+
+  ## Out of scope
+
+  - Auto-routing of opened PRs/MRs to a reviewer queue: needs a webhook-side integration (or a periodic poll). File separately if/when this matters.
+  - Cross-forge syncing (PR → linked GitLab MR): aida-core already has GitLabCommand for this; not session-specific.
+  - Merge protection / branch-protection enforcement: defer.
+
+  ## Why now
+
+  User concrete observation 2026-05-09: their EPIC-20 agent opened PR #1 from inside a session, but no clear workflow for who/how reviews and merges. They use GitHub at home, GitLab at work; both need to feel native.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T03:31:55.406242214Z
+modified_at: 2026-05-10T03:31:55.406242214Z
+req_type: Story
