@@ -53,7 +53,7 @@ use aida_core::{
 use crate::cli::{
     BlockCommand, CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand, DevCommand,
     DocsCommand, FeatureCommand, GitHubCommand, GitLabCommand, JiraCommand, NodeCommand,
-    QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand, RoleCommand,
+    QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand,
     RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ServerCommand, SessionCommand,
     TraceCommand, TypeCommand,
 };
@@ -440,6 +440,9 @@ fn main() -> Result<()> {
         }
         Command::Trace(trace_cmd) => {
             handle_trace_command(trace_cmd, &storage)?;
+        }
+        Command::Review(review_cmd) => {
+            handle_review_command(review_cmd, &storage)?;
         }
         Command::Report(report_cmd) => {
             let db_path_str = requirements_path.display().to_string();
@@ -1678,6 +1681,53 @@ fn handle_git_backend_command(
                     record_role_activity(sid, "add");
                 }
 
+                // BUG-58: when adding from inside a session worktree
+                // WITHOUT --parent, hint that the session's scope is
+                // probably the right parent. Surfaced after the add line
+                // (rather than rejecting the call) so muscle-memory
+                // workflows don't break — the user can ignore it for
+                // off-topic reqs. Only fires when:
+                //   - the lease scope looks like a spec id (so we can
+                //     suggest a concrete `--parent`)
+                //   - the parent actually exists in the store
+                //   - the new req isn't already that scope's spec
+                // trace:BUG-58 | ai:claude
+                if parent.is_none() {
+                    if let Ok(project_root) = find_project_root() {
+                        if let Some(lease) = std::env::current_dir()
+                            .ok()
+                            .and_then(|cwd| active_lease_for_cwd(&project_root, &cwd))
+                        {
+                            let scope = lease.scope.clone();
+                            // Cheap heuristic for "looks like a spec id":
+                            // PREFIX-N format. Free-form scopes like
+                            // `feature:auth` or path globs don't match
+                            // and we stay quiet.
+                            if looks_like_spec_id(&scope)
+                                && backend
+                                    .get_requirement_by_spec_id(&scope)
+                                    .ok()
+                                    .flatten()
+                                    .is_some()
+                                && last.spec_id.as_deref() != Some(scope.as_str())
+                            {
+                                eprintln!(
+                                    "{} this session owns scope {}. \
+                                     If {} should be a child of it, link it now: \
+                                     `aida rel add --from {} --to {} --type child --bidirectional` \
+                                     (or pass `--parent {}` next time).",
+                                    "Hint:".dimmed(),
+                                    scope.cyan(),
+                                    last.spec_id.as_deref().unwrap_or("?").cyan(),
+                                    last.spec_id.as_deref().unwrap_or("?"),
+                                    scope,
+                                    scope,
+                                );
+                            }
+                        }
+                    }
+                }
+
                 // FR-215: --parent <id> establishes a parent relationship
                 // in the same shot. Resolve the parent (spec_id or uuid),
                 // append a Parent relationship to both reqs, persist.
@@ -2484,6 +2534,13 @@ fn handle_git_backend_command(
             // Wrap our backend in a Storage façade pointing at the store path.
             let storage = Storage::new(store_path);
             handle_queue_command(queue_cmd, &storage)?;
+        }
+        Command::Review(review_cmd) => {
+            // STORY-67: review-prompt generation reads requirements via the
+            // same Storage façade as Queue above. Pure read path — no
+            // mutation of the store.
+            let storage = Storage::new(store_path);
+            handle_review_command(review_cmd, &storage)?;
         }
         // STORY-44: `aida config user` is a global op against
         // ~/.aida/preferences.toml — no store needed. Route it through the
@@ -3698,10 +3755,22 @@ fn add_requirement_cli(
         type_prefix.as_deref(),
     );
 
-    // Add parent relationship if specified
+    // Add parent relationship if specified.
+    //
+    // BUG-58: previously stored `(child, Parent, parent)` with
+    // bidirectional=false, which is doubly broken:
+    //   1. Relationship type is "I am X to target", so Parent on the
+    //      child says "I AM the parent of <parent>" — backwards.
+    //   2. Without bidirectional=true, the parent never gets the inverse
+    //      Parent edge pointing at the child, so `rel list <parent>`
+    //      didn't show its new child.
+    // Fix: store `Child` on the source (child) pointing at the parent,
+    // bidirectional so the parent gets the matching `Parent` edge.
+    // Matches the convention already used by the git-canonical add
+    // path (FR-215). trace:BUG-58 | ai:claude
     if let Some(parent_id) = parent_uuid {
         store
-            .add_relationship(&id, RelationshipType::Parent, &parent_id, false)
+            .add_relationship(&id, RelationshipType::Child, &parent_id, true)
             .map_err(|e| anyhow::anyhow!("Failed to add parent relationship: {}", e))?;
     }
 
@@ -6064,6 +6133,28 @@ fn record_role_activity(spec_id: &str, action: &str) {
         Ok(p) => std::path::PathBuf::from(p),
         Err(_) => statusline_project_root(),
     };
+
+    // STORY-56: when this shell is inside a session lease's worktree,
+    // route the per-spec activity to the session-local log so concurrent
+    // sessions don't clobber each other's @SPEC. The project-level role
+    // file still gets `last_active_at` bumped so `aida role list --recent`
+    // keeps working as a "what role was used most recently" view, but its
+    // `activity` stream stays at whatever the last non-session shell saw
+    // until session-end flattens the session log into it.
+    // trace:STORY-56 | ai:claude
+    let lease = std::env::current_dir()
+        .ok()
+        .and_then(|cwd| active_lease_for_cwd(&project, &cwd));
+
+    if let Some(lease) = lease {
+        let _ = append_session_activity(&project, &lease.id, &role_name, spec_id, action);
+        if let Ok((mut state, path)) = load_role(&project, &role_name) {
+            state.last_active_at = chrono::Utc::now();
+            let _ = save_role_at(&state, &path);
+        }
+        return;
+    }
+
     let (mut state, path) = match load_role(&project, &role_name) {
         Ok(t) => t,
         Err(_) => return,
@@ -8171,15 +8262,15 @@ fn update_config_counter_scope(config_path: &std::path::Path, new_value: &str) -
 /// trace:FR-1-043 | ai:claude
 fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
     match cmd {
-        SessionCommand::List { limit, no_color } => session::list(*limit, *no_color),
+        SessionCommand::List { limit, no_color, all } => session::list(*limit, *no_color, *all),
         SessionCommand::Resume { id, limit } => session::resume(id.clone(), *limit),
         SessionCommand::New {
             title,
             permission_mode,
             role,
         } => session::new_session(title.clone(), permission_mode, role.clone()),
-        SessionCommand::Start { owns, branch, base, path } => {
-            session_start(owns, branch.as_deref(), base.as_deref(), path.as_deref())
+        SessionCommand::Start { owns, branch, base, path, forge } => {
+            session_start(owns, branch.as_deref(), base.as_deref(), path.as_deref(), forge.as_deref())
         }
         SessionCommand::End { id, yes } => session_end(id.as_deref(), *yes),
         SessionCommand::Leases => session_leases(),
@@ -8258,6 +8349,220 @@ fn active_lease_for_cwd(
     list_leases(project_root)
         .into_iter()
         .find(|l| canon == l.worktree_path || canon.starts_with(&l.worktree_path))
+}
+
+// ---------------------------------------------------------------------------
+// Per-session role activity log (STORY-56)
+//
+// Project-level role activity (`.aida/roles/<name>.toml`'s `activity` field)
+// is shared by every shell that has the role active. When two sessions for
+// the same project both run `role:implementer`, they fight over the same
+// "current spec" — last writer wins, and `aida statusline`'s @SPEC segment
+// flips between specs depending on which session most recently touched
+// something. STORY-56 splits that activity stream: while a shell is inside
+// a session lease's worktree, role activity goes to a session-local log
+// (`.aida/sessions/<id>.activity.toml`) instead. Statusline reads the
+// session log when in-session, the project log otherwise. `session end`
+// flattens unique (spec_id) entries from the session log back into each
+// participating role's project-level activity (newest first, dedupe,
+// truncate to ACTIVITY_MAX) so long-term recent-activity views still show
+// what was worked on under the closed session.
+// trace:STORY-56 | ai:claude
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Default, Clone, serde::Serialize, serde::Deserialize)]
+struct SessionActivityLog {
+    #[serde(default)]
+    entries: Vec<SessionActivityEntry>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct SessionActivityEntry {
+    /// Role active when this entry was recorded — needed at session-end to
+    /// know which project-level role file to fold the entry back into.
+    role: String,
+    spec_id: String,
+    action: String,
+    at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Hard cap on session activity entries — keeps the file small for long
+/// sessions. Older-than-cap entries fall off the back (so the newest cap
+/// entries are kept, matching the project-level role's stream behavior).
+const SESSION_ACTIVITY_MAX: usize = 200;
+
+fn session_activity_path(project_root: &std::path::Path, id: &str) -> std::path::PathBuf {
+    leases_dir(project_root).join(format!("{}.activity.toml", id))
+}
+
+fn load_session_activity(
+    project_root: &std::path::Path,
+    id: &str,
+) -> SessionActivityLog {
+    let path = session_activity_path(project_root, id);
+    let Ok(content) = std::fs::read_to_string(&path) else {
+        return SessionActivityLog::default();
+    };
+    toml::from_str(&content).unwrap_or_default()
+}
+
+fn save_session_activity(
+    project_root: &std::path::Path,
+    id: &str,
+    log: &SessionActivityLog,
+) -> Result<()> {
+    let path = session_activity_path(project_root, id);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let content = toml::to_string_pretty(log)?;
+    std::fs::write(&path, content)
+        .with_context(|| format!("failed to write {}", path.display()))?;
+    Ok(())
+}
+
+/// Append an activity entry to the given session's log. Dedupes against
+/// the most recent entry the same way project-level activity does:
+/// consecutive (role, spec_id, action) collapse into one entry whose
+/// timestamp ticks forward.
+/// trace:STORY-56 | ai:claude
+fn append_session_activity(
+    project_root: &std::path::Path,
+    session_id: &str,
+    role: &str,
+    spec_id: &str,
+    action: &str,
+) -> Result<()> {
+    let mut log = load_session_activity(project_root, session_id);
+    let entry = SessionActivityEntry {
+        role: role.to_string(),
+        spec_id: spec_id.to_string(),
+        action: action.to_string(),
+        at: chrono::Utc::now(),
+    };
+    let dup = log
+        .entries
+        .first()
+        .map(|prev| {
+            prev.role == entry.role
+                && prev.spec_id == entry.spec_id
+                && prev.action == entry.action
+        })
+        .unwrap_or(false);
+    if dup {
+        if let Some(first) = log.entries.first_mut() {
+            first.at = entry.at;
+        }
+    } else {
+        log.entries.insert(0, entry);
+        log.entries.truncate(SESSION_ACTIVITY_MAX);
+    }
+    save_session_activity(project_root, session_id, &log)
+}
+
+/// STORY-57: queue routing filter. Returns true if `entry`'s scope/session
+/// routing tags are compatible with the consumer side (the shell calling
+/// `queue list` / `queue next`).
+///
+/// Rules:
+///   - `for_scope` set on the entry must match the consumer's lease scope
+///     (case-insensitive). No lease + scope-tagged entry → filtered out
+///     (the entry is targeted at a session that isn't this shell).
+///   - `for_session` set on the entry must match the consumer lease's id
+///     (8+ char prefix on either side, since a user might have typed a
+///     short prefix).
+///   - Either field absent on the entry = unrouted on that axis = visible
+///     to all consumers.
+///
+/// Bypass with `bypass=true` (used for `--all` / explicit `--scope any`).
+/// trace:STORY-57 | ai:claude
+fn entry_scope_session_match(
+    entry: &aida_core::QueueEntry,
+    self_lease: Option<&SessionLease>,
+    bypass: bool,
+) -> bool {
+    if bypass {
+        return true;
+    }
+    if let Some(want_scope) = entry.for_scope.as_deref() {
+        let Some(lease) = self_lease else {
+            return false;
+        };
+        if !lease.scope.eq_ignore_ascii_case(want_scope) {
+            return false;
+        }
+    }
+    if let Some(want_sess) = entry.for_session.as_deref() {
+        let Some(lease) = self_lease else {
+            return false;
+        };
+        let n = want_sess.len().min(lease.id.len());
+        if n < 4 {
+            // Too short to be safely matched — bail out as no-match
+            // rather than risk a false positive.
+            return false;
+        }
+        if !lease.id[..n].eq_ignore_ascii_case(&want_sess[..n]) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Fold a closed session's activity entries back into each participating
+/// role's project-level `activity` stream. Called from `session_end` so
+/// long-running views (`aida role show`, `aida statusline` outside any
+/// session) still surface what was worked on under the session. Does NOT
+/// delete the activity log file — `session_end` handles that after this
+/// returns successfully.
+///
+/// Per role: take the newest session entry per spec_id, merge in front of
+/// the project role's existing activity, dedupe by spec_id, truncate to
+/// ACTIVITY_MAX. Best-effort — malformed/missing role files are skipped
+/// (the project role might have been deleted while the session ran).
+/// trace:STORY-56 | ai:claude
+fn aggregate_session_activity_into_roles(
+    project_root: &std::path::Path,
+    session_id: &str,
+) {
+    let log = load_session_activity(project_root, session_id);
+    if log.entries.is_empty() {
+        return;
+    }
+    // Group newest-first by role; within each role the first entry per
+    // spec_id wins (newest, since `entries` is newest-first by design).
+    use std::collections::{BTreeMap, BTreeSet};
+    let mut per_role: BTreeMap<String, Vec<RoleActivity>> = BTreeMap::new();
+    for entry in &log.entries {
+        let bucket = per_role.entry(entry.role.clone()).or_default();
+        if !bucket.iter().any(|a| a.spec_id == entry.spec_id) {
+            bucket.push(RoleActivity {
+                spec_id: entry.spec_id.clone(),
+                action: entry.action.clone(),
+                at: entry.at,
+            });
+        }
+    }
+    for (role_name, mut new_entries) in per_role {
+        let Ok((mut state, path)) = load_role(project_root, &role_name) else {
+            continue;
+        };
+        // Merge: prepend session-newest entries, then append project's
+        // existing entries skipping any spec_id already brought forward.
+        let promoted: BTreeSet<String> =
+            new_entries.iter().map(|e| e.spec_id.clone()).collect();
+        new_entries.extend(
+            state
+                .activity
+                .iter()
+                .filter(|e| !promoted.contains(&e.spec_id))
+                .cloned(),
+        );
+        new_entries.truncate(ACTIVITY_MAX);
+        state.activity = new_entries;
+        state.last_active_at = chrono::Utc::now();
+        let _ = save_role_at(&state, &path);
+    }
 }
 
 /// Lease-enforcement mode for cross-session writes.
@@ -8475,18 +8780,113 @@ fn find_project_root() -> Result<std::path::PathBuf> {
     }
 }
 
+/// STORY-61: forge-specific PR/MR scope. When `aida session start
+/// --owns PR-1` or `--owns MR-42` is invoked, we route through a
+/// review-branch fetch + worktree-on-existing-branch flow instead of
+/// the default new-branch flow.
+/// trace:STORY-61 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ReviewForge {
+    GitHub,
+    GitLab,
+}
+
+impl ReviewForge {
+    fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "github" | "gh" => Some(Self::GitHub),
+            "gitlab" | "glab" => Some(Self::GitLab),
+            _ => None,
+        }
+    }
+
+    /// Standard refspec for the head of a PR/MR (works for fork PRs
+    /// too because both forges expose the head ref on origin).
+    fn pr_head_ref(&self, n: u64) -> String {
+        match self {
+            Self::GitHub => format!("pull/{}/head", n),
+            Self::GitLab => format!("merge-requests/{}/head", n),
+        }
+    }
+
+    fn local_branch_for(&self, n: u64) -> String {
+        match self {
+            Self::GitHub => format!("pr-{}", n),
+            Self::GitLab => format!("mr-{}", n),
+        }
+    }
+}
+
+/// STORY-61: parse `PR-N` / `MR-N` scope strings (case-insensitive).
+/// Returns the implied forge + PR number when the scope matches; None
+/// otherwise (lets normal scope handling proceed).
+/// trace:STORY-61 | ai:claude
+fn parse_review_scope(scope: &str) -> Option<(ReviewForge, u64)> {
+    let trimmed = scope.trim();
+    let (prefix, rest) = trimmed.split_once('-')?;
+    let n: u64 = rest.parse().ok()?;
+    match prefix.to_ascii_uppercase().as_str() {
+        "PR" => Some((ReviewForge::GitHub, n)),
+        "MR" => Some((ReviewForge::GitLab, n)),
+        _ => None,
+    }
+}
+
+/// STORY-61: detect the project's forge by inspecting `origin`'s URL.
+/// Returns None for hosts we don't recognize (Bitbucket, self-hosted
+/// without telltale domain, etc.) — caller can require `--forge`.
+/// trace:STORY-61 | ai:claude
+fn detect_forge_from_origin(project_root: &std::path::Path) -> Option<ReviewForge> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["remote", "get-url", "origin"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let url = String::from_utf8_lossy(&out.stdout).trim().to_lowercase();
+    if url.contains("github.com") {
+        Some(ReviewForge::GitHub)
+    } else if url.contains("gitlab.com") || url.contains("/gitlab/") {
+        Some(ReviewForge::GitLab)
+    } else {
+        None
+    }
+}
+
 fn session_start(
     owns: &str,
     branch: Option<&str>,
     base: Option<&str>,
     explicit_path: Option<&str>,
+    forge_override: Option<&str>,
 ) -> Result<()> {
     let project_root = find_project_root()?;
     let slug = slugify(owns);
     if slug.is_empty() {
         anyhow::bail!("scope `{}` slugifies to empty — pick something with letters/digits", owns);
     }
-    let branch_name = branch.map(|s| s.to_string()).unwrap_or_else(|| slug.clone());
+
+    // STORY-61: review-mode dispatch. When the scope is `PR-N` / `MR-N`
+    // and the forge resolves (via override or origin-URL detection), we
+    // hand off to the review flow which fetches the PR head ref into a
+    // local branch and creates the worktree on that existing branch
+    // (rather than `git worktree add -b <new-branch>`).
+    let review_target: Option<(ReviewForge, u64)> = parse_review_scope(owns)
+        .map(|(f, n)| {
+            let resolved_forge = match forge_override.and_then(ReviewForge::parse) {
+                Some(f) => f,
+                None => detect_forge_from_origin(&project_root).unwrap_or(f),
+            };
+            (resolved_forge, n)
+        });
+
+    let branch_name = match (&review_target, branch) {
+        (Some((forge, n)), None) => forge.local_branch_for(*n),
+        _ => branch.map(|s| s.to_string()).unwrap_or_else(|| slug.clone()),
+    };
     let repo_name = project_root
         .file_name()
         .and_then(|s| s.to_str())
@@ -8524,24 +8924,67 @@ fn session_start(
         }
     }
 
-    // Create worktree on new branch.
-    let mut args = vec![
-        "worktree",
-        "add",
-        "-b",
-        branch_name.as_str(),
-        worktree_path.to_str().unwrap(),
-    ];
-    if let Some(b) = base {
-        args.push(b);
-    }
-    let res = std::process::Command::new("git")
-        .arg("-C")
-        .arg(&project_root)
-        .args(&args)
-        .status()?;
-    if !res.success() {
-        anyhow::bail!("`git worktree add` failed");
+    if let Some((forge, n)) = review_target {
+        // STORY-61 review flow:
+        //   1. fetch the PR/MR head ref from origin into the local branch
+        //      <forge>-<N>; safe to re-run (creates or fast-forwards).
+        //   2. `git worktree add <path> <local-branch>` checks out the
+        //      existing branch — does NOT create a new one. Reviewer can
+        //      then commit feedback / try fixes locally without disturbing
+        //      the contributor's branch on origin.
+        let head_ref = forge.pr_head_ref(n);
+        let refspec = format!("+{}:{}", head_ref, branch_name);
+        let fetch = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&project_root)
+            .args(["fetch", "origin", refspec.as_str()])
+            .status()?;
+        if !fetch.success() {
+            anyhow::bail!(
+                "`git fetch origin {}` failed — is {} #{} valid? \
+                 (For self-hosted forges, override with --forge github|gitlab.)",
+                refspec,
+                match forge {
+                    ReviewForge::GitHub => "PR",
+                    ReviewForge::GitLab => "MR",
+                },
+                n
+            );
+        }
+        let res = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&project_root)
+            .args([
+                "worktree",
+                "add",
+                worktree_path.to_str().unwrap(),
+                branch_name.as_str(),
+            ])
+            .status()?;
+        if !res.success() {
+            anyhow::bail!("`git worktree add` failed");
+        }
+    } else {
+        // Default flow: create worktree on a NEW branch (the original
+        // EPIC-20 behavior — work-in-progress sessions, not reviews).
+        let mut args = vec![
+            "worktree",
+            "add",
+            "-b",
+            branch_name.as_str(),
+            worktree_path.to_str().unwrap(),
+        ];
+        if let Some(b) = base {
+            args.push(b);
+        }
+        let res = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&project_root)
+            .args(&args)
+            .status()?;
+        if !res.success() {
+            anyhow::bail!("`git worktree add` failed");
+        }
     }
 
     // Make AIDA state from the parent visible inside the new worktree.
@@ -8720,6 +9163,21 @@ fn session_end(id_query: Option<&str>, yes: bool) -> Result<()> {
         }
     }
 
+    // STORY-56: flatten the session's activity log into each
+    // participating role's project-level activity stream BEFORE we delete
+    // the lease — once the lease is gone the activity file is orphaned.
+    // For each role, take the newest entry per spec_id from the session
+    // log, merge into the project role's `activity` (newest first, dedupe
+    // by spec_id, truncate to ACTIVITY_MAX) so post-session views like
+    // `aida role show` still surface what was worked on under the closed
+    // session. trace:STORY-56 | ai:claude
+    aggregate_session_activity_into_roles(&project_root, &target.id);
+    let activity_file = session_activity_path(&project_root, &target.id);
+    let canonical_activity = activity_file.canonicalize().ok();
+    let activity_target: std::path::PathBuf = canonical_activity
+        .clone()
+        .unwrap_or_else(|| activity_file.clone());
+
     // Snapshot the lease file's authoritative on-disk location BEFORE we
     // touch the worktree's symlinks. When session_end runs from inside the
     // worktree (the natural flow), `project_root` IS the worktree path —
@@ -8781,6 +9239,25 @@ fn session_end(id_query: Option<&str>, yes: bool) -> Result<()> {
                 lease_target.display(),
                 e
             );
+        }
+    }
+
+    // STORY-56: drop the session activity log. Quiet on missing — short
+    // sessions that never recorded any activity won't have one. We've
+    // already aggregated entries into the project-level role(s) above.
+    // trace:STORY-56 | ai:claude
+    if activity_target.exists() {
+        match std::fs::remove_file(&activity_target) {
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
+                eprintln!(
+                    "{} could not delete session activity log at {}: {}",
+                    "Warning:".yellow().bold(),
+                    activity_target.display(),
+                    e
+                );
+            }
         }
     }
 
@@ -8970,6 +9447,284 @@ mod statusline_tests {
         assert_eq!(SessionEnforcement::from_config_str("strict"), SessionEnforcement::Block);
         // Unknown → Warn (the safe default).
         assert_eq!(SessionEnforcement::from_config_str("xyzzy"), SessionEnforcement::Warn);
+    }
+
+    /// STORY-53: the `sess:<scope>` segment reuses SCOPE_LABEL_MAX, the
+    /// same budget that bounds @SPEC's width — long path-glob scopes get
+    /// the trailing ellipsis so the statusline stays scannable, and short
+    /// scopes pass through verbatim.
+    /// trace:STORY-53 | ai:claude
+    #[test]
+    fn sess_segment_label_truncation() {
+        let short = "EPIC-20";
+        assert_eq!(truncate(short, SCOPE_LABEL_MAX), "EPIC-20");
+
+        let long = "feature:auth-flow-rewrite";
+        let out = truncate(long, SCOPE_LABEL_MAX);
+        assert!(out.chars().count() <= SCOPE_LABEL_MAX);
+        assert!(out.ends_with('…'));
+    }
+
+    /// STORY-56: appending session activity dedupes consecutive same-(role,
+    /// spec_id, action) writes by ticking the timestamp instead of stacking
+    /// duplicate entries — same shape as project-level role activity.
+    /// trace:STORY-56 | ai:claude
+    #[test]
+    fn session_activity_dedupes_consecutive_repeats() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".aida/sessions")).unwrap();
+
+        let id = "test-session-01";
+        append_session_activity(root, id, "implementer", "STORY-56", "edit").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        append_session_activity(root, id, "implementer", "STORY-56", "edit").unwrap();
+        let log = load_session_activity(root, id);
+        assert_eq!(log.entries.len(), 1, "consecutive same-action collapse");
+
+        // A different action breaks the dedupe.
+        append_session_activity(root, id, "implementer", "STORY-56", "show").unwrap();
+        let log = load_session_activity(root, id);
+        assert_eq!(log.entries.len(), 2);
+        assert_eq!(log.entries[0].action, "show", "newest first");
+    }
+
+    /// STORY-67: extract_acceptance_section finds `## Acceptance`,
+    /// `## Verify`, etc. (case-insensitive) and returns the body until
+    /// the next `## ` heading. Missing or empty sections return None
+    /// so the caller can render a placeholder rather than an empty
+    /// section. trace:STORY-67 | ai:claude
+    #[test]
+    fn extract_acceptance_section_basic() {
+        let desc = "Some intro paragraph.\n\n## Acceptance\n\n- alpha\n- bravo\n\n## Notes\n\nFollow-up.\n";
+        let body = extract_acceptance_section(desc).unwrap();
+        assert_eq!(body, "- alpha\n- bravo");
+    }
+
+    /// trace:STORY-67 | ai:claude
+    #[test]
+    fn extract_acceptance_section_aliases() {
+        for heading in &["Acceptance", "Verify", "Test cases", "Tests", "Verification"] {
+            let desc = format!("blah\n\n## {}\n\nbody text\n", heading);
+            assert!(
+                extract_acceptance_section(&desc).is_some(),
+                "missing recognition for `## {}`",
+                heading
+            );
+        }
+        // Non-matching headings fall through.
+        let desc = "Body.\n\n## Why\n\nBecause.\n";
+        assert!(extract_acceptance_section(desc).is_none());
+    }
+
+    /// trace:STORY-67 | ai:claude
+    #[test]
+    fn extract_acceptance_section_empty_body() {
+        let desc = "## Acceptance\n\n## Why\n\nReason.\n";
+        // Empty body (just whitespace until the next heading) → None.
+        assert!(extract_acceptance_section(desc).is_none());
+    }
+
+    /// STORY-67: spec ID detection inside a `(...)` group at end of
+    /// commit subject. Matches AIDA-format SPEC-IDs and rejects
+    /// anything else (e.g., issue refs, version strings).
+    /// trace:STORY-67 | ai:claude
+    #[test]
+    fn extract_spec_ids_from_commit_subject() {
+        let msg = "[AI:claude] feat(api): add endpoint (FR-1-042)\n\nBody text.\n";
+        assert_eq!(
+            extract_spec_ids_from_commit(msg),
+            vec!["FR-1-042".to_string()]
+        );
+        let msg = "fix(scope): tweak (BUG-23)\n";
+        assert_eq!(
+            extract_spec_ids_from_commit(msg),
+            vec!["BUG-23".to_string()]
+        );
+        // Commits with no trailer leave nothing.
+        let msg = "chore: bump dep version\n";
+        assert!(extract_spec_ids_from_commit(msg).is_empty());
+        // Version-like parens shouldn't match.
+        let msg = "release: v1.2.3 (1.2.3)\n";
+        assert!(extract_spec_ids_from_commit(msg).is_empty());
+    }
+
+    /// STORY-67: looks_like_spec_id validates the alpha-DASH-digits
+    /// shape used throughout AIDA.
+    /// trace:STORY-67 | ai:claude
+    #[test]
+    fn spec_id_shape_recognition() {
+        assert!(looks_like_spec_id("FR-42"));
+        assert!(looks_like_spec_id("BUG-1-038"));
+        assert!(looks_like_spec_id("EPIC-2"));
+        assert!(looks_like_spec_id("STORY-100"));
+        // Rejects.
+        assert!(!looks_like_spec_id("v1.2.3"));
+        assert!(!looks_like_spec_id("1.2"));
+        assert!(!looks_like_spec_id("X-"));
+        assert!(!looks_like_spec_id("X"));
+        assert!(!looks_like_spec_id(""));
+        // Lowercase prefix is permitted at this layer; commit subjects
+        // typically uppercase, but `(fr-1)` shouldn't blow up if it
+        // appears.
+        assert!(looks_like_spec_id("fr-1"));
+    }
+
+    /// STORY-61: PR-N / MR-N scope parsing — case-insensitive, requires
+    /// the trailing number, and rejects everything else (so the normal
+    /// scope flow is preserved for non-review scopes like EPIC-20).
+    /// trace:STORY-61 | ai:claude
+    #[test]
+    fn review_scope_parsing() {
+        assert_eq!(parse_review_scope("PR-1"), Some((ReviewForge::GitHub, 1)));
+        assert_eq!(parse_review_scope("pr-42"), Some((ReviewForge::GitHub, 42)));
+        assert_eq!(parse_review_scope("MR-7"), Some((ReviewForge::GitLab, 7)));
+        assert_eq!(parse_review_scope("mr-2024"), Some((ReviewForge::GitLab, 2024)));
+        // Non-PR scopes pass through unchanged.
+        assert_eq!(parse_review_scope("EPIC-20"), None);
+        assert_eq!(parse_review_scope("FR-42"), None);
+        assert_eq!(parse_review_scope("feature:auth"), None);
+        // Missing number rejects.
+        assert_eq!(parse_review_scope("PR-"), None);
+        assert_eq!(parse_review_scope("MR-abc"), None);
+    }
+
+    /// STORY-61: refspec format — same-repo and fork PRs both work
+    /// because `pull/N/head` (GitHub) and `merge-requests/N/head`
+    /// (GitLab) are populated on origin in both cases.
+    /// trace:STORY-61 | ai:claude
+    #[test]
+    fn review_forge_refspec() {
+        assert_eq!(ReviewForge::GitHub.pr_head_ref(1), "pull/1/head");
+        assert_eq!(ReviewForge::GitHub.pr_head_ref(123), "pull/123/head");
+        assert_eq!(ReviewForge::GitLab.pr_head_ref(7), "merge-requests/7/head");
+        assert_eq!(ReviewForge::GitHub.local_branch_for(1), "pr-1");
+        assert_eq!(ReviewForge::GitLab.local_branch_for(7), "mr-7");
+    }
+
+    /// STORY-61: --forge string parsing accepts both the long form
+    /// (`github`/`gitlab`) and the CLI-tool short form (`gh`/`glab`)
+    /// since users usually have one or the other muscle-memory'd.
+    /// trace:STORY-61 | ai:claude
+    #[test]
+    fn review_forge_override_parsing() {
+        assert_eq!(ReviewForge::parse("github"), Some(ReviewForge::GitHub));
+        assert_eq!(ReviewForge::parse("GitHub"), Some(ReviewForge::GitHub));
+        assert_eq!(ReviewForge::parse("gh"), Some(ReviewForge::GitHub));
+        assert_eq!(ReviewForge::parse("gitlab"), Some(ReviewForge::GitLab));
+        assert_eq!(ReviewForge::parse("glab"), Some(ReviewForge::GitLab));
+        assert_eq!(ReviewForge::parse("bitbucket"), None);
+        assert_eq!(ReviewForge::parse(""), None);
+    }
+
+    /// STORY-57: routing-filter decision table for the consumer side.
+    /// Entries with `for_scope` only route to sessions whose lease scope
+    /// matches; entries with `for_session` only route to that exact lease
+    /// (8+ char prefix). No lease + scope-tagged entry → filtered. The
+    /// `--all` bypass (the boolean param) lets users see everything.
+    /// trace:STORY-57 | ai:claude
+    #[test]
+    fn entry_scope_session_match_decision_table() {
+        use aida_core::QueueEntry;
+        let now = chrono::Utc::now();
+        let mk = |scope: Option<&str>, sess: Option<&str>| QueueEntry {
+            user_id: "u".into(),
+            requirement_id: uuid::Uuid::nil(),
+            position: 0,
+            added_by: "u".into(),
+            note: None,
+            added_at: now,
+            for_role: Some("implementer".into()),
+            for_scope: scope.map(|s| s.to_string()),
+            for_session: sess.map(|s| s.to_string()),
+        };
+        let lease = SessionLease {
+            id: "abcdef123456".into(),
+            scope: "EPIC-20".into(),
+            slug: "epic-20".into(),
+            owner: "u".into(),
+            worktree_path: std::path::PathBuf::from("/tmp/wt"),
+            branch: "br".into(),
+            started_at: now,
+            hostname: "h".into(),
+        };
+
+        // No routing tags = visible everywhere.
+        assert!(entry_scope_session_match(&mk(None, None), Some(&lease), false));
+        assert!(entry_scope_session_match(&mk(None, None), None, false));
+
+        // Scope match passes; mismatch filters out.
+        assert!(entry_scope_session_match(&mk(Some("EPIC-20"), None), Some(&lease), false));
+        assert!(!entry_scope_session_match(&mk(Some("OTHER"), None), Some(&lease), false));
+        // Scope-tagged entry without a lease → filtered (entry was for
+        // a session, this shell isn't in one).
+        assert!(!entry_scope_session_match(&mk(Some("EPIC-20"), None), None, false));
+
+        // Session prefix matches case-insensitively.
+        assert!(entry_scope_session_match(&mk(None, Some("abcdef12")), Some(&lease), false));
+        assert!(entry_scope_session_match(&mk(None, Some("ABCDEF12")), Some(&lease), false));
+        // Wrong session prefix is filtered.
+        assert!(!entry_scope_session_match(&mk(None, Some("99999999")), Some(&lease), false));
+
+        // Bypass shows everything regardless.
+        assert!(entry_scope_session_match(&mk(Some("OTHER"), None), Some(&lease), true));
+        assert!(entry_scope_session_match(&mk(Some("EPIC-20"), Some("99999999")), None, true));
+    }
+
+    /// STORY-56: aggregating a session log into the project role keeps
+    /// only the newest entry per spec_id, merges in front of the role's
+    /// existing activity, and respects ACTIVITY_MAX. The session's
+    /// per-spec winners survive even when the project role already had
+    /// older entries for the same specs (the session entry is fresher,
+    /// so it wins).
+    /// trace:STORY-56 | ai:claude
+    #[test]
+    fn session_aggregation_dedupes_and_promotes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".aida/sessions")).unwrap();
+        std::fs::create_dir_all(root.join(".aida/roles")).unwrap();
+
+        // Seed a project role with one stale entry for STORY-X.
+        let role_path = root.join(".aida/roles/implementer.toml");
+        let stale = chrono::Utc::now() - chrono::Duration::hours(1);
+        let role = RoleState {
+            name: "implementer".into(),
+            purpose: None,
+            created_at: stale,
+            last_active_at: stale,
+            working_directory: None,
+            notes: None,
+            global: false,
+            activity: vec![RoleActivity {
+                spec_id: "STORY-X".into(),
+                action: "edit".into(),
+                at: stale,
+            }],
+            scope_tags: vec![],
+            scope_status: None,
+            system_prompt: None,
+        };
+        std::fs::write(&role_path, toml::to_string_pretty(&role).unwrap()).unwrap();
+
+        // Session log: STORY-X (newer than the seed) and STORY-Y.
+        let id = "agg-session-01";
+        append_session_activity(root, id, "implementer", "STORY-X", "show").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        append_session_activity(root, id, "implementer", "STORY-Y", "edit").unwrap();
+
+        aggregate_session_activity_into_roles(root, id);
+
+        let merged: RoleState =
+            toml::from_str(&std::fs::read_to_string(&role_path).unwrap()).unwrap();
+        let ids: Vec<&str> = merged.activity.iter().map(|a| a.spec_id.as_str()).collect();
+        // STORY-Y (newest in session) first, then STORY-X (the session
+        // entry wins over the seed; the seed's stale STORY-X is dropped).
+        assert_eq!(ids, vec!["STORY-Y", "STORY-X"]);
+        assert!(
+            merged.activity[1].at > stale,
+            "session-promoted STORY-X must carry the session timestamp, not the stale seed"
+        );
     }
 }
 
@@ -9499,19 +10254,45 @@ fn handle_statusline_command(color: &str) -> Result<()> {
         "αιδα".dimmed().to_string(),
         project_label.green().bold().to_string(),
     ];
+    // Resolve the active session lease once: both the @SPEC fallback and
+    // the dedicated sess: segment use it, and we want a single canonicalize
+    // + read-dir per render. trace:STORY-53 | ai:claude
+    let lease = std::env::current_dir()
+        .ok()
+        .and_then(|cwd| active_lease_for_cwd(&project_root, &cwd));
+
     if let Some(r) = &role {
         parts.push(format!("role:{}", r).yellow().bold().to_string());
-        // @SPEC segment. Default: newest activity entry from the active role
-        // (the spec the user most recently touched). Override: when cwd is
-        // inside an active session lease and the role's last activity is
-        // older than the lease (or there is none), show `@<scope>` instead
-        // — otherwise the prompt would carry over a stale spec from before
-        // this session began. trace:STORY-55 | ai:claude
+        // @SPEC segment. Default: newest activity entry the active role
+        // touched. Source preference: the session-local activity log when
+        // cwd is inside an active session lease (STORY-56), else the
+        // project-level role's activity stream. Override: with a session
+        // active but no role activity yet inside it, fall back to
+        // `@<scope>` so the prompt advertises the session anchor instead
+        // of a pre-session spec. trace:STORY-55 | ai:claude
+        let session_latest: Option<RoleActivity> = lease
+            .as_ref()
+            .and_then(|l| {
+                load_session_activity(&project_root, &l.id)
+                    .entries
+                    .into_iter()
+                    .find(|e| e.role == *r)
+                    .map(|e| RoleActivity {
+                        spec_id: e.spec_id,
+                        action: e.action,
+                        at: e.at,
+                    })
+            });
         let role_state = load_role(&project_root, r).ok().map(|(s, _)| s);
-        let latest = role_state.as_ref().and_then(|s| s.activity.first());
-        let lease = std::env::current_dir()
-            .ok()
-            .and_then(|cwd| active_lease_for_cwd(&project_root, &cwd));
+        let project_latest = role_state.as_ref().and_then(|s| s.activity.first()).cloned();
+        let latest: Option<RoleActivity> = match (lease.as_ref(), session_latest, project_latest) {
+            // In-session: prefer session log; only consider project-level
+            // entries that are newer than the lease (i.e. a freshly
+            // promoted entry from a prior `session end`).
+            (Some(l), Some(s), _) => Some(s).filter(|s| s.at >= l.started_at),
+            (Some(l), None, p) => p.filter(|p| p.at >= l.started_at),
+            (None, _, p) => p,
+        };
         let label: Option<String> = match (latest, lease.as_ref()) {
             (Some(act), Some(l)) if act.at >= l.started_at => Some(act.spec_id.clone()),
             (_, Some(l)) => Some(truncate(&l.scope, SCOPE_LABEL_MAX)),
@@ -9534,6 +10315,18 @@ fn handle_statusline_command(color: &str) -> Result<()> {
         if l != "fresh" {
             parts.push(format!("cache:{}", l).red().to_string());
         }
+    }
+    // sess:<scope> segment — emitted whenever cwd resolves into an active
+    // session lease's worktree, regardless of role. Coexists with @SPEC:
+    // @SPEC answers "which spec am I touching", sess: answers "which
+    // session-scope owns this shell" (the latter sticks even when the
+    // role's recent activity is on a child spec). Same color as role:
+    // since both answer "what context am I in". Scope is truncated to the
+    // same budget as @SPEC so the line stays scannable.
+    // trace:STORY-53 | ai:claude
+    if let Some(l) = lease.as_ref() {
+        let label = truncate(&l.scope, SCOPE_LABEL_MAX);
+        parts.push(format!("sess:{}", label).yellow().bold().to_string());
     }
     println!("{}", parts.join(&separator));
     Ok(())
@@ -14274,6 +15067,373 @@ fn trace_sweep(
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// `aida review` — review-workflow helpers (STORY-67)
+// ---------------------------------------------------------------------------
+
+/// Section headings the prompt-generator looks for in a requirement's
+/// description. The first match (case-insensitive) wins; everything from
+/// that heading until the next `## ` heading or end-of-string is the
+/// extracted body.
+/// trace:STORY-67 | ai:claude
+const ACCEPTANCE_SECTION_HEADINGS: &[&str] =
+    &["Acceptance", "Verify", "Test cases", "Tests", "Verification"];
+
+/// Extract the acceptance-criteria body from a requirement description.
+/// Returns the body text (without the heading line) when one of the
+/// recognized headings is found; None otherwise so the caller can render
+/// a "no acceptance criteria documented" placeholder instead of silently
+/// emitting an empty section. trace:STORY-67 | ai:claude
+fn extract_acceptance_section(description: &str) -> Option<String> {
+    let lines: Vec<&str> = description.lines().collect();
+    let mut start: Option<usize> = None;
+    let mut i = 0usize;
+    while i < lines.len() {
+        let line = lines[i].trim();
+        if let Some(rest) = line.strip_prefix("## ") {
+            let lower = rest.trim().to_ascii_lowercase();
+            if ACCEPTANCE_SECTION_HEADINGS
+                .iter()
+                .any(|h| lower.starts_with(&h.to_ascii_lowercase()))
+            {
+                start = Some(i + 1);
+                break;
+            }
+        }
+        i += 1;
+    }
+    let start = start?;
+    let mut end = lines.len();
+    for (j, line) in lines.iter().enumerate().skip(start) {
+        if line.trim_start().starts_with("## ") {
+            end = j;
+            break;
+        }
+    }
+    let body = lines[start..end].join("\n").trim().to_string();
+    if body.is_empty() {
+        None
+    } else {
+        Some(body)
+    }
+}
+
+/// Pull `(REQ-ID)` trailers from a single commit message body. AIDA's
+/// commit format wraps the requirement id in parens at end-of-subject:
+/// `[AI:tool] feat(scope): description (REQ-ID)`. Also tolerates the
+/// shorter form without `[AI:tool]` (chores/docs).
+/// trace:STORY-67 | ai:claude
+fn extract_spec_ids_from_commit(message: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for line in message.lines() {
+        let trimmed = line.trim();
+        // Walk until the LAST `(...)` group on the subject line, which
+        // is where the REQ-ID lives. Body lines occasionally mention
+        // other reqs in prose; we ignore those to avoid false matches.
+        let Some(open_at) = trimmed.rfind('(') else { continue };
+        let Some(close_at) = trimmed[open_at..].find(')').map(|n| open_at + n) else {
+            continue;
+        };
+        let inner = &trimmed[open_at + 1..close_at];
+        if looks_like_spec_id(inner) {
+            out.push(inner.to_string());
+        }
+    }
+    out
+}
+
+fn looks_like_spec_id(s: &str) -> bool {
+    let s = s.trim();
+    if s.len() < 3 || s.len() > 40 {
+        return false;
+    }
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() && bytes[i].is_ascii_alphabetic() {
+        i += 1;
+    }
+    if i < 2 || i >= bytes.len() || bytes[i] != b'-' {
+        return false;
+    }
+    i += 1;
+    if i >= bytes.len() || !bytes[i].is_ascii_digit() {
+        return false;
+    }
+    while i < bytes.len() {
+        let b = bytes[i];
+        if b.is_ascii_digit() || b == b'-' {
+            i += 1;
+        } else {
+            return false;
+        }
+    }
+    true
+}
+
+/// trace:STORY-67 | ai:claude
+fn handle_review_command(cmd: &ReviewCommand, storage: &Storage) -> Result<()> {
+    match cmd {
+        ReviewCommand::Prompt {
+            specs,
+            pr,
+            forge,
+            write,
+        } => generate_review_prompt(storage, specs.as_deref(), *pr, forge.as_deref(), write.as_deref()),
+    }
+}
+
+/// trace:STORY-67 | ai:claude
+fn generate_review_prompt(
+    storage: &Storage,
+    specs_csv: Option<&str>,
+    pr: Option<u64>,
+    forge_override: Option<&str>,
+    write_path: Option<&str>,
+) -> Result<()> {
+    let store = storage.load()?;
+
+    // Resolve the spec list. Preference order: --specs explicit,
+    // --pr range parse, error if neither.
+    let (spec_ids, header_subtitle): (Vec<String>, String) = if let Some(csv) = specs_csv {
+        let ids: Vec<String> = csv
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if ids.is_empty() {
+            anyhow::bail!("--specs was empty after splitting on commas");
+        }
+        (ids.clone(), format!("Specs: {}", ids.join(", ")))
+    } else if let Some(pr_n) = pr {
+        let project_root = find_project_root()?;
+        let forge = forge_override
+            .and_then(ReviewForge::parse)
+            .or_else(|| detect_forge_from_origin(&project_root))
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "couldn't detect forge from origin URL — pass --forge github|gitlab"
+                )
+            })?;
+        let (base, head) = pr_base_head(&project_root, forge, pr_n)?;
+        let messages = git_log_messages(&project_root, &base, &head)?;
+        let mut ids: Vec<String> = Vec::new();
+        for msg in &messages {
+            for id in extract_spec_ids_from_commit(msg) {
+                if !ids.iter().any(|existing| existing.eq_ignore_ascii_case(&id)) {
+                    ids.push(id);
+                }
+            }
+        }
+        if ids.is_empty() {
+            anyhow::bail!(
+                "no `(REQ-ID)` trailers found in {}..{} ({} commits inspected)",
+                base,
+                head,
+                messages.len()
+            );
+        }
+        let label = match forge {
+            ReviewForge::GitHub => format!("PR #{} — branch `{}`", pr_n, head),
+            ReviewForge::GitLab => format!("MR !{} — branch `{}`", pr_n, head),
+        };
+        (ids, label)
+    } else {
+        anyhow::bail!("pass --specs <CSV> or --pr <N>");
+    };
+
+    // Compose the markdown.
+    let mut out = String::new();
+    out.push_str("# Review Prompt\n\n");
+    out.push_str(&header_subtitle);
+    out.push_str("\n\n## What to verify\n\n");
+
+    let mut missing: Vec<String> = Vec::new();
+    for id in &spec_ids {
+        let req = store
+            .requirements
+            .iter()
+            .find(|r| r.spec_id.as_deref() == Some(id.as_str()))
+            .or_else(|| {
+                uuid::Uuid::parse_str(id)
+                    .ok()
+                    .and_then(|u| store.requirements.iter().find(|r| r.id == u))
+            });
+        let Some(req) = req else {
+            out.push_str(&format!(
+                "### {}\n\n_(not found in store)_\n\n",
+                id
+            ));
+            missing.push(id.clone());
+            continue;
+        };
+        out.push_str(&format!(
+            "### {} — {}\n\n",
+            req.spec_id.as_deref().unwrap_or(id.as_str()),
+            req.title
+        ));
+        match extract_acceptance_section(&req.description) {
+            Some(body) => {
+                out.push_str(&body);
+                out.push_str("\n\n");
+            }
+            None => {
+                out.push_str("_(no `## Acceptance` / `## Verify` section in description — review against the requirement title and description.)_\n\n");
+            }
+        }
+    }
+
+    out.push_str("## Decide\n\n");
+    out.push_str(
+        "If every item above passes: approve and merge (`gh pr merge --squash` / \
+         `glab mr merge --squash`), then mark each linked req `completed`.\n\n",
+    );
+    out.push_str(
+        "If any item fails: request changes with specifics tied to the spec_id, \
+         so the contributor can address them by id (not by paraphrase).\n",
+    );
+
+    if let Some(path) = write_path {
+        std::fs::write(path, &out)
+            .with_context(|| format!("failed to write review prompt to {}", path))?;
+        eprintln!(
+            "{} review prompt written to {} ({} spec{}{})",
+            "✓".green().bold(),
+            path,
+            spec_ids.len(),
+            if spec_ids.len() == 1 { "" } else { "s" },
+            if missing.is_empty() {
+                String::new()
+            } else {
+                format!(", {} missing in store", missing.len())
+            },
+        );
+    } else {
+        print!("{}", out);
+    }
+    Ok(())
+}
+
+/// trace:STORY-67 | ai:claude
+fn pr_base_head(
+    project_root: &std::path::Path,
+    forge: ReviewForge,
+    n: u64,
+) -> Result<(String, String)> {
+    // Use the forge CLI when available — it knows about fork PRs and
+    // returns the resolved branch names. Fall back to a pure-git
+    // approximation for environments without `gh`/`glab` (we fetch the
+    // standard server-side ref and pretend base = current branch's
+    // merge base with it; not perfect but better than failing).
+    let (cli, args): (&str, &[&str]) = match forge {
+        ReviewForge::GitHub => (
+            "gh",
+            &["pr", "view", "", "--json", "baseRefName,headRefName", "-q",
+              ".baseRefName + \"\\t\" + .headRefName"],
+        ),
+        ReviewForge::GitLab => (
+            "glab",
+            &["mr", "view", "", "-F", "json"],
+        ),
+    };
+    // The CLI invocation needs the PR number injected — clone args and
+    // overwrite the empty placeholder.
+    let mut args_owned: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+    args_owned[2] = n.to_string();
+
+    // gh / glab don't take `-C <path>` like git does — set the cwd via
+    // `current_dir` so each tool runs against the right repo.
+    // trace:STORY-67 | ai:claude
+    let out = std::process::Command::new(cli)
+        .current_dir(project_root)
+        .args(&args_owned[..])
+        .output();
+
+    if let Ok(out) = out {
+        if out.status.success() {
+            match forge {
+                ReviewForge::GitHub => {
+                    let s = String::from_utf8_lossy(&out.stdout);
+                    let parts: Vec<&str> = s.trim().split('\t').collect();
+                    if parts.len() == 2 && !parts[0].is_empty() && !parts[1].is_empty() {
+                        return Ok((parts[0].to_string(), parts[1].to_string()));
+                    }
+                }
+                ReviewForge::GitLab => {
+                    // Cheap parse: grep for the two fields rather than
+                    // depending on serde_json — avoids a fresh dep just
+                    // for this one path.
+                    let s = String::from_utf8_lossy(&out.stdout).into_owned();
+                    let base = json_string_field(&s, "target_branch");
+                    let head = json_string_field(&s, "source_branch");
+                    if let (Some(b), Some(h)) = (base, head) {
+                        return Ok((b, h));
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback: pure-git. We don't know the contributor's base branch,
+    // so we point at `main` (the most common case in this codebase) and
+    // set `head` to the local review branch (`pr-N` / `mr-N`) the user
+    // is presumed to have fetched via `aida session start --owns PR-N`
+    // (STORY-61). Tell the user.
+    eprintln!(
+        "{} couldn't resolve PR base/head via {} — falling back to base=main, head={}-{}; \
+         pass an explicit base via `git log <base>..<head>` if this is wrong.",
+        "Note:".yellow().bold(),
+        cli,
+        if matches!(forge, ReviewForge::GitHub) { "pr" } else { "mr" },
+        n
+    );
+    let head = match forge {
+        ReviewForge::GitHub => format!("pr-{}", n),
+        ReviewForge::GitLab => format!("mr-{}", n),
+    };
+    Ok(("main".to_string(), head))
+}
+
+/// Cheap "extract \"key\": \"value\"" JSON field grep. Only handles
+/// string values without escapes — fine for branch names but not a
+/// general parser. trace:STORY-67 | ai:claude
+fn json_string_field(s: &str, key: &str) -> Option<String> {
+    let needle = format!("\"{}\":\"", key);
+    let start = s.find(&needle)? + needle.len();
+    let rest = &s[start..];
+    let end = rest.find('"')?;
+    Some(rest[..end].to_string())
+}
+
+/// Run `git log <base>..<head> --pretty=format:%B%n--END--`. Returns
+/// each commit message as a separate string. trace:STORY-67 | ai:claude
+fn git_log_messages(
+    project_root: &std::path::Path,
+    base: &str,
+    head: &str,
+) -> Result<Vec<String>> {
+    let range = format!("{}..{}", base, head);
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["log", "--pretty=format:%B%n--END--", &range])
+        .output()
+        .with_context(|| format!("running git log {}", range))?;
+    if !out.status.success() {
+        anyhow::bail!(
+            "git log {} failed: {}",
+            range,
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let messages: Vec<String> = stdout
+        .split("--END--")
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    Ok(messages)
+}
+
 // trace:FR-0259 | ai:claude:high
 fn handle_report_command(cmd: &ReportCommand, storage: &Storage, storage_path: &str) -> Result<()> {
     match cmd {
@@ -16114,11 +17274,28 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // trace:TASK-1-021 | ai:claude
             let scope = if *all || *no_scope { None } else { active_role_scope() };
 
+            // STORY-57: scope/session routing filter — when in a session,
+            // an entry tagged for_scope=X is only visible if X matches the
+            // active lease (or `--all` bypasses).
+            let self_lease_for_routing: Option<SessionLease> = std::env::current_dir()
+                .ok()
+                .and_then(|cwd| {
+                    let project_root = storage
+                        .path()
+                        .parent()
+                        .map(|p| p.to_path_buf())
+                        .unwrap_or_else(|| std::path::PathBuf::from("."));
+                    active_lease_for_cwd(&project_root, &cwd)
+                });
+
             let entries: Vec<&aida_core::QueueEntry> = raw_entries
                 .iter()
                 .filter(|e| match &role_filter {
                     Some(r) => e.for_role.as_deref() == Some(r.as_str()),
                     None => true,
+                })
+                .filter(|e| {
+                    entry_scope_session_match(e, self_lease_for_routing.as_ref(), *all)
                 })
                 .filter(|e| {
                     let Some((scope_tags, scope_status)) = &scope else {
@@ -16219,10 +17396,23 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 if entry.added_by != user_id {
                     print!("  {}", format!("(from @{})", entry.added_by).dimmed());
                 }
+                // STORY-57: inline routing tags. Show for: only when the
+                // user isn't already filtering on a specific role (avoids
+                // repeating "for:implementer" on every line in the
+                // role-filtered view). Always show scope/session — those
+                // are session-axis filters that don't get hoisted into
+                // the title bar.
                 if role_filter.is_none() {
                     if let Some(ref r) = entry.for_role {
                         print!("  {}", format!("[for:{}]", r).cyan());
                     }
+                }
+                if let Some(ref s) = entry.for_scope {
+                    print!("  {}", format!("[@{}]", s).cyan());
+                }
+                if let Some(ref s) = entry.for_session {
+                    let short = &s[..s.len().min(8)];
+                    print!("  {}", format!("[session:{}]", short).cyan());
                 }
                 // When the global queue is also being shown, tag local entries
                 // with their origin so the merge view is unambiguous.
@@ -16270,6 +17460,9 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             user,
             note,
             r#for,
+            scope,
+            for_session,
+            no_scope,
             global,
         } => {
             let user_id = get_user(user);
@@ -16289,6 +17482,36 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     .ok()
                     .filter(|s| !s.is_empty()),
             };
+
+            // STORY-57: default scope routing. When adding inside a session
+            // worktree without --scope or --no-scope, fill `for_scope` with
+            // the active lease's scope so concurrent sessions sharing a
+            // role don't see each other's work. --for-session is more
+            // specific than --scope and overrides it for filtering, but we
+            // keep both fields in the entry — the consumer side ANDs them.
+            // trace:STORY-57 | ai:claude
+            let active_lease_for_routing: Option<SessionLease> = std::env::current_dir()
+                .ok()
+                .and_then(|cwd| {
+                    let project_root = storage
+                        .path()
+                        .parent()
+                        .map(|p| p.to_path_buf())
+                        .unwrap_or_else(|| std::path::PathBuf::from("."));
+                    active_lease_for_cwd(&project_root, &cwd)
+                });
+            let for_scope_routing: Option<String> = if *no_scope {
+                None
+            } else if let Some(s) = scope.as_deref() {
+                Some(s.to_string())
+            } else if for_session.is_some() {
+                // --for-session is the more specific axis; don't also
+                // auto-add a scope filter unless the user asked for it.
+                None
+            } else {
+                active_lease_for_routing.as_ref().map(|l| l.scope.clone())
+            };
+            let for_session_routing: Option<String> = for_session.clone();
 
             // Resolve requirement ID
             let req = if let Ok(uuid) = uuid::Uuid::parse_str(id) {
@@ -16372,12 +17595,26 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 note: note.clone(),
                 added_at: chrono::Utc::now(),
                 for_role: r#for.clone(),
+                for_scope: for_scope_routing.clone(),
+                for_session: for_session_routing.clone(),
             };
             storage.queue_add(entry)?;
 
-            let routing = match r#for {
-                Some(r) => format!(" [for:{}]", r.cyan()),
-                None => String::new(),
+            // trace:STORY-57 | ai:claude
+            let mut routing_parts: Vec<String> = Vec::new();
+            if let Some(r) = &r#for {
+                routing_parts.push(format!("for:{}", r));
+            }
+            if let Some(s) = &for_scope_routing {
+                routing_parts.push(format!("@{}", s));
+            }
+            if let Some(s) = &for_session_routing {
+                routing_parts.push(format!("session:{}", &s[..s.len().min(8)]));
+            }
+            let routing = if routing_parts.is_empty() {
+                String::new()
+            } else {
+                format!(" [{}]", routing_parts.join(" ").cyan())
             };
             println!(
                 "{} Added {} ({}) to queue{}",
@@ -16552,6 +17789,12 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 .filter(|e| match &role_filter {
                     Some(r) => e.for_role.as_deref() == Some(r.as_str()),
                     None => true,
+                })
+                .filter(|e| {
+                    // STORY-57: scope/session routing — only show items
+                    // targeted at this session (or unrouted on that axis).
+                    // --all bypasses; consistent with queue list.
+                    entry_scope_session_match(e, self_lease.as_ref(), *all)
                 })
                 .filter(|e| {
                     if !lease_filter_active {

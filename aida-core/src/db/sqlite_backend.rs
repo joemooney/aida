@@ -1647,9 +1647,12 @@ impl DatabaseBackend for SqliteBackend {
                     note,
                     added_at,
                     // Legacy SQLite-canonical mode predates role routing
-                    // (EPIC-1-001). Always None here; the column doesn't
-                    // exist in this schema. Git-canonical mode supports it.
+                    // (EPIC-1-001) and scope/session routing (STORY-57).
+                    // Always None here; columns don't exist in this
+                    // schema. Git-canonical mode supports them.
                     for_role: None,
+                    for_scope: None,
+                    for_session: None,
                 })
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
