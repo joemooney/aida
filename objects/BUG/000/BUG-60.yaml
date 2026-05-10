@@ -33,5 +33,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T04:34:37.512633417Z
-modified_at: 2026-05-10T06:35:27.695965517Z
+modified_at: 2026-05-10T06:42:09.070842801Z
 req_type: Bug
+comments:
+- id: 019e109f-322e-73c2-a1fa-ea2214f336da
+  author: joe
+  content: Commit 312f2bb6 references this requirement
+  created_at: 2026-05-10T06:42:09.070842801Z
+  modified_at: 2026-05-10T06:42:09.070842801Z
