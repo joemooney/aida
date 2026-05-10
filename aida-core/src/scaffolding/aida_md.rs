@@ -150,7 +150,25 @@ impl Scaffolder {
              `.claude/settings.json` wires `aida statusline` into Claude Code's status\n\
              bar. It shows project · active role · queue depth · cache freshness. If the\n\
              role you expect isn't there, you forgot to `aida role enter <name>` before\n\
-             starting the session.\n",
+             starting the session.\n\
+             \n\
+             ## Review workflow\n\
+             \n\
+             `aida review prompt --pr N` (or `--specs FR-1,STORY-2,…`) generates a\n\
+             markdown review prompt that lifts each linked requirement's `## Acceptance`\n\
+             section verbatim — paste it into a fresh Claude Code review session, or\n\
+             write it to a file with `--write`.\n\
+             \n\
+             - **Install `gh` or `glab` for `--pr` mode.** AIDA shells out to\n\
+             \x20  [`gh pr view`](https://cli.github.com) / [`glab mr view`](https://gitlab.com/gitlab-org/cli)\n\
+             \x20  to resolve the PR's base + head refs. Without them, AIDA falls back to\n\
+             \x20  `base=main` and a local review branch named `pr-N` / `mr-N` — that path\n\
+             \x20  works when the PR was started via `aida session start --owns PR-N`\n\
+             \x20  (STORY-61), surprising otherwise.\n\
+             - **Acceptance sections are the contract.** Write a `## Acceptance`,\n\
+             \x20  `## Verify`, `## Tests`, `## Test cases`, or `## Verification` section\n\
+             \x20  in every STORY / BUG description so the review prompt has something\n\
+             \x20  concrete to lift. `aida doctor convention-check` lints for the gap.\n",
         );
 
         if self.config.generate_skills {

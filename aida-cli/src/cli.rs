@@ -320,7 +320,13 @@ pub enum ReviewCommand {
     /// requirements' acceptance criteria. Specs come either from an
     /// explicit `--specs` list (CSV) or from the commit-range of a
     /// PR/MR (parsed `(REQ-ID)` trailers in commit messages).
-    /// trace:STORY-67 | ai:claude
+    ///
+    /// For best results with --pr, install `gh` (https://cli.github.com)
+    /// for GitHub or `glab` (https://gitlab.com/gitlab-org/cli) for
+    /// GitLab. Without them, AIDA falls back to base=main + a local
+    /// review branch named `pr-N` / `mr-N` — works when the PR was
+    /// started via `aida session start --owns PR-N`, surprising
+    /// otherwise. trace:STORY-67, TASK-40 | ai:claude
     Prompt {
         /// Comma-separated list of spec IDs (e.g. "FR-1,STORY-2"). When
         /// given, --pr is ignored.
@@ -329,6 +335,9 @@ pub enum ReviewCommand {
 
         /// Pull spec IDs from the PR/MR's commit range. Forge auto-
         /// detected from origin URL; override with --forge github|gitlab.
+        /// Resolves base/head via `gh pr view` / `glab mr view` when
+        /// installed; otherwise falls back to base=main and a local
+        /// review branch named `pr-N` / `mr-N`. trace:TASK-40 | ai:claude
         #[clap(long, value_name = "N", conflicts_with = "specs")]
         pr: Option<u64>,
 
