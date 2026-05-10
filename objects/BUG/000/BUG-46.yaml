@@ -3,10 +3,10 @@ spec_id: BUG-46
 agreed_id: BUG-46
 title: aida add --help / aida edit --help missed docs-layer types (vision/principle/decision/constraint/term)
 description: 'FR-1-074 added 5 new types but the help text on --add and --edit was never updated. Surfaced 2026-05-09 walkthrough — user read `aida add --help` and didn''t see vision listed. Fix: refresh the help strings to include all current types.'
-status: Approved
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T00:21:19.580090426Z
-modified_at: 2026-05-10T00:21:19.580090426Z
+modified_at: 2026-05-10T00:21:20.631936046Z
 req_type: Bug
