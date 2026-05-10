@@ -1,0 +1,64 @@
+id: 019e1342-7c5b-7052-aa3e-3183d8d6d2b2
+spec_id: TASK-55
+agreed_id: TASK-55
+title: 'aida session leases: hide stale leases by default (no live claude + >24h old); --all to show them'
+description: |
+  Caught 2026-05-10 — user observed that `aida session leases` shows 3 leases including 2 stale ones from PRs merged earlier (PR-3 reviewer, PR-5 reviewer). Only the third (batch6 implementer) is actually live. Stale leases pollute the active-session view and confuse "what's running right now?" questions.
+
+  ## Today's behavior
+
+  Lists every `.aida/sessions/*.toml` file. No filtering by age, liveness, or scope.
+
+  ## Desired behavior
+
+  Default: show live + recent dormant. Hide stale.
+
+  State classification (using STORY-69's sysinfo helper):
+
+  - **live**: a claude process has cwd inside the worktree → always show
+  - **dormant**: lease exists, worktree exists, no live claude inside, started <24h ago → show (recently-active, possibly user just exited claude)
+  - **stale**: lease exists but (a) worktree missing OR (b) no live claude AND >24h old → hide, count in footer
+
+  Output:
+
+  ```
+  $ aida session leases
+  Active session leases
+
+  id          scope         branch              worktree                              state
+  ─────────────────────────────────────────────────────────────────────────────────────────────
+  019e1300    EPIC-20       epic-20-batch6      /home/joe/ai/aida-epic-20             ● live
+
+  2 stale leases hidden (pass --all to see).
+
+  End one with: aida session end <id>
+  ```
+
+  `--all` shows everything with state classification:
+
+  ```
+  019e1076    PR-3          pr-3                /home/joe/ai/aida-pr-3                ⚠ stale (worktree missing, 3d old)
+  019e12ef    PR-5          pr-5                /home/joe/ai/aida-pr-5                ⚠ stale (no live claude, 4h old)
+  019e1300    EPIC-20       epic-20-batch6      /home/joe/ai/aida-epic-20             ● live
+  ```
+
+  ## Composes with
+
+  - STORY-69 (sysinfo liveness probe) — provides the live/dormant detection (already on main)
+  - BUG-67 (session end fails on gitignored cruft) — reduces stale accumulation by making session-end reliable
+  - STORY-59 (session list default-recent) — same pattern; this is the leases-table analog
+
+  ## Acceptance
+
+  - [ ] `aida session leases` hides stale by default
+  - [ ] Footer shows "N stale leases hidden" count
+  - [ ] `--all` shows everything with state column
+  - [ ] State derived via STORY-69's helper (live ● / dormant ◐ / stale ⚠)
+  - [ ] Stale classification = worktree missing OR (no live claude AND lease >24h old)
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T18:59:44.859996917Z
+modified_at: 2026-05-10T18:59:44.859996917Z
+req_type: Task
