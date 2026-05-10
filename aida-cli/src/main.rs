@@ -8831,6 +8831,38 @@ fn append_session_activity(
 ///
 /// Bypass with `bypass=true` (used for `--all` / explicit `--scope any`).
 /// trace:STORY-57 | ai:claude
+/// TASK-44: walk `req`'s relationships for a Child edge whose target is
+/// an Epic-typed requirement and return that Epic's display id
+/// (`agreed_id` when merged-trunk-canonical, else `spec_id`). A `Child`
+/// relationship semantically means "this req IS a child of target" —
+/// the inverse of `Parent`. Used by `aida queue list` to auto-derive
+/// the `[@EPIC-XX*]` cluster chip for entries that weren't explicitly
+/// queued with `--scope`. Returns None when:
+///   - the req has no Child relationship, OR
+///   - the target id doesn't resolve to a requirement in `store`, OR
+///   - the target's type isn't Epic.
+/// Pure — no I/O — so the decision rules can be unit-tested without
+/// fixtures. trace:TASK-44 | ai:claude
+fn derive_parent_epic_label(
+    req: &aida_core::Requirement,
+    store: &RequirementsStore,
+) -> Option<String> {
+    req.relationships
+        .iter()
+        .filter(|r| r.rel_type == RelationshipType::Child)
+        .find_map(|r| {
+            let parent = store
+                .requirements
+                .iter()
+                .find(|p| p.id == r.target_id && p.req_type == RequirementType::Epic)?;
+            parent
+                .agreed_id
+                .as_deref()
+                .or(parent.spec_id.as_deref())
+                .map(String::from)
+        })
+}
+
 fn entry_scope_session_match(
     entry: &aida_core::QueueEntry,
     self_lease: Option<&SessionLease>,
@@ -13536,6 +13568,142 @@ mod session_end_resolution_tests {
         std::env::remove_var("AIDA_SESSION_ID");
         let got = resolve_session_to_end(None, &leases, true).unwrap();
         assert_eq!(got.scope, "EPIC-1");
+    }
+}
+
+#[cfg(test)]
+mod derive_parent_epic_label_tests {
+    use super::*;
+    use aida_core::{
+        Relationship, Requirement, RequirementType, RequirementsStore,
+    };
+    use uuid::Uuid;
+
+    /// Build a Requirement via the canonical `::new()` constructor and
+    /// patch the fields the helper inspects: spec_id, agreed_id, type.
+    fn req(spec_id: &str, agreed: Option<&str>, t: RequirementType) -> Requirement {
+        let mut r = Requirement::new(spec_id.to_string(), String::new());
+        r.spec_id = Some(spec_id.into());
+        r.agreed_id = agreed.map(String::from);
+        r.req_type = t;
+        r
+    }
+
+    fn rel(target: Uuid, t: RelationshipType) -> Relationship {
+        Relationship {
+            rel_type: t,
+            target_id: target,
+            created_at: Some(chrono::Utc::now()),
+            created_by: Some("t".into()),
+        }
+    }
+
+    /// Child edge into an Epic → derives that Epic's spec_id.
+    /// trace:TASK-44 | ai:claude
+    #[test]
+    fn child_into_epic_derives_label() {
+        let epic = req("EPIC-20", None, RequirementType::Epic);
+        let mut task = req("TASK-44", None, RequirementType::Task);
+        task.relationships.push(rel(epic.id, RelationshipType::Child));
+        let store = RequirementsStore {
+            requirements: vec![epic, task.clone()],
+            ..Default::default()
+        };
+        assert_eq!(
+            derive_parent_epic_label(&task, &store),
+            Some("EPIC-20".to_string())
+        );
+    }
+
+    /// Child edge into a non-Epic (Story) → None.
+    #[test]
+    fn child_into_non_epic_returns_none() {
+        let story = req("STORY-9", None, RequirementType::Story);
+        let mut task = req("TASK-44", None, RequirementType::Task);
+        task.relationships.push(rel(story.id, RelationshipType::Child));
+        let store = RequirementsStore {
+            requirements: vec![story, task.clone()],
+            ..Default::default()
+        };
+        assert_eq!(derive_parent_epic_label(&task, &store), None);
+    }
+
+    /// No relationships → None (the orphan-TASK case).
+    #[test]
+    fn no_relationships_returns_none() {
+        let task = req("TASK-42", None, RequirementType::Task);
+        let store = RequirementsStore {
+            requirements: vec![task.clone()],
+            ..Default::default()
+        };
+        assert_eq!(derive_parent_epic_label(&task, &store), None);
+    }
+
+    /// Parent edge (the inverse direction) is NOT what we want — a Parent
+    /// rel on `req` means `req` is the parent of something else. We
+    /// only derive from Child edges. trace:TASK-44 | ai:claude
+    #[test]
+    fn parent_edge_does_not_derive() {
+        let epic = req("EPIC-20", None, RequirementType::Epic);
+        let mut task = req("TASK-44", None, RequirementType::Task);
+        // Wrong direction: TASK has a Parent edge pointing at EPIC
+        // (semantically: TASK is parent of EPIC — nonsense, but the
+        // helper shouldn't be fooled by it).
+        task.relationships.push(rel(epic.id, RelationshipType::Parent));
+        let store = RequirementsStore {
+            requirements: vec![epic, task.clone()],
+            ..Default::default()
+        };
+        assert_eq!(derive_parent_epic_label(&task, &store), None);
+    }
+
+    /// Dangling target (parent UUID not in store) → None, no panic.
+    #[test]
+    fn dangling_target_returns_none() {
+        let mut task = req("TASK-44", None, RequirementType::Task);
+        task.relationships.push(rel(Uuid::now_v7(), RelationshipType::Child));
+        let store = RequirementsStore {
+            requirements: vec![task.clone()],
+            ..Default::default()
+        };
+        assert_eq!(derive_parent_epic_label(&task, &store), None);
+    }
+
+    /// agreed_id wins over spec_id when both are present — the
+    /// merge-gate-canonical short form is what users recognize.
+    #[test]
+    fn prefers_agreed_id_over_spec_id() {
+        let epic = req("EPIC-7-001", Some("EPIC-20"), RequirementType::Epic);
+        let mut task = req("TASK-44", None, RequirementType::Task);
+        task.relationships.push(rel(epic.id, RelationshipType::Child));
+        let store = RequirementsStore {
+            requirements: vec![epic, task.clone()],
+            ..Default::default()
+        };
+        assert_eq!(
+            derive_parent_epic_label(&task, &store),
+            Some("EPIC-20".to_string())
+        );
+    }
+
+    /// Multiple Child edges, only one of which points to an Epic → that
+    /// one wins. Order is "first match" so a stable ordering isn't
+    /// guaranteed for multi-Epic cases (uncommon).
+    #[test]
+    fn mixed_child_edges_picks_epic() {
+        let epic = req("EPIC-20", None, RequirementType::Epic);
+        let story = req("STORY-9", None, RequirementType::Story);
+        let mut task = req("TASK-44", None, RequirementType::Task);
+        task.relationships.push(rel(story.id, RelationshipType::Child));
+        task.relationships.push(rel(epic.id, RelationshipType::Child));
+        let store = RequirementsStore {
+            requirements: vec![epic, story, task.clone()],
+            ..Default::default()
+        };
+        assert_eq!(
+            derive_parent_epic_label(&task, &store),
+            Some("EPIC-20".to_string())
+        );
     }
 }
 
@@ -21200,6 +21368,14 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 }
                 if let Some(ref s) = entry.for_scope {
                     print!("  {}", format!("[@{}]", s).cyan());
+                } else if let Some(req) = req {
+                    // TASK-44: auto-derive the parent-EPIC chip when
+                    // no explicit `--scope` was set. Dimmed + `*`
+                    // suffix to distinguish from explicit routing.
+                    // trace:TASK-44 | ai:claude
+                    if let Some(epic) = derive_parent_epic_label(req, &store) {
+                        print!("  {}", format!("[@{}*]", epic).dimmed());
+                    }
                 }
                 if let Some(ref s) = entry.for_session {
                     let short = &s[..s.len().min(8)];
