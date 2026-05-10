@@ -9,12 +9,12 @@ description: |
   - aida edit FR-42 from a session NOT owning EPIC-X (where FR-42 is part of EPIC-X) -> warning naming the owner session + worktree path
   - aida-pickup skips items in another session's queue
   - A new [session] enforcement = warn|block|off config knob (default warn for v2)
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T02:30:37.098163669Z
-modified_at: 2026-05-10T03:07:33.601889450Z
+modified_at: 2026-05-10T03:12:10.777888292Z
 req_type: Story
 relationships:
 - rel_type: Child
