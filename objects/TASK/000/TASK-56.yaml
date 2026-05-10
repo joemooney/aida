@@ -1,0 +1,65 @@
+id: 019e1346-2c41-71f0-a07a-8d5afcd11b0e
+spec_id: TASK-56
+agreed_id: TASK-56
+title: 'aida session leases --verbose + session show: include PID and Claude Code session id'
+description: |
+  Caught 2026-05-10 — `aida session leases` shows id/scope/branch/worktree but not PID or Claude Code session id. Both are diagnostic gaps that take real work to find via `ps` or `~/.claude/projects/*` poking.
+
+  ## Two additions
+
+  ### PID
+
+  The OS process for the live claude inside the worktree. Resolved via STORY-69's sysinfo helper:
+
+  ```rust
+  probe_live_claude_sessions()
+      .find(|s| s.cwd == lease.worktree_path)
+      .map(|s| s.pid)
+  ```
+
+  Use cases:
+  - Manual `kill <pid>` for leaked claude (BUG-61 territory, in case the auto-handling has a hole)
+  - Confirm liveness at a glance ("pid 3024975 = alive; absent = no claude inside")
+  - Diagnostic for "what is that session doing right now" (top, htop, /proc/<pid>/status)
+
+  ### Claude Code session id
+
+  The 8-char id under `~/.claude/projects/<encoded-cwd>/<session-id>.jsonl`. Enables:
+  - `claude --resume <cc-session-id>` reconnect after exit
+  - Bridges `aida session leases` (live state) ↔ `aida session list` (history of jsonls)
+
+  STORY-68's `aida session show <id>` may already render this line per its acceptance criteria — verify and extend to leases.
+
+  ## Surface
+
+  `aida session leases` stays compact (default). `--verbose` adds two columns:
+
+  ```
+  $ aida session leases --verbose
+  id          scope      branch          worktree                  pid       cc-session
+  019e1300    EPIC-20    epic-20-batch6  /home/joe/ai/aida-epic-20 3024975   abc12345
+  ```
+
+  `aida session show <id>` (STORY-68) should include both unconditionally — that's the detail view's job.
+
+  ## Composes with
+
+  - STORY-68 (aida session show <id>) — already on main from PR-4; this story extends its output if CC-session not already there, and is the detail view for the compact leases table
+  - STORY-69 (sysinfo liveness probe) — already on main; provides the PID resolution
+  - TASK-55 (leases hide stale by default) — composes naturally with the state classification
+
+  ## Acceptance
+
+  - [ ] `aida session leases --verbose` shows pid + cc-session columns
+  - [ ] `aida session show <id>` shows PID line (Claude Code session id already there per STORY-68; verify and add if missing)
+  - [ ] PID resolved via STORY-69's helper; absent = no live claude (don't render "pid: -" — just blank/dim)
+  - [ ] CC-session resolution: find newest `~/.claude/projects/<encoded-worktree>/<id>.jsonl`
+  - [ ] Empty values (no live process, no jsonl yet) rendered consistently
+  - [ ] No performance regression on default (non-verbose) leases output
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T19:03:46.497835140Z
+modified_at: 2026-05-10T19:03:46.497835140Z
+req_type: Task
