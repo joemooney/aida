@@ -1690,6 +1690,11 @@ pub enum QueueCommand {
         /// trace:STORY-78 | ai:claude
         #[clap(long)]
         sync: bool,
+        /// Include Completed/Rejected entries in the listing. Default
+        /// hides them with a footer count so the queue view stays
+        /// focused on actionable work. trace:TASK-46 | ai:claude
+        #[clap(long)]
+        include_terminal: bool,
     },
     /// Add a requirement to your queue
     Add {
@@ -1736,6 +1741,12 @@ pub enum QueueCommand {
         /// active role context (AIDA_SESSION_ROLE). trace:FR-1-012 | ai:claude
         #[clap(long)]
         global: bool,
+        /// Bypass the TASK-45 guard that refuses queueing a Completed
+        /// or Rejected requirement. Use for legitimate re-open
+        /// scenarios; the default error message hints at this flag.
+        /// trace:TASK-45 | ai:claude
+        #[clap(long)]
+        force: bool,
     },
     /// Remove a requirement from your queue
     Remove {
@@ -2024,6 +2035,14 @@ pub enum Command {
         /// trace:STORY-48 | ai:claude
         #[clap(long)]
         strict: bool,
+
+        /// Bypass the TASK-47 guard that refuses re-opening a Completed
+        /// or Rejected requirement (e.g. flipping `--status in-progress`
+        /// on something already shipped). Use when intentionally
+        /// re-opening: usually you should instead file a new req that
+        /// supersedes the closed one. trace:TASK-47 | ai:claude
+        #[clap(long)]
+        force: bool,
     },
 
     /// Delete a requirement

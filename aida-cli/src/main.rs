@@ -350,6 +350,7 @@ fn main() -> Result<()> {
             tags,
             interactive,
             strict: _, // legacy SQLite path ignores session leases
+            force: _,  // TASK-47 guard only applies to git-canonical Edit
         } => {
             // If any flags provided, use non-interactive mode; otherwise interactive
             let has_flags = title.is_some()
@@ -1941,12 +1942,40 @@ fn handle_git_backend_command(
             feature,
             tags,
             strict,
+            force,
             ..
         } => {
             record_role_activity(id, "edit");
             let mut req = backend
                 .get_requirement_by_spec_id(id)?
                 .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
+
+            // TASK-47: refuse to re-open a Completed/Rejected req
+            // without --force. Closing or idempotent re-flips stay
+            // allowed; only Closed → Open transitions trip the guard.
+            // Computed BEFORE the field mutations below so we read the
+            // on-disk status, not the post-edit one.
+            // trace:TASK-47 | ai:claude
+            if let Some(new_status) = status {
+                if is_terminal_status(&req.status) && !*force {
+                    let canonical =
+                        validate_status_input(new_status).map_err(|e| anyhow::anyhow!(e))?;
+                    let mut probe = req.clone();
+                    probe.set_status_from_str(canonical);
+                    if !is_terminal_status(&probe.status) {
+                        let spec_id = req.spec_id.as_deref().unwrap_or("?");
+                        anyhow::bail!(
+                            "{} is currently {}. Re-opening a closed requirement is \
+                             usually a mistake.\n  If you mean to re-open it, pass \
+                             `--force`. Otherwise, file a new requirement that \
+                             supersedes {}.",
+                            spec_id,
+                            req.status,
+                            spec_id
+                        );
+                    }
+                }
+            }
 
             // STORY-48: lease enforcement. Find leases relative to the git
             // project root (parent of the orphan store), load the full
@@ -13572,6 +13601,84 @@ mod session_end_resolution_tests {
 }
 
 #[cfg(test)]
+mod terminal_status_guard_tests {
+    use super::*;
+    use aida_core::RequirementStatus::*;
+
+    /// Mirrors the TASK-47 guard: refuse Closed→Open without --force,
+    /// while allowing Open→Closed, idempotent flips, and any path under
+    /// `force=true`. Pure helper so the matrix is exhaustively testable
+    /// without touching the storage backend. trace:TASK-47 | ai:claude
+    fn would_block_status_change(
+        old: &aida_core::RequirementStatus,
+        new: &aida_core::RequirementStatus,
+        force: bool,
+    ) -> bool {
+        if force {
+            return false;
+        }
+        is_terminal_status(old) && !is_terminal_status(new)
+    }
+
+    /// Closed → Open without --force → blocked.
+    #[test]
+    fn completed_to_in_progress_blocks_without_force() {
+        assert!(would_block_status_change(&Completed, &InProgress, false));
+        assert!(would_block_status_change(&Rejected, &InProgress, false));
+        assert!(would_block_status_change(&Completed, &Approved, false));
+        assert!(would_block_status_change(&Rejected, &Draft, false));
+    }
+
+    /// Idempotent terminal flips and cross terminal flips both stay
+    /// closed, so no guard needed.
+    #[test]
+    fn terminal_to_terminal_passes() {
+        assert!(!would_block_status_change(&Completed, &Completed, false));
+        assert!(!would_block_status_change(&Rejected, &Rejected, false));
+        assert!(!would_block_status_change(&Completed, &Rejected, false));
+        assert!(!would_block_status_change(&Rejected, &Completed, false));
+    }
+
+    /// Closing a non-terminal req always allowed.
+    #[test]
+    fn open_to_terminal_passes() {
+        let opens = [Draft, Approved, Planned, InProgress];
+        let terminals = [Completed, Rejected];
+        for old in &opens {
+            for new in &terminals {
+                assert!(!would_block_status_change(old, new, false),
+                    "{:?} → {:?} should be allowed", old, new);
+            }
+        }
+    }
+
+    /// Open-to-open transitions are unaffected by the guard.
+    #[test]
+    fn open_to_open_passes() {
+        let opens = [Draft, Approved, Planned, InProgress];
+        for old in &opens {
+            for new in &opens {
+                assert!(!would_block_status_change(old, new, false),
+                    "{:?} → {:?} should be allowed", old, new);
+            }
+        }
+    }
+
+    /// --force unconditionally bypasses, including Closed→Open which is
+    /// the whole point of the flag.
+    #[test]
+    fn force_bypasses_every_transition() {
+        let all = [Draft, Approved, Planned, InProgress, Completed, Rejected];
+        for old in &all {
+            for new in &all {
+                assert!(!would_block_status_change(old, new, true),
+                    "--force should never block {:?} → {:?}", old, new);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
 mod derive_parent_epic_label_tests {
     use super::*;
     use aida_core::{
@@ -21201,6 +21308,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // --sync is handled at the dispatch site (it needs store_path
             // access); silently consume it here. trace:STORY-78 | ai:claude
             sync: _,
+            include_terminal,
         } => {
             let user_id = get_user(user);
             let raw_entries = if *global {
@@ -21247,6 +21355,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     active_lease_for_cwd(&project_root, &cwd)
                 });
 
+            // TASK-46: track how many entries we hid because their req
+            // is in a terminal status. Surfaced as a footer hint so the
+            // user knows the listing isn't the whole queue.
+            // trace:TASK-46 | ai:claude
+            let mut hidden_terminal_count: usize = 0;
             let entries: Vec<&aida_core::QueueEntry> = raw_entries
                 .iter()
                 .filter(|e| match &role_filter {
@@ -21255,6 +21368,22 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 })
                 .filter(|e| {
                     entry_scope_session_match(e, self_lease_for_routing.as_ref(), *all)
+                })
+                .filter(|e| {
+                    // TASK-46: hide Completed/Rejected entries by default.
+                    // Counts them for the footer hint, so the user can
+                    // discover --include-terminal. trace:TASK-46 | ai:claude
+                    if *include_terminal {
+                        return true;
+                    }
+                    let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id) else {
+                        return true;
+                    };
+                    if is_terminal_status(&req.status) {
+                        hidden_terminal_count += 1;
+                        return false;
+                    }
+                    true
                 })
                 .filter(|e| {
                     let Some((scope_tags, scope_status)) = &scope else {
@@ -21299,6 +21428,17 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     );
                 } else {
                     println!("{}", "Your queue is empty.".dimmed());
+                }
+                // TASK-46: if the queue *looks* empty only because all
+                // remaining items are terminal-status, point at the
+                // escape hatch so the user isn't confused.
+                // trace:TASK-46 | ai:claude
+                if hidden_terminal_count > 0 {
+                    println!(
+                        "  ({} terminal-status entr{} hidden; pass --include-terminal to show)",
+                        hidden_terminal_count,
+                        if hidden_terminal_count == 1 { "y" } else { "ies" }
+                    );
                 }
                 return Ok(());
             }
@@ -21419,6 +21559,23 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 }
                 println!();
             }
+            // TASK-46: footer hint when the default filter hid some
+            // terminal-status entries. Stays silent when nothing was
+            // hidden so it doesn't add noise to the common case.
+            // trace:TASK-46 | ai:claude
+            if hidden_terminal_count > 0 {
+                println!();
+                println!(
+                    "{} ({} pass --include-terminal to show)",
+                    format!(
+                        "{} terminal-status entr{} hidden",
+                        hidden_terminal_count,
+                        if hidden_terminal_count == 1 { "y" } else { "ies" }
+                    )
+                    .dimmed(),
+                    "Completed/Rejected;".dimmed()
+                );
+            }
         }
         QueueCommand::Add {
             id,
@@ -21431,6 +21588,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             for_session,
             no_scope,
             global,
+            force,
         } => {
             let user_id = get_user(user);
             let store = storage.load()?;
@@ -21487,6 +21645,23 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 store.get_requirement_by_spec_id(id)
             }
             .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
+
+            // TASK-45: refuse to queue a Completed/Rejected req unless
+            // --force. The intermediate state ("Completed item in
+            // queue") is harmless but confuses agents and races with
+            // bulk reclassification. The error message points at the
+            // escape hatch. trace:TASK-45 | ai:claude
+            if is_terminal_status(&req.status) && !*force {
+                let spec_id = req.spec_id.as_deref().unwrap_or("?");
+                anyhow::bail!(
+                    "{} is {} — re-queueing closed work is usually a mistake.\n  \
+                     Pass `--force` if you really mean to re-queue it, or file a \
+                     new requirement that supersedes {}.",
+                    spec_id,
+                    req.status,
+                    spec_id
+                );
+            }
 
             let position = if *top {
                 let entries = storage.queue_list(&user_id, true)?;
@@ -21821,6 +21996,18 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     // targeted at this session (or unrouted on that axis).
                     // --all bypasses; consistent with queue list.
                     entry_scope_session_match(e, self_lease.as_ref(), *all)
+                })
+                .filter(|e| {
+                    // TASK-46: never surface terminal-status entries
+                    // as "next" — they aren't actionable. Unlike
+                    // `queue list` we don't offer an --include-terminal
+                    // override here because the whole point of `next`
+                    // is "what should I pick up", and the answer is
+                    // never "this Completed thing". trace:TASK-46 | ai:claude
+                    let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id) else {
+                        return true;
+                    };
+                    !is_terminal_status(&req.status)
                 })
                 .filter(|e| {
                     if !lease_filter_active {
