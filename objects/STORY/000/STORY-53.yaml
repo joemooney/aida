@@ -1,0 +1,34 @@
+id: 019e0fc1-f85b-7603-bdac-5e374185c227
+spec_id: STORY-53
+agreed_id: STORY-53
+title: aida statusline shows active session scope when cwd is in a session worktree
+description: |
+  Add a `sess:<scope>` segment to `aida statusline` output when cwd is inside an active session worktree (resolved by matching cwd against `.aida/sessions/*.toml` lease files).
+
+  ## Render
+
+  ```
+  aida · tzconv · role:implementer · @FR-42 · q:3 · cache:fresh · sess:EPIC-19
+  ```
+
+  - Show the lease's `scope` field, NOT the session id (12-char UUID prefix is noise; the scope is what humans remember)
+  - Truncate scope to ~10-12 chars so the line stays scannable (`EPIC-19` fits; `feature:auth-flow` clips to `feature:au…`)
+  - Color the same as `role:` — both answer "what context am I in"
+  - Only emit when cwd resolves to an active lease's `worktree_path` (or descends from it). No segment when in the parent repo.
+
+  ## Why
+
+  Session leases are advisory in v1 (EPIC-20). Without a statusline segment, the session presence is invisible until you run `aida session leases`. With it, every shell prompt + Claude Code statusbar tells you which session-scope you're operating in — primary defense against accidental cross-session work before STORY-48's enforcement lands.
+
+  ## Implementation notes
+
+  - Lease lookup is cheap: read `.aida/sessions/`, find the lease whose `worktree_path` is an ancestor of cwd. Should add ~1ms to the statusline render.
+  - The segment is omitted entirely (not shown as empty) when no match — keeps the line clean for non-session work.
+  - Pairs naturally with role: a session may also have a role active. Both render side-by-side: `role:implementer · sess:EPIC-19`.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T02:40:30.811183735Z
+modified_at: 2026-05-10T02:40:30.811183735Z
+req_type: Story
