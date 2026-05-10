@@ -1389,6 +1389,13 @@ pub enum RelationshipCommand {
         /// Create bidirectional relationship (adds inverse relationship automatically)
         #[clap(long, short = 'b')]
         bidirectional: bool,
+
+        /// Override the BUG-64 guard that refuses `--type child` when
+        /// the target (the parent) is in a terminal status
+        /// (Completed/Rejected). Use when intentionally backfilling a
+        /// forgotten child onto a closed epic. trace:BUG-64 | ai:claude
+        #[clap(long)]
+        force_parent: bool,
     },
 
     /// Remove a relationship between requirements
@@ -1813,6 +1820,13 @@ pub enum Command {
         /// Parent requirement ID (UUID or SPEC-ID) to link as child
         #[clap(long)]
         parent: Option<String>,
+
+        /// Override the BUG-64 guard that refuses `--parent <X>` when X
+        /// is in a terminal status (Completed/Rejected). Use when
+        /// intentionally backfilling a forgotten child onto a closed
+        /// epic for traceability. trace:BUG-64 | ai:claude
+        #[clap(long)]
+        force_parent: bool,
 
         /// Use interactive mode (prompts)
         #[clap(long)]

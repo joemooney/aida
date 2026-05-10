@@ -267,6 +267,7 @@ fn main() -> Result<()> {
             tags,
             prefix,
             parent,
+            force_parent,
             interactive,
         } => {
             // trace:BUG-17 | ai:claude — resolve description from inline,
@@ -310,6 +311,7 @@ fn main() -> Result<()> {
                     tags,
                     prefix,
                     parent,
+                    *force_parent,
                 )?;
             }
         }
@@ -1385,6 +1387,7 @@ fn handle_git_backend_command(
             tags,
             prefix,
             parent,
+            force_parent,
             interactive,
             ..
         } => {
@@ -1684,6 +1687,23 @@ fn handle_git_backend_command(
             } else {
                 None
             };
+            // BUG-64: refuse `--parent <X>` when X is in a terminal status
+            // (Completed or Rejected). Filing a new child under a closed
+            // epic produces a confusing graph (closed parent with open
+            // children) that surfaces later in `aida list --parent` and
+            // `aida show --tree`. `--force-parent` bypasses for the
+            // legitimate backfill case. trace:BUG-64 | ai:claude
+            if let Some(ref pr) = parent_req {
+                if !*force_parent && is_terminal_status(&pr.status) {
+                    anyhow::bail!(
+                        "parent {} is {} — adding new children to a closed parent is usually a mistake. \
+                         Pass `--force-parent` to override, or pick a different parent \
+                         (try `aida list --type epic --status approved`).",
+                        pr.spec_id.as_deref().unwrap_or("?"),
+                        pr.status,
+                    );
+                }
+            }
             if let Some(ref pr) = parent_req {
                 if let Ok(project_root) = find_project_root() {
                     if !list_leases(&project_root).is_empty() {
@@ -2189,6 +2209,7 @@ fn handle_git_backend_command(
             to_flag,
             r#type,
             bidirectional,
+            force_parent,
         }) => {
             let from = from_pos.as_deref().or(from_flag.as_deref())
                 .ok_or_else(|| anyhow::anyhow!("missing FROM (positional or --from)"))?;
@@ -2211,6 +2232,30 @@ fn handle_git_backend_command(
                 "references" => RelationshipType::References,
                 other => RelationshipType::Custom(other.to_string()),
             };
+
+            // BUG-64: same terminal-status guard as `aida add --parent`,
+            // applied here when the user is hand-rolling a parent edge
+            // via `aida rel add X Y --type child` (X is child of Y, so Y
+            // is the parent being checked) or its inverse `--type parent`
+            // (X is parent of Y). `--force-parent` bypasses for backfill
+            // cases. trace:BUG-64 | ai:claude
+            if !*force_parent {
+                let parent_for_guard = match &rel_type {
+                    RelationshipType::Child => Some(&to_req),
+                    RelationshipType::Parent => Some(&from_req),
+                    _ => None,
+                };
+                if let Some(p) = parent_for_guard {
+                    if is_terminal_status(&p.status) {
+                        anyhow::bail!(
+                            "parent {} is {} — adding new children to a closed parent is usually a mistake. \
+                             Pass `--force-parent` to override.",
+                            p.spec_id.as_deref().unwrap_or("?"),
+                            p.status,
+                        );
+                    }
+                }
+            }
 
             let rel = aida_core::models::Relationship {
                 rel_type: rel_type.clone(),
@@ -3716,6 +3761,7 @@ fn add_requirement_cli(
     tags_str: &Option<String>,
     prefix: &Option<String>,
     parent: &Option<String>,
+    force_parent: bool,
 ) -> Result<()> {
     // Load existing requirements
     let mut store = storage.load()?;
@@ -3733,7 +3779,24 @@ fn add_requirement_cli(
 
     // Validate parent exists if specified
     let parent_uuid = if let Some(parent_id) = parent {
-        Some(parse_requirement_id(parent_id, &store)?)
+        let uuid = parse_requirement_id(parent_id, &store)?;
+        // BUG-64: terminal-status guard. Refuse to file a new child
+        // under a Completed/Rejected parent unless --force-parent.
+        // trace:BUG-64 | ai:claude
+        if !force_parent {
+            let pr = store
+                .get_requirement_by_id(&uuid)
+                .ok_or_else(|| anyhow::anyhow!("parent {} not found", parent_id))?;
+            if is_terminal_status(&pr.status) {
+                anyhow::bail!(
+                    "parent {} is {} — adding new children to a closed parent is usually a mistake. \
+                     Pass `--force-parent` to override.",
+                    pr.spec_id.as_deref().unwrap_or(parent_id),
+                    pr.status,
+                );
+            }
+        }
+        Some(uuid)
     } else {
         None
     };
@@ -4418,6 +4481,19 @@ fn delete_requirement(storage: &Storage, id_str: &str, skip_confirm: bool) -> Re
     Ok(())
 }
 
+
+/// True when a requirement's status means "this work is done — no new
+/// children should be filed under it without explicit override". Used by
+/// the BUG-64 guard on `aida add --parent` and `aida rel add --type
+/// child` to refuse parenting under closed work, and to keep `aida show
+/// --tree` / `aida list --parent` views from accumulating mixed-status
+/// trees. trace:BUG-64 | ai:claude
+fn is_terminal_status(status: &RequirementStatus) -> bool {
+    matches!(
+        status,
+        RequirementStatus::Completed | RequirementStatus::Rejected
+    )
+}
 
 /// Parse requirement ID - accepts either UUID or SPEC-ID. Used by the legacy
 /// SQLite path; the git-canonical dispatch resolves IDs directly via
@@ -10509,6 +10585,19 @@ mod statusline_tests {
         assert_eq!(humanize_size(1024 * 1024 * 1024), "1.0 GB");
     }
 
+    /// BUG-64: terminal-status predicate. Completed and Rejected are
+    /// terminal; everything else is open and accepts new children.
+    /// trace:BUG-64 | ai:claude
+    #[test]
+    fn is_terminal_status_buckets() {
+        assert!(is_terminal_status(&RequirementStatus::Completed));
+        assert!(is_terminal_status(&RequirementStatus::Rejected));
+        assert!(!is_terminal_status(&RequirementStatus::Draft));
+        assert!(!is_terminal_status(&RequirementStatus::Approved));
+        assert!(!is_terminal_status(&RequirementStatus::Planned));
+        assert!(!is_terminal_status(&RequirementStatus::InProgress));
+    }
+
     /// STORY-72: position math for `queue move --after`. Three regimes —
     /// gapped (typical), adjacent (collision fallback), bottom (no
     /// successor). trace:STORY-72 | ai:claude
@@ -14844,12 +14933,13 @@ fn handle_relationship_command(cmd: &RelationshipCommand, storage: &Storage) -> 
             to_flag,
             r#type,
             bidirectional,
+            force_parent,
         } => {
             let from = from_pos.as_deref().or(from_flag.as_deref())
                 .ok_or_else(|| anyhow::anyhow!("missing FROM (positional or --from)"))?;
             let to = to_pos.as_deref().or(to_flag.as_deref())
                 .ok_or_else(|| anyhow::anyhow!("missing TO (positional or --to)"))?;
-            add_relationship(storage, from, to, r#type, *bidirectional)?;
+            add_relationship(storage, from, to, r#type, *bidirectional, *force_parent)?;
         }
         RelationshipCommand::Remove {
             from_pos,
@@ -14878,6 +14968,7 @@ fn add_relationship(
     to_str: &str,
     rel_type_str: &str,
     bidirectional: bool,
+    force_parent: bool,
 ) -> Result<()> {
     // Load requirements
     let mut store = storage.load()?;
@@ -14904,6 +14995,26 @@ fn add_relationship(
     let from_title = from_req.title.clone();
     let to_spec = to_req.spec_id.clone().unwrap_or_else(|| "N/A".to_string());
     let to_title = to_req.title.clone();
+
+    // BUG-64: terminal-status guard on the parent end of a parent/child
+    // edge. Same logic as the git-canonical path. trace:BUG-64 | ai:claude
+    if !force_parent {
+        let parent_for_guard = match &rel_type {
+            RelationshipType::Child => Some(&to_req),
+            RelationshipType::Parent => Some(&from_req),
+            _ => None,
+        };
+        if let Some(p) = parent_for_guard {
+            if is_terminal_status(&p.status) {
+                anyhow::bail!(
+                    "parent {} is {} — adding new children to a closed parent is usually a mistake. \
+                     Pass `--force-parent` to override.",
+                    p.spec_id.as_deref().unwrap_or("?"),
+                    p.status,
+                );
+            }
+        }
+    }
 
     // Add the relationship
     store.add_relationship(&from_id, rel_type.clone(), &to_id, bidirectional)?;
