@@ -1621,6 +1621,58 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             //   - blocks-then-fallback: try block; fall through silently if missing
             //   - blocks-only:          require a block; error if missing
             // trace:EPIC-1-052 Phase 2 | ai:claude
+
+            // TASK-59: pre-flight validation BEFORE the dispenser
+            // advances. The original flow allocated an agreed_id from
+            // the block, then ran parent / terminal-status / lease
+            // checks — when any of those bailed the counter was
+            // already advanced and committed to blocks.yaml, leaving
+            // a phantom id (BUG-69 etc.) permanently missing from the
+            // sequence. Resolve parent + run all three guards FIRST
+            // so a failed `aida add --parent <Completed-EPIC>` leaves
+            // the dispenser exactly where it was.
+            // trace:TASK-59 | ai:claude
+            let parent_req: Option<aida_core::models::Requirement> =
+                if let Some(parent_str) = parent {
+                    let resolved = if let Ok(uuid) = uuid::Uuid::parse_str(parent_str) {
+                        backend.get_requirement(&uuid)?
+                    } else {
+                        backend.get_requirement_by_spec_id(parent_str)?
+                    };
+                    Some(resolved.ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "parent `{}` not found — refusing to create child requirement \
+                         without a valid parent (no child file written)",
+                            parent_str
+                        )
+                    })?)
+                } else {
+                    None
+                };
+            if let Some(ref pr) = parent_req {
+                if !*force_parent && is_terminal_status(&pr.status) {
+                    anyhow::bail!(
+                        "parent {} is {} — adding new children to a closed parent is usually a mistake. \
+                         Pass `--force-parent` to override, or pick a different parent \
+                         (try `aida list --type epic --status approved`).",
+                        pr.spec_id.as_deref().unwrap_or("?"),
+                        pr.status,
+                    );
+                }
+                if let Ok(project_root) = find_project_root() {
+                    if !list_leases(&project_root).is_empty() {
+                        let store = backend.load()?;
+                        enforce_session_lease(
+                            &project_root,
+                            pr,
+                            &store,
+                            "aida add --parent",
+                            false,
+                        )?;
+                    }
+                }
+            }
+
             let project_dir = std::env::current_dir().unwrap_or_default();
             let id_policy = read_id_format_policy(&project_dir);
             if id_policy.uses_blocks() {
@@ -1733,66 +1785,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 }
             }
 
-            // BUG-62: pre-resolve --parent BEFORE writing the child. Two
-            // gaps in the original post-hoc flow: (1) the lookup only
-            // consulted spec_id/agreed_id, silently rejecting UUID input
-            // even though FR-215's acceptance says "accepts SPEC-ID or
-            // UUID"; (2) when the lookup failed, the child file was
-            // already on disk with no parent edge, leaving an orphan.
-            // Resolve here (UUID → spec_id/agreed_id), and run the
-            // STORY-48 lease enforcement up-front too — both gates fire
-            // before any write so a blocked or invalid --parent leaves
-            // the store untouched. The actual relationship insert still
-            // happens post-write because the child has to exist before
-            // it can receive a Child edge. trace:BUG-62, FR-215 | ai:claude
-            let parent_req: Option<aida_core::models::Requirement> =
-                if let Some(parent_str) = parent {
-                    let resolved = if let Ok(uuid) = uuid::Uuid::parse_str(parent_str) {
-                        backend.get_requirement(&uuid)?
-                    } else {
-                        backend.get_requirement_by_spec_id(parent_str)?
-                    };
-                    Some(resolved.ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "parent `{}` not found — refusing to create child requirement \
-                         without a valid parent (no child file written)",
-                            parent_str
-                        )
-                    })?)
-                } else {
-                    None
-                };
-            // BUG-64: refuse `--parent <X>` when X is in a terminal status
-            // (Completed or Rejected). Filing a new child under a closed
-            // epic produces a confusing graph (closed parent with open
-            // children) that surfaces later in `aida list --parent` and
-            // `aida show --tree`. `--force-parent` bypasses for the
-            // legitimate backfill case. trace:BUG-64 | ai:claude
-            if let Some(ref pr) = parent_req {
-                if !*force_parent && is_terminal_status(&pr.status) {
-                    anyhow::bail!(
-                        "parent {} is {} — adding new children to a closed parent is usually a mistake. \
-                         Pass `--force-parent` to override, or pick a different parent \
-                         (try `aida list --type epic --status approved`).",
-                        pr.spec_id.as_deref().unwrap_or("?"),
-                        pr.status,
-                    );
-                }
-            }
-            if let Some(ref pr) = parent_req {
-                if let Ok(project_root) = find_project_root() {
-                    if !list_leases(&project_root).is_empty() {
-                        let store = backend.load()?;
-                        enforce_session_lease(
-                            &project_root,
-                            pr,
-                            &store,
-                            "aida add --parent",
-                            false,
-                        )?;
-                    }
-                }
-            }
+            // (parent validation moved BEFORE the dispenser allocation
+            // above for TASK-59 — preserves BUG-62, BUG-64, STORY-48
+            // guards while preventing phantom-id leaks.)
 
             // Use update_atomically to generate the ID with store's config
             let store = backend.update_atomically(|store| {
