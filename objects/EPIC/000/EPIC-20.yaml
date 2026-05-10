@@ -34,7 +34,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T01:10:57.197579751Z
-modified_at: 2026-05-10T01:16:40.812043099Z
+modified_at: 2026-05-10T01:22:42.653205499Z
 req_type: Epic
 comments:
 - id: 019e0f75-37ec-7053-8b7c-bb99c0ccd392
@@ -42,3 +42,8 @@ comments:
   content: Commit 0984cc8 references this requirement
   created_at: 2026-05-10T01:16:40.812043099Z
   modified_at: 2026-05-10T01:16:40.812043099Z
+- id: 019e0f7a-bd5d-76c3-8783-f66ac34d8eb0
+  author: joe
+  content: Clarification on v1's race window — it only exists in the specific case of one user, one machine, two+ concurrent sessions sharing the same .aida-store via symlink. Cross-developer setups (separate machines or separate clones) have node-id isolation via AIDA's existing distributed model — disjoint blocks, no possible collision regardless of v1/v2. So v2 (STORY-47, sub-blocks) is a refinement for the narrow same-user-same-machine concurrent case, not a fix for a broader issue.
+  created_at: 2026-05-10T01:22:42.653205499Z
+  modified_at: 2026-05-10T01:22:42.653205499Z
