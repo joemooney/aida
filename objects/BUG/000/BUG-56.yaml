@@ -1,0 +1,44 @@
+id: 019e0fff-0c20-7290-be15-f93c38f419ae
+spec_id: BUG-56
+agreed_id: BUG-56
+title: session end fails to delete lease file (silent failure after worktree removal)
+description: |
+  Reproduced 2026-05-09: ran `aida session end --yes` for two sessions; output said "✓ lease deleted" for both; but the lease .toml files were still in `~/ai/aida/.aida/sessions/` and `aida session leases` continued to show both as active.
+
+  ## Root cause
+
+  In session_end, the order is:
+
+  1. Strip runtime symlinks inside <worktree>/.aida/
+  2. git worktree remove <worktree>          # the worktree is now GONE
+  3. let lease_file = lease_path(&project_root, &id);
+  4. let _ = std::fs::remove_file(&lease_file);   # silent failure
+
+  `project_root` was computed earlier via `find_project_root()` which is cwd-derived. If the user ran `aida session end` from inside the worktree being deleted (the natural flow), `project_root` IS the worktree path. After step 2 deletes the worktree, the path no longer exists — including its `.aida/sessions/` symlink to parent.
+
+  Step 4 tries `remove_file(<deleted-worktree>/.aida/sessions/<id>.toml)` → ENOENT → silently swallowed by `let _ = ...`.
+
+  ## Fix
+
+  Two parts:
+
+  1. **Reorder**: delete the lease file BEFORE removing the worktree. The lease file's symlink target (parent's `.aida/sessions/<id>.toml`) is what we actually want to delete; do it while the symlink is still resolvable.
+
+  2. **Compute the lease path against the parent, not cwd**: the lease's owner project_root is recorded in the lease itself (or derivable from the worktree's parent dir). Use that to resolve the lease file's canonical location, so the remove works regardless of whether we're inside the worktree or not.
+
+  Cleanest combination: at session_end start, snapshot `let owner_lease_file = parent_of_worktree.join(".aida/sessions/<id>.toml")` (canonicalized via the lease record), then delete that BEFORE worktree remove.
+
+  ## Don't trust the "✓ lease deleted" log
+
+  The current code unconditionally prints success after `let _ = remove_file(...)`. Fix the print to only show on actual success; print a warning on failure.
+
+  ## Pairs with BUG-54
+
+  Same flavor — STORY-48 work shipped enforcement that didn't account for the owner case. session_end's lease-delete didn't account for the worktree-removed case. Both are "we know enough to work in the simple case, didn't think through the edge."
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T03:47:13.568720034Z
+modified_at: 2026-05-10T03:47:13.568720034Z
+req_type: Bug
