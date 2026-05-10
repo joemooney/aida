@@ -1,0 +1,53 @@
+id: 019e12da-8d5d-7361-a7e6-7d447027bfa6
+spec_id: TASK-45
+agreed_id: TASK-45
+title: 'aida queue add: refuse to queue requirements in terminal status (Completed/Rejected)'
+description: |
+  Caught 2026-05-10 — race condition between concurrent shells. Sequence was:
+
+  1. Shell A: `aida queue remove STORY-58` (still Approved at that instant) → removed
+  2. Shell B (agent): `aida queue done STORY-58` (atomic status=Completed + remove from queue) → succeeded; queue entry already gone, but status flip persisted
+  3. Shell A: `aida queue add STORY-58 --scope EPIC-20` (intended to re-add with scope) → succeeded; re-queued a now-Completed item
+  4. Result: queue contained `STORY-58 [Completed]` — semantically nonsensical
+
+  This was a bulk re-scope op (retroactively adding `--scope EPIC-20` to existing entries). Concurrent agent activity shipped STORY-58 in the middle. The race is benign in this case (just visual oddity, easy cleanup) but exposes that `aida queue add` doesn't validate the requirement's current status.
+
+  ## Today's behavior
+
+  `aida queue add <id>` only checks: requirement exists, no duplicate entry. Doesn't check status.
+
+  ## Desired behavior
+
+  `aida queue add <id>`:
+  - Refuses (exit 1) if req status is Completed or Rejected
+  - Hint: "STORY-58 is Completed — use `aida queue add --force` if you really mean to re-queue it"
+  - `--force` flag bypasses (for legitimate re-open scenarios)
+
+  Same check applies to `aida queue move` (less critical — moving an already-queued completed item is even weirder, but cheap to add).
+
+  ## Why low priority
+
+  Doesn't break correctness — just produces a weird intermediate state. Easy manual cleanup (`queue remove`). The bulk-ops use case where this races is rare.
+
+  But: cheap fix, prevents agent confusion ("why is a Completed item in my queue?"), and composes naturally with BUG-64 (parent terminal-status check) — same family of "validate status at write time."
+
+  ## Composes with
+
+  - BUG-64 (--parent terminal-status check) — same "validate at boundary" pattern
+  - BUG-65 (activity log not bumping on status flips) — when both land, the queue+activity model becomes harder to confuse
+
+  ## Acceptance
+
+  - [ ] `aida queue add <Completed-req>` errors by default
+  - [ ] `aida queue add <Rejected-req>` errors by default
+  - [ ] `--force` bypasses
+  - [ ] Hint suggests `--force` when relevant
+  - [ ] Same check on `aida queue move <Completed-req>` (lower priority — log a warning instead of erroring)
+  - [ ] Test covers race scenario: completed-then-add returns clear error
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T17:06:13.469356813Z
+modified_at: 2026-05-10T17:06:13.469356813Z
+req_type: Task
