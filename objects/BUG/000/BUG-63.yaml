@@ -37,10 +37,10 @@ description: |-
   ## Notes
 
   Not introduced by PR #3 — the git-canonical `--parent` path was wired up in commit 08009bc7 on main. PR #3's BUG-58 fix brings the legacy path INTO ALIGNMENT with the (imperfect) git-canonical convention; this bug is the next step.
-status: Approved
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T06:24:35.883151110Z
-modified_at: 2026-05-10T06:24:35.883151110Z
+modified_at: 2026-05-10T06:24:51.479592792Z
 req_type: Bug
