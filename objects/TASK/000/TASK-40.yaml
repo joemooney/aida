@@ -14,12 +14,12 @@ description: |-
   ## Why now
 
   Surfaced 2026-05-09 while implementing STORY-67. The fallback behavior is correct but invisible in --help, so users without gh/glab get a stderr note they don't expect. Trivial doc fix.
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T05:05:30.445790391Z
-modified_at: 2026-05-10T17:15:08.109558615Z
+modified_at: 2026-05-10T17:17:43.253875665Z
 req_type: Task
 relationships:
 - rel_type: Child
