@@ -24,6 +24,13 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      # protoc is required by tonic-build (aida-server's gRPC build script).
+      # See BUG-66.
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
@@ -74,6 +81,13 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+
+      # protoc is required by tonic-build (aida-server's gRPC build script).
+      # See BUG-66.
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'

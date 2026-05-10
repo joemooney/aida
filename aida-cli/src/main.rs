@@ -268,6 +268,7 @@ fn main() -> Result<()> {
             tags,
             prefix,
             parent,
+            force_parent,
             interactive,
         } => {
             // trace:BUG-17 | ai:claude — resolve description from inline,
@@ -311,6 +312,7 @@ fn main() -> Result<()> {
                     tags,
                     prefix,
                     parent,
+                    *force_parent,
                 )?;
             }
         }
@@ -397,6 +399,12 @@ fn main() -> Result<()> {
         Command::Push { .. } => {
             anyhow::bail!(
                 "`aida push` requires a git-canonical store. Run `aida init` (or upgrade from \
+                 the deprecated centralized backend with `aida db export-git`)."
+            );
+        }
+        Command::Pull { .. } => {
+            anyhow::bail!(
+                "`aida pull` requires a git-canonical store. Run `aida init` (or upgrade from \
                  the deprecated centralized backend with `aida db export-git`)."
             );
         }
@@ -1235,6 +1243,9 @@ fn handle_git_backend_command(
         Command::Push { code_only, store_only, message } => {
             return handle_push_command(store_path, *code_only, *store_only, message.as_deref());
         }
+        Command::Pull { code_only, store_only } => {
+            return handle_pull_command(store_path, *code_only, *store_only);
+        }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::Doctor(_) => unreachable!("doctor is dispatched before storage init"),
@@ -1386,6 +1397,7 @@ fn handle_git_backend_command(
             tags,
             prefix,
             parent,
+            force_parent,
             interactive,
             ..
         } => {
@@ -1657,6 +1669,66 @@ fn handle_git_backend_command(
                 }
             }
 
+            // BUG-62: pre-resolve --parent BEFORE writing the child. Two
+            // gaps in the original post-hoc flow: (1) the lookup only
+            // consulted spec_id/agreed_id, silently rejecting UUID input
+            // even though FR-215's acceptance says "accepts SPEC-ID or
+            // UUID"; (2) when the lookup failed, the child file was
+            // already on disk with no parent edge, leaving an orphan.
+            // Resolve here (UUID → spec_id/agreed_id), and run the
+            // STORY-48 lease enforcement up-front too — both gates fire
+            // before any write so a blocked or invalid --parent leaves
+            // the store untouched. The actual relationship insert still
+            // happens post-write because the child has to exist before
+            // it can receive a Child edge. trace:BUG-62, FR-215 | ai:claude
+            let parent_req: Option<aida_core::models::Requirement> = if let Some(parent_str) = parent {
+                let resolved = if let Ok(uuid) = uuid::Uuid::parse_str(parent_str) {
+                    backend.get_requirement(&uuid)?
+                } else {
+                    backend.get_requirement_by_spec_id(parent_str)?
+                };
+                Some(resolved.ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "parent `{}` not found — refusing to create child requirement \
+                         without a valid parent (no child file written)",
+                        parent_str
+                    )
+                })?)
+            } else {
+                None
+            };
+            // BUG-64: refuse `--parent <X>` when X is in a terminal status
+            // (Completed or Rejected). Filing a new child under a closed
+            // epic produces a confusing graph (closed parent with open
+            // children) that surfaces later in `aida list --parent` and
+            // `aida show --tree`. `--force-parent` bypasses for the
+            // legitimate backfill case. trace:BUG-64 | ai:claude
+            if let Some(ref pr) = parent_req {
+                if !*force_parent && is_terminal_status(&pr.status) {
+                    anyhow::bail!(
+                        "parent {} is {} — adding new children to a closed parent is usually a mistake. \
+                         Pass `--force-parent` to override, or pick a different parent \
+                         (try `aida list --type epic --status approved`).",
+                        pr.spec_id.as_deref().unwrap_or("?"),
+                        pr.status,
+                    );
+                }
+            }
+            if let Some(ref pr) = parent_req {
+                if let Ok(project_root) = find_project_root() {
+                    if !list_leases(&project_root).is_empty() {
+                        let store = backend.load()?;
+                        enforce_session_lease(
+                            &project_root,
+                            pr,
+                            &store,
+                            "aida add --parent",
+                            false,
+                        )?;
+                    }
+                }
+            }
+
             // Use update_atomically to generate the ID with store's config
             let store = backend.update_atomically(|store| {
                 let type_prefix = store.get_type_prefix(&req.req_type);
@@ -1730,40 +1802,12 @@ fn handle_git_backend_command(
                 }
 
                 // FR-215: --parent <id> establishes a parent relationship
-                // in the same shot. Resolve the parent (spec_id or uuid),
-                // append a Parent relationship to both reqs, persist.
-                // trace:FR-215 | ai:claude
-                if let Some(parent_str) = parent {
+                // in the same shot. Parent was pre-resolved + lease-checked
+                // above (BUG-62) so by this point we know the link is
+                // valid; here we just append the bidirectional edges.
+                // trace:FR-215, BUG-62 | ai:claude
+                if let Some(parent_req) = parent_req {
                     use aida_core::models::{Relationship, RelationshipType};
-                    let parent_req = backend
-                        .get_requirement_by_spec_id(parent_str)?
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "parent `{}` not found — child req {} created but \
-                                 the parent relationship was NOT recorded",
-                                parent_str,
-                                last.spec_id.as_deref().unwrap_or("?")
-                            )
-                        })?;
-                    // STORY-48: lease enforcement on the parent — adding a
-                    // child mutates the parent and effectively extends the
-                    // owning session's scope, so warn/block in the same
-                    // way as a direct edit. The child has already been
-                    // persisted by the add path above; the warning is
-                    // about the parent-link operation only.
-                    // trace:STORY-48 | ai:claude
-                    if let Ok(project_root) = find_project_root() {
-                        if !list_leases(&project_root).is_empty() {
-                            let store = backend.load()?;
-                            enforce_session_lease(
-                                &project_root,
-                                &parent_req,
-                                &store,
-                                "aida add --parent",
-                                false,
-                            )?;
-                        }
-                    }
                     let mut child = last.clone();
                     let parent_uuid = parent_req.id;
                     let child_uuid = child.id;
@@ -2175,6 +2219,7 @@ fn handle_git_backend_command(
             to_flag,
             r#type,
             bidirectional,
+            force_parent,
         }) => {
             let from = from_pos.as_deref().or(from_flag.as_deref())
                 .ok_or_else(|| anyhow::anyhow!("missing FROM (positional or --from)"))?;
@@ -2197,6 +2242,30 @@ fn handle_git_backend_command(
                 "references" => RelationshipType::References,
                 other => RelationshipType::Custom(other.to_string()),
             };
+
+            // BUG-64: same terminal-status guard as `aida add --parent`,
+            // applied here when the user is hand-rolling a parent edge
+            // via `aida rel add X Y --type child` (X is child of Y, so Y
+            // is the parent being checked) or its inverse `--type parent`
+            // (X is parent of Y). `--force-parent` bypasses for backfill
+            // cases. trace:BUG-64 | ai:claude
+            if !*force_parent {
+                let parent_for_guard = match &rel_type {
+                    RelationshipType::Child => Some(&to_req),
+                    RelationshipType::Parent => Some(&from_req),
+                    _ => None,
+                };
+                if let Some(p) = parent_for_guard {
+                    if is_terminal_status(&p.status) {
+                        anyhow::bail!(
+                            "parent {} is {} — adding new children to a closed parent is usually a mistake. \
+                             Pass `--force-parent` to override.",
+                            p.spec_id.as_deref().unwrap_or("?"),
+                            p.status,
+                        );
+                    }
+                }
+            }
 
             let rel = aida_core::models::Relationship {
                 rel_type: rel_type.clone(),
@@ -2294,18 +2363,40 @@ fn handle_git_backend_command(
                     };
                     if let Some(target_req) = target {
                         let target_spec = target_req.spec_id.as_deref().unwrap_or("N/A");
-                        println!(
-                            "  {} {} - {}",
-                            description.cyan(),
-                            target_spec.yellow(),
-                            target_req.title
-                        );
+                        // BUG-53: tag rejected targets so a dangling-looking
+                        // edge is recognizable as still-resolvable rather
+                        // than removed. trace:BUG-53 | ai:claude
+                        if matches!(target_req.status, aida_core::RequirementStatus::Rejected) {
+                            println!(
+                                "  {} {} {} - {}",
+                                description.cyan(),
+                                target_spec.yellow(),
+                                "[REJECTED]".red().bold(),
+                                target_req.title
+                            );
+                        } else {
+                            println!(
+                                "  {} {} - {}",
+                                description.cyan(),
+                                target_spec.yellow(),
+                                target_req.title
+                            );
+                        }
                     } else {
+                        // BUG-53: a relationship pointing at a uuid with no
+                        // backing object means the target was deleted (its
+                        // YAML is gone, mapping back to spec_id is lost). We
+                        // show a short uuid + "(removed)" instead of the
+                        // full 36-char uuid + "(not found)" so the line
+                        // reads as a tombstone rather than a phantom.
+                        // trace:BUG-53 | ai:claude
+                        let uuid_str = relationship.target_id.to_string();
+                        let short = &uuid_str[..uuid_str.len().min(8)];
                         println!(
                             "  {} {} {}",
                             description.cyan(),
-                            relationship.target_id.to_string().yellow(),
-                            "(not found)".red()
+                            short.dimmed(),
+                            "(removed — run `aida doctor verify-relationships --repair` to clean up)".red()
                         );
                     }
                 }
@@ -3680,6 +3771,7 @@ fn add_requirement_cli(
     tags_str: &Option<String>,
     prefix: &Option<String>,
     parent: &Option<String>,
+    force_parent: bool,
 ) -> Result<()> {
     // Load existing requirements
     let mut store = storage.load()?;
@@ -3697,7 +3789,24 @@ fn add_requirement_cli(
 
     // Validate parent exists if specified
     let parent_uuid = if let Some(parent_id) = parent {
-        Some(parse_requirement_id(parent_id, &store)?)
+        let uuid = parse_requirement_id(parent_id, &store)?;
+        // BUG-64: terminal-status guard. Refuse to file a new child
+        // under a Completed/Rejected parent unless --force-parent.
+        // trace:BUG-64 | ai:claude
+        if !force_parent {
+            let pr = store
+                .get_requirement_by_id(&uuid)
+                .ok_or_else(|| anyhow::anyhow!("parent {} not found", parent_id))?;
+            if is_terminal_status(&pr.status) {
+                anyhow::bail!(
+                    "parent {} is {} — adding new children to a closed parent is usually a mistake. \
+                     Pass `--force-parent` to override.",
+                    pr.spec_id.as_deref().unwrap_or(parent_id),
+                    pr.status,
+                );
+            }
+        }
+        Some(uuid)
     } else {
         None
     };
@@ -4382,6 +4491,19 @@ fn delete_requirement(storage: &Storage, id_str: &str, skip_confirm: bool) -> Re
     Ok(())
 }
 
+
+/// True when a requirement's status means "this work is done — no new
+/// children should be filed under it without explicit override". Used by
+/// the BUG-64 guard on `aida add --parent` and `aida rel add --type
+/// child` to refuse parenting under closed work, and to keep `aida show
+/// --tree` / `aida list --parent` views from accumulating mixed-status
+/// trees. trace:BUG-64 | ai:claude
+fn is_terminal_status(status: &RequirementStatus) -> bool {
+    matches!(
+        status,
+        RequirementStatus::Completed | RequirementStatus::Rejected
+    )
+}
 
 /// Parse requirement ID - accepts either UUID or SPEC-ID. Used by the legacy
 /// SQLite path; the git-canonical dispatch resolves IDs directly via
@@ -6189,6 +6311,7 @@ fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
         } => handle_role_add(&project_root, name, purpose.as_deref(), *global),
         RoleCommand::List => handle_role_list(&project_root),
         RoleCommand::Show { name } => handle_role_show(&project_root, name.as_deref()),
+        RoleCommand::Active => handle_role_active(),
         RoleCommand::End => handle_role_end(),
         RoleCommand::Delete { name, yes } => handle_role_delete(&project_root, name, *yes),
         RoleCommand::Scaffold => handle_role_scaffold(),
@@ -6500,6 +6623,22 @@ fn emit_role_enter_eval(
                 entry.spec_id, entry.action, when
             );
         }
+    }
+}
+
+/// `aida role active` — one-line stub that prints just the active role
+/// name, scriptable counterpart to `git branch --show-current` and
+/// `git config --get user.email`. Pure read of `$AIDA_SESSION_ROLE` so
+/// it never loads the project store; exits 1 with empty stdout when no
+/// role is active so shell guards like `[ -n "$(aida role active)" ]`
+/// work without parsing. trace:TASK-42 | ai:claude
+fn handle_role_active() -> Result<()> {
+    match std::env::var("AIDA_SESSION_ROLE") {
+        Ok(role) if !role.is_empty() => {
+            println!("{}", role);
+            Ok(())
+        }
+        _ => std::process::exit(1),
     }
 }
 
@@ -8388,6 +8527,9 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
         SessionCommand::End { id, yes, force } => session_end(id.as_deref(), *yes, *force),
         SessionCommand::Leases { verbose } => session_leases(*verbose),
         SessionCommand::Show { id } => session_show(id.as_deref()),
+        SessionCommand::Prune { days, dry_run, yes } => {
+            session_prune(*days, *dry_run, *yes)
+        }
     }
 }
 
@@ -10126,6 +10268,18 @@ fn session_end(id_query: Option<&str>, yes: bool, force: bool) -> Result<()> {
         target.branch
     );
 
+    // STORY-66: when the just-ended session's branch has an open PR, file a
+    // Story-typed review item routed to the `reviewer` role with `implements`
+    // relations to every spec referenced in the PR's commit messages. Best
+    // effort: any failure here logs a warning and is otherwise silent — we
+    // never fail `session_end` because of a queue side-effect.
+    // trace:STORY-66 | ai:claude
+    if let Some(summary) =
+        try_auto_queue_pr_review(&project_root, &target.branch, &target.id)
+    {
+        println!("{} {}", "✓".green(), summary);
+    }
+
     // STORY-73: emit `unset AIDA_SESSION_ID` to stdout when wrapped via the
     // shell helper's `eval "$(...)"`, so the calling shell's env var
     // doesn't go stale after the lease it pointed at is gone.
@@ -10134,6 +10288,323 @@ fn session_end(id_query: Option<&str>, yes: bool, force: bool) -> Result<()> {
         println!("unset AIDA_SESSION_ID");
     }
     Ok(())
+}
+
+/// Open-PR metadata captured by `gh pr list` for a session's branch. Just
+/// the fields the auto-queue side-effect needs to brief a reviewer.
+/// trace:STORY-66 | ai:claude
+struct OpenPrInfo {
+    number: u64,
+    title: String,
+    url: String,
+}
+
+/// Look up a single open PR for `branch` via `gh`. Returns None when `gh`
+/// isn't installed, the user isn't authenticated, the branch has no open
+/// PR, or the output can't be parsed. All paths are best-effort —
+/// session_end never fails because of this hook. trace:STORY-66 | ai:claude
+fn detect_open_pr_for_branch(
+    project_root: &std::path::Path,
+    branch: &str,
+) -> Option<OpenPrInfo> {
+    let out = std::process::Command::new("gh")
+        .current_dir(project_root)
+        .args([
+            "pr", "list",
+            "--head", branch,
+            "--state", "open",
+            "--limit", "1",
+            "--json", "number,title,url",
+            "-q", r#".[] | "\(.number)\t\(.title)\t\(.url)""#,
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout);
+    let line = s.lines().next()?.trim();
+    if line.is_empty() {
+        return None;
+    }
+    let parts: Vec<&str> = line.split('\t').collect();
+    if parts.len() < 3 {
+        return None;
+    }
+    let number: u64 = parts[0].parse().ok()?;
+    Some(OpenPrInfo {
+        number,
+        title: parts[1].to_string(),
+        url: parts[2].to_string(),
+    })
+}
+
+/// Detect whether a `Review PR-<n>:` story already exists in the local
+/// store, so calling `aida session end` twice on the same branch doesn't
+/// create duplicate queue entries. trace:STORY-66 | ai:claude
+fn pr_review_story_already_exists(
+    project_root: &std::path::Path,
+    pr_number: u64,
+) -> bool {
+    let aida = std::env::current_exe()
+        .unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    let Ok(out) = std::process::Command::new(&aida)
+        .current_dir(project_root)
+        .args(["list", "--type", "story"])
+        .output()
+    else {
+        return false;
+    };
+    if !out.status.success() {
+        return false;
+    }
+    let needle = format!("Review PR-{}:", pr_number);
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .any(|line| line.contains(&needle))
+}
+
+/// Strip ANSI SGR sequences (`ESC[...m`) so we can match output text
+/// regardless of whether the child invocation colored its output. Keep it
+/// minimal — we only need the SGR shape `aida add` emits.
+/// trace:STORY-66 | ai:claude
+fn strip_ansi_color(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\x1b' && chars.peek() == Some(&'[') {
+            chars.next();
+            for cc in chars.by_ref() {
+                if cc.is_ascii_alphabetic() {
+                    break;
+                }
+            }
+            continue;
+        }
+        out.push(c);
+    }
+    out
+}
+
+/// Self-invoke `aida add` for a Story-typed review requirement and parse the
+/// resulting spec id out of stdout. Returns None on any failure.
+/// trace:STORY-66 | ai:claude
+fn aida_subcmd_add_review_story(
+    project_root: &std::path::Path,
+    title: &str,
+    description: &str,
+) -> Option<String> {
+    let aida = std::env::current_exe()
+        .unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    let out = std::process::Command::new(&aida)
+        .current_dir(project_root)
+        .args([
+            "add",
+            "--type", "story",
+            "--status", "approved",
+            "--priority", "medium",
+            "--title", title,
+            "--description", description,
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        eprintln!(
+            "{} auto-queue review story: `aida add` failed: {}",
+            "Warning:".yellow().bold(),
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    parse_spec_id_from_add_output(&stdout)
+}
+
+/// Parse the spec id printed by `aida add`. The git-canonical path prints
+/// `Added: STORY-N - <title>` (one line); the legacy YAML/SQLite path
+/// prints a standalone `ID: STORY-N` line. Accept either so this hook keeps
+/// working across backends. trace:STORY-66 | ai:claude
+fn parse_spec_id_from_add_output(stdout: &str) -> Option<String> {
+    for line in stdout.lines() {
+        let cleaned = strip_ansi_color(line);
+        let candidate = cleaned
+            .strip_prefix("Added: ")
+            .map(|rest| rest.split(" - ").next().unwrap_or("").trim().to_string())
+            .or_else(|| {
+                cleaned
+                    .strip_prefix("ID: ")
+                    .map(|rest| rest.trim().to_string())
+            });
+        if let Some(c) = candidate {
+            if !c.is_empty() {
+                return Some(c);
+            }
+        }
+    }
+    None
+}
+
+/// Best-effort `aida rel add <from> <to> --type implements` (and the
+/// matching reverse `implemented-by` so `aida show <spec>` surfaces the
+/// review story). Custom relation types don't have an `inverse()` mapping
+/// in core, so `--bidirectional` is a no-op for them — we add both
+/// directions manually instead. Logs and continues on failure.
+/// trace:STORY-66 | ai:claude
+fn aida_subcmd_rel_add_implements(
+    project_root: &std::path::Path,
+    from: &str,
+    to: &str,
+) {
+    aida_subcmd_rel_add(project_root, from, to, "implements");
+    aida_subcmd_rel_add(project_root, to, from, "implemented-by");
+}
+
+fn aida_subcmd_rel_add(
+    project_root: &std::path::Path,
+    from: &str,
+    to: &str,
+    rel_type: &str,
+) {
+    let aida = std::env::current_exe()
+        .unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    match std::process::Command::new(&aida)
+        .current_dir(project_root)
+        .args(["rel", "add", from, to, "--type", rel_type])
+        .output()
+    {
+        Ok(o) if o.status.success() => {}
+        Ok(o) => eprintln!(
+            "{} auto-queue: `rel add {} {} --type {}` failed: {}",
+            "Warning:".yellow().bold(),
+            from,
+            to,
+            rel_type,
+            String::from_utf8_lossy(&o.stderr).trim()
+        ),
+        Err(e) => eprintln!(
+            "{} auto-queue: could not invoke `aida rel add`: {}",
+            "Warning:".yellow().bold(),
+            e
+        ),
+    }
+}
+
+/// Best-effort `aida queue add <id> --for reviewer --no-scope --note <...>`.
+/// trace:STORY-66 | ai:claude
+fn aida_subcmd_queue_add_for_reviewer(
+    project_root: &std::path::Path,
+    spec_id: &str,
+    note: &str,
+) {
+    let aida = std::env::current_exe()
+        .unwrap_or_else(|_| std::path::PathBuf::from("aida"));
+    let out = std::process::Command::new(&aida)
+        .current_dir(project_root)
+        .args([
+            "queue", "add", spec_id,
+            "--for", "reviewer",
+            "--no-scope",
+            "--note", note,
+        ])
+        .output();
+    match out {
+        Ok(o) if o.status.success() => {}
+        Ok(o) => eprintln!(
+            "{} auto-queue: `queue add {}` failed: {}",
+            "Warning:".yellow().bold(),
+            spec_id,
+            String::from_utf8_lossy(&o.stderr).trim()
+        ),
+        Err(e) => eprintln!(
+            "{} auto-queue: could not invoke `aida queue add`: {}",
+            "Warning:".yellow().bold(),
+            e
+        ),
+    }
+}
+
+/// End-of-session auto-detect-and-queue. Runs as a side effect of
+/// `aida session end` so a forgotten `gh pr create` doesn't leave the
+/// reviewer unaware. Returns a one-line summary string when it filed (or
+/// already-skipped) something; None when there's no PR to act on.
+/// trace:STORY-66 | ai:claude
+fn try_auto_queue_pr_review(
+    project_root: &std::path::Path,
+    branch: &str,
+    session_id: &str,
+) -> Option<String> {
+    let pr = detect_open_pr_for_branch(project_root, branch)?;
+    if pr_review_story_already_exists(project_root, pr.number) {
+        return Some(format!(
+            "PR #{} already has a `Review PR-{}` story queued — skipping",
+            pr.number, pr.number
+        ));
+    }
+
+    // Pull the commit-range spec ids using the existing helpers from STORY-67.
+    let (base, head) = pr_base_head(project_root, ReviewForge::GitHub, pr.number)
+        .unwrap_or_else(|_| ("main".to_string(), branch.to_string()));
+    let messages = git_log_messages(project_root, &base, &head).unwrap_or_default();
+    let mut spec_ids: Vec<String> = Vec::new();
+    for msg in &messages {
+        for id in extract_spec_ids_from_commit(msg) {
+            if !spec_ids.iter().any(|x| x.eq_ignore_ascii_case(&id)) {
+                spec_ids.push(id);
+            }
+        }
+    }
+
+    let session_short: &str = &session_id[..session_id.len().min(8)];
+    let mut desc = String::new();
+    desc.push_str(&format!(
+        "Auto-filed by `aida session end` (session `{}`) when its branch `{}` had an open PR.\n\n",
+        session_short, branch
+    ));
+    desc.push_str(&format!("- PR: <{}>\n", pr.url));
+    desc.push_str(&format!("- Branch: `{}` → `{}`\n\n", head, base));
+    if spec_ids.is_empty() {
+        desc.push_str(
+            "No `(REQ-ID)` trailers were found in the PR's commit range — review against the PR title/body and link specs after the fact via `aida rel add <this> <spec> --type implements`.\n\n",
+        );
+    } else {
+        desc.push_str("## Covers\n\n");
+        for id in &spec_ids {
+            desc.push_str(&format!("- {}\n", id));
+        }
+        desc.push('\n');
+    }
+    desc.push_str("## Acceptance\n\n");
+    desc.push_str(&format!(
+        "- Generate a structured review prompt with `aida review prompt --pr {}` and verify each spec's acceptance criteria.\n",
+        pr.number
+    ));
+    desc.push_str("- Approve and merge, or request changes by spec id.\n");
+    desc.push_str("- Mark this story `completed` once the PR is merged.\n");
+
+    let title = format!("Review PR-{}: {}", pr.number, pr.title);
+    let new_id = aida_subcmd_add_review_story(project_root, &title, &desc)?;
+
+    for id in &spec_ids {
+        aida_subcmd_rel_add_implements(project_root, &new_id, id);
+    }
+
+    let note = format!(
+        "auto-queued by `aida session end` ({}); covers {} spec{}",
+        session_short,
+        spec_ids.len(),
+        if spec_ids.len() == 1 { "" } else { "s" }
+    );
+    aida_subcmd_queue_add_for_reviewer(project_root, &new_id, &note);
+
+    let covers = if spec_ids.is_empty() {
+        "no specs".to_string()
+    } else {
+        spec_ids.join(", ")
+    };
+    Some(format!(
+        "filed {} (covers {}) → reviewer queue (PR #{})",
+        new_id, covers, pr.number
+    ))
 }
 
 fn session_leases(verbose: bool) -> Result<()> {
@@ -10220,6 +10691,298 @@ fn session_leases(verbose: bool) -> Result<()> {
         "aida session end".cyan(),
         "<id>".dimmed()
     );
+    Ok(())
+}
+
+/// One `.jsonl` file old enough to prune. Captured up-front so the
+/// confirmation list and the deletion loop see the same set.
+/// trace:STORY-60 | ai:claude
+struct PruneCandidate {
+    path: std::path::PathBuf,
+    size: u64,
+    age_seconds: u64,
+}
+
+/// Format a byte count with a human-readable unit (KB/MB/GB). One
+/// decimal place so a 1.5 MB file doesn't read as "1 MB" or "1500000 B".
+/// trace:STORY-60 | ai:claude
+fn humanize_size(bytes: u64) -> String {
+    const KB: f64 = 1024.0;
+    const MB: f64 = 1024.0 * 1024.0;
+    const GB: f64 = 1024.0 * 1024.0 * 1024.0;
+    let b = bytes as f64;
+    if b < KB {
+        format!("{} B", bytes)
+    } else if b < MB {
+        format!("{:.1} KB", b / KB)
+    } else if b < GB {
+        format!("{:.1} MB", b / MB)
+    } else {
+        format!("{:.1} GB", b / GB)
+    }
+}
+
+/// Compute the new queue position for `aida queue move X --after Y`.
+/// `anchor` is Y's current position; `successor` is the position of the
+/// next entry strictly after Y, or `None` when Y is at the bottom.
+///
+/// Returns a position that sorts strictly between `anchor` and the next
+/// entry. Midpoint math when there's room; +1 fallback when adjacent
+/// (collision risk acknowledged — safe in practice because positions are
+/// initially gapped by 1000); +1000 when Y is at the bottom. All math is
+/// saturating so a corrupt-state queue (every item at `i64::MAX` from a
+/// pre-fix queue_add, see git_backend.rs) doesn't panic on overflow —
+/// the callsite is expected to surface a friendlier hint instead.
+/// trace:STORY-72 | ai:claude
+fn position_after(anchor: i64, successor: Option<i64>) -> i64 {
+    match successor {
+        Some(np) if np > anchor.saturating_add(1) => {
+            anchor.saturating_add((np.saturating_sub(anchor)) / 2)
+        }
+        Some(_) => anchor.saturating_add(1),
+        None => anchor.saturating_add(1000),
+    }
+}
+
+fn humanize_age_secs(secs: u64) -> String {
+    if secs < 86_400 {
+        format!("{}h", secs / 3600)
+    } else if secs < 7 * 86_400 {
+        format!("{}d", secs / 86_400)
+    } else if secs < 30 * 86_400 {
+        format!("{}w", secs / (7 * 86_400))
+    } else if secs < 365 * 86_400 {
+        format!("{}mo", secs / (30 * 86_400))
+    } else {
+        format!("{}y", secs / (365 * 86_400))
+    }
+}
+
+/// `aida session prune` — walk Claude Code's per-project session
+/// directories under `~/.claude/projects/<encoded>/` and delete `.jsonl`
+/// files whose mtime is older than `days`. Skips any project dir
+/// corresponding to an active session lease so a long-running session
+/// doesn't self-delete from a forgotten cron-like usage. Logs each
+/// deletion to `<project>/.aida/session-prune.log` for auditing.
+/// trace:STORY-60 | ai:claude
+fn session_prune(days: u32, dry_run: bool, yes: bool) -> Result<()> {
+    let cwd = std::env::current_dir().context("could not determine cwd")?;
+    let project_root = find_project_root().unwrap_or_else(|_| cwd.clone());
+
+    let cutoff = std::time::SystemTime::now()
+        .checked_sub(std::time::Duration::from_secs(u64::from(days) * 86_400))
+        .ok_or_else(|| anyhow::anyhow!("--days {} is too large", days))?;
+    let now = std::time::SystemTime::now();
+
+    // Project dirs to walk: the current cwd's encoded dir, plus the parent
+    // project's (when run from inside a session worktree). De-dup since
+    // they collapse to the same dir for plain non-worktree usage.
+    let mut search_dirs: Vec<std::path::PathBuf> = Vec::new();
+    let push_dir = |dirs: &mut Vec<std::path::PathBuf>, p: std::path::PathBuf| {
+        if p.is_dir() && !dirs.iter().any(|d| d == &p) {
+            dirs.push(p);
+        }
+    };
+    if let Ok(d) = session::claude_project_dir(&cwd) {
+        push_dir(&mut search_dirs, d);
+    }
+    if let Some(parent) = parent_project_root_for_session(&cwd) {
+        if let Ok(d) = session::claude_project_dir(&parent) {
+            push_dir(&mut search_dirs, d);
+        }
+    }
+    // Also include encoded dirs for every active lease's worktree path —
+    // they often live OUTSIDE the parent project root (sibling worktrees),
+    // so the parent-walk doesn't catch them. We'll skip these in the
+    // candidate loop (see active_dirs below) but we still need to know
+    // about them for the "skipped active" tally. trace:STORY-60 | ai:claude
+    let active_leases = list_leases(&project_root);
+    let mut active_dirs: std::collections::HashSet<std::path::PathBuf> =
+        std::collections::HashSet::new();
+    for l in &active_leases {
+        if let Ok(d) = session::claude_project_dir(&l.worktree_path) {
+            active_dirs.insert(d.clone());
+            push_dir(&mut search_dirs, d);
+        }
+    }
+
+    if search_dirs.is_empty() {
+        println!("(no Claude Code session directories found for this project)");
+        return Ok(());
+    }
+
+    let mut candidates: Vec<PruneCandidate> = Vec::new();
+    let mut skipped_active = 0usize;
+    for dir in &search_dirs {
+        if active_dirs.contains(dir) {
+            // Defensive: anything in here belongs to an in-progress
+            // session, regardless of mtime. Skip wholesale.
+            // trace:STORY-60 | ai:claude
+            if let Ok(read) = std::fs::read_dir(dir) {
+                skipped_active += read
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("jsonl"))
+                    .count();
+            }
+            continue;
+        }
+        let Ok(read) = std::fs::read_dir(dir) else { continue };
+        for entry in read.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("jsonl") {
+                continue;
+            }
+            let Ok(metadata) = entry.metadata() else { continue };
+            let Ok(mtime) = metadata.modified() else { continue };
+            if mtime >= cutoff {
+                continue;
+            }
+            let age_seconds = now.duration_since(mtime).map(|d| d.as_secs()).unwrap_or(0);
+            candidates.push(PruneCandidate {
+                path,
+                size: metadata.len(),
+                age_seconds,
+            });
+        }
+    }
+
+    if candidates.is_empty() {
+        println!(
+            "(no .jsonl files older than {} day{} in {} session director{})",
+            days,
+            if days == 1 { "" } else { "s" },
+            search_dirs.len(),
+            if search_dirs.len() == 1 { "y" } else { "ies" },
+        );
+        if skipped_active > 0 {
+            println!(
+                "  ({} file{} skipped — belong to {} active session{})",
+                skipped_active,
+                if skipped_active == 1 { "" } else { "s" },
+                active_dirs.len(),
+                if active_dirs.len() == 1 { "" } else { "s" },
+            );
+        }
+        return Ok(());
+    }
+
+    // Sort oldest-first so the user sees the most-stale entries up top.
+    candidates.sort_by(|a, b| b.age_seconds.cmp(&a.age_seconds));
+
+    let total_size: u64 = candidates.iter().map(|c| c.size).sum();
+    let count = candidates.len();
+    println!(
+        "Found {} .jsonl file{} older than {} day{} ({} total):",
+        count,
+        if count == 1 { "" } else { "s" },
+        days,
+        if days == 1 { "" } else { "s" },
+        humanize_size(total_size)
+    );
+    println!();
+    for c in &candidates {
+        let id = c
+            .path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("?");
+        let id_short = &id[..id.len().min(8)];
+        println!(
+            "  {:>6}  {:>10}  {}  {}",
+            humanize_age_secs(c.age_seconds),
+            humanize_size(c.size),
+            id_short.dimmed(),
+            c.path.display()
+        );
+    }
+    println!();
+    if skipped_active > 0 {
+        println!(
+            "{} {} file{} from {} active session{} excluded.",
+            "Note:".yellow().bold(),
+            skipped_active,
+            if skipped_active == 1 { "" } else { "s" },
+            active_dirs.len(),
+            if active_dirs.len() == 1 { "" } else { "s" },
+        );
+    }
+
+    if dry_run {
+        println!("{}", "(--dry-run; nothing deleted)".dimmed());
+        return Ok(());
+    }
+
+    if !yes {
+        use std::io::Write;
+        print!("Delete {} file{}? [y/N] ", count, if count == 1 { "" } else { "s" });
+        std::io::stdout().flush().ok();
+        let mut ans = String::new();
+        if std::io::stdin().read_line(&mut ans).is_err()
+            || !matches!(ans.trim().to_ascii_lowercase().as_str(), "y" | "yes")
+        {
+            println!("Aborted.");
+            return Ok(());
+        }
+    }
+
+    let log_path = project_root.join(".aida").join("session-prune.log");
+    if let Some(parent) = log_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut log_handle = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .ok();
+
+    let mut deleted = 0usize;
+    let mut bytes_freed = 0u64;
+    let mut errors = 0usize;
+    let now_iso = chrono::Utc::now().to_rfc3339();
+    for c in &candidates {
+        match std::fs::remove_file(&c.path) {
+            Ok(_) => {
+                deleted += 1;
+                bytes_freed += c.size;
+                if let Some(f) = log_handle.as_mut() {
+                    use std::io::Write;
+                    let _ = writeln!(
+                        f,
+                        "{}\t{}\t{}\t{}",
+                        now_iso,
+                        c.size,
+                        c.age_seconds,
+                        c.path.display()
+                    );
+                }
+            }
+            Err(e) => {
+                errors += 1;
+                eprintln!(
+                    "{} could not delete {}: {}",
+                    "Warning:".yellow().bold(),
+                    c.path.display(),
+                    e
+                );
+            }
+        }
+    }
+
+    println!(
+        "{} Deleted {} file{} ({} freed){}",
+        "✓".green(),
+        deleted,
+        if deleted == 1 { "" } else { "s" },
+        humanize_size(bytes_freed),
+        if errors > 0 {
+            format!("; {} error{}", errors, if errors == 1 { "" } else { "s" })
+        } else {
+            String::new()
+        }
+    );
+    if log_handle.is_some() {
+        println!("  log: {}", log_path.display().to_string().dimmed());
+    }
     Ok(())
 }
 
@@ -10477,6 +11240,127 @@ mod statusline_tests {
         assert!(sha_prefix_match("", ""));
         assert!(!sha_prefix_match("", "abc"));
         assert!(!sha_prefix_match("abc", ""));
+    }
+
+    /// STORY-66: the auto-queue hook parses `aida add`'s spec_id out of a
+    /// line that may be wrapped in colored() output. Drop SGR sequences
+    /// without depending on a regex / ansi crate.
+    /// trace:STORY-66 | ai:claude
+    #[test]
+    fn strip_ansi_color_basic() {
+        assert_eq!(strip_ansi_color("plain"), "plain");
+        assert_eq!(strip_ansi_color("\x1b[32mSTORY-77\x1b[0m"), "STORY-77");
+        assert_eq!(
+            strip_ansi_color("\x1b[1;32mbold green\x1b[0m and tail"),
+            "bold green and tail"
+        );
+        // Lone ESC without `[` survives — we only strip well-formed SGR.
+        assert_eq!(strip_ansi_color("a\x1bb"), "a\x1bb");
+    }
+
+    /// STORY-60: byte-count formatter — boundary cases at KB/MB/GB
+    /// crossover. Below 1KB renders as bytes; otherwise one decimal.
+    /// trace:STORY-60 | ai:claude
+    #[test]
+    fn humanize_size_buckets() {
+        assert_eq!(humanize_size(0), "0 B");
+        assert_eq!(humanize_size(512), "512 B");
+        assert_eq!(humanize_size(1024), "1.0 KB");
+        assert_eq!(humanize_size(1536), "1.5 KB");
+        assert_eq!(humanize_size(1024 * 1024), "1.0 MB");
+        assert_eq!(humanize_size(1024 * 1024 * 3 / 2), "1.5 MB");
+        assert_eq!(humanize_size(1024 * 1024 * 1024), "1.0 GB");
+    }
+
+    /// BUG-64: terminal-status predicate. Completed and Rejected are
+    /// terminal; everything else is open and accepts new children.
+    /// trace:BUG-64 | ai:claude
+    #[test]
+    fn is_terminal_status_buckets() {
+        assert!(is_terminal_status(&RequirementStatus::Completed));
+        assert!(is_terminal_status(&RequirementStatus::Rejected));
+        assert!(!is_terminal_status(&RequirementStatus::Draft));
+        assert!(!is_terminal_status(&RequirementStatus::Approved));
+        assert!(!is_terminal_status(&RequirementStatus::Planned));
+        assert!(!is_terminal_status(&RequirementStatus::InProgress));
+    }
+
+    /// STORY-72: position math for `queue move --after`. Three regimes —
+    /// gapped (typical), adjacent (collision fallback), bottom (no
+    /// successor). trace:STORY-72 | ai:claude
+    #[test]
+    fn position_after_picks_midpoint_when_gapped() {
+        // Typical case: anchor + successor with the standard 1000 gap.
+        assert_eq!(position_after(0, Some(1000)), 500);
+        // Wider gap still midpoints.
+        assert_eq!(position_after(2000, Some(4000)), 3000);
+        // Anchor at bottom — no successor — uses the +1000 step that
+        // matches the existing `--bottom` convention.
+        assert_eq!(position_after(7000, None), 8000);
+        // Adjacent positions: midpoint would land on the anchor (collision).
+        // Fall through to +1 even though it risks colliding with the next
+        // entry — the situation only arises in pathologically dense queues.
+        assert_eq!(position_after(5, Some(6)), 6);
+        assert_eq!(position_after(5, Some(5)), 6);
+        // Negative anchor (queue items moved to top via `--top` use
+        // negative positions) still produces a sortable midpoint.
+        assert_eq!(position_after(-1000, Some(0)), -500);
+        // Saturating arithmetic: a pre-fix corrupt queue where every
+        // entry has `position: i64::MAX` (see git_backend's queue_add
+        // sentinel resolution) must not overflow. The result clamps to
+        // i64::MAX rather than wrapping. The user-visible result is a
+        // no-op move, which is fine — better than a panic.
+        assert_eq!(position_after(i64::MAX, None), i64::MAX);
+        assert_eq!(position_after(i64::MAX, Some(i64::MAX)), i64::MAX);
+        assert_eq!(position_after(i64::MAX - 1, None), i64::MAX);
+    }
+
+    /// STORY-60: age formatter for the prune candidate list. Resolution
+    /// drops as we cross day/week/month/year boundaries; sub-day uses
+    /// hours since `--days 30` makes anything finer than that
+    /// uninteresting (and 0d would be confusing).
+    /// trace:STORY-60 | ai:claude
+    #[test]
+    fn humanize_age_secs_buckets() {
+        assert_eq!(humanize_age_secs(3600), "1h");
+        assert_eq!(humanize_age_secs(86_399), "23h");
+        assert_eq!(humanize_age_secs(86_400), "1d");
+        assert_eq!(humanize_age_secs(7 * 86_400 - 1), "6d");
+        assert_eq!(humanize_age_secs(7 * 86_400), "1w");
+        assert_eq!(humanize_age_secs(30 * 86_400), "1mo");
+        assert_eq!(humanize_age_secs(365 * 86_400), "1y");
+    }
+
+    /// STORY-66: parse spec_id out of `aida add` stdout. Cover both backend
+    /// output shapes — git-canonical (`Added: ID - title`) and legacy
+    /// (`ID: spec_id`) — plus colored output and trailing `Hint:` noise.
+    /// trace:STORY-66 | ai:claude
+    #[test]
+    fn parse_spec_id_from_add_output_handles_known_shapes() {
+        // Git-canonical default.
+        assert_eq!(
+            parse_spec_id_from_add_output(
+                "Added: STORY-82 - Test STORY-66 auto-queue helper\nHint: link it via …\n"
+            ),
+            Some("STORY-82".to_string())
+        );
+        // Legacy YAML/SQLite path.
+        assert_eq!(
+            parse_spec_id_from_add_output(
+                "Requirement added successfully!\nUUID: 019e1300-…\nID: \x1b[32mSTORY-77\x1b[0m\n"
+            ),
+            Some("STORY-77".to_string())
+        );
+        // Color-wrapped git-canonical.
+        assert_eq!(
+            parse_spec_id_from_add_output("Added: \x1b[1;32mSTORY-99\x1b[0m - hello\n"),
+            Some("STORY-99".to_string())
+        );
+        // Output with no recognizable line.
+        assert_eq!(
+            parse_spec_id_from_add_output("something unrelated\n"),
+            None
+        );
     }
 
     /// STORY-55: scope-fallback decision table for the `@<…>` segment.
@@ -13235,6 +14119,107 @@ fn handle_push_command(
     Ok(())
 }
 
+/// `aida pull` — symmetric counterpart of `aida push`. Pulls both the
+/// current code branch (via `git pull --ff-only`) and the orphan store
+/// (via `git_ops::pull_rebase`, matching `aida db sync --pull`). Each
+/// leg skips cleanly when its remote isn't configured, so the command
+/// is safe to run in any project state. trace:TASK-43 | ai:claude
+fn handle_pull_command(
+    store_path: &std::path::Path,
+    code_only: bool,
+    store_only: bool,
+) -> Result<()> {
+    use aida_core::git_ops;
+
+    let project_root = store_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+
+    // ---- Code pull (current branch on the project repo) ----
+    if !store_only {
+        if !git_ops::has_remote(&project_root, "origin") {
+            println!("  {} no `origin` remote — skipping code pull", "Note:".dimmed());
+        } else {
+            let branch = git_ops::current_branch(&project_root)
+                .unwrap_or_else(|_| "HEAD".to_string());
+            println!(
+                "{} {} ← origin",
+                "Pulling code".cyan().bold(),
+                branch
+            );
+            // --ff-only refuses if the local branch has diverged from
+            // origin (user has unpushed commits AND origin has new
+            // commits). Safer default than --rebase for a working
+            // branch — the user gets a clear error and can decide
+            // whether to rebase, merge, or stash. Matches the task's
+            // acceptance shape ("equivalent to `git pull --ff-only`").
+            // trace:TASK-43 | ai:claude
+            let res = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&project_root)
+                .args(["pull", "--ff-only", "origin", &branch])
+                .status();
+            match res {
+                Ok(s) if s.success() => {
+                    println!("  {}", "code pull complete".green());
+                }
+                Ok(s) => {
+                    eprintln!(
+                        "  {} git pull --ff-only exited with status {} — \
+                         your branch may have diverged from origin/{}. Use \
+                         `git pull --rebase` or `git pull --no-rebase` once \
+                         you've decided how to reconcile.",
+                        "Warning:".yellow().bold(),
+                        s,
+                        branch
+                    );
+                }
+                Err(e) => anyhow::bail!("git pull failed: {}", e),
+            }
+        }
+    }
+
+    // ---- Store pull (orphan branch via pull_rebase) ----
+    if !code_only {
+        if !git_ops::is_git_repo(store_path) {
+            println!("  {} no orphan worktree — skipping store pull", "Note:".dimmed());
+            return Ok(());
+        }
+        if !git_ops::has_remote(store_path, "origin") {
+            println!("  {} orphan store has no `origin` — skipping store pull", "Note:".dimmed());
+            return Ok(());
+        }
+        // Mirror `aida db sync --pull`: commit any pending orphan
+        // changes first, then pull --rebase. Without the pre-commit
+        // step, rebase refuses on a dirty tree and leaves the user
+        // half-pulled.
+        if git_ops::has_changes(store_path).unwrap_or(false) {
+            let _ = git_ops::add(store_path, &["."]);
+            let _ = git_ops::commit(store_path, "chore: sync pending changes");
+            println!("  Committed pending orphan changes before pull");
+        }
+        let branch = git_ops::current_branch(store_path)
+            .unwrap_or_else(|_| "aida-store".to_string());
+        println!("{} aida-store ← origin", "Pulling store".cyan().bold());
+        match git_ops::pull_rebase(store_path, "origin", &branch) {
+            Ok(()) => println!("  {}", "store pull complete".green()),
+            Err(e) => {
+                eprintln!(
+                    "  {} {}\n  The orphan store may be mid-rebase. To recover:\n    \
+                         cd {} && git rebase --abort\n  \
+                     Then re-run `aida pull` or `aida db sync --pull`.",
+                    "Warning:".yellow().bold(),
+                    e,
+                    store_path.display()
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
 // ----------------------------------------------------------------------------
 // `aida status` — comprehensive project overview, with extra sections when
 // the current project is the aida repo itself.
@@ -14924,12 +15909,13 @@ fn handle_relationship_command(cmd: &RelationshipCommand, storage: &Storage) -> 
             to_flag,
             r#type,
             bidirectional,
+            force_parent,
         } => {
             let from = from_pos.as_deref().or(from_flag.as_deref())
                 .ok_or_else(|| anyhow::anyhow!("missing FROM (positional or --from)"))?;
             let to = to_pos.as_deref().or(to_flag.as_deref())
                 .ok_or_else(|| anyhow::anyhow!("missing TO (positional or --to)"))?;
-            add_relationship(storage, from, to, r#type, *bidirectional)?;
+            add_relationship(storage, from, to, r#type, *bidirectional, *force_parent)?;
         }
         RelationshipCommand::Remove {
             from_pos,
@@ -14958,6 +15944,7 @@ fn add_relationship(
     to_str: &str,
     rel_type_str: &str,
     bidirectional: bool,
+    force_parent: bool,
 ) -> Result<()> {
     // Load requirements
     let mut store = storage.load()?;
@@ -14984,6 +15971,26 @@ fn add_relationship(
     let from_title = from_req.title.clone();
     let to_spec = to_req.spec_id.clone().unwrap_or_else(|| "N/A".to_string());
     let to_title = to_req.title.clone();
+
+    // BUG-64: terminal-status guard on the parent end of a parent/child
+    // edge. Same logic as the git-canonical path. trace:BUG-64 | ai:claude
+    if !force_parent {
+        let parent_for_guard = match &rel_type {
+            RelationshipType::Child => Some(&to_req),
+            RelationshipType::Parent => Some(&from_req),
+            _ => None,
+        };
+        if let Some(p) = parent_for_guard {
+            if is_terminal_status(&p.status) {
+                anyhow::bail!(
+                    "parent {} is {} — adding new children to a closed parent is usually a mistake. \
+                     Pass `--force-parent` to override.",
+                    p.spec_id.as_deref().unwrap_or("?"),
+                    p.status,
+                );
+            }
+        }
+    }
 
     // Add the relationship
     store.add_relationship(&from_id, rel_type.clone(), &to_id, bidirectional)?;
@@ -15078,28 +16085,47 @@ fn list_relationships(storage: &Storage, id_str: &str) -> Result<()> {
 
             // Format the relationship description based on type
             let description = match &relationship.rel_type {
-                RelationshipType::Parent => format!("is parent of"),
-                RelationshipType::Child => format!("is child of"),
-                RelationshipType::Duplicate => format!("is duplicate of"),
-                RelationshipType::Verifies => format!("verifies"),
-                RelationshipType::VerifiedBy => format!("is verified by"),
-                RelationshipType::References => format!("references"),
-                RelationshipType::Custom(name) => format!("{}", name),
+                RelationshipType::Parent => "is parent of".to_string(),
+                RelationshipType::Child => "is child of".to_string(),
+                RelationshipType::Duplicate => "is duplicate of".to_string(),
+                RelationshipType::Verifies => "verifies".to_string(),
+                RelationshipType::VerifiedBy => "is verified by".to_string(),
+                RelationshipType::References => "references".to_string(),
+                RelationshipType::Custom(name) => name.clone(),
             };
 
-            println!(
-                "  {} {} ({}) - {}",
-                description.cyan(),
-                target_spec.yellow(),
-                target_req.id.to_string().dimmed(),
-                target_req.title
-            );
+            // BUG-53: tag rejected targets so a dangling-looking edge is
+            // recognizable as still-resolvable rather than removed.
+            // trace:BUG-53 | ai:claude
+            if matches!(target_req.status, RequirementStatus::Rejected) {
+                println!(
+                    "  {} {} {} ({}) - {}",
+                    description.cyan(),
+                    target_spec.yellow(),
+                    "[REJECTED]".red().bold(),
+                    target_req.id.to_string().dimmed(),
+                    target_req.title
+                );
+            } else {
+                println!(
+                    "  {} {} ({}) - {}",
+                    description.cyan(),
+                    target_spec.yellow(),
+                    target_req.id.to_string().dimmed(),
+                    target_req.title
+                );
+            }
         } else {
+            // BUG-53: shorten dangling target uuid + flag it as removed so
+            // the line reads as a tombstone rather than a phantom.
+            // trace:BUG-53 | ai:claude
+            let uuid_str = relationship.target_id.to_string();
+            let short = &uuid_str[..uuid_str.len().min(8)];
             println!(
                 "  {} {} {}",
                 relationship.rel_type.to_string().cyan(),
-                relationship.target_id.to_string().yellow(),
-                "(requirement not found)".red()
+                short.dimmed(),
+                "(removed — run `aida doctor verify-relationships --repair` to clean up)".red()
             );
         }
     }
@@ -19345,6 +20371,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             top,
             bottom,
             before,
+            after,
         } => {
             let user_id = std::env::var("AIDA_USER")
                 .or_else(|_| std::env::var("USER"))
@@ -19358,7 +20385,22 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             }
             .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
 
-            let entries = storage.queue_list(&user_id, true)?;
+            let mut entries = storage.queue_list(&user_id, true)?;
+            // STORY-72: queues created before the queue_add sentinel-fix
+            // can have every entry at `position: i64::MAX`, which makes
+            // any --before/--after/--top math unable to produce a
+            // distinct-sorting result. Detect that state and lay down
+            // properly-gapped positions (preserving display order) before
+            // we compute the new slot. trace:STORY-72 | ai:claude
+            if entries.iter().any(|e| e.position == i64::MAX) {
+                let renumber: Vec<(uuid::Uuid, i64)> = entries
+                    .iter()
+                    .enumerate()
+                    .map(|(i, e)| (e.requirement_id, (i as i64 + 1) * 1000))
+                    .collect();
+                storage.queue_reorder(&user_id, &renumber)?;
+                entries = storage.queue_list(&user_id, true)?;
+            }
             let new_position = if *top {
                 entries.first().map(|e| e.position - 1000).unwrap_or(0)
             } else if *bottom {
@@ -19370,14 +20412,48 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     store.get_requirement_by_spec_id(before_id)
                 }
                 .ok_or_else(|| not_found::requirement_not_found(before_id, Some(storage.path())))?;
-
+                if before_req.id == req.id {
+                    anyhow::bail!("--before target is the same as the moved item");
+                }
                 entries
                     .iter()
                     .find(|e| e.requirement_id == before_req.id)
-                    .map(|e| e.position - 1)
-                    .unwrap_or(0)
+                    .ok_or_else(|| anyhow::anyhow!(
+                        "{} is not in the queue", before_id
+                    ))
+                    .map(|e| e.position - 1)?
+            } else if let Some(ref after_id) = after {
+                // STORY-72: --after Y places X immediately after Y in the
+                // queue. Symmetric to --before. Midpoint math against the
+                // successor avoids the naive `Y.pos + 1` collision when the
+                // queue happens to be densely-packed; falls back to
+                // `Y.pos + 1000` when Y is at the bottom.
+                // trace:STORY-72 | ai:claude
+                let after_req = if let Ok(uuid) = uuid::Uuid::parse_str(after_id) {
+                    store.requirements.iter().find(|r| r.id == uuid)
+                } else {
+                    store.get_requirement_by_spec_id(after_id)
+                }
+                .ok_or_else(|| not_found::requirement_not_found(after_id, Some(storage.path())))?;
+                if after_req.id == req.id {
+                    anyhow::bail!("--after target is the same as the moved item");
+                }
+                let anchor_pos = entries
+                    .iter()
+                    .find(|e| e.requirement_id == after_req.id)
+                    .ok_or_else(|| anyhow::anyhow!(
+                        "{} is not in the queue", after_id
+                    ))?
+                    .position;
+                // Successor is the next entry strictly after the anchor in
+                // sorted-by-position order. queue_list already returns sorted.
+                let successor_pos = entries
+                    .iter()
+                    .find(|e| e.position > anchor_pos)
+                    .map(|e| e.position);
+                position_after(anchor_pos, successor_pos)
             } else {
-                anyhow::bail!("Specify --top, --bottom, or --before <ID>");
+                anyhow::bail!("Specify --top, --bottom, --before <ID>, or --after <ID>");
             };
 
             storage.queue_reorder(&user_id, &[(req.id, new_position)])?;

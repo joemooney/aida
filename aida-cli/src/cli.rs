@@ -494,6 +494,13 @@ pub enum SessionCommand {
     /// leave the branch alone (merge/discard is up to the user). When
     /// `id` is omitted, ends the session whose lease names this cwd's
     /// worktree.
+    ///
+    /// As a side effect, when the just-ended session's branch has an
+    /// open PR (detected via `gh`), files a Story-typed review item
+    /// routed to the `reviewer` role with `implements` relations to
+    /// every spec referenced in the PR's commit messages — so a
+    /// forgotten `gh pr create` doesn't leave the reviewer unaware.
+    /// trace:STORY-66 | ai:claude
     End {
         /// Session id (8-char prefix accepted) to end. Omit to end the
         /// session matching the current cwd.
@@ -533,6 +540,34 @@ pub enum SessionCommand {
         /// covering cwd, or — if cwd doesn't help — the lease whose
         /// creator_pid is in this shell's ancestor chain.
         id: Option<String>,
+    },
+
+    /// Delete Claude Code session metadata (`.jsonl` files under
+    /// `~/.claude/projects/<encoded>/`) older than N days. Walks the
+    /// current project + the parent project (when run inside a session
+    /// worktree). Skips any project dir corresponding to an active
+    /// `aida session` lease — a defensive guard so the user can run
+    /// prune from anywhere without clobbering work in progress.
+    ///
+    /// Default behavior shows the candidates and asks for confirmation.
+    /// Use `--dry-run` to preview without prompting, `--yes` to skip
+    /// the prompt and delete. Each deletion is appended to
+    /// `<project>/.aida/session-prune.log` so the action is auditable.
+    /// trace:STORY-60 | ai:claude
+    Prune {
+        /// Delete `.jsonl` files older than N days. Default 30.
+        #[clap(long, default_value = "30")]
+        days: u32,
+
+        /// Show what would be deleted without touching anything. Use
+        /// to preview before committing to a real prune.
+        #[clap(long)]
+        dry_run: bool,
+
+        /// Skip the y/N confirmation. Without `--dry-run`, deletes
+        /// immediately after printing the candidate list.
+        #[clap(long, short = 'y')]
+        yes: bool,
     },
 }
 
@@ -578,6 +613,12 @@ pub enum RoleCommand {
     Show {
         name: Option<String>,
     },
+
+    /// Print the active role's name and exit, or exit 1 with empty
+    /// stdout when no role is active. Pure read of `$AIDA_SESSION_ROLE`
+    /// — no project-store load. Shell-friendly counterpart to
+    /// `git branch --show-current`. trace:TASK-42 | ai:claude
+    Active,
 
     /// Deactivate the current role (state preserved). Outputs shell code:
     ///   `eval "$(aida role end)"`
@@ -1391,6 +1432,13 @@ pub enum RelationshipCommand {
         /// Create bidirectional relationship (adds inverse relationship automatically)
         #[clap(long, short = 'b')]
         bidirectional: bool,
+
+        /// Override the BUG-64 guard that refuses `--type child` when
+        /// the target (the parent) is in a terminal status
+        /// (Completed/Rejected). Use when intentionally backfilling a
+        /// forgotten child onto a closed epic. trace:BUG-64 | ai:claude
+        #[clap(long)]
+        force_parent: bool,
     },
 
     /// Remove a relationship between requirements
@@ -1704,6 +1752,13 @@ pub enum QueueCommand {
         /// Move before this requirement ID
         #[clap(long)]
         before: Option<String>,
+        /// Move immediately after this requirement ID — symmetric to
+        /// `--before`. Useful for "put X right after Y" reasoning, and
+        /// for inserting a cluster of items after a single anchor
+        /// without each move shifting the previous one further from the
+        /// anchor. trace:STORY-72 | ai:claude
+        #[clap(long)]
+        after: Option<String>,
     },
     /// Clear queue entries
     Clear {
@@ -1808,6 +1863,13 @@ pub enum Command {
         /// Parent requirement ID (UUID or SPEC-ID) to link as child
         #[clap(long)]
         parent: Option<String>,
+
+        /// Override the BUG-64 guard that refuses `--parent <X>` when X
+        /// is in a terminal status (Completed/Rejected). Use when
+        /// intentionally backfilling a forgotten child onto a closed
+        /// epic for traceability. trace:BUG-64 | ai:claude
+        #[clap(long)]
+        force_parent: bool,
 
         /// Use interactive mode (prompts)
         #[clap(long)]
@@ -1995,6 +2057,20 @@ pub enum Command {
         /// before pushing. Same as `aida db sync --message`.
         #[clap(long, short = 'm')]
         message: Option<String>,
+    },
+
+    /// Pull code AND the AIDA orphan store in one shot. Symmetric to
+    /// `aida push`: equivalent to `git pull --ff-only` on the current
+    /// branch followed by `aida db sync --pull`. Skips a leg cleanly
+    /// when there's nothing to pull (no upstream tracked, no orphan
+    /// remote). trace:TASK-43 | ai:claude
+    Pull {
+        /// Skip the code pull (only sync the orphan store).
+        #[clap(long, conflicts_with = "store_only")]
+        code_only: bool,
+        /// Skip the orphan-store sync (only `git pull`).
+        #[clap(long, conflicts_with = "code_only")]
+        store_only: bool,
     },
 
     /// AIDA-developer-only commands: activate the in-repo dev binary,
