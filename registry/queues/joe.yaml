@@ -1,1 +1,6 @@
-[]
+- user_id: joe
+  requirement_id: 019e0ff3-8046-7621-9e39-57216fca5308
+  position: 9223372036854775807
+  added_by: joe
+  added_at: 2026-05-10T03:39:46.982521005Z
+  for_role: implementer
