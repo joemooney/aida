@@ -1,0 +1,50 @@
+id: 019e12f8-7fac-7b00-978b-ea133369a89a
+spec_id: TASK-49
+agreed_id: TASK-49
+title: 'aida role enter Last-touched: show titles alongside SPEC-IDs'
+description: |
+  Caught 2026-05-10 — `aida role enter <role>` shows past activity as bare SPEC-IDs:
+
+  ```
+  Last touched while in this role:
+      STORY-55 — edit (11h ago)
+      STORY-53 — edit (11h ago)
+      ...
+  ```
+
+  User has to remember (or look up) what STORY-55 was. `aida queue list` already shows id + title together; this section should match.
+
+  ## Desired
+
+  ```
+  Last touched while in this role:
+      STORY-55  Lease enforcement: respect cwd ownership          edit (11h ago)
+      STORY-53  Statusline sess:<scope> segment                   edit (11h ago)
+      ...
+  ```
+
+  Truncate long titles to fit terminal width (e.g., max 60 chars + ellipsis), aligned columns.
+
+  ## Implementation
+
+  In the role-enter activity-display path (~aida-cli/src/main.rs in the role enter handler), each entry resolution already loads enough to know spec_id; extend to also fetch title. Cheap — these are typically 5 entries, one cache lookup each.
+
+  Falls back to bare id if title can't be resolved (e.g., req was deleted since the activity entry).
+
+  ## Composes with
+
+  - TASK-48 (role enter: show queue head) — similar enrichment in the same screen; both sections benefit from titles
+  - BUG-65 (activity log not bumping on edit) — once that lands, Last-touched will be more comprehensive AND more useful with titles
+
+  ## Acceptance
+
+  - [ ] Last-touched rows show id + title (truncated to fit) + action + relative time
+  - [ ] Title resolution falls back gracefully if req was deleted/renamed
+  - [ ] Same column alignment as `aida queue list`
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T17:38:56.044230560Z
+modified_at: 2026-05-10T17:38:56.044230560Z
+req_type: Task
