@@ -11265,6 +11265,144 @@ fn sha_prefix_match(a: &str, b: &str) -> bool {
     a[..min].eq_ignore_ascii_case(&b[..min])
 }
 
+/// Statusline cache freshness state. Two independent axes folded into a
+/// single label by severity:
+///   1. cache.db vs local orphan branch HEAD — `Stale` when they differ
+///      (next read will rebuild the cache).
+///   2. local orphan branch HEAD vs `origin/aida-store` — `Behind` when
+///      local lags origin (run `aida db sync --pull`).
+/// `Unknown` covers "can't tell about origin yet" — either no recent
+/// fetch (STORY-79 hasn't run, or it's been >threshold) or no
+/// `origin/aida-store` ref locally. `Fresh` is the all-good state and
+/// doesn't render. trace:STORY-78 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CacheFreshness {
+    Fresh,
+    Stale,
+    Behind,
+    Unknown,
+}
+
+impl CacheFreshness {
+    /// One-letter label used by statusline. None means "don't render"
+    /// (the Fresh case — boring, hide it). trace:STORY-78 | ai:claude
+    fn label(self) -> Option<&'static str> {
+        match self {
+            CacheFreshness::Fresh => None,
+            CacheFreshness::Stale => Some("stale"),
+            CacheFreshness::Behind => Some("behind"),
+            CacheFreshness::Unknown => Some("?"),
+        }
+    }
+}
+
+/// Decide which freshness state to render given pre-collected inputs.
+/// Pure — no I/O, no env reads — so the precedence rules can be
+/// exhaustively tested. trace:STORY-78 | ai:claude
+fn classify_cache_freshness(
+    recorded_cache_sha: Option<&str>,
+    local_sha: &str,
+    origin_sha: Option<&str>,
+    last_fetch_age_secs: Option<u64>,
+    freshness_threshold_secs: u64,
+) -> CacheFreshness {
+    // No local store → no signal to render at all. Caller suppresses.
+    if local_sha.is_empty() {
+        return CacheFreshness::Unknown;
+    }
+    // Axis 1: cache vs local. Stale wins over every other state because
+    // the immediate consequence (slow next read while cache rebuilds) is
+    // user-visible regardless of remote state.
+    let cache_matches_local = recorded_cache_sha
+        .map(|r| sha_prefix_match(r, local_sha))
+        .unwrap_or(false);
+    if !cache_matches_local {
+        return CacheFreshness::Stale;
+    }
+    // Axis 2: local vs origin. Requires both a recent fetch AND a known
+    // origin SHA — either missing collapses to Unknown rather than
+    // false-fresh. STORY-79 is the producer of the last-fetch timestamp;
+    // until it ships, last_fetch_age_secs is always None and we render
+    // `?` whenever cache matches local. trace:STORY-79 | ai:claude
+    let fetch_is_recent = last_fetch_age_secs
+        .map(|age| age <= freshness_threshold_secs)
+        .unwrap_or(false);
+    if !fetch_is_recent {
+        return CacheFreshness::Unknown;
+    }
+    match origin_sha {
+        None => CacheFreshness::Unknown,
+        Some(o) if sha_prefix_match(o, local_sha) => CacheFreshness::Fresh,
+        Some(_) => CacheFreshness::Behind,
+    }
+}
+
+/// Read `~/.aida/cache/last-fetch.toml` and return the age (in seconds)
+/// of the most recent successful fetch for `project_root`. Returns None
+/// when the file is absent, the entry is missing, the last result was
+/// an error, or the timestamp is unparseable — all of which collapse to
+/// "Unknown" in the freshness classifier. trace:STORY-78 | ai:claude
+fn read_last_fetch_age_secs(project_root: &std::path::Path) -> Option<u64> {
+    let home = dirs::home_dir()?;
+    let toml_path = home.join(".aida/cache/last-fetch.toml");
+    let raw = std::fs::read_to_string(&toml_path).ok()?;
+    let value: toml::Value = toml::from_str(&raw).ok()?;
+    // Schema (per STORY-79): top-level keys are project root absolute
+    // paths; each entry is a table { last_fetch = "<rfc3339>", result =
+    // "ok" | "error" }. Look up by canonical project_root path.
+    let canon = project_root.canonicalize().ok()?;
+    let key = canon.to_string_lossy();
+    let entry = value.get(key.as_ref())?;
+    let result = entry.get("result").and_then(|v| v.as_str()).unwrap_or("ok");
+    if result != "ok" {
+        return None;
+    }
+    let ts_str = entry.get("last_fetch").and_then(|v| v.as_str())?;
+    let ts = chrono::DateTime::parse_from_rfc3339(ts_str).ok()?;
+    let now = chrono::Utc::now();
+    let age = now.signed_duration_since(ts.with_timezone(&chrono::Utc));
+    let secs = age.num_seconds();
+    if secs < 0 { Some(0) } else { Some(secs as u64) }
+}
+
+/// `git rev-parse origin/aida-store` against the orphan-store worktree.
+/// Returns None when the ref doesn't exist (no remote configured, never
+/// fetched) or the git invocation otherwise fails. The caller maps None
+/// to `CacheFreshness::Unknown` rather than treating it as
+/// "no-difference". trace:STORY-78 | ai:claude
+fn rev_parse_origin_aida_store(project_root: &std::path::Path) -> Option<String> {
+    let store_path = if project_root.join(".aida-store").exists() {
+        project_root.join(".aida-store")
+    } else if project_root.join("aida-store").exists() {
+        project_root.join("aida-store")
+    } else {
+        return None;
+    };
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&store_path)
+        .args(["rev-parse", "--short", "origin/aida-store"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if s.is_empty() { None } else { Some(s) }
+}
+
+/// Threshold above which a last-fetch timestamp is treated as "stale"
+/// (i.e. we render `cache:?` rather than `cache:fresh|behind`). Matches
+/// STORY-79's default background-fetch interval so a single missed fetch
+/// cycle is the boundary. Overridable via `AIDA_FETCH_FRESHNESS_SECS` so
+/// CI / tests can dial it without hardcoding `300`. trace:STORY-78 | ai:claude
+fn cache_freshness_threshold_secs() -> u64 {
+    std::env::var("AIDA_FETCH_FRESHNESS_SECS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(300)
+}
+
 #[cfg(test)]
 mod statusline_tests {
     use super::*;
@@ -11294,6 +11432,110 @@ mod statusline_tests {
         assert!(sha_prefix_match("", ""));
         assert!(!sha_prefix_match("", "abc"));
         assert!(!sha_prefix_match("abc", ""));
+    }
+
+    // ── classify_cache_freshness ──
+    // STORY-78: pure decision function for cache:fresh|stale|behind|?.
+    // trace:STORY-78 | ai:claude
+
+    /// Cache SHA matches local AND fetch is recent AND origin matches → Fresh.
+    #[test]
+    fn freshness_all_aligned_is_fresh() {
+        let r = classify_cache_freshness(
+            Some("abc1234"),
+            "abc1234",
+            Some("abc1234"),
+            Some(60),
+            300,
+        );
+        assert_eq!(r, CacheFreshness::Fresh);
+    }
+
+    /// Cache SHA != local → Stale. Wins over every other axis because the
+    /// next read will pay the rebuild cost regardless of origin state.
+    #[test]
+    fn freshness_cache_mismatch_is_stale_even_when_origin_fresh() {
+        let r = classify_cache_freshness(
+            Some("aaaaaaa"),
+            "bbbbbbb",
+            Some("bbbbbbb"),
+            Some(60),
+            300,
+        );
+        assert_eq!(r, CacheFreshness::Stale);
+    }
+
+    /// recorded_sha=None counts as stale (cache hasn't recorded HEAD yet
+    /// or schema row is missing).
+    #[test]
+    fn freshness_missing_cache_sha_is_stale() {
+        let r = classify_cache_freshness(
+            None, "abc1234", Some("abc1234"), Some(60), 300,
+        );
+        assert_eq!(r, CacheFreshness::Stale);
+    }
+
+    /// Cache matches local, fetch is recent, origin differs → Behind.
+    #[test]
+    fn freshness_local_lags_origin_is_behind() {
+        let r = classify_cache_freshness(
+            Some("aaaaaaa"),
+            "aaaaaaa",
+            Some("bbbbbbb"),
+            Some(60),
+            300,
+        );
+        assert_eq!(r, CacheFreshness::Behind);
+    }
+
+    /// Cache matches local, fetch is recent, origin ref missing → Unknown
+    /// (we don't know whether we lag, so don't render false-fresh).
+    #[test]
+    fn freshness_origin_ref_missing_is_unknown() {
+        let r = classify_cache_freshness(
+            Some("aaaaaaa"), "aaaaaaa", None, Some(60), 300,
+        );
+        assert_eq!(r, CacheFreshness::Unknown);
+    }
+
+    /// Cache matches local, fetch timestamp absent → Unknown. This is the
+    /// dominant state until STORY-79 starts writing last-fetch.toml.
+    #[test]
+    fn freshness_no_last_fetch_is_unknown() {
+        let r = classify_cache_freshness(
+            Some("aaaaaaa"), "aaaaaaa", Some("aaaaaaa"), None, 300,
+        );
+        assert_eq!(r, CacheFreshness::Unknown);
+    }
+
+    /// Cache matches local, fetch is OLDER than threshold → Unknown.
+    /// Equal-to-threshold counts as fresh (<= boundary).
+    #[test]
+    fn freshness_stale_fetch_is_unknown() {
+        let r = classify_cache_freshness(
+            Some("aaaaaaa"), "aaaaaaa", Some("aaaaaaa"), Some(301), 300,
+        );
+        assert_eq!(r, CacheFreshness::Unknown);
+    }
+
+    /// Empty local SHA (no orphan store) → Unknown. Caller suppresses
+    /// rendering in this case anyway (cache.db wouldn't exist either),
+    /// but the classifier shouldn't claim Stale or Fresh from nothing.
+    #[test]
+    fn freshness_no_local_store_is_unknown() {
+        let r = classify_cache_freshness(
+            Some("aaaaaaa"), "", Some("bbbbbbb"), Some(60), 300,
+        );
+        assert_eq!(r, CacheFreshness::Unknown);
+    }
+
+    /// Label mapping: Fresh suppressed, others render the documented strings.
+    #[test]
+    fn freshness_label_mapping() {
+        assert_eq!(CacheFreshness::Fresh.label(), None);
+        assert_eq!(CacheFreshness::Stale.label(), Some("stale"));
+        assert_eq!(CacheFreshness::Behind.label(), Some("behind"));
+        assert_eq!(CacheFreshness::Unknown.label(), Some("?"));
     }
 
     /// STORY-66: the auto-queue hook parses `aida add`'s spec_id out of a
@@ -12885,12 +13127,13 @@ fn handle_statusline_command(color: &str) -> Result<()> {
 
     let role = std::env::var("AIDA_SESSION_ROLE").ok();
 
-    // Cache stats — fast SQLite lookups, no rebuild. Only used now for
-    // the cache:fresh|stale label; the requirement count is no longer
-    // surfaced (FR-1-041 swapped reqs:N for queue depth, which is more
-    // actionable).
+    // Cache freshness state. Folds two axes (cache vs local, local vs
+    // origin) into one severity-ordered label. None when there's no
+    // cache.db yet (fresh `aida init` with no reads). Render contract
+    // below: skip `Fresh`, surface everything else.
+    // trace:STORY-78 | ai:claude
     let cache_path = project_root.join(".aida/cache.db");
-    let cache_label = if cache_path.exists() {
+    let cache_freshness = if cache_path.exists() {
         match rusqlite::Connection::open_with_flags(
             &cache_path,
             rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
@@ -12903,7 +13146,7 @@ fn handle_statusline_command(color: &str) -> Result<()> {
                         |r| r.get(0),
                     )
                     .ok();
-                let actual_sha = aida_core::git_ops::head_sha(
+                let local_sha = aida_core::git_ops::head_sha(
                     &project_root.join(".aida-store"),
                 )
                 .ok()
@@ -12911,19 +13154,15 @@ fn handle_statusline_command(color: &str) -> Result<()> {
                     aida_core::git_ops::head_sha(&project_root.join("aida-store")).ok()
                 })
                 .unwrap_or_default();
-                // Prefix-tolerant equality: cache.set_source_head_sha is
-                // called with whatever `git_ops::head_sha` returns (today
-                // that's `git rev-parse --short HEAD` → 7 chars), but
-                // older aida versions and `cache rebuild` paths have
-                // historically stored full 40-char SHAs in some installs.
-                // Treat either side as a prefix-match of the other so
-                // statusline doesn't false-positive on the mixed form.
-                // trace:TASK-1-045 | ai:claude
-                let stale = recorded_sha
-                    .as_deref()
-                    .map(|recorded| !sha_prefix_match(recorded, &actual_sha))
-                    .unwrap_or(true);
-                Some(if !actual_sha.is_empty() && stale { "stale" } else { "fresh" })
+                let origin_sha = rev_parse_origin_aida_store(&project_root);
+                let last_fetch_age = read_last_fetch_age_secs(&project_root);
+                Some(classify_cache_freshness(
+                    recorded_sha.as_deref(),
+                    &local_sha,
+                    origin_sha.as_deref(),
+                    last_fetch_age,
+                    cache_freshness_threshold_secs(),
+                ))
             }
             Err(_) => None,
         }
@@ -12998,14 +13237,20 @@ fn handle_statusline_command(color: &str) -> Result<()> {
     if queue_depth > 0 {
         parts.push(format!("q:{}", queue_depth));
     }
-    // Cache freshness: only surface when stale. Fresh is the boring
-    // default and the cache is self-healing on the next read, so showing
-    // `cache:fresh` on every prompt is noise. Stale stays — red — so the
-    // user sees that the next read will trigger a rebuild.
-    // trace:TASK-1-045 | ai:claude
-    if let Some(l) = cache_label {
-        if l != "fresh" {
-            parts.push(format!("cache:{}", l).red().to_string());
+    // Cache freshness: only surface non-fresh states. Fresh is the boring
+    // default; rendering it on every prompt is noise.
+    //   stale  → red    (cache lags local; next read rebuilds — slow)
+    //   behind → red    (local lags origin; run `aida db sync --pull`)
+    //   ?      → yellow (origin freshness unknown — STORY-79 not run lately
+    //                    or no origin/aida-store ref; informational, not red)
+    // trace:STORY-78 | ai:claude
+    if let Some(f) = cache_freshness {
+        if let Some(label) = f.label() {
+            let colored = match f {
+                CacheFreshness::Unknown => format!("cache:{}", label).yellow().to_string(),
+                _ => format!("cache:{}", label).red().to_string(),
+            };
+            parts.push(colored);
         }
     }
     // sess:<scope> segment — emitted whenever cwd resolves into an active
