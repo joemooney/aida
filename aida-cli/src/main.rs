@@ -6576,7 +6576,11 @@ fn handle_doctor_command(cmd: &cli::DoctorCommand) -> Result<()> {
         cli::DoctorCommand::VerifyRelationships { repair, yes } => {
             doctor_verify_relationships(*repair, *yes)
         }
-        cli::DoctorCommand::ValidateTraceComments => doctor_validate_trace_comments(),
+        cli::DoctorCommand::ValidateTraceComments {
+            strip_dangling,
+            dry_run,
+            yes,
+        } => doctor_validate_trace_comments(*strip_dangling, *dry_run, *yes),
         cli::DoctorCommand::Fsck => doctor_fsck(),
     }
 }
@@ -6767,8 +6771,9 @@ fn doctor_verify_relationships(repair: bool, yes: bool) -> Result<()> {
 
 /// Walk source files under the project root for `trace:<SPEC-ID>`
 /// patterns and verify each spec_id resolves to a requirement in the
-/// store. Read-only. trace:EPIC-19 | ai:claude
-fn doctor_validate_trace_comments() -> Result<()> {
+/// store. With `strip_dangling`, rewrites source files to remove the
+/// dangling trace markers. trace:EPIC-19 | ai:claude
+fn doctor_validate_trace_comments(strip_dangling: bool, dry_run: bool, yes: bool) -> Result<()> {
     let project_root = find_project_root()?;
     let store_path = project_root.join(".aida-store");
     let objects_root = store_path.join("objects");
@@ -6849,9 +6854,229 @@ fn doctor_validate_trace_comments() -> Result<()> {
         }
         println!();
     }
-    println!("Likely causes: req was deleted, or a typo. Either delete the");
-    println!("trace comment or update it to reference an existing spec_id.");
-    std::process::exit(1);
+    if !strip_dangling {
+        println!("Likely causes: req was deleted, or a typo. Either delete the");
+        println!("trace comment or update it to reference an existing spec_id.");
+        println!();
+        println!("To strip these in-place: {}", "aida doctor validate-trace-comments --strip-dangling".cyan());
+        std::process::exit(1);
+    }
+
+    // --- strip-dangling path ---
+    let dangling_set: std::collections::HashSet<String> =
+        orphan_specs.iter().map(|s| (*s).clone()).collect();
+
+    println!(
+        "{} {} reference(s) across {} unique spec_ids will be stripped.",
+        "Plan:".yellow().bold(),
+        by_spec
+            .iter()
+            .filter(|(s, _)| dangling_set.contains(*s))
+            .map(|(_, v)| v.len())
+            .sum::<usize>(),
+        dangling_set.len()
+    );
+
+    if dry_run {
+        println!();
+        let stats = strip_dangling_traces(&project_root, &dangling_set, true)?;
+        println!(
+            "→ dry-run: would delete {} whole line(s) and modify {} other line(s) across {} file(s).",
+            stats.lines_deleted, stats.lines_modified, stats.files_changed
+        );
+        return Ok(());
+    }
+
+    if !yes {
+        use std::io::Write;
+        print!("Strip dangling trace annotations from source files? [y/N] ");
+        std::io::stdout().flush()?;
+        let mut ans = String::new();
+        std::io::stdin().read_line(&mut ans)?;
+        if !matches!(ans.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+            println!("Aborted.");
+            return Ok(());
+        }
+    }
+
+    let stats = strip_dangling_traces(&project_root, &dangling_set, false)?;
+    println!(
+        "{} stripped {} line(s) (deleted {} whole, modified {} mixed) across {} file(s).",
+        "✓".green().bold(),
+        stats.lines_deleted + stats.lines_modified,
+        stats.lines_deleted,
+        stats.lines_modified,
+        stats.files_changed
+    );
+    println!(
+        "  Review the diff: {}",
+        "git diff".cyan()
+    );
+    Ok(())
+}
+
+#[derive(Default)]
+struct StripStats {
+    files_changed: usize,
+    lines_deleted: usize,
+    lines_modified: usize,
+}
+
+/// Walk every text source file under `root` and either delete or modify
+/// any line containing `trace:<DANGLING>` per the dangling_ids set.
+/// When `dry_run`, returns counts without writing. trace:EPIC-19
+fn strip_dangling_traces(
+    root: &std::path::Path,
+    dangling_ids: &std::collections::HashSet<String>,
+    dry_run: bool,
+) -> Result<StripStats> {
+    let mut stats = StripStats::default();
+    strip_dangling_walk(root, root, dangling_ids, dry_run, &mut stats);
+    Ok(stats)
+}
+
+fn strip_dangling_walk(
+    root: &std::path::Path,
+    project_root: &std::path::Path,
+    dangling_ids: &std::collections::HashSet<String>,
+    dry_run: bool,
+    stats: &mut StripStats,
+) {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+        if path.is_dir() {
+            if matches!(
+                name,
+                ".git" | ".aida-store" | ".aida" | "target" | "node_modules"
+                    | "dist" | "build" | ".cache" | ".venv" | "venv"
+            ) {
+                continue;
+            }
+            strip_dangling_walk(&path, project_root, dangling_ids, dry_run, stats);
+            continue;
+        }
+        let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+        let probably_text = matches!(
+            ext,
+            "rs" | "py" | "ts" | "tsx" | "js" | "jsx" | "go" | "java"
+                | "c" | "cpp" | "h" | "hpp" | "cs" | "rb" | "sh" | "md"
+                | "toml" | "yaml" | "yml" | "json"
+        );
+        if !probably_text {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        // Quick scan: any dangling id present?
+        let mut had_match = false;
+        for id in dangling_ids {
+            if content.contains(&format!("trace:{}", id)) {
+                had_match = true;
+                break;
+            }
+        }
+        if !had_match {
+            continue;
+        }
+
+        let (new_content, deleted, modified) = rewrite_strip_dangling(&content, dangling_ids);
+        if new_content == content {
+            continue;
+        }
+        stats.files_changed += 1;
+        stats.lines_deleted += deleted;
+        stats.lines_modified += modified;
+        if !dry_run {
+            let _ = std::fs::write(&path, new_content);
+        }
+    }
+}
+
+/// Pure transform: take a file's content and the dangling-id set,
+/// return (new_content, lines_deleted, lines_modified). A line is
+/// "deleted" when the only meaningful content was the trace marker
+/// (post-strip, only a comment marker remains); otherwise the trace
+/// fragment is excised and the line is "modified". trace:EPIC-19
+fn rewrite_strip_dangling(
+    content: &str,
+    dangling_ids: &std::collections::HashSet<String>,
+) -> (String, usize, usize) {
+    use regex::Regex;
+    // Match `trace:<ID> | ai:<tool>(:<conf>)?` fragments. Capture the
+    // id so we can check it against the dangling set.
+    let frag_re =
+        Regex::new(r"trace:([A-Z]+(?:-[A-Z0-9]+)?-[0-9]+(?:-[0-9]+)?)\s*\|\s*ai:[a-zA-Z]+(?::(?:high|med|low))?")
+            .unwrap();
+
+    let mut out = String::with_capacity(content.len());
+    let mut deleted = 0;
+    let mut modified = 0;
+
+    for line in content.lines() {
+        // Does this line contain a dangling trace?
+        let mut should_strip = false;
+        for cap in frag_re.captures_iter(line) {
+            if let Some(m) = cap.get(1) {
+                if dangling_ids.contains(m.as_str()) {
+                    should_strip = true;
+                    break;
+                }
+            }
+        }
+        if !should_strip {
+            out.push_str(line);
+            out.push('\n');
+            continue;
+        }
+
+        // Strip every dangling trace fragment from this line.
+        let stripped = frag_re
+            .replace_all(line, |caps: &regex::Captures| {
+                let id = caps.get(1).map(|m| m.as_str()).unwrap_or("");
+                if dangling_ids.contains(id) {
+                    String::new()
+                } else {
+                    caps.get(0).map(|m| m.as_str().to_string()).unwrap_or_default()
+                }
+            })
+            .into_owned();
+
+        // Decide: delete the whole line if what remains is just a
+        // comment marker (no content), or modify (keep the line with
+        // the fragment removed).
+        let trimmed = stripped.trim();
+        let is_just_marker = matches!(
+            trimmed,
+            "" | "//" | "///" | "//!" | "/*" | "*/" | "*" | "#"
+        ) || trimmed.starts_with("// ") && trimmed.trim_end_matches(' ').len() <= 3;
+
+        if is_just_marker {
+            deleted += 1;
+            // skip — don't push this line
+        } else {
+            modified += 1;
+            // Clean up double-spaces left behind by the strip.
+            let cleaned = stripped
+                .replace("  ", " ")
+                .trim_end()
+                .to_string();
+            out.push_str(&cleaned);
+            out.push('\n');
+        }
+    }
+
+    // Preserve trailing newline behavior (str.lines() drops it; if the
+    // original content ended without a newline, drop our trailing one).
+    if !content.ends_with('\n') && out.ends_with('\n') {
+        out.pop();
+    }
+
+    (out, deleted, modified)
 }
 
 /// Recurse into source files looking for trace comments. Skips the
