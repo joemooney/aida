@@ -1681,6 +1681,53 @@ fn handle_git_backend_command(
                     record_role_activity(sid, "add");
                 }
 
+                // BUG-58: when adding from inside a session worktree
+                // WITHOUT --parent, hint that the session's scope is
+                // probably the right parent. Surfaced after the add line
+                // (rather than rejecting the call) so muscle-memory
+                // workflows don't break — the user can ignore it for
+                // off-topic reqs. Only fires when:
+                //   - the lease scope looks like a spec id (so we can
+                //     suggest a concrete `--parent`)
+                //   - the parent actually exists in the store
+                //   - the new req isn't already that scope's spec
+                // trace:BUG-58 | ai:claude
+                if parent.is_none() {
+                    if let Ok(project_root) = find_project_root() {
+                        if let Some(lease) = std::env::current_dir()
+                            .ok()
+                            .and_then(|cwd| active_lease_for_cwd(&project_root, &cwd))
+                        {
+                            let scope = lease.scope.clone();
+                            // Cheap heuristic for "looks like a spec id":
+                            // PREFIX-N format. Free-form scopes like
+                            // `feature:auth` or path globs don't match
+                            // and we stay quiet.
+                            if looks_like_spec_id(&scope)
+                                && backend
+                                    .get_requirement_by_spec_id(&scope)
+                                    .ok()
+                                    .flatten()
+                                    .is_some()
+                                && last.spec_id.as_deref() != Some(scope.as_str())
+                            {
+                                eprintln!(
+                                    "{} this session owns scope {}. \
+                                     If {} should be a child of it, link it now: \
+                                     `aida rel add --from {} --to {} --type child --bidirectional` \
+                                     (or pass `--parent {}` next time).",
+                                    "Hint:".dimmed(),
+                                    scope.cyan(),
+                                    last.spec_id.as_deref().unwrap_or("?").cyan(),
+                                    last.spec_id.as_deref().unwrap_or("?"),
+                                    scope,
+                                    scope,
+                                );
+                            }
+                        }
+                    }
+                }
+
                 // FR-215: --parent <id> establishes a parent relationship
                 // in the same shot. Resolve the parent (spec_id or uuid),
                 // append a Parent relationship to both reqs, persist.
@@ -3692,10 +3739,22 @@ fn add_requirement_cli(
         type_prefix.as_deref(),
     );
 
-    // Add parent relationship if specified
+    // Add parent relationship if specified.
+    //
+    // BUG-58: previously stored `(child, Parent, parent)` with
+    // bidirectional=false, which is doubly broken:
+    //   1. Relationship type is "I am X to target", so Parent on the
+    //      child says "I AM the parent of <parent>" — backwards.
+    //   2. Without bidirectional=true, the parent never gets the inverse
+    //      Parent edge pointing at the child, so `rel list <parent>`
+    //      didn't show its new child.
+    // Fix: store `Child` on the source (child) pointing at the parent,
+    // bidirectional so the parent gets the matching `Parent` edge.
+    // Matches the convention already used by the git-canonical add
+    // path (FR-215). trace:BUG-58 | ai:claude
     if let Some(parent_id) = parent_uuid {
         store
-            .add_relationship(&id, RelationshipType::Parent, &parent_id, false)
+            .add_relationship(&id, RelationshipType::Child, &parent_id, true)
             .map_err(|e| anyhow::anyhow!("Failed to add parent relationship: {}", e))?;
     }
 
