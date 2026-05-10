@@ -1,0 +1,57 @@
+id: 019e12d2-b239-7810-ae79-f6a84b70064e
+spec_id: STORY-79
+agreed_id: STORY-79
+title: Statusline does background fetch of origin/aida-store every N minutes (auto-freshness)
+description: |
+  Counterpart to the `cache:behind` indicator story. Without periodic fetches, the indicator can't know whether local lags origin.
+
+  ## Approach
+
+  `aida statusline` is the highest-frequency aida invocation (every shell prompt redraw). It can opportunistically fetch in the background:
+
+  1. On each statusline call, check `~/.aida/cache/last-fetch.toml` for this project's `<store-path>` entry.
+  2. If missing or older than 5 minutes (configurable), fork a background `git -C .aida-store/ fetch origin aida-store --prune` (no merge, no checkout — just updates `origin/aida-store` ref).
+  3. Return the statusline immediately based on the *current* state (don't wait for the fetch).
+  4. The fork's stdout/stderr is suppressed; failures are silent (offline, transient network).
+  5. Next statusline render after fetch completes will see the fresh `origin/aida-store` ref and emit `cache:behind` if local lags.
+
+  ## Why this composition
+
+  - **Fast statusline preserved**: no blocking network call. Statusline stays sub-50ms.
+  - **Always-fresh feel**: by the time the user types their next command, last-fetch is current.
+  - **Cheap**: a `git fetch` of just the orphan ref is small (KB scale, even on big stores).
+  - **Graceful**: works offline; just shows `cache:?` until next online statusline render.
+
+  ## Implementation notes
+
+  - Use `std::process::Command` with `.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn()` — fire-and-forget
+  - Store last-fetch timestamps per project at `~/.aida/cache/last-fetch.toml`:
+    ```toml
+    [["/home/joe/ai/aida"]]
+    last_fetch = "2026-05-10T12:34:56Z"
+    result = "ok"          # or "error" with message
+    ```
+  - Configurable via env: `AIDA_BG_FETCH_INTERVAL_SECS` (default 300)
+  - Disable via env: `AIDA_BG_FETCH=false`
+
+  ## Composes with
+
+  - The `cache:behind` indicator story — provides the data
+  - TASK-43 (`aida pull`) — when user does run pull, last-fetch should be updated to "now"
+
+  ## Acceptance
+
+  - [ ] Statusline forks background fetch when last-fetch >5min old
+  - [ ] Statusline returns immediately, no blocking
+  - [ ] Per-project last-fetch state persisted at `~/.aida/cache/last-fetch.toml`
+  - [ ] Configurable interval via env
+  - [ ] Disable via env (`AIDA_BG_FETCH=false`)
+  - [ ] Failures silent (no statusline noise on offline)
+  - [ ] Tested under: offline, slow network, fast network, multiple shells (no fetch storm — one in-flight at a time per project)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T16:57:38.617935878Z
+modified_at: 2026-05-10T16:57:38.617935878Z
+req_type: Story
