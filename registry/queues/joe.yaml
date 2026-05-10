@@ -70,10 +70,3 @@
   added_by: joe
   added_at: 2026-05-10T03:39:56.489589284Z
   for_role: implementer
-- user_id: joe
-  requirement_id: 019e0ff9-c372-71d1-88df-2242fc337dcf
-  position: 9223372036854775807
-  added_by: joe
-  note: verify-or-mitigate
-  added_at: 2026-05-10T03:54:16.211515912Z
-  for_role: implementer
