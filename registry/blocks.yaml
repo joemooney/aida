@@ -45,7 +45,7 @@ blocks:
   type_prefix: STORY
   range_start: 41
   range_end: 140
-  next: 72
+  next: 73
   allocated_at: 2026-05-09T04:40:37.967307234Z
 - node_id: '1'
   owner: joe
