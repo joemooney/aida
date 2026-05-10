@@ -1678,6 +1678,13 @@ pub enum Command {
         /// `--type meta`. trace:BUG-27 | ai:claude
         #[clap(long)]
         include_meta: bool,
+
+        /// Restrict the listing to direct children of <id> (UUID or
+        /// SPEC-ID). Composes with --status / --type / --tags etc., so
+        /// e.g. `aida list --parent EPIC-20 --status approved` shows
+        /// what's still open under that EPIC. trace:STORY-62 | ai:claude
+        #[clap(long, value_name = "ID")]
+        parent: Option<String>,
     },
 
     /// Show details for a specific requirement
@@ -1689,6 +1696,17 @@ pub enum Command {
         /// the count). Equivalent to following up with `aida comment list <ID>`.
         #[clap(long, short = 'c')]
         comments: bool,
+
+        /// Render an indented hierarchy of <id> and its descendants instead
+        /// of the standard detail view. Each row shows status + title.
+        /// trace:STORY-62 | ai:claude
+        #[clap(long)]
+        tree: bool,
+
+        /// Depth limit for `--tree` (default 3). Only meaningful with
+        /// `--tree`. trace:STORY-62 | ai:claude
+        #[clap(long, default_value = "3", value_name = "N")]
+        depth: usize,
     },
 
     /// Edit an existing requirement

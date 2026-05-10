@@ -1239,7 +1239,7 @@ fn handle_git_backend_command(
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::Session(_) => unreachable!("session is dispatched before storage init"),
-        Command::List { status, r#type, feature, tags, no_scope, show_origin, include_meta, .. } => {
+        Command::List { status, r#type, feature, tags, no_scope, show_origin, include_meta, parent, .. } => {
             // Cache-backed list (EPIC-1-001 Phase 2). The CachedGitBackend
             // ensures the cache is fresh before querying, so this is one
             // SQLite query instead of ~360 YAML reads.
@@ -1271,6 +1271,25 @@ fn handle_git_backend_command(
                 ..Default::default()
             };
             let mut reqs = backend.list_summaries(&filter)?;
+
+            // STORY-62: --parent <id> restricts to direct children of <id>.
+            // We don't materialize a parent->children index in the cache;
+            // for one parent it's a single YAML read to grab the
+            // relationships array, which is fast enough for the
+            // interactive `aida list` cadence.
+            // trace:STORY-62 | ai:claude
+            if let Some(parent_ref) = parent {
+                let parent_req = backend.get_requirement_by_spec_id(parent_ref)?
+                    .ok_or_else(|| anyhow::anyhow!(
+                        "--parent {}: requirement not found", parent_ref
+                    ))?;
+                let child_ids: HashSet<Uuid> = parent_req.relationships
+                    .iter()
+                    .filter(|r| r.rel_type == RelationshipType::Parent)
+                    .map(|r| r.target_id)
+                    .collect();
+                reqs.retain(|r| child_ids.contains(&r.id));
+            }
 
             // Hide META reqs (AI prompt customization seeded by init) from
             // the default view — they're plumbing, not user-authored work.
@@ -1725,8 +1744,27 @@ fn handle_git_backend_command(
                 }
             }
         }
-        Command::Show { id, comments } => {
+        Command::Show { id, comments, tree, depth } => {
             record_role_activity(id, "show");
+            // STORY-62: --tree replaces the detail view with an indented
+            // hierarchy walk. Children are read via rel_type:Parent edges
+            // on the parent's record; recursion descends until depth is
+            // exhausted or no more children. Hidden tradeoff: each level
+            // hits one more YAML read per visited node, but for typical
+            // EPIC trees (~50 nodes max) that's fine, and the user opts
+            // in. trace:STORY-62 | ai:claude
+            if *tree {
+                match backend.get_requirement_by_spec_id(id)? {
+                    Some(root) => render_tree(&backend, &root, *depth)?,
+                    None => {
+                        eprintln!(
+                            "{}",
+                            not_found::requirement_not_found(id, Some(store_path))
+                        );
+                    }
+                }
+                return Ok(());
+            }
             match backend.get_requirement_by_spec_id(id)? {
                 Some(req) => {
                     println!("{}: {}", "ID".bold(), req.display_id());
@@ -12571,6 +12609,71 @@ fn list_comments(storage: &Storage, req_id: &str) -> Result<()> {
         print_comment(comment, 0);
     }
 
+    Ok(())
+}
+
+/// Render `root` and its descendants as an indented tree, two spaces per
+/// level. Each node prints as `<status-glyph> <ID>  <Status>  <title>`.
+/// Children are walked via rel_type:Parent edges (AIDA's
+/// parent-points-at-child storage convention). Recursion stops at
+/// `max_depth` (the root is depth 0). Cycles are guarded by a visited
+/// set — defensive only; the data model shouldn't allow them.
+/// trace:STORY-62 | ai:claude
+fn render_tree(
+    backend: &aida_core::CachedGitBackend,
+    root: &Requirement,
+    max_depth: usize,
+) -> Result<()> {
+    let mut visited: HashSet<Uuid> = HashSet::new();
+    render_tree_node(backend, root, 0, max_depth, &mut visited)
+}
+
+fn render_tree_node(
+    backend: &aida_core::CachedGitBackend,
+    req: &Requirement,
+    depth: usize,
+    max_depth: usize,
+    visited: &mut HashSet<Uuid>,
+) -> Result<()> {
+    if !visited.insert(req.id) {
+        return Ok(()); // already rendered — treat as cycle, skip silently
+    }
+    let indent = "  ".repeat(depth);
+    let status = format!("{}", req.effective_status());
+    // Glyph hint without emoji (CLAUDE.md house rule): two-state mark on
+    // the most useful axis — completed vs everything else.
+    let glyph = if status.eq_ignore_ascii_case("completed") {
+        "✓".green().to_string()
+    } else {
+        "○".dimmed().to_string()
+    };
+    let id_label = req.display_id();
+    println!(
+        "{}{} {:<14} {:<12} {}",
+        indent,
+        glyph,
+        id_label,
+        status,
+        req.title,
+    );
+    if depth >= max_depth {
+        return Ok(());
+    }
+    // Collect direct children (Parent edges on this req point to children).
+    let mut children: Vec<Requirement> = Vec::new();
+    for rel in &req.relationships {
+        if rel.rel_type == RelationshipType::Parent {
+            if let Some(child) = backend.get_requirement(&rel.target_id)? {
+                children.push(child);
+            }
+        }
+    }
+    // Stable order: by display_id ascending so the same tree prints the
+    // same way across runs.
+    children.sort_by(|a, b| a.display_id().cmp(&b.display_id()));
+    for child in &children {
+        render_tree_node(backend, child, depth + 1, max_depth, visited)?;
+    }
     Ok(())
 }
 
