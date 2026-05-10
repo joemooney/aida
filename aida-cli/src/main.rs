@@ -8666,6 +8666,18 @@ fn session_end(id_query: Option<&str>, yes: bool) -> Result<()> {
         }
     }
 
+    // Snapshot the lease file's authoritative on-disk location BEFORE we
+    // touch the worktree's symlinks. When session_end runs from inside the
+    // worktree (the natural flow), `project_root` IS the worktree path —
+    // and `<worktree>/.aida/sessions/<id>.toml` traverses the symlink
+    // installed at session_start to reach the parent's real file. Once we
+    // strip that symlink (or git removes the whole worktree), the
+    // worktree-relative path stops resolving. canonicalize() follows the
+    // symlink now and gives us a stable target for the unlink later.
+    // trace:BUG-56 | ai:claude
+    let lease_file_via_symlink = lease_path(&project_root, &target.id);
+    let canonical_lease = lease_file_via_symlink.canonicalize().ok();
+
     // Clean the symlinks we created at session start before git tries to
     // remove the worktree — they count as untracked files and `git worktree
     // remove` would otherwise refuse without --force.
@@ -8692,6 +8704,32 @@ fn session_end(id_query: Option<&str>, yes: bool) -> Result<()> {
         }
     }
 
+    // Delete the lease file BEFORE removing the worktree. The canonical
+    // path resolved above points at the parent's sessions dir, so the
+    // unlink succeeds regardless of whether the worktree's symlink chain
+    // is still intact. Reporting is honest: success printed only on
+    // actual success; missing file is a quiet no-op (already-released
+    // lease from a previous partial run is fine); other errors warn so
+    // the user can clean up manually instead of trusting a stale "✓".
+    // trace:BUG-56 | ai:claude
+    let lease_target: &std::path::Path = canonical_lease
+        .as_deref()
+        .unwrap_or(&lease_file_via_symlink);
+    match std::fs::remove_file(lease_target) {
+        Ok(_) => println!("{} lease deleted", "✓".green()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // Already gone — keep quiet.
+        }
+        Err(e) => {
+            eprintln!(
+                "{} could not delete lease at {}: {} — remove manually",
+                "Warning:".yellow().bold(),
+                lease_target.display(),
+                e
+            );
+        }
+    }
+
     let res = std::process::Command::new("git")
         .arg("-C")
         .arg(&project_root)
@@ -8712,10 +8750,6 @@ fn session_end(id_query: Option<&str>, yes: bool) -> Result<()> {
             );
         }
     }
-
-    let lease_file = lease_path(&project_root, &target.id);
-    let _ = std::fs::remove_file(&lease_file);
-    println!("{} lease deleted", "✓".green());
     println!(
         "  branch {} retained — merge or `git branch -D {}` when ready",
         target.branch.cyan(),
