@@ -29,5 +29,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T01:16:36.229167719Z
-modified_at: 2026-05-10T01:16:36.229167719Z
+modified_at: 2026-05-10T01:22:43.683765269Z
 req_type: Story
+comments:
+- id: 019e0f7a-c163-7f51-af9b-c77e97377015
+  author: joe
+  content: 'Scope correction: this is a refinement for one-user-one-machine concurrent sessions only. Cross-developer races never existed because separate clones get separate node ids → disjoint blocks. The symlink approach in EPIC-20 v1 is fine for cross-machine work; STORY-47 closes the (narrow) same-user-same-machine race window.'
+  created_at: 2026-05-10T01:22:43.683765269Z
+  modified_at: 2026-05-10T01:22:43.683765269Z
