@@ -8955,6 +8955,22 @@ mod statusline_tests {
         // Unknown → Warn (the safe default).
         assert_eq!(SessionEnforcement::from_config_str("xyzzy"), SessionEnforcement::Warn);
     }
+
+    /// STORY-53: the `sess:<scope>` segment reuses SCOPE_LABEL_MAX, the
+    /// same budget that bounds @SPEC's width — long path-glob scopes get
+    /// the trailing ellipsis so the statusline stays scannable, and short
+    /// scopes pass through verbatim.
+    /// trace:STORY-53 | ai:claude
+    #[test]
+    fn sess_segment_label_truncation() {
+        let short = "EPIC-20";
+        assert_eq!(truncate(short, SCOPE_LABEL_MAX), "EPIC-20");
+
+        let long = "feature:auth-flow-rewrite";
+        let out = truncate(long, SCOPE_LABEL_MAX);
+        assert!(out.chars().count() <= SCOPE_LABEL_MAX);
+        assert!(out.ends_with('…'));
+    }
 }
 
 #[cfg(test)]
@@ -9483,6 +9499,13 @@ fn handle_statusline_command(color: &str) -> Result<()> {
         "αιδα".dimmed().to_string(),
         project_label.green().bold().to_string(),
     ];
+    // Resolve the active session lease once: both the @SPEC fallback and
+    // the dedicated sess: segment use it, and we want a single canonicalize
+    // + read-dir per render. trace:STORY-53 | ai:claude
+    let lease = std::env::current_dir()
+        .ok()
+        .and_then(|cwd| active_lease_for_cwd(&project_root, &cwd));
+
     if let Some(r) = &role {
         parts.push(format!("role:{}", r).yellow().bold().to_string());
         // @SPEC segment. Default: newest activity entry from the active role
@@ -9493,9 +9516,6 @@ fn handle_statusline_command(color: &str) -> Result<()> {
         // this session began. trace:STORY-55 | ai:claude
         let role_state = load_role(&project_root, r).ok().map(|(s, _)| s);
         let latest = role_state.as_ref().and_then(|s| s.activity.first());
-        let lease = std::env::current_dir()
-            .ok()
-            .and_then(|cwd| active_lease_for_cwd(&project_root, &cwd));
         let label: Option<String> = match (latest, lease.as_ref()) {
             (Some(act), Some(l)) if act.at >= l.started_at => Some(act.spec_id.clone()),
             (_, Some(l)) => Some(truncate(&l.scope, SCOPE_LABEL_MAX)),
@@ -9518,6 +9538,18 @@ fn handle_statusline_command(color: &str) -> Result<()> {
         if l != "fresh" {
             parts.push(format!("cache:{}", l).red().to_string());
         }
+    }
+    // sess:<scope> segment — emitted whenever cwd resolves into an active
+    // session lease's worktree, regardless of role. Coexists with @SPEC:
+    // @SPEC answers "which spec am I touching", sess: answers "which
+    // session-scope owns this shell" (the latter sticks even when the
+    // role's recent activity is on a child spec). Same color as role:
+    // since both answer "what context am I in". Scope is truncated to the
+    // same budget as @SPEC so the line stays scannable.
+    // trace:STORY-53 | ai:claude
+    if let Some(l) = lease.as_ref() {
+        let label = truncate(&l.scope, SCOPE_LABEL_MAX);
+        parts.push(format!("sess:{}", label).yellow().bold().to_string());
     }
     println!("{}", parts.join(&separator));
     Ok(())
