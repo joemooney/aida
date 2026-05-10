@@ -42,3 +42,7 @@ feature: Uncategorized
 created_at: 2026-05-10T21:44:10.299919947Z
 modified_at: 2026-05-10T21:44:10.299919947Z
 req_type: Bug
+relationships:
+- rel_type: Child
+  target_id: 019df145-51da-7c23-ab31-910ad58c4c44
+  created_at: 2026-05-10T21:44:11.295730799Z
