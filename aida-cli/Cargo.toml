@@ -36,6 +36,12 @@ tokio = { workspace = true }
 hostname = "0.4"
 toml = { workspace = true }
 rusqlite = { workspace = true }
+# Cross-platform process inspection for session liveness probe (STORY-69):
+# enumerate live `claude` PIDs + their cwd so AIDA can mark live sessions in
+# `aida session list`, refuse to delete jsonls of live projects in
+# `aida session prune`, and detect leaked claude processes whose worktree
+# was removed out from under them (BUG-61).
+sysinfo = "0.30"
 
 # gRPC client dependencies (optional)
 tonic = { workspace = true, optional = true }

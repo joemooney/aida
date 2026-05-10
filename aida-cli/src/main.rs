@@ -3,6 +3,7 @@ mod docs;
 mod global_queue;
 mod history;
 mod not_found;
+mod process_probe;
 mod session;
 #[cfg(feature = "remote")]
 mod client;
@@ -8292,7 +8293,7 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             session_start(owns, branch.as_deref(), base.as_deref(), path.as_deref(), forge.as_deref())
         }
         SessionCommand::End { id, yes } => session_end(id.as_deref(), *yes),
-        SessionCommand::Leases => session_leases(),
+        SessionCommand::Leases { verbose } => session_leases(*verbose),
     }
 }
 
@@ -9308,7 +9309,7 @@ fn session_end(id_query: Option<&str>, yes: bool) -> Result<()> {
     Ok(())
 }
 
-fn session_leases() -> Result<()> {
+fn session_leases(verbose: bool) -> Result<()> {
     let project_root = find_project_root()?;
     let leases = list_leases(&project_root);
     if leases.is_empty() {
@@ -9337,6 +9338,50 @@ fn session_leases() -> Result<()> {
             l.worktree_path.display()
         );
     }
+
+    // STORY-69: --verbose probes live claude processes to surface leaked
+    // ones with `(deleted)` cwd — a session ended its worktree but a
+    // claude inside the worktree never exited. Each WARN row points at a
+    // PID the user can `kill` to clean up. trace:STORY-69 | ai:claude
+    if verbose {
+        let live = process_probe::probe_live_claude_sessions();
+        let leaked: Vec<_> = live.iter().filter(|s| s.stale_cwd).collect();
+        if !leaked.is_empty() {
+            println!();
+            println!("{}", "Leaked claude processes:".bold());
+            for s in &leaked {
+                println!(
+                    "  {} pid {} cwd {} {} — `kill {}` to clean up",
+                    "WARN".yellow().bold(),
+                    s.pid.to_string().yellow(),
+                    s.cwd.display(),
+                    "(deleted)".dimmed(),
+                    s.pid
+                );
+            }
+        }
+        let live_in_lease: Vec<_> = live
+            .iter()
+            .filter(|s| !s.stale_cwd)
+            .filter(|s| {
+                leases
+                    .iter()
+                    .any(|l| s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path))
+            })
+            .collect();
+        if !live_in_lease.is_empty() {
+            println!();
+            println!("{}", "Live claude processes in lease worktrees:".bold());
+            for s in &live_in_lease {
+                println!(
+                    "  pid {} cwd {}",
+                    s.pid.to_string().green(),
+                    s.cwd.display()
+                );
+            }
+        }
+    }
+
     println!();
     println!(
         "End one with: {} {}",

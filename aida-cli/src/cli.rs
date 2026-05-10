@@ -458,7 +458,13 @@ pub enum SessionCommand {
 
     /// List active session leases (separately from the historical list
     /// of past Claude Code sessions in `aida session list`).
-    Leases,
+    Leases {
+        /// Probe live `claude` processes and warn about ones whose cwd is
+        /// `(deleted)` (worktree was removed without ending claude — the
+        /// signature of BUG-61). trace:STORY-69 | ai:claude
+        #[clap(long, short = 'v')]
+        verbose: bool,
+    },
 }
 
 /// activity, optional purpose, and acts as a label in the statusline.
