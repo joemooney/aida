@@ -924,6 +924,32 @@ pub enum DoctorCommand {
         #[clap(long, default_value = "1000")]
         size: u32,
     },
+
+    /// Find and tombstone blocks whose `node_id` isn't in nodes.toml
+    /// (orphaned from a clone that never registered, or from a
+    /// pre-EPIC-1-052 store). The block range stays reserved so other
+    /// clones don't reallocate over it; `next` is bumped past `range_end`
+    /// so the dispenser skips it. trace:EPIC-19 | ai:claude
+    RepairStaleBlocks {
+        /// Print what would change without writing.
+        #[clap(long)]
+        dry_run: bool,
+        /// Skip confirmation.
+        #[clap(long, short = 'y')]
+        yes: bool,
+    },
+
+    /// Detect duplicate spec_ids in the orphan store — multiple YAMLs
+    /// claiming the same id (BUG-31-era leftovers, imports gone wrong).
+    /// Reports only; v1 doesn't auto-renumber because that would orphan
+    /// trace comments and commit refs. trace:EPIC-19 | ai:claude
+    ScrubCollisions,
+
+    /// Run every diagnostic in sequence and print a unified report.
+    /// Composes `aida db block verify`, repair-stale-blocks --dry-run,
+    /// scrub-collisions, plus a few smaller checks. Exits non-zero if
+    /// any check found a problem. trace:EPIC-19 | ai:claude
+    Fsck,
 }
 
 #[derive(Subcommand, Debug)]
