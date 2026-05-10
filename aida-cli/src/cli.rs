@@ -894,6 +894,38 @@ pub enum BlockCommand {
     Verify,
 }
 
+/// Maintenance + migration ops on the AIDA store. Hidden from `aida
+/// --help`; surface via `aida doctor --help`. trace:EPIC-19 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum DoctorCommand {
+    /// Migrate this project from per-type counters (FR-1, BUG-1, EPIC-1
+    /// each independent) to global counters (FR-1, BUG-2, EPIC-3 — one
+    /// shared counter). Allocates a new `*` block above the existing
+    /// per-type blocks' max range_end, marks per-type blocks as
+    /// exhausted, sets `[id_format] counter_scope = "global"`. Existing
+    /// requirement spec_ids stay unchanged — only newly-added reqs use
+    /// the global counter. trace:EPIC-19, FR-271 | ai:claude
+    MigrateCounterScope {
+        /// Target scope. Today only `global` is supported. (Going from
+        /// global back to per-type is harder — no migration path yet.)
+        #[clap(long, value_parser = ["global"])]
+        to: String,
+
+        /// Print the planned changes without writing anything.
+        #[clap(long)]
+        dry_run: bool,
+
+        /// Skip the y/N confirmation.
+        #[clap(long, short = 'y')]
+        yes: bool,
+
+        /// Block size for the new shared block (default 1000, matching
+        /// `aida init` Global default).
+        #[clap(long, default_value = "1000")]
+        size: u32,
+    },
+}
+
 #[derive(Subcommand, Debug)]
 pub enum FeatureCommand {
     /// Add a new feature with a prefix for IDs
@@ -1681,6 +1713,12 @@ pub enum Command {
     /// run dev servers, install shell helpers. End users don't need these.
     #[clap(subcommand, hide = true)]
     Dev(DevCommand),
+
+    /// Maintenance and migration operations on the AIDA store. Hidden from
+    /// `aida --help` because these aren't daily-driver commands; they're
+    /// for repairing or migrating an existing project. trace:EPIC-19
+    #[clap(subcommand, hide = true)]
+    Doctor(DoctorCommand),
 
     /// Manage personas / hats — persistent named contexts that resume
     /// across shells. `aida role enter <name>` switches; `aida role list`
