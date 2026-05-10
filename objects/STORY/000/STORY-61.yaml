@@ -63,12 +63,12 @@ description: |
   ## Why now
 
   User concrete observation 2026-05-09: their EPIC-20 agent opened PR #1 from inside a session, but no clear workflow for who/how reviews and merges. They use GitHub at home, GitLab at work; both need to feel native.
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T03:31:55.406242214Z
-modified_at: 2026-05-10T03:31:55.406242214Z
+modified_at: 2026-05-10T04:53:50.130547030Z
 req_type: Story
 relationships:
 - rel_type: Child
