@@ -1,0 +1,45 @@
+id: 019e12e7-dd36-7b70-9adb-8eab02173b13
+spec_id: TASK-46
+agreed_id: TASK-46
+title: 'aida queue list/next: filter out terminal-status entries by default; --include-terminal to show'
+description: |
+  Caught 2026-05-10 — BUG-63 (Rejected, duplicate of BUG-62) sat in the implementer queue because the dedup skipped dequeueing. `aida queue list` and `aida queue next` would have surfaced it to the next pickup, leading to the agent flipping Rejected → InProgress and shipping work on a closed bug.
+
+  ## Today's behavior
+
+  `queue list/next` show all queued entries regardless of req status. A queued Rejected/Completed item is invisible to filter logic — the consumer has to eyeball the `[Rejected]`/`[Completed]` tag in each row.
+
+  ## Desired behavior
+
+  Default: hide terminal-status (Completed, Rejected) entries from `queue list` and `queue next`.
+
+  ```
+  $ aida queue list
+  ... approved/in-progress entries only ...
+
+  (2 terminal-status entries hidden — pass --include-terminal to show)
+  ```
+
+  Footer line warns about the count so they don't go silent.
+
+  `--include-terminal` flag (or `--all`? — but `--all` is taken for "all roles") shows everything.
+
+  ## Composes with
+
+  - TASK-45 (queue add: refuse terminal-status) — write-side enforcement; this is the read-side counterpart
+  - The proposed companion task (c — block status flip from Rejected/Completed without --force) — both prevent the re-open foot gun from different angles
+
+  ## Acceptance
+
+  - [ ] `aida queue list` hides Completed/Rejected entries by default
+  - [ ] `aida queue next` skips Completed/Rejected entries when finding the head
+  - [ ] Footer counts hidden entries
+  - [ ] `--include-terminal` flag shows everything (name TBD; could be `--show-terminal`, `--all-statuses`)
+  - [ ] No regression for `--all` (cross-role view)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T17:20:45.878343028Z
+modified_at: 2026-05-10T17:20:45.878343028Z
+req_type: Task
