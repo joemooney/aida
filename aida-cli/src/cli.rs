@@ -1731,6 +1731,13 @@ pub enum Command {
         /// Use interactive mode (launches editor)
         #[clap(long, short = 'i')]
         interactive: bool,
+
+        /// Treat session-lease conflicts as a hard error rather than the
+        /// configured default. Equivalent to `[session] enforcement =
+        /// "block"` for this single invocation.
+        /// trace:STORY-48 | ai:claude
+        #[clap(long)]
+        strict: bool,
     },
 
     /// Delete a requirement

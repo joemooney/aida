@@ -340,6 +340,7 @@ fn main() -> Result<()> {
             feature,
             tags,
             interactive,
+            strict: _, // legacy SQLite path ignores session leases
         } => {
             // If any flags provided, use non-interactive mode; otherwise interactive
             let has_flags = title.is_some()
@@ -1664,6 +1665,25 @@ fn handle_git_backend_command(
                                 last.spec_id.as_deref().unwrap_or("?")
                             )
                         })?;
+                    // STORY-48: lease enforcement on the parent — adding a
+                    // child mutates the parent and effectively extends the
+                    // owning session's scope, so warn/block in the same
+                    // way as a direct edit. The child has already been
+                    // persisted by the add path above; the warning is
+                    // about the parent-link operation only.
+                    // trace:STORY-48 | ai:claude
+                    if let Ok(project_root) = find_project_root() {
+                        if !list_leases(&project_root).is_empty() {
+                            let store = backend.load()?;
+                            enforce_session_lease(
+                                &project_root,
+                                &parent_req,
+                                &store,
+                                "aida add --parent",
+                                false,
+                            )?;
+                        }
+                    }
                     let mut child = last.clone();
                     let parent_uuid = parent_req.id;
                     let child_uuid = child.id;
@@ -1757,12 +1777,26 @@ fn handle_git_backend_command(
             owner,
             feature,
             tags,
+            strict,
             ..
         } => {
             record_role_activity(id, "edit");
             let mut req = backend
                 .get_requirement_by_spec_id(id)?
                 .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
+
+            // STORY-48: lease enforcement. Find leases relative to the git
+            // project root (parent of the orphan store), load the full
+            // store once for ancestor walking, and consult the
+            // [session].enforcement knob. Best-effort — if we can't even
+            // find a project root, skip enforcement rather than break edit.
+            // trace:STORY-48 | ai:claude
+            if let Ok(project_root) = find_project_root() {
+                if !list_leases(&project_root).is_empty() {
+                    let store = backend.load()?;
+                    enforce_session_lease(&project_root, &req, &store, "aida edit", *strict)?;
+                }
+            }
 
             let mut changed = false;
             if let Some(t) = title {
@@ -8117,6 +8151,10 @@ fn leases_dir(project_root: &std::path::Path) -> std::path::PathBuf {
     project_root.join(".aida").join("sessions")
 }
 
+/// Max display width for the @SCOPE statusline segment (matches @SPEC budget).
+/// trace:STORY-55 | ai:claude
+const SCOPE_LABEL_MAX: usize = 12;
+
 fn lease_path(project_root: &std::path::Path, id: &str) -> std::path::PathBuf {
     leases_dir(project_root).join(format!("{}.toml", id))
 }
@@ -8142,6 +8180,200 @@ fn list_leases(project_root: &std::path::Path) -> Vec<SessionLease> {
     }
     out.sort_by_key(|l| l.started_at);
     out
+}
+
+/// Find the active session lease whose worktree contains `cwd`, if any.
+/// Used by statusline + enforcement to identify which session "owns" the
+/// shell the user is operating from.
+/// trace:STORY-55 | ai:claude
+fn active_lease_for_cwd(
+    project_root: &std::path::Path,
+    cwd: &std::path::Path,
+) -> Option<SessionLease> {
+    let canon = cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf());
+    list_leases(project_root)
+        .into_iter()
+        .find(|l| canon == l.worktree_path || canon.starts_with(&l.worktree_path))
+}
+
+/// Lease-enforcement mode for cross-session writes.
+/// Configured via `[session] enforcement = "warn"|"block"|"off"` in
+/// `.aida/config.toml`; default is `Warn`.
+/// trace:STORY-48 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SessionEnforcement {
+    Off,
+    Warn,
+    Block,
+}
+
+impl SessionEnforcement {
+    fn from_config_str(s: &str) -> Self {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "off" | "false" | "none" => SessionEnforcement::Off,
+            "block" | "strict" => SessionEnforcement::Block,
+            _ => SessionEnforcement::Warn,
+        }
+    }
+}
+
+/// Read `[session].enforcement` from `<project_root>/.aida/config.toml`.
+/// Falls back to `Warn` on any parse/IO failure — enforcement should
+/// never break the host command.
+/// trace:STORY-48 | ai:claude
+fn session_enforcement(project_root: &std::path::Path) -> SessionEnforcement {
+    let path = project_root.join(".aida").join("config.toml");
+    let Ok(content) = std::fs::read_to_string(&path) else {
+        return SessionEnforcement::Warn;
+    };
+    let Ok(parsed) = content.parse::<toml::Value>() else {
+        return SessionEnforcement::Warn;
+    };
+    parsed
+        .get("session")
+        .and_then(|s| s.get("enforcement"))
+        .and_then(|v| v.as_str())
+        .map(SessionEnforcement::from_config_str)
+        .unwrap_or(SessionEnforcement::Warn)
+}
+
+/// Returns the lease that "owns" `target_uuid` — i.e. the spec is itself
+/// the scope, OR is a descendant of the scope's spec via Parent
+/// relationships. Excludes `self_lease` (the caller's own session) so a
+/// session can freely edit specs in its own scope. Returns `None` for
+/// path-glob / free-form scopes that we can't resolve to a spec id.
+/// trace:STORY-48 | ai:claude
+fn lease_owning_spec(
+    leases: &[SessionLease],
+    self_lease: Option<&SessionLease>,
+    target_uuid: Uuid,
+    target_spec_id: Option<&str>,
+    store: &RequirementsStore,
+) -> Option<SessionLease> {
+    if leases.is_empty() {
+        return None;
+    }
+
+    // Walk to collect ancestors (incl. target itself). AIDA stores
+    // hierarchy with `rel_type: Child` on the descendant pointing at the
+    // ancestor (display: "X is child of Y"), so the climb-toward-root edge
+    // is `Child`, NOT `Parent`. Visit each uuid at most once; pathological
+    // cycles are bounded by the visited set.
+    let mut ancestors: HashSet<Uuid> = HashSet::new();
+    ancestors.insert(target_uuid);
+    let mut frontier = vec![target_uuid];
+    while let Some(curr) = frontier.pop() {
+        if let Some(req) = store.requirements.iter().find(|r| r.id == curr) {
+            for rel in &req.relationships {
+                if rel.rel_type == RelationshipType::Child && ancestors.insert(rel.target_id) {
+                    frontier.push(rel.target_id);
+                }
+            }
+        }
+    }
+
+    // Pre-compute the lower-cased spec_ids / agreed_ids of the ancestor
+    // set for fast string-match against scope strings.
+    let ancestor_ids: HashSet<String> = ancestors
+        .iter()
+        .filter_map(|id| store.requirements.iter().find(|r| r.id == *id))
+        .flat_map(|r| {
+            [r.spec_id.as_deref(), r.agreed_id.as_deref()]
+                .into_iter()
+                .flatten()
+                .map(|s| s.to_ascii_lowercase())
+                .collect::<Vec<_>>()
+        })
+        .collect();
+
+    for lease in leases {
+        if let Some(self_l) = self_lease {
+            if lease.id == self_l.id {
+                continue;
+            }
+        }
+        let scope_lc = lease.scope.to_ascii_lowercase();
+        // Direct id-form match (handles SPEC-ID + agreed-id forms).
+        if ancestor_ids.contains(&scope_lc) {
+            return Some(lease.clone());
+        }
+        // The provided target_spec_id might equal the scope verbatim even
+        // when ancestor walking doesn't pick it up (e.g. agreed_id stripped).
+        if let Some(tid) = target_spec_id {
+            if tid.eq_ignore_ascii_case(&lease.scope) {
+                return Some(lease.clone());
+            }
+        }
+        // Path globs / free-form tags: no ancestry to walk → don't enforce.
+    }
+    None
+}
+
+/// Enforce a session lease for an outbound mutation on `target`. Returns
+/// `Err` only when the active enforcement mode is `Block` and another
+/// session owns the scope; in `Warn` mode it prints a warning and returns
+/// `Ok(())` so the operation proceeds. `force_block` (e.g. `--strict` on
+/// `aida edit`) escalates Warn → Block for this single call.
+/// trace:STORY-48 | ai:claude
+fn enforce_session_lease(
+    project_root: &std::path::Path,
+    target: &Requirement,
+    store: &RequirementsStore,
+    operation: &str,
+    force_block: bool,
+) -> Result<()> {
+    let leases = list_leases(project_root);
+    if leases.is_empty() {
+        return Ok(());
+    }
+    let self_lease = std::env::current_dir()
+        .ok()
+        .and_then(|cwd| active_lease_for_cwd(project_root, &cwd));
+    let owner = lease_owning_spec(
+        &leases,
+        self_lease.as_ref(),
+        target.id,
+        target.spec_id.as_deref(),
+        store,
+    );
+    let Some(owner) = owner else { return Ok(()) };
+
+    let mut mode = session_enforcement(project_root);
+    if force_block {
+        mode = SessionEnforcement::Block;
+    }
+    let target_label = target.spec_id.as_deref().unwrap_or("?");
+    let owner_id_short: String = owner.id.chars().take(8).collect();
+    match mode {
+        SessionEnforcement::Off => Ok(()),
+        SessionEnforcement::Warn => {
+            eprintln!(
+                "{} {} on {} touches scope owned by session {} ({})",
+                "Warning:".yellow().bold(),
+                operation,
+                target_label.cyan(),
+                owner_id_short.yellow(),
+                owner.scope.cyan(),
+            );
+            eprintln!("  worktree: {}", owner.worktree_path.display());
+            eprintln!(
+                "  ({} or set `[session] enforcement = \"off\"` in .aida/config.toml to silence)",
+                "pass --strict to convert into a hard block".dimmed()
+            );
+            Ok(())
+        }
+        SessionEnforcement::Block => {
+            anyhow::bail!(
+                "{} on {} blocked: scope owned by session {} ({}, worktree: {}). \
+                 End that session first or set `[session] enforcement = \"warn\"` to downgrade.",
+                operation,
+                target_label,
+                owner_id_short,
+                owner.scope,
+                owner.worktree_path.display()
+            );
+        }
+    }
 }
 
 fn slugify(s: &str) -> String {
@@ -8519,6 +8751,210 @@ mod statusline_tests {
         assert!(!sha_prefix_match("", "abc"));
         assert!(!sha_prefix_match("abc", ""));
     }
+
+    /// STORY-55: scope-fallback decision table for the `@<…>` segment.
+    /// Captures the four (latest-activity, active-lease) cases the
+    /// statusline distinguishes.
+    /// trace:STORY-55 | ai:claude
+    #[test]
+    fn scope_fallback_decision_table() {
+        use chrono::TimeZone;
+        let lease_started = chrono::Utc.with_ymd_and_hms(2026, 5, 9, 12, 0, 0).unwrap();
+        let before_lease = chrono::Utc.with_ymd_and_hms(2026, 5, 9, 11, 0, 0).unwrap();
+        let after_lease = chrono::Utc.with_ymd_and_hms(2026, 5, 9, 13, 0, 0).unwrap();
+
+        let pick = |latest_at: Option<chrono::DateTime<chrono::Utc>>,
+                    lease: Option<chrono::DateTime<chrono::Utc>>,
+                    spec: &str,
+                    scope: &str|
+         -> Option<String> {
+            match (latest_at, lease) {
+                (Some(at), Some(started_at)) if at >= started_at => Some(spec.to_string()),
+                (_, Some(_)) => Some(scope.to_string()),
+                (Some(_), None) => Some(spec.to_string()),
+                (None, None) => None,
+            }
+        };
+
+        // In-session activity wins over scope.
+        assert_eq!(
+            pick(Some(after_lease), Some(lease_started), "STORY-48", "EPIC-20"),
+            Some("STORY-48".into())
+        );
+        // Pre-session activity is shadowed by the scope.
+        assert_eq!(
+            pick(Some(before_lease), Some(lease_started), "STORY-54", "EPIC-20"),
+            Some("EPIC-20".into())
+        );
+        // Lease but no activity at all → scope.
+        assert_eq!(
+            pick(None, Some(lease_started), "", "EPIC-20"),
+            Some("EPIC-20".into())
+        );
+        // No lease, only activity → spec (existing behavior).
+        assert_eq!(
+            pick(Some(after_lease), None, "STORY-48", ""),
+            Some("STORY-48".into())
+        );
+        // No lease, no activity → nothing.
+        assert_eq!(pick(None, None, "", ""), None);
+    }
+
+    /// STORY-55: long scopes (e.g. file-path scopes) are truncated to fit
+    /// the statusline budget, matching @SPEC's visual width.
+    /// trace:STORY-55 | ai:claude
+    #[test]
+    fn scope_label_truncates_to_budget() {
+        let long = "very-long-scope-name-that-overflows";
+        let short = truncate(long, SCOPE_LABEL_MAX);
+        assert!(short.chars().count() <= SCOPE_LABEL_MAX);
+        assert!(short.ends_with('…'));
+
+        let exact = "EPIC-20";
+        assert_eq!(truncate(exact, SCOPE_LABEL_MAX), "EPIC-20");
+    }
+
+    /// STORY-48: enforcement-mode parsing is forgiving on capitalization
+    /// and whitespace, and unknown values fall through to `Warn`.
+    /// trace:STORY-48 | ai:claude
+    #[test]
+    fn session_enforcement_parsing() {
+        assert_eq!(SessionEnforcement::from_config_str("off"), SessionEnforcement::Off);
+        assert_eq!(SessionEnforcement::from_config_str("OFF"), SessionEnforcement::Off);
+        assert_eq!(SessionEnforcement::from_config_str("none"), SessionEnforcement::Off);
+        assert_eq!(SessionEnforcement::from_config_str(" warn "), SessionEnforcement::Warn);
+        assert_eq!(SessionEnforcement::from_config_str("Warn"), SessionEnforcement::Warn);
+        assert_eq!(SessionEnforcement::from_config_str("block"), SessionEnforcement::Block);
+        assert_eq!(SessionEnforcement::from_config_str("strict"), SessionEnforcement::Block);
+        // Unknown → Warn (the safe default).
+        assert_eq!(SessionEnforcement::from_config_str("xyzzy"), SessionEnforcement::Warn);
+    }
+}
+
+#[cfg(test)]
+mod lease_enforcement_tests {
+    use super::*;
+    use aida_core::models::Relationship;
+
+    /// trace:STORY-48 | ai:claude
+    fn lease(scope: &str, id: &str) -> SessionLease {
+        SessionLease {
+            id: id.to_string(),
+            scope: scope.to_string(),
+            slug: scope.to_lowercase(),
+            owner: "tester".into(),
+            worktree_path: std::path::PathBuf::from(format!("/tmp/{}", id)),
+            branch: format!("br-{}", id),
+            started_at: chrono::Utc::now(),
+            hostname: "test".into(),
+        }
+    }
+
+    /// AIDA's parent-edge convention: a child stores `rel_type: Child`
+    /// pointing at its parent (display reads "X is child of Y"). So to
+    /// model "this requirement has these parents" in fixtures, we emit
+    /// `Child` edges from `r` to each parent UUID.
+    /// trace:STORY-48 | ai:claude
+    fn req_with_parents(spec_id: &str, parents: &[Uuid]) -> Requirement {
+        let mut r = Requirement::new(format!("Title for {}", spec_id), "".into());
+        r.spec_id = Some(spec_id.into());
+        r.relationships = parents
+            .iter()
+            .map(|pid| Relationship {
+                rel_type: RelationshipType::Child,
+                target_id: *pid,
+                created_at: Some(chrono::Utc::now()),
+                created_by: None,
+            })
+            .collect();
+        r
+    }
+
+    /// Direct spec-id ownership: lease scope == target spec id.
+    /// trace:STORY-48 | ai:claude
+    #[test]
+    fn lease_owns_direct_spec_match() {
+        let target = req_with_parents("STORY-48", &[]);
+        let mut store = RequirementsStore::new();
+        store.requirements.push(target.clone());
+        let leases = vec![lease("STORY-48", "abc123")];
+        let owner = lease_owning_spec(&leases, None, target.id, target.spec_id.as_deref(), &store);
+        assert!(owner.is_some());
+        assert_eq!(owner.unwrap().scope, "STORY-48");
+    }
+
+    /// EPIC-scope ownership: lease.scope is the parent of target.
+    /// trace:STORY-48 | ai:claude
+    #[test]
+    fn lease_owns_via_parent_chain() {
+        let epic = req_with_parents("EPIC-20", &[]);
+        let story = req_with_parents("STORY-48", &[epic.id]);
+        let mut store = RequirementsStore::new();
+        store.requirements.push(epic.clone());
+        store.requirements.push(story.clone());
+        let leases = vec![lease("EPIC-20", "epic")];
+        let owner = lease_owning_spec(&leases, None, story.id, story.spec_id.as_deref(), &store);
+        assert!(owner.is_some(), "EPIC-scope lease should own descendant story");
+        assert_eq!(owner.unwrap().scope, "EPIC-20");
+    }
+
+    /// Self-lease must be skipped — a session can edit specs in its own
+    /// scope without a warning.
+    /// trace:STORY-48 | ai:claude
+    #[test]
+    fn lease_owning_skips_self() {
+        let target = req_with_parents("STORY-48", &[]);
+        let mut store = RequirementsStore::new();
+        store.requirements.push(target.clone());
+        let mine = lease("STORY-48", "self");
+        let leases = vec![mine.clone()];
+        let owner = lease_owning_spec(&leases, Some(&mine), target.id, target.spec_id.as_deref(), &store);
+        assert!(owner.is_none(), "should not flag the caller's own lease");
+    }
+
+    /// Path-glob / free-form scopes that don't resolve to a spec id are
+    /// treated as non-enforced.
+    /// trace:STORY-48 | ai:claude
+    #[test]
+    fn lease_owning_ignores_unresolved_scopes() {
+        let target = req_with_parents("STORY-48", &[]);
+        let mut store = RequirementsStore::new();
+        store.requirements.push(target.clone());
+        let leases = vec![lease("src/scaffolding/**", "glob")];
+        let owner = lease_owning_spec(&leases, None, target.id, target.spec_id.as_deref(), &store);
+        assert!(owner.is_none());
+    }
+
+    /// Cycle in parent edges must not infinite-loop the ancestor walk.
+    /// trace:STORY-48 | ai:claude
+    #[test]
+    fn lease_owning_handles_parent_cycle() {
+        let mut a = req_with_parents("FR-A", &[]);
+        let mut b = req_with_parents("FR-B", &[]);
+        // Cycle uses `Child` edges (the climb-toward-root direction in
+        // AIDA's storage convention). Each side points at the other as
+        // its "parent" — pathological, but lease_owning_spec must
+        // terminate even so.
+        a.relationships = vec![Relationship {
+            rel_type: RelationshipType::Child,
+            target_id: b.id,
+            created_at: Some(chrono::Utc::now()),
+            created_by: None,
+        }];
+        b.relationships = vec![Relationship {
+            rel_type: RelationshipType::Child,
+            target_id: a.id,
+            created_at: Some(chrono::Utc::now()),
+            created_by: None,
+        }];
+        let mut store = RequirementsStore::new();
+        store.requirements.push(a.clone());
+        store.requirements.push(b.clone());
+        // No lease covers either; the call must terminate.
+        let leases: Vec<SessionLease> = vec![];
+        let owner = lease_owning_spec(&leases, None, a.id, a.spec_id.as_deref(), &store);
+        assert!(owner.is_none());
+    }
 }
 
 /// Apply the user's `--color=auto|always|never` choice to the colored
@@ -8658,12 +9094,25 @@ fn handle_statusline_command(color: &str) -> Result<()> {
     ];
     if let Some(r) = &role {
         parts.push(format!("role:{}", r).yellow().bold().to_string());
-        // If the active role has a recent activity entry, surface the
-        // newest spec_id so the prompt reminds you what you were working on.
-        if let Ok((state, _)) = load_role(&project_root, r) {
-            if let Some(latest) = state.activity.first() {
-                parts.push(format!("@{}", latest.spec_id).cyan().bold().to_string());
-            }
+        // @SPEC segment. Default: newest activity entry from the active role
+        // (the spec the user most recently touched). Override: when cwd is
+        // inside an active session lease and the role's last activity is
+        // older than the lease (or there is none), show `@<scope>` instead
+        // — otherwise the prompt would carry over a stale spec from before
+        // this session began. trace:STORY-55 | ai:claude
+        let role_state = load_role(&project_root, r).ok().map(|(s, _)| s);
+        let latest = role_state.as_ref().and_then(|s| s.activity.first());
+        let lease = std::env::current_dir()
+            .ok()
+            .and_then(|cwd| active_lease_for_cwd(&project_root, &cwd));
+        let label: Option<String> = match (latest, lease.as_ref()) {
+            (Some(act), Some(l)) if act.at >= l.started_at => Some(act.spec_id.clone()),
+            (_, Some(l)) => Some(truncate(&l.scope, SCOPE_LABEL_MAX)),
+            (Some(act), None) => Some(act.spec_id.clone()),
+            (None, None) => None,
+        };
+        if let Some(label) = label {
+            parts.push(format!("@{}", label).cyan().bold().to_string());
         }
     }
     if queue_depth > 0 {
@@ -15474,11 +15923,68 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // trace:TASK-1-021 | ai:claude
             let scope = if *all || *no_scope { None } else { active_role_scope() };
 
+            // STORY-48: skip queue items whose target spec is owned by
+            // another active session. Honors `[session].enforcement`:
+            //   off   → no filtering
+            //   warn  → entry is filtered out, but a stderr note explains
+            //           why so the user isn't confused by an empty queue
+            //   block → entry is filtered out silently (consistent with
+            //           a hard "those specs aren't yours" stance)
+            // trace:STORY-48 | ai:claude
+            let project_root_for_leases = find_project_root().ok();
+            let leases = project_root_for_leases
+                .as_ref()
+                .map(|p| list_leases(p))
+                .unwrap_or_default();
+            let self_lease = if leases.is_empty() {
+                None
+            } else {
+                std::env::current_dir().ok().and_then(|cwd| {
+                    project_root_for_leases
+                        .as_ref()
+                        .and_then(|root| active_lease_for_cwd(root, &cwd))
+                })
+            };
+            let enforcement_mode = project_root_for_leases
+                .as_ref()
+                .map(|p| session_enforcement(p))
+                .unwrap_or(SessionEnforcement::Warn);
+            let lease_filter_active = !leases.is_empty()
+                && enforcement_mode != SessionEnforcement::Off;
+            let mut skipped_for_lease: Vec<(String, String)> = Vec::new();
+
             let next_entry = raw_entries
                 .iter()
                 .filter(|e| match &role_filter {
                     Some(r) => e.for_role.as_deref() == Some(r.as_str()),
                     None => true,
+                })
+                .filter(|e| {
+                    if !lease_filter_active {
+                        return true;
+                    }
+                    let Some(req) =
+                        store.requirements.iter().find(|r| r.id == e.requirement_id)
+                    else {
+                        return true;
+                    };
+                    let owner = lease_owning_spec(
+                        &leases,
+                        self_lease.as_ref(),
+                        req.id,
+                        req.spec_id.as_deref(),
+                        &store,
+                    );
+                    match owner {
+                        None => true,
+                        Some(o) => {
+                            skipped_for_lease.push((
+                                req.spec_id.clone().unwrap_or_else(|| "?".into()),
+                                o.scope.clone(),
+                            ));
+                            false
+                        }
+                    }
                 })
                 .filter(|e| {
                     let Some((scope_tags, scope_status)) = &scope else {
@@ -15521,8 +16027,32 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     None => String::new(),
                 };
                 println!("{} Queue is empty{}.", "Nothing to do —".dimmed(), scope);
+                // STORY-48: if the queue would have had items but they were
+                // all owned by other sessions, name them — otherwise the
+                // user sees an empty queue with no idea why.
+                if !skipped_for_lease.is_empty() {
+                    eprintln!();
+                    eprintln!(
+                        "{} {} item(s) skipped (owned by other sessions):",
+                        "Note:".yellow().bold(),
+                        skipped_for_lease.len()
+                    );
+                    for (spec, scope) in &skipped_for_lease {
+                        eprintln!("  · {}  →  scope {}", spec.cyan(), scope.cyan());
+                    }
+                }
                 println!("  ({})", "pick up new work via `aida role enter dialog` or wait for items".dimmed());
                 return Ok(());
+            }
+            // STORY-48: surface non-fatal skips before rendering the next
+            // item — useful when the active queue contains a mix of
+            // in-scope and out-of-scope items.
+            if !skipped_for_lease.is_empty() {
+                eprintln!(
+                    "{} {} other-session item(s) skipped (run `aida session leases` to see who)",
+                    "Note:".dimmed(),
+                    skipped_for_lease.len()
+                );
             }
 
             // If only the global has an item, render it and return.
