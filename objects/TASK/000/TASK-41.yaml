@@ -1,0 +1,21 @@
+id: 019e108e-2d73-7dd1-8d06-419367324b3b
+spec_id: TASK-41
+agreed_id: TASK-41
+title: 'aida rel add/remove: accept positional FROM TO instead of requiring --from/--to'
+description: |
+  User asked 2026-05-10 — `aida rel add STORY-72 EPIC-13 --type child` failed with "unexpected argument" because rel add/remove only accepted --from/--to flag form.
+
+  ## Fix
+
+  In `aida-cli/src/cli.rs`, RelationshipCommand::Add and ::Remove gained two positional args (`from_pos`, `to_pos`) plus retained --from/--to as hidden aliases. Handler logic resolves: `from_pos.or(from_flag).ok_or_else(...)`.
+
+  Both forms work:
+    aida rel add STORY-72 EPIC-13 --type child
+    aida rel add --from STORY-72 --to EPIC-13 --type child
+status: Completed
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T06:23:33.747161534Z
+modified_at: 2026-05-10T06:23:33.747161534Z
+req_type: Task
