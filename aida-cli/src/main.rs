@@ -9964,6 +9964,65 @@ fn session_start(
     if let Some(r) = &inherited_role {
         eprintln!("  {}: {} {}", "role".bold(), r.cyan(), "(inherited)".dimmed());
     }
+
+    // TASK-53: pre-flight conflict detection. Look for OTHER active
+    // leases on the same scope and surface their recent file
+    // touches so the user notices likely-overlap before they start
+    // working. Informational only — never blocks the session start.
+    // trace:TASK-53 | ai:claude
+    {
+        let other_leases: Vec<SessionLease> = list_leases(&project_root)
+            .into_iter()
+            .filter(|l| l.id != id && l.scope.eq_ignore_ascii_case(owns))
+            .collect();
+        if !other_leases.is_empty() {
+            eprintln!();
+            eprintln!(
+                "{} Concurrent session{} on {} detected:",
+                "⚠".yellow().bold(),
+                if other_leases.len() == 1 { "" } else { "s" },
+                owns.cyan()
+            );
+            for other in &other_leases {
+                let files = recent_files_for_branch(
+                    &project_root,
+                    &other.branch,
+                    /* since */ "14 days ago",
+                    /* max */ 8,
+                );
+                let started_ago = humanize_relative(other.started_at);
+                let short_id = &other.id[..other.id.len().min(8)];
+                if files.is_empty() {
+                    eprintln!(
+                        "    {} ({}) — started {}; no recent commits on branch",
+                        short_id.dimmed(),
+                        other.branch.cyan(),
+                        started_ago.dimmed()
+                    );
+                } else {
+                    let preview: Vec<&str> =
+                        files.iter().take(5).map(|s| s.as_str()).collect();
+                    let extra = if files.len() > 5 {
+                        format!(" (+{} more)", files.len() - 5)
+                    } else {
+                        String::new()
+                    };
+                    eprintln!(
+                        "    {} ({}) — started {}; recent files: {}{}",
+                        short_id.dimmed(),
+                        other.branch.cyan(),
+                        started_ago.dimmed(),
+                        preview.join(", "),
+                        extra.dimmed()
+                    );
+                }
+            }
+            eprintln!(
+                "  {}",
+                "Informational — coordinate with the other session if you'll touch the same files.".dimmed()
+            );
+        }
+    }
     // STORY-71: surface captured PR head/base in the summary so the user
     // sees what the reviewer flow recorded (matches `aida session show`).
     // trace:STORY-71 | ai:claude
@@ -10070,6 +10129,46 @@ fn probe_dangling_claudes_at_path(worktree: &std::path::Path) -> Vec<process_pro
         .into_iter()
         .filter(|s| s.stale_cwd && (s.cwd == worktree || s.cwd.starts_with(worktree)))
         .collect()
+}
+
+/// TASK-53: list distinct files touched by commits on `branch` since
+/// `since` (a git-friendly time string like "14 days ago"). Returns
+/// an empty vec on any git error or when the branch has no commits in
+/// the window. Used by `aida session start`'s pre-flight conflict
+/// warning so the user sees what another concurrent session has been
+/// touching. trace:TASK-53 | ai:claude
+fn recent_files_for_branch(
+    repo: &std::path::Path,
+    branch: &str,
+    since: &str,
+    max: usize,
+) -> Vec<String> {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args([
+            "log",
+            branch,
+            &format!("--since={}", since),
+            "--name-only",
+            "--pretty=format:",
+        ])
+        .output();
+    let Ok(out) = out else { return Vec::new() };
+    if !out.status.success() {
+        return Vec::new();
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    for line in String::from_utf8_lossy(&out.stdout).lines() {
+        let trimmed = line.trim();
+        if !trimmed.is_empty() {
+            seen.insert(trimmed.to_string());
+        }
+        if seen.len() >= max {
+            break;
+        }
+    }
+    seen.into_iter().collect()
 }
 
 /// BUG-67: list every line of `git status --porcelain` inside `worktree`,
@@ -14154,6 +14253,85 @@ mod worktree_dirty_entries_tests {
     fn non_git_path_is_clean() {
         let tmp = TempDir::new().unwrap();
         assert!(worktree_dirty_entries(tmp.path()).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod recent_files_for_branch_tests {
+    use super::*;
+    use std::process::Command;
+    use tempfile::TempDir;
+
+    /// Init a git repo on `branch_name` with `files` committed across N
+    /// commits (one commit per file). trace:TASK-53 | ai:claude
+    fn init_repo_with_files(branch_name: &str, files: &[&str]) -> TempDir {
+        let tmp = TempDir::new().unwrap();
+        let p = tmp.path();
+        let run = |args: &[&str]| {
+            Command::new("git")
+                .arg("-C")
+                .arg(p)
+                .args(args)
+                .env("GIT_AUTHOR_NAME", "t").env("GIT_AUTHOR_EMAIL", "t@t")
+                .env("GIT_COMMITTER_NAME", "t").env("GIT_COMMITTER_EMAIL", "t@t")
+                .status()
+                .unwrap();
+        };
+        run(&["init", &format!("--initial-branch={}", branch_name), "--quiet"]);
+        for (i, f) in files.iter().enumerate() {
+            // Create the file (with subdirs if needed) and commit it.
+            let path = p.join(f);
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).unwrap();
+            }
+            std::fs::write(&path, format!("v{}", i)).unwrap();
+            run(&["add", f]);
+            run(&["commit", "-m", &format!("commit {}: {}", i, f), "--quiet"]);
+        }
+        tmp
+    }
+
+    /// Branch with recent commits → returns the touched files (deduped,
+    /// sorted by BTreeSet ordering). trace:TASK-53 | ai:claude
+    #[test]
+    fn returns_committed_files() {
+        let tmp = init_repo_with_files("feat-x", &["a.rs", "b.rs", "c.rs"]);
+        let files = recent_files_for_branch(tmp.path(), "feat-x", "14 days ago", 10);
+        assert_eq!(files, vec!["a.rs", "b.rs", "c.rs"]);
+    }
+
+    /// Max cap respected — a busy branch only surfaces the first N
+    /// unique files so the warning stays scannable.
+    #[test]
+    fn respects_max_cap() {
+        let many = ["a.rs", "b.rs", "c.rs", "d.rs", "e.rs", "f.rs"];
+        let tmp = init_repo_with_files("feat-x", &many);
+        let files = recent_files_for_branch(tmp.path(), "feat-x", "14 days ago", 3);
+        assert_eq!(files.len(), 3);
+    }
+
+    /// Same file touched in multiple commits → deduped.
+    #[test]
+    fn dedupes_repeated_files() {
+        let tmp = init_repo_with_files("feat-x", &["a.rs", "a.rs", "b.rs"]);
+        let files = recent_files_for_branch(tmp.path(), "feat-x", "14 days ago", 10);
+        assert_eq!(files, vec!["a.rs", "b.rs"]);
+    }
+
+    /// Unknown branch → empty vec (git errors, we treat as no signal).
+    #[test]
+    fn unknown_branch_returns_empty() {
+        let tmp = init_repo_with_files("feat-x", &["a.rs"]);
+        let files = recent_files_for_branch(tmp.path(), "ghost-branch", "14 days ago", 10);
+        assert!(files.is_empty());
+    }
+
+    /// Non-git path → empty vec.
+    #[test]
+    fn non_git_path_returns_empty() {
+        let tmp = TempDir::new().unwrap();
+        let files = recent_files_for_branch(tmp.path(), "main", "14 days ago", 10);
+        assert!(files.is_empty());
     }
 }
 
