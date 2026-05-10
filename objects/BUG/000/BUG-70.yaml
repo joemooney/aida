@@ -1,0 +1,44 @@
+id: 019e13d9-053b-7a52-83d1-042c41cf8868
+spec_id: BUG-70
+agreed_id: BUG-70
+title: aida dev activate accumulates (aida-debug)/(aida-release) PS1 prefix on repeated invocation — mirrors BUG-60
+description: |
+  Caught 2026-05-10 — running `aida dev activate` while already activated stacks PS1 prefixes:
+
+  ```
+  (aida-debug) joe@imac:~$ aida dev activate
+  (aida-debug) (aida-debug) joe@imac:~$
+  ```
+
+  Same pattern as BUG-60 (role enter accumulation) but for dev-activation. Cosmetic but visually distracting, especially after a few cycles of deactivate-without-strip / activate-while-active.
+
+  ## Today's behavior
+
+  `aida dev activate` emits shell code that prepends `(aida-<profile>) ` to PS1 unconditionally. Doesn't check if a prior `(aida-debug)` / `(aida-release)` prefix is already present.
+
+  ## Desired behavior
+
+  Same fix BUG-60 used for role enter: strip ALL `(aida-debug) ` and `(aida-release) ` prefixes from PS1 in a loop before prepending the new one. Catches:
+
+  - Activated debug, activate again → still single `(aida-debug)`
+  - Activated debug, then activate release → switch cleanly to `(aida-release)` (no debug leftover)
+  - Stale state from subshell / env unset → cleaned up on next activate
+
+  ## Composes with
+
+  - BUG-60 (role enter PS1 strip-all) — exact same pattern; implementer can crib the loop logic
+  - TASK-19 (PS1 splice for dev activate/deactivate) — original feature; this is the polish
+
+  ## Acceptance
+
+  - [ ] Repeated `aida dev activate` keeps PS1 prefix singular
+  - [ ] Switching between debug/release replaces, not stacks
+  - [ ] `aida dev deactivate` continues to strip any/all `(aida-*) ` prefixes (already correct, verify)
+  - [ ] Tested with: clean PS1, single prefix, stacked prefix from prior accumulation, subshell with stale env
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T21:44:10.299919947Z
+modified_at: 2026-05-10T21:44:10.299919947Z
+req_type: Bug
