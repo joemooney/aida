@@ -1,0 +1,49 @@
+id: 019e12ea-5350-78e0-b627-ac288ec7c46e
+spec_id: STORY-80
+agreed_id: STORY-80
+title: '/aida-pr skill: wrap up a batch and open a PR with linked specs + test plan'
+description: |
+  After PR-3, PR-4, and PR-5, the prompt for "open the PR for this batch" has stabilized into a repeatable pattern. Codify it as a skill so the user doesn't have to recall the structure each time.
+
+  ## What the skill does
+
+  1. **Identify shipped items**: walk `git log main..HEAD --oneline` (or `<base>..HEAD` if base differs) — extract REQ-IDs from each commit subject's `(REQ-ID)` suffix
+  2. **Verify status**: for each REQ-ID, confirm it's `Completed` (any item still `In Progress` is a sign work isn't actually done — pause and ask the user)
+  3. **Push code + orphan store**: `aida push` (or `git push -u origin <branch> && aida db sync --push`)
+  4. **Build the PR body**:
+     - Title: "EPIC-N batch M: <one-line summary>" — derive batch number from branch name (epic-20-batch5 → batch 5), summary from the cluster of items
+     - Per-spec section: ID, title, what changed (paragraph from commit body), trace link
+     - Test plan: workspace tests passed (count from `cargo test --workspace`), manual verification steps (one per spec)
+  5. **Stop and confirm with user**: show the title + first paragraph of body, ask for sign-off
+  6. **On approval**: `gh pr create --base main --head <branch> --title "..." --body "..."` (HEREDOC for proper formatting)
+  7. **Output the PR URL** so user can review
+
+  ## Slash command surface
+
+  ```
+  /aida-pr           # auto-derive everything from current branch + git log
+  /aida-pr --base epic-20-batch4   # stack on a previous batch's PR
+  ```
+
+  ## Composes with
+
+  - `/aida-commit` — commit current work first (skill chain: commit → pr)
+  - `/aida-code-review` — sister skill on the consumer side; after PR opens, reviewer agent uses this
+  - STORY-66 (auto-queue PR for reviewer) — once that ships, `/aida-pr` could also auto-add a queue entry routed to reviewer role
+
+  ## Acceptance
+
+  - [ ] `.claude/skills/aida-pr.md` + `.claude/commands/aida-pr.md` (mirror of skill)
+  - [ ] Skill walks git log to derive REQ-IDs
+  - [ ] Skill verifies all derived REQ-IDs are Completed; pauses with hint if any are In Progress / Approved
+  - [ ] Skill pushes code + orphan store before opening PR
+  - [ ] Skill produces title + body matching PR-3/PR-4/PR-5 format
+  - [ ] Skill confirms with user before invoking `gh pr create`
+  - [ ] Tested against current EPIC-20 batch5 worktree (the prompt that motivated this filing)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T17:23:27.184082740Z
+modified_at: 2026-05-10T17:23:27.184082740Z
+req_type: Story
