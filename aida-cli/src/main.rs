@@ -143,6 +143,12 @@ fn main() -> Result<()> {
         return handle_dev_command(dev_cmd);
     }
 
+    // Doctor commands run before storage init — they may need to operate
+    // on broken or partially-migrated stores. trace:EPIC-19 | ai:claude
+    if let Command::Doctor(doctor_cmd) = &cli.command {
+        return handle_doctor_command(doctor_cmd);
+    }
+
     // Help-all is pure text; no storage needed.
     if let Command::HelpAll = &cli.command {
         print_help_all();
@@ -388,6 +394,7 @@ fn main() -> Result<()> {
         }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
+        Command::Doctor(_) => unreachable!("doctor is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
@@ -1208,6 +1215,7 @@ fn handle_git_backend_command(
         }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
+        Command::Doctor(_) => unreachable!("doctor is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
@@ -6543,6 +6551,230 @@ fn humanize_relative(t: chrono::DateTime<chrono::Utc>) -> String {
 // statusLine.command setting. Cache-only; no git operations, no API calls.
 // trace:EPIC-1-001 | ai:claude
 // ----------------------------------------------------------------------------
+
+// ----------------------------------------------------------------------------
+// EPIC-19 — `aida doctor`: maintenance + migration commands.
+// ----------------------------------------------------------------------------
+
+fn handle_doctor_command(cmd: &cli::DoctorCommand) -> Result<()> {
+    match cmd {
+        cli::DoctorCommand::MigrateCounterScope {
+            to,
+            dry_run,
+            yes,
+            size,
+        } => doctor_migrate_counter_scope(to, *dry_run, *yes, *size),
+    }
+}
+
+fn doctor_migrate_counter_scope(
+    to: &str,
+    dry_run: bool,
+    yes: bool,
+    new_block_size: u32,
+) -> Result<()> {
+    use aida_core::BlockRegistry;
+
+    if to != "global" {
+        anyhow::bail!("only `--to global` is supported today (per-type → global)");
+    }
+
+    let project_root = find_project_root()?;
+    let store_path = project_root.join(".aida-store");
+    let blocks_path = store_path.join("registry").join("blocks.yaml");
+    let config_path = project_root.join(".aida").join("config.toml");
+
+    if !blocks_path.exists() {
+        anyhow::bail!(
+            "no blocks.yaml at {} — nothing to migrate",
+            blocks_path.display()
+        );
+    }
+    if !config_path.exists() {
+        anyhow::bail!(
+            "no config.toml at {} — is this an AIDA project?",
+            config_path.display()
+        );
+    }
+
+    let current_scope = read_id_counter_scope(&project_root);
+    if current_scope == aida_core::IdCounterScope::Global {
+        println!(
+            "{} already on global counter_scope — nothing to migrate.",
+            "✓".green()
+        );
+        return Ok(());
+    }
+
+    let mut registry = BlockRegistry::load(&blocks_path)?;
+    if registry.blocks.is_empty() {
+        anyhow::bail!("blocks.yaml is empty — no blocks to migrate from");
+    }
+
+    // Identify this clone's node id so the new `*` block belongs to it.
+    let node_id = load_node_id(&store_path);
+    let our_blocks: Vec<_> = registry
+        .blocks
+        .iter()
+        .filter(|b| b.node_id == node_id && !b.is_exhausted())
+        .map(|b| b.clone())
+        .collect();
+    if our_blocks.is_empty() {
+        anyhow::bail!(
+            "node {} has no active per-type blocks in blocks.yaml — \
+             either already migrated, or this clone hasn't been initialized",
+            node_id
+        );
+    }
+
+    // The new `*` block starts strictly above the highest range_end across
+    // ALL blocks (any node, any type) so we never collide with another
+    // clone's range. Then size more on top.
+    let highest_end: u32 = registry
+        .blocks
+        .iter()
+        .map(|b| b.range_end)
+        .max()
+        .unwrap_or(0);
+    let new_start = highest_end + 1;
+    let new_end = new_start + new_block_size - 1;
+
+    println!("{}", "Migration plan: per-type → global".bold());
+    println!("  node:                {}", node_id);
+    println!("  per-type blocks to retire (mark exhausted):");
+    for b in &our_blocks {
+        println!(
+            "    - {} {}-{}..{} (next was {})",
+            "·".dimmed(),
+            b.type_prefix,
+            b.range_start,
+            b.range_end,
+            b.next
+        );
+    }
+    println!(
+        "  new global block:    *-{}..{} (size {}) for node {}",
+        new_start, new_end, new_block_size, node_id
+    );
+    println!("  config write:        [id_format] counter_scope = \"global\"");
+    println!();
+    println!("After this migration:");
+    println!("  - existing requirement spec_ids stay UNCHANGED");
+    println!("  - new requirements use the global counter (FR-{}, BUG-{}, etc.)", new_start, new_start + 1);
+    println!("  - the retired per-type blocks remain in blocks.yaml as history");
+    println!();
+
+    if dry_run {
+        println!("{} dry-run — no changes written.", "→".cyan());
+        return Ok(());
+    }
+
+    if !yes {
+        use std::io::Write;
+        print!("Proceed? [y/N] ");
+        std::io::stdout().flush()?;
+        let mut ans = String::new();
+        std::io::stdin().read_line(&mut ans)?;
+        if !matches!(ans.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+            println!("Aborted.");
+            return Ok(());
+        }
+    }
+
+    // Apply: mark our per-type blocks exhausted (next = range_end + 1) so
+    // the dispenser skips them. Then append the new `*` block.
+    for b in registry.blocks.iter_mut() {
+        if b.node_id == node_id && !b.is_exhausted() {
+            b.next = b.range_end + 1;
+        }
+    }
+    let owner = aida_core::git_ops::git_config_get("user.email")
+        .ok()
+        .or_else(|| std::env::var("USER").ok())
+        .unwrap_or_else(|| "unknown".to_string());
+    registry.claim_block_with_floor(
+        node_id.clone(),
+        owner,
+        hostname(),
+        aida_core::IdCounterScope::GLOBAL_TYPE_PREFIX.to_string(),
+        new_block_size,
+        highest_end,
+    );
+    registry.save(&blocks_path)?;
+
+    // Update config.toml — preserve the file by line-rewriting; if
+    // counter_scope already exists (it shouldn't given the early check),
+    // overwrite. Otherwise append after the [id_format] section.
+    update_config_counter_scope(&config_path, "global")?;
+
+    // Stage + commit the registry change. The lease symlink in the
+    // session worktree means `git -C <store_path>` operates on the
+    // shared orphan branch.
+    let _ = aida_core::git_ops::add(&store_path, &["registry/blocks.yaml"]);
+    let _ = aida_core::git_ops::commit(
+        &store_path,
+        &format!(
+            "chore(registry): migrate node {} to global counter (*-{}..{})",
+            node_id, new_start, new_end
+        ),
+    );
+
+    println!();
+    println!("{} migration complete.", "✓".green().bold());
+    println!(
+        "  new global block: {}",
+        format!("*-{}..{}", new_start, new_end).cyan()
+    );
+    println!("  next `aida add` will dispense {}", format!("<TYPE>-{}", new_start).cyan());
+    println!();
+    println!("Don't forget to push:");
+    println!("  {}", "aida push".cyan());
+    Ok(())
+}
+
+/// Update the `[id_format] counter_scope` value in config.toml. Adds the
+/// line if missing, replaces it in-place if present. Preserves the rest
+/// of the file (comments, other keys, formatting).
+fn update_config_counter_scope(config_path: &std::path::Path, new_value: &str) -> Result<()> {
+    let content = std::fs::read_to_string(config_path)?;
+    let mut lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
+    let mut in_id_format = false;
+    let mut last_id_format_line: Option<usize> = None;
+    let mut replaced = false;
+    for (i, line) in lines.iter_mut().enumerate() {
+        let trimmed_owned: String = line.trim().to_string();
+        if trimmed_owned.starts_with('[') {
+            in_id_format = trimmed_owned == "[id_format]";
+            if in_id_format {
+                last_id_format_line = Some(i);
+            }
+            continue;
+        }
+        if in_id_format && trimmed_owned.starts_with("counter_scope") {
+            *line = format!("counter_scope = \"{}\"", new_value);
+            replaced = true;
+        }
+        if in_id_format && !trimmed_owned.is_empty() && !trimmed_owned.starts_with('#') {
+            last_id_format_line = Some(i);
+        }
+    }
+    if !replaced {
+        // Insert after the last line of the [id_format] section.
+        let insert_at = last_id_format_line.map(|i| i + 1);
+        let new_line = format!("counter_scope = \"{}\"", new_value);
+        match insert_at {
+            Some(idx) => lines.insert(idx, new_line),
+            None => {
+                // No [id_format] section found — append both header and value.
+                lines.push(String::new());
+                lines.push("[id_format]".to_string());
+                lines.push(new_line);
+            }
+        }
+    }
+    std::fs::write(config_path, lines.join("\n") + "\n")?;
+    Ok(())
+}
 
 /// trace:FR-1-043 | ai:claude
 fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
