@@ -31,19 +31,113 @@ pub struct SessionMeta {
     /// new` record so the user-chosen title and authoritative role can
     /// override the grep heuristic.
     pub started_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// Most-recent cwd recorded in the .jsonl. Each Claude Code message
+    /// stores the cwd at message time; we sample the LAST one we see in
+    /// our parse window so worktree switches mid-session show up.
+    /// trace:STORY-59 | ai:claude
+    pub last_cwd: Option<String>,
+    /// Branch the worktree at `last_cwd` was on when we ran. Computed on
+    /// demand at table-print time (one cheap `git branch --show-current`
+    /// per unique cwd) — None if we can't resolve a branch (cwd missing,
+    /// not a repo, etc.).
+    /// trace:STORY-59 | ai:claude
+    pub branch: Option<String>,
 }
 
-pub fn list(limit: usize, no_color: bool) -> Result<()> {
+/// STORY-59: liveness inferred from activity recency. Visual indicator
+/// only — no PID tracking (Claude Code forks; child PIDs ≠ launch PID,
+/// so PID-based liveness is unreliable across reads).
+/// trace:STORY-59 | ai:claude
+fn liveness_indicator(age_seconds: u64) -> &'static str {
+    if age_seconds < 5 * 60 {
+        "●" // live (active in last 5 minutes)
+    } else if age_seconds < 60 * 60 {
+        "◐" // recent (last hour)
+    } else {
+        " " // idle
+    }
+}
+
+const RECENT_WINDOW_SECS: u64 = 24 * 60 * 60;
+
+pub fn list(limit: usize, no_color: bool, all: bool) -> Result<()> {
     if no_color {
         colored::control::set_override(false);
     }
-    let sessions = collect_sessions(limit)?;
+    let mut sessions = collect_sessions(limit)?;
+    let total = sessions.len();
+    // STORY-59: by default, hide sessions with no activity in the last
+    // 24h — long-tail abandoned sessions clutter the everyday view. The
+    // `--all` flag bypasses; we still note how many were elided.
+    if !all {
+        sessions.retain(|s| s.age_seconds < RECENT_WINDOW_SECS);
+    }
+    let hidden = total.saturating_sub(sessions.len());
     if sessions.is_empty() {
-        eprintln!("{}", "(no past sessions in this directory)".dimmed());
+        if hidden > 0 {
+            eprintln!(
+                "{}",
+                format!(
+                    "(no sessions active in the last 24h; {} older session{} hidden — pass --all to see them)",
+                    hidden,
+                    if hidden == 1 { "" } else { "s" }
+                )
+                .dimmed()
+            );
+        } else {
+            eprintln!("{}", "(no past sessions in this directory)".dimmed());
+        }
         return Ok(());
     }
+    fill_branches(&mut sessions);
     print_table(&sessions);
+    if hidden > 0 {
+        eprintln!(
+            "{}",
+            format!(
+                "({} older session{} hidden — pass --all to see them)",
+                hidden,
+                if hidden == 1 { "" } else { "s" }
+            )
+            .dimmed()
+        );
+    }
     Ok(())
+}
+
+/// STORY-59: resolve `branch` per session by running `git -C <cwd>
+/// branch --show-current` once per unique cwd. Cheap (one fork/exec per
+/// distinct worktree), and the result is cached across sessions sharing
+/// the same cwd.
+/// trace:STORY-59 | ai:claude
+fn fill_branches(sessions: &mut [SessionMeta]) {
+    use std::collections::HashMap;
+    let mut cache: HashMap<String, Option<String>> = HashMap::new();
+    for s in sessions.iter_mut() {
+        let Some(cwd) = s.last_cwd.clone() else { continue };
+        let branch = cache
+            .entry(cwd.clone())
+            .or_insert_with(|| resolve_branch(&cwd))
+            .clone();
+        s.branch = branch;
+    }
+}
+
+fn resolve_branch(cwd: &str) -> Option<String> {
+    let out = std::process::Command::new("git")
+        .args(["-C", cwd, "branch", "--show-current"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8(out.stdout).ok()?;
+    let trimmed = s.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
 }
 
 pub fn resume(id: Option<String>, limit: usize) -> Result<()> {
@@ -291,11 +385,21 @@ fn parse_session_meta(path: &Path, mtime: SystemTime, now: SystemTime) -> Result
     let mut title: Option<String> = None;
     let mut spec: Option<String> = None;
     let mut started_at: Option<chrono::DateTime<chrono::Utc>> = None;
+    let mut last_cwd: Option<String> = None;
     for (i, line) in reader.lines().enumerate() {
         if i >= MAX_LINES && title.is_some() && role.is_some() && started_at.is_some() {
             break;
         }
         let Ok(line) = line else { continue };
+
+        // STORY-59: capture the most recent cwd we see in the parse
+        // window. Each event in Claude Code's .jsonl carries `"cwd":"..."`
+        // — we read the last occurrence so a session that switched
+        // worktrees mid-flight reports its current cwd, not its launch
+        // cwd. Cheap because it's just a substring scan per line.
+        if let Some(cwd) = extract_str(&line, "\"cwd\":\"") {
+            last_cwd = Some(cwd);
+        }
 
         // First event with a `"timestamp":"..."` field — gives us a
         // close-to-launch-time anchor for FR-1-044's launches.log
@@ -363,6 +467,8 @@ fn parse_session_meta(path: &Path, mtime: SystemTime, now: SystemTime) -> Result
         spec,
         title,
         started_at,
+        last_cwd,
+        branch: None,
     })
 }
 
@@ -457,21 +563,27 @@ fn print_table(sessions: &[SessionMeta]) {
         .max()
         .unwrap_or(4)
         .max(4);
+    // STORY-59: worktree column = "<basename> @ <branch>" (truncated).
+    // 28 chars is enough for "aida-epic-20 @ epic-20-batch3" without
+    // squeezing the title.
+    const WORKTREE_W: usize = 28;
     let age_w = 6;
 
     println!(
         "{}",
         format!(
-            "{:<id_w$}  {:<age_w$}  {:<role_w$}  {:<spec_w$}  {}",
+            " {:<id_w$}  {:<age_w$}  {:<role_w$}  {:<spec_w$}  {:<wt_w$}  {}",
             "ID",
             "AGE",
             "ROLE",
             "SPEC",
+            "WORKTREE",
             "TITLE",
             id_w = id_w,
             age_w = age_w,
             role_w = role_w,
             spec_w = spec_w,
+            wt_w = WORKTREE_W,
         )
         .dimmed()
     );
@@ -482,19 +594,52 @@ fn print_table(sessions: &[SessionMeta]) {
         let role = s.role.as_deref().unwrap_or("-");
         let spec = s.spec.as_deref().unwrap_or("-");
         let title = s.title.as_deref().unwrap_or("(untitled)");
+        let worktree = format_worktree_label(s.last_cwd.as_deref(), s.branch.as_deref(), WORKTREE_W);
+        let live = liveness_indicator(s.age_seconds);
+        // Color the indicator: bright green when truly live, yellow for
+        // recent, dim for idle. Width of the indicator slot is one cell.
+        let live_colored = match live {
+            "●" => live.green().bold().to_string(),
+            "◐" => live.yellow().to_string(),
+            _ => live.dimmed().to_string(),
+        };
         println!(
-            "{:<id_w$}  {:<age_w$}  {:<role_w$}  {:<spec_w$}  {}",
+            "{} {:<id_w$}  {:<age_w$}  {:<role_w$}  {:<spec_w$}  {:<wt_w$}  {}",
+            live_colored,
             id_short.bold(),
             age,
             role.yellow(),
             spec.cyan(),
+            worktree.cyan(),
             title.dimmed(),
             id_w = id_w,
             age_w = age_w,
             role_w = role_w,
             spec_w = spec_w,
+            wt_w = WORKTREE_W,
         );
     }
+}
+
+/// STORY-59: render `<basename> @ <branch>` with truncation. Empty/no
+/// cwd shows a dash; missing branch shows just the basename.
+/// trace:STORY-59 | ai:claude
+fn format_worktree_label(cwd: Option<&str>, branch: Option<&str>, max: usize) -> String {
+    let Some(cwd) = cwd else { return "-".to_string() };
+    let basename = std::path::Path::new(cwd)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or(cwd);
+    let label = match branch {
+        Some(b) => format!("{} @ {}", basename, b),
+        None => basename.to_string(),
+    };
+    if label.chars().count() <= max {
+        return label;
+    }
+    let mut out: String = label.chars().take(max.saturating_sub(1)).collect();
+    out.push('…');
+    out
 }
 
 fn humanize_age(secs: u64) -> String {
@@ -512,19 +657,22 @@ fn humanize_age(secs: u64) -> String {
 }
 
 fn pick_interactive(limit: usize) -> Result<String> {
-    let sessions = collect_sessions(limit)?;
+    let mut sessions = collect_sessions(limit)?;
     if sessions.is_empty() {
         anyhow::bail!("no past sessions in this directory");
     }
+    fill_branches(&mut sessions);
     let labels: Vec<String> = sessions
         .iter()
         .map(|s| {
             format!(
-                "{:<8}  {:<6}  {:<10}  {:<12}  {}",
+                "{} {:<8}  {:<6}  {:<10}  {:<12}  {:<24}  {}",
+                liveness_indicator(s.age_seconds),
                 &s.id[..s.id.len().min(8)],
                 humanize_age(s.age_seconds),
                 s.role.as_deref().unwrap_or("-"),
                 s.spec.as_deref().unwrap_or("-"),
+                format_worktree_label(s.last_cwd.as_deref(), s.branch.as_deref(), 24),
                 s.title.as_deref().unwrap_or("(untitled)"),
             )
         })
@@ -535,9 +683,10 @@ fn pick_interactive(limit: usize) -> Result<String> {
         .prompt()
         .context("interactive picker cancelled")?;
 
-    // Map the picked label back to its session id (first 8 chars before
-    // padding).
-    let id_prefix: String = pick.chars().take(8).collect();
+    // Map the picked label back to its session id. Labels start with a
+    // 1-char liveness glyph + space; the id sits at chars [2..10].
+    // STORY-59: account for the leading liveness column.
+    let id_prefix: String = pick.chars().skip(2).take(8).collect();
     let chosen = sessions
         .iter()
         .find(|s| s.id.starts_with(id_prefix.trim()))
@@ -674,5 +823,56 @@ mod tests {
     fn sanitize_for_tsv_drops_tabs_newlines() {
         assert_eq!(sanitize_for_tsv("a\tb\nc"), "a b c");
         assert_eq!(sanitize_for_tsv("plain"), "plain");
+    }
+
+    /// STORY-59: liveness indicator buckets — `●` live (<5min), `◐`
+    /// recent (<1h), space for idle. The widths are visual; the test
+    /// guards the bucket boundaries.
+    /// trace:STORY-59 | ai:claude
+    #[test]
+    fn liveness_indicator_buckets() {
+        assert_eq!(liveness_indicator(0), "●");
+        assert_eq!(liveness_indicator(4 * 60 + 59), "●");
+        assert_eq!(liveness_indicator(5 * 60), "◐");
+        assert_eq!(liveness_indicator(59 * 60), "◐");
+        assert_eq!(liveness_indicator(60 * 60), " ");
+        assert_eq!(liveness_indicator(86_400), " ");
+    }
+
+    /// STORY-59: worktree label = "<basename> @ <branch>", truncated
+    /// with `…` when it overflows the column width. Empty cwd → "-".
+    /// Missing branch → just the basename.
+    /// trace:STORY-59 | ai:claude
+    #[test]
+    fn worktree_label_formatting() {
+        assert_eq!(format_worktree_label(None, None, 28), "-");
+        assert_eq!(
+            format_worktree_label(Some("/home/joe/ai/aida"), Some("main"), 28),
+            "aida @ main"
+        );
+        assert_eq!(
+            format_worktree_label(Some("/home/joe/ai/aida-epic-20"), None, 28),
+            "aida-epic-20"
+        );
+        let truncated = format_worktree_label(
+            Some("/home/joe/ai/aida-epic-20"),
+            Some("epic-20-batch3-followups-with-more"),
+            28,
+        );
+        assert!(truncated.chars().count() <= 28);
+        assert!(truncated.ends_with('…'));
+    }
+
+    /// STORY-59: extract_str pulls cwd out of a Claude Code event line.
+    /// We piggyback on the existing `extract_str` helper; this test
+    /// guards the marker we use.
+    /// trace:STORY-59 | ai:claude
+    #[test]
+    fn extract_cwd_from_event_line() {
+        let line = r#"{"type":"user","cwd":"/home/joe/ai/aida-epic-20","message":{"role":"user"}}"#;
+        assert_eq!(
+            extract_str(line, "\"cwd\":\""),
+            Some("/home/joe/ai/aida-epic-20".into())
+        );
     }
 }

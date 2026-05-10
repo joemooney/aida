@@ -310,12 +310,48 @@ pub enum ScaffoldCommand {
 /// can resume across shells — captures the working directory, last
 /// Inspect / resume past Claude Code sessions for this project, enriched
 /// with the AIDA role and most-recent spec from each session's .jsonl.
+/// STORY-67: review-prompt generation and related review-workflow
+/// helpers. v1: only `prompt`; future subcommands (e.g. `summary`,
+/// `checks`) can land here without bloating the top-level `aida` help.
+/// trace:STORY-67 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum ReviewCommand {
+    /// Generate a markdown review prompt from a set of linked
+    /// requirements' acceptance criteria. Specs come either from an
+    /// explicit `--specs` list (CSV) or from the commit-range of a
+    /// PR/MR (parsed `(REQ-ID)` trailers in commit messages).
+    /// trace:STORY-67 | ai:claude
+    Prompt {
+        /// Comma-separated list of spec IDs (e.g. "FR-1,STORY-2"). When
+        /// given, --pr is ignored.
+        #[clap(long, value_name = "SPEC-IDS")]
+        specs: Option<String>,
+
+        /// Pull spec IDs from the PR/MR's commit range. Forge auto-
+        /// detected from origin URL; override with --forge github|gitlab.
+        #[clap(long, value_name = "N", conflicts_with = "specs")]
+        pr: Option<u64>,
+
+        /// Forge override for self-hosted GHE / self-hosted GitLab
+        /// when --pr is used.
+        #[clap(long, value_name = "FORGE")]
+        forge: Option<String>,
+
+        /// Write the prompt to PATH instead of stdout. Useful when
+        /// piping into a freshly-launched Claude Code session
+        /// (`aida review prompt --pr 2 --write .aida-review-prompt.md`).
+        #[clap(long, value_name = "PATH")]
+        write: Option<String>,
+    },
+}
+
 /// trace:FR-1-043 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum SessionCommand {
     /// List recent Claude Code sessions for this project (cwd) with
     /// role + spec context extracted from each session's .jsonl. By
-    /// default shows the 20 most recent.
+    /// default shows sessions with activity in the last 24 hours, up
+    /// to 20 entries — `--all` bypasses the recency cutoff.
     List {
         /// Show at most N sessions (default 20).
         #[clap(long, short = 'n', default_value = "20")]
@@ -324,6 +360,11 @@ pub enum SessionCommand {
         /// Plain output (no color), suitable for piping.
         #[clap(long)]
         no_color: bool,
+
+        /// Bypass the default 24h recency cutoff and show every session
+        /// the limit allows. trace:STORY-59 | ai:claude
+        #[clap(long)]
+        all: bool,
     },
 
     /// Pick a session interactively and resume it via `claude --resume`.
@@ -392,6 +433,13 @@ pub enum SessionCommand {
         /// `<repo-parent>/<repo-name>-<scope-slug>/`).
         #[clap(long, value_name = "PATH")]
         path: Option<String>,
+
+        /// Forge override for `PR-N` / `MR-N` scopes when the origin
+        /// URL doesn't auto-detect (self-hosted GHE/GitLab, multi-remote
+        /// setups, etc.). Accepts `github` or `gitlab`.
+        /// trace:STORY-61 | ai:claude
+        #[clap(long, value_name = "FORGE")]
+        forge: Option<String>,
     },
 
     /// End a scoped session: remove the worktree, delete the lease,
@@ -1514,6 +1562,25 @@ pub enum QueueCommand {
         /// while in that role to see incoming work.
         #[clap(long)]
         r#for: Option<String>,
+        /// Restrict routing to sessions whose lease scope matches this
+        /// (e.g., "EPIC-20"). Default-populated to the active session's
+        /// scope when adding from inside a session worktree, unless
+        /// --no-scope is passed. Pairs with --for so two implementer
+        /// sessions don't see each other's incoming work.
+        /// trace:STORY-57 | ai:claude
+        #[clap(long)]
+        scope: Option<String>,
+        /// Restrict routing to one specific session, by 8+ char lease id
+        /// prefix. Mutually exclusive with --no-scope (passing both is
+        /// nonsense — --for-session implies a scope match too).
+        /// trace:STORY-57 | ai:claude
+        #[clap(long = "for-session", conflicts_with = "no_scope")]
+        for_session: Option<String>,
+        /// Suppress the auto-default scope when adding from inside a
+        /// session worktree. The entry stays scope-unrouted (visible to
+        /// any session in --for's role). trace:STORY-57 | ai:claude
+        #[clap(long)]
+        no_scope: bool,
         /// Add to the role's GLOBAL queue at `~/.aida/queue/<role>.yaml`
         /// instead of the local per-project queue. Requires --for or an
         /// active role context (AIDA_SESSION_ROLE). trace:FR-1-012 | ai:claude
@@ -1984,6 +2051,11 @@ pub enum Command {
     /// Code-to-requirement traceability commands
     #[clap(subcommand, hide = true)]
     Trace(TraceCommand),
+
+    /// Review-workflow helpers (review-prompt generation, etc.)
+    /// trace:STORY-67 | ai:claude
+    #[clap(subcommand)]
+    Review(ReviewCommand),
 
     /// Report generation commands
     #[clap(subcommand, hide = true)]

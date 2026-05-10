@@ -3566,9 +3566,12 @@ async fn queue_add(
         added_by,
         note: body.note.clone(),
         added_at: chrono::Utc::now(),
-        // REST API doesn't yet expose role routing; pass-through field
-        // when caller supplies it via JSON body in a future iteration.
+        // REST API doesn't yet expose role/scope/session routing;
+        // pass-through fields when caller supplies them via JSON body
+        // in a future iteration.
         for_role: None,
+        for_scope: None,
+        for_session: None,
     };
 
     state
