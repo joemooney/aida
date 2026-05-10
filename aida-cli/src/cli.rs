@@ -894,6 +894,26 @@ pub enum BlockCommand {
     Verify,
 }
 
+/// Operations on the orphan-store SHA pin (the `Aida-Store: <sha>`
+/// trailer in every code commit). trace:EPIC-21 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum StoreCommand {
+    /// Show the relationship between the current code commit and the
+    /// orphan store: which store SHA the code was paired with at commit
+    /// time, what the store HEAD is now, drift in commits between them.
+    Status,
+
+    /// Install the prepare-commit-msg hook (`aida-store-pair.sh`) into
+    /// `.git/hooks/`. Idempotent — safe to re-run. New projects get
+    /// this hook from `aida init` automatically; this command exists
+    /// for retrofitting an existing project.
+    InstallHook {
+        /// Overwrite an existing prepare-commit-msg hook (default: refuse).
+        #[clap(long)]
+        force: bool,
+    },
+}
+
 /// Maintenance + migration ops on the AIDA store. Hidden from `aida
 /// --help`; surface via `aida doctor --help`. trace:EPIC-19 | ai:claude
 #[derive(Subcommand, Debug)]
@@ -1783,6 +1803,13 @@ pub enum Command {
     /// for repairing or migrating an existing project. trace:EPIC-19
     #[clap(subcommand, hide = true)]
     Doctor(DoctorCommand),
+
+    /// Inspect and align the orphan-store SHA against code commits.
+    /// Pairs with the prepare-commit-msg hook (`aida-store-pair.sh`)
+    /// that pins the store SHA into every code commit's trailer via an
+    /// `Aida-Store: <sha>` line. trace:EPIC-21 | ai:claude
+    #[clap(subcommand)]
+    Store(StoreCommand),
 
     /// Manage personas / hats — persistent named contexts that resume
     /// across shells. `aida role enter <name>` switches; `aida role list`

@@ -149,6 +149,12 @@ fn main() -> Result<()> {
         return handle_doctor_command(doctor_cmd);
     }
 
+    // Store commands inspect git state, no AIDA storage needed.
+    // trace:EPIC-21 | ai:claude
+    if let Command::Store(store_cmd) = &cli.command {
+        return handle_store_command(store_cmd);
+    }
+
     // Help-all is pure text; no storage needed.
     if let Command::HelpAll = &cli.command {
         print_help_all();
@@ -395,6 +401,7 @@ fn main() -> Result<()> {
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::Doctor(_) => unreachable!("doctor is dispatched before storage init"),
+        Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
@@ -1216,6 +1223,7 @@ fn handle_git_backend_command(
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
         Command::Doctor(_) => unreachable!("doctor is dispatched before storage init"),
+        Command::Store(_) => unreachable!("store is dispatched before storage init"),
         Command::HelpAll => unreachable!("help-all is dispatched before storage init"),
         Command::Role(_) => unreachable!("role is dispatched before storage init"),
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
@@ -6556,6 +6564,223 @@ fn humanize_relative(t: chrono::DateTime<chrono::Utc>) -> String {
 // statusLine.command setting. Cache-only; no git operations, no API calls.
 // trace:EPIC-1-001 | ai:claude
 // ----------------------------------------------------------------------------
+
+// ----------------------------------------------------------------------------
+// EPIC-21 — `aida store`: code↔store commit pairing.
+// trace:EPIC-21 | ai:claude
+// ----------------------------------------------------------------------------
+
+fn handle_store_command(cmd: &cli::StoreCommand) -> Result<()> {
+    match cmd {
+        cli::StoreCommand::Status => store_status(),
+        cli::StoreCommand::InstallHook { force } => store_install_hook(*force),
+    }
+}
+
+/// Print the alignment between this commit's paired store SHA (from the
+/// `Aida-Store:` trailer) and the current orphan store HEAD. Reports
+/// "aligned" when they match, "drift" with commit count otherwise.
+/// trace:EPIC-21 | ai:claude
+fn store_status() -> Result<()> {
+    let project_root = find_project_root()?;
+    let store_path = project_root.join(".aida-store");
+
+    // Current code HEAD.
+    let code_head = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&project_root)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .ok()
+        .and_then(|o| {
+            if o.status.success() {
+                Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+            } else {
+                None
+            }
+        });
+    let code_head = match code_head {
+        Some(s) if !s.is_empty() => s,
+        _ => anyhow::bail!("not in a git repo or no commits yet"),
+    };
+
+    // Paired store SHA — read the Aida-Store trailer from HEAD's message.
+    let head_msg = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&project_root)
+        .args(["log", "-1", "--format=%B"])
+        .output()?;
+    let head_msg = String::from_utf8_lossy(&head_msg.stdout).to_string();
+    let trailers = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&project_root)
+        .args(["interpret-trailers", "--parse"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()?;
+    {
+        use std::io::Write;
+        if let Some(mut stdin) = trailers.stdin.as_ref().take() {
+            let _ = stdin.write_all(head_msg.as_bytes());
+        }
+    }
+    let trailer_output = trailers.wait_with_output()?;
+    let trailer_text = String::from_utf8_lossy(&trailer_output.stdout).to_string();
+    let paired_store_sha: Option<String> = trailer_text
+        .lines()
+        .find_map(|l| l.strip_prefix("Aida-Store:").map(|s| s.trim().to_string()));
+
+    // Current orphan-store HEAD.
+    let store_head: Option<String> = if store_path.exists() {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&store_path)
+            .args(["rev-parse", "HEAD"])
+            .output()
+            .ok()
+            .and_then(|o| {
+                if o.status.success() {
+                    Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                } else {
+                    None
+                }
+            })
+    } else {
+        None
+    };
+
+    println!("{}", "Code ↔ store pairing".bold());
+    println!("  code HEAD:        {}", short_sha(&code_head).cyan());
+    match &paired_store_sha {
+        Some(p) => println!("  paired store SHA: {}", short_sha(p).cyan()),
+        None => {
+            println!(
+                "  paired store SHA: {} {}",
+                "(none)".dimmed(),
+                "— commit was made before the prepare-commit-msg hook was installed".dimmed()
+            );
+        }
+    }
+    match &store_head {
+        Some(s) => println!("  current store:    {}", short_sha(s).cyan()),
+        None => println!("  current store:    {} (no .aida-store/)", "(missing)".yellow()),
+    }
+    println!();
+
+    match (paired_store_sha.as_deref(), store_head.as_deref()) {
+        (Some(p), Some(c)) if p == c => {
+            println!("{} aligned — code commit was paired with the current store HEAD.", "✓".green());
+        }
+        (Some(p), Some(c)) => {
+            // Compute drift: how many commits is store HEAD ahead of/behind paired.
+            let drift = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&store_path)
+                .args(["rev-list", "--left-right", "--count", &format!("{}...{}", p, c)])
+                .output()
+                .ok();
+            let (behind, ahead) = match drift {
+                Some(o) if o.status.success() => {
+                    let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                    let parts: Vec<&str> = s.split_whitespace().collect();
+                    let b: i32 = parts.first().and_then(|x| x.parse().ok()).unwrap_or(0);
+                    let a: i32 = parts.get(1).and_then(|x| x.parse().ok()).unwrap_or(0);
+                    (b, a)
+                }
+                _ => (-1, -1),
+            };
+            if behind < 0 {
+                println!(
+                    "{} drift — store moved since this commit was made (could not count commits, paired SHA may not exist locally).",
+                    "·".yellow()
+                );
+            } else {
+                println!(
+                    "{} drift — store moved {} commit(s) since this code commit was made.",
+                    "·".yellow(),
+                    ahead
+                );
+                if behind > 0 {
+                    println!(
+                        "  Note: {} commit(s) on the paired SHA are not on the current store HEAD — possible store-side history rewrite.",
+                        behind
+                    );
+                }
+            }
+            println!(
+                "  v2 will offer: {}",
+                "aida store checkout HEAD   # rewind .aida-store/ to the paired SHA".dimmed()
+            );
+        }
+        (None, _) => {
+            println!(
+                "{} no Aida-Store trailer on this commit — install the hook with: {}",
+                "·".dimmed(),
+                "aida store install-hook".cyan()
+            );
+        }
+        (Some(_), None) => {
+            println!(
+                "{} commit has a paired SHA but no .aida-store/ in the worktree to compare against.",
+                "·".yellow()
+            );
+        }
+    }
+    Ok(())
+}
+
+fn short_sha(sha: &str) -> String {
+    if sha.len() >= 7 {
+        sha[..7].to_string()
+    } else {
+        sha.to_string()
+    }
+}
+
+/// Install the prepare-commit-msg hook from EMBEDDED_TEMPLATES into
+/// `.git/hooks/prepare-commit-msg`. Idempotent. trace:EPIC-21 | ai:claude
+fn store_install_hook(force: bool) -> Result<()> {
+    let project_root = find_project_root()?;
+    let hooks_dir = project_root.join(".git").join("hooks");
+    if !hooks_dir.exists() {
+        anyhow::bail!(
+            "{} doesn't exist — is this a git repo?",
+            hooks_dir.display()
+        );
+    }
+    let target = hooks_dir.join("prepare-commit-msg");
+    if target.exists() && !force {
+        anyhow::bail!(
+            "{} already exists — pass --force to overwrite, or inspect with `cat {}`",
+            target.display(),
+            target.display()
+        );
+    }
+
+    let body = aida_core::templates::EMBEDDED_TEMPLATES
+        .get("hooks/aida-store-pair.sh")
+        .copied()
+        .ok_or_else(|| anyhow::anyhow!("aida-store-pair.sh missing from embedded templates"))?;
+
+    std::fs::write(&target, body)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = std::fs::metadata(&target)?.permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&target, perms)?;
+    }
+
+    println!(
+        "{} installed prepare-commit-msg hook at {}",
+        "✓".green().bold(),
+        target.display().to_string().cyan()
+    );
+    println!();
+    println!("Every future code commit will get an `Aida-Store: <sha>` trailer pinning the");
+    println!("orphan-store HEAD at commit time. Inspect alignment with: {}", "aida store status".cyan());
+    Ok(())
+}
 
 // ----------------------------------------------------------------------------
 // EPIC-19 — `aida doctor`: maintenance + migration commands.

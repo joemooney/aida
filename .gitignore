@@ -68,7 +68,12 @@ docker/.env
 .aida/.dev-*.log
 
 # AIDA distributed store (orphan branch worktree)
+# Pattern matches both the directory (in the canonical worktree) and a
+# symlink (in `aida session start`-created sibling worktrees, which
+# point back at the canonical store). Without the bare-name pattern,
+# git treats the symlink as a tracked file. trace:EPIC-21 | ai:claude
 .aida-store/
+.aida-store
 
 # AIDA SQLite cache projection (rebuildable from git store)
 # trace:EPIC-1-001 | ai:claude
