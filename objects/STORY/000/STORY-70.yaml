@@ -1,0 +1,43 @@
+id: 019e1046-c9c9-7e23-a1d9-3e82b0a0ca37
+spec_id: STORY-70
+agreed_id: STORY-70
+title: 'aida doctor convention-check: warn when STORY/BUG descriptions lack acceptance section'
+description: |-
+  STORY-67 shipped a review-prompt generator that pulls "## Acceptance" / "## Verify" / "## Test cases" sections from each linked req's description. When a requirement has no recognized section, the generator emits a placeholder ("_no acceptance section in description — review against title and description._"). Useful but reactive — the gap is only visible during review.
+
+  ## Goal
+
+  Make the convention enforced (or at least surfaced) at write time: a doctor lint that warns when STORY / BUG descriptions don't contain a recognized acceptance heading.
+
+  ## Shape
+
+  ```
+  $ aida doctor convention-check
+  ⚠ STORY-71  no `## Acceptance` / `## Verify` section
+  ⚠ BUG-65    no `## Acceptance` / `## Verify` section
+  2 of 38 STORY/BUG descriptions missing acceptance criteria
+    (run `aida edit <id>` to add — STORY-67 will pick it up automatically)
+  ```
+
+  Optionally hook into `aida add` post-create (warn when type is STORY/BUG and no recognized heading), so newly-filed reqs get the nudge before they're forgotten.
+
+  ## Recognized headings (matches STORY-67's extractor)
+
+  \`## Acceptance\`, \`## Verify\`, \`## Test cases\`, \`## Tests\`, \`## Verification\` (case-insensitive).
+
+  ## Why now
+
+  Surfaced 2026-05-09 by STORY-67. Without this lint, the review-prompt placeholder will keep showing up because there's no upstream pressure to write the section. Filing as low-priority because the workaround (writing the section) is already documented elsewhere.
+
+  ## Out of scope
+
+  - Auto-generating an acceptance section from the title/description with AI — defer
+  - Failing CI on missing sections — too aggressive in v1
+  - Per-type customization (e.g., NFRs need a different heading) — defer
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T05:05:35.177222511Z
+modified_at: 2026-05-10T05:05:35.177222511Z
+req_type: Story
