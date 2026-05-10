@@ -35,10 +35,10 @@ description: |
   - [ ] `--force-parent` bypasses the check
   - [ ] Same check applies to `aida rel add <X> <Y> --type child` when Y is terminal-status
   - [ ] Test covers all four combos (parent status × --force-parent)
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T06:55:15.099630258Z
-modified_at: 2026-05-10T19:04:18.638743349Z
+modified_at: 2026-05-10T19:10:23.698864512Z
 req_type: Bug
