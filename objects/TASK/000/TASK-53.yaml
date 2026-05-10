@@ -1,0 +1,65 @@
+id: 019e1328-674e-7dc0-9ff1-134fb5669e83
+spec_id: TASK-53
+agreed_id: TASK-53
+title: 'aida session start: pre-flight conflict detection — warn if other live sessions on same scope touch overlapping files'
+description: |
+  Caught 2026-05-10 from the PR-4 vs PR-5 rebase pain. Batch4 (STORY-65 session_start refactor) and batch5 (STORY-71 session_start refactor) both touched `session_start` independently while running concurrent sessions. Neither agent knew about the other's in-flight refactor. Result: gnarly rebase with 16+ conflicts in main.rs when batch4 had to absorb merged batch5.
+
+  ## Today's behavior
+
+  `aida session start --owns EPIC-20 --branch X` creates a new lease and worktree without consulting other active leases on EPIC-20. Silently ships you into a parallel-work zone where conflicts are latent.
+
+  ## Desired behavior
+
+  At session start, after creating the lease but before printing the success summary:
+
+  1. List other active leases on the same `scope` (EPIC-20 in this case)
+  2. For each, look at the recent commits on its branch: `git log <their-branch> --since="14 days ago" --name-only`
+  3. Compare file lists to the recent commits on YOUR base branch + your historical session activity
+  4. If overlap exists (same files touched recently), emit a warning:
+
+  ```
+  ✓ session 019e1300 started
+    scope: EPIC-20
+    branch: epic-20-batch6
+    worktree: /home/joe/ai/aida-epic-20
+
+  ⚠ Concurrent sessions on EPIC-20 detected:
+      019e1026 (epic-20-batch4) — last activity 2h ago — touches aida-cli/src/main.rs, aida-cli/src/cli.rs
+      019e1026's queue head: STORY-65 (auto-branch + role inheritance) [In Progress]
+
+    Likely conflict zone: aida-cli/src/main.rs session_start function.
+    Consider coordinating with the other agent — or accept that a rebase will be needed when their PR merges first.
+  ```
+
+  This doesn't block. It informs. The user can proceed anyway.
+
+  ## Implementation
+
+  - Read `.aida/sessions/*.toml` for all active leases on the same scope
+  - For each, extract `branch` and `worktree_path`
+  - `git log <other-branch> --since=14d --name-only --pretty=` to get recently-touched files
+  - Compare against the new session's likely working set (could be heuristic: "you're on EPIC-20, so probably aida-cli/* and aida-core/*")
+  - Emit warning with concrete file list + the other session's queue head for context
+
+  ## Composes with
+
+  - STORY-69 (sysinfo liveness probe) — already detects which leases have live claude processes; a stale lease (no live process) is less worrying than an active one
+  - STORY-78 (cache:behind indicator) — same family of "surface latent friction before it bites"
+  - TASK-43 (aida pull) — companion: if user pulls before session start, the base-branch comparison is more accurate
+
+  ## Acceptance
+
+  - [ ] `aida session start` lists overlapping-file warnings for active leases on the same scope
+  - [ ] Warning is informative, not blocking
+  - [ ] Shows the other session's queue head for context
+  - [ ] No warning when other sessions touch different file sets
+  - [ ] Silent when no other active leases on the scope
+  - [ ] Tested with: 0 overlap, 1 overlap, multi-overlap, stale-lease (filter out via STORY-69's liveness)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T18:31:15.534362536Z
+modified_at: 2026-05-10T18:31:15.534362536Z
+req_type: Task
