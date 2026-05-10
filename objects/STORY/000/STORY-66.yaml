@@ -1,0 +1,33 @@
+id: 019e101a-8766-7d82-8d67-e8cc2aab1456
+spec_id: STORY-66
+agreed_id: STORY-66
+title: Auto-queue PR/MR for reviewer when opened from a session
+description: |
+  Today, when an agent in a session runs `gh pr create` (or the equivalent `glab mr create`), no AIDA-side action happens. The PR exists on the forge, but there's no queue item, no record linking the PR to the work it covers, no signal to a reviewer agent that there's something to review.
+
+  ## Proposal
+
+  Two integration points:
+
+  1. **post-PR-open hook**: when `aida session start --owns PR-N` is the next action, fine — but BEFORE that, when the implementer closes their session with an open PR, the system should record it. Two ways:
+     - aida session end detects open PRs from the just-ended worktree's branch, files a STORY-or-equivalent: "Review PR-N (covers: STORY-X, STORY-Y, BUG-Z)" routed to reviewer role
+     - OR: a wrapper command `aida pr open --title "..." --body "..."` (or `aida mr open` for GitLab) that runs gh/glab AND creates the queue item
+
+  2. **link the PR to the underlying reqs**: parse the PR body / commit messages for spec_ids; create relationships between PR-N's req and each referenced spec (relation type: "implements"). Then `aida show STORY-X` shows "implemented by PR-2".
+
+  ## Why now
+
+  User concrete observation 2026-05-09: agent opened PR #2 covering 5 reqs (3 bugs + 2 stories). No queue item appeared for the reviewer. The user had to manually queue and brief the reviewer. Friction point that scales with concurrent sessions.
+
+  ## Out of scope
+
+  - Auto-merge after CI passes — too autonomous for v1
+  - Webhook-based detection (forge → AIDA) — needs server-side; defer
+  - Cross-forge sync (PR ↔ MR linked) — already covered by aida-core's GitLabCommand
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-10T04:17:14.598905756Z
+modified_at: 2026-05-10T04:17:14.598905756Z
+req_type: Story
