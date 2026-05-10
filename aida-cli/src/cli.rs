@@ -320,7 +320,13 @@ pub enum ReviewCommand {
     /// requirements' acceptance criteria. Specs come either from an
     /// explicit `--specs` list (CSV) or from the commit-range of a
     /// PR/MR (parsed `(REQ-ID)` trailers in commit messages).
-    /// trace:STORY-67 | ai:claude
+    ///
+    /// For best results with --pr, install `gh` (https://cli.github.com)
+    /// for GitHub or `glab` (https://gitlab.com/gitlab-org/cli) for
+    /// GitLab. Without them, AIDA falls back to base=main + a local
+    /// review branch named `pr-N` / `mr-N` — works when the PR was
+    /// started via `aida session start --owns PR-N`, surprising
+    /// otherwise. trace:STORY-67, TASK-40 | ai:claude
     Prompt {
         /// Comma-separated list of spec IDs (e.g. "FR-1,STORY-2"). When
         /// given, --pr is ignored.
@@ -329,6 +335,9 @@ pub enum ReviewCommand {
 
         /// Pull spec IDs from the PR/MR's commit range. Forge auto-
         /// detected from origin URL; override with --forge github|gitlab.
+        /// Resolves base/head via `gh pr view` / `glab mr view` when
+        /// installed; otherwise falls back to base=main and a local
+        /// review branch named `pr-N` / `mr-N`. trace:TASK-40 | ai:claude
         #[clap(long, value_name = "N", conflicts_with = "specs")]
         pr: Option<u64>,
 
@@ -450,6 +459,35 @@ pub enum SessionCommand {
         /// trace:STORY-65 | ai:claude
         #[clap(long, value_name = "STYLE", default_value = "auto")]
         branch_style: String,
+
+        /// After creating the worktree + lease, launch Claude Code inside
+        /// it: chdirs into the worktree, records launch metadata in the
+        /// same log as `aida session new`, then execs
+        /// `claude --permission-mode <mode>`. Collapses the usual
+        /// "start → cd → session new" three-step into one command.
+        /// trace:STORY-54 | ai:claude
+        #[clap(long, short = 'l')]
+        launch: bool,
+
+        /// Title for the launched session (only used with --launch).
+        /// Shown in `aida session list`. Prompted interactively when
+        /// omitted; pass an empty string to skip the prompt.
+        /// trace:STORY-54 | ai:claude
+        #[clap(long, short = 't')]
+        title: Option<String>,
+
+        /// Claude Code permission mode for the launch. Common values:
+        /// `bypassPermissions` (default), `acceptEdits`, `default`,
+        /// `plan`. Ignored without --launch.
+        /// trace:STORY-54 | ai:claude
+        #[clap(long, default_value = "bypassPermissions")]
+        permission_mode: String,
+
+        /// Override the role recorded for the launched session
+        /// (defaults to $AIDA_SESSION_ROLE). Ignored without --launch.
+        /// trace:STORY-54 | ai:claude
+        #[clap(long)]
+        role: Option<String>,
     },
 
     /// End a scoped session: remove the worktree, delete the lease,
@@ -1093,6 +1131,19 @@ pub enum DoctorCommand {
     /// plus a few smaller checks. Exits non-zero if any check found a
     /// problem. trace:EPIC-19 | ai:claude
     Fsck,
+
+    /// Check that STORY / BUG descriptions contain a recognized
+    /// acceptance heading (`## Acceptance`, `## Verify`, `## Tests`,
+    /// `## Test cases`, `## Verification` — case-insensitive). Surfaced
+    /// by STORY-67's review-prompt generator: missing sections produce
+    /// a placeholder downstream, this lint catches them at write-time.
+    /// Exits non-zero if any STORY/BUG is missing a section.
+    /// trace:STORY-70 | ai:claude
+    ConventionCheck {
+        /// Quiet mode — print only the summary line, omit per-spec rows.
+        #[clap(long, short = 'q')]
+        quiet: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]

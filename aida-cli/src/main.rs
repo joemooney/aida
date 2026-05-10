@@ -6160,23 +6160,20 @@ fn record_role_activity(spec_id: &str, action: &str) {
         Ok(t) => t,
         Err(_) => return,
     };
-    // Dedupe consecutive entries on the same spec_id+action.
+    // BUG-65: LRU-by-(spec_id, action). Drop any prior entry with the
+    // same key, then insert at the front — interleaved sequences like
+    // [show A, edit B, show A] no longer leave a stale duplicate behind.
+    // trace:BUG-65 | ai:claude
     let entry = RoleActivity {
         spec_id: spec_id.to_string(),
         action: action.to_string(),
         at: chrono::Utc::now(),
     };
-    let dup = state
+    state
         .activity
-        .first()
-        .map(|prev| prev.spec_id == entry.spec_id && prev.action == entry.action)
-        .unwrap_or(false);
-    if !dup {
-        state.activity.insert(0, entry);
-        state.activity.truncate(ACTIVITY_MAX);
-    } else if let Some(first) = state.activity.first_mut() {
-        first.at = entry.at;
-    }
+        .retain(|prev| !(prev.spec_id == entry.spec_id && prev.action == entry.action));
+    state.activity.insert(0, entry);
+    state.activity.truncate(ACTIVITY_MAX);
     state.last_active_at = chrono::Utc::now();
     let _ = save_role_at(&state, &path);
 }
@@ -7016,7 +7013,83 @@ fn handle_doctor_command(cmd: &cli::DoctorCommand) -> Result<()> {
             yes,
         } => doctor_validate_trace_comments(*strip_dangling, *dry_run, *yes),
         cli::DoctorCommand::Fsck => doctor_fsck(),
+        cli::DoctorCommand::ConventionCheck { quiet } => doctor_convention_check(*quiet),
     }
+}
+
+/// STORY-70: a STORY or BUG description should carry an acceptance
+/// section that STORY-67's review-prompt generator can lift verbatim.
+/// Returns true when the requirement's type is in the lint scope and
+/// its description doesn't carry one of the recognized headings.
+/// trace:STORY-70 | ai:claude
+fn requirement_missing_acceptance(req: &aida_core::Requirement) -> bool {
+    matches!(
+        req.req_type,
+        aida_core::RequirementType::Story | aida_core::RequirementType::Bug
+    ) && extract_acceptance_section(&req.description).is_none()
+}
+
+/// STORY-70: walk the orphan store, flag STORY/BUG requirements whose
+/// descriptions don't contain a recognized acceptance heading. Output
+/// shape mirrors the other doctor commands (per-finding rows + a final
+/// summary). Exits non-zero on findings so CI/scripts can gate on it.
+/// trace:STORY-70 | ai:claude
+fn doctor_convention_check(quiet: bool) -> Result<()> {
+    let project_root = find_project_root()?;
+    let objects_root = project_root.join(".aida-store").join("objects");
+    if !objects_root.exists() {
+        println!("(no objects/ tree — nothing to check)");
+        return Ok(());
+    }
+
+    let reqs = aida_core::object_store::load_all_objects(&objects_root)?;
+    let mut total_in_scope: usize = 0;
+    let mut missing: Vec<(String, String)> = Vec::new();
+    for req in &reqs {
+        if !matches!(
+            req.req_type,
+            aida_core::RequirementType::Story | aida_core::RequirementType::Bug
+        ) {
+            continue;
+        }
+        total_in_scope += 1;
+        if requirement_missing_acceptance(req) {
+            let id = req.spec_id.clone().unwrap_or_else(|| req.id.to_string());
+            missing.push((id, req.title.clone()));
+        }
+    }
+    missing.sort_by(|a, b| a.0.cmp(&b.0));
+
+    if missing.is_empty() {
+        println!(
+            "{} all {} STORY/BUG description(s) carry an acceptance section.",
+            "✓".green(),
+            total_in_scope
+        );
+        return Ok(());
+    }
+
+    if !quiet {
+        for (id, title) in &missing {
+            println!(
+                "{} {}  no `## Acceptance` / `## Verify` section  {}",
+                "⚠".yellow(),
+                id.bold(),
+                title.dimmed()
+            );
+        }
+    }
+    println!(
+        "{} of {} STORY/BUG descriptions missing acceptance criteria",
+        format!("{}", missing.len()).bold(),
+        total_in_scope
+    );
+    println!(
+        "  ({})",
+        "run `aida edit <id>` to add — STORY-67 will pick it up automatically"
+            .dimmed()
+    );
+    std::process::exit(1);
 }
 
 /// Walk every YAML in objects/, collect every `relationships[*].target_id`
@@ -8289,16 +8362,29 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             permission_mode,
             role,
         } => session::new_session(title.clone(), permission_mode, role.clone()),
-        SessionCommand::Start { owns, branch, base, path, forge, branch_style } => {
-            session_start(
-                owns,
-                branch.as_deref(),
-                base.as_deref(),
-                path.as_deref(),
-                forge.as_deref(),
-                branch_style,
-            )
-        }
+        SessionCommand::Start {
+            owns,
+            branch,
+            base,
+            path,
+            forge,
+            branch_style,
+            launch,
+            title,
+            permission_mode,
+            role,
+        } => session_start(
+            owns,
+            branch.as_deref(),
+            base.as_deref(),
+            path.as_deref(),
+            forge.as_deref(),
+            branch_style,
+            *launch,
+            title.clone(),
+            permission_mode,
+            role.clone(),
+        ),
         SessionCommand::End { id, yes, force } => session_end(id.as_deref(), *yes, *force),
         SessionCommand::Leases { verbose } => session_leases(*verbose),
         SessionCommand::Show { id } => session_show(id.as_deref()),
@@ -8341,6 +8427,39 @@ struct SessionLease {
     /// the worktree). Optional for back-compat. trace:STORY-73 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     creator_pid: Option<u32>,
+    /// Parent project's `target/` dir, captured so the session shell can
+    /// share its cargo build cache with the parent worktree (avoids a full
+    /// rebuild on first `cargo build` inside the session). `None` when the
+    /// project doesn't have a `target/` (e.g., non-Rust project, or fresh
+    /// checkout that's never been built). Sourced via `.aida/session-env.sh`.
+    /// trace:STORY-52 | ai:claude
+    #[serde(default)]
+    cargo_target_dir: Option<std::path::PathBuf>,
+    /// Parent project root (the worktree where `aida session start` ran).
+    /// Recorded so cross-worktree views like `aida session list` can walk
+    /// the parent's Claude Code session directory in addition to the
+    /// session worktree's own. `None` for leases written before STORY-58.
+    /// trace:STORY-58 | ai:claude
+    #[serde(default)]
+    parent_project_root: Option<std::path::PathBuf>,
+    /// STORY-71: for PR/MR review sessions (--owns PR-N / MR-N), the
+    /// PR head commit SHA captured via `gh pr view` / `glab mr view` at
+    /// session-start time. `None` when the scope isn't a PR/MR or when
+    /// the forge CLI wasn't available. Surfaced by `aida session show`.
+    /// trace:STORY-71 | ai:claude
+    #[serde(default)]
+    pr_head_sha: Option<String>,
+    /// STORY-71: PR base commit SHA at session-start time (companion to
+    /// pr_head_sha). Lets the reviewer recompute the diff range later
+    /// without round-tripping to the forge.
+    /// trace:STORY-71 | ai:claude
+    #[serde(default)]
+    pr_base_sha: Option<String>,
+    /// STORY-71: PR base ref name (e.g. `main`). Mostly informational —
+    /// for reporting in `aida session show`.
+    /// trace:STORY-71 | ai:claude
+    #[serde(default)]
+    pr_base_ref: Option<String>,
 }
 
 fn leases_dir(project_root: &std::path::Path) -> std::path::PathBuf {
@@ -8390,6 +8509,34 @@ fn active_lease_for_cwd(
     list_leases(project_root)
         .into_iter()
         .find(|l| canon == l.worktree_path || canon.starts_with(&l.worktree_path))
+}
+
+/// STORY-58: from inside a session worktree, return the parent project's
+/// root path so cross-worktree views (currently just `aida session list`)
+/// can also surface sessions launched from the parent. `None` when:
+///   - cwd isn't covered by an active lease (not in a session), OR
+///   - the lease was written before STORY-58 (no parent recorded), OR
+///   - we can't locate any project root to read leases from.
+/// trace:STORY-58 | ai:claude
+pub(crate) fn parent_project_root_for_session(
+    cwd: &std::path::Path,
+) -> Option<std::path::PathBuf> {
+    // The lease dir is `<root>/.aida/sessions/`. Inside a session worktree
+    // that dir is a symlink back to the parent project's, so `list_leases`
+    // returns the same set either way. Walk up from cwd looking for any
+    // ancestor that has `.aida/sessions/`, then ask for its lease set.
+    let canon = cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf());
+    let mut probe = canon.as_path();
+    loop {
+        if probe.join(".aida").join("sessions").is_dir() {
+            let lease = active_lease_for_cwd(probe, &canon)?;
+            return lease.parent_project_root;
+        }
+        match probe.parent() {
+            Some(p) => probe = p,
+            None => return None,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -8481,23 +8628,17 @@ fn append_session_activity(
         action: action.to_string(),
         at: chrono::Utc::now(),
     };
-    let dup = log
-        .entries
-        .first()
-        .map(|prev| {
-            prev.role == entry.role
-                && prev.spec_id == entry.spec_id
-                && prev.action == entry.action
-        })
-        .unwrap_or(false);
-    if dup {
-        if let Some(first) = log.entries.first_mut() {
-            first.at = entry.at;
-        }
-    } else {
-        log.entries.insert(0, entry);
-        log.entries.truncate(SESSION_ACTIVITY_MAX);
-    }
+    // BUG-65: LRU-by-(role, spec_id, action). Drop any prior entry with
+    // the same key, then insert at the front — interleaved actions across
+    // specs no longer accumulate stale duplicates.
+    // trace:BUG-65 | ai:claude
+    log.entries.retain(|prev| {
+        !(prev.role == entry.role
+            && prev.spec_id == entry.spec_id
+            && prev.action == entry.action)
+    });
+    log.entries.insert(0, entry);
+    log.entries.truncate(SESSION_ACTIVITY_MAX);
     save_session_activity(project_root, session_id, &log)
 }
 
@@ -8856,6 +8997,116 @@ impl ReviewForge {
             Self::GitLab => format!("mr-{}", n),
         }
     }
+
+    /// STORY-71: forge CLI binary name used to enrich the lease with the
+    /// PR's head/base SHAs (and to surface a clear stderr note when it's
+    /// not on PATH).
+    /// trace:STORY-71 | ai:claude
+    fn cli_name(&self) -> &'static str {
+        match self {
+            Self::GitHub => "gh",
+            Self::GitLab => "glab",
+        }
+    }
+
+    fn cli_install_url(&self) -> &'static str {
+        match self {
+            Self::GitHub => "https://cli.github.com",
+            Self::GitLab => "https://gitlab.com/gitlab-org/cli",
+        }
+    }
+}
+
+/// STORY-71: PR/MR head + base metadata captured at session-start time.
+/// Recorded into the lease so `aida session show` can display it without
+/// re-querying the forge, and so a reviewer can recompute the diff range
+/// later even after the PR has moved on.
+/// trace:STORY-71 | ai:claude
+#[derive(Debug, Clone, Default)]
+struct PrMetadata {
+    head_sha: Option<String>,
+    base_sha: Option<String>,
+    base_ref: Option<String>,
+}
+
+/// STORY-71: query the forge CLI for a PR/MR's head/base SHAs + base ref.
+/// Returns `Err(reason)` when the CLI isn't installed or the query fails
+/// (caller turns that into a stderr note + Default fallback) and
+/// `Ok(None)` when the JSON parsed but key fields were missing.
+/// trace:STORY-71 | ai:claude
+fn query_pr_metadata(
+    forge: ReviewForge,
+    n: u64,
+    project_root: &std::path::Path,
+) -> std::result::Result<PrMetadata, String> {
+    let cli = forge.cli_name();
+    let n_str = n.to_string();
+    let args: Vec<&str> = match forge {
+        ReviewForge::GitHub => vec![
+            "pr",
+            "view",
+            n_str.as_str(),
+            "--json",
+            "headRefOid,baseRefOid,baseRefName",
+        ],
+        ReviewForge::GitLab => vec!["mr", "view", n_str.as_str(), "--output", "json"],
+    };
+    // gh/glab inherit the working directory; both honor cwd to find the
+    // matching repo for the PR/MR number, so we set current_dir rather
+    // than relying on `-C` which neither CLI accepts.
+    let out = std::process::Command::new(cli)
+        .current_dir(project_root)
+        .args(&args)
+        .output()
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                format!(
+                    "`{}` not on PATH ({} not installed?)",
+                    cli,
+                    forge.cli_install_url()
+                )
+            } else {
+                format!("`{}` failed to spawn: {}", cli, e)
+            }
+        })?;
+    if !out.status.success() {
+        return Err(format!(
+            "`{} {}` exited {}",
+            cli,
+            args.join(" "),
+            out.status
+        ));
+    }
+    let json: serde_json::Value = serde_json::from_slice(&out.stdout)
+        .map_err(|e| format!("`{}` JSON parse failed: {}", cli, e))?;
+    Ok(parse_pr_metadata_json(forge, &json))
+}
+
+/// STORY-71: extract the head SHA / base SHA / base ref out of the JSON
+/// the forge CLI returned. Pulled out of `query_pr_metadata` so unit
+/// tests can pin the parsing without invoking the CLI.
+/// trace:STORY-71 | ai:claude
+fn parse_pr_metadata_json(forge: ReviewForge, json: &serde_json::Value) -> PrMetadata {
+    let s = |v: &serde_json::Value| -> Option<String> {
+        v.as_str().map(|s| s.to_string()).filter(|s| !s.is_empty())
+    };
+    match forge {
+        ReviewForge::GitHub => PrMetadata {
+            head_sha: s(&json["headRefOid"]),
+            base_sha: s(&json["baseRefOid"]),
+            base_ref: s(&json["baseRefName"]),
+        },
+        ReviewForge::GitLab => {
+            // glab's mr view --output json field names mirror GitLab's
+            // REST API: `sha` (head), `diff_refs.base_sha`, `target_branch`.
+            // Source-of-truth list: `glab api projects/:id/merge_requests/N`.
+            PrMetadata {
+                head_sha: s(&json["sha"]),
+                base_sha: s(&json["diff_refs"]["base_sha"]),
+                base_ref: s(&json["target_branch"]),
+            }
+        }
+    }
 }
 
 /// STORY-61: parse `PR-N` / `MR-N` scope strings (case-insensitive).
@@ -8986,6 +9237,10 @@ fn session_start(
     explicit_path: Option<&str>,
     forge_override: Option<&str>,
     branch_style: &str,
+    launch_claude: bool,
+    launch_title: Option<String>,
+    launch_permission_mode: &str,
+    launch_role: Option<String>,
 ) -> Result<()> {
     let project_root = find_project_root()?;
     let slug = slugify(owns);
@@ -9076,6 +9331,12 @@ fn session_start(
         }
     }
 
+    // STORY-71: PR metadata captured from `gh`/`glab` for review sessions.
+    // Populated below and stitched into the lease so `aida session show`
+    // can display head/base SHAs without a round-trip to the forge.
+    // trace:STORY-71 | ai:claude
+    let mut pr_metadata: PrMetadata = PrMetadata::default();
+
     if let Some((forge, n)) = review_target {
         // STORY-61 review flow:
         //   1. fetch the PR/MR head ref from origin into the local branch
@@ -9120,6 +9381,30 @@ fn session_start(
         let _ = std::io::stderr().write_all(&res.stderr);
         if !res.status.success() {
             anyhow::bail!("`git worktree add` failed");
+        }
+
+        // STORY-71: enrich the lease with PR metadata via gh/glab. The
+        // worktree is already on the PR's code (the fetch above did the
+        // real work) — this pass is just for the head/base SHAs the
+        // reviewer wants to see in `aida session show`. CLI-not-installed
+        // is a soft failure: the session start succeeds and we print one
+        // stderr line so the user knows what they're missing.
+        // trace:STORY-71 | ai:claude
+        match query_pr_metadata(forge, n, &project_root) {
+            Ok(meta) => pr_metadata = meta,
+            Err(reason) => {
+                eprintln!(
+                    "{} {}",
+                    "ℹ".cyan(),
+                    format!(
+                        "skipped PR metadata capture: {} \u{2014} install {} from {} for richer `aida session show` output",
+                        reason,
+                        forge.cli_name(),
+                        forge.cli_install_url()
+                    )
+                    .dimmed()
+                );
+            }
         }
     } else {
         // Default flow: create worktree on a NEW branch (the original
@@ -9200,6 +9485,22 @@ fn session_start(
         }
     }
 
+    // STORY-52: share parent's cargo target/ with the new worktree so the
+    // first `cargo build` inside the session reuses the existing build
+    // cache instead of rebuilding from scratch (~2min for aida-cli). We
+    // detect a parent target/, write it into the lease, and drop a
+    // `.aida/session-env.sh` shim the user sources after `cd`.
+    // trace:STORY-52 | ai:claude
+    let cargo_target_dir = detect_cargo_target_dir(&project_root);
+    if let Some(target) = &cargo_target_dir {
+        write_session_env_file(&worktree_path, target).with_context(|| {
+            format!(
+                "writing session env shim under {}",
+                worktree_path.display()
+            )
+        })?;
+    }
+
     // Compose lease.
     let id_long = uuid::Uuid::now_v7().to_string();
     let id = id_long.replace('-', "")[..12].to_string();
@@ -9235,6 +9536,21 @@ fn session_start(
         hostname: hostname(),
         role: inherited_role.clone(),
         creator_pid,
+        cargo_target_dir: cargo_target_dir.clone(),
+        // STORY-58: record the parent project root so `aida session list`
+        // run from inside the new worktree can also walk the parent's
+        // Claude Code session storage and present a merged view.
+        // trace:STORY-58 | ai:claude
+        parent_project_root: Some(
+            project_root
+                .canonicalize()
+                .unwrap_or_else(|_| project_root.clone()),
+        ),
+        // STORY-71: PR/MR head/base metadata when this is a review session.
+        // trace:STORY-71 | ai:claude
+        pr_head_sha: pr_metadata.head_sha.clone(),
+        pr_base_sha: pr_metadata.base_sha.clone(),
+        pr_base_ref: pr_metadata.base_ref.clone(),
     };
     let lease_file = lease_path(&project_root, &id);
     std::fs::write(&lease_file, toml::to_string_pretty(&lease)?)?;
@@ -9260,13 +9576,74 @@ fn session_start(
     if let Some(r) = &inherited_role {
         eprintln!("  {}: {} {}", "role".bold(), r.cyan(), "(inherited)".dimmed());
     }
+    // STORY-71: surface captured PR head/base in the summary so the user
+    // sees what the reviewer flow recorded (matches `aida session show`).
+    // trace:STORY-71 | ai:claude
+    if let Some(head) = pr_metadata.head_sha.as_deref() {
+        let head_short = &head[..head.len().min(12)];
+        let base_disp = match (
+            pr_metadata.base_ref.as_deref(),
+            pr_metadata.base_sha.as_deref(),
+        ) {
+            (Some(r), Some(b)) => format!("{} ({})", r, &b[..b.len().min(12)]),
+            (Some(r), None) => r.to_string(),
+            (None, Some(b)) => b[..b.len().min(12)].to_string(),
+            (None, None) => "-".to_string(),
+        };
+        eprintln!("  {}: {}", "pr-head".bold(), head_short.cyan());
+        eprintln!("  {}: {}", "pr-base".bold(), base_disp.cyan());
+    }
     eprintln!("  {}: {}", "lease".bold(), lease_file.display().to_string().dimmed());
+
+    if launch_claude {
+        // STORY-54: --launch collapses "start → cd → session new" into one
+        // command. We chdir into the new worktree (so claude inherits it
+        // and the launch-log records the worktree path, not the parent),
+        // then delegate to session::new_session for the title prompt,
+        // launch-log append, and `exec claude --permission-mode <mode>`.
+        // exec replaces this process; control doesn't return here on
+        // success.
+        // trace:STORY-54 | ai:claude
+        if cargo_target_dir.is_some() {
+            eprintln!();
+            eprintln!(
+                "{} {}",
+                "ℹ".cyan(),
+                "tip: source .aida/session-env.sh in your shell to share \
+                 the parent's cargo target/ between sessions"
+                    .dimmed()
+            );
+        }
+        eprintln!();
+        eprintln!(
+            "{} {}",
+            "▶".green().bold(),
+            format!(
+                "launching claude in {} (permission-mode {})",
+                worktree_path.display(),
+                launch_permission_mode
+            )
+            .cyan()
+        );
+        std::env::set_current_dir(&worktree_path).with_context(|| {
+            format!("failed to chdir into {}", worktree_path.display())
+        })?;
+        return session::new_session(launch_title, launch_permission_mode, launch_role);
+    }
+
     eprintln!();
     eprintln!("Next:");
     eprintln!(
         "  {}",
         format!("cd {}", worktree_path.display()).cyan()
     );
+    if cargo_target_dir.is_some() {
+        eprintln!(
+            "  {}    {}",
+            "source .aida/session-env.sh".cyan(),
+            "# share parent's cargo target/".dimmed()
+        );
+    }
     eprintln!(
         "  {}",
         format!("aida session end {}    # when done", &id[..8]).dimmed()
@@ -9472,6 +9849,70 @@ fn find_lease_by_id_prefix(query: &str, leases: &[SessionLease]) -> Result<Sessi
             n
         ),
     }
+}
+
+/// STORY-52: locate the parent project's cargo `target/` directory so a
+/// session worktree can reuse its build cache. Returns the canonicalized
+/// path when `target/` exists (Rust project that has been built), `None`
+/// otherwise. Pure-function over the filesystem so callers can test the
+/// session-start flow with a temp dir.
+/// trace:STORY-52 | ai:claude
+fn detect_cargo_target_dir(project_root: &std::path::Path) -> Option<std::path::PathBuf> {
+    let target = project_root.join("target");
+    if !target.is_dir() {
+        return None;
+    }
+    Some(target.canonicalize().unwrap_or(target))
+}
+
+/// STORY-52: write the worktree-local `.aida/session-env.sh` that the user
+/// sources after `cd`-ing into the session worktree. Sourcing it sets
+/// `CARGO_TARGET_DIR` to the parent's `target/` so cargo reuses that build
+/// cache instead of rebuilding from scratch. The file is written into the
+/// worktree's `.aida/` (created here if it doesn't already exist), which
+/// lives alongside the symlinked runtime subdirs (sessions/, roles/,
+/// cache.db, etc.) that `session_start` set up moments earlier.
+/// trace:STORY-52 | ai:claude
+fn write_session_env_file(
+    worktree_path: &std::path::Path,
+    cargo_target_dir: &std::path::Path,
+) -> Result<()> {
+    let aida_dir = worktree_path.join(".aida");
+    std::fs::create_dir_all(&aida_dir)?;
+    let env_path = aida_dir.join("session-env.sh");
+    let body = render_session_env_file(cargo_target_dir);
+    std::fs::write(&env_path, body)?;
+    Ok(())
+}
+
+/// STORY-52: build the body of `.aida/session-env.sh`. Split out so unit
+/// tests can assert the export shape without touching the filesystem.
+/// trace:STORY-52 | ai:claude
+fn render_session_env_file(cargo_target_dir: &std::path::Path) -> String {
+    format!(
+        "# Generated by `aida session start` — source after cd-ing into\n\
+         # this worktree to share the parent project's cargo build cache.\n\
+         # trace:STORY-52 | ai:claude\n\
+         export CARGO_TARGET_DIR={}\n",
+        shell_single_quote(&cargo_target_dir.display().to_string())
+    )
+}
+
+/// Wrap a string in POSIX single quotes for safe inclusion in shell source.
+/// `'` inside the value is escaped via the standard `'\''` close-reopen trick.
+/// trace:STORY-52 | ai:claude
+fn shell_single_quote(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('\'');
+    for ch in s.chars() {
+        if ch == '\'' {
+            out.push_str("'\\''");
+        } else {
+            out.push(ch);
+        }
+    }
+    out.push('\'');
+    out
 }
 
 fn session_end(id_query: Option<&str>, yes: bool, force: bool) -> Result<()> {
@@ -9875,6 +10316,34 @@ fn session_show(id: Option<&str>) -> Result<()> {
     }
     println!("  {}: {}", "owner".bold(), lease.owner);
     println!("  {}: {}", "hostname".bold(), lease.hostname);
+    // STORY-71 / TASK-51: when this is a review session (--owns PR-N or
+    // MR-N), session_start captured the head/base SHAs and base ref.
+    // Render them on one line so the reviewer can see what diff range
+    // they're working against. Omit the line entirely for non-PR
+    // sessions so non-review output stays clean.
+    // trace:STORY-71, TASK-51 | ai:claude
+    if lease.pr_head_sha.is_some()
+        || lease.pr_base_sha.is_some()
+        || lease.pr_base_ref.is_some()
+    {
+        let head = lease
+            .pr_head_sha
+            .as_deref()
+            .map(|s| s[..s.len().min(12)].to_string())
+            .unwrap_or_else(|| "?".to_string());
+        let base = match (lease.pr_base_ref.as_deref(), lease.pr_base_sha.as_deref()) {
+            (Some(r), Some(b)) => format!("{} ({})", r, &b[..b.len().min(12)]),
+            (Some(r), None) => r.to_string(),
+            (None, Some(b)) => b[..b.len().min(12)].to_string(),
+            (None, None) => "?".to_string(),
+        };
+        println!(
+            "  {}: head {}  base {}",
+            "PR / MR".bold(),
+            head.cyan(),
+            base.cyan()
+        );
+    }
     if let Some(pid) = lease.creator_pid {
         let descendant = {
             let chain: std::collections::HashSet<u32> =
@@ -10128,6 +10597,107 @@ mod statusline_tests {
         assert_eq!(log.entries[0].action, "show", "newest first");
     }
 
+    /// BUG-65: dedupe is LRU-by-(role, spec_id, action), not just
+    /// consecutive — interleaved actions across specs still collapse
+    /// duplicates. Without this, a long agent run that revisits the same
+    /// spec produces an ever-growing log.
+    /// trace:BUG-65 | ai:claude
+    #[test]
+    fn session_activity_dedupes_lru_across_interleaving() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".aida/sessions")).unwrap();
+        let id = "lru-session-01";
+
+        // Sequence: show A → edit B → show A. The second show A must
+        // remove the first one and land at the front (not append a
+        // duplicate behind edit B).
+        append_session_activity(root, id, "implementer", "STORY-A", "show").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        append_session_activity(root, id, "implementer", "STORY-B", "edit").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        append_session_activity(root, id, "implementer", "STORY-A", "show").unwrap();
+
+        let log = load_session_activity(root, id);
+        assert_eq!(log.entries.len(), 2, "duplicate show STORY-A collapsed");
+        assert_eq!(log.entries[0].spec_id, "STORY-A", "newest first");
+        assert_eq!(log.entries[0].action, "show");
+        assert_eq!(log.entries[1].spec_id, "STORY-B");
+    }
+
+    /// STORY-70: convention-check predicate flags STORY/BUG with no
+    /// acceptance section, accepts STORY/BUG that has one (any of the
+    /// recognized headings), and ignores other types entirely. Pins the
+    /// scope of the lint so it doesn't grow over-eagerly.
+    /// trace:STORY-70 | ai:claude
+    #[test]
+    fn requirement_missing_acceptance_scope() {
+        use aida_core::{Requirement, RequirementType};
+
+        // STORY without acceptance → flagged.
+        let mut story = Requirement::new("S".into(), "Just a paragraph.".into());
+        story.req_type = RequirementType::Story;
+        assert!(requirement_missing_acceptance(&story));
+
+        // STORY with `## Acceptance` → not flagged.
+        let mut story_ok = Requirement::new(
+            "S".into(),
+            "Intro.\n\n## Acceptance\n\n- alpha\n".into(),
+        );
+        story_ok.req_type = RequirementType::Story;
+        assert!(!requirement_missing_acceptance(&story_ok));
+
+        // BUG with `## Verify` (alias) → not flagged.
+        let mut bug_ok = Requirement::new(
+            "B".into(),
+            "Repro.\n\n## Verify\n\n- behaves\n".into(),
+        );
+        bug_ok.req_type = RequirementType::Bug;
+        assert!(!requirement_missing_acceptance(&bug_ok));
+
+        // BUG without acceptance → flagged.
+        let mut bug = Requirement::new("B".into(), "Repro only.".into());
+        bug.req_type = RequirementType::Bug;
+        assert!(requirement_missing_acceptance(&bug));
+
+        // EPIC / TASK / etc. are out of scope — even with no section,
+        // they're never flagged.
+        let mut epic = Requirement::new("E".into(), "No section.".into());
+        epic.req_type = RequirementType::Epic;
+        assert!(!requirement_missing_acceptance(&epic));
+        let mut task = Requirement::new("T".into(), "No section.".into());
+        task.req_type = RequirementType::Task;
+        assert!(!requirement_missing_acceptance(&task));
+    }
+
+    /// BUG-65 acceptance: shipping 3 specs sequentially via a typical
+    /// implementer lifecycle (edit → done) leaves the activity log
+    /// pointing at the 3rd, not the 1st. This is the contract the
+    /// statusline @SPEC reads off of, so this test pins the regression
+    /// that motivated the bug.
+    /// trace:BUG-65 | ai:claude
+    #[test]
+    fn session_activity_three_specs_lifecycle_points_at_last() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".aida/sessions")).unwrap();
+        let id = "lifecycle-01";
+
+        for spec in ["STORY-1", "STORY-2", "STORY-3"] {
+            append_session_activity(root, id, "implementer", spec, "edit").unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(1));
+            append_session_activity(root, id, "implementer", spec, "done").unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+
+        let log = load_session_activity(root, id);
+        // Newest action is `done` on STORY-3.
+        assert_eq!(log.entries[0].spec_id, "STORY-3");
+        assert_eq!(log.entries[0].action, "done");
+        // Each spec contributes 2 entries (edit, done) — total 6, no dups.
+        assert_eq!(log.entries.len(), 6);
+    }
+
     /// STORY-67: extract_acceptance_section finds `## Acceptance`,
     /// `## Verify`, etc. (case-insensitive) and returns the body until
     /// the next `## ` heading. Missing or empty sections return None
@@ -10288,6 +10858,11 @@ mod statusline_tests {
             hostname: "h".into(),
             role: None,
             creator_pid: None,
+            cargo_target_dir: None,
+            parent_project_root: None,
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
         };
 
         // No routing tags = visible everywhere.
@@ -10367,6 +10942,253 @@ mod statusline_tests {
             "session-promoted STORY-X must carry the session timestamp, not the stale seed"
         );
     }
+
+    /// STORY-52: detect_cargo_target_dir returns Some when target/ exists
+    /// and None otherwise — the latter case is the "not a Rust project /
+    /// never built" path that should silently skip env-shim generation.
+    /// trace:STORY-52 | ai:claude
+    #[test]
+    fn detect_cargo_target_dir_only_when_present() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        assert_eq!(detect_cargo_target_dir(root), None);
+
+        std::fs::create_dir_all(root.join("target")).unwrap();
+        let got = detect_cargo_target_dir(root).expect("target/ exists");
+        // Result is canonicalized, so just assert it points at the dir we made.
+        assert_eq!(
+            got.canonicalize().unwrap(),
+            root.join("target").canonicalize().unwrap()
+        );
+
+        // A regular file named `target` doesn't count.
+        let tmp2 = tempfile::tempdir().unwrap();
+        std::fs::write(tmp2.path().join("target"), b"not a dir").unwrap();
+        assert_eq!(detect_cargo_target_dir(tmp2.path()), None);
+    }
+
+    /// STORY-52: render_session_env_file emits a sourceable export with
+    /// the path POSIX-quoted so spaces or apostrophes in the parent path
+    /// don't break the shell.
+    /// trace:STORY-52 | ai:claude
+    #[test]
+    fn render_session_env_file_quotes_path() {
+        let body = render_session_env_file(std::path::Path::new("/tmp/aida/target"));
+        assert!(body.contains("export CARGO_TARGET_DIR='/tmp/aida/target'"));
+        assert!(body.starts_with("# Generated by `aida session start`"));
+
+        // Apostrophe in the path → close-reopen escape.
+        let body = render_session_env_file(std::path::Path::new("/tmp/joe's repo/target"));
+        assert!(body.contains("export CARGO_TARGET_DIR='/tmp/joe'\\''s repo/target'"));
+    }
+
+    /// STORY-52: write_session_env_file writes `.aida/session-env.sh` under
+    /// the worktree, creating `.aida/` if it doesn't exist yet (the symlink
+    /// pass in session_start sometimes runs before this, sometimes the dir
+    /// is fresh — either way it should land in place).
+    /// trace:STORY-52 | ai:claude
+    #[test]
+    fn write_session_env_file_creates_aida_dir_if_needed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let worktree = tmp.path();
+        write_session_env_file(worktree, std::path::Path::new("/tmp/parent/target")).unwrap();
+        let written =
+            std::fs::read_to_string(worktree.join(".aida").join("session-env.sh")).unwrap();
+        assert!(written.contains("CARGO_TARGET_DIR='/tmp/parent/target'"));
+    }
+
+    /// STORY-52: leases predating the cargo_target_dir field must still
+    /// deserialize cleanly so an old session can be ended after upgrading
+    /// aida. `#[serde(default)]` handles this; this test pins the contract.
+    /// trace:STORY-52 | ai:claude
+    #[test]
+    fn lease_without_cargo_target_dir_deserializes() {
+        let toml_text = r#"
+id = "abcdef123456"
+scope = "EPIC-20"
+slug = "epic-20"
+owner = "u"
+worktree_path = "/tmp/wt"
+branch = "br"
+started_at = "2026-05-04T00:00:00Z"
+hostname = "h"
+"#;
+        let lease: SessionLease = toml::from_str(toml_text).unwrap();
+        assert_eq!(lease.id, "abcdef123456");
+        assert!(lease.cargo_target_dir.is_none());
+        // STORY-58 field carries forward the same back-compat contract.
+        assert!(lease.parent_project_root.is_none());
+    }
+
+    /// STORY-58: from inside a worktree covered by a lease that records a
+    /// parent, the helper returns that parent. Models the on-disk layout
+    /// session_start produces (lease lives at <root>/.aida/sessions/) so
+    /// we exercise the actual lookup path.
+    /// trace:STORY-58 | ai:claude
+    #[test]
+    fn parent_project_root_for_session_returns_recorded_parent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let parent_dir = root.join("aida");
+        let worktree = root.join("aida-epic-20");
+        std::fs::create_dir_all(&parent_dir).unwrap();
+        std::fs::create_dir_all(&worktree).unwrap();
+        let leases = worktree.join(".aida").join("sessions");
+        std::fs::create_dir_all(&leases).unwrap();
+
+        let lease = SessionLease {
+            id: "abcdef123456".into(),
+            scope: "EPIC-20".into(),
+            slug: "epic-20".into(),
+            owner: "u".into(),
+            worktree_path: worktree.canonicalize().unwrap(),
+            branch: "epic-20".into(),
+            started_at: chrono::Utc::now(),
+            hostname: "h".into(),
+            role: None,
+            creator_pid: None,
+            cargo_target_dir: None,
+            parent_project_root: Some(parent_dir.canonicalize().unwrap()),
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
+        };
+        std::fs::write(
+            leases.join("abcdef123456.toml"),
+            toml::to_string_pretty(&lease).unwrap(),
+        )
+        .unwrap();
+
+        let got = parent_project_root_for_session(&worktree).expect("active lease w/ parent");
+        assert_eq!(got, parent_dir.canonicalize().unwrap());
+    }
+
+    /// STORY-58: pre-STORY-58 leases (no parent recorded) return None
+    /// even when the cwd is squarely inside the lease's worktree, so the
+    /// list path falls back to the classic single-group output.
+    /// trace:STORY-58 | ai:claude
+    #[test]
+    fn parent_project_root_for_session_none_for_legacy_lease() {
+        let tmp = tempfile::tempdir().unwrap();
+        let worktree = tmp.path().join("wt");
+        std::fs::create_dir_all(&worktree).unwrap();
+        let leases = worktree.join(".aida").join("sessions");
+        std::fs::create_dir_all(&leases).unwrap();
+
+        // Old-format lease: no parent_project_root field.
+        let toml_text = format!(
+            r#"
+id = "legacylease01"
+scope = "EPIC-20"
+slug = "epic-20"
+owner = "u"
+worktree_path = "{}"
+branch = "br"
+started_at = "2026-05-04T00:00:00Z"
+hostname = "h"
+"#,
+            worktree.canonicalize().unwrap().display()
+        );
+        std::fs::write(leases.join("legacylease01.toml"), toml_text).unwrap();
+
+        assert!(parent_project_root_for_session(&worktree).is_none());
+    }
+
+    /// STORY-58: outside a session worktree (no lease covers cwd), the
+    /// helper returns None — list stays single-group as today.
+    /// trace:STORY-58 | ai:claude
+    #[test]
+    fn parent_project_root_for_session_none_when_no_lease() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("not-a-session");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::create_dir_all(dir.join(".aida").join("sessions")).unwrap();
+        assert!(parent_project_root_for_session(&dir).is_none());
+    }
+
+    /// STORY-71: parsing the JSON shape `gh pr view --json
+    /// headRefOid,baseRefOid,baseRefName` returns. Pinned so a future
+    /// refactor of the field list can't silently break the lease enrichment.
+    /// trace:STORY-71 | ai:claude
+    #[test]
+    fn parse_pr_metadata_json_github_shape() {
+        let body = serde_json::json!({
+            "headRefOid": "deadbeefcafe1234567890abcdef1234567890ab",
+            "baseRefOid": "0011223344556677889900112233445566778899",
+            "baseRefName": "main",
+        });
+        let m = parse_pr_metadata_json(ReviewForge::GitHub, &body);
+        assert_eq!(
+            m.head_sha.as_deref(),
+            Some("deadbeefcafe1234567890abcdef1234567890ab")
+        );
+        assert_eq!(
+            m.base_sha.as_deref(),
+            Some("0011223344556677889900112233445566778899")
+        );
+        assert_eq!(m.base_ref.as_deref(), Some("main"));
+    }
+
+    /// STORY-71: glab's `mr view --output json` mirrors the GitLab REST
+    /// API — head SHA in `sha`, base SHA in `diff_refs.base_sha`, base
+    /// ref in `target_branch`. Test pins all three lookups.
+    /// trace:STORY-71 | ai:claude
+    #[test]
+    fn parse_pr_metadata_json_gitlab_shape() {
+        let body = serde_json::json!({
+            "sha": "1111222233334444555566667777888899990000",
+            "diff_refs": {
+                "base_sha": "aaaabbbbccccddddeeeeffff0000111122223333",
+                "head_sha": "1111222233334444555566667777888899990000",
+            },
+            "target_branch": "develop",
+        });
+        let m = parse_pr_metadata_json(ReviewForge::GitLab, &body);
+        assert_eq!(
+            m.head_sha.as_deref(),
+            Some("1111222233334444555566667777888899990000")
+        );
+        assert_eq!(
+            m.base_sha.as_deref(),
+            Some("aaaabbbbccccddddeeeeffff0000111122223333")
+        );
+        assert_eq!(m.base_ref.as_deref(), Some("develop"));
+    }
+
+    /// STORY-71: missing or empty fields drop through as None rather than
+    /// pinning empty strings into the lease. Forwards-compat for forge
+    /// CLIs that omit some keys (auth scope, schema drift, etc.).
+    /// trace:STORY-71 | ai:claude
+    #[test]
+    fn parse_pr_metadata_json_missing_fields_yield_none() {
+        let body = serde_json::json!({ "headRefOid": "" });
+        let m = parse_pr_metadata_json(ReviewForge::GitHub, &body);
+        assert!(m.head_sha.is_none());
+        assert!(m.base_sha.is_none());
+        assert!(m.base_ref.is_none());
+    }
+
+    /// STORY-71: leases written before the new PR fields existed must
+    /// still deserialize cleanly (so an in-flight session survives an
+    /// aida upgrade). Test pins the back-compat contract.
+    /// trace:STORY-71 | ai:claude
+    #[test]
+    fn lease_without_pr_fields_deserializes() {
+        let toml_text = r#"
+id = "abcdef123456"
+scope = "PR-3"
+slug = "pr-3"
+owner = "u"
+worktree_path = "/tmp/wt"
+branch = "pr-3"
+started_at = "2026-05-04T00:00:00Z"
+hostname = "h"
+"#;
+        let lease: SessionLease = toml::from_str(toml_text).unwrap();
+        assert!(lease.pr_head_sha.is_none());
+        assert!(lease.pr_base_sha.is_none());
+        assert!(lease.pr_base_ref.is_none());
+    }
 }
 
 #[cfg(test)]
@@ -10387,6 +11209,11 @@ mod lease_enforcement_tests {
             hostname: "test".into(),
             role: None,
             creator_pid: None,
+            cargo_target_dir: None,
+            parent_project_root: None,
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
         }
     }
 
@@ -10542,6 +11369,11 @@ mod scope_fallback_tests {
             hostname: "h".into(),
             role: None,
             creator_pid: None,
+            cargo_target_dir: None,
+            parent_project_root: None,
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
         }
     }
 
@@ -10780,6 +11612,11 @@ mod session_end_resolution_tests {
             hostname: "h".into(),
             role: None,
             creator_pid,
+            cargo_target_dir: None,
+            parent_project_root: None,
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
         }
     }
 
@@ -18396,6 +19233,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     for_role: role.clone(),
                 };
                 global_queue::add(&role, gentry)?;
+                // BUG-65: bump role activity on queue-add so statusline
+                // tracks "started caring about this spec" alongside the
+                // existing edit/show/comment events.
+                // trace:BUG-65 | ai:claude
+                record_role_activity(spec_id, "queue-add");
                 println!(
                     "{} Added {} ({}) to {} {}",
                     "✓".green(),
@@ -18419,6 +19261,10 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 for_session: for_session_routing.clone(),
             };
             storage.queue_add(entry)?;
+            // BUG-65: bump role activity on queue-add so statusline tracks
+            // "started caring about this spec" alongside edit/show/comment.
+            // trace:BUG-65 | ai:claude
+            record_role_activity(spec_id, "queue-add");
 
             // trace:STORY-57 | ai:claude
             let mut routing_parts: Vec<String> = Vec::new();
@@ -18913,6 +19759,13 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 }
             })?;
             storage.queue_remove(&user_id, &req_id)?;
+            // BUG-65: queue done bypasses Command::Edit (sets status via
+            // update_atomically directly), so the role activity log used
+            // to miss it entirely — leaving statusline @SPEC stuck on the
+            // last show/comment after every shipped spec. Bump explicitly
+            // here so the most recently shipped spec wins.
+            // trace:BUG-65 | ai:claude
+            record_role_activity(spec_id, "done");
 
             println!(
                 "{} {} marked completed and removed from queue.",
