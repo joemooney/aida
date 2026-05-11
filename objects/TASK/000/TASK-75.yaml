@@ -1,0 +1,66 @@
+id: 019e15a1-c1c1-7320-83be-a476b69ed5c3
+spec_id: TASK-75
+agreed_id: TASK-75
+title: 'aida pull verbose output: status changes show source (PR-N merge, manual edit, etc.)'
+description: |
+  TASK-73 shipped in PR-9 with categorical summary of changes (specs added, status flips, comments added). Acceptance included "Status changes show source (e.g., 'PR-N merge' when commit message references the PR)" — that part was deferred and surfaced as PARTIAL in PR-9's review.
+
+  ## Today's output
+
+  ```
+  ~4 status changes
+    BUG-67       Approved   → Completed
+    STORY-79     Approved   → Completed
+    TASK-58      Approved   → Completed
+    STORY-71     InProgress → Completed
+  ```
+
+  Flat spec_id list. No indication of WHY they changed.
+
+  ## Desired output
+
+  ```
+  ~4 status changes (from PR-7 merge):
+    BUG-67       Approved   → Completed
+    STORY-79     Approved   → Completed
+    TASK-58      Approved   → Completed
+    STORY-71     InProgress → Completed
+
+  ~1 status change (manual):
+    BUG-99       Approved   → Rejected
+  ```
+
+  Or per-row source annotation:
+  ```
+  ~5 status changes:
+    BUG-67       Approved   → Completed   (PR-7 squash 35f483a9)
+    ...
+    BUG-99       Approved   → Rejected    (manual)
+  ```
+
+  ## Implementation
+
+  For each commit on the orphan branch that changed a req status:
+  1. Look at the commit message — if it matches squash-merge shape (`(#N)` suffix), the source is "PR-N merge"
+  2. Otherwise check if the commit message has `(REQ-ID)` references — source is "commit <sha> (REQ-IDs...)"
+  3. Otherwise fallback "manual"
+
+  For the cross-source view, group by detected source so user can see which PR drove which changes.
+
+  ## Composes with
+
+  - TASK-73 (parent — categorical summary) — this is the deferred acceptance piece
+  - STORY-86 (Done vs Completed auto-bump on merge) — both consume the same "commit references this spec" detection logic; share the helper
+
+  ## Acceptance
+
+  - [ ] Status changes annotated with source (PR-N merge / commit / manual)
+  - [ ] Grouped or per-row annotation (UX TBD)
+  - [ ] No regression on the non-status-change categories (specs added, comments added)
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T06:03:02.977429747Z
+modified_at: 2026-05-11T06:03:02.977429747Z
+req_type: Task
