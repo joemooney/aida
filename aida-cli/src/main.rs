@@ -11156,7 +11156,15 @@ fn session_end(id_query: Option<&str>, yes: bool, force: bool) -> Result<()> {
     match outcome.status {
         AutoQueueStatus::Filed => println!("{} {}", "✓".green(), outcome.summary),
         AutoQueueStatus::AlreadyExists => println!("{} {}", "ⓘ".cyan(), outcome.summary),
-        AutoQueueStatus::Skipped => eprintln!("{} {}", "ⓘ".dimmed(), outcome.summary.dimmed()),
+        // TASK-74: by-design skips stay quiet (dim ⓘ); needs-attention
+        // skips bump up to yellow ⚠ so the user notices if gh broke or
+        // the rel/queue subprocess errored. trace:TASK-74 | ai:claude
+        AutoQueueStatus::SkippedByDesign => {
+            eprintln!("{} {}", "ⓘ".dimmed(), outcome.summary.dimmed())
+        }
+        AutoQueueStatus::SkippedNeedsAttention => {
+            eprintln!("{} {}", "⚠".yellow().bold(), outcome.summary.yellow())
+        }
     }
 
     // STORY-73: emit `unset AIDA_SESSION_ID` to stdout when wrapped via the
@@ -11442,18 +11450,28 @@ fn aida_subcmd_queue_add_for_reviewer(project_root: &std::path::Path, spec_id: &
     }
 }
 
-/// What `try_auto_queue_pr_review` did, in three buckets that map to the
-/// caller's display formatting (green check / cyan info / dim skip).
-/// trace:BUG-72 | ai:claude
+/// What `try_auto_queue_pr_review` did, in four buckets that map to the
+/// caller's display formatting (green check / cyan info / dim by-design /
+/// yellow attention-needed). The fourth bucket (TASK-74) was carved out
+/// of the original BUG-72 "Skipped" bucket so review sessions (whose
+/// branches don't produce PRs by design) stop reading as failures, and
+/// missing-tool / lookup-failed cases stop reading as routine.
+/// trace:BUG-72 TASK-74 | ai:claude
 enum AutoQueueStatus {
     /// New review story filed and queued for reviewer.
     Filed,
     /// PR found but a `Review PR-N` story already exists — idempotent re-run.
     AlreadyExists,
-    /// Anything that means "no queue entry filed": no PR open for branch,
-    /// gh missing, gh failed, `aida add` failed, etc. Carries enough detail
-    /// in `summary` for the user to know why.
-    Skipped,
+    /// Skipped on purpose — this session shape never produces a PR (e.g.
+    /// reviewer session on a `pr-N` branch). Dimmed in output: nothing to
+    /// fix, the user just needs to know the hook checked and stepped aside.
+    /// trace:TASK-74 | ai:claude
+    SkippedByDesign,
+    /// Skipped but the user might want to do something about it: `gh`
+    /// missing, `gh pr list` failed, or the queue/rel-add subprocess
+    /// errored. Rendered in yellow so it doesn't blend into the by-design
+    /// noise floor. trace:TASK-74 | ai:claude
+    SkippedNeedsAttention,
 }
 
 /// Outcome of the end-of-session auto-queue. Always returns SOMETHING so
@@ -11476,12 +11494,37 @@ impl AutoQueueOutcome {
             summary: s.into(),
         }
     }
-    fn skipped(s: impl Into<String>) -> Self {
+    /// Skip the user shouldn't care about (review session, no PR-producing
+    /// branch). Rendered dim. trace:TASK-74 | ai:claude
+    fn skipped_by_design(s: impl Into<String>) -> Self {
         Self {
-            status: AutoQueueStatus::Skipped,
+            status: AutoQueueStatus::SkippedByDesign,
             summary: s.into(),
         }
     }
+    /// Skip the user might want to act on (missing tool, gh failed, queue
+    /// subprocess error). Rendered yellow. trace:TASK-74 | ai:claude
+    fn skipped_needs_attention(s: impl Into<String>) -> Self {
+        Self {
+            status: AutoQueueStatus::SkippedNeedsAttention,
+            summary: s.into(),
+        }
+    }
+}
+
+/// Heuristic: does this branch shape correspond to a session that, by
+/// design, never produces a PR? Today: `pr-N`, `mr-N`, `github-N`,
+/// `gitlab-N` — the local branch names `aida session start --owns PR-N`
+/// creates for review sessions. Case-insensitive. trace:TASK-74 | ai:claude
+fn is_review_session_branch(branch: &str) -> bool {
+    let lower = branch.to_ascii_lowercase();
+    let prefixes = ["pr-", "mr-", "github-", "gitlab-"];
+    prefixes.iter().any(|p| {
+        lower
+            .strip_prefix(p)
+            .map(|rest| !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit()))
+            .unwrap_or(false)
+    })
 }
 
 /// End-of-session auto-detect-and-queue. Runs as a side effect of
@@ -11493,23 +11536,36 @@ fn try_auto_queue_pr_review(
     branch: &str,
     session_id: &str,
 ) -> AutoQueueOutcome {
+    // TASK-74: short-circuit when the branch shape says "this session
+    // never produces a PR" (reviewer session on `pr-N` / `mr-N` etc.).
+    // Catches the case before we even call gh, so a reviewer with `gh`
+    // uninstalled doesn't get a misleading "gh not found" warning when
+    // the right answer is "we wouldn't have filed anyway".
+    if is_review_session_branch(branch) {
+        return AutoQueueOutcome::skipped_by_design(format!(
+            "auto-queue: reviewer session on `{}` — no PR to file (skip by design)",
+            branch
+        ));
+    }
+
     let pr = match detect_open_pr_for_branch(project_root, branch) {
         PrLookup::Found(pr) => pr,
         PrLookup::NoOpenPr => {
-            return AutoQueueOutcome::skipped(format!(
+            return AutoQueueOutcome::skipped_by_design(format!(
                 "auto-queue: no open PR for branch `{}` — reviewer queue not filed",
                 branch
             ));
         }
         PrLookup::GhMissing => {
-            return AutoQueueOutcome::skipped(
-                "auto-queue: `gh` CLI not on PATH — reviewer queue not filed".to_string(),
-            );
+            return AutoQueueOutcome::skipped_needs_attention(format!(
+                "auto-queue: `gh` CLI not on PATH — would have queued reviewer story for branch `{}`. Install gh to enable.",
+                branch
+            ));
         }
         PrLookup::GhFailed(reason) => {
-            return AutoQueueOutcome::skipped(format!(
-                "auto-queue: `gh pr list` failed ({}) — reviewer queue not filed",
-                reason
+            return AutoQueueOutcome::skipped_needs_attention(format!(
+                "auto-queue: `gh pr list` failed for branch `{}` ({}) — no reviewer story filed",
+                branch, reason
             ));
         }
     };
@@ -11564,7 +11620,7 @@ fn try_auto_queue_pr_review(
     let new_id = match aida_subcmd_add_review_story(project_root, &title, &desc) {
         Some(id) => id,
         None => {
-            return AutoQueueOutcome::skipped(format!(
+            return AutoQueueOutcome::skipped_needs_attention(format!(
                 "auto-queue: `aida add` failed for PR #{} (see warning above)",
                 pr.number
             ));
@@ -13539,18 +13595,52 @@ mod statusline_tests {
         );
         assert!(matches!(dup.status, AutoQueueStatus::AlreadyExists));
 
-        // Skip reasons all flow through one variant. Cover each phrasing so
-        // a future refactor that swaps the strings can't silently regress
-        // back into the BUG-72 "no message at all" hole.
+        // TASK-74: skip reasons now split into ByDesign (nothing to fix —
+        // session shape never produces a PR) and NeedsAttention (missing
+        // tool, gh failed, queue subprocess errored). Cover each phrasing
+        // tagged with the right variant.
         for phrase in [
+            "auto-queue: reviewer session on `pr-7` — no PR to file (skip by design)",
             "auto-queue: no open PR for branch `epic-20-batch7` — reviewer queue not filed",
-            "auto-queue: `gh` CLI not on PATH — reviewer queue not filed",
-            "auto-queue: `gh pr list` failed (HTTP 401 — gh auth status) — reviewer queue not filed",
+        ] {
+            let s = AutoQueueOutcome::skipped_by_design(phrase);
+            assert!(matches!(s.status, AutoQueueStatus::SkippedByDesign));
+            assert_eq!(s.summary, phrase);
+        }
+        for phrase in [
+            "auto-queue: `gh` CLI not on PATH — would have queued reviewer story for branch `x`. Install gh to enable.",
+            "auto-queue: `gh pr list` failed for branch `x` (HTTP 401) — no reviewer story filed",
             "auto-queue: `aida add` failed for PR #42 (see warning above)",
         ] {
-            let s = AutoQueueOutcome::skipped(phrase);
-            assert!(matches!(s.status, AutoQueueStatus::Skipped));
+            let s = AutoQueueOutcome::skipped_needs_attention(phrase);
+            assert!(matches!(s.status, AutoQueueStatus::SkippedNeedsAttention));
             assert_eq!(s.summary, phrase);
+        }
+    }
+
+    /// TASK-74: branch-shape heuristic for "this is a reviewer session;
+    /// don't expect a PR from it". Covers the four branch prefixes the
+    /// `aida session start --owns PR-N` / `MR-N` etc. flows produce, and
+    /// rejects neighbors that just happen to start with the same letters.
+    /// trace:TASK-74 | ai:claude
+    #[test]
+    fn is_review_session_branch_recognizes_review_branches() {
+        // Positives
+        for b in ["pr-7", "PR-7", "mr-12", "MR-1", "github-99", "gitlab-3"] {
+            assert!(is_review_session_branch(b), "{}", b);
+        }
+        // Negatives — implementer-style branches must not match
+        for b in [
+            "epic-20-batch7",
+            "main",
+            "feature/foo",
+            "pr-foo",
+            "pr-",
+            "pr",
+            "fix-pr-7-handling",
+            "release-1.2.3",
+        ] {
+            assert!(!is_review_session_branch(b), "{}", b);
         }
     }
 
