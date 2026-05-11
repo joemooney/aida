@@ -53,12 +53,12 @@ description: |
   - [ ] `--dangling` filters to edges with unresolved target UUID
   - [ ] Default hides edges between terminal-status reqs; --all shows everything
   - [ ] Composable filters work in combination (e.g., `--type child --dangling`)
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T02:59:59.219030843Z
-modified_at: 2026-05-11T02:59:59.219030843Z
+modified_at: 2026-05-11T04:26:02.594144321Z
 req_type: Task
 relationships:
 - rel_type: Child
