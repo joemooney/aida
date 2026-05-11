@@ -46,12 +46,12 @@ description: |
   - [ ] Test passes on all 3 platforms
   - [ ] Sweep aida-cli/ tests for similar HOME-only fixtures; apply same pattern
   - [ ] Optional: extract a `temp_home_env(temp_path)` helper that sets both env vars; use it in all such tests
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T02:21:34.843287316Z
-modified_at: 2026-05-11T02:21:34.843287316Z
+modified_at: 2026-05-11T06:49:07.213138946Z
 req_type: Task
 relationships:
 - rel_type: Child
