@@ -1,0 +1,24 @@
+id: 019e15a4-57b5-7a92-8fcb-b447020e8ed2
+spec_id: STORY-100
+agreed_id: STORY-100
+title: 'Review PR-10: EPIC-20 batch 10: session manifest + auto-queue at PR-create + gh detection fix'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e1574`) for branch `epic-20-batch10`.
+
+  - PR: <https://github.com/joemooney/aida/pull/10>
+  - Branch: `epic-20-batch10` → `main`
+
+  No `(REQ-ID)` trailers were found in the PR's commit range — review against the PR title/body and link specs after the fact via `aida rel add <this> <spec> --type implements`.
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 10` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T06:05:52.437668966Z
+modified_at: 2026-05-11T06:05:52.437668966Z
+req_type: Story
