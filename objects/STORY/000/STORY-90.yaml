@@ -1,0 +1,83 @@
+id: 019e14b6-b85c-7421-affe-33629aa42ab5
+spec_id: STORY-90
+agreed_id: STORY-90
+title: Auto-queue PR for reviewer at PR-create time, not session-end (redesign STORY-66 trigger; idempotent re-fire as backup)
+description: |
+  User observation 2026-05-10 after STORY-66 failed to fire on PR-7's session_end: the trigger is in the wrong place.
+
+  ## Today's design (STORY-66 as shipped)
+
+  `aida session end` checks if the branch has an open PR via gh/glab. If yes, files a Story-typed review item routed to reviewer, with implements relations to each spec referenced in commit messages.
+
+  **Problems:**
+  - Fires AFTER PR open + AFTER all work; far from the natural moment of "we just opened a PR, file the review item"
+  - Reverse-engineers context (PR number, specs, commits) from git/gh queries — fragile
+  - Brittle to session_end edge cases (BUG-71 .gitignore refusal, --force path, network failures during gh-query) — see BUG-72 for the production failure
+  - Silent on skip: user doesn't know whether it fired or not
+
+  ## Proposed design
+
+  **Primary trigger: PR-create time**
+
+  The `/aida-pr` skill (STORY-80) opens the PR. Right after `gh pr create` returns the URL, fire the auto-queue:
+
+  ```rust
+  let pr_meta = parse_gh_create_output(...);  // PR number, head sha, body
+  let specs = extract_specs_from_body(pr_meta.body);  // (REQ-IDs) from each bullet
+  let review_req = build_review_story(pr_meta, specs);
+  aida_add(review_req)?;
+  aida_queue_add(review_req.id, "--for", "reviewer")?;
+  ```
+
+  Agent already has PR number, commits, specs in working memory — no reverse-engineering needed.
+
+  **Backup trigger: session_end (idempotent re-fire)**
+
+  If `aida session end` detects an open PR on the just-ended branch AND no review item already exists for it (idempotent check via search or stored marker), file the review item then. Catches:
+  - PR created via raw `gh pr create` (no /aida-pr skill)
+  - PR created externally and pushed
+  - /aida-pr skill failed to fire the auto-queue (e.g., transient store error)
+
+  ## Idempotency
+
+  Mark the review story with a `pr_url` field on creation. Both triggers check: "is there already a Story-typed req with pr_url=<this-pr's-url>?" If yes, skip. If no, file.
+
+  ## Explicit signal
+
+  Both triggers print the result to stderr:
+  ```
+  ✓ Filed reviewer review item STORY-93 for PR-7
+  ```
+  Or:
+  ```
+  ⓘ PR-7 reviewer item already filed (STORY-93) — skipping
+  ```
+  Or:
+  ```
+  ⚠ Could not file reviewer item — no PR detected on branch epic-20-batch7
+  ```
+
+  User always knows what happened.
+
+  ## Composes with
+
+  - STORY-66 (original auto-queue feature) — this story redesigns its trigger
+  - STORY-80 (/aida-pr skill) — gains the primary trigger
+  - BUG-72 (STORY-66 didn't fire on --force path) — this redesign sidesteps that bug entirely
+  - TASK-48 (role enter shows queue head) — reviewer's "Queued for this role:" section needs to show these auto-filed items distinctly
+
+  ## Acceptance
+
+  - [ ] `/aida-pr` skill files the reviewer queue item right after `gh pr create` succeeds
+  - [ ] `aida session end` re-fires the auto-queue if no item exists for the branch's PR (idempotent)
+  - [ ] Both triggers print explicit stderr signal (filed / skipped-dupe / no-PR-detected)
+  - [ ] Review story includes pr_url field for idempotency check
+  - [ ] Tested: clean /aida-pr → fires once. Raw gh pr create + session end → fires once. /aida-pr + session end → no duplicate.
+  - [ ] BUG-72 closed by this design (no longer relies on session_end success path)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T01:46:19.612969675Z
+modified_at: 2026-05-11T01:46:19.612969675Z
+req_type: Story
