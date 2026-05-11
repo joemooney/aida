@@ -65,12 +65,12 @@ description: |
   - [ ] Comment count is correct (new comments only, not edits to existing)
   - [ ] Status changes show source (e.g., "PR-N merge" when commit message references the PR)
   - [ ] Performance: <100ms overhead vs today's silent pull on a 10-commit delta
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T04:07:34.430560202Z
-modified_at: 2026-05-11T04:07:34.430560202Z
+modified_at: 2026-05-11T04:41:47.086886334Z
 req_type: Task
 relationships:
 - rel_type: Child
