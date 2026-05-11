@@ -49,14 +49,18 @@ description: |
   - [ ] Tested with: gh in /usr/bin, gh in /usr/local/bin, gh via brew, gh in $HOME/bin in PATH
   - [ ] When genuinely missing: clean error message persists (don't regress the BUG-72 reporting)
   - [ ] Optional debug: AIDA_DEBUG_GH=1 prints PATH and search results when checking gh
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T04:58:06.203893167Z
-modified_at: 2026-05-11T04:58:06.203893167Z
+modified_at: 2026-05-11T05:37:11.387492604Z
 req_type: Bug
 relationships:
 - rel_type: Child
   target_id: 019e0f6f-f9ad-7653-8336-12a7f09d7cb1
   created_at: 2026-05-11T04:58:07.356975134Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-11T05:37:11.387492604Z
+  implemented_by: joe
