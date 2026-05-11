@@ -64,11 +64,7 @@ pub fn slots_for_file(path: &Path) -> &'static [&'static str] {
 /// docs are already aligned at every declared slot).
 ///
 /// trace:FR-1-047 | ai:claude
-pub fn slot_merge(
-    user_doc: &Value,
-    aida_doc: &Value,
-    slots: &[&str],
-) -> (Value, Vec<SlotChange>) {
+pub fn slot_merge(user_doc: &Value, aida_doc: &Value, slots: &[&str]) -> (Value, Vec<SlotChange>) {
     let mut result = user_doc.clone();
     let mut changes = Vec::new();
 
@@ -77,8 +73,8 @@ pub fn slot_merge(
         let user_val = result.pointer(slot);
 
         match (user_val, aida_val) {
-            (None, None) => continue,                       // neither has it
-            (Some(u), Some(a)) if u == a => continue,       // matching
+            (None, None) => continue,                 // neither has it
+            (Some(u), Some(a)) if u == a => continue, // matching
             (Some(_), Some(a)) => {
                 // Drift — replace.
                 if let Some(target) = result.pointer_mut(slot) {
@@ -171,7 +167,10 @@ mod tests {
 
     #[test]
     fn slots_for_mcp_json() {
-        assert_eq!(slots_for_file(Path::new(".mcp.json")), &["/mcpServers/aida"]);
+        assert_eq!(
+            slots_for_file(Path::new(".mcp.json")),
+            &["/mcpServers/aida"]
+        );
         assert_eq!(slots_for_file(Path::new("mcp.json")), &["/mcpServers/aida"]);
     }
 
@@ -209,7 +208,10 @@ mod tests {
         assert_eq!(merged["hooks"]["PreToolUse"], user["hooks"]["PreToolUse"]);
         // User-owned keys preserved.
         assert_eq!(merged["permissions"]["deny"], json!(["rm -rf /"]));
-        assert_eq!(merged["hooks"]["Stop"], json!([{"matcher": "*", "hooks": []}]));
+        assert_eq!(
+            merged["hooks"]["Stop"],
+            json!([{"matcher": "*", "hooks": []}])
+        );
         // One change reported (statusLine).
         assert_eq!(changes.len(), 1);
         assert_eq!(changes[0].slot, "/statusLine");

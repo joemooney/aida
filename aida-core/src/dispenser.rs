@@ -103,16 +103,14 @@ pub trait Dispenser: Send + Sync {
         let state = self.state()?;
         let digits = 3; // minimum padding
         match &state.mode {
-            IdMode::Centralized => {
-                Ok(format!("{}-{:0>width$}", object_type, seq, width = digits))
-            }
-            IdMode::Distributed { node_id } => {
-                Ok(format!(
-                    "{}-{}-{:0>width$}",
-                    object_type, node_id, seq,
-                    width = digits
-                ))
-            }
+            IdMode::Centralized => Ok(format!("{}-{:0>width$}", object_type, seq, width = digits)),
+            IdMode::Distributed { node_id } => Ok(format!(
+                "{}-{}-{:0>width$}",
+                object_type,
+                node_id,
+                seq,
+                width = digits
+            )),
         }
     }
 
@@ -311,7 +309,7 @@ impl SqliteDispenser {
             CREATE TABLE IF NOT EXISTS dispenser_meta (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
-            );"
+            );",
         )?;
 
         // Store the mode
@@ -389,9 +387,8 @@ impl Dispenser for SqliteDispenser {
         let conn = self.conn.lock().unwrap();
         let node_id = self.node_id();
 
-        let mut stmt = conn.prepare(
-            "SELECT type_prefix, next_val FROM dispenser_sequences WHERE node_id = ?1",
-        )?;
+        let mut stmt = conn
+            .prepare("SELECT type_prefix, next_val FROM dispenser_sequences WHERE node_id = ?1")?;
 
         let mut sequences = HashMap::new();
         let rows = stmt.query_map(rusqlite::params![node_id.clone()], |row| {
@@ -430,7 +427,9 @@ mod tests {
 
     #[test]
     fn test_memory_dispenser_distributed() {
-        let d = MemoryDispenser::new(IdMode::Distributed { node_id: "7".to_string() });
+        let d = MemoryDispenser::new(IdMode::Distributed {
+            node_id: "7".to_string(),
+        });
 
         assert_eq!(d.next_id("FR").unwrap(), "FR-7-001");
         assert_eq!(d.next_id("FR").unwrap(), "FR-7-002");
@@ -449,13 +448,20 @@ mod tests {
 
     #[test]
     fn test_state_snapshot() {
-        let d = MemoryDispenser::new(IdMode::Distributed { node_id: "42".to_string() });
+        let d = MemoryDispenser::new(IdMode::Distributed {
+            node_id: "42".to_string(),
+        });
         d.next("FR").unwrap();
         d.next("FR").unwrap();
         d.next("FEAT").unwrap();
 
         let state = d.state().unwrap();
-        assert_eq!(state.mode, IdMode::Distributed { node_id: "42".to_string() });
+        assert_eq!(
+            state.mode,
+            IdMode::Distributed {
+                node_id: "42".to_string()
+            }
+        );
         assert_eq!(state.sequences.get("FR"), Some(&2));
         assert_eq!(state.sequences.get("FEAT"), Some(&1));
     }
@@ -474,14 +480,26 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("dispenser.toml");
 
-        let d = FileDispenser::open(path.clone(), IdMode::Distributed { node_id: "7".to_string() }).unwrap();
+        let d = FileDispenser::open(
+            path.clone(),
+            IdMode::Distributed {
+                node_id: "7".to_string(),
+            },
+        )
+        .unwrap();
 
         assert_eq!(d.next("FR").unwrap(), 1);
         assert_eq!(d.next("FR").unwrap(), 2);
         assert_eq!(d.next_id("FR").unwrap(), "FR-7-003");
 
         // Reopen — state should persist
-        let d2 = FileDispenser::open(path, IdMode::Distributed { node_id: "7".to_string() }).unwrap();
+        let d2 = FileDispenser::open(
+            path,
+            IdMode::Distributed {
+                node_id: "7".to_string(),
+            },
+        )
+        .unwrap();
         assert_eq!(d2.next("FR").unwrap(), 4);
         assert_eq!(d2.peek("FEAT").unwrap(), 1);
     }
@@ -492,7 +510,13 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("dispenser.db");
 
-        let d = SqliteDispenser::open(path, IdMode::Distributed { node_id: "7".to_string() }).unwrap();
+        let d = SqliteDispenser::open(
+            path,
+            IdMode::Distributed {
+                node_id: "7".to_string(),
+            },
+        )
+        .unwrap();
 
         assert_eq!(d.next("FR").unwrap(), 1);
         assert_eq!(d.next("FR").unwrap(), 2);
@@ -512,7 +536,13 @@ mod tests {
 
         // First session
         {
-            let d = SqliteDispenser::open(path.clone(), IdMode::Distributed { node_id: "3".to_string() }).unwrap();
+            let d = SqliteDispenser::open(
+                path.clone(),
+                IdMode::Distributed {
+                    node_id: "3".to_string(),
+                },
+            )
+            .unwrap();
             assert_eq!(d.next("FR").unwrap(), 1);
             assert_eq!(d.next("FR").unwrap(), 2);
             assert_eq!(d.next("BUG").unwrap(), 1);
@@ -520,7 +550,13 @@ mod tests {
 
         // Second session — state persisted
         {
-            let d = SqliteDispenser::open(path, IdMode::Distributed { node_id: "3".to_string() }).unwrap();
+            let d = SqliteDispenser::open(
+                path,
+                IdMode::Distributed {
+                    node_id: "3".to_string(),
+                },
+            )
+            .unwrap();
             assert_eq!(d.next("FR").unwrap(), 3);
             assert_eq!(d.peek("BUG").unwrap(), 2);
             assert_eq!(d.next_id("BUG").unwrap(), "BUG-3-002");
@@ -558,13 +594,24 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("dispenser.db");
 
-        let d = SqliteDispenser::open(path, IdMode::Distributed { node_id: "42".to_string() }).unwrap();
+        let d = SqliteDispenser::open(
+            path,
+            IdMode::Distributed {
+                node_id: "42".to_string(),
+            },
+        )
+        .unwrap();
         d.next("FR").unwrap();
         d.next("FR").unwrap();
         d.next("FEAT").unwrap();
 
         let state = d.state().unwrap();
-        assert_eq!(state.mode, IdMode::Distributed { node_id: "42".to_string() });
+        assert_eq!(
+            state.mode,
+            IdMode::Distributed {
+                node_id: "42".to_string()
+            }
+        );
         assert_eq!(state.sequences.get("FR"), Some(&2));
         assert_eq!(state.sequences.get("FEAT"), Some(&1));
     }
@@ -578,14 +625,20 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("dispenser.db");
 
-        let d = Arc::new(SqliteDispenser::open(path, IdMode::Distributed { node_id: "1".to_string() }).unwrap());
+        let d = Arc::new(
+            SqliteDispenser::open(
+                path,
+                IdMode::Distributed {
+                    node_id: "1".to_string(),
+                },
+            )
+            .unwrap(),
+        );
 
         let mut handles = vec![];
         for _ in 0..10 {
             let d = Arc::clone(&d);
-            handles.push(thread::spawn(move || {
-                d.next("FR").unwrap()
-            }));
+            handles.push(thread::spawn(move || d.next("FR").unwrap()));
         }
 
         let mut results: Vec<u32> = handles.into_iter().map(|h| h.join().unwrap()).collect();
@@ -604,8 +657,13 @@ mod tests {
         // Create a database with some other table first
         {
             let conn = rusqlite::Connection::open(&path).unwrap();
-            conn.execute("CREATE TABLE other_data (id INTEGER PRIMARY KEY, value TEXT)", []).unwrap();
-            conn.execute("INSERT INTO other_data (value) VALUES ('hello')", []).unwrap();
+            conn.execute(
+                "CREATE TABLE other_data (id INTEGER PRIMARY KEY, value TEXT)",
+                [],
+            )
+            .unwrap();
+            conn.execute("INSERT INTO other_data (value) VALUES ('hello')", [])
+                .unwrap();
         }
 
         // Open dispenser on the same database — should not interfere
@@ -615,7 +673,9 @@ mod tests {
         // Verify the other table is intact
         {
             let conn = rusqlite::Connection::open(&path).unwrap();
-            let val: String = conn.query_row("SELECT value FROM other_data", [], |r| r.get(0)).unwrap();
+            let val: String = conn
+                .query_row("SELECT value FROM other_data", [], |r| r.get(0))
+                .unwrap();
             assert_eq!(val, "hello");
         }
     }

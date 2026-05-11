@@ -869,11 +869,8 @@ pub fn check_scaffold_status(
 
         if full_path.exists() {
             if let Ok(actual_content) = fs::read_to_string(&full_path) {
-                let matches = file_matches_for_status(
-                    &artifact.path,
-                    &actual_content,
-                    &artifact.content,
-                );
+                let matches =
+                    file_matches_for_status(&artifact.path, &actual_content, &artifact.content);
 
                 if matches {
                     status.matching.push(artifact.path.clone());
@@ -957,7 +954,9 @@ fn managed_merge_matches(path: &Path, actual: &str, expected: &str) -> bool {
     if slots.is_empty() {
         return actual.trim() == expected.trim();
     }
-    slots.iter().all(|slot| actual_v.pointer(slot) == expected_v.pointer(slot))
+    slots
+        .iter()
+        .all(|slot| actual_v.pointer(slot) == expected_v.pointer(slot))
 }
 
 fn seed_matches(path: &Path, actual: &str, expected: &str) -> bool {

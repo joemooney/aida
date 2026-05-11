@@ -15,9 +15,7 @@ use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
 use super::traits::{BackendType, DatabaseBackend};
-use crate::models::{
-    DispenserHandle, QueueEntry, Requirement, RequirementsStore,
-};
+use crate::models::{DispenserHandle, QueueEntry, Requirement, RequirementsStore};
 use crate::object_store;
 
 /// Git-backed storage backend.
@@ -162,7 +160,9 @@ impl GitBackend {
             return;
         }
         let oplog_path = self.root.join("oplog.yaml");
-        let node_id: String = self.dispenser.as_ref()
+        let node_id: String = self
+            .dispenser
+            .as_ref()
             .and_then(|d| d.state().ok())
             .map(|s| match s.mode {
                 crate::dispenser::IdMode::Distributed { node_id } => node_id,
@@ -416,35 +416,51 @@ impl DatabaseBackend for GitBackend {
     }
 
     fn update_requirement(&self, requirement: &Requirement) -> Result<()> {
-        let spec_id = requirement.spec_id.as_deref()
-            .ok_or_else(|| anyhow::anyhow!("Cannot update requirement without spec_id in git backend"))?;
+        let spec_id = requirement.spec_id.as_deref().ok_or_else(|| {
+            anyhow::anyhow!("Cannot update requirement without spec_id in git backend")
+        })?;
 
         // Record ops for changed fields (compare with existing if possible)
         if let Ok(old) = object_store::read_object(&self.objects_root, spec_id) {
             if old.title != requirement.title {
-                self.record_op(requirement.id, crate::oplog::OpKind::SetTitle {
-                    title: requirement.title.clone(),
-                });
+                self.record_op(
+                    requirement.id,
+                    crate::oplog::OpKind::SetTitle {
+                        title: requirement.title.clone(),
+                    },
+                );
             }
             if old.effective_status() != requirement.effective_status() {
-                self.record_op(requirement.id, crate::oplog::OpKind::SetStatus {
-                    status: requirement.effective_status(),
-                });
+                self.record_op(
+                    requirement.id,
+                    crate::oplog::OpKind::SetStatus {
+                        status: requirement.effective_status(),
+                    },
+                );
             }
             if old.effective_priority() != requirement.effective_priority() {
-                self.record_op(requirement.id, crate::oplog::OpKind::SetPriority {
-                    priority: requirement.effective_priority(),
-                });
+                self.record_op(
+                    requirement.id,
+                    crate::oplog::OpKind::SetPriority {
+                        priority: requirement.effective_priority(),
+                    },
+                );
             }
             if old.owner != requirement.owner {
-                self.record_op(requirement.id, crate::oplog::OpKind::SetOwner {
-                    owner: requirement.owner.clone(),
-                });
+                self.record_op(
+                    requirement.id,
+                    crate::oplog::OpKind::SetOwner {
+                        owner: requirement.owner.clone(),
+                    },
+                );
             }
             if old.description != requirement.description {
-                self.record_op(requirement.id, crate::oplog::OpKind::SetDescription {
-                    description: requirement.description.clone(),
-                });
+                self.record_op(
+                    requirement.id,
+                    crate::oplog::OpKind::SetDescription {
+                        description: requirement.description.clone(),
+                    },
+                );
             }
         }
 
@@ -492,13 +508,16 @@ impl DatabaseBackend for GitBackend {
         }
 
         // Record create operation
-        self.record_op(req.id, crate::oplog::OpKind::Create {
-            title: req.title.clone(),
-            description: req.description.clone(),
-            req_type: format!("{:?}", req.req_type),
-            status: req.effective_status(),
-            priority: req.effective_priority(),
-        });
+        self.record_op(
+            req.id,
+            crate::oplog::OpKind::Create {
+                title: req.title.clone(),
+                description: req.description.clone(),
+                req_type: format!("{:?}", req.req_type),
+                status: req.effective_status(),
+                priority: req.effective_priority(),
+            },
+        );
 
         object_store::write_object(&self.objects_root, &req)?;
         let spec_id = req.spec_id.as_deref().unwrap_or("unknown");
@@ -520,7 +539,10 @@ impl DatabaseBackend for GitBackend {
     // Queue operations — stored as registry/queues/{user_id}.yaml
 
     fn queue_list(&self, user_id: &str, _include_completed: bool) -> Result<Vec<QueueEntry>> {
-        let path = self.root.join("registry/queues").join(format!("{}.yaml", user_id));
+        let path = self
+            .root
+            .join("registry/queues")
+            .join(format!("{}.yaml", user_id));
         if !path.exists() {
             return Ok(Vec::new());
         }
@@ -573,7 +595,10 @@ impl DatabaseBackend for GitBackend {
     }
 
     fn queue_remove(&self, user_id: &str, requirement_id: &uuid::Uuid) -> Result<()> {
-        let path = self.root.join("registry/queues").join(format!("{}.yaml", user_id));
+        let path = self
+            .root
+            .join("registry/queues")
+            .join(format!("{}.yaml", user_id));
         if !path.exists() {
             return Ok(());
         }
@@ -582,12 +607,18 @@ impl DatabaseBackend for GitBackend {
         entries.retain(|e| e.requirement_id != *requirement_id);
         let yaml = serde_yaml::to_string(&entries)?;
         std::fs::write(&path, yaml)?;
-        self.auto_commit_paths("update queue", &[&format!("registry/queues/{}.yaml", user_id)]);
+        self.auto_commit_paths(
+            "update queue",
+            &[&format!("registry/queues/{}.yaml", user_id)],
+        );
         Ok(())
     }
 
     fn queue_reorder(&self, user_id: &str, items: &[(uuid::Uuid, i64)]) -> Result<()> {
-        let path = self.root.join("registry/queues").join(format!("{}.yaml", user_id));
+        let path = self
+            .root
+            .join("registry/queues")
+            .join(format!("{}.yaml", user_id));
         if !path.exists() {
             return Ok(());
         }
@@ -609,7 +640,10 @@ impl DatabaseBackend for GitBackend {
     }
 
     fn queue_clear(&self, user_id: &str, _completed_only: bool) -> Result<()> {
-        let path = self.root.join("registry/queues").join(format!("{}.yaml", user_id));
+        let path = self
+            .root
+            .join("registry/queues")
+            .join(format!("{}.yaml", user_id));
         if path.exists() {
             std::fs::remove_file(&path)?;
             self.auto_commit_paths(
@@ -646,7 +680,9 @@ impl<'a> BulkWriter<'a> {
             // Reuse RequirementsStore::add_requirement_with_id by building a
             // throwaway store carrying the live metadata; the `staged` Vec
             // contains in-flight specs so the counter advances correctly.
-            let mut tmp = self.backend.assemble_store(self.metadata.clone(), Vec::new());
+            let mut tmp = self
+                .backend
+                .assemble_store(self.metadata.clone(), Vec::new());
             tmp.requirements = self.staged.clone();
             let type_prefix = tmp.get_type_prefix(&req.req_type);
             let req_clone = req.clone();
@@ -691,13 +727,16 @@ impl<'a> BulkWriter<'a> {
             }
             // Record the create op for each new requirement (matches
             // GitBackend::add_requirement's bookkeeping)
-            self.backend.record_op(req.id, crate::oplog::OpKind::Create {
-                title: req.title.clone(),
-                description: req.description.clone(),
-                req_type: format!("{:?}", req.req_type),
-                status: req.effective_status(),
-                priority: req.effective_priority(),
-            });
+            self.backend.record_op(
+                req.id,
+                crate::oplog::OpKind::Create {
+                    title: req.title.clone(),
+                    description: req.description.clone(),
+                    req_type: format!("{:?}", req.req_type),
+                    status: req.effective_status(),
+                    priority: req.effective_priority(),
+                },
+            );
         }
 
         // Persist the bumped metadata
@@ -712,13 +751,17 @@ impl<'a> BulkWriter<'a> {
         let path_refs: Vec<&str> = paths.iter().map(|s| s.as_str()).collect();
 
         let count = self.staged.len();
-        let message = format!("{}: import {} requirement{}", commit_subject, count, if count == 1 { "" } else { "s" });
+        let message = format!(
+            "{}: import {} requirement{}",
+            commit_subject,
+            count,
+            if count == 1 { "" } else { "s" }
+        );
         self.backend.auto_commit_paths(&message, &path_refs);
 
         Ok(count)
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -783,10 +826,7 @@ mod tests {
         // Drain three new reqs through BulkWriter in one go.
         let mut writer = backend.bulk_writer().unwrap();
         for i in 1..=3 {
-            let req = Requirement::new(
-                format!("Bulk req {}", i),
-                format!("Description {}", i),
-            );
+            let req = Requirement::new(format!("Bulk req {}", i), format!("Description {}", i));
             writer.add(req).unwrap();
         }
         assert_eq!(writer.len(), 3);
@@ -810,7 +850,11 @@ mod tests {
             .filter(|r| r.title.starts_with("Bulk req"))
             .filter_map(|r| r.spec_id.as_deref())
             .collect();
-        assert_eq!(spec_ids.len(), 3, "each bulk req must get a distinct spec_id");
+        assert_eq!(
+            spec_ids.len(),
+            3,
+            "each bulk req must get a distinct spec_id"
+        );
     }
 
     #[test]
@@ -839,7 +883,10 @@ mod tests {
         updated.title = "Updated Title".into();
         backend.update_requirement(&updated).unwrap();
 
-        let reloaded = backend.get_requirement_by_spec_id("FR-042").unwrap().unwrap();
+        let reloaded = backend
+            .get_requirement_by_spec_id("FR-042")
+            .unwrap()
+            .unwrap();
         assert_eq!(reloaded.title, "Updated Title");
 
         // Delete
@@ -888,7 +935,9 @@ mod tests {
         assert!(root.join("objects/FR/000/FR-002.yaml").exists());
 
         // Save again with only 1 requirement — FR-002 should be deleted
-        store.requirements.retain(|r| r.spec_id.as_deref() == Some("FR-001"));
+        store
+            .requirements
+            .retain(|r| r.spec_id.as_deref() == Some("FR-001"));
         backend.save(&store).unwrap();
 
         assert!(root.join("objects/FR/000/FR-001.yaml").exists());
@@ -903,7 +952,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("aida-store");
 
-        let dispenser = Arc::new(MemoryDispenser::new(IdMode::Distributed { node_id: "7".to_string() }));
+        let dispenser = Arc::new(MemoryDispenser::new(IdMode::Distributed {
+            node_id: "7".to_string(),
+        }));
         let handle = DispenserHandle(dispenser);
         let backend = GitBackend::new(&root).unwrap().with_dispenser(handle);
 

@@ -24,7 +24,10 @@ pub enum ClientError {
 
 impl ClientError {
     pub fn is_rate_limited(&self) -> bool {
-        matches!(self, Self::Api { status: 403, .. } | Self::Api { status: 429, .. })
+        matches!(
+            self,
+            Self::Api { status: 403, .. } | Self::Api { status: 429, .. }
+        )
     }
 
     pub fn is_auth_error(&self) -> bool {
@@ -74,7 +77,11 @@ impl GitHubClient {
     /// Test the connection by fetching repo info.
     pub async fn test_connection(&self) -> Result<GitHubRepo> {
         let url = self.config.api_endpoint("");
-        let resp = self.client.get(&url).send().await
+        let resp = self
+            .client
+            .get(&url)
+            .send()
+            .await
             .map_err(|e| ClientError::Http(e.to_string()))?;
         self.handle_response(resp).await
     }
@@ -82,22 +89,32 @@ impl GitHubClient {
     /// List issues with optional filtering.
     pub async fn list_issues(&self, filter: Option<IssueFilter>) -> Result<Vec<GitHubIssue>> {
         let url = self.config.api_endpoint("/issues");
-        let params = filter
-            .unwrap_or_default()
-            .to_query_params();
+        let params = filter.unwrap_or_default().to_query_params();
 
-        let resp = self.client.get(&url).query(&params).send().await
+        let resp = self
+            .client
+            .get(&url)
+            .query(&params)
+            .send()
+            .await
             .map_err(|e| ClientError::Http(e.to_string()))?;
 
         let issues: Vec<GitHubIssue> = self.handle_response(resp).await?;
         // Filter out pull requests (GitHub returns PRs as issues)
-        Ok(issues.into_iter().filter(|i| !i.is_pull_request()).collect())
+        Ok(issues
+            .into_iter()
+            .filter(|i| !i.is_pull_request())
+            .collect())
     }
 
     /// Get a single issue by number.
     pub async fn get_issue(&self, number: u64) -> Result<GitHubIssue> {
         let url = self.config.api_endpoint(&format!("/issues/{}", number));
-        let resp = self.client.get(&url).send().await
+        let resp = self
+            .client
+            .get(&url)
+            .send()
+            .await
             .map_err(|e| ClientError::Http(e.to_string()))?;
         self.handle_response(resp).await
     }
@@ -105,7 +122,12 @@ impl GitHubClient {
     /// Create a new issue.
     pub async fn create_issue(&self, request: &CreateIssueRequest) -> Result<GitHubIssue> {
         let url = self.config.api_endpoint("/issues");
-        let resp = self.client.post(&url).json(request).send().await
+        let resp = self
+            .client
+            .post(&url)
+            .json(request)
+            .send()
+            .await
             .map_err(|e| ClientError::Http(e.to_string()))?;
         self.handle_response(resp).await
     }
@@ -117,15 +139,23 @@ impl GitHubClient {
         request: &UpdateIssueRequest,
     ) -> Result<GitHubIssue> {
         let url = self.config.api_endpoint(&format!("/issues/{}", number));
-        let resp = self.client.patch(&url).json(request).send().await
+        let resp = self
+            .client
+            .patch(&url)
+            .json(request)
+            .send()
+            .await
             .map_err(|e| ClientError::Http(e.to_string()))?;
         self.handle_response(resp).await
     }
 
     /// Add a comment to an issue.
     pub async fn add_comment(&self, number: u64, body: &str) -> Result<GitHubComment> {
-        let url = self.config.api_endpoint(&format!("/issues/{}/comments", number));
-        let resp = self.client
+        let url = self
+            .config
+            .api_endpoint(&format!("/issues/{}/comments", number));
+        let resp = self
+            .client
             .post(&url)
             .json(&serde_json::json!({ "body": body }))
             .send()
@@ -136,8 +166,14 @@ impl GitHubClient {
 
     /// List comments on an issue.
     pub async fn list_comments(&self, number: u64) -> Result<Vec<GitHubComment>> {
-        let url = self.config.api_endpoint(&format!("/issues/{}/comments", number));
-        let resp = self.client.get(&url).send().await
+        let url = self
+            .config
+            .api_endpoint(&format!("/issues/{}/comments", number));
+        let resp = self
+            .client
+            .get(&url)
+            .send()
+            .await
             .map_err(|e| ClientError::Http(e.to_string()))?;
         self.handle_response(resp).await
     }
@@ -145,7 +181,12 @@ impl GitHubClient {
     /// List labels in the repository.
     pub async fn list_labels(&self) -> Result<Vec<GitHubLabel>> {
         let url = self.config.api_endpoint("/labels");
-        let resp = self.client.get(&url).query(&[("per_page", "100")]).send().await
+        let resp = self
+            .client
+            .get(&url)
+            .query(&[("per_page", "100")])
+            .send()
+            .await
             .map_err(|e| ClientError::Http(e.to_string()))?;
         self.handle_response(resp).await
     }
@@ -165,7 +206,12 @@ impl GitHubClient {
         if let Some(desc) = description {
             body["description"] = serde_json::Value::String(desc.to_string());
         }
-        let resp = self.client.post(&url).json(&body).send().await
+        let resp = self
+            .client
+            .post(&url)
+            .json(&body)
+            .send()
+            .await
             .map_err(|e| ClientError::Http(e.to_string()))?;
         self.handle_response(resp).await
     }
@@ -173,7 +219,11 @@ impl GitHubClient {
     /// List milestones.
     pub async fn list_milestones(&self) -> Result<Vec<GitHubMilestone>> {
         let url = self.config.api_endpoint("/milestones");
-        let resp = self.client.get(&url).send().await
+        let resp = self
+            .client
+            .get(&url)
+            .send()
+            .await
             .map_err(|e| ClientError::Http(e.to_string()))?;
         self.handle_response(resp).await
     }
@@ -190,10 +240,13 @@ impl GitHubClient {
     ) -> Result<T> {
         let status = resp.status();
         if status.is_success() {
-            let body = resp.text().await
+            let body = resp
+                .text()
+                .await
                 .map_err(|e| ClientError::Http(e.to_string()))?;
-            serde_json::from_str(&body)
-                .map_err(|e| ClientError::Parse(format!("{}: {}", e, &body[..body.len().min(200)])).into())
+            serde_json::from_str(&body).map_err(|e| {
+                ClientError::Parse(format!("{}: {}", e, &body[..body.len().min(200)])).into()
+            })
         } else {
             let status_code = status.as_u16();
             let body = resp.text().await.unwrap_or_default();
@@ -209,7 +262,8 @@ impl GitHubClient {
                 Err(ClientError::Api {
                     status: status_code,
                     message,
-                }.into())
+                }
+                .into())
             }
         }
     }

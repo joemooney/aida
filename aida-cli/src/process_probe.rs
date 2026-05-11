@@ -67,8 +67,8 @@ pub fn probe_live_claude_sessions() -> Vec<LiveSession> {
     );
     sys.refresh_processes_specifics(
         ProcessRefreshKind::new()
-                .with_cwd(sysinfo::UpdateKind::Always)
-                .with_cmd(sysinfo::UpdateKind::Always),
+            .with_cwd(sysinfo::UpdateKind::Always)
+            .with_cmd(sysinfo::UpdateKind::Always),
     );
 
     let mut out = Vec::new();
@@ -113,7 +113,10 @@ fn is_claude_process(name: &str, cmd: &[String]) -> bool {
         return true;
     }
     cmd.iter().any(|arg| {
-        let bare = Path::new(arg).file_name().and_then(|s| s.to_str()).unwrap_or(arg);
+        let bare = Path::new(arg)
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or(arg);
         bare == "claude" || bare == "Claude" || bare == "Claude Code"
     })
 }
@@ -197,9 +200,8 @@ fn encode_cwd_for_projects(cwd: &Path) -> String {
 /// can't be read. Used by STORY-73 to match a calling shell against any
 /// session lease's `creator_pid`.
 pub fn walk_ancestor_pids(start: u32) -> Vec<u32> {
-    let mut sys = System::new_with_specifics(
-        RefreshKind::new().with_processes(ProcessRefreshKind::new()),
-    );
+    let mut sys =
+        System::new_with_specifics(RefreshKind::new().with_processes(ProcessRefreshKind::new()));
     sys.refresh_processes_specifics(ProcessRefreshKind::new());
     let mut chain = Vec::new();
     let mut cur = sysinfo::Pid::from_u32(start);
@@ -259,9 +261,15 @@ mod tests {
     fn is_claude_process_falls_back_to_cmd() {
         assert!(is_claude_process(
             "node",
-            &["/usr/local/bin/claude".to_string(), "--something".to_string()],
+            &[
+                "/usr/local/bin/claude".to_string(),
+                "--something".to_string()
+            ],
         ));
-        assert!(!is_claude_process("node", &["/usr/local/bin/clauded".to_string()]));
+        assert!(!is_claude_process(
+            "node",
+            &["/usr/local/bin/clauded".to_string()]
+        ));
     }
 
     #[test]

@@ -42,34 +42,56 @@ pub struct TelemetryEvent {
 pub enum EventKind {
     // Requirement lifecycle
     RequirementCreated,
-    RequirementUpdated { fields: Vec<String> },
-    RequirementStatusChanged { from: String, to: String },
+    RequirementUpdated {
+        fields: Vec<String>,
+    },
+    RequirementStatusChanged {
+        from: String,
+        to: String,
+    },
     RequirementDeleted,
     RequirementViewed,
 
     // Traceability
-    TraceCommentAdded { file: String },
-    CommitLinked { commit_sha: String },
+    TraceCommentAdded {
+        file: String,
+    },
+    CommitLinked {
+        commit_sha: String,
+    },
 
     // Skills
-    SkillInvoked { skill: String },
+    SkillInvoked {
+        skill: String,
+    },
 
     // AI
-    AiEvaluationRun { score: Option<f32> },
+    AiEvaluationRun {
+        score: Option<f32>,
+    },
     AiChatQuery,
 
     // Sync
     GitSyncPush,
     GitSyncPull,
-    GitHubPush { issue_number: u64 },
-    GitHubPull { count: u32 },
+    GitHubPush {
+        issue_number: u64,
+    },
+    GitHubPull {
+        count: u32,
+    },
 
     // Search
-    SearchPerformed { query: String, results: u32 },
+    SearchPerformed {
+        query: String,
+        results: u32,
+    },
 
     // Session
     SessionStart,
-    SessionEnd { duration_secs: u64 },
+    SessionEnd {
+        duration_secs: u64,
+    },
 
     // Reviews
     ReviewCompleted {
@@ -99,11 +121,7 @@ impl TelemetryStore {
     }
 
     /// Get events in a time range.
-    pub fn events_between(
-        &self,
-        start: DateTime<Utc>,
-        end: DateTime<Utc>,
-    ) -> Vec<&TelemetryEvent> {
+    pub fn events_between(&self, start: DateTime<Utc>, end: DateTime<Utc>) -> Vec<&TelemetryEvent> {
         self.events
             .iter()
             .filter(|e| e.timestamp >= start && e.timestamp <= end)
@@ -111,7 +129,11 @@ impl TelemetryStore {
     }
 
     /// Count events by kind in a time range.
-    pub fn count_by_kind(&self, start: DateTime<Utc>, end: DateTime<Utc>) -> std::collections::HashMap<String, u32> {
+    pub fn count_by_kind(
+        &self,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+    ) -> std::collections::HashMap<String, u32> {
         let mut counts = std::collections::HashMap::new();
         for event in self.events_between(start, end) {
             let kind_name = match &event.kind {
@@ -278,7 +300,13 @@ mod tests {
 
         store.record("joe", EventKind::RequirementCreated, Some("FR-001"));
         store.record("joe", EventKind::RequirementCreated, Some("FR-002"));
-        store.record("joe", EventKind::SkillInvoked { skill: "aida-req".into() }, None);
+        store.record(
+            "joe",
+            EventKind::SkillInvoked {
+                skill: "aida-req".into(),
+            },
+            None,
+        );
         store.record("alice", EventKind::RequirementViewed, Some("FR-001"));
 
         assert_eq!(store.events.len(), 4);
@@ -294,12 +322,30 @@ mod tests {
         let mut store = TelemetryStore::default();
 
         for _ in 0..5 {
-            store.record("joe", EventKind::SkillInvoked { skill: "aida-req".into() }, None);
+            store.record(
+                "joe",
+                EventKind::SkillInvoked {
+                    skill: "aida-req".into(),
+                },
+                None,
+            );
         }
         for _ in 0..3 {
-            store.record("joe", EventKind::SkillInvoked { skill: "aida-commit".into() }, None);
+            store.record(
+                "joe",
+                EventKind::SkillInvoked {
+                    skill: "aida-commit".into(),
+                },
+                None,
+            );
         }
-        store.record("joe", EventKind::SkillInvoked { skill: "aida-grill".into() }, None);
+        store.record(
+            "joe",
+            EventKind::SkillInvoked {
+                skill: "aida-grill".into(),
+            },
+            None,
+        );
 
         let top = store.top_skills(2);
         assert_eq!(top[0].0, "aida-req");
@@ -341,7 +387,13 @@ mod tests {
 
         let mut store = TelemetryStore::default();
         store.record("joe", EventKind::RequirementCreated, Some("FR-001"));
-        store.record("joe", EventKind::SkillInvoked { skill: "aida-req".into() }, None);
+        store.record(
+            "joe",
+            EventKind::SkillInvoked {
+                skill: "aida-req".into(),
+            },
+            None,
+        );
         store.save(&path).unwrap();
 
         let loaded = TelemetryStore::load(&path).unwrap();

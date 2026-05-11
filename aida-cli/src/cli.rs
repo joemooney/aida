@@ -510,12 +510,19 @@ pub enum SessionCommand {
         #[clap(long, short = 'y')]
         yes: bool,
 
-        /// Force-terminate any live `claude` processes inside the
-        /// worktree before removing it. Sends SIGTERM, waits 5s, then
-        /// SIGKILL. Without this flag, `session end` refuses if it
-        /// finds a live claude in the worktree (BUG-61: prevents the
-        /// orphaned-claude-with-dangling-cwd leak).
+        /// Force through safety checks. Two effects:
+        ///   1. Force-terminate any live `claude` processes inside the
+        ///      worktree (SIGTERM, 5s grace, then SIGKILL). Without this,
+        ///      `session end` refuses to remove a worktree with live
+        ///      claudes inside (BUG-61: prevents orphaned-claude-with-
+        ///      dangling-cwd leak).
+        ///   2. Discard uncommitted tracked/untracked-but-not-ignored
+        ///      changes in the worktree. Without this, `session end`
+        ///      refuses and prints the dirty file list (BUG-67). Gitignored
+        ///      differences — `target/`, `.aida/cache.db`, etc. — never
+        ///      require `--force` and are always discarded.
         /// trace:BUG-61 | ai:claude
+        /// trace:BUG-67 | ai:claude
         #[clap(long)]
         force: bool,
     },
@@ -525,9 +532,18 @@ pub enum SessionCommand {
     Leases {
         /// Probe live `claude` processes and warn about ones whose cwd is
         /// `(deleted)` (worktree was removed without ending claude — the
-        /// signature of BUG-61). trace:STORY-69 | ai:claude
+        /// signature of BUG-61). `-v` adds two columns: PID of the live
+        /// claude (when present) and the Claude Code session id from
+        /// `~/.claude/projects/<encoded>/<id>.jsonl`. trace:STORY-69, TASK-56 | ai:claude
         #[clap(long, short = 'v')]
         verbose: bool,
+        /// Include stale leases in the listing. Default hides leases
+        /// whose worktree no longer exists OR which have no live
+        /// claude AND are >24h old. With --all, every lease renders
+        /// with a state column (live ● / dormant ◐ / stale ⚠).
+        /// trace:TASK-55 | ai:claude
+        #[clap(long)]
+        all: bool,
     },
 
     /// Show details for one session lease (defaults to the lease covering
@@ -610,9 +626,7 @@ pub enum RoleCommand {
     List,
 
     /// Show details for one role (defaults to the active role if any).
-    Show {
-        name: Option<String>,
-    },
+    Show { name: Option<String> },
 
     /// Print the active role's name and exit, or exit 1 with empty
     /// stdout when no role is active. Pure read of `$AIDA_SESSION_ROLE`
@@ -1676,6 +1690,27 @@ pub enum QueueCommand {
         /// Mutually exclusive with --global. trace:FR-1-012 | ai:claude
         #[clap(long)]
         local: bool,
+        /// Pull from `origin/aida-store` before listing. Opt-in freshness
+        /// for collaborators / multi-session workflows; fast path stays
+        /// default. No-op when the local orphan branch is already
+        /// current; warns and falls back to the local view when offline.
+        /// trace:STORY-78 | ai:claude
+        #[clap(long)]
+        sync: bool,
+        /// Include Completed/Rejected entries in the listing. Default
+        /// hides them with a footer count so the queue view stays
+        /// focused on actionable work. trace:TASK-46 | ai:claude
+        #[clap(long)]
+        include_terminal: bool,
+        /// Filter to entries whose `for_scope` matches one of these
+        /// scopes (comma list). Pass `none` to filter to entries with
+        /// no `for_scope` set (the "uncategorized" pile).
+        /// Mirrors STORY-57's `--scope` shape on `queue add`. Distinct
+        /// from `--no-scope`, which bypasses the active role's
+        /// scope_tags/scope_status filters — different axis.
+        /// trace:TASK-52 | ai:claude
+        #[clap(long, value_name = "CSV")]
+        scope: Option<String>,
     },
     /// Add a requirement to your queue
     Add {
@@ -1722,6 +1757,12 @@ pub enum QueueCommand {
         /// active role context (AIDA_SESSION_ROLE). trace:FR-1-012 | ai:claude
         #[clap(long)]
         global: bool,
+        /// Bypass the TASK-45 guard that refuses queueing a Completed
+        /// or Rejected requirement. Use for legitimate re-open
+        /// scenarios; the default error message hints at this flag.
+        /// trace:TASK-45 | ai:claude
+        #[clap(long)]
+        force: bool,
     },
     /// Remove a requirement from your queue
     Remove {
@@ -1926,6 +1967,14 @@ pub enum Command {
         /// what's still open under that EPIC. trace:STORY-62 | ai:claude
         #[clap(long, value_name = "ID")]
         parent: Option<String>,
+
+        /// Pull from `origin/aida-store` before listing. Opt-in
+        /// freshness for collaborators / multi-session workflows;
+        /// fast path stays default. No-op when the local orphan
+        /// branch is already current; warns and falls back to the
+        /// local view when offline. trace:STORY-78 | ai:claude
+        #[clap(long)]
+        sync: bool,
     },
 
     /// Show details for a specific requirement
@@ -1948,6 +1997,11 @@ pub enum Command {
         /// `--tree`. trace:STORY-62 | ai:claude
         #[clap(long, default_value = "3", value_name = "N")]
         depth: usize,
+
+        /// Pull from `origin/aida-store` before reading the requirement.
+        /// See `aida list --sync`. trace:STORY-78 | ai:claude
+        #[clap(long)]
+        sync: bool,
     },
 
     /// Edit an existing requirement
@@ -1997,6 +2051,14 @@ pub enum Command {
         /// trace:STORY-48 | ai:claude
         #[clap(long)]
         strict: bool,
+
+        /// Bypass the TASK-47 guard that refuses re-opening a Completed
+        /// or Rejected requirement (e.g. flipping `--status in-progress`
+        /// on something already shipped). Use when intentionally
+        /// re-opening: usually you should instead file a new req that
+        /// supersedes the closed one. trace:TASK-47 | ai:claude
+        #[clap(long)]
+        force: bool,
     },
 
     /// Delete a requirement
@@ -2057,6 +2119,11 @@ pub enum Command {
         /// before pushing. Same as `aida db sync --message`.
         #[clap(long, short = 'm')]
         message: Option<String>,
+        /// Skip the "branch behind main" pre-flight check. Useful for
+        /// CI / scripted pushes where the prompt would just hang
+        /// waiting on stdin. trace:TASK-54 | ai:claude
+        #[clap(long)]
+        no_rebase_check: bool,
     },
 
     /// Pull code AND the AIDA orphan store in one shot. Symmetric to
@@ -2117,6 +2184,18 @@ pub enum Command {
         /// is a TTY and `NO_COLOR` is unset), `always`, `never`.
         #[clap(long, value_parser = ["auto", "always", "never"], default_value = "auto")]
         color: String,
+    },
+
+    /// (internal) Background fetch worker spawned by `aida statusline`.
+    /// Fetches `origin/<branch>` for the orphan store at <store-path>,
+    /// updates `~/.aida/cache/last-fetch.toml`, and removes the
+    /// per-project lockfile. Not intended for direct invocation —
+    /// statusline forks this as a detached process with stdio nulled.
+    /// trace:STORY-79 | ai:claude
+    #[clap(name = "_bg-fetch", hide = true)]
+    BgFetch {
+        /// Absolute path to the orphan-store worktree (`.aida-store/`).
+        store_path: std::path::PathBuf,
     },
 
     /// Upgrade aida to the latest release (or a specified version).
@@ -2389,6 +2468,11 @@ pub enum Command {
         /// Maximum number of matches to return (default: 200)
         #[clap(long, short = 'n', default_value = "200")]
         limit: usize,
+
+        /// Pull from `origin/aida-store` before searching. See
+        /// `aida list --sync`. trace:STORY-78 | ai:claude
+        #[clap(long)]
+        sync: bool,
     },
 
     /// Project activity — what's been touched and how it stands now.

@@ -249,7 +249,10 @@ impl Cache {
         // to avoid `foo` matching `foobar` mid-string.
         for tag in &filter.tags {
             sql.push_str(" AND tags_json LIKE ?");
-            args.push(format!("%\"{}\"%", tag.replace('\\', "\\\\").replace('"', "\\\"")));
+            args.push(format!(
+                "%\"{}\"%",
+                tag.replace('\\', "\\\\").replace('"', "\\\"")
+            ));
         }
 
         sql.push_str(" ORDER BY modified_at DESC");
@@ -387,7 +390,10 @@ fn delete_one_uncommitted(conn: &Connection, id: &Uuid) -> Result<()> {
         "DELETE FROM requirements_cache WHERE id = ?1",
         params![id_str],
     )?;
-    conn.execute("DELETE FROM requirements_fts WHERE id = ?1", params![id_str])?;
+    conn.execute(
+        "DELETE FROM requirements_fts WHERE id = ?1",
+        params![id_str],
+    )?;
     Ok(())
 }
 
@@ -443,9 +449,7 @@ mod tests {
         assert_eq!(cache.requirement_count().unwrap(), 2);
 
         // Delete: remove the second requirement.
-        cache
-            .delete_requirement(&store.requirements[1].id)
-            .unwrap();
+        cache.delete_requirement(&store.requirements[1].id).unwrap();
         assert_eq!(cache.requirement_count().unwrap(), 1);
     }
 
@@ -498,9 +502,15 @@ mod tests {
         let cache = Cache::open(dir.path().join("cache.db")).unwrap();
 
         let mut store = RequirementsStore::new();
-        store.requirements.push(sample_req("FR-1-001", "git canonical storage"));
-        store.requirements.push(sample_req("FR-1-002", "react dashboard"));
-        store.requirements.push(sample_req("FR-1-003", "canonical readme"));
+        store
+            .requirements
+            .push(sample_req("FR-1-001", "git canonical storage"));
+        store
+            .requirements
+            .push(sample_req("FR-1-002", "react dashboard"));
+        store
+            .requirements
+            .push(sample_req("FR-1-003", "canonical readme"));
 
         cache.rebuild_from_store(&store, "head").unwrap();
 

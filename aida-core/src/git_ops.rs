@@ -79,7 +79,9 @@ pub fn commit(repo: &Path, message: &str) -> Result<bool> {
     let result = git(repo, &["commit", "-m", message])?;
     if result.success {
         Ok(true)
-    } else if result.stdout.contains("nothing to commit") || result.stderr.contains("nothing to commit") {
+    } else if result.stdout.contains("nothing to commit")
+        || result.stderr.contains("nothing to commit")
+    {
         Ok(false) // nothing to commit — not an error
     } else {
         anyhow::bail!("git commit failed: {}", result.stderr);
@@ -201,38 +203,23 @@ pub fn create_store_worktree(
 
     if branch_exists {
         // Branch exists (e.g., from a clone) — just add the worktree
-        let result = git(
-            repo_root,
-            &["worktree", "add", worktree_dir, branch_name],
-        )?;
+        let result = git(repo_root, &["worktree", "add", worktree_dir, branch_name])?;
         if !result.success {
-            anyhow::bail!(
-                "Failed to add worktree: {}",
-                result.stderr
-            );
+            anyhow::bail!("Failed to add worktree: {}", result.stderr);
         }
     } else {
         // Create orphan branch via worktree
         // git worktree add --orphan was added in git 2.42+
         // For compatibility, create it manually
-        let result = git(
-            repo_root,
-            &["worktree", "add", "--detach", worktree_dir],
-        )?;
+        let result = git(repo_root, &["worktree", "add", "--detach", worktree_dir])?;
         if !result.success {
-            anyhow::bail!(
-                "Failed to create worktree: {}",
-                result.stderr
-            );
+            anyhow::bail!("Failed to create worktree: {}", result.stderr);
         }
 
         // Create the orphan branch in the worktree
         let result = git(&worktree_path, &["checkout", "--orphan", branch_name])?;
         if !result.success {
-            anyhow::bail!(
-                "Failed to create orphan branch: {}",
-                result.stderr
-            );
+            anyhow::bail!("Failed to create orphan branch: {}", result.stderr);
         }
 
         // Clear the index (orphan branch starts with main's files staged)
@@ -245,10 +232,7 @@ pub fn create_store_worktree(
 }
 
 /// Remove a store worktree and optionally delete the branch.
-pub fn remove_store_worktree(
-    repo_root: &Path,
-    worktree_dir: &str,
-) -> Result<()> {
+pub fn remove_store_worktree(repo_root: &Path, worktree_dir: &str) -> Result<()> {
     let worktree_path = repo_root.join(worktree_dir);
     if worktree_path.exists() {
         git(repo_root, &["worktree", "remove", "--force", worktree_dir])?;
@@ -286,9 +270,17 @@ pub fn has_remote(repo: &Path, remote: &str) -> bool {
 /// callers can treat absence and unreachability the same.
 /// trace:EPIC-1-052 Phase 4 | ai:claude
 pub fn remote_branch_exists(repo: &Path, remote: &str, branch: &str) -> bool {
-    git(repo, &["ls-remote", "--exit-code", remote, &format!("refs/heads/{}", branch)])
-        .map(|r| r.success)
-        .unwrap_or(false)
+    git(
+        repo,
+        &[
+            "ls-remote",
+            "--exit-code",
+            remote,
+            &format!("refs/heads/{}", branch),
+        ],
+    )
+    .map(|r| r.success)
+    .unwrap_or(false)
 }
 
 /// Fetch a single branch from a remote into a local tracking branch.
@@ -306,9 +298,7 @@ pub fn fetch_branch_into_local(repo: &Path, remote: &str, branch: &str) -> Resul
 
 /// Get a git config value (checks local, then global).
 pub fn git_config_get(key: &str) -> Result<String> {
-    let output = Command::new("git")
-        .args(["config", key])
-        .output()?;
+    let output = Command::new("git").args(["config", key]).output()?;
     if output.status.success() {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     } else {
@@ -340,11 +330,7 @@ const MAX_CAS_RETRIES: u32 = 10;
 /// 5. If push rejected (someone else registered first), pull and retry
 ///
 /// Returns the assigned node_id on success.
-pub fn register_node(
-    aida_repo: &Path,
-    user_id: u32,
-    hostname: &str,
-) -> Result<String> {
+pub fn register_node(aida_repo: &Path, user_id: u32, hostname: &str) -> Result<String> {
     register_node_with_email(aida_repo, user_id, hostname, None)
 }
 
@@ -440,8 +426,7 @@ pub fn register_node_full(
 
     let registry_path = registry_dir.join("nodes.toml");
     let blocks_path = registry_dir.join("blocks.yaml");
-    let branch = current_branch(aida_repo)
-        .unwrap_or_else(|_| "main".to_string());
+    let branch = current_branch(aida_repo).unwrap_or_else(|_| "main".to_string());
 
     // BUG-40: solo users with no origin still want their preferred node id.
     // The CAS push loop is only needed for race-resolution against other
@@ -466,8 +451,7 @@ pub fn register_node_full(
         // "in use" if it appears in nodes.toml OR if it owns any entry in
         // blocks.yaml — the latter catches legacy clones that operated
         // with implicit (pre-EPIC-1-052) node ids and never registered.
-        let mut registry = NodeRegistry::load(&registry_path)
-            .unwrap_or_default();
+        let mut registry = NodeRegistry::load(&registry_path).unwrap_or_default();
         let blocks_in_use: std::collections::HashSet<String> = if blocks_path.exists() {
             BlockRegistry::load(&blocks_path)
                 .map(|br| br.blocks.iter().map(|b| b.node_id.clone()).collect())
@@ -503,9 +487,7 @@ pub fn register_node_full(
         // Step 3: Register the node, capturing clone_path for hijack-mark-
         // in-place support (STORY-43). The clone path is the parent of the
         // .aida-store worktree (i.e., the project root). trace:STORY-41
-        let clone_path = aida_repo
-            .parent()
-            .and_then(|p| p.canonicalize().ok());
+        let clone_path = aida_repo.parent().and_then(|p| p.canonicalize().ok());
         registry.register_specific_full(
             node_id.clone(),
             user_id,
@@ -671,15 +653,11 @@ pub fn hijack_node(
                 new_owner_clone_path: clone_path.clone(),
                 hijacked_at: chrono::Utc::now(),
             };
-            let marker_path =
-                HijackMarker::path_in_store(&old_clone.join(".aida-store"));
+            let marker_path = HijackMarker::path_in_store(&old_clone.join(".aida-store"));
             // Best-effort: if the old store path doesn't exist (the clone
             // was deleted but its parent dir lingered), fall through to
             // Reattributed instead of failing the whole hijack.
-            if marker_path
-                .parent()
-                .map(|p| p.exists())
-                .unwrap_or(false)
+            if marker_path.parent().map(|p| p.exists()).unwrap_or(false)
                 || std::fs::create_dir_all(marker_path.parent().unwrap()).is_ok()
             {
                 marker.save(&marker_path)?;
@@ -798,7 +776,10 @@ pub fn unregister_node(aida_repo: &Path, node_id: &str) -> Result<bool> {
         }
         registry.save(&registry_path)?;
         add(aida_repo, &["registry/nodes.toml"])?;
-        commit(aida_repo, &format!("chore(registry): unregister node {}", node_id))?;
+        commit(
+            aida_repo,
+            &format!("chore(registry): unregister node {}", node_id),
+        )?;
 
         match push(aida_repo, "origin", &branch) {
             Ok(true) => return Ok(true),
@@ -941,8 +922,7 @@ pub fn merge_gate(store_path: &Path) -> Result<Vec<(String, String)>> {
 }
 
 pub fn sync_objects(aida_repo: &Path, message: &str) -> Result<bool> {
-    let branch = current_branch(aida_repo)
-        .unwrap_or_else(|_| "main".to_string());
+    let branch = current_branch(aida_repo).unwrap_or_else(|_| "main".to_string());
 
     // Stage all changes in objects/ and metadata.yaml
     add_all(aida_repo, "objects")?;
@@ -1127,10 +1107,8 @@ mod tests {
         }
 
         // After "JM2" is also taken, suggestion advances to "JM3".
-        let mut registry = crate::node::NodeRegistry::load(
-            &aida.join("registry").join("nodes.toml"),
-        )
-        .unwrap();
+        let mut registry =
+            crate::node::NodeRegistry::load(&aida.join("registry").join("nodes.toml")).unwrap();
         registry.register_specific("JM2".into(), 1, "spock".into(), None);
         registry
             .save(&aida.join("registry").join("nodes.toml"))

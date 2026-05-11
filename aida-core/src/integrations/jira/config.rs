@@ -27,7 +27,9 @@ pub struct JiraConfig {
     pub mapping: FieldMapping,
 }
 
-fn default_true() -> bool { true }
+fn default_true() -> bool {
+    true
+}
 
 /// Bidirectional field mapping between AIDA and Jira.
 /// This is the core of the mapping spec — it drives how fields translate.
@@ -53,7 +55,9 @@ pub struct FieldMapping {
     pub label_prefix: String,
 }
 
-fn default_label_prefix() -> String { "aida:".into() }
+fn default_label_prefix() -> String {
+    "aida:".into()
+}
 
 fn default_type_mapping() -> HashMap<String, String> {
     let mut m = HashMap::new();
@@ -135,7 +139,9 @@ impl Default for JiraConfig {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
-    #[error("Instance URL not configured. Set with: aida jira config --url https://myorg.atlassian.net")]
+    #[error(
+        "Instance URL not configured. Set with: aida jira config --url https://myorg.atlassian.net"
+    )]
     NoUrl,
     #[error("Project key not configured. Set with: aida jira config --project PROJ")]
     NoProject,
@@ -174,7 +180,8 @@ impl JiraConfig {
     }
 
     pub fn effective_token(&self) -> Result<String> {
-        self.api_token.clone()
+        self.api_token
+            .clone()
             .or_else(|| std::env::var("AIDA_JIRA_TOKEN").ok())
             .or_else(|| std::env::var("JIRA_API_KEY").ok())
             .or_else(|| std::env::var("JIRA_API_TOKEN").ok())
@@ -182,50 +189,70 @@ impl JiraConfig {
     }
 
     pub fn validate(&self) -> Result<()> {
-        if self.instance_url.is_empty() { return Err(ConfigError::NoUrl.into()); }
-        if self.project_key.is_empty() { return Err(ConfigError::NoProject.into()); }
-        if self.user_email.is_empty() { return Err(ConfigError::NoEmail.into()); }
+        if self.instance_url.is_empty() {
+            return Err(ConfigError::NoUrl.into());
+        }
+        if self.project_key.is_empty() {
+            return Err(ConfigError::NoProject.into());
+        }
+        if self.user_email.is_empty() {
+            return Err(ConfigError::NoEmail.into());
+        }
         self.effective_token()?;
         Ok(())
     }
 
     /// Map an AIDA requirement type to a Jira issue type name.
     pub fn map_type(&self, aida_type: &str) -> String {
-        self.mapping.types.get(aida_type)
+        self.mapping
+            .types
+            .get(aida_type)
             .cloned()
             .unwrap_or_else(|| "Task".into())
     }
 
     /// Map a Jira issue type to an AIDA requirement type.
     pub fn reverse_map_type(&self, jira_type: &str) -> String {
-        self.mapping.reverse_types.get(jira_type)
+        self.mapping
+            .reverse_types
+            .get(jira_type)
             .cloned()
             .unwrap_or_else(|| "Task".into())
     }
 
     /// Map an AIDA status to a Jira status name.
     pub fn map_status(&self, aida_status: &str) -> String {
-        self.mapping.statuses.get(aida_status)
+        self.mapping
+            .statuses
+            .get(aida_status)
             .cloned()
             .unwrap_or_else(|| "To Do".into())
     }
 
     /// Map a Jira status to an AIDA status.
     pub fn reverse_map_status(&self, jira_status: &str) -> String {
-        self.mapping.reverse_statuses.get(jira_status)
+        self.mapping
+            .reverse_statuses
+            .get(jira_status)
             .cloned()
             .unwrap_or_else(|| "Draft".into())
     }
 
     /// Map an AIDA priority to a Jira priority name.
     pub fn map_priority(&self, aida_priority: &str) -> String {
-        self.mapping.priorities.get(aida_priority)
+        self.mapping
+            .priorities
+            .get(aida_priority)
             .cloned()
             .unwrap_or_else(|| "Medium".into())
     }
 
     /// API base URL.
     pub fn api_url(&self, path: &str) -> String {
-        format!("{}/rest/api/3{}", self.instance_url.trim_end_matches('/'), path)
+        format!(
+            "{}/rest/api/3{}",
+            self.instance_url.trim_end_matches('/'),
+            path
+        )
     }
 }

@@ -12,6 +12,6 @@ pub mod models;
 pub use client::{ClientError, JiraClient};
 pub use config::{ConfigError, FieldMapping, JiraConfig};
 pub use models::{
-    CreateIssueFields, CreateIssueRequest, CreatedIssue, IssueTypeRef, JiraIssue, JiraProject,
-    JiraSearchResults, PriorityRef, ProjectRef, text_to_adf,
+    text_to_adf, CreateIssueFields, CreateIssueRequest, CreatedIssue, IssueTypeRef, JiraIssue,
+    JiraProject, JiraSearchResults, PriorityRef, ProjectRef,
 };

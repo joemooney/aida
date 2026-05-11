@@ -130,10 +130,7 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
     }
 
     let log_output = run_git(store_path, &log_args)?;
-    let commits: Vec<CommitMeta> = log_output
-        .lines()
-        .filter_map(parse_log_line)
-        .collect();
+    let commits: Vec<CommitMeta> = log_output.lines().filter_map(parse_log_line).collect();
 
     let mut events: Vec<Event> = Vec::new();
 
@@ -168,7 +165,14 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
             let after = git_show_blob(store_path, &commit.sha, path).ok();
             let before = git_show_blob(store_path, &format!("{}^", commit.sha), path).ok();
 
-            decode_into_events(commit, status, path, before.as_deref(), after.as_deref(), &mut events);
+            decode_into_events(
+                commit,
+                status,
+                path,
+                before.as_deref(),
+                after.as_deref(),
+                &mut events,
+            );
         }
     }
 
@@ -314,14 +318,16 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
         let spec_id = spec_id_from_path(&path);
         let req_type = req_type_from_path(&path);
 
-        let entry = summaries.entry(spec_id.clone()).or_insert_with(|| DigestEntry {
-            spec_id: spec_id.clone(),
-            req_type,
-            last_git_ts: commit.ts.clone(),
-            last_author_email: commit.author.clone(),
-            had_add: false,
-            had_delete: false,
-        });
+        let entry = summaries
+            .entry(spec_id.clone())
+            .or_insert_with(|| DigestEntry {
+                spec_id: spec_id.clone(),
+                req_type,
+                last_git_ts: commit.ts.clone(),
+                last_author_email: commit.author.clone(),
+                had_add: false,
+                had_delete: false,
+            });
         // Track whether this YAML was added or deleted somewhere in the
         // window so we can show "+ / − / ·" markers. Status letter is the
         // one from `git log --name-status`.
@@ -398,11 +404,7 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
 
     // Width-align spec_id column so the rest reads as a table.
     let id_w = entries.iter().map(|e| e.spec_id.len()).max().unwrap_or(8);
-    let status_w = entries
-        .iter()
-        .map(|e| e.status.len())
-        .max()
-        .unwrap_or(10);
+    let status_w = entries.iter().map(|e| e.status.len()).max().unwrap_or(10);
     // Time column needs to fit the widest rendered value (today's HH:MM
     // collapses to 5 chars; older "MM-DD HH:MM" is 11). Compute once.
     let time_w = entries
@@ -548,7 +550,11 @@ fn looks_like_spec_id(s: &str) -> bool {
     // SPEC-IDs are letters then dash-and-digits, optionally with a node
     // segment (`FR-1-037`). Reject pure numbers and chore-style words.
     let mut chars = s.chars();
-    if !chars.next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false) {
+    if !chars
+        .next()
+        .map(|c| c.is_ascii_alphabetic())
+        .unwrap_or(false)
+    {
         return false;
     }
     s.contains('-') && s.chars().any(|c| c.is_ascii_digit())
@@ -685,8 +691,7 @@ fn decode_into_events(
                     req_type: yaml_string(v, "req_type")
                         .or_else(|| yaml_string(v, "type"))
                         .unwrap_or_else(|| req_type.clone()),
-                    priority: effective(v, "priority", "custom_priority")
-                        .unwrap_or_default(),
+                    priority: effective(v, "priority", "custom_priority").unwrap_or_default(),
                 }));
             }
         }
@@ -806,11 +811,7 @@ fn diff_modified(
     }
 }
 
-fn pick_author(
-    before: &Option<Value>,
-    after: &Option<Value>,
-    commit: &CommitMeta,
-) -> String {
+fn pick_author(before: &Option<Value>, after: &Option<Value>, commit: &CommitMeta) -> String {
     // Prefer the YAML's last_modified_by if the field exists and is set.
     // Falls back to the git committer's local-part.
     let from_yaml = after
@@ -899,7 +900,12 @@ fn human_timestamp(iso: &str) -> String {
 }
 
 fn format_oneline(e: &Event) -> String {
-    let head = format!("{} {} {}", e.timestamp.dimmed(), e.author.cyan(), e.spec_id.bold());
+    let head = format!(
+        "{} {} {}",
+        e.timestamp.dimmed(),
+        e.author.cyan(),
+        e.spec_id.bold()
+    );
     format!("{}  {}", head, format_event_body(e))
 }
 
@@ -916,17 +922,12 @@ fn format_event_body(e: &Event) -> String {
             priority,
             shorten(title, 80).dimmed()
         ),
-        EventKind::Deleted { title } => format!(
-            "{} {}",
-            "deleted".red(),
-            shorten(title, 80).dimmed()
-        ),
-        EventKind::StatusChange { from, to } => format!(
-            "{}: {} → {}",
-            "status".bold(),
-            from.yellow(),
-            to.green()
-        ),
+        EventKind::Deleted { title } => {
+            format!("{} {}", "deleted".red(), shorten(title, 80).dimmed())
+        }
+        EventKind::StatusChange { from, to } => {
+            format!("{}: {} → {}", "status".bold(), from.yellow(), to.green())
+        }
         EventKind::PriorityChange { from, to } => {
             format!("{}: {} → {}", "priority".bold(), from, to)
         }
@@ -938,7 +939,12 @@ fn format_event_body(e: &Event) -> String {
         ),
         EventKind::DescriptionEdited => format!("{}", "description edited".bold()),
         EventKind::OwnerChange { from, to } => {
-            format!("{}: {} → {}", "owner".bold(), maybe_dash(from), maybe_dash(to))
+            format!(
+                "{}: {} → {}",
+                "owner".bold(),
+                maybe_dash(from),
+                maybe_dash(to)
+            )
         }
         EventKind::FeatureChange { from, to } => format!(
             "{}: {} → {}",
@@ -1005,8 +1011,14 @@ mod tests {
 
     #[test]
     fn spec_id_from_path_extracts_stem() {
-        assert_eq!(spec_id_from_path("objects/FR/000/FR-1-011.yaml"), "FR-1-011");
-        assert_eq!(spec_id_from_path("objects/EPIC/000/EPIC-1-005.yaml"), "EPIC-1-005");
+        assert_eq!(
+            spec_id_from_path("objects/FR/000/FR-1-011.yaml"),
+            "FR-1-011"
+        );
+        assert_eq!(
+            spec_id_from_path("objects/EPIC/000/EPIC-1-005.yaml"),
+            "EPIC-1-005"
+        );
     }
 
     #[test]
@@ -1046,7 +1058,8 @@ mod tests {
 
     #[test]
     fn effective_falls_back_to_custom() {
-        let v: Value = serde_yaml::from_str("status: Draft\ncustom_status: Awaiting Review").unwrap();
+        let v: Value =
+            serde_yaml::from_str("status: Draft\ncustom_status: Awaiting Review").unwrap();
         assert_eq!(
             effective(&v, "status", "custom_status").as_deref(),
             Some("Awaiting Review")
