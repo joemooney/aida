@@ -54,14 +54,18 @@ description: |
   - [ ] Documentation in CLAUDE.md noting "anything new under .aida/ is runtime by convention; tracked exceptions require explicit `!` entries"
   - [ ] Migration: existing projects updated via `aida doctor migrate-gitignore` (optional helper)
   - [ ] Tested: scaffold a new project, write a fictional `.aida/new-feature.foo`, verify it's ignored without an explicit entry
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T04:09:29.404339079Z
-modified_at: 2026-05-11T04:16:46.502103935Z
+modified_at: 2026-05-11T04:19:41.968488888Z
 req_type: Bug
 relationships:
 - rel_type: Child
   target_id: 019e0f6f-f9ad-7653-8336-12a7f09d7cb1
   created_at: 2026-05-11T04:09:30.616861179Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-11T04:19:41.968488888Z
+  implemented_by: joe
