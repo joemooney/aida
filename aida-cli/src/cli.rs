@@ -569,6 +569,23 @@ pub enum SessionCommand {
         /// covering cwd, or — if cwd doesn't help — the lease whose
         /// creator_pid is in this shell's ancestor chain.
         id: Option<String>,
+
+        /// Render the session's planned-cluster manifest as a status table
+        /// (✓ Done / ◐ In progress / ○ Pending per item). Empty when
+        /// /aida-pickup hasn't written a manifest for this session.
+        /// trace:STORY-98 | ai:claude
+        #[clap(long)]
+        plan: bool,
+    },
+
+    /// Manage the planned-cluster manifest for the active session
+    /// (`.aida/sessions/<id>.manifest.toml`). Used by /aida-pickup to
+    /// record which items the session intends to work, and by other
+    /// commands to surface "planned by another session" cues.
+    /// trace:STORY-98 | ai:claude
+    Manifest {
+        #[command(subcommand)]
+        cmd: SessionManifestCommand,
     },
 
     /// Delete Claude Code session metadata (`.jsonl` files under
@@ -606,6 +623,94 @@ pub enum SessionCommand {
         /// trace:TASK-70 | ai:claude
         #[clap(long)]
         orphans: bool,
+    },
+}
+
+/// Planned-cluster manifest subcommands. The manifest is a per-session
+/// file at `.aida/sessions/<id>.manifest.toml` listing the SPEC-IDs the
+/// session intends to work, written by /aida-pickup on cluster confirm.
+/// trace:STORY-98 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum SessionManifestCommand {
+    /// Write (replace) the planned-cluster manifest for the active
+    /// session. Pass items as a comma-separated SPEC-ID list in the order
+    /// /aida-pickup intends to work them.
+    ///
+    /// Example:
+    ///   aida session manifest write --items STORY-98,STORY-90,BUG-74
+    ///
+    /// trace:STORY-98 | ai:claude
+    Write {
+        /// Comma-separated SPEC-IDs in planned order (position derives
+        /// from order in the list, starting at 1).
+        #[clap(long, value_name = "SPEC-IDS")]
+        items: String,
+
+        /// Plan source — typically "user prompt" (user-confirmed cluster)
+        /// or "auto" (skill picked the head item). Free-form.
+        #[clap(long, default_value = "user prompt")]
+        source: String,
+
+        /// Target session id (8-char prefix accepted). Defaults to the
+        /// lease covering cwd / this shell's ancestor chain.
+        #[clap(long)]
+        session: Option<String>,
+    },
+
+    /// Mark `spec_id` as started in the active session's manifest
+    /// (records started_at = now). Invoked by `aida edit --status
+    /// in-progress` so the chip status flips automatically.
+    /// trace:STORY-98 | ai:claude
+    MarkStarted {
+        /// SPEC-ID to mark.
+        spec_id: String,
+
+        /// Target session id (8-char prefix accepted). Defaults to the
+        /// lease covering cwd / this shell's ancestor chain.
+        #[clap(long)]
+        session: Option<String>,
+    },
+
+    /// Mark `spec_id` as completed in the active session's manifest
+    /// (records completed_at = now). Invoked by `aida queue done` and
+    /// `aida edit --status completed`. trace:STORY-98 | ai:claude
+    MarkCompleted {
+        /// SPEC-ID to mark.
+        spec_id: String,
+
+        /// Target session id (8-char prefix accepted). Defaults to the
+        /// lease covering cwd / this shell's ancestor chain.
+        #[clap(long)]
+        session: Option<String>,
+    },
+}
+
+/// Pull-request side-effects intended to fire from /aida-pr at PR-create
+/// time. Mirrors what `aida session end` would do as a backup, but moves
+/// the trigger to the moment context is freshest (right after `gh pr
+/// create` returns the URL). trace:STORY-90 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum PrCommand {
+    /// File the reviewer story for the PR open on the current branch and
+    /// queue it to the `reviewer` role. Idempotent: skips when a
+    /// `Review PR-<n>:` story already exists for the PR. Detects the PR
+    /// via `gh pr list --head <branch>` (so `gh` must be on PATH and
+    /// authenticated).
+    ///
+    /// Intended trigger: `/aida-pr` runs this right after `gh pr create`
+    /// succeeds — the agent already has the PR open, the commit range,
+    /// and the spec list cached, but the auto-queue logic does its own
+    /// gh detection so the call is self-contained.
+    ///
+    /// `aida session end` also fires this as a backup, so a forgotten
+    /// /aida-pr (or a raw `gh pr create`) still ends up routed to the
+    /// reviewer. The idempotency guard means both firing is fine.
+    /// trace:STORY-90 | ai:claude
+    AutoQueueReview {
+        /// Branch to look up the PR for. Defaults to the current
+        /// branch via `git branch --show-current`.
+        #[clap(long, value_name = "BRANCH")]
+        branch: Option<String>,
     },
 }
 
@@ -2255,6 +2360,15 @@ pub enum Command {
     /// trace:FR-1-043 | ai:claude
     #[clap(subcommand)]
     Session(SessionCommand),
+
+    /// Pull-request side-effects intended to fire from the /aida-pr
+    /// skill. Today: `auto-queue-review` files the reviewer story right
+    /// after `gh pr create` so the trigger lives where context is
+    /// freshest. `aida session end` keeps the same logic as an
+    /// idempotent backup for PRs opened outside the skill.
+    /// trace:STORY-90 | ai:claude
+    #[clap(subcommand)]
+    Pr(PrCommand),
 
     /// One-line project + role summary suitable for shell prompts and
     /// the `statusLine.command` setting in ~/.claude/settings.json.

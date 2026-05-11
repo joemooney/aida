@@ -9,6 +9,7 @@ mod not_found;
 mod process_probe;
 mod prompts;
 mod session;
+mod session_manifest;
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -53,10 +54,10 @@ use aida_core::{
 
 use crate::cli::{
     BlockCommand, CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand, DevCommand,
-    DocsCommand, FeatureCommand, GitHubCommand, GitLabCommand, JiraCommand, NodeCommand,
+    DocsCommand, FeatureCommand, GitHubCommand, GitLabCommand, JiraCommand, NodeCommand, PrCommand,
     QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand,
     RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ServerCommand, SessionCommand,
-    TraceCommand, TypeCommand,
+    SessionManifestCommand, TraceCommand, TypeCommand,
 };
 
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
@@ -226,6 +227,14 @@ fn run() -> Result<()> {
     // trace:FR-1-043 | ai:claude
     if let Command::Session(session_cmd) = &cli.command {
         return handle_session_command(session_cmd);
+    }
+
+    // STORY-90: PR side-effects dispatch before storage init — the
+    // command's side-effects all live in git / gh / self-invoked `aida
+    // add` calls; it doesn't need the global Storage handle.
+    // trace:STORY-90 | ai:claude
+    if let Command::Pr(pr_cmd) = &cli.command {
+        return handle_pr_command(pr_cmd);
     }
 
     // Determine which requirements file to use
@@ -471,6 +480,7 @@ fn run() -> Result<()> {
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::BgFetch { .. } => unreachable!("_bg-fetch is dispatched before storage init"),
         Command::Session(_) => unreachable!("session is dispatched before storage init"),
+        Command::Pr(_) => unreachable!("pr is dispatched before storage init"),
         Command::Rel(rel_cmd) => {
             handle_relationship_command(rel_cmd, &storage)?;
         }
@@ -1386,6 +1396,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Statusline { .. } => unreachable!("statusline is dispatched before storage init"),
         Command::BgFetch { .. } => unreachable!("_bg-fetch is dispatched before storage init"),
         Command::Session(_) => unreachable!("session is dispatched before storage init"),
+        Command::Pr(_) => unreachable!("pr is dispatched before storage init"),
         Command::List {
             status,
             r#type,
@@ -2224,10 +2235,12 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 req.description = d.clone();
                 changed = true;
             }
+            let mut new_status_for_manifest: Option<String> = None;
             if let Some(s) = status {
                 let canonical = validate_status_input(s).map_err(|e| anyhow::anyhow!(e))?;
                 req.set_status_from_str(canonical);
                 changed = true;
+                new_status_for_manifest = Some(canonical.to_string());
             }
             if let Some(p) = priority {
                 let canonical = validate_priority_input(p).map_err(|e| anyhow::anyhow!(e))?;
@@ -2289,6 +2302,18 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 req.modified_at = chrono::Utc::now();
                 backend.update_requirement(&req)?;
                 println!("Updated: {}", id);
+
+                // STORY-98: if this edit changed the status AND a session
+                // manifest covers the active session, flip the manifest
+                // row so `aida session show --plan` and the
+                // `[planned:by-X]` chip stay coherent with the store.
+                // Best-effort — manifest errors don't fail the edit.
+                // trace:STORY-98 | ai:claude
+                if let Some(status_str) = &new_status_for_manifest {
+                    if let Some(spec_id) = req.spec_id.as_deref() {
+                        update_manifest_for_status(spec_id, status_str);
+                    }
+                }
             } else {
                 println!("No changes specified. Use --title, --status, --priority, etc.");
             }
@@ -9010,13 +9035,14 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             purge_cc,
         } => session_end(id.as_deref(), *yes, *force, *purge_cc),
         SessionCommand::Leases { verbose, all } => session_leases(*verbose, *all),
-        SessionCommand::Show { id } => session_show(id.as_deref()),
+        SessionCommand::Show { id, plan } => session_show(id.as_deref(), *plan),
         SessionCommand::Prune {
             days,
             dry_run,
             yes,
             orphans,
         } => session_prune(*days, *dry_run, *yes, *orphans),
+        SessionCommand::Manifest { cmd } => session_manifest_dispatch(cmd),
     }
 }
 
@@ -11192,20 +11218,19 @@ fn session_end(id_query: Option<&str>, yes: bool, force: bool, purge_cc: bool) -
     // user sees whether the hook fired. The silent-skip case was painful in
     // PR-7 wrap-up: STORY-66 silently no-op'd and the reviewer queue stayed
     // empty with no explanation. trace:STORY-66 BUG-72 | ai:claude
-    let outcome = try_auto_queue_pr_review(&project_root, &target.branch, &target.id);
-    match outcome.status {
-        AutoQueueStatus::Filed => println!("{} {}", "✓".green(), outcome.summary),
-        AutoQueueStatus::AlreadyExists => println!("{} {}", "ⓘ".cyan(), outcome.summary),
-        // TASK-74: by-design skips stay quiet (dim ⓘ); needs-attention
-        // skips bump up to yellow ⚠ so the user notices if gh broke or
-        // the rel/queue subprocess errored. trace:TASK-74 | ai:claude
-        AutoQueueStatus::SkippedByDesign => {
-            eprintln!("{} {}", "ⓘ".dimmed(), outcome.summary.dimmed())
-        }
-        AutoQueueStatus::SkippedNeedsAttention => {
-            eprintln!("{} {}", "⚠".yellow().bold(), outcome.summary.yellow())
-        }
-    }
+    //
+    // STORY-90: this is the backup trigger now — primary fires from
+    // /aida-pr right after `gh pr create`. The idempotency check inside
+    // `try_auto_queue_pr_review` (Review PR-N story already exists) means
+    // both firing the same PR is safe; the second one renders as
+    // `AlreadyExists`. trace:STORY-90 | ai:claude
+    let outcome = try_auto_queue_pr_review(
+        &project_root,
+        &target.branch,
+        &target.id,
+        AutoQueueOrigin::SessionEnd,
+    );
+    render_auto_queue_outcome(&outcome);
 
     // STORY-73: emit `unset AIDA_SESSION_ID` to stdout when wrapped via the
     // shell helper's `eval "$(...)"`, so the calling shell's env var
@@ -11262,11 +11287,138 @@ enum PrLookup {
 }
 
 /// Look up a single open PR for `branch` via `gh`. Never panics; never
+/// Walk PATH (plus a handful of common install locations) looking for a
+/// real, executable `gh` binary. Returns the resolved path or None.
+///
+/// The original code (pre-BUG-74) used `Command::new("gh")` and trusted
+/// `ErrorKind::NotFound` to flag "gh isn't installed." That trust
+/// produced false-negatives when the spawned Rust process inherited a
+/// PATH that didn't include the user's gh install dir — a common
+/// outcome when shell helpers mutate PATH only inside the shell and
+/// non-login process launches see a stripped environment.
+///
+/// AIDA_DEBUG_GH=1 prints the search trace to stderr so the user can see
+/// exactly what was looked at. trace:BUG-74 | ai:claude
+fn resolve_gh_binary() -> Option<std::path::PathBuf> {
+    let debug = std::env::var("AIDA_DEBUG_GH")
+        .map(|v| !v.is_empty() && v != "0")
+        .unwrap_or(false);
+    let mut tried: Vec<std::path::PathBuf> = Vec::new();
+
+    let exe_name = if cfg!(windows) { "gh.exe" } else { "gh" };
+
+    // Pass 1: walk $PATH.
+    if let Ok(path) = std::env::var("PATH") {
+        let sep = if cfg!(windows) { ';' } else { ':' };
+        for dir in path.split(sep) {
+            if dir.is_empty() {
+                continue;
+            }
+            let candidate = std::path::PathBuf::from(dir).join(exe_name);
+            tried.push(candidate.clone());
+            if is_executable(&candidate) {
+                if debug {
+                    eprintln!(
+                        "{} found gh on PATH at {}",
+                        "AIDA_DEBUG_GH:".dimmed(),
+                        candidate.display()
+                    );
+                }
+                return Some(candidate);
+            }
+        }
+    }
+
+    // Pass 2: common absolute paths, in case PATH was mangled or the
+    // child process inherited an empty PATH. Conservative list — only
+    // dirs where gh is regularly installed by the official installers
+    // or distros.
+    let fallbacks: Vec<std::path::PathBuf> = {
+        let mut v = vec![
+            std::path::PathBuf::from("/usr/bin").join(exe_name),
+            std::path::PathBuf::from("/usr/local/bin").join(exe_name),
+            std::path::PathBuf::from("/opt/homebrew/bin").join(exe_name),
+            std::path::PathBuf::from("/snap/bin").join(exe_name),
+        ];
+        if let Some(home) = dirs::home_dir() {
+            v.push(home.join(".local").join("bin").join(exe_name));
+            v.push(home.join("bin").join(exe_name));
+        }
+        v
+    };
+    for candidate in &fallbacks {
+        tried.push(candidate.clone());
+        if is_executable(candidate) {
+            if debug {
+                eprintln!(
+                    "{} found gh via absolute-path fallback at {}",
+                    "AIDA_DEBUG_GH:".dimmed(),
+                    candidate.display()
+                );
+            }
+            return Some(candidate.clone());
+        }
+    }
+
+    if debug {
+        eprintln!(
+            "{} gh not found after searching {} location(s):",
+            "AIDA_DEBUG_GH:".dimmed(),
+            tried.len()
+        );
+        eprintln!(
+            "{} PATH = {}",
+            "AIDA_DEBUG_GH:".dimmed(),
+            std::env::var("PATH").unwrap_or_default()
+        );
+        for p in &tried {
+            eprintln!("  - {}", p.display());
+        }
+    }
+    None
+}
+
+/// True when `path` exists as a file and is executable by the current
+/// process. On Windows we just check existence (the PATHEXT-aware Rust
+/// spawn handles the rest); on Unix we check the executable bit on the
+/// metadata. trace:BUG-74 | ai:claude
+fn is_executable(path: &std::path::Path) -> bool {
+    let Ok(meta) = std::fs::metadata(path) else {
+        return false;
+    };
+    if !meta.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        return meta.permissions().mode() & 0o111 != 0;
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = meta;
+        true
+    }
+}
+
 /// fails session_end. The richer return shape lets the caller print an
 /// honest skip reason instead of pretending nothing happened.
-/// trace:STORY-66 BUG-72 | ai:claude
+///
+/// BUG-74: previously this called `Command::new("gh")` and trusted that
+/// `ErrorKind::NotFound` meant "gh isn't installed". In practice the
+/// false-negative rate is non-trivial — a child Rust process can see a
+/// PATH that doesn't include the directory where the user installed gh
+/// (especially with shell helpers that mutate PATH only inside the
+/// shell). So we now do an explicit PATH walk first, fall back to a
+/// handful of common absolute paths, and invoke gh by absolute path.
+/// AIDA_DEBUG_GH=1 surfaces what we searched and where we found (or
+/// didn't find) the binary. trace:STORY-66 BUG-72 BUG-74 | ai:claude
 fn detect_open_pr_for_branch(project_root: &std::path::Path, branch: &str) -> PrLookup {
-    let spawned = std::process::Command::new("gh")
+    let gh_bin = match resolve_gh_binary() {
+        Some(p) => p,
+        None => return PrLookup::GhMissing,
+    };
+    let spawned = std::process::Command::new(&gh_bin)
         .current_dir(project_root)
         .args([
             "pr",
@@ -11285,8 +11437,10 @@ fn detect_open_pr_for_branch(project_root: &std::path::Path, branch: &str) -> Pr
         .output();
     let out = match spawned {
         Ok(o) => o,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return PrLookup::GhMissing,
-        Err(e) => return PrLookup::GhFailed(e.to_string()),
+        // We resolved the binary path above, so NotFound here is a race
+        // (binary deleted between resolve and spawn). Treat as a failure
+        // not a "gh missing" — the user almost certainly still has gh.
+        Err(e) => return PrLookup::GhFailed(format!("spawn {:?}: {}", gh_bin.display(), e)),
     };
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
@@ -11567,14 +11721,40 @@ fn is_review_session_branch(branch: &str) -> bool {
     })
 }
 
-/// End-of-session auto-detect-and-queue. Runs as a side effect of
-/// `aida session end` so a forgotten `gh pr create` doesn't leave the
-/// reviewer unaware. Returns an outcome describing what happened — see
-/// `AutoQueueStatus` for the categories. trace:STORY-66 BUG-72 | ai:claude
+/// Where the auto-queue was triggered from. Used purely for the
+/// description blurb on the filed review story (so a reviewer reading
+/// it later can tell "the /aida-pr skill filed me at PR-create time"
+/// from "session end picked me up as a backup"). Doesn't change any
+/// other behavior. trace:STORY-90 | ai:claude
+#[derive(Debug, Clone, Copy)]
+enum AutoQueueOrigin {
+    /// Fired from `aida pr auto-queue-review`, normally by /aida-pr right
+    /// after `gh pr create`.
+    PrSkill,
+    /// Fired from `aida session end` as the idempotent backup trigger.
+    SessionEnd,
+}
+
+impl AutoQueueOrigin {
+    fn human_origin(self) -> &'static str {
+        match self {
+            AutoQueueOrigin::PrSkill => "`aida pr auto-queue-review` (typically from /aida-pr)",
+            AutoQueueOrigin::SessionEnd => "`aida session end` (backup trigger)",
+        }
+    }
+}
+
+/// Auto-detect-and-queue. Triggered primarily from /aida-pr right after
+/// `gh pr create` returns, and as an idempotent backup from `aida session
+/// end` so a forgotten `gh pr create` (or a manual one outside the skill)
+/// doesn't leave the reviewer unaware. Returns an outcome describing what
+/// happened — see `AutoQueueStatus` for the categories.
+/// trace:STORY-66 STORY-90 BUG-72 | ai:claude
 fn try_auto_queue_pr_review(
     project_root: &std::path::Path,
     branch: &str,
     session_id: &str,
+    origin: AutoQueueOrigin,
 ) -> AutoQueueOutcome {
     // TASK-74: short-circuit when the branch shape says "this session
     // never produces a PR" (reviewer session on `pr-N` / `mr-N` etc.).
@@ -11632,8 +11812,10 @@ fn try_auto_queue_pr_review(
     let session_short: &str = &session_id[..session_id.len().min(8)];
     let mut desc = String::new();
     desc.push_str(&format!(
-        "Auto-filed by `aida session end` (session `{}`) when its branch `{}` had an open PR.\n\n",
-        session_short, branch
+        "Auto-filed by {} (session `{}`) for branch `{}`.\n\n",
+        origin.human_origin(),
+        session_short,
+        branch
     ));
     desc.push_str(&format!("- PR: <{}>\n", pr.url));
     desc.push_str(&format!("- Branch: `{}` → `{}`\n\n", head, base));
@@ -11671,8 +11853,13 @@ fn try_auto_queue_pr_review(
         aida_subcmd_rel_add_implements(project_root, &new_id, id);
     }
 
+    let origin_short = match origin {
+        AutoQueueOrigin::PrSkill => "aida pr",
+        AutoQueueOrigin::SessionEnd => "session end",
+    };
     let note = format!(
-        "auto-queued by `aida session end` ({}); covers {} spec{}",
+        "auto-queued by `{}` ({}); covers {} spec{}",
+        origin_short,
         session_short,
         spec_ids.len(),
         if spec_ids.len() == 1 { "" } else { "s" }
@@ -11688,6 +11875,92 @@ fn try_auto_queue_pr_review(
         "filed {} (covers {}) → reviewer queue (PR #{})",
         new_id, covers, pr.number
     ))
+}
+
+/// Print an `AutoQueueOutcome` in the convention shared by `aida session
+/// end` and `aida pr auto-queue-review` (filed = ✓ green, already-exists
+/// = ⓘ cyan, by-design skip = dim, needs-attention = ⚠ yellow).
+/// trace:STORY-90 BUG-72 | ai:claude
+fn render_auto_queue_outcome(outcome: &AutoQueueOutcome) {
+    match outcome.status {
+        AutoQueueStatus::Filed => println!("{} {}", "✓".green(), outcome.summary),
+        AutoQueueStatus::AlreadyExists => println!("{} {}", "ⓘ".cyan(), outcome.summary),
+        AutoQueueStatus::SkippedByDesign => {
+            eprintln!("{} {}", "ⓘ".dimmed(), outcome.summary.dimmed())
+        }
+        AutoQueueStatus::SkippedNeedsAttention => {
+            eprintln!("{} {}", "⚠".yellow().bold(), outcome.summary.yellow())
+        }
+    }
+}
+
+/// `aida pr <subcommand>` dispatcher. trace:STORY-90 | ai:claude
+fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
+    match cmd {
+        PrCommand::AutoQueueReview { branch } => pr_auto_queue_review(branch.as_deref()),
+    }
+}
+
+/// Implementation of `aida pr auto-queue-review` — files (or skips, if
+/// already filed) the reviewer story for the PR open on `branch` (default
+/// to `git branch --show-current`). Designed to be invoked by /aida-pr
+/// right after `gh pr create` returns. trace:STORY-90 | ai:claude
+fn pr_auto_queue_review(branch_override: Option<&str>) -> Result<()> {
+    let project_root = find_project_root()?;
+
+    let branch = match branch_override {
+        Some(b) => b.to_string(),
+        None => current_git_branch(&project_root)?,
+    };
+    if branch.is_empty() {
+        anyhow::bail!("could not resolve current branch — pass `--branch <name>` explicitly");
+    }
+
+    // Try to associate this run with the active session lease so the
+    // review-story description records who opened the PR. Falls back to
+    // a synthetic "(no-session)" id if no lease covers the cwd.
+    let session_id = std::env::current_dir()
+        .ok()
+        .and_then(|cwd| active_lease_for_cwd(&project_root, &cwd))
+        .map(|l| l.id)
+        .unwrap_or_else(|| "(no-sess)".to_string());
+
+    let outcome = try_auto_queue_pr_review(
+        &project_root,
+        &branch,
+        &session_id,
+        AutoQueueOrigin::PrSkill,
+    );
+    render_auto_queue_outcome(&outcome);
+
+    // Exit non-zero for the "needs attention" bucket so /aida-pr can
+    // detect the failure mode and tell the user to install gh / re-auth
+    // / etc. Filed, already-filed, and by-design skips all return 0 —
+    // they're all expected outcomes the skill should treat as success.
+    match outcome.status {
+        AutoQueueStatus::SkippedNeedsAttention => {
+            anyhow::bail!("{}", outcome.summary)
+        }
+        _ => Ok(()),
+    }
+}
+
+/// `git -C <root> branch --show-current` — used by `aida pr` when the
+/// caller doesn't pass --branch. Returns trimmed branch name on success;
+/// empty string when detached / not a repo. trace:STORY-90 | ai:claude
+fn current_git_branch(project_root: &std::path::Path) -> Result<String> {
+    let out = std::process::Command::new("git")
+        .current_dir(project_root)
+        .args(["branch", "--show-current"])
+        .output()
+        .context("could not invoke `git branch --show-current` — is git installed?")?;
+    if !out.status.success() {
+        anyhow::bail!(
+            "`git branch --show-current` failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
 /// TASK-55: lease liveness classification used by `session leases`.
@@ -12372,7 +12645,7 @@ fn session_prune(days: u32, dry_run: bool, yes: bool, orphans: bool) -> Result<(
 /// resolution chain, minus the single-active prompt — `show` should be
 /// non-interactive). Errors with the active-lease listing if nothing
 /// resolves. trace:STORY-68 | ai:claude
-fn session_show(id: Option<&str>) -> Result<()> {
+fn session_show(id: Option<&str>, plan: bool) -> Result<()> {
     let project_root = find_project_root()?;
     let leases = list_leases(&project_root);
     if leases.is_empty() {
@@ -12577,6 +12850,385 @@ fn session_show(id: Option<&str>) -> Result<()> {
         }
     }
 
+    if plan {
+        render_session_manifest(&project_root, &lease.id)?;
+    }
+
+    Ok(())
+}
+
+/// Render the planned-cluster manifest for `session_id` as a status table.
+/// Reads the requirement store once to resolve each item's current status
+/// (so a spec the user flipped to "in progress" via /aida-pickup actually
+/// shows as ◐ regardless of whether mark-started ran). trace:STORY-98
+fn render_session_manifest(project_root: &std::path::Path, session_id: &str) -> Result<()> {
+    let path = session_manifest::manifest_path(project_root, session_id);
+    println!();
+    if !path.exists() {
+        println!(
+            "{} (no planned-cluster manifest — /aida-pickup hasn't recorded one for this session)",
+            "Plan:".bold()
+        );
+        println!(
+            "  {} {}",
+            "tip:".dimmed(),
+            "/aida-pickup writes the manifest when it confirms a multi-item cluster".dimmed()
+        );
+        return Ok(());
+    }
+    let manifest = session_manifest::load(&path)?;
+
+    // Resolve each item's current store status — expensive, so do it once.
+    // Git-canonical first (the default backend now), falling back to the
+    // legacy Storage path if no .aida-store/ is present.
+    // trace:STORY-98 | ai:claude
+    let store = load_store_for_lookup(project_root);
+
+    let mut done = 0usize;
+    let mut in_progress = 0usize;
+    let mut pending = 0usize;
+    let total = manifest.items.len();
+
+    // Pre-compute per-item (status, title).
+    let mut rows: Vec<(
+        session_manifest::ItemStatus,
+        &session_manifest::ManifestItem,
+        String,
+    )> = Vec::with_capacity(total);
+    for item in &manifest.items {
+        let (status_str, title) = if let Some(store) = &store {
+            let req = store
+                .requirements
+                .iter()
+                .find(|r| r.spec_id.as_deref() == Some(item.spec_id.as_str()));
+            (
+                req.map(|r| format!("{}", r.status)),
+                req.map(|r| r.title.clone())
+                    .unwrap_or_else(|| "(not found)".to_string()),
+            )
+        } else {
+            (None, String::new())
+        };
+        let st = session_manifest::classify_item(item, status_str.as_deref());
+        match st {
+            session_manifest::ItemStatus::Done => done += 1,
+            session_manifest::ItemStatus::InProgress => in_progress += 1,
+            session_manifest::ItemStatus::Pending => pending += 1,
+        }
+        rows.push((st, item, title));
+    }
+
+    println!(
+        "{} {} items, {} done, {} in-progress, {} pending",
+        "Plan:".bold(),
+        total,
+        done.to_string().green(),
+        in_progress.to_string().yellow(),
+        pending.to_string().dimmed(),
+    );
+    println!(
+        "  {} {} · {} {}",
+        "planned_at:".dimmed(),
+        manifest
+            .planned_at
+            .with_timezone(&chrono::Local)
+            .format("%Y-%m-%d %H:%M %Z"),
+        "source:".dimmed(),
+        manifest.plan_source.cyan()
+    );
+    println!();
+    println!(
+        "  {:<3} {:<14} {:<14} {}",
+        "#".dimmed(),
+        "Status".dimmed(),
+        "Spec".dimmed(),
+        "Title".dimmed()
+    );
+    for (st, item, title) in &rows {
+        let glyph = st.glyph();
+        let label = st.label();
+        let display = format!("{} {}", glyph, label);
+        let colored = match st {
+            session_manifest::ItemStatus::Done => display.green(),
+            session_manifest::ItemStatus::InProgress => display.yellow(),
+            session_manifest::ItemStatus::Pending => display.dimmed(),
+        };
+        println!(
+            "  {:<3} {:<14} {:<14} {}",
+            item.position,
+            colored,
+            item.spec_id.bold(),
+            title
+        );
+    }
+
+    Ok(())
+}
+
+/// STORY-98: best-effort manifest-row flip on `aida edit --status`.
+/// Resolves the active session lease via cwd / ancestor-PID match, then
+/// stamps started_at or completed_at on the matching item. Silent no-op
+/// when no lease covers this shell or the manifest doesn't list the
+/// spec — most edits happen outside a planned cluster, so the path stays
+/// quiet by design. trace:STORY-98 | ai:claude
+fn update_manifest_for_status(spec_id: &str, canonical_status: &str) {
+    let Ok(project_root) = find_project_root() else {
+        return;
+    };
+    let leases = list_leases(&project_root);
+    if leases.is_empty() {
+        return;
+    }
+    let lease = match std::env::current_dir().ok() {
+        Some(cwd) => {
+            let canon = cwd.canonicalize().unwrap_or(cwd);
+            leases
+                .iter()
+                .find(|l| canon == l.worktree_path || canon.starts_with(&l.worktree_path))
+                .cloned()
+        }
+        None => None,
+    }
+    .or_else(|| {
+        let chain: std::collections::HashSet<u32> =
+            process_probe::walk_ancestor_pids(std::process::id())
+                .into_iter()
+                .collect();
+        let ancestor: Vec<&SessionLease> = leases
+            .iter()
+            .filter(|l| l.creator_pid.map(|p| chain.contains(&p)).unwrap_or(false))
+            .collect();
+        if ancestor.len() == 1 {
+            Some(ancestor[0].clone())
+        } else {
+            None
+        }
+    });
+    let Some(lease) = lease else {
+        return;
+    };
+    let path = session_manifest::manifest_path(&project_root, &lease.id);
+    if !path.exists() {
+        return;
+    }
+    let lower = canonical_status.to_ascii_lowercase();
+    let res = if lower == "in-progress" || lower == "in_progress" || lower == "in progress" {
+        session_manifest::mark_started(&path, spec_id)
+    } else if lower == "completed" || lower == "rejected" {
+        session_manifest::mark_completed(&path, spec_id)
+    } else {
+        return; // draft/approved transitions don't move the manifest needle
+    };
+    if let Err(e) = res {
+        eprintln!(
+            "{} session-manifest update failed for {} ({}): {}",
+            "Warning:".yellow().bold(),
+            spec_id,
+            canonical_status,
+            e
+        );
+    }
+}
+
+/// Best-effort load of the requirements store for read-only spec-id /
+/// title / status lookups inside session-manifest rendering. Tries
+/// distributed git-canonical mode first (the default), then falls back
+/// to the legacy YAML/SQLite path. Returns None on any error — caller
+/// renders with "(not found)" placeholders so missing data degrades
+/// gracefully. trace:STORY-98 | ai:claude
+fn load_store_for_lookup(project_root: &std::path::Path) -> Option<aida_core::RequirementsStore> {
+    // Git-canonical: walk up from project_root looking for an .aida/config.toml.
+    if let Some(store_path) = detect_distributed_store_from(project_root) {
+        if let Ok(backend) = aida_core::GitBackend::new(&store_path) {
+            if let Ok(s) = aida_core::DatabaseBackend::load(&backend) {
+                return Some(s);
+            }
+        }
+    }
+    // Legacy fallback for projects that haven't migrated.
+    determine_requirements_path(None)
+        .ok()
+        .map(Storage::new)
+        .and_then(|s| s.load().ok())
+}
+
+/// `aida session manifest <subcommand>` dispatcher. trace:STORY-98
+fn session_manifest_dispatch(cmd: &SessionManifestCommand) -> Result<()> {
+    match cmd {
+        SessionManifestCommand::Write {
+            items,
+            source,
+            session,
+        } => session_manifest_write(items, source, session.as_deref()),
+        SessionManifestCommand::MarkStarted { spec_id, session } => {
+            session_manifest_mark(spec_id, session.as_deref(), MarkKind::Started)
+        }
+        SessionManifestCommand::MarkCompleted { spec_id, session } => {
+            session_manifest_mark(spec_id, session.as_deref(), MarkKind::Completed)
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum MarkKind {
+    Started,
+    Completed,
+}
+
+/// Resolve the target lease for a manifest operation: explicit id wins,
+/// else the lease covering cwd, else ancestor-PID match, else error.
+/// Centralized so all three manifest subcommands resolve identically.
+fn resolve_manifest_target_lease(
+    project_root: &std::path::Path,
+    session_query: Option<&str>,
+) -> Result<SessionLease> {
+    let leases = list_leases(project_root);
+    if leases.is_empty() {
+        anyhow::bail!(
+            "no active sessions — start one with `aida session start --owns <scope>` before writing a manifest"
+        );
+    }
+    if let Some(q) = session_query {
+        return find_lease_by_id_prefix(q, &leases);
+    }
+    if let Ok(cwd) = std::env::current_dir() {
+        let canon = cwd.canonicalize().unwrap_or(cwd);
+        if let Some(l) = leases
+            .iter()
+            .find(|l| canon == l.worktree_path || canon.starts_with(&l.worktree_path))
+        {
+            return Ok(l.clone());
+        }
+    }
+    let chain: std::collections::HashSet<u32> =
+        process_probe::walk_ancestor_pids(std::process::id())
+            .into_iter()
+            .collect();
+    let ancestor: Vec<&SessionLease> = leases
+        .iter()
+        .filter(|l| l.creator_pid.map(|p| chain.contains(&p)).unwrap_or(false))
+        .collect();
+    if ancestor.len() == 1 {
+        return Ok(ancestor[0].clone());
+    }
+    anyhow::bail!(
+        "could not resolve a single active session — pass --session <id> ({} active)",
+        leases.len()
+    );
+}
+
+fn session_manifest_write(items: &str, source: &str, session_query: Option<&str>) -> Result<()> {
+    let project_root = find_project_root()?;
+    let lease = resolve_manifest_target_lease(&project_root, session_query)?;
+
+    let parsed: Vec<String> = items
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    if parsed.is_empty() {
+        anyhow::bail!("--items is empty — pass a comma-separated list of SPEC-IDs");
+    }
+
+    // Resolve current store statuses so status_at_plan reflects truth.
+    let store = load_store_for_lookup(&project_root);
+
+    let now = chrono::Utc::now();
+    let mut manifest_items: Vec<session_manifest::ManifestItem> = Vec::with_capacity(parsed.len());
+    for (i, spec_id) in parsed.iter().enumerate() {
+        let status = store
+            .as_ref()
+            .and_then(|s| {
+                s.requirements
+                    .iter()
+                    .find(|r| r.spec_id.as_deref() == Some(spec_id.as_str()))
+            })
+            .map(|r| format!("{}", r.status))
+            .unwrap_or_else(|| "Unknown".to_string());
+        manifest_items.push(session_manifest::ManifestItem {
+            spec_id: spec_id.clone(),
+            position: (i + 1) as u32,
+            status_at_plan: status,
+            started_at: None,
+            completed_at: None,
+            note: None,
+        });
+    }
+
+    let manifest = session_manifest::SessionManifest {
+        session_id: lease.id.clone(),
+        planned_at: now,
+        plan_source: source.to_string(),
+        items: manifest_items,
+    };
+
+    let path = session_manifest::manifest_path(&project_root, &lease.id);
+    session_manifest::save(&path, &manifest)?;
+
+    println!(
+        "{} {} for session {} ({} items)",
+        "✓".green(),
+        "Wrote planned-cluster manifest".bold(),
+        (&lease.id[..lease.id.len().min(8)]).yellow(),
+        manifest.items.len()
+    );
+    for it in &manifest.items {
+        println!(
+            "  {}. {}  [{}]",
+            it.position.to_string().dimmed(),
+            it.spec_id.bold(),
+            it.status_at_plan.dimmed()
+        );
+    }
+    println!();
+    println!(
+        "  {} {} {}",
+        "manifest:".dimmed(),
+        path.display().to_string().dimmed(),
+        "(view with `aida session show --plan`)".dimmed()
+    );
+
+    Ok(())
+}
+
+fn session_manifest_mark(spec_id: &str, session_query: Option<&str>, kind: MarkKind) -> Result<()> {
+    let project_root = find_project_root()?;
+    let lease = resolve_manifest_target_lease(&project_root, session_query)?;
+    let path = session_manifest::manifest_path(&project_root, &lease.id);
+    let updated = match kind {
+        MarkKind::Started => session_manifest::mark_started(&path, spec_id)?,
+        MarkKind::Completed => session_manifest::mark_completed(&path, spec_id)?,
+    };
+    let action = match kind {
+        MarkKind::Started => "started",
+        MarkKind::Completed => "completed",
+    };
+    if updated {
+        println!(
+            "{} marked {} as {} in session {} manifest",
+            "✓".green(),
+            spec_id.bold(),
+            action,
+            (&lease.id[..lease.id.len().min(8)]).dimmed()
+        );
+    } else if !path.exists() {
+        // Quiet no-op: most edits happen outside a planned cluster. We
+        // emit a single dim line so manual `aida session manifest
+        // mark-started` calls aren't silently lost, but we don't shout
+        // when the hook path runs against every edit.
+        println!(
+            "{} no manifest for session {} — nothing to mark (run `aida session manifest write` first)",
+            "→".dimmed(),
+            (&lease.id[..lease.id.len().min(8)]).dimmed()
+        );
+    } else {
+        println!(
+            "{} {} not in session {} manifest — not marking",
+            "→".dimmed(),
+            spec_id,
+            (&lease.id[..lease.id.len().min(8)]).dimmed()
+        );
+    }
     Ok(())
 }
 
@@ -15931,6 +16583,97 @@ mod branch_behind_main_tests {
             .status()
             .unwrap();
         assert!(branch_behind_main(p, "trunk").is_none());
+    }
+}
+
+#[cfg(all(test, unix))]
+mod resolve_gh_binary_tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+    use tempfile::TempDir;
+
+    fn make_executable(path: &std::path::Path) {
+        std::fs::write(path, "#!/bin/sh\necho gh fake\n").unwrap();
+        let mut perms = std::fs::metadata(path).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(path, perms).unwrap();
+    }
+
+    fn make_non_executable(path: &std::path::Path) {
+        std::fs::write(path, "not executable\n").unwrap();
+        let mut perms = std::fs::metadata(path).unwrap().permissions();
+        perms.set_mode(0o644);
+        std::fs::set_permissions(path, perms).unwrap();
+    }
+
+    /// PATH walk picks up gh even when the system gh isn't on PATH.
+    /// Critical regression guard for BUG-74. trace:BUG-74 | ai:claude
+    #[test]
+    fn finds_gh_via_path() {
+        let tmp = TempDir::new().unwrap();
+        let gh = tmp.path().join("gh");
+        make_executable(&gh);
+        // Set PATH to ONLY our temp dir so we don't conflict with the
+        // system gh and we know exactly what was resolved.
+        let prev_path = std::env::var("PATH").ok();
+        std::env::set_var("PATH", tmp.path());
+        let resolved = resolve_gh_binary();
+        if let Some(p) = prev_path {
+            std::env::set_var("PATH", p);
+        } else {
+            std::env::remove_var("PATH");
+        }
+        let resolved = resolved.expect("expected to find fake gh on PATH");
+        assert_eq!(
+            std::fs::canonicalize(&resolved).unwrap(),
+            std::fs::canonicalize(&gh).unwrap()
+        );
+    }
+
+    /// PATH walk ignores non-executable files named gh. trace:BUG-74
+    #[test]
+    fn rejects_non_executable() {
+        let tmp = TempDir::new().unwrap();
+        let gh = tmp.path().join("gh");
+        make_non_executable(&gh);
+        let prev_path = std::env::var("PATH").ok();
+        std::env::set_var("PATH", tmp.path());
+        let resolved = resolve_gh_binary();
+        if let Some(p) = prev_path {
+            std::env::set_var("PATH", p);
+        } else {
+            std::env::remove_var("PATH");
+        }
+        // We may still pick up a real system gh via the absolute-path
+        // fallback — but we should NOT have picked up our broken fake.
+        if let Some(p) = resolved {
+            assert_ne!(
+                std::fs::canonicalize(&p).unwrap(),
+                std::fs::canonicalize(&gh).unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn is_executable_checks_perm_bit() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("x");
+        make_executable(&path);
+        assert!(is_executable(&path));
+        make_non_executable(&path);
+        assert!(!is_executable(&path));
+    }
+
+    #[test]
+    fn is_executable_rejects_dirs() {
+        let tmp = TempDir::new().unwrap();
+        assert!(!is_executable(tmp.path()));
+    }
+
+    #[test]
+    fn is_executable_rejects_missing() {
+        let tmp = TempDir::new().unwrap();
+        assert!(!is_executable(&tmp.path().join("nope")));
     }
 }
 
@@ -24020,6 +24763,21 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     active_lease_for_cwd(&project_root, &cwd)
                 });
 
+            // STORY-98: load every session manifest once so the loop can
+            // tag entries that another live session has planned. Cheap
+            // (handful of TOML files); falls back to empty on read error.
+            // trace:STORY-98 | ai:claude
+            let project_root_for_manifests = storage
+                .path()
+                .parent()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| std::path::PathBuf::from("."));
+            let active_manifests = session_manifest::list_all(&project_root_for_manifests);
+            let viewer_session_id = self_lease_for_routing
+                .as_ref()
+                .map(|l| l.id.clone())
+                .unwrap_or_default();
+
             // TASK-46: track how many entries we hid because their req
             // is in a terminal status. Surfaced as a footer hint so the
             // user knows the listing isn't the whole queue.
@@ -24244,6 +25002,24 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 if let Some(ref s) = entry.for_session {
                     let short = &s[..s.len().min(8)];
                     print!("  {}", format!("[session:{}]", short).cyan());
+                }
+                // STORY-98: if another session's manifest plans this spec,
+                // surface a `[planned:by-<short>]` chip so concurrent
+                // sessions can see the soft claim. The viewer's own
+                // session is skipped (the chip would be redundant — the
+                // user already knows what their own /aida-pickup queued).
+                // trace:STORY-98 | ai:claude
+                if let Some(req) = req {
+                    if let Some(spec_id) = req.spec_id.as_deref() {
+                        if let Some(other) = session_manifest::planned_by_other(
+                            &active_manifests,
+                            spec_id,
+                            &viewer_session_id,
+                        ) {
+                            let short = &other[..other.len().min(8)];
+                            print!("  {}", format!("[planned:by-{}]", short).magenta());
+                        }
+                    }
                 }
                 // When the global queue is also being shown, tag local entries
                 // with their origin so the merge view is unambiguous.
@@ -25102,6 +25878,13 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // here so the most recently shipped spec wins.
             // trace:BUG-65 | ai:claude
             record_role_activity(spec_id, "done");
+
+            // STORY-98: same reason as the BUG-65 hookup above — `queue
+            // done` bypasses Command::Edit, so the manifest-flip path
+            // there doesn't fire. Mirror it explicitly so `aida session
+            // show --plan` flips ✓ Done at completion time.
+            // trace:STORY-98 | ai:claude
+            update_manifest_for_status(spec_id, "Completed");
 
             println!(
                 "{} {} marked completed and removed from queue.",
