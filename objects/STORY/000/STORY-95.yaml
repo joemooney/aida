@@ -1,0 +1,25 @@
+id: 019e14f8-72e8-7733-b03f-fb3c10e0def6
+spec_id: STORY-95
+agreed_id: STORY-95
+title: 'Multi-session scheduling: resource caps, priority ordering, idle-detection'
+description: |
+  Once auto-spawn (STORY-23-1) lands, runaway concurrency becomes possible — N batches and N reviewers and N watchers, all chewing CPU.
+
+  ## Scope
+
+  - **Resource caps**: AIDA_MAX_CONCURRENT_SESSIONS (default 3). aida session start refuses past the cap unless --force.
+  - **Priority ordering**: when auto-spawn is considering "next batch," prefer the highest-priority queue cluster. Composes with TASK-44 (auto-derived parent-EPIC chip) — group queue items by parent EPIC, score by item count + age.
+  - **Idle-detection**: sessions whose claude has had no activity for >N minutes are candidates for cleanup or pause (composes with STORY-69 sysinfo liveness).
+
+  ## Acceptance
+
+  - [ ] Hard cap on concurrent leases via env var
+  - [ ] aida session leases shows priority ordering
+  - [ ] aida session prune --idle suggests cleanup candidates
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T02:58:07.208663328Z
+modified_at: 2026-05-11T02:58:07.208663328Z
+req_type: Story
