@@ -1,0 +1,55 @@
+id: 019e14d6-fefb-70e3-a77f-e7e1332e9f9d
+spec_id: TASK-62
+agreed_id: TASK-62
+title: 'STORY-79 test: make bg_worker_records_error_on_missing_remote cross-platform (Windows uses USERPROFILE, not HOME)'
+description: |
+  PR-7 reviewer caught 2026-05-11: `bg_worker_records_error_on_missing_remote` (aida-cli/src/main.rs:12996) sets HOME and expects dirs::home_dir() to follow it. On Windows, dirs::home_dir() reads USERPROFILE — so the test writes to the real Windows home, the temp-HOME assertion misses, and the test fails.
+
+  Unblock landed in PR-7 itself: `#[cfg(unix)]` on the test. Cross-platform coverage was sacrificed for ship velocity. This task restores it.
+
+  ## Fix
+
+  ```rust
+  // Before:
+  #[cfg(unix)]
+  #[test]
+  fn bg_worker_records_error_on_missing_remote() {
+      let temp = TempDir::new().unwrap();
+      std::env::set_var("HOME", temp.path());
+      // ...
+  }
+
+  // After:
+  #[test]
+  fn bg_worker_records_error_on_missing_remote() {
+      let temp = TempDir::new().unwrap();
+      std::env::set_var("HOME", temp.path());
+      #[cfg(windows)]
+      std::env::set_var("USERPROFILE", temp.path());
+      // ...
+  }
+  ```
+
+  Two-line change. Restores Windows coverage. dirs::home_dir() then resolves to the temp dir on all 3 platforms.
+
+  ## Why low priority
+
+  The bg_worker code itself is cross-platform; this is only test-fixture plumbing. Ubuntu + macOS test coverage gives high confidence in the implementation. Worth fixing for completeness but not urgent.
+
+  ## Same pattern likely elsewhere
+
+  `rg 'set_var\("HOME"' aida-cli/` may turn up other unix-only-by-accident tests. Worth a sweep when fixing this one — apply the same pattern to all home-dir-dependent fixtures.
+
+  ## Acceptance
+
+  - [ ] `bg_worker_records_error_on_missing_remote` removes #[cfg(unix)], adds Windows USERPROFILE set
+  - [ ] Test passes on all 3 platforms
+  - [ ] Sweep aida-cli/ tests for similar HOME-only fixtures; apply same pattern
+  - [ ] Optional: extract a `temp_home_env(temp_path)` helper that sets both env vars; use it in all such tests
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T02:21:34.843287316Z
+modified_at: 2026-05-11T02:21:34.843287316Z
+req_type: Task
