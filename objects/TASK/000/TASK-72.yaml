@@ -51,12 +51,27 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T04:05:08.327855472Z
-modified_at: 2026-05-11T04:41:39.227905957Z
+modified_at: 2026-05-11T06:03:01.899722992Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019e0f6f-f9ad-7653-8336-12a7f09d7cb1
   created_at: 2026-05-11T04:05:09.466876967Z
+comments:
+- id: 019e15a1-bd8b-7552-8c67-291666177c26
+  author: joe
+  content: |-
+    PR-9 review (second use of /aida-review) surfaced three additional polish items beyond the original three:
+
+    4. Implementer-side ordering bug: /aida-pr's step 9 marks all PR specs Completed BEFORE gh pr create. By the time /aida-review fires after merge, every spec is already Completed and step 9 of /aida-review is a no-op. Fix: split lifecycle — /aida-pr marks 'Ready for review' (or Done from STORY-86), /aida-review marks Completed only post-merge. Until STORY-86 ships, /aida-pr should NOT mark Completed.
+
+    5. Pseudo-id noise: aida review prompt --pr N renders a first row 'PR-N — (not found in store)' before the real spec list. STORY-67 should detect when its argument is a PR/MR pseudo-id (not a real spec_id in the store) and skip rendering that row.
+
+    6. Heuristic refinement: TASK-72's original 'already-Completed = informational' rule works for trailing build-deps (BUG-64 in PR-9, completed in a prior PR). But if every spec is pre-flipped (per finding #4 above), the heuristic marks EVERY spec informational and skips all verdicts. Add a second signal: 'is this spec the subject of a commit in main..HEAD?' If yes, verdict required regardless of current status.
+
+    All three compose with each other. Implementer should address #4 first (the ordering bug is the cause; #5 and #6 are downstream symptoms of it). Suggest folding into TASK-72's existing acceptance section.
+  created_at: 2026-05-11T06:03:01.899722992Z
+  modified_at: 2026-05-11T06:03:01.899722992Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-11T04:41:39.227905957Z
