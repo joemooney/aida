@@ -95,12 +95,12 @@ description: |
   - [ ] `aida session show <id> --plan` displays the manifest with item status
   - [ ] Manifest updated when items flip InProgress / Done / Skipped
   - [ ] Gracefully degrades when a session crashes (stale manifests cleaned up on next session start, or via aida session prune)
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T04:20:15.751009438Z
-modified_at: 2026-05-11T04:20:56.793236087Z
+modified_at: 2026-05-11T05:14:24.218623530Z
 req_type: Story
 relationships:
 - rel_type: Child
