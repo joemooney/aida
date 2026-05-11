@@ -1,0 +1,58 @@
+id: 019e1566-4bfb-7320-8e61-481f5d5a34b6
+spec_id: BUG-74
+agreed_id: BUG-74
+title: 'STORY-66 auto-queue: gh detection false-negatives when gh IS on PATH'
+description: |
+  Caught 2026-05-11 — `aida session end` for batch9 (using batch9's compiled binary, which has BUG-72's outcome reporting) emitted:
+
+  ```
+  ⚠ auto-queue: `gh` CLI not on PATH — would have queued reviewer story for branch `epic-20-batch9`. Install gh to enable.
+  ```
+
+  But `gh` IS on PATH:
+  ```
+  $ type gh
+  gh is hashed (/usr/bin/gh)
+  $ which gh
+  /usr/bin/gh
+  $ gh --version
+  gh version 2.x.x ...
+  ```
+
+  False negative. STORY-66's auto-queue thinks gh is missing and skips, when it should fire.
+
+  ## Likely root causes (need to inspect implementation)
+
+  1. `which::which("gh")` with a sanitized env (the Rust process may have stripped PATH for some reason)
+  2. Looking for `gh` in a specific hardcoded path (/usr/local/bin) instead of using PATH
+  3. Spawning gh via `Command::new("gh")` and timing out / misparsing the exit code
+  4. Some race condition where the PATH env is dropped between fork and exec
+
+  ## Fix angles
+
+  - Use `std::env::var("PATH")` explicitly to walk PATH manually if which-crate is unreliable
+  - Or use `Command::new("gh").arg("--version").output()` and check exit code (more direct than path search)
+  - Add a debug message when gh isn't found, listing what was searched and why
+
+  ## User-visible impact
+
+  This is the production failure mode of STORY-66 — when it falsely thinks gh is missing, no reviewer story gets queued, user wonders why nothing showed up in the reviewer queue. BUG-72's outcome reporting at least makes the failure visible (would have been silent before), but the underlying detection logic is wrong.
+
+  ## Composes with
+
+  - BUG-72 (outcome reporting on every path) — made this bug visible; this fixes the underlying detection
+  - STORY-90 (auto-queue redesign at PR-create-time) — if that ships, gh detection moves into /aida-pr's flow which is more controlled; this bug would auto-resolve there
+
+  ## Acceptance
+
+  - [ ] `aida session end` correctly detects gh when it's on PATH
+  - [ ] Tested with: gh in /usr/bin, gh in /usr/local/bin, gh via brew, gh in $HOME/bin in PATH
+  - [ ] When genuinely missing: clean error message persists (don't regress the BUG-72 reporting)
+  - [ ] Optional debug: AIDA_DEBUG_GH=1 prints PATH and search results when checking gh
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T04:58:06.203893167Z
+modified_at: 2026-05-11T04:58:06.203893167Z
+req_type: Bug
