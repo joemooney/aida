@@ -91,3 +91,9 @@ docker/.env
 .aida/sessions
 .aida/roles/
 .aida/roles
+
+# AIDA session environment shim (STORY-52: writes CARGO_TARGET_DIR=<parent>/target
+# so session worktrees share the parent's build dir). Generated per-session,
+# never committed. Without this entry every post-STORY-52 session-end stumbles
+# on BUG-67's untracked-file check and demands --force. trace:BUG-71 | ai:claude
+.aida/session-env.sh
