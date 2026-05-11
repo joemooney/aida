@@ -14249,12 +14249,47 @@ mod statusline_tests {
     // `git fetch` on file:// remotes (rare; CI rolls everything).
     // trace:STORY-79 | ai:claude
 
+    /// RAII guard that points dirs::home_dir() at `path` for the test's
+    /// duration on all 3 platforms. dirs::home_dir() reads HOME on unix
+    /// and USERPROFILE on Windows; without both set, Windows tests write
+    /// to the real user home and the assertion misses. trace:TASK-62 | ai:claude
+    struct TempHomeEnv {
+        prev_home: Option<String>,
+        prev_userprofile: Option<String>,
+    }
+
+    impl TempHomeEnv {
+        fn set(path: &std::path::Path) -> Self {
+            let prev_home = std::env::var("HOME").ok();
+            let prev_userprofile = std::env::var("USERPROFILE").ok();
+            std::env::set_var("HOME", path);
+            std::env::set_var("USERPROFILE", path);
+            Self {
+                prev_home,
+                prev_userprofile,
+            }
+        }
+    }
+
+    impl Drop for TempHomeEnv {
+        fn drop(&mut self) {
+            match &self.prev_home {
+                Some(v) => std::env::set_var("HOME", v),
+                None => std::env::remove_var("HOME"),
+            }
+            match &self.prev_userprofile {
+                Some(v) => std::env::set_var("USERPROFILE", v),
+                None => std::env::remove_var("USERPROFILE"),
+            }
+        }
+    }
+
     /// Worker writes `result = "error: ..."` to last-fetch.toml when the
     /// store has no `origin` remote configured. Exercises the failure
     /// path without needing network. Uses an isolated HOME so the test
     /// doesn't clobber the real ~/.aida/cache/last-fetch.toml.
-    // test fixture relies on $HOME governing dirs::home_dir() — unix-only; the bg_worker code itself is cross-platform.
-    #[cfg(unix)]
+    // trace:TASK-62 | ai:claude — cross-platform: set USERPROFILE on Windows
+    // so dirs::home_dir() resolves to the temp dir on all 3 platforms.
     #[test]
     fn bg_worker_records_error_on_missing_remote() {
         use std::process::Command;
@@ -14282,13 +14317,9 @@ mod statusline_tests {
         // No `origin` remote configured → fetch fails.
 
         // Redirect HOME so write_last_fetch_entry lands under our temp dir.
-        let prev_home = std::env::var("HOME").ok();
-        std::env::set_var("HOME", &fake_home);
+        let _home_guard = TempHomeEnv::set(&fake_home);
         let result = handle_bg_fetch_command(&store);
-        match prev_home {
-            Some(v) => std::env::set_var("HOME", v),
-            None => std::env::remove_var("HOME"),
-        }
+        drop(_home_guard);
         assert!(result.is_ok());
 
         let toml_path = fake_home.join(".aida/cache/last-fetch.toml");
