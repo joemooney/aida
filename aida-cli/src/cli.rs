@@ -1713,8 +1713,11 @@ pub enum QueueCommand {
         #[clap(long)]
         include_completed: bool,
         /// Filter to items routed to a specific role (e.g., "implementer").
-        /// Pass --role any to show all items including unrouted.
-        #[clap(long)]
+        /// Pass `--for any` (or `--role any`) to show all items including
+        /// unrouted. `--for <role>` is the canonical form, matching
+        /// `aida queue add --for` and `aida queue next --for`; `--role`
+        /// is kept as a hidden alias for back-compat. trace:TASK-71
+        #[clap(long = "for", visible_alias = "role")]
         role: Option<String>,
         /// Show all items regardless of any active-role default filter
         #[clap(long)]
@@ -1857,8 +1860,11 @@ pub enum QueueCommand {
     /// global queues by default (local wins on tiebreaks).
     /// trace:FR-1-012 | ai:claude
     Next {
-        /// Filter to items routed to a specific role
-        #[clap(long)]
+        /// Filter to items routed to a specific role. `--for <role>` is the
+        /// canonical form, matching `aida queue add --for` and
+        /// `aida queue list --for`; `--role` is kept as an alias.
+        /// trace:TASK-71 | ai:claude
+        #[clap(long = "for", visible_alias = "role")]
         role: Option<String>,
         /// Show the top item from the full queue regardless of role
         #[clap(long)]
