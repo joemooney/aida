@@ -52,12 +52,16 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T01:23:02.276233538Z
-modified_at: 2026-05-11T03:34:15.138258008Z
+modified_at: 2026-05-11T03:53:43.491012686Z
 req_type: Bug
 relationships:
 - rel_type: Child
   target_id: 019e0f6f-f9ad-7653-8336-12a7f09d7cb1
   created_at: 2026-05-11T01:23:03.253534213Z
+- rel_type: !Custom implemented-by
+  target_id: 019e152b-2941-7960-8dbc-047cf890fa99
+  created_at: 2026-05-11T03:53:43.491004430Z
+  created_by: joe
 implementation_info:
   implemented: true
   implemented_at: 2026-05-11T03:34:15.138258008Z
