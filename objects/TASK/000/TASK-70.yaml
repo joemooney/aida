@@ -1,0 +1,73 @@
+id: 019e150b-087d-7301-808a-d071d1d15cf4
+spec_id: TASK-70
+agreed_id: TASK-70
+title: 'aida session end + aida session prune: handle Claude Code project dirs orphaned by worktree removal'
+description: |
+  Caught 2026-05-11 — Claude Code sessions are cwd-bound (`~/.claude/projects/<cwd-encoded>/<session-id>.jsonl`). When `aida session end` removes a worktree, the corresponding Claude Code project dir is orphaned. Same problem in reverse: starting a session in a worktree creates a new Claude Code project dir; removing the worktree doesn't clean it up.
+
+  User observation 2026-05-11: "do sessions occur in the context of a directory and if so, could they happen in the context of a worktree that `aida session end` would invalidate?"
+
+  Yes. Two failure modes:
+
+  1. **Stranded resume**: `claude --resume <id>` for an orphaned session may fail or behave unexpectedly (cwd doesn't exist)
+  2. **Accumulating cruft**: `~/.claude/projects/` gains one orphan dir per session-end; user has to manually `rm -rf` (saw this with `-home-joe-ai-aida-pr-3` etc.)
+
+  ## Two complementary fixes
+
+  ### Part A — `aida session end` warns / optionally purges
+
+  Default: warn about the orphaned project dir; leave it alone (preserves --resume option).
+
+  ```
+  ✓ session ended; worktree removed
+  ⓘ Claude Code project dir ~/.claude/projects/-home-joe-ai-aida-pr-7/ is now orphaned
+    (cwd no longer exists). Resume may fail. Run `aida session prune --orphans` to clean up.
+  ```
+
+  `--purge-cc` flag deletes the Claude Code project dir atomically with session end:
+  ```
+  $ aida session end <lease> --purge-cc
+  ✓ session ended; worktree removed; Claude Code project dir deleted
+  ```
+
+  ### Part B — `aida session prune --orphans`
+
+  Extends STORY-60's `aida session prune` (already shipped on main): adds `--orphans` flag that finds Claude Code project dirs whose cwd no longer exists.
+
+  ```
+  $ aida session prune --orphans --dry-run
+  Would remove 3 orphan project dirs:
+    -home-joe-ai-aida-pr-7      (cwd missing; 6 jsonls)
+    -home-joe-ai-aida-epic-20   (cwd missing; 12 jsonls)
+    -home-joe-ai-aida-pr-3      (cwd missing; 4 jsonls)
+
+  $ aida session prune --orphans
+  ✓ Removed 3 orphan project dirs.
+  ```
+
+  Composes with the time-based filter:
+  ```
+  aida session prune --orphans --days 7   # only orphans older than 7 days
+  ```
+
+  ## Composes with
+
+  - STORY-60 (aida session prune, on main) — Part B extends its surface
+  - BUG-67 (session end gitignored auto-force, on main) — same family of session-end hygiene
+  - TASK-55 (leases hide stale by default, queued) — different layer; that's about aida leases, this is about Claude Code session dirs
+
+  ## Acceptance
+
+  - [ ] `aida session end` warns about orphaned Claude Code project dir
+  - [ ] `--purge-cc` flag deletes it atomically
+  - [ ] `aida session prune --orphans` lists/deletes orphan project dirs (cwd missing)
+  - [ ] `--orphans --dry-run` previews
+  - [ ] Composes with `--days N` filter
+  - [ ] Tested with: session end without flag (warn only), with --purge-cc (cleaned), prune --orphans (sweeps historical orphans)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T03:18:25.149264466Z
+modified_at: 2026-05-11T03:18:25.149264466Z
+req_type: Task
