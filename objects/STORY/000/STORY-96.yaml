@@ -1,0 +1,52 @@
+id: 019e14f8-7ecb-7c10-bbc7-099a5965eaa4
+spec_id: STORY-96
+agreed_id: STORY-96
+title: 'Decision policy: ''what next?'' autonomy for auto-spawn trigger'
+description: |
+  The auto-spawn trigger (STORY-23-1) needs to decide WHICH next batch to spawn. Several inputs:
+
+  - Queue items routed to the active role's scope (continuation)
+  - Queue items in other scopes that need work (cross-EPIC jump)
+  - Open PRs awaiting review (switch to reviewer)
+  - High-priority bugs filed since last session (urgent break-in)
+
+  ## Surface
+
+  ```
+  $ aida session end <batch-N>
+  ✓ lease deleted, worktree removed
+
+  What's next?
+    1. Continue: spawn batch N+1 implementer for EPIC-20 (5 queue items, mixed priority)
+    2. Switch: spawn reviewer for PR-9 (filed 3 min ago by another session)
+    3. Pivot: spawn implementer for EPIC-22 (12 queue items, high-priority cluster)
+    4. Stop: just end this session, no next action
+
+  Default: 1 (continue same epic)
+  [1/2/3/4]:
+  ```
+
+  ## Decision factors
+
+  - Queue size + priority distribution
+  - Time since PR opens (older PRs that haven't been reviewed get priority)
+  - Recent activity log (user's recent focus area)
+  - Configured policies (AIDA_AUTOSPAWN_PREFER_CONTINUE=true, etc.)
+
+  ## Why low-priority
+
+  Premature without lots of usage data. Ship STORY-23-1 (basic auto-spawn) and STORY-23-2 (watcher daemon) first; this layer of intelligence comes when the simpler mechanics are well-understood.
+
+  ## Acceptance
+
+  - [ ] Decision menu shown on session end when multiple paths exist
+  - [ ] Default option chosen via policy + recency heuristics
+  - [ ] User can configure default policy via env / config
+  - [ ] Decisions logged so the policy can be tuned over time
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T02:58:10.251469383Z
+modified_at: 2026-05-11T02:58:10.251469383Z
+req_type: Story
