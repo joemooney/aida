@@ -10256,14 +10256,30 @@ fn session_start(
         // exec replaces this process; control doesn't return here on
         // success.
         // trace:STORY-54 | ai:claude
-        if cargo_target_dir.is_some() {
+        //
+        // TASK-63: before the exec, source `.aida/session-env.sh` into
+        // this process's env so the launched claude inherits
+        // CARGO_TARGET_DIR (and any future session-scoped exports).
+        // Without this, --launch defeats STORY-52's target-sharing —
+        // the user has no chance to run `source` between chdir and
+        // exec. The manual non-launch flow is unchanged: the user
+        // sources the shim themselves after `cd`.
+        // trace:TASK-63 | ai:claude
+        let env_shim = worktree_path.join(".aida").join("session-env.sh");
+        let applied_vars: Vec<String> = match std::fs::read_to_string(&env_shim) {
+            Ok(body) => apply_session_env_to_process(&body),
+            Err(_) => Vec::new(),
+        };
+        if !applied_vars.is_empty() {
             eprintln!();
             eprintln!(
                 "{} {}",
                 "ℹ".cyan(),
-                "tip: source .aida/session-env.sh in your shell to share \
-                 the parent's cargo target/ between sessions"
-                    .dimmed()
+                format!(
+                    "sourced .aida/session-env.sh ({}) into launched claude's env",
+                    applied_vars.join(", ")
+                )
+                .dimmed()
             );
         }
         eprintln!();
@@ -10671,6 +10687,74 @@ fn render_session_env_file(cargo_target_dir: &std::path::Path) -> String {
          export CARGO_TARGET_DIR={}\n",
         shell_single_quote(&cargo_target_dir.display().to_string())
     )
+}
+
+/// TASK-63: parse a `.aida/session-env.sh` body into `(name, value)`
+/// pairs. Pure: no env mutation, so unit tests can exercise the parser
+/// without racing the live process env across parallel test threads.
+///
+/// Parser is intentionally narrow: it understands only the shape that
+/// `render_session_env_file` writes — `export VAR='single-quoted-value'`
+/// with `'\''` close-reopen escaping. Lines we don't recognize are
+/// skipped silently, so a manually-edited shim with extra noise doesn't
+/// poison the env. trace:TASK-63 | ai:claude
+fn parse_session_env(body: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for line in body.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let Some(rest) = line.strip_prefix("export ") else {
+            continue;
+        };
+        let Some((name, raw_value)) = rest.split_once('=') else {
+            continue;
+        };
+        let name = name.trim();
+        let mut chars = name.chars();
+        let first = chars.next();
+        let valid_first = matches!(first, Some(c) if c.is_ascii_alphabetic() || c == '_');
+        let valid_rest = chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
+        if !valid_first || !valid_rest {
+            continue;
+        }
+        let value = unquote_shell_single_quoted(raw_value.trim());
+        out.push((name.to_string(), value));
+    }
+    out
+}
+
+/// TASK-63: apply parsed env pairs to the current process so the
+/// subsequent `exec claude` inherits them. Returns the names that were
+/// applied so the caller can echo them to the user. Calls
+/// `std::env::set_var` for each pair — the wrapping `unsafe { }` is
+/// forward-compatibility with Edition 2024 where `set_var` is marked
+/// unsafe; safe here because `session_start --launch` is single-threaded
+/// between parse and exec. trace:TASK-63 | ai:claude
+fn apply_session_env_to_process(body: &str) -> Vec<String> {
+    let pairs = parse_session_env(body);
+    let mut applied = Vec::with_capacity(pairs.len());
+    for (name, value) in pairs {
+        #[allow(unused_unsafe)]
+        unsafe {
+            std::env::set_var(&name, &value);
+        }
+        applied.push(name);
+    }
+    applied
+}
+
+/// Inverse of `shell_single_quote` for the narrow shape we write.
+/// `'X'` → `X`. `'a'\''b'` → `a'b`. Bare (unquoted) values are returned
+/// as-is — POSIX-y enough for the shim's purposes. trace:TASK-63 | ai:claude
+fn unquote_shell_single_quoted(raw: &str) -> String {
+    let bytes = raw.as_bytes();
+    if bytes.len() < 2 || bytes[0] != b'\'' || bytes[bytes.len() - 1] != b'\'' {
+        return raw.to_string();
+    }
+    let inner = &raw[1..raw.len() - 1];
+    inner.replace("'\\''", "'")
 }
 
 /// Wrap a string in POSIX single quotes for safe inclusion in shell source.
@@ -13911,6 +13995,84 @@ mod statusline_tests {
         let written =
             std::fs::read_to_string(worktree.join(".aida").join("session-env.sh")).unwrap();
         assert!(written.contains("CARGO_TARGET_DIR='/tmp/parent/target'"));
+    }
+
+    /// TASK-63: parse_session_env handles the shape we write today.
+    /// Cover the round-trip with render_session_env_file (the source of
+    /// truth for what we produce) so a future change to the shim format
+    /// has to update both sides. trace:TASK-63 | ai:claude
+    #[test]
+    fn parse_session_env_roundtrips_with_render() {
+        let body = render_session_env_file(std::path::Path::new("/tmp/parent/target"));
+        let pairs = parse_session_env(&body);
+        assert_eq!(pairs.len(), 1, "{:?}", pairs);
+        assert_eq!(pairs[0].0, "CARGO_TARGET_DIR");
+        assert_eq!(pairs[0].1, "/tmp/parent/target");
+    }
+
+    /// TASK-63: apostrophe in the target path → close-reopen escape on
+    /// the way out, must unescape cleanly on the way back in.
+    /// trace:TASK-63 | ai:claude
+    #[test]
+    fn parse_session_env_unquotes_close_reopen_escape() {
+        let body = render_session_env_file(std::path::Path::new("/tmp/joe's repo/target"));
+        let pairs = parse_session_env(&body);
+        assert_eq!(pairs.len(), 1);
+        assert_eq!(pairs[0].1, "/tmp/joe's repo/target");
+    }
+
+    /// TASK-63: ignore comments, blanks, non-export lines, malformed
+    /// names. The shim is gitignored runtime state but a user might
+    /// hand-edit it (debug session) — don't poison the env if they do.
+    /// trace:TASK-63 | ai:claude
+    #[test]
+    fn parse_session_env_skips_noise() {
+        let body = "\
+# header comment\n\
+\n\
+export CARGO_TARGET_DIR='/x'\n\
+not an export line\n\
+export 1BAD=value\n\
+export GOOD_VAR='hello'\n\
+export NO_EQUALS\n\
+   export INDENTED='trimmed'\n\
+";
+        let pairs = parse_session_env(body);
+        let names: Vec<&str> = pairs.iter().map(|p| p.0.as_str()).collect();
+        assert_eq!(names, vec!["CARGO_TARGET_DIR", "GOOD_VAR", "INDENTED"]);
+        assert_eq!(pairs[2].1, "trimmed");
+    }
+
+    /// TASK-63: bare (unquoted) values pass through unchanged — the
+    /// parser is forgiving so a hand-written `export FOO=bar` works.
+    /// trace:TASK-63 | ai:claude
+    #[test]
+    fn parse_session_env_handles_unquoted_value() {
+        let pairs = parse_session_env("export FOO=bar\n");
+        assert_eq!(pairs, vec![("FOO".to_string(), "bar".to_string())]);
+    }
+
+    /// TASK-63: apply_session_env_to_process really mutates the process
+    /// env, and returns the names it set. Use a name unique to this test
+    /// so parallel test runs don't trample each other.
+    /// trace:TASK-63 | ai:claude
+    #[test]
+    fn apply_session_env_to_process_sets_env() {
+        const VAR: &str = "AIDA_TEST_TASK_63_APPLIED";
+        // SAFETY: scoped to this test; not racing with anything that
+        // reads VAR.
+        #[allow(unused_unsafe)]
+        unsafe {
+            std::env::remove_var(VAR);
+        }
+        let body = format!("export {}='hello world'\n", VAR);
+        let applied = apply_session_env_to_process(&body);
+        assert_eq!(applied, vec![VAR.to_string()]);
+        assert_eq!(std::env::var(VAR).unwrap(), "hello world");
+        #[allow(unused_unsafe)]
+        unsafe {
+            std::env::remove_var(VAR);
+        }
     }
 
     /// STORY-52: leases predating the cargo_target_dir field must still
