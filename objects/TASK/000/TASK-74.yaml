@@ -54,12 +54,12 @@ description: |
   - [ ] By-design skips dimmed; missing-tool / lookup-failed skips warned
   - [ ] Heuristic for detecting reviewer-vs-implementer branch shape (regex or lease.scope inspection)
   - [ ] Tested: end reviewer session → ⓘ by-design. End implementer session without gh installed → ⚠ missing. End implementer session with gh failure → ⚠ lookup-failed.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T04:11:32.799801209Z
-modified_at: 2026-05-11T04:11:32.799801209Z
+modified_at: 2026-05-11T04:43:40.452382749Z
 req_type: Task
 relationships:
 - rel_type: Child
