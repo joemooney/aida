@@ -719,6 +719,50 @@ fn handle_init_command(
     )
 }
 
+/// Append AIDA's runtime entries to the project's `.gitignore` if any are
+/// missing. Returns `true` if a new entry was written (so callers can echo
+/// "updated .gitignore"); `false` if everything was already covered or the
+/// file had to be created from scratch.
+///
+/// Entries:
+/// - `<worktree_dir>/` — the orphan-branch worktree (`.aida-store/` by default)
+/// - `.aida/session-env.sh` — STORY-52 per-session env shim. Missing it makes
+///   every post-STORY-52 `aida session end` trip BUG-67's untracked check and
+///   demand `--force`. trace:BUG-71 | ai:claude
+fn add_aida_gitignore_entries(cwd: &std::path::Path, worktree_dir: &str) -> Result<bool> {
+    use std::io::Write;
+    let gitignore_path = cwd.join(".gitignore");
+    let store_entry = format!(
+        "\n# AIDA distributed store (orphan branch worktree)\n{}/\n",
+        worktree_dir
+    );
+    let session_env_entry = "\n# AIDA session environment shim (STORY-52, gitignored per BUG-71)\n\
+         .aida/session-env.sh\n";
+
+    if !gitignore_path.exists() {
+        std::fs::write(
+            &gitignore_path,
+            format!("{}{}", store_entry, session_env_entry),
+        )?;
+        return Ok(false);
+    }
+
+    let content = std::fs::read_to_string(&gitignore_path)?;
+    let mut wrote = false;
+    let mut file = std::fs::OpenOptions::new()
+        .append(true)
+        .open(&gitignore_path)?;
+    if !content.contains(worktree_dir) {
+        file.write_all(store_entry.as_bytes())?;
+        wrote = true;
+    }
+    if !content.contains(".aida/session-env.sh") {
+        file.write_all(session_env_entry.as_bytes())?;
+        wrote = true;
+    }
+    Ok(wrote)
+}
+
 /// Workflow scaffolding shared by all `aida init` modes — builds skills,
 /// commands, hooks, MCP integration, etc. Called by both centralized and
 /// distributed init paths after their respective storage setup is complete.
@@ -3318,24 +3362,9 @@ fn handle_init_distributed_worktree(
         }
     }
 
-    // Add .aida-store to .gitignore on main branch
-    let gitignore_path = cwd.join(".gitignore");
-    let gitignore_entry = format!(
-        "\n# AIDA distributed store (orphan branch worktree)\n{}/\n",
-        worktree_dir
-    );
-    if gitignore_path.exists() {
-        let content = std::fs::read_to_string(&gitignore_path)?;
-        if !content.contains(worktree_dir) {
-            let mut file = std::fs::OpenOptions::new()
-                .append(true)
-                .open(&gitignore_path)?;
-            use std::io::Write;
-            file.write_all(gitignore_entry.as_bytes())?;
-        }
-    } else {
-        std::fs::write(&gitignore_path, gitignore_entry)?;
-    }
+    // Add .aida-store and runtime shims to .gitignore on main branch.
+    // trace:BUG-71 | ai:claude
+    add_aida_gitignore_entries(&cwd, worktree_dir)?;
 
     // Create .aida/config.toml
     std::fs::create_dir_all(&aida_dir)?;
@@ -3453,28 +3482,14 @@ fn handle_init_post_clone(
         git_ops::git_config_get("user.email").unwrap_or_else(|_| "aida@localhost".to_string());
     git_ops::configure_user(&store_path, &git_name, &git_email)?;
 
-    // Add .aida-store/ to root .gitignore (idempotent)
-    let gitignore_path = cwd.join(".gitignore");
-    let gitignore_entry = format!(
-        "\n# AIDA distributed store (orphan branch worktree)\n{}/\n",
-        worktree_dir
-    );
-    if gitignore_path.exists() {
-        let content = std::fs::read_to_string(&gitignore_path)?;
-        if !content.contains(worktree_dir) {
-            use std::io::Write;
-            let mut file = std::fs::OpenOptions::new()
-                .append(true)
-                .open(&gitignore_path)?;
-            file.write_all(gitignore_entry.as_bytes())?;
-            println!(
-                "  {} updated {}",
-                "Done".green(),
-                ".gitignore".white().bold()
-            );
-        }
-    } else {
-        std::fs::write(&gitignore_path, gitignore_entry)?;
+    // Add .aida-store/ and runtime shims to root .gitignore (idempotent).
+    // trace:BUG-71 | ai:claude
+    if add_aida_gitignore_entries(cwd, worktree_dir)? {
+        println!(
+            "  {} updated {}",
+            "Done".green(),
+            ".gitignore".white().bold()
+        );
     }
 
     // Write .aida/config.toml — same contents as a fresh init
@@ -14888,6 +14903,70 @@ mod worktree_dirty_entries_tests {
     fn non_git_path_is_clean() {
         let tmp = TempDir::new().unwrap();
         assert!(worktree_dirty_entries(tmp.path()).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod add_aida_gitignore_entries_tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    /// Fresh project (no .gitignore) → file is created with both entries.
+    /// Returns Ok(false) per the contract (a brand-new file isn't an
+    /// "update"). trace:BUG-71 | ai:claude
+    #[test]
+    fn creates_gitignore_with_both_entries() {
+        let tmp = TempDir::new().unwrap();
+        let updated = add_aida_gitignore_entries(tmp.path(), ".aida-store").unwrap();
+        assert!(!updated, "creation isn't an update");
+        let content = std::fs::read_to_string(tmp.path().join(".gitignore")).unwrap();
+        assert!(content.contains(".aida-store/"), "{}", content);
+        assert!(content.contains(".aida/session-env.sh"), "{}", content);
+    }
+
+    /// Existing .gitignore that already covers both entries → no write,
+    /// returns Ok(false). trace:BUG-71 | ai:claude
+    #[test]
+    fn idempotent_when_both_entries_present() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join(".gitignore");
+        let original = "target/\n.aida-store/\n.aida/session-env.sh\n";
+        std::fs::write(&path, original).unwrap();
+        let updated = add_aida_gitignore_entries(tmp.path(), ".aida-store").unwrap();
+        assert!(!updated);
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(content, original);
+    }
+
+    /// Pre-BUG-71 .gitignore (has .aida-store/ but not session-env.sh) →
+    /// only session-env.sh is appended. This is the migration path for
+    /// existing projects scaffolded before the fix. trace:BUG-71 | ai:claude
+    #[test]
+    fn appends_only_missing_session_env_entry() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join(".gitignore");
+        std::fs::write(&path, "target/\n.aida-store/\n").unwrap();
+        let updated = add_aida_gitignore_entries(tmp.path(), ".aida-store").unwrap();
+        assert!(updated, "session-env line was missing → expected an append");
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains(".aida-store/"));
+        assert!(content.contains(".aida/session-env.sh"));
+        // Original content preserved
+        assert!(content.starts_with("target/\n.aida-store/\n"));
+    }
+
+    /// .gitignore exists but neither AIDA entry → both get appended.
+    /// trace:BUG-71 | ai:claude
+    #[test]
+    fn appends_both_when_neither_present() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join(".gitignore");
+        std::fs::write(&path, "target/\n").unwrap();
+        let updated = add_aida_gitignore_entries(tmp.path(), ".aida-store").unwrap();
+        assert!(updated);
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains(".aida-store/"));
+        assert!(content.contains(".aida/session-env.sh"));
     }
 }
 
