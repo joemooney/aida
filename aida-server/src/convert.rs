@@ -25,7 +25,6 @@ pub fn datetime_to_proto(dt: DateTime<Utc>) -> proto::Timestamp {
     }
 }
 
-
 // ============================================================================
 // Status conversions
 // ============================================================================
@@ -168,7 +167,6 @@ pub fn relationship_to_proto(rel: &Relationship) -> proto::Relationship {
     }
 }
 
-
 // ============================================================================
 // Comment conversions
 // ============================================================================
@@ -189,7 +187,6 @@ pub fn comment_to_proto(comment: &Comment) -> proto::Comment {
     }
 }
 
-
 // ============================================================================
 // Reaction conversions
 // ============================================================================
@@ -201,7 +198,6 @@ pub fn reaction_to_proto(reaction: &CommentReaction) -> proto::CommentReaction {
         added_at: Some(datetime_to_proto(reaction.added_at)),
     }
 }
-
 
 // ============================================================================
 // History entry conversions
@@ -247,8 +243,6 @@ pub fn url_open_mode_to_proto(mode: &aida_core::UrlOpenMode) -> i32 {
     }
 }
 
-
-
 // ============================================================================
 // Requirement conversions
 // ============================================================================
@@ -285,7 +279,6 @@ pub fn requirement_to_proto(req: &Requirement) -> proto::Requirement {
         agreed_id: req.agreed_id.clone().unwrap_or_default(),
     }
 }
-
 
 // ============================================================================
 // Feature definition conversions

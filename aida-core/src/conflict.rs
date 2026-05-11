@@ -121,7 +121,10 @@ pub fn detect_conflict(local: &Requirement, remote: &Requirement) -> Option<Requ
 
     Some(RequirementConflict {
         id: local.id,
-        spec_id: local.spec_id.clone().unwrap_or_else(|| local.id.to_string()),
+        spec_id: local
+            .spec_id
+            .clone()
+            .unwrap_or_else(|| local.id.to_string()),
         fields,
         local_modified: local.modified_at,
         remote_modified: remote.modified_at,
@@ -309,10 +312,7 @@ mod tests {
 
         let req2 = make_req("Req 2", "Draft"); // no conflict
 
-        let conflicts = detect_store_conflicts(
-            &[req1_local, req2.clone()],
-            &[req1_remote, req2],
-        );
+        let conflicts = detect_store_conflicts(&[req1_local, req2.clone()], &[req1_remote, req2]);
         assert_eq!(conflicts.len(), 1);
         assert_eq!(conflicts[0].fields[0].field, "title");
     }

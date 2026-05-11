@@ -146,8 +146,12 @@ pub trait DatabaseBackend: Send + Sync {
             .requirements
             .iter()
             .find(|r| {
-                r.spec_id.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
-                    || r.agreed_id.as_deref().is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
+                r.spec_id
+                    .as_deref()
+                    .is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
+                    || r.agreed_id
+                        .as_deref()
+                        .is_some_and(|s| s.eq_ignore_ascii_case(spec_id))
             })
             .cloned())
     }

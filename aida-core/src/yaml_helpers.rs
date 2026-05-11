@@ -10,7 +10,10 @@ use serde::ser::{SerializeMap, SerializeSeq, Serializer};
 use std::collections::{HashMap, HashSet};
 
 /// Serialize a `HashSet<String>` as a sorted sequence so YAML output is stable.
-pub fn serialize_sorted_string_set<S>(set: &HashSet<String>, serializer: S) -> Result<S::Ok, S::Error>
+pub fn serialize_sorted_string_set<S>(
+    set: &HashSet<String>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {

@@ -267,10 +267,7 @@ async fn main() -> Result<()> {
     if dev_mode {
         info!("Dev mode enabled (AIDA_DEV_MODE)");
     }
-    info!(
-        "Web auth mode: {}",
-        web_auth_state.mode().as_str()
-    );
+    info!("Web auth mode: {}", web_auth_state.mode().as_str());
 
     // Build CORS layer - allows gRPC-Web requests from browser clients
     let cors = build_cors_layer(&args.cors_origins);

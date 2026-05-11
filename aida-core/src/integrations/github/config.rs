@@ -181,6 +181,11 @@ impl GitHubConfig {
 
     /// Build the full API URL for a path.
     pub fn api_endpoint(&self, path: &str) -> String {
-        format!("{}/repos/{}{}", self.api_url.trim_end_matches('/'), self.repo, path)
+        format!(
+            "{}/repos/{}{}",
+            self.api_url.trim_end_matches('/'),
+            self.repo,
+            path
+        )
     }
 }

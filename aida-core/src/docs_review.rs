@@ -53,45 +53,152 @@ pub struct ReviewRule {
 /// Catalog of all review rules.
 pub const REVIEW_RULES: &[ReviewRule] = &[
     // Traceability
-    ReviewRule { id: "TRACE-001", category: "Traceability", description: "Source file has no trace comments", default_severity: Severity::Important },
-    ReviewRule { id: "TRACE-002", category: "Traceability", description: "Trace references non-existent requirement", default_severity: Severity::Critical },
-    ReviewRule { id: "TRACE-003", category: "Traceability", description: "Requirement has no implementing code", default_severity: Severity::Important },
-
+    ReviewRule {
+        id: "TRACE-001",
+        category: "Traceability",
+        description: "Source file has no trace comments",
+        default_severity: Severity::Important,
+    },
+    ReviewRule {
+        id: "TRACE-002",
+        category: "Traceability",
+        description: "Trace references non-existent requirement",
+        default_severity: Severity::Critical,
+    },
+    ReviewRule {
+        id: "TRACE-003",
+        category: "Traceability",
+        description: "Requirement has no implementing code",
+        default_severity: Severity::Important,
+    },
     // Complexity
-    ReviewRule { id: "COMPLEXITY-001", category: "Complexity", description: "File exceeds line limit", default_severity: Severity::Important },
-    ReviewRule { id: "COMPLEXITY-002", category: "Complexity", description: "Function exceeds line limit", default_severity: Severity::Important },
-    ReviewRule { id: "COMPLEXITY-003", category: "Complexity", description: "Excessive nesting depth", default_severity: Severity::Minor },
-
+    ReviewRule {
+        id: "COMPLEXITY-001",
+        category: "Complexity",
+        description: "File exceeds line limit",
+        default_severity: Severity::Important,
+    },
+    ReviewRule {
+        id: "COMPLEXITY-002",
+        category: "Complexity",
+        description: "Function exceeds line limit",
+        default_severity: Severity::Important,
+    },
+    ReviewRule {
+        id: "COMPLEXITY-003",
+        category: "Complexity",
+        description: "Excessive nesting depth",
+        default_severity: Severity::Minor,
+    },
     // Dead Code
-    ReviewRule { id: "DEAD-001", category: "Dead Code", description: "TODO/FIXME/HACK comment found", default_severity: Severity::Minor },
-    ReviewRule { id: "DEAD-002", category: "Dead Code", description: "Unused dependency detected", default_severity: Severity::Important },
-
+    ReviewRule {
+        id: "DEAD-001",
+        category: "Dead Code",
+        description: "TODO/FIXME/HACK comment found",
+        default_severity: Severity::Minor,
+    },
+    ReviewRule {
+        id: "DEAD-002",
+        category: "Dead Code",
+        description: "Unused dependency detected",
+        default_severity: Severity::Important,
+    },
     // Error Handling
-    ReviewRule { id: "ERROR-001", category: "Error Handling", description: "unwrap() in non-test code", default_severity: Severity::Important },
-    ReviewRule { id: "ERROR-002", category: "Error Handling", description: "Error swallowed (let _ = ...)", default_severity: Severity::Minor },
-
+    ReviewRule {
+        id: "ERROR-001",
+        category: "Error Handling",
+        description: "unwrap() in non-test code",
+        default_severity: Severity::Important,
+    },
+    ReviewRule {
+        id: "ERROR-002",
+        category: "Error Handling",
+        description: "Error swallowed (let _ = ...)",
+        default_severity: Severity::Minor,
+    },
     // Security
-    ReviewRule { id: "SECURITY-001", category: "Security", description: "Potential hardcoded secret", default_severity: Severity::Critical },
-    ReviewRule { id: "SECURITY-002", category: "Security", description: "Unsafe code block without justification", default_severity: Severity::Important },
-    ReviewRule { id: "SECURITY-003", category: "Security", description: "Known vulnerability in dependency", default_severity: Severity::Critical },
-
+    ReviewRule {
+        id: "SECURITY-001",
+        category: "Security",
+        description: "Potential hardcoded secret",
+        default_severity: Severity::Critical,
+    },
+    ReviewRule {
+        id: "SECURITY-002",
+        category: "Security",
+        description: "Unsafe code block without justification",
+        default_severity: Severity::Important,
+    },
+    ReviewRule {
+        id: "SECURITY-003",
+        category: "Security",
+        description: "Known vulnerability in dependency",
+        default_severity: Severity::Critical,
+    },
     // Consistency
-    ReviewRule { id: "CONSISTENCY-001", category: "Consistency", description: "Inconsistent naming convention", default_severity: Severity::Minor },
-
+    ReviewRule {
+        id: "CONSISTENCY-001",
+        category: "Consistency",
+        description: "Inconsistent naming convention",
+        default_severity: Severity::Minor,
+    },
     // Tests
-    ReviewRule { id: "TEST-001", category: "Tests", description: "Module has no tests", default_severity: Severity::Important },
-    ReviewRule { id: "TEST-002", category: "Tests", description: "Test only covers happy path", default_severity: Severity::Minor },
-
+    ReviewRule {
+        id: "TEST-001",
+        category: "Tests",
+        description: "Module has no tests",
+        default_severity: Severity::Important,
+    },
+    ReviewRule {
+        id: "TEST-002",
+        category: "Tests",
+        description: "Test only covers happy path",
+        default_severity: Severity::Minor,
+    },
     // Documentation
-    ReviewRule { id: "DOCS-001", category: "Documentation", description: "Public API missing doc comment", default_severity: Severity::Minor },
-    ReviewRule { id: "DOCS-002", category: "Documentation", description: "Doc comment contradicts implementation", default_severity: Severity::Important },
-    ReviewRule { id: "DOCS-003", category: "Documentation", description: "Stale content (referenced item no longer exists)", default_severity: Severity::Critical },
-    ReviewRule { id: "DOCS-004", category: "Documentation", description: "Hype/marketing language in technical docs", default_severity: Severity::Minor },
-    ReviewRule { id: "DOCS-005", category: "Documentation", description: "Inconsistency between documents", default_severity: Severity::Important },
-
+    ReviewRule {
+        id: "DOCS-001",
+        category: "Documentation",
+        description: "Public API missing doc comment",
+        default_severity: Severity::Minor,
+    },
+    ReviewRule {
+        id: "DOCS-002",
+        category: "Documentation",
+        description: "Doc comment contradicts implementation",
+        default_severity: Severity::Important,
+    },
+    ReviewRule {
+        id: "DOCS-003",
+        category: "Documentation",
+        description: "Stale content (referenced item no longer exists)",
+        default_severity: Severity::Critical,
+    },
+    ReviewRule {
+        id: "DOCS-004",
+        category: "Documentation",
+        description: "Hype/marketing language in technical docs",
+        default_severity: Severity::Minor,
+    },
+    ReviewRule {
+        id: "DOCS-005",
+        category: "Documentation",
+        description: "Inconsistency between documents",
+        default_severity: Severity::Important,
+    },
     // Dependencies
-    ReviewRule { id: "DEPS-001", category: "Dependencies", description: "Outdated dependency", default_severity: Severity::Minor },
-    ReviewRule { id: "DEPS-002", category: "Dependencies", description: "Dependency with known vulnerability", default_severity: Severity::Critical },
+    ReviewRule {
+        id: "DEPS-001",
+        category: "Dependencies",
+        description: "Outdated dependency",
+        default_severity: Severity::Minor,
+    },
+    ReviewRule {
+        id: "DEPS-002",
+        category: "Dependencies",
+        description: "Dependency with known vulnerability",
+        default_severity: Severity::Critical,
+    },
 ];
 
 /// Complete documentation review report.
@@ -116,15 +223,24 @@ impl DocReviewReport {
     }
 
     pub fn critical_count(&self) -> usize {
-        self.issues.iter().filter(|i| i.severity == Severity::Critical).count()
+        self.issues
+            .iter()
+            .filter(|i| i.severity == Severity::Critical)
+            .count()
     }
 
     pub fn important_count(&self) -> usize {
-        self.issues.iter().filter(|i| i.severity == Severity::Important).count()
+        self.issues
+            .iter()
+            .filter(|i| i.severity == Severity::Important)
+            .count()
     }
 
     pub fn minor_count(&self) -> usize {
-        self.issues.iter().filter(|i| i.severity == Severity::Minor).count()
+        self.issues
+            .iter()
+            .filter(|i| i.severity == Severity::Minor)
+            .count()
     }
 
     /// Generate a markdown report.
@@ -170,7 +286,10 @@ impl DocReviewReport {
                 md.push_str(&format!("### {}\n\n", current_file));
             }
 
-            let line_info = issue.line.map(|l| format!(" (line {})", l)).unwrap_or_default();
+            let line_info = issue
+                .line
+                .map(|l| format!(" (line {})", l))
+                .unwrap_or_default();
             md.push_str(&format!(
                 "**[{}]** **{}**: {}{}\n",
                 issue.rule_id, issue.severity, issue.category, line_info
@@ -449,8 +568,16 @@ mod tests {
         let mut ids: std::collections::HashSet<&str> = std::collections::HashSet::new();
         for rule in REVIEW_RULES {
             assert!(!rule.id.is_empty(), "Rule ID should not be empty");
-            assert!(!rule.category.is_empty(), "Category should not be empty for rule {}", rule.id);
-            assert!(!rule.description.is_empty(), "Description should not be empty for rule {}", rule.id);
+            assert!(
+                !rule.category.is_empty(),
+                "Category should not be empty for rule {}",
+                rule.id
+            );
+            assert!(
+                !rule.description.is_empty(),
+                "Description should not be empty for rule {}",
+                rule.id
+            );
             assert!(ids.insert(rule.id), "Duplicate rule ID: {}", rule.id);
         }
         // Verify expected count
@@ -487,7 +614,12 @@ mod tests {
 
         assert_eq!(telemetry.events.len(), 1);
         match &telemetry.events[0].kind {
-            crate::telemetry::EventKind::ReviewCompleted { total_issues, critical, important, minor } => {
+            crate::telemetry::EventKind::ReviewCompleted {
+                total_issues,
+                critical,
+                important,
+                minor,
+            } => {
                 assert_eq!(*total_issues, 2);
                 assert_eq!(*critical, 1);
                 assert_eq!(*important, 1);

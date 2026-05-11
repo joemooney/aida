@@ -39,8 +39,7 @@ impl HlcTimestamp {
 
     /// Convert to a chrono DateTime (loses counter and node_id precision).
     pub fn to_datetime(&self) -> DateTime<Utc> {
-        DateTime::from_timestamp_millis(self.wall_time_ms)
-            .unwrap_or_else(|| Utc::now())
+        DateTime::from_timestamp_millis(self.wall_time_ms).unwrap_or_else(|| Utc::now())
     }
 
     /// Create from a chrono DateTime (sets counter=0, node_id=0).
@@ -70,11 +69,7 @@ impl Ord for HlcTimestamp {
 
 impl std::fmt::Display for HlcTimestamp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}:{}:{}",
-            self.wall_time_ms, self.counter, self.node_id
-        )
+        write!(f, "{}:{}:{}", self.wall_time_ms, self.counter, self.node_id)
     }
 }
 

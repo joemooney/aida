@@ -89,12 +89,20 @@ impl ReviewConfig {
             Ok(content) => match serde_yaml::from_str(&content) {
                 Ok(config) => config,
                 Err(e) => {
-                    eprintln!("Warning: failed to parse review config {}: {}", path.display(), e);
+                    eprintln!(
+                        "Warning: failed to parse review config {}: {}",
+                        path.display(),
+                        e
+                    );
                     Self::default()
                 }
             },
             Err(e) => {
-                eprintln!("Warning: failed to read review config {}: {}", path.display(), e);
+                eprintln!(
+                    "Warning: failed to read review config {}: {}",
+                    path.display(),
+                    e
+                );
                 Self::default()
             }
         }
@@ -107,11 +115,7 @@ impl ReviewConfig {
 
     /// Return the effective severity for a rule, applying any override.
     /// Falls back to `default_severity` if no override is configured.
-    pub fn effective_severity(
-        &self,
-        rule_id: &str,
-        default_severity: &str,
-    ) -> String {
+    pub fn effective_severity(&self, rule_id: &str, default_severity: &str) -> String {
         self.severity_overrides
             .get(rule_id)
             .cloned()
@@ -154,7 +158,10 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(config.effective_severity("DOCS-001", "MINOR"), "CRITICAL");
-        assert_eq!(config.effective_severity("DOCS-002", "IMPORTANT"), "IMPORTANT");
+        assert_eq!(
+            config.effective_severity("DOCS-002", "IMPORTANT"),
+            "IMPORTANT"
+        );
     }
 
     #[test]

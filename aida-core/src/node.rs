@@ -682,11 +682,7 @@ impl BlockRegistry {
     /// match exists. Used at dispense time so a global-scope project
     /// (single shared counter per node) can serve any type request.
     /// trace:FR-271 | ai:claude
-    pub fn find_active_block_or_global(
-        &self,
-        node_id: &str,
-        type_prefix: &str,
-    ) -> Option<usize> {
+    pub fn find_active_block_or_global(&self, node_id: &str, type_prefix: &str) -> Option<usize> {
         if let Some(idx) = self.find_active_block(node_id, type_prefix) {
             return Some(idx);
         }
@@ -712,11 +708,7 @@ impl BlockRegistry {
     /// must start strictly above it to avoid colliding with existing reqs
     /// (e.g., post-merge-gate or post-retire-legacy-ids stores).
     /// trace:FR-1-073 | ai:claude
-    pub fn next_range_start_above_counter(
-        &self,
-        type_prefix: &str,
-        counter_floor: u32,
-    ) -> u32 {
+    pub fn next_range_start_above_counter(&self, type_prefix: &str, counter_floor: u32) -> u32 {
         let from_blocks = self.next_range_start(type_prefix);
         from_blocks.max(counter_floor + 1)
     }
@@ -794,10 +786,7 @@ pub struct AgreedCounters {
 impl AgreedCounters {
     /// Get the next agreed ID for a type and increment the counter.
     pub fn next(&mut self, type_prefix: &str) -> u32 {
-        let counter = self
-            .counters
-            .entry(type_prefix.to_uppercase())
-            .or_insert(0);
+        let counter = self.counters.entry(type_prefix.to_uppercase()).or_insert(0);
         *counter += 1;
         *counter
     }
@@ -1003,10 +992,7 @@ registered = "2026-05-09T00:00:00Z"
         assert_eq!(counters.next("FEAT"), 1);
         assert_eq!(counters.peek("FR"), 3);
 
-        assert_eq!(
-            AgreedCounters::format_agreed_id("FR", 423),
-            "FR-423"
-        );
+        assert_eq!(AgreedCounters::format_agreed_id("FR", 423), "FR-423");
     }
 
     #[test]
@@ -1024,7 +1010,9 @@ registered = "2026-05-09T00:00:00Z"
         assert!(mode.is_distributed());
         assert_eq!(
             mode.id_mode(Some("7")),
-            IdMode::Distributed { node_id: "7".to_string() }
+            IdMode::Distributed {
+                node_id: "7".to_string()
+            }
         );
     }
 
@@ -1097,7 +1085,13 @@ registered = "2026-05-09T00:00:00Z"
     #[test]
     fn test_block_registry_claim_and_dispense() {
         let mut registry = BlockRegistry::default();
-        let block = registry.claim_block("2".into(), "joe@work".into(), "workstation".into(), "FR".into(), 100);
+        let block = registry.claim_block(
+            "2".into(),
+            "joe@work".into(),
+            "workstation".into(),
+            "FR".into(),
+            100,
+        );
         assert_eq!(block.range_start, 1);
         assert_eq!(block.range_end, 100);
         assert_eq!(block.next, 1);
@@ -1113,8 +1107,20 @@ registered = "2026-05-09T00:00:00Z"
     #[test]
     fn test_block_registry_next_range_start() {
         let mut registry = BlockRegistry::default();
-        registry.claim_block("1".into(), "joe@home".into(), "home".into(), "FR".into(), 100);
-        registry.claim_block("2".into(), "joe@work".into(), "work".into(), "FR".into(), 100);
+        registry.claim_block(
+            "1".into(),
+            "joe@home".into(),
+            "home".into(),
+            "FR".into(),
+            100,
+        );
+        registry.claim_block(
+            "2".into(),
+            "joe@work".into(),
+            "work".into(),
+            "FR".into(),
+            100,
+        );
 
         // home claims 1..100, work claims 101..200, next start should be 201
         assert_eq!(registry.next_range_start("FR"), 201);
@@ -1156,7 +1162,13 @@ registered = "2026-05-09T00:00:00Z"
         let path = dir.path().join("blocks.yaml");
 
         let mut registry = BlockRegistry::default();
-        registry.claim_block("2".into(), "joe@work".into(), "work".into(), "FR".into(), 100);
+        registry.claim_block(
+            "2".into(),
+            "joe@work".into(),
+            "work".into(),
+            "FR".into(),
+            100,
+        );
         registry.save(&path).unwrap();
 
         let loaded = BlockRegistry::load(&path).unwrap();

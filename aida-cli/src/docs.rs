@@ -45,18 +45,20 @@ impl BuildReport {
 
 /// Build the docs tree at `output_dir`. When `dry_run` is true, files are
 /// not written but the report still tracks what would change.
-pub fn build(
-    store: &RequirementsStore,
-    output_dir: &Path,
-    dry_run: bool,
-) -> Result<BuildReport> {
+pub fn build(store: &RequirementsStore, output_dir: &Path, dry_run: bool) -> Result<BuildReport> {
     let mut report = BuildReport::default();
     let mut planned: Vec<(PathBuf, String)> = Vec::new();
 
     planned.push((output_dir.join("README.md"), render_index(store)));
-    planned.push((output_dir.join("00-constitution.md"), render_constitution(store)));
+    planned.push((
+        output_dir.join("00-constitution.md"),
+        render_constitution(store),
+    ));
     planned.push((output_dir.join("01-vision.md"), render_vision(store)));
-    planned.push((output_dir.join("02-constraints.md"), render_constraints(store)));
+    planned.push((
+        output_dir.join("02-constraints.md"),
+        render_constraints(store),
+    ));
     planned.push((output_dir.join("07-quality.md"), render_quality(store)));
     planned.push((output_dir.join("10-glossary.md"), render_glossary(store)));
 
@@ -64,7 +66,10 @@ pub fn build(
     // so ADR-1 lands before ADR-2 in the index. trace:BUG-20 | ai:claude
     let decisions_dir = output_dir.join("05-decisions");
     let decisions = filter_type_sorted(store, &RequirementType::Decision);
-    planned.push((decisions_dir.join("README.md"), render_decisions_index(&decisions)));
+    planned.push((
+        decisions_dir.join("README.md"),
+        render_decisions_index(&decisions),
+    ));
     for d in &decisions {
         let filename = decision_filename(d);
         planned.push((decisions_dir.join(filename), render_decision(d)));
@@ -82,9 +87,8 @@ pub fn build(
 
         if !dry_run {
             if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent).with_context(|| {
-                    format!("failed to create directory {}", parent.display())
-                })?;
+                std::fs::create_dir_all(parent)
+                    .with_context(|| format!("failed to create directory {}", parent.display()))?;
             }
             std::fs::write(path, &body_with_marker)
                 .with_context(|| format!("failed to write {}", path.display()))?;
@@ -99,10 +103,8 @@ pub fn build(
     // Stale ADR files (Decision was deleted) — surface but don't auto-delete
     // in v1; user can `aida docs build` after a manual cleanup.
     if let Ok(entries) = std::fs::read_dir(&decisions_dir) {
-        let planned_paths: std::collections::HashSet<PathBuf> = planned
-            .iter()
-            .map(|(p, _)| p.clone())
-            .collect();
+        let planned_paths: std::collections::HashSet<PathBuf> =
+            planned.iter().map(|(p, _)| p.clone()).collect();
         for e in entries.flatten() {
             let path = e.path();
             if path.extension().and_then(|s| s.to_str()) != Some("md") {
@@ -131,7 +133,13 @@ fn display_id(req: &Requirement) -> String {
 
 fn slugify(s: &str) -> String {
     s.chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
         .collect::<String>()
         .split('-')
         .filter(|s| !s.is_empty())
@@ -179,15 +187,30 @@ fn render_index(store: &RequirementsStore) -> String {
          To re-render after editing requirements: `aida docs build`.\n\n",
     );
     s.push_str("## Layers\n\n");
-    s.push_str(&format!("- [Constitution](00-constitution.md) — {} principles\n", count_principles));
-    s.push_str(&format!("- [Vision](01-vision.md) — {} item(s)\n", count_visions));
-    s.push_str(&format!("- [Constraints](02-constraints.md) — {} constraint(s)\n", count_constraints));
+    s.push_str(&format!(
+        "- [Constitution](00-constitution.md) — {} principles\n",
+        count_principles
+    ));
+    s.push_str(&format!(
+        "- [Vision](01-vision.md) — {} item(s)\n",
+        count_visions
+    ));
+    s.push_str(&format!(
+        "- [Constraints](02-constraints.md) — {} constraint(s)\n",
+        count_constraints
+    ));
     s.push_str(&format!(
         "- [Decisions](05-decisions/README.md) — {} ADR(s)\n",
         count_decisions
     ));
-    s.push_str(&format!("- [Quality requirements](07-quality.md) — {} NFR(s)\n", count_nfrs));
-    s.push_str(&format!("- [Glossary](10-glossary.md) — {} term(s)\n", count_terms));
+    s.push_str(&format!(
+        "- [Quality requirements](07-quality.md) — {} NFR(s)\n",
+        count_nfrs
+    ));
+    s.push_str(&format!(
+        "- [Glossary](10-glossary.md) — {} term(s)\n",
+        count_terms
+    ));
     s
 }
 
@@ -286,7 +309,10 @@ fn render_decisions_index(decisions: &[&Requirement]) -> String {
         let id = display_id(d);
         let status = format!("{}", d.effective_status());
         let file = decision_filename(d);
-        s.push_str(&format!("| [{}]({}) | {} | {} |\n", id, file, d.title, status));
+        s.push_str(&format!(
+            "| [{}]({}) | {} | {} |\n",
+            id, file, d.title, status
+        ));
     }
     s
 }
@@ -306,7 +332,12 @@ fn render_decision(d: &Requirement) -> String {
         s.push_str("## Discussion\n\n");
         for c in &d.comments {
             let ts = c.created_at.format("%Y-%m-%d");
-            s.push_str(&format!("**{}** — *{}*\n\n{}\n\n", c.author, ts, c.content.trim()));
+            s.push_str(&format!(
+                "**{}** — *{}*\n\n{}\n\n",
+                c.author,
+                ts,
+                c.content.trim()
+            ));
         }
     }
     s
@@ -347,7 +378,9 @@ fn render_glossary(store: &RequirementsStore) -> String {
          `type=term` requirements.\n\n",
     );
     if terms.is_empty() {
-        s.push_str("_No terms defined yet._ Run `aida add --type term --title \"...\"` to add one.\n");
+        s.push_str(
+            "_No terms defined yet._ Run `aida add --type term --title \"...\"` to add one.\n",
+        );
         return s;
     }
     let mut sorted = terms;
@@ -366,7 +399,11 @@ fn render_glossary(store: &RequirementsStore) -> String {
 // ─── Helpers ────────────────────────────────────────────────────────────
 
 fn filter_type<'a>(store: &'a RequirementsStore, t: &RequirementType) -> Vec<&'a Requirement> {
-    store.requirements.iter().filter(|r| &r.req_type == t).collect()
+    store
+        .requirements
+        .iter()
+        .filter(|r| &r.req_type == t)
+        .collect()
 }
 
 /// Filter by type AND sort by spec_id ascending so the projected docs list
@@ -410,13 +447,21 @@ mod tests {
     #[test]
     fn slugify_handles_punctuation_and_unicode() {
         assert_eq!(slugify("Hello, World!"), "hello-world");
-        assert_eq!(slugify("ADR: orphan-branch storage"), "adr-orphan-branch-storage");
+        assert_eq!(
+            slugify("ADR: orphan-branch storage"),
+            "adr-orphan-branch-storage"
+        );
         assert_eq!(slugify(""), "");
     }
 
     #[test]
     fn decision_filename_combines_id_and_slug() {
-        let d = req(RequirementType::Decision, "ADR-1", "Use orphan-branch storage", "");
+        let d = req(
+            RequirementType::Decision,
+            "ADR-1",
+            "Use orphan-branch storage",
+            "",
+        );
         assert_eq!(decision_filename(&d), "ADR-1-use-orphan-branch-storage.md");
     }
 
@@ -446,12 +491,9 @@ mod tests {
     fn build_writes_planned_files_and_skips_unchanged() {
         let dir = tempfile::tempdir().unwrap();
         let mut store = RequirementsStore::new();
-        store.requirements.push(req(
-            RequirementType::Principle,
-            "PRIN-1",
-            "P",
-            "body",
-        ));
+        store
+            .requirements
+            .push(req(RequirementType::Principle, "PRIN-1", "P", "body"));
 
         let r1 = build(&store, dir.path(), false).unwrap();
         assert!(!r1.written.is_empty(), "first build must write files");
@@ -460,19 +502,19 @@ mod tests {
         let r2 = build(&store, dir.path(), false).unwrap();
         assert!(r2.written.is_empty(), "second build should not re-write");
         assert!(r2.drifted.is_empty(), "second build should not show drift");
-        assert!(!r2.unchanged.is_empty(), "second build should report unchanged files");
+        assert!(
+            !r2.unchanged.is_empty(),
+            "second build should report unchanged files"
+        );
     }
 
     #[test]
     fn build_detects_drift_when_file_modified_externally() {
         let dir = tempfile::tempdir().unwrap();
         let mut store = RequirementsStore::new();
-        store.requirements.push(req(
-            RequirementType::Principle,
-            "PRIN-1",
-            "Original",
-            "",
-        ));
+        store
+            .requirements
+            .push(req(RequirementType::Principle, "PRIN-1", "Original", ""));
         build(&store, dir.path(), false).unwrap();
 
         // External edit

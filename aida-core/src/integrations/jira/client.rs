@@ -53,8 +53,14 @@ impl JiraClient {
 
     /// Test connection by fetching the project.
     pub async fn test_connection(&self) -> Result<JiraProject> {
-        let url = self.config.api_url(&format!("/project/{}", self.config.project_key));
-        let resp = self.client.get(&url).send().await
+        let url = self
+            .config
+            .api_url(&format!("/project/{}", self.config.project_key));
+        let resp = self
+            .client
+            .get(&url)
+            .send()
+            .await
             .map_err(|e| ClientError::Http(e.to_string()))?;
         self.handle_response(resp).await
     }
@@ -67,21 +73,33 @@ impl JiraClient {
             "maxResults": max_results,
             "fields": ["summary", "description", "status", "issuetype", "priority", "assignee", "reporter", "labels", "created", "updated", "resolution"]
         });
-        let resp = self.client.post(&url).json(&body).send().await
+        let resp = self
+            .client
+            .post(&url)
+            .json(&body)
+            .send()
+            .await
             .map_err(|e| ClientError::Http(e.to_string()))?;
         self.handle_response(resp).await
     }
 
     /// List issues in the configured project.
     pub async fn list_issues(&self, max_results: u32) -> Result<JiraSearchResults> {
-        let jql = format!("project = {} ORDER BY updated DESC", self.config.project_key);
+        let jql = format!(
+            "project = {} ORDER BY updated DESC",
+            self.config.project_key
+        );
         self.search(&jql, max_results).await
     }
 
     /// Get a single issue by key (e.g., "PROJ-123").
     pub async fn get_issue(&self, key: &str) -> Result<JiraIssue> {
         let url = self.config.api_url(&format!("/issue/{}", key));
-        let resp = self.client.get(&url).send().await
+        let resp = self
+            .client
+            .get(&url)
+            .send()
+            .await
             .map_err(|e| ClientError::Http(e.to_string()))?;
         self.handle_response(resp).await
     }
@@ -89,7 +107,12 @@ impl JiraClient {
     /// Create a new issue.
     pub async fn create_issue(&self, request: &CreateIssueRequest) -> Result<CreatedIssue> {
         let url = self.config.api_url("/issue");
-        let resp = self.client.post(&url).json(request).send().await
+        let resp = self
+            .client
+            .post(&url)
+            .json(request)
+            .send()
+            .await
             .map_err(|e| ClientError::Http(e.to_string()))?;
         self.handle_response(resp).await
     }
@@ -98,7 +121,12 @@ impl JiraClient {
     pub async fn update_issue(&self, key: &str, fields: &serde_json::Value) -> Result<()> {
         let url = self.config.api_url(&format!("/issue/{}", key));
         let body = serde_json::json!({ "fields": fields });
-        let resp = self.client.put(&url).json(&body).send().await
+        let resp = self
+            .client
+            .put(&url)
+            .json(&body)
+            .send()
+            .await
             .map_err(|e| ClientError::Http(e.to_string()))?;
 
         if resp.status().is_success() {
@@ -106,7 +134,11 @@ impl JiraClient {
         } else {
             let status = resp.status().as_u16();
             let body = resp.text().await.unwrap_or_default();
-            Err(ClientError::Api { status, message: body }.into())
+            Err(ClientError::Api {
+                status,
+                message: body,
+            }
+            .into())
         }
     }
 
@@ -116,7 +148,12 @@ impl JiraClient {
         let body = serde_json::json!({
             "body": text_to_adf(body_text)
         });
-        let resp = self.client.post(&url).json(&body).send().await
+        let resp = self
+            .client
+            .post(&url)
+            .json(&body)
+            .send()
+            .await
             .map_err(|e| ClientError::Http(e.to_string()))?;
 
         if resp.status().is_success() {
@@ -124,17 +161,26 @@ impl JiraClient {
         } else {
             let status = resp.status().as_u16();
             let body = resp.text().await.unwrap_or_default();
-            Err(ClientError::Api { status, message: body }.into())
+            Err(ClientError::Api {
+                status,
+                message: body,
+            }
+            .into())
         }
     }
 
     /// Get available transitions for an issue (for status changes).
     pub async fn get_transitions(&self, key: &str) -> Result<Vec<serde_json::Value>> {
         let url = self.config.api_url(&format!("/issue/{}/transitions", key));
-        let resp = self.client.get(&url).send().await
+        let resp = self
+            .client
+            .get(&url)
+            .send()
+            .await
             .map_err(|e| ClientError::Http(e.to_string()))?;
         let result: serde_json::Value = self.handle_response(resp).await?;
-        Ok(result.get("transitions")
+        Ok(result
+            .get("transitions")
             .and_then(|t| t.as_array())
             .cloned()
             .unwrap_or_default())
@@ -146,7 +192,12 @@ impl JiraClient {
         let body = serde_json::json!({
             "transition": { "id": transition_id }
         });
-        let resp = self.client.post(&url).json(&body).send().await
+        let resp = self
+            .client
+            .post(&url)
+            .json(&body)
+            .send()
+            .await
             .map_err(|e| ClientError::Http(e.to_string()))?;
 
         if resp.status().is_success() {
@@ -154,7 +205,11 @@ impl JiraClient {
         } else {
             let status = resp.status().as_u16();
             let body = resp.text().await.unwrap_or_default();
-            Err(ClientError::Api { status, message: body }.into())
+            Err(ClientError::Api {
+                status,
+                message: body,
+            }
+            .into())
         }
     }
 
@@ -168,13 +223,17 @@ impl JiraClient {
     ) -> Result<T> {
         let status = resp.status();
         if status.is_success() {
-            let body = resp.text().await
+            let body = resp
+                .text()
+                .await
                 .map_err(|e| ClientError::Http(e.to_string()))?;
-            serde_json::from_str(&body)
-                .map_err(|e| ClientError::Api {
+            serde_json::from_str(&body).map_err(|e| {
+                ClientError::Api {
                     status: status.as_u16(),
                     message: format!("{}: {}", e, &body[..body.len().min(200)]),
-                }.into())
+                }
+                .into()
+            })
         } else {
             let status_code = status.as_u16();
             let body = resp.text().await.unwrap_or_default();
@@ -191,7 +250,11 @@ impl JiraClient {
                             .map(String::from)
                     })
                     .unwrap_or(body);
-                Err(ClientError::Api { status: status_code, message }.into())
+                Err(ClientError::Api {
+                    status: status_code,
+                    message,
+                }
+                .into())
             }
         }
     }

@@ -98,7 +98,6 @@ pub fn prompt_new_requirement(store: &mut aida_core::RequirementsStore) -> Resul
     Ok(req)
 }
 
-
 /// Prompts the user for a new feature
 pub fn prompt_new_feature(store: &mut aida_core::RequirementsStore) -> Result<String> {
     // Get feature name

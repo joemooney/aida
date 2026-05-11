@@ -99,9 +99,8 @@ pub fn run_daemon(db_path: &Path, mode: IdMode, socket_path: Option<&Path>) -> R
                     };
 
                     let response = handle_request(&line, &dispenser);
-                    let json = serde_json::to_string(&response).unwrap_or_else(|_| {
-                        r#"{"error":"serialization failed"}"#.to_string()
-                    });
+                    let json = serde_json::to_string(&response)
+                        .unwrap_or_else(|_| r#"{"error":"serialization failed"}"#.to_string());
 
                     if writeln!(writer, "{}", json).is_err() {
                         break;
@@ -264,7 +263,9 @@ mod tests {
     #[test]
     fn test_handle_request_next() {
         use crate::dispenser::MemoryDispenser;
-        let d = MemoryDispenser::new(IdMode::Distributed { node_id: "7".to_string() });
+        let d = MemoryDispenser::new(IdMode::Distributed {
+            node_id: "7".to_string(),
+        });
 
         let resp = handle_request(r#"{"method":"next","type":"FR"}"#, &d);
         assert_eq!(resp.seq, Some(1));
@@ -291,13 +292,20 @@ mod tests {
     #[test]
     fn test_handle_request_state() {
         use crate::dispenser::MemoryDispenser;
-        let d = MemoryDispenser::new(IdMode::Distributed { node_id: "42".to_string() });
+        let d = MemoryDispenser::new(IdMode::Distributed {
+            node_id: "42".to_string(),
+        });
         d.next("FR").unwrap();
 
         let resp = handle_request(r#"{"method":"state"}"#, &d);
         assert!(resp.state.is_some());
         let state = resp.state.unwrap();
-        assert_eq!(state.mode, IdMode::Distributed { node_id: "42".to_string() });
+        assert_eq!(
+            state.mode,
+            IdMode::Distributed {
+                node_id: "42".to_string()
+            }
+        );
     }
 
     #[test]
@@ -339,7 +347,13 @@ mod tests {
 
         // Start daemon in background thread
         let _handle = thread::spawn(move || {
-            let _ = run_daemon(&db_clone, IdMode::Distributed { node_id: "7".to_string() }, Some(&sock_clone));
+            let _ = run_daemon(
+                &db_clone,
+                IdMode::Distributed {
+                    node_id: "7".to_string(),
+                },
+                Some(&sock_clone),
+            );
         });
 
         // Wait for socket to appear
@@ -359,7 +373,12 @@ mod tests {
             assert_eq!(client.peek("FR").unwrap(), 3);
 
             let state = client.state().unwrap();
-            assert_eq!(state.mode, IdMode::Distributed { node_id: "7".to_string() });
+            assert_eq!(
+                state.mode,
+                IdMode::Distributed {
+                    node_id: "7".to_string()
+                }
+            );
 
             // Clean up — remove socket to stop daemon
             let _ = std::fs::remove_file(&sock_path);

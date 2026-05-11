@@ -63,7 +63,10 @@ pub struct Operation {
     pub author: String,
     /// Node that created this operation. String as of EPIC-9 / STORY-41
     /// (was u32; numeric ids deserialize as decimal strings for back-compat).
-    #[serde(default = "default_node_id_str", deserialize_with = "deserialize_node_id_oplog")]
+    #[serde(
+        default = "default_node_id_str",
+        deserialize_with = "deserialize_node_id_oplog"
+    )]
     pub node_id: String,
     /// Lamport clock value at creation
     pub lamport: LamportClock,
@@ -105,14 +108,9 @@ pub enum OpKind {
         author: String,
     },
     /// Add a relationship
-    AddRelationship {
-        target_id: Uuid,
-        rel_type: String,
-    },
+    AddRelationship { target_id: Uuid, rel_type: String },
     /// Remove a relationship
-    RemoveRelationship {
-        target_id: Uuid,
-    },
+    RemoveRelationship { target_id: Uuid },
     /// Archive the requirement
     Archive,
     /// Unarchive the requirement
@@ -127,7 +125,10 @@ pub struct OpLog {
     /// Current Lamport clock value
     pub clock: LamportClock,
     /// Node ID for this log. String as of STORY-41.
-    #[serde(default = "default_node_id_str", deserialize_with = "deserialize_node_id_oplog")]
+    #[serde(
+        default = "default_node_id_str",
+        deserialize_with = "deserialize_node_id_oplog"
+    )]
     pub node_id: String,
 }
 
@@ -194,11 +195,8 @@ impl OpLog {
         }
 
         // Sort by Lamport clock, then by operation ID for deterministic ordering
-        self.operations.sort_by(|a, b| {
-            a.lamport
-                .cmp(&b.lamport)
-                .then(a.id.cmp(&b.id))
-        });
+        self.operations
+            .sort_by(|a, b| a.lamport.cmp(&b.lamport).then(a.id.cmp(&b.id)));
     }
 
     /// Get all operations for a specific requirement, in causal order.
@@ -277,17 +275,25 @@ mod tests {
         let mut log = OpLog::new("7".to_string());
         let target = Uuid::now_v7();
 
-        log.append(target, "joe".into(), OpKind::Create {
-            title: "Test".into(),
-            description: "Desc".into(),
-            req_type: "functional".into(),
-            status: "draft".into(),
-            priority: "medium".into(),
-        });
+        log.append(
+            target,
+            "joe".into(),
+            OpKind::Create {
+                title: "Test".into(),
+                description: "Desc".into(),
+                req_type: "functional".into(),
+                status: "draft".into(),
+                priority: "medium".into(),
+            },
+        );
 
-        log.append(target, "joe".into(), OpKind::SetStatus {
-            status: "approved".into(),
-        });
+        log.append(
+            target,
+            "joe".into(),
+            OpKind::SetStatus {
+                status: "approved".into(),
+            },
+        );
 
         assert_eq!(log.len(), 2);
         assert_eq!(log.operations[0].lamport, LamportClock(1));
@@ -299,14 +305,26 @@ mod tests {
         let target = Uuid::now_v7();
 
         let mut log_a = OpLog::new("1".to_string());
-        let op1 = log_a.append(target, "alice".into(), OpKind::SetTitle {
-            title: "Alice's title".into(),
-        }).clone();
+        let op1 = log_a
+            .append(
+                target,
+                "alice".into(),
+                OpKind::SetTitle {
+                    title: "Alice's title".into(),
+                },
+            )
+            .clone();
 
         let mut log_b = OpLog::new("2".to_string());
-        let op2 = log_b.append(target, "bob".into(), OpKind::SetTitle {
-            title: "Bob's title".into(),
-        }).clone();
+        let op2 = log_b
+            .append(
+                target,
+                "bob".into(),
+                OpKind::SetTitle {
+                    title: "Bob's title".into(),
+                },
+            )
+            .clone();
 
         // Manually add op1 to log_b to simulate it was already synced
         log_b.operations.push(op1.clone());
@@ -323,14 +341,22 @@ mod tests {
         let target = Uuid::now_v7();
 
         let mut log_a = OpLog::new("1".to_string());
-        log_a.append(target, "alice".into(), OpKind::SetTitle {
-            title: "From A".into(),
-        });
+        log_a.append(
+            target,
+            "alice".into(),
+            OpKind::SetTitle {
+                title: "From A".into(),
+            },
+        );
 
         let mut log_b = OpLog::new("2".to_string());
-        log_b.append(target, "bob".into(), OpKind::SetTitle {
-            title: "From B".into(),
-        });
+        log_b.append(
+            target,
+            "bob".into(),
+            OpKind::SetTitle {
+                title: "From B".into(),
+            },
+        );
 
         // Merge in both directions — should produce same order
         let mut merged_ab = log_a.clone();
@@ -352,9 +378,23 @@ mod tests {
         let target_a = Uuid::now_v7();
         let target_b = Uuid::now_v7();
 
-        log.append(target_a, "joe".into(), OpKind::SetTitle { title: "A".into() });
-        log.append(target_b, "joe".into(), OpKind::SetTitle { title: "B".into() });
-        log.append(target_a, "joe".into(), OpKind::SetStatus { status: "done".into() });
+        log.append(
+            target_a,
+            "joe".into(),
+            OpKind::SetTitle { title: "A".into() },
+        );
+        log.append(
+            target_b,
+            "joe".into(),
+            OpKind::SetTitle { title: "B".into() },
+        );
+        log.append(
+            target_a,
+            "joe".into(),
+            OpKind::SetStatus {
+                status: "done".into(),
+            },
+        );
 
         let ops_a = log.ops_for(&target_a);
         assert_eq!(ops_a.len(), 2);
@@ -368,10 +408,22 @@ mod tests {
         let mut log = OpLog::new("1".to_string());
         let target = Uuid::now_v7();
 
-        log.append(target, "joe".into(), OpKind::SetTitle { title: "v1".into() });
-        log.append(target, "joe".into(), OpKind::SetTitle { title: "v2".into() });
+        log.append(
+            target,
+            "joe".into(),
+            OpKind::SetTitle { title: "v1".into() },
+        );
+        log.append(
+            target,
+            "joe".into(),
+            OpKind::SetTitle { title: "v2".into() },
+        );
         let checkpoint = log.clock;
-        log.append(target, "joe".into(), OpKind::SetTitle { title: "v3".into() });
+        log.append(
+            target,
+            "joe".into(),
+            OpKind::SetTitle { title: "v3".into() },
+        );
 
         let since = log.ops_since(checkpoint);
         assert_eq!(since.len(), 1);
@@ -389,13 +441,17 @@ mod tests {
 
         let mut log = OpLog::new("7".to_string());
         let target = Uuid::now_v7();
-        log.append(target, "joe".into(), OpKind::Create {
-            title: "Test".into(),
-            description: "Desc".into(),
-            req_type: "functional".into(),
-            status: "draft".into(),
-            priority: "medium".into(),
-        });
+        log.append(
+            target,
+            "joe".into(),
+            OpKind::Create {
+                title: "Test".into(),
+                description: "Desc".into(),
+                req_type: "functional".into(),
+                status: "draft".into(),
+                priority: "medium".into(),
+            },
+        );
         log.save(&path).unwrap();
 
         let loaded = OpLog::load(&path).unwrap();

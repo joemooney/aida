@@ -76,8 +76,7 @@ impl CachedGitBackend {
     /// git repo (e.g., test fixture); stale check then collapses to "always
     /// fresh" which is fine for non-git scenarios.
     fn current_head_sha(&self) -> String {
-        crate::git_ops::head_sha(self.inner.path())
-            .unwrap_or_default()
+        crate::git_ops::head_sha(self.inner.path()).unwrap_or_default()
     }
 
     /// If the cache is stale (or missing source SHA), rebuild it from the
@@ -88,7 +87,10 @@ impl CachedGitBackend {
         if !self.cache.is_stale(&head)? {
             return Ok(());
         }
-        let store = self.inner.load().context("Failed to load git store for cache rebuild")?;
+        let store = self
+            .inner
+            .load()
+            .context("Failed to load git store for cache rebuild")?;
         self.cache.rebuild_from_store(&store, &head)?;
         Ok(())
     }
@@ -316,8 +318,12 @@ mod tests {
         std::fs::create_dir_all(&store_root).unwrap();
 
         let backend = CachedGitBackend::open(&store_root, &cache_path).unwrap();
-        backend.add_requirement(sample_req("FR-1-001", "a")).unwrap();
-        backend.add_requirement(sample_req("FR-1-002", "b")).unwrap();
+        backend
+            .add_requirement(sample_req("FR-1-001", "a"))
+            .unwrap();
+        backend
+            .add_requirement(sample_req("FR-1-002", "b"))
+            .unwrap();
         assert_eq!(backend.cache().requirement_count().unwrap(), 2);
 
         // Drop the cache file entirely; rebuild restores it.

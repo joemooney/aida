@@ -20,11 +20,14 @@ impl JiraIssue {
     pub fn description_text(&self) -> String {
         // Jira Cloud uses ADF (Atlassian Document Format) for description
         // Extract plain text from the content array if present
-        self.fields.description.as_ref()
+        self.fields
+            .description
+            .as_ref()
             .and_then(|d| d.get("content"))
             .and_then(|c| c.as_array())
             .map(|paragraphs| {
-                paragraphs.iter()
+                paragraphs
+                    .iter()
                     .filter_map(|p| p.get("content"))
                     .filter_map(|c| c.as_array())
                     .flat_map(|texts| texts.iter())
@@ -36,25 +39,33 @@ impl JiraIssue {
             .unwrap_or_default()
     }
     pub fn status_name(&self) -> &str {
-        self.fields.status.as_ref()
+        self.fields
+            .status
+            .as_ref()
             .and_then(|s| s.get("name"))
             .and_then(|n| n.as_str())
             .unwrap_or("Unknown")
     }
     pub fn issue_type_name(&self) -> &str {
-        self.fields.issuetype.as_ref()
+        self.fields
+            .issuetype
+            .as_ref()
             .and_then(|t| t.get("name"))
             .and_then(|n| n.as_str())
             .unwrap_or("Task")
     }
     pub fn priority_name(&self) -> &str {
-        self.fields.priority.as_ref()
+        self.fields
+            .priority
+            .as_ref()
             .and_then(|p| p.get("name"))
             .and_then(|n| n.as_str())
             .unwrap_or("Medium")
     }
     pub fn assignee_name(&self) -> Option<&str> {
-        self.fields.assignee.as_ref()
+        self.fields
+            .assignee
+            .as_ref()
             .and_then(|a| a.get("displayName"))
             .and_then(|n| n.as_str())
     }

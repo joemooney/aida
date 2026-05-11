@@ -170,7 +170,9 @@ fn fill_branches(sessions: &mut [SessionMeta]) {
     use std::collections::HashMap;
     let mut cache: HashMap<String, Option<String>> = HashMap::new();
     for s in sessions.iter_mut() {
-        let Some(cwd) = s.last_cwd.clone() else { continue };
+        let Some(cwd) = s.last_cwd.clone() else {
+            continue;
+        };
         let branch = cache
             .entry(cwd.clone())
             .or_insert_with(|| resolve_branch(&cwd))
@@ -332,7 +334,9 @@ fn read_launches_for_cwd(cwd: &Path) -> Vec<LaunchRecord> {
             if recorded_cwd != cwd_str {
                 return None;
             }
-            let parsed_ts = chrono::DateTime::parse_from_rfc3339(ts).ok()?.with_timezone(&chrono::Utc);
+            let parsed_ts = chrono::DateTime::parse_from_rfc3339(ts)
+                .ok()?
+                .with_timezone(&chrono::Utc);
             Some(LaunchRecord {
                 ts: parsed_ts,
                 role: role.to_string(),
@@ -433,10 +437,7 @@ fn parse_session_meta(path: &Path, mtime: SystemTime, now: SystemTime) -> Result
         .and_then(|s| s.to_str())
         .unwrap_or("?")
         .to_string();
-    let age_seconds = now
-        .duration_since(mtime)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
+    let age_seconds = now.duration_since(mtime).map(|d| d.as_secs()).unwrap_or(0);
 
     // Parse only the first chunk of lines — `ai-title` appears within
     // the first few hundred events and the SessionStart hook output
@@ -604,8 +605,20 @@ fn first_spec_id(line: &str) -> Option<String> {
         let prefix = &line[start..start + (i - start)];
         if matches!(
             prefix,
-            "FR" | "BUG" | "TASK" | "EPIC" | "STORY" | "SPIKE" | "SPRINT"
-                | "FOLDER" | "META" | "UR" | "SR" | "CR" | "REQ" | "NFR" | "SPEC"
+            "FR" | "BUG"
+                | "TASK"
+                | "EPIC"
+                | "STORY"
+                | "SPIKE"
+                | "SPRINT"
+                | "FOLDER"
+                | "META"
+                | "UR"
+                | "SR"
+                | "CR"
+                | "REQ"
+                | "NFR"
+                | "SPEC"
         ) {
             return Some(line[start..j].to_string());
         }
@@ -682,7 +695,8 @@ fn print_table_with_widths(sessions: &[SessionMeta], w: &TableWidths) {
         let role = s.role.as_deref().unwrap_or("-");
         let spec = s.spec.as_deref().unwrap_or("-");
         let title = s.title.as_deref().unwrap_or("(untitled)");
-        let worktree = format_worktree_label(s.last_cwd.as_deref(), s.branch.as_deref(), w.worktree_w);
+        let worktree =
+            format_worktree_label(s.last_cwd.as_deref(), s.branch.as_deref(), w.worktree_w);
         let live = liveness_indicator(s.age_seconds);
         // Color the indicator: bright green when truly live, yellow for
         // recent, dim for idle. Width of the indicator slot is one cell.
@@ -713,7 +727,9 @@ fn print_table_with_widths(sessions: &[SessionMeta], w: &TableWidths) {
 /// cwd shows a dash; missing branch shows just the basename.
 /// trace:STORY-59 | ai:claude
 fn format_worktree_label(cwd: Option<&str>, branch: Option<&str>, max: usize) -> String {
-    let Some(cwd) = cwd else { return "-".to_string() };
+    let Some(cwd) = cwd else {
+        return "-".to_string();
+    };
     let basename = std::path::Path::new(cwd)
         .file_name()
         .and_then(|s| s.to_str())
@@ -845,9 +861,18 @@ mod tests {
 
     #[test]
     fn first_spec_id_finds_node_aware_form() {
-        assert_eq!(first_spec_id("Working on FR-1-042 today"), Some("FR-1-042".into()));
-        assert_eq!(first_spec_id("BUG-1-017 is fixed"), Some("BUG-1-017".into()));
-        assert_eq!(first_spec_id("see EPIC-2 and TASK-1"), Some("EPIC-2".into()));
+        assert_eq!(
+            first_spec_id("Working on FR-1-042 today"),
+            Some("FR-1-042".into())
+        );
+        assert_eq!(
+            first_spec_id("BUG-1-017 is fixed"),
+            Some("BUG-1-017".into())
+        );
+        assert_eq!(
+            first_spec_id("see EPIC-2 and TASK-1"),
+            Some("EPIC-2".into())
+        );
     }
 
     #[test]
@@ -886,10 +911,10 @@ mod tests {
             title: title.into(),
         };
         let launches = vec![
-            mk(-120, "way-before"),    // 2min before — outside 60s window
-            mk(-10, "ten-before"),     // 10s before — inside window
+            mk(-120, "way-before"),     // 2min before — outside 60s window
+            mk(-10, "ten-before"),      // 10s before — inside window
             mk(45, "forty-five-after"), // 45s after — inside window, but farther than -10
-            mk(200, "way-after"),      // outside window
+            mk(200, "way-after"),       // outside window
         ];
         let session_started = base; // exactly base
         let m = match_launch(&launches, session_started, 60).unwrap();
