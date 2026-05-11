@@ -483,9 +483,13 @@ pub enum SessionCommand {
         #[clap(long, default_value = "bypassPermissions")]
         permission_mode: String,
 
-        /// Override the role recorded for the launched session
-        /// (defaults to $AIDA_SESSION_ROLE). Ignored without --launch.
-        /// trace:STORY-54 | ai:claude
+        /// Override the role recorded in this session's lease (and, when
+        /// `--launch` is set, the persona the launched Claude inherits).
+        /// Without `--role`, the role is derived from the scope:
+        /// `--owns PR-N` / `--owns MR-N` → reviewer; everything else →
+        /// implementer. `$AIDA_SESSION_ROLE` is a last-resort fallback
+        /// only — when it disagrees with the scope-derived default the
+        /// scope wins and a warning is printed. trace:TASK-67 | ai:claude
         #[clap(long)]
         role: Option<String>,
     },
@@ -525,6 +529,15 @@ pub enum SessionCommand {
         /// trace:BUG-67 | ai:claude
         #[clap(long)]
         force: bool,
+
+        /// After removing the worktree, also delete the corresponding
+        /// `~/.claude/projects/<encoded-cwd>/` directory so `claude
+        /// --resume` doesn't try to revive sessions whose cwd no longer
+        /// exists. Without this flag, the dir is left in place and a
+        /// hint is printed pointing at `aida session prune --orphans`.
+        /// trace:TASK-70 | ai:claude
+        #[clap(long = "purge-cc")]
+        purge_cc: bool,
     },
 
     /// List active session leases (separately from the historical list
@@ -584,6 +597,15 @@ pub enum SessionCommand {
         /// immediately after printing the candidate list.
         #[clap(long, short = 'y')]
         yes: bool,
+
+        /// Sweep `~/.claude/projects/*` for project dirs whose recorded
+        /// cwd no longer exists on disk (orphans from removed worktrees).
+        /// When set, each whole orphaned project dir is removed instead
+        /// of file-by-file pruning. Composes with `--dry-run` and `--yes`.
+        /// `--days` is ignored in this mode — orphan-ness is the trigger.
+        /// trace:TASK-70 | ai:claude
+        #[clap(long)]
+        orphans: bool,
     },
 }
 
@@ -1486,11 +1508,52 @@ pub enum RelationshipCommand {
         bidirectional: bool,
     },
 
-    /// List all relationships for a requirement
+    /// List relationships — global by default, or filtered to a specific
+    /// source/target requirement.
+    ///
+    /// Examples:
+    ///   aida rel list                      # all edges in the graph
+    ///   aida rel list EPIC-20              # outgoing edges from EPIC-20
+    ///   aida rel list --source EPIC-20     # same as positional form
+    ///   aida rel list --target EPIC-20     # incoming edges (what points AT it)
+    ///   aida rel list --type child         # filter by edge type
+    ///   aida rel list --dangling           # only edges with unresolved targets
+    ///   aida rel list --type child --dangling   # composable
+    /// trace:TASK-65 | ai:claude
     #[clap(visible_alias = "show")]
     List {
-        /// Requirement ID (UUID or SPEC-ID)
-        id: String,
+        /// Source requirement ID (UUID or SPEC-ID). Positional alias of
+        /// --source. When omitted (and --target/--source unset), lists every
+        /// edge in the graph.
+        #[clap(value_name = "ID")]
+        id: Option<String>,
+
+        /// Source requirement — same as the positional. Explicit form for
+        /// scripts that want to be unambiguous.
+        #[clap(long)]
+        source: Option<String>,
+
+        /// Target requirement — inverts the query to "what edges point AT
+        /// this requirement?". Useful for "who depends on EPIC-20?".
+        #[clap(long)]
+        target: Option<String>,
+
+        /// Filter by relationship type (parent, child, duplicate, verifies,
+        /// verified-by, references, or a custom name).
+        #[clap(long = "type", short = 't')]
+        r#type: Option<String>,
+
+        /// Only show edges whose target UUID doesn't resolve (deleted-target
+        /// tombstones, BUG-53 territory). Pairs with `aida doctor
+        /// verify-relationships --repair` to clean them up.
+        #[clap(long)]
+        dangling: bool,
+
+        /// Include edges between terminal-status (Completed/Rejected)
+        /// requirements. By default the global listing hides them so the
+        /// view focuses on actionable work, matching `aida list`.
+        #[clap(long)]
+        all: bool,
     },
 }
 
@@ -1672,8 +1735,11 @@ pub enum QueueCommand {
         #[clap(long)]
         include_completed: bool,
         /// Filter to items routed to a specific role (e.g., "implementer").
-        /// Pass --role any to show all items including unrouted.
-        #[clap(long)]
+        /// Pass `--for any` (or `--role any`) to show all items including
+        /// unrouted. `--for <role>` is the canonical form, matching
+        /// `aida queue add --for` and `aida queue next --for`; `--role`
+        /// is kept as a hidden alias for back-compat. trace:TASK-71
+        #[clap(long = "for", visible_alias = "role")]
         role: Option<String>,
         /// Show all items regardless of any active-role default filter
         #[clap(long)]
@@ -1816,8 +1882,11 @@ pub enum QueueCommand {
     /// global queues by default (local wins on tiebreaks).
     /// trace:FR-1-012 | ai:claude
     Next {
-        /// Filter to items routed to a specific role
-        #[clap(long)]
+        /// Filter to items routed to a specific role. `--for <role>` is the
+        /// canonical form, matching `aida queue add --for` and
+        /// `aida queue list --for`; `--role` is kept as an alias.
+        /// trace:TASK-71 | ai:claude
+        #[clap(long = "for", visible_alias = "role")]
         role: Option<String>,
         /// Show the top item from the full queue regardless of role
         #[clap(long)]
@@ -1975,6 +2044,15 @@ pub enum Command {
         /// local view when offline. trace:STORY-78 | ai:claude
         #[clap(long)]
         sync: bool,
+
+        /// Include terminal-status (Completed/Rejected) requirements.
+        /// Default behavior hides them so day-to-day `aida list` shows
+        /// only actionable work; pass `--all` to see the archive too.
+        /// An explicit `--status completed`/`--status rejected` always
+        /// wins (the user already asked for that view).
+        /// trace:TASK-64 | ai:claude
+        #[clap(long, alias = "include-terminal")]
+        all: bool,
     },
 
     /// Show details for a specific requirement
@@ -2138,6 +2216,11 @@ pub enum Command {
         /// Skip the orphan-store sync (only `git pull`).
         #[clap(long, conflicts_with = "code_only")]
         store_only: bool,
+        /// Suppress the per-commit change summary printed after the
+        /// orphan-store pull. Errors still print. Useful in scripts that
+        /// pipe pull output. trace:TASK-73 | ai:claude
+        #[clap(long, short = 'q')]
+        quiet: bool,
     },
 
     /// AIDA-developer-only commands: activate the in-repo dev binary,
@@ -2537,6 +2620,13 @@ pub enum Command {
         /// (--events only) terse one-line-per-event format.
         #[clap(long)]
         oneline: bool,
+
+        /// Include terminal-status (Completed/Rejected) requirements.
+        /// Symmetric with `aida list --all`: by default `aida history`
+        /// surfaces the "what's been touched recently and is still live"
+        /// view; `--all` brings the archive back. trace:TASK-64 | ai:claude
+        #[clap(long, alias = "include-terminal")]
+        all: bool,
     },
 
     /// List all commands (including the less-common ones hidden from

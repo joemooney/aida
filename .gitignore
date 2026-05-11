@@ -60,13 +60,6 @@ docker/secrets/*.txt
 docker/*.new
 docker/.env
 
-# PostgreSQL data (dev)
-.aida/pgdata/
-.aida/web-sessions.sqlite3
-.aida/server.toml
-.aida/.dev-pids/
-.aida/.dev-*.log
-
 # AIDA distributed store (orphan branch worktree)
 # Pattern matches both the directory (in the canonical worktree) and a
 # symlink (in `aida session start`-created sibling worktrees, which
@@ -75,25 +68,16 @@ docker/.env
 .aida-store/
 .aida-store
 
-# AIDA SQLite cache projection (rebuildable from git store)
-# trace:EPIC-1-001 | ai:claude
-.aida/cache.db
-.aida/cache.db-journal
-.aida/cache.db-shm
-.aida/cache.db-wal
+# AIDA runtime state — deny-by-default. Anything under .aida/ is per-clone
+# runtime state (cache, sessions, roles, env shims, review prompts, server
+# data, etc.) unless explicitly allow-listed below. Adding a new runtime
+# file under .aida/ requires no gitignore change; tracking a new
+# project-config file requires adding an explicit `!.aida/<name>` line.
+# trace:BUG-73 | ai:claude
+.aida/*
 
-# AIDA runtime state (per-clone, gitignored — must NOT be tracked)
-# Session leases (EPIC-20) and role activity logs are local runtime
-# state, not project-tracked content. Pattern matches both the directory
-# (canonical worktree) AND a symlink (session-worktree siblings).
-# trace:BUG-52 | ai:claude
-.aida/sessions/
-.aida/sessions
-.aida/roles/
-.aida/roles
-
-# AIDA session environment shim (STORY-52: writes CARGO_TARGET_DIR=<parent>/target
-# so session worktrees share the parent's build dir). Generated per-session,
-# never committed. Without this entry every post-STORY-52 session-end stumbles
-# on BUG-67's untracked-file check and demands --force. trace:BUG-71 | ai:claude
-.aida/session-env.sh
+# Tracked exceptions: project-level config that lives in the repo.
+!.aida/config.toml
+!.aida/docker-compose.yml
+!.aida/docker-compose.dev.yml
+!.aida/setup.sh
