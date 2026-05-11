@@ -1,0 +1,61 @@
+id: 019e1505-1417-7c70-bf89-7f66d62da3c6
+spec_id: TASK-67
+agreed_id: TASK-67
+title: 'aida session start: lease should record role-by-intent (--role flag or scope-derived) rather than blindly inheriting from $AIDA_SESSION_ROLE'
+description: |
+  Caught 2026-05-11 — after PR-7 wrap-up, `aida session leases` showed:
+
+  ```
+  019e13d5  EPIC-20  epic-20-batch7  reviewer       /home/joe/ai/aida-epic-20
+  019e14b0  PR-7     pr-7            reviewer       /home/joe/ai/aida-pr-7
+  ```
+
+  The first lease (batch7 on EPIC-20) is an **implementer** session — that's where the 22-spec PR-7 work happened. But its lease records `role: reviewer` because the user's shell was in `(role:reviewer)` when they ran `aida session start --owns EPIC-20 --branch epic-20-batch7`, and STORY-65's role-inheritance blindly read $AIDA_SESSION_ROLE.
+
+  ## Today's behavior
+
+  `aida session start` reads `$AIDA_SESSION_ROLE` from the calling shell's env and records it in the lease. No sanity check against:
+  - `--role` flag if passed (STORY-65 added the flag, may not override env priority correctly)
+  - The scope's natural role: PR-N/MR-N → reviewer; EPIC-N/STORY-N/BUG-N/etc. → implementer
+
+  ## Desired behavior
+
+  Resolution order for lease.role:
+  1. `--role <name>` if explicitly passed → use that (highest priority)
+  2. Scope-derived default: if `--owns PR-N` or `--owns MR-N` → "reviewer"; else → "implementer"
+  3. Env `$AIDA_SESSION_ROLE` → use as fallback ONLY if scope-derived didn't have a clear default
+  4. None → leave role unset
+
+  Warn (don't refuse) when env-inherited role doesn't match scope-derived default:
+  ```
+  ⚠ Active role (reviewer) doesn't match this session's likely role (implementer for EPIC-20).
+    Recording: implementer (scope-derived). Pass --role reviewer to override.
+  ```
+
+  ## Why this matters
+
+  - `aida session leases` shows misleading role info (lease says reviewer for a session that did implementer work)
+  - TASK-48 (role enter shows queue head) — when re-entering a session, the role is the lease's role; wrong role means wrong queue surface
+  - Auditing / activity log — role-tagged activity entries get the wrong role attribution
+  - STORY-66 (auto-queue PR for reviewer) — fires based on session role; wrong role = wrong routing
+
+  ## Composes with
+
+  - STORY-65 (auto-branch + inherit current role) — this is the refinement
+  - TASK-48 (role enter shows queue) — depends on correct lease role
+  - STORY-92 (auto-spawn next-batch on PR merge, from EPIC-23) — uses session's role to decide what to spawn
+
+  ## Acceptance
+
+  - [ ] `--role` flag wins over env inheritance
+  - [ ] Scope-derived default fires when no --role and no env (or as warning when env disagrees)
+  - [ ] Lease records the intended role, not the env at start time
+  - [ ] Warning printed when env-role disagrees with scope-default
+  - [ ] Tested: implementer-shell + --owns PR-N → records reviewer. Reviewer-shell + --owns EPIC-N → records implementer (with warning). --role override always wins.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T03:11:54.903185075Z
+modified_at: 2026-05-11T03:11:54.903185075Z
+req_type: Task
