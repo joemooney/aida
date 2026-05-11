@@ -529,6 +529,15 @@ pub enum SessionCommand {
         /// trace:BUG-67 | ai:claude
         #[clap(long)]
         force: bool,
+
+        /// After removing the worktree, also delete the corresponding
+        /// `~/.claude/projects/<encoded-cwd>/` directory so `claude
+        /// --resume` doesn't try to revive sessions whose cwd no longer
+        /// exists. Without this flag, the dir is left in place and a
+        /// hint is printed pointing at `aida session prune --orphans`.
+        /// trace:TASK-70 | ai:claude
+        #[clap(long = "purge-cc")]
+        purge_cc: bool,
     },
 
     /// List active session leases (separately from the historical list
@@ -588,6 +597,15 @@ pub enum SessionCommand {
         /// immediately after printing the candidate list.
         #[clap(long, short = 'y')]
         yes: bool,
+
+        /// Sweep `~/.claude/projects/*` for project dirs whose recorded
+        /// cwd no longer exists on disk (orphans from removed worktrees).
+        /// When set, each whole orphaned project dir is removed instead
+        /// of file-by-file pruning. Composes with `--dry-run` and `--yes`.
+        /// `--days` is ignored in this mode — orphan-ness is the trigger.
+        /// trace:TASK-70 | ai:claude
+        #[clap(long)]
+        orphans: bool,
     },
 }
 

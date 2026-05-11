@@ -9008,10 +9008,20 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             permission_mode,
             role.clone(),
         ),
-        SessionCommand::End { id, yes, force } => session_end(id.as_deref(), *yes, *force),
+        SessionCommand::End {
+            id,
+            yes,
+            force,
+            purge_cc,
+        } => session_end(id.as_deref(), *yes, *force, *purge_cc),
         SessionCommand::Leases { verbose, all } => session_leases(*verbose, *all),
         SessionCommand::Show { id } => session_show(id.as_deref()),
-        SessionCommand::Prune { days, dry_run, yes } => session_prune(*days, *dry_run, *yes),
+        SessionCommand::Prune {
+            days,
+            dry_run,
+            yes,
+            orphans,
+        } => session_prune(*days, *dry_run, *yes, *orphans),
     }
 }
 
@@ -10882,7 +10892,7 @@ fn shell_single_quote(s: &str) -> String {
     out
 }
 
-fn session_end(id_query: Option<&str>, yes: bool, force: bool) -> Result<()> {
+fn session_end(id_query: Option<&str>, yes: bool, force: bool, purge_cc: bool) -> Result<()> {
     let project_root = find_project_root()?;
     let leases = list_leases(&project_root);
     if leases.is_empty() {
@@ -11141,6 +11151,41 @@ fn session_end(id_query: Option<&str>, yes: bool, force: bool) -> Result<()> {
         target.branch.cyan(),
         target.branch
     );
+
+    // TASK-70: handle the Claude Code project dir orphaned by the
+    // worktree removal. Claude Code stores per-session jsonls under
+    // `~/.claude/projects/<encoded-cwd>/`; once the cwd vanishes, the
+    // jsonls are stranded — `claude --resume <id>` may fail or behave
+    // unexpectedly. Default: warn + point at `session prune --orphans`.
+    // With `--purge-cc`: remove the dir atomically here.
+    // trace:TASK-70 | ai:claude
+    if let Ok(cc_dir) = session::claude_project_dir(&canonical_worktree) {
+        if cc_dir.is_dir() {
+            if purge_cc {
+                match std::fs::remove_dir_all(&cc_dir) {
+                    Ok(_) => eprintln!(
+                        "{} purged Claude Code project dir {}",
+                        "✓".green(),
+                        cc_dir.display().to_string().dimmed()
+                    ),
+                    Err(e) => eprintln!(
+                        "{} could not purge {}: {} — remove manually if you don't want it",
+                        "Warning:".yellow().bold(),
+                        cc_dir.display(),
+                        e
+                    ),
+                }
+            } else {
+                eprintln!(
+                    "{} Claude Code project dir {} is now orphaned (cwd gone). \
+                     Run `aida session prune --orphans` to clean up, or pass \
+                     `--purge-cc` on `aida session end` next time.",
+                    "ⓘ".dimmed(),
+                    cc_dir.display().to_string().dimmed()
+                );
+            }
+        }
+    }
 
     // STORY-66: when the just-ended session's branch has an open PR, file a
     // Story-typed review item routed to the `reviewer` role with `implements`
@@ -11940,7 +11985,170 @@ fn humanize_age_secs(secs: u64) -> String {
 /// doesn't self-delete from a forgotten cron-like usage. Logs each
 /// deletion to `<project>/.aida/session-prune.log` for auditing.
 /// trace:STORY-60 | ai:claude
-fn session_prune(days: u32, dry_run: bool, yes: bool) -> Result<()> {
+/// Walk `~/.claude/projects/*` and find project dirs whose recorded cwd
+/// no longer exists on disk. Each surviving jsonl encodes its cwd in
+/// every event; we read one jsonl per project dir, extract the cwd
+/// from the first event that has one, and check the filesystem. No
+/// jsonls in the dir → treat as orphan (the dir is content-less).
+/// Falls back to the lossy dir-name decode (replace `-` with `/`) when
+/// the jsonl lacks a `"cwd":` field. trace:TASK-70 | ai:claude
+fn session_prune_orphans(dry_run: bool, yes: bool) -> Result<()> {
+    let home = dirs::home_dir().context("HOME not set; cannot locate Claude project dir")?;
+    let projects = home.join(".claude/projects");
+    if !projects.is_dir() {
+        println!("(no ~/.claude/projects dir found)");
+        return Ok(());
+    }
+
+    struct Orphan {
+        path: std::path::PathBuf,
+        decoded_cwd: String,
+        jsonl_count: usize,
+    }
+
+    let mut orphans: Vec<Orphan> = Vec::new();
+    let mut active = 0usize;
+    let mut errored = 0usize;
+    for entry in std::fs::read_dir(&projects)?.filter_map(|e| e.ok()) {
+        let dir = entry.path();
+        if !dir.is_dir() {
+            continue;
+        }
+        // Read one jsonl event to recover the authoritative cwd. Skip if
+        // the dir has no jsonls — it's empty cruft, treat as orphan.
+        let mut found_cwd: Option<String> = None;
+        let mut jsonl_count = 0;
+        if let Ok(read) = std::fs::read_dir(&dir) {
+            for jsonl in read.filter_map(|e| e.ok()) {
+                if jsonl.path().extension().and_then(|s| s.to_str()) != Some("jsonl") {
+                    continue;
+                }
+                jsonl_count += 1;
+                if found_cwd.is_none() {
+                    if let Ok(text) = std::fs::read_to_string(jsonl.path()) {
+                        for line in text.lines().take(20) {
+                            if let Some(idx) = line.find("\"cwd\":\"") {
+                                let after = &line[idx + 7..];
+                                if let Some(end) = after.find('"') {
+                                    found_cwd = Some(after[..end].to_string());
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        let cwd_str = found_cwd.unwrap_or_else(|| {
+            // Lossy fallback decode: `-home-joe-ai-aida` → `/home/joe/ai/aida`.
+            let name = dir
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string();
+            name.replace('-', "/")
+        });
+        let cwd_path = std::path::Path::new(&cwd_str);
+        if cwd_path.is_dir() {
+            active += 1;
+            continue;
+        }
+        if cwd_str.is_empty() {
+            errored += 1;
+            continue;
+        }
+        orphans.push(Orphan {
+            path: dir,
+            decoded_cwd: cwd_str,
+            jsonl_count,
+        });
+    }
+
+    if orphans.is_empty() {
+        println!(
+            "(no orphan project dirs; {} active dir{} under {})",
+            active,
+            if active == 1 { "" } else { "s" },
+            projects.display()
+        );
+        if errored > 0 {
+            println!(
+                "  ({} dir{} couldn't be inspected — left in place)",
+                errored,
+                if errored == 1 { "" } else { "s" }
+            );
+        }
+        return Ok(());
+    }
+
+    println!(
+        "Found {} orphan Claude Code project dir{} (cwd missing):",
+        orphans.len(),
+        if orphans.len() == 1 { "" } else { "s" }
+    );
+    println!();
+    for o in &orphans {
+        println!(
+            "  {}",
+            o.path.display().to_string().dimmed()
+        );
+        println!(
+            "      cwd: {}    {} jsonl{}",
+            o.decoded_cwd.yellow(),
+            o.jsonl_count,
+            if o.jsonl_count == 1 { "" } else { "s" }
+        );
+    }
+    println!();
+
+    if dry_run {
+        println!("{} (--dry-run; nothing removed)", "Dry run".dimmed());
+        return Ok(());
+    }
+
+    if !yes {
+        use std::io::Write;
+        eprint!("Remove these {} orphan dir(s)? [y/N] ", orphans.len());
+        std::io::stderr().flush()?;
+        let mut ans = String::new();
+        std::io::stdin().read_line(&mut ans)?;
+        if !matches!(ans.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+            println!("Aborted.");
+            return Ok(());
+        }
+    }
+
+    let mut removed = 0usize;
+    for o in &orphans {
+        match std::fs::remove_dir_all(&o.path) {
+            Ok(_) => removed += 1,
+            Err(e) => eprintln!(
+                "{} couldn't remove {}: {}",
+                "Warning:".yellow().bold(),
+                o.path.display(),
+                e
+            ),
+        }
+    }
+    println!(
+        "{} removed {} orphan project dir{}",
+        "✓".green(),
+        removed,
+        if removed == 1 { "" } else { "s" }
+    );
+    Ok(())
+}
+
+fn session_prune(days: u32, dry_run: bool, yes: bool, orphans: bool) -> Result<()> {
+    // TASK-70: orphan-sweep mode short-circuits the per-file age path.
+    // Iterates every project dir under ~/.claude/projects and removes any
+    // whose recorded cwd no longer exists on disk (stranded by an
+    // earlier `aida session end` that didn't `--purge-cc`).
+    // trace:TASK-70 | ai:claude
+    if orphans {
+        return session_prune_orphans(dry_run, yes);
+    }
+
     let cwd = std::env::current_dir().context("could not determine cwd")?;
     let project_root = find_project_root().unwrap_or_else(|_| cwd.clone());
 
