@@ -1,0 +1,56 @@
+id: 019e14f8-5ae4-7cd3-a643-5646216e86a3
+spec_id: STORY-93
+agreed_id: STORY-93
+title: 'Aida-watcher daemon: observe git/PR/queue state, fire orchestration triggers'
+description: |
+  Long-term home for orchestration triggers that don't fit cleanly into one-shot command flows.
+
+  ## Surface
+
+  ```
+  aida watch start         # spawn background daemon (pid recorded; one per project)
+  aida watch stop          # graceful shutdown
+  aida watch status        # is it running? what has it observed recently?
+  aida watch logs          # tail -f the daemon's event log
+  ```
+
+  ## What it observes (polling, ~30s interval default)
+
+  - `gh pr list --state merged --search "head:<branch>"` — detect newly-merged PRs for active session branches
+  - `gh pr list --state open` — detect new PRs (alternative trigger for STORY-66 if STORY-90 doesn't fire)
+  - `aida queue list --all` — watch for items added by other agents (e.g., the reviewer filing followups during a review)
+  - `.aida/sessions/*.toml` mtimes — detect new leases starting
+
+  ## What it triggers
+
+  - When a session's PR merges: fire `aida session end <lease>` workflow, possibly auto-spawn next (STORY-23-1)
+  - When a new PR opens on a session branch: fire reviewer auto-queue (backup for STORY-90)
+  - When queue grows beyond N items routed to a role: notify user "considering spawning <role> session?"
+
+  ## Why a daemon vs hooks
+
+  - Git hooks fire on local actions only — miss PR merges on origin
+  - gh's webhook support requires server setup
+  - Local poll daemon is simple, works offline (gracefully degrades), opt-in
+
+  ## Composes with
+
+  - All of EPIC-23 — this is the engine that makes the rest work
+  - STORY-69 (sysinfo liveness probe) — daemon uses it to know which sessions are alive
+  - STORY-79 (statusline background fetch) — same daemon pattern, could merge
+
+  ## Acceptance
+
+  - [ ] `aida watch start/stop/status/logs` works as described
+  - [ ] Polls every AIDA_WATCH_INTERVAL_SECS (default 30, configurable)
+  - [ ] Per-project (one daemon per AIDA-initialized repo)
+  - [ ] Event log persisted at .aida/watch.log
+  - [ ] Graceful shutdown via SIGTERM
+  - [ ] No fetch storm (single-flight in-flight check, like STORY-79's lockfile)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T02:58:01.060106484Z
+modified_at: 2026-05-11T02:58:01.060106484Z
+req_type: Story
