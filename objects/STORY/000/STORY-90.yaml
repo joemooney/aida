@@ -74,14 +74,18 @@ description: |
   - [ ] Review story includes pr_url field for idempotency check
   - [ ] Tested: clean /aida-pr → fires once. Raw gh pr create + session end → fires once. /aida-pr + session end → no duplicate.
   - [ ] BUG-72 closed by this design (no longer relies on session_end success path)
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T01:46:19.612969675Z
-modified_at: 2026-05-11T01:46:19.612969675Z
+modified_at: 2026-05-11T05:37:08.946100456Z
 req_type: Story
 relationships:
 - rel_type: Child
   target_id: 019e0f6f-f9ad-7653-8336-12a7f09d7cb1
   created_at: 2026-05-11T01:46:20.528707650Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-11T05:37:08.946100456Z
+  implemented_by: joe
