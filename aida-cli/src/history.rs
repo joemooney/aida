@@ -29,6 +29,10 @@ pub struct HistoryOpts {
     pub status_changes_only: bool,
     pub comments_only: bool,
     pub oneline: bool,
+    /// Include rows whose current status is Completed/Rejected. Default
+    /// false: day-to-day `aida history` should surface live work, not the
+    /// archive. trace:TASK-64 | ai:claude
+    pub include_terminal: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -176,6 +180,31 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
         }
     }
 
+    // TASK-64: precompute terminal-status spec_ids to hide their events.
+    // One YAML read per surfaced spec; in events mode the limit is small
+    // (default 20) so we usually touch ~5-20 files. trace:TASK-64 | ai:claude
+    let terminal_specs: std::collections::HashSet<String> = if opts.include_terminal {
+        std::collections::HashSet::new()
+    } else {
+        let mut seen = std::collections::HashSet::new();
+        let mut out = std::collections::HashSet::new();
+        for e in &events {
+            if !seen.insert(e.spec_id.clone()) {
+                continue;
+            }
+            let yaml_path = store_path
+                .join("objects")
+                .join(&e.req_type)
+                .join("000")
+                .join(format!("{}.yaml", e.spec_id));
+            let (status, _, _) = read_current(&yaml_path);
+            if is_terminal_status_str(&status) {
+                out.insert(e.spec_id.clone());
+            }
+        }
+        out
+    };
+
     // Apply filters not handled by `git log` itself.
     let filtered: Vec<&Event> = events
         .iter()
@@ -203,11 +232,22 @@ pub fn run(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
             }
             matches!(e.kind, EventKind::CommentsAdded { .. })
         })
+        .filter(|e| !terminal_specs.contains(&e.spec_id))
         .take(opts.limit)
         .collect();
 
     if filtered.is_empty() {
         eprintln!("{}", "(no events match the filter)".dimmed());
+        if !terminal_specs.is_empty() {
+            eprintln!(
+                "{}",
+                format!(
+                    "({} spec(s) hidden — pass --all to include events for Completed/Rejected items)",
+                    terminal_specs.len()
+                )
+                .dimmed()
+            );
+        }
         return Ok(());
     }
 
@@ -393,12 +433,32 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
         true
     });
 
+    // TASK-64: hide terminal-status (Completed/Rejected) rows by default.
+    // Count what gets dropped so we can print a "(N hidden — pass --all …)"
+    // hint that mirrors `aida list`. trace:TASK-64 | ai:claude
+    let hidden_terminal = if opts.include_terminal {
+        0
+    } else {
+        let before = entries.len();
+        entries.retain(|e| !is_terminal_status_str(&e.status));
+        before - entries.len()
+    };
+
     // Sort newest-first by ISO timestamp (string compare works for ISO 8601).
     entries.sort_by(|a, b| b.last_ts_iso.cmp(&a.last_ts_iso));
     entries.truncate(opts.limit);
 
     if entries.is_empty() {
         eprintln!("{}", "(no recent activity)".dimmed());
+        if hidden_terminal > 0 {
+            eprintln!(
+                "{}",
+                format!(
+                    "({hidden_terminal} hidden — pass --all to see Completed/Rejected items)"
+                )
+                .dimmed()
+            );
+        }
         return Ok(());
     }
 
@@ -460,6 +520,16 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
             colorize_status(&status_padded),
             time_padded,
             title.dimmed(),
+        );
+    }
+
+    if hidden_terminal > 0 {
+        println!(
+            "{}",
+            format!(
+                "  ({hidden_terminal} hidden — pass --all to see Completed/Rejected items)"
+            )
+            .dimmed()
         );
     }
 
@@ -562,6 +632,17 @@ fn looks_like_spec_id(s: &str) -> bool {
 
 fn pick_author_email(email: &str) -> String {
     email.split('@').next().unwrap_or(email).to_string()
+}
+
+/// Whether a stringified status is terminal (Completed/Rejected). Local
+/// twin of `main::is_terminal_status` so this module stays self-contained
+/// (history.rs is consumed by integration tests without pulling in main).
+/// trace:TASK-64 | ai:claude
+fn is_terminal_status_str(s: &str) -> bool {
+    let t = s.trim();
+    t.eq_ignore_ascii_case("completed")
+        || t.eq_ignore_ascii_case("rejected")
+        || t.eq_ignore_ascii_case("done")
 }
 
 /// HH:MM if today (in the user's local tz), else "MM-DD HH:MM". Always

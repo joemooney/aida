@@ -1975,6 +1975,15 @@ pub enum Command {
         /// local view when offline. trace:STORY-78 | ai:claude
         #[clap(long)]
         sync: bool,
+
+        /// Include terminal-status (Completed/Rejected) requirements.
+        /// Default behavior hides them so day-to-day `aida list` shows
+        /// only actionable work; pass `--all` to see the archive too.
+        /// An explicit `--status completed`/`--status rejected` always
+        /// wins (the user already asked for that view).
+        /// trace:TASK-64 | ai:claude
+        #[clap(long, alias = "include-terminal")]
+        all: bool,
     },
 
     /// Show details for a specific requirement
@@ -2537,6 +2546,13 @@ pub enum Command {
         /// (--events only) terse one-line-per-event format.
         #[clap(long)]
         oneline: bool,
+
+        /// Include terminal-status (Completed/Rejected) requirements.
+        /// Symmetric with `aida list --all`: by default `aida history`
+        /// surfaces the "what's been touched recently and is still live"
+        /// view; `--all` brings the archive back. trace:TASK-64 | ai:claude
+        #[clap(long, alias = "include-terminal")]
+        all: bool,
     },
 
     /// List all commands (including the less-common ones hidden from

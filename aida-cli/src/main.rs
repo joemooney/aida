@@ -1372,6 +1372,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             include_meta,
             parent,
             sync,
+            all,
             ..
         } => {
             // STORY-78: opt-in implicit sync-pull before reading. Quiet
@@ -1415,7 +1416,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 None => (cli_tags, status.clone()),
             };
             let filter = aida_core::ListFilter {
-                status: effective_status,
+                status: effective_status.clone(),
                 req_type: r#type.clone(),
                 feature: feature.clone(),
                 tags: effective_tags,
@@ -1458,8 +1459,35 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 reqs.retain(|r| !r.req_type.eq_ignore_ascii_case("meta"));
             }
 
+            // Hide terminal-status (Completed/Rejected) by default — see
+            // TASK-64 for the rationale (day-to-day `aida list` should
+            // surface actionable work, not the archive). Skip the filter
+            // when:
+            //   - `--all` was passed,
+            //   - the user explicitly filtered by status (their pick wins,
+            //     even if it is one of the terminal values), or
+            //   - the active role scope set the status (scope wins).
+            // trace:TASK-64 | ai:claude
+            let hide_terminal = !*all && effective_status.is_none();
+            let hidden_terminal_count = if hide_terminal {
+                let before = reqs.len();
+                reqs.retain(|r| !is_terminal_status_str(&r.status));
+                before - reqs.len()
+            } else {
+                0
+            };
+
             if reqs.is_empty() {
                 println!("No requirements found.");
+                if hidden_terminal_count > 0 {
+                    println!(
+                        "  {}",
+                        format!(
+                            "({hidden_terminal_count} hidden — pass --all to see Completed/Rejected items)"
+                        )
+                        .dimmed()
+                    );
+                }
             } else {
                 // Default rendering: one ID column (canonical = agreed_id
                 // when present, else spec_id). Pass --show-origin to
@@ -1514,6 +1542,15 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     }
                 }
                 println!("\n{} requirements", reqs.len());
+                if hidden_terminal_count > 0 {
+                    println!(
+                        "{}",
+                        format!(
+                            "  ({hidden_terminal_count} hidden — pass --all to see Completed/Rejected items)"
+                        )
+                        .dimmed()
+                    );
+                }
             }
         }
         Command::Add {
@@ -2939,6 +2976,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             status_changes,
             comments,
             oneline,
+            all,
         } => {
             // trace:FR-1-037 | ai:claude
             // Default max_commits scales differently per mode: digest only
@@ -2958,6 +2996,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 status_changes_only: *status_changes,
                 comments_only: *comments,
                 oneline: *oneline,
+                // TASK-64: hide terminal-status (Completed/Rejected) rows
+                // unless --all (or --id <ID>) overrides. --id is treated as
+                // an opt-in to that spec's full timeline regardless of
+                // status, since the user already named what they want.
+                include_terminal: *all || id.is_some(),
             };
             history::run(store_path, &opts)?;
         }
@@ -2981,6 +3024,19 @@ fn capitalize(s: &str) -> String {
         None => String::new(),
         Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
     }
+}
+
+/// String form of [`is_terminal_status`] — used by `aida list` / `aida
+/// history` to hide the archive by default (TASK-64). Case-insensitive;
+/// tolerates display vs storage casing. Companion to the enum version
+/// at line ~4807 (BUG-64); both live here so the list/history surface
+/// and the parent-guard share the same notion of "this is closed work".
+/// trace:TASK-64 | ai:claude
+pub fn is_terminal_status_str(s: &str) -> bool {
+    let t = s.trim();
+    t.eq_ignore_ascii_case("completed")
+        || t.eq_ignore_ascii_case("rejected")
+        || t.eq_ignore_ascii_case("done")
 }
 
 /// Validate a status string against the canonical set. Accepts case-
