@@ -57,12 +57,12 @@ description: |
   - [ ] Status changes annotated with source (PR-N merge / commit / manual)
   - [ ] Grouped or per-row annotation (UX TBD)
   - [ ] No regression on the non-status-change categories (specs added, comments added)
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T06:03:02.977429747Z
-modified_at: 2026-05-11T06:03:02.977429747Z
+modified_at: 2026-05-11T07:06:03.032198681Z
 req_type: Task
 relationships:
 - rel_type: Child
