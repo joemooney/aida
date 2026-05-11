@@ -3,14 +3,18 @@ spec_id: TASK-71
 agreed_id: TASK-71
 title: 'aida queue list: add --for <role> filter (symmetric with queue add/next)'
 description: "Caught 2026-05-11 — agent ran `aida queue list --for implementer` expecting it to work (since `aida queue add --for <role>` and `aida queue next --for <role>` both work). It errors with \"unexpected argument.\"\n\nAsymmetry: \n\n| command | --for support |\n|---|---|\n| `aida queue add` | ✓ (set routing on add) |\n| `aida queue next` | ✓ (filter pickup head by role) |\n| `aida queue list` | ✗ — only `--all` (everyone) or default (active role) |\n\nThe default already filters to active role, so `--for <current>` would be a no-op. But explicit `--for <other>` is natural to want:\n- \"show me what the reviewer queue looks like from my implementer shell\"\n- \"what's queued for triage?\"\n\nToday's workaround: `aida queue list --all | grep -i 'for:reviewer'`. Works but ugly.\n\n## Surface\n\n```\naida queue list --for reviewer       # only reviewer-routed entries\naida queue list --for any            # only unrouted entries (where for_role is None)\naida queue list --for reviewer,triage  # multiple roles\n```\n\nComposes with TASK-52 (`--scope` filter) and TASK-64 (default-hide-terminal):\n\n```\naida queue list --for reviewer --scope EPIC-20 --all\n```\n\n## Acceptance\n\n- [ ] `--for <role>` filters queue list by role\n- [ ] `--for any` shows unrouted entries\n- [ ] `--for X,Y` accepts comma list\n- [ ] Composes with `--scope`, `--all`, `--user` (existing filters)\n- [ ] Tested: present role-routed items show under `--for matching-role`; absent items don't\n"
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T03:31:30.655730333Z
-modified_at: 2026-05-11T04:29:20.809897917Z
+modified_at: 2026-05-11T04:30:18.074374540Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019e0f6f-f9ad-7653-8336-12a7f09d7cb1
   created_at: 2026-05-11T03:31:32.321730760Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-11T04:30:18.074374540Z
+  implemented_by: joe
