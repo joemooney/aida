@@ -1,0 +1,64 @@
+id: 019e1506-7f0f-7e03-b383-0b510b89bcb3
+spec_id: TASK-68
+agreed_id: TASK-68
+title: 'aida session end: handle cwd-inside-worktree gracefully (chdir before git ops + auto-cd user''s shell out)'
+description: |
+  Caught 2026-05-11 — running `aida session end` from inside the worktree being removed triggers git's "cannot remove the current working directory" error. User has to remember to `cd ~/ai/aida` (or anywhere outside) first.
+
+  Same friction every session end. Cheap fix in two layers.
+
+  ## Layer 1 — Rust-side chdir before git ops
+
+  `aida session end` resolves the lease's worktree path. Before running `git worktree remove`, the Rust binary should:
+
+  ```rust
+  let parent_root = lease.worktree_path.parent()
+      .map(|p| project_root_from_sibling(p))
+      .unwrap_or_else(|| Path::new("/"));  // safe fallback
+  std::env::set_current_dir(&parent_root)?;
+  git_worktree_remove(...)?;
+  ```
+
+  This affects only the Rust process's cwd (and child git process's inherited cwd). The parent shell's cwd is untouched. git worktree remove succeeds even when the user's shell was inside the worktree.
+
+  ## Layer 2 — Shell function auto-cd
+
+  After Layer 1's success, the user's shell is still cwd'd into the now-deleted worktree path. Anything they type next (ls, git status, anything path-relative) fails.
+
+  Add `aida session end` to the shell function's eval case (alongside dev activate, role enter, etc.). Rust output:
+
+  ```bash
+  # stdout (gets eval'd by shell function):
+  cd '/home/joe/ai/aida'   # parent project root
+  # stderr (human messages):
+  ✓ session ended; cd'd back to parent project /home/joe/ai/aida
+  ```
+
+  The shell function detects `aida session end` and evals the cd. User ends up in the parent project naturally.
+
+  ## Failure modes to handle
+
+  - Lease points to a worktree under a path the user has chmod-blocked → fall back to $HOME or /
+  - Layer 2 only fires when shell function is installed (aida dev shell-init); without it, Layer 1 still works and user is in a non-existent cwd until they cd manually
+  - If user invokes from OUTSIDE the worktree → Layer 1 chdir is a no-op (set_current_dir to the same dir is fine); Layer 2's cd is harmless (cd to current dir)
+
+  ## Composes with
+
+  - BUG-61 (refuse end with live claude inside) — orthogonal; both checks run
+  - BUG-67 (auto-force on gitignored cruft) — orthogonal; both checks run
+  - The shell function's existing eval allowlist — adding session-end is the same pattern as role enter/dev activate
+
+  ## Acceptance
+
+  - [ ] Layer 1: `aida session end` from inside the worktree succeeds (git worktree remove not tripped by cwd)
+  - [ ] Layer 2: shell function evals the cd, user's shell lands in parent project
+  - [ ] Both layers tested with: user in worktree root, user in deep subdir, user outside worktree, user in unrelated directory
+  - [ ] `aida dev shell-init --install` updated to include `aida session end` in the eval case
+  - [ ] Migration: users with already-installed shell function need to re-run shell-init or manually add session end to their case list — document in upgrade notes
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T03:13:27.823914939Z
+modified_at: 2026-05-11T03:13:27.823914939Z
+req_type: Task
