@@ -1,0 +1,63 @@
+id: 019e1539-ca3c-70c1-8b26-0d6cbb4b5ed8
+spec_id: BUG-73
+agreed_id: BUG-73
+title: '.aida/review-prompt-pr-N.md missing from .gitignore + broader: structural fix for ''all runtime files under .aida/'''
+description: |
+  Caught 2026-05-11 — `aida session end` for PR-8 reviewer refused on untracked `.aida/review-prompt-pr-8.md`. STORY-67's `aida review prompt --pr N --write <path>` (and `/aida-review` skill) writes the per-spec checklist there, but the path isn't in .gitignore. Same shape as BUG-71 (.aida/session-env.sh).
+
+  This is the **third** such file:
+  - BUG-67's fix detected the `.aida/sessions/`, `.aida/roles/`, `.aida/cache.db` runtime cruft (those WERE in .gitignore)
+  - BUG-71 added `.aida/session-env.sh` (STORY-52's runtime file)
+  - This bug: `.aida/review-prompt-pr-*.md` (STORY-67's runtime file)
+
+  Each new feature that writes to `.aida/` introduces a new gitignore hole. Whack-a-mole.
+
+  ## Two-part fix
+
+  ### Part 1 — immediate (mechanical)
+
+  Add to `.gitignore`:
+  ```
+  .aida/review-prompt-pr-*.md
+  .aida/review-prompt-*.md     # catches MR variants and other write paths
+  ```
+
+  Plus same line in the `aida init` scaffolding template (per BUG-71's pattern — `add_aida_gitignore_entries()`).
+
+  ### Part 2 — structural (anti-recurrence)
+
+  Refactor `.gitignore` to a deny-everything-then-allow-list:
+
+  ```gitignore
+  # AIDA runtime state (per-clone, gitignored — must NOT be tracked)
+  .aida/*
+
+  # Tracked exceptions: project config, never runtime
+  !.aida/config.toml
+  !.aida/.gitkeep
+  ```
+
+  This catches ANY future runtime file under `.aida/` automatically. Documented assumption: anything new under `.aida/` is runtime unless explicitly un-ignored.
+
+  Trade-off: harder to track new project-config files (each one needs an `!` entry). But that's rare — `config.toml` is the only persistently-tracked file today. Worth it for the recurrence-immunity.
+
+  ## Composes with
+
+  - BUG-67 (auto-force gitignored cruft on session end) — once .gitignore is exhaustive, BUG-67's check rarely trips
+  - BUG-71 (session-env.sh gitignore) — same pattern; this generalizes
+  - STORY-67 (aida review prompt --write) — its output path becomes self-ignored
+
+  ## Acceptance
+
+  - [ ] Part 1: `.aida/review-prompt-pr-*.md` line added to .gitignore + init scaffolding
+  - [ ] Part 2: `.aida/*` + explicit `!` allow-list refactor (deny-by-default)
+  - [ ] Documentation in CLAUDE.md noting "anything new under .aida/ is runtime by convention; tracked exceptions require explicit `!` entries"
+  - [ ] Migration: existing projects updated via `aida doctor migrate-gitignore` (optional helper)
+  - [ ] Tested: scaffold a new project, write a fictional `.aida/new-feature.foo`, verify it's ignored without an explicit entry
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T04:09:29.404339079Z
+modified_at: 2026-05-11T04:09:29.404339079Z
+req_type: Bug
