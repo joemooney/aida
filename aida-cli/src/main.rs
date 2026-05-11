@@ -9638,34 +9638,39 @@ fn find_project_root() -> Result<std::path::PathBuf> {
     }
 }
 
-/// Resolve the MAIN worktree path for the current repo. When the caller
-/// is inside a linked worktree (created via `git worktree add`),
-/// `find_project_root()` returns the LINKED worktree's path because the
-/// climb stops at the first `.git` (file or dir). Session-start path /
-/// branch derivation needs the canonical project root regardless of cwd,
-/// otherwise new sessions stack as `~/ai/aida-pr-9-epic-20` instead of
-/// landing as siblings under `~/ai/aida`. trace:BUG-75 | ai:claude
+/// Resolve the MAIN worktree path given a starting checkout (which may
+/// itself be a linked worktree). When the caller is inside a linked
+/// worktree (created via `git worktree add`), `find_project_root()`
+/// returns the LINKED worktree's path because the climb stops at the
+/// first `.git` (file or dir). Session-start path / branch derivation
+/// needs the canonical project root regardless of cwd, otherwise new
+/// sessions stack as `~/ai/aida-pr-9-epic-20` instead of landing as
+/// siblings under `~/ai/aida`. trace:BUG-75 | ai:claude
 ///
 /// Uses `git worktree list --porcelain`; the first record is always the
-/// main worktree. Falls back to `find_project_root()` if git can't be
-/// invoked (e.g., tests without a real repo).
-fn find_main_worktree_root() -> Result<std::path::PathBuf> {
-    let start = find_project_root()?;
+/// main worktree. Falls back to `start` when git can't be invoked.
+fn main_worktree_root_from(start: &std::path::Path) -> std::path::PathBuf {
     let out = std::process::Command::new("git")
         .arg("-C")
-        .arg(&start)
+        .arg(start)
         .args(["worktree", "list", "--porcelain"])
         .output();
     if let Ok(o) = out {
         if o.status.success() {
             for line in String::from_utf8_lossy(&o.stdout).lines() {
                 if let Some(p) = line.strip_prefix("worktree ") {
-                    return Ok(std::path::PathBuf::from(p));
+                    return std::path::PathBuf::from(p);
                 }
             }
         }
     }
-    Ok(start)
+    start.to_path_buf()
+}
+
+/// Convenience wrapper that walks up from cwd. Same fallback semantics.
+fn find_main_worktree_root() -> Result<std::path::PathBuf> {
+    let start = find_project_root()?;
+    Ok(main_worktree_root_from(&start))
 }
 
 /// Resolve the project's default branch ref (e.g. `origin/main` or
@@ -17045,7 +17050,41 @@ mod branch_behind_main_tests {
 mod resolve_gh_binary_tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt;
+    use std::sync::Mutex;
     use tempfile::TempDir;
+
+    // Serialize PATH-mutating tests against each other. Prepending (vs
+    // replacing) PATH means other parallel tests keep finding `git` and
+    // friends, but two concurrent PATH mutators still need to serialize
+    // so they don't restore the wrong predecessor value. trace:BUG-79
+    static PATH_LOCK: Mutex<()> = Mutex::new(());
+
+    /// Acquire the PATH lock and prepend `dir` to PATH for the test's
+    /// duration. Returns an RAII guard that restores PATH on drop.
+    /// Prepending (instead of overwriting) keeps system `git` reachable
+    /// from any parallel test that spawns subprocesses.
+    fn scoped_prepend_path(dir: &std::path::Path) -> impl Drop {
+        struct G {
+            _lock: std::sync::MutexGuard<'static, ()>,
+            prev: Option<String>,
+        }
+        impl Drop for G {
+            fn drop(&mut self) {
+                match &self.prev {
+                    Some(v) => std::env::set_var("PATH", v),
+                    None => std::env::remove_var("PATH"),
+                }
+            }
+        }
+        let lock = PATH_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let prev = std::env::var("PATH").ok();
+        let new = match &prev {
+            Some(v) => format!("{}:{}", dir.display(), v),
+            None => format!("{}", dir.display()),
+        };
+        std::env::set_var("PATH", &new);
+        G { _lock: lock, prev }
+    }
 
     fn make_executable(path: &std::path::Path) {
         std::fs::write(path, "#!/bin/sh\necho gh fake\n").unwrap();
@@ -17068,17 +17107,8 @@ mod resolve_gh_binary_tests {
         let tmp = TempDir::new().unwrap();
         let gh = tmp.path().join("gh");
         make_executable(&gh);
-        // Set PATH to ONLY our temp dir so we don't conflict with the
-        // system gh and we know exactly what was resolved.
-        let prev_path = std::env::var("PATH").ok();
-        std::env::set_var("PATH", tmp.path());
-        let resolved = resolve_gh_binary();
-        if let Some(p) = prev_path {
-            std::env::set_var("PATH", p);
-        } else {
-            std::env::remove_var("PATH");
-        }
-        let resolved = resolved.expect("expected to find fake gh on PATH");
+        let _g = scoped_prepend_path(tmp.path());
+        let resolved = resolve_gh_binary().expect("expected to find fake gh on PATH");
         assert_eq!(
             std::fs::canonicalize(&resolved).unwrap(),
             std::fs::canonicalize(&gh).unwrap()
@@ -17091,14 +17121,9 @@ mod resolve_gh_binary_tests {
         let tmp = TempDir::new().unwrap();
         let gh = tmp.path().join("gh");
         make_non_executable(&gh);
-        let prev_path = std::env::var("PATH").ok();
-        std::env::set_var("PATH", tmp.path());
+        let _g = scoped_prepend_path(tmp.path());
         let resolved = resolve_gh_binary();
-        if let Some(p) = prev_path {
-            std::env::set_var("PATH", p);
-        } else {
-            std::env::remove_var("PATH");
-        }
+        drop(_g);
         // We may still pick up a real system gh via the absolute-path
         // fallback — but we should NOT have picked up our broken fake.
         if let Some(p) = resolved {
@@ -17150,14 +17175,9 @@ mod resolve_gh_binary_tests {
         std::fs::set_permissions(&bad, perms).unwrap();
         assert!(is_executable(&bad));
 
-        let prev_path = std::env::var("PATH").ok();
-        std::env::set_var("PATH", tmp.path());
+        let _g = scoped_prepend_path(tmp.path());
         let resolved = resolve_gh_binary();
-        if let Some(p) = prev_path {
-            std::env::set_var("PATH", p);
-        } else {
-            std::env::remove_var("PATH");
-        }
+        drop(_g);
         // Either None (no other gh) or some other path — never the broken one.
         if let Some(p) = resolved {
             assert_ne!(
@@ -17183,20 +17203,16 @@ mod resolve_gh_binary_tests {
         let good = good_dir.path().join("gh");
         make_executable(&good);
 
-        let combined_path = format!(
+        // Prepend BOTH dirs so the broken one is hit first, then the good
+        // one. Order matters: broken_dir wins on lookup order.
+        let combined = std::path::PathBuf::from(format!(
             "{}:{}",
             broken_dir.path().display(),
             good_dir.path().display()
-        );
-        let prev_path = std::env::var("PATH").ok();
-        std::env::set_var("PATH", &combined_path);
-        let resolved = resolve_gh_binary();
-        if let Some(prev) = prev_path {
-            std::env::set_var("PATH", prev);
-        } else {
-            std::env::remove_var("PATH");
-        }
-        let resolved = resolved.expect("should fall back to the working gh");
+        ));
+        let _g = scoped_prepend_path(&combined);
+        let resolved = resolve_gh_binary().expect("should fall back to the working gh");
+        drop(_g);
         assert_eq!(
             std::fs::canonicalize(&resolved).unwrap(),
             std::fs::canonicalize(&good).unwrap()
@@ -17253,16 +17269,12 @@ mod session_root_resolution_tests {
         (tmp, main, linked)
     }
 
-    /// BUG-75: from inside a linked worktree, find_main_worktree_root
+    /// BUG-75: from inside a linked worktree, main_worktree_root_from
     /// returns the MAIN worktree path, not the linked one.
     #[test]
     fn main_worktree_root_resolves_from_linked() {
         let (_tmp, main, linked) = fixture_with_linked_worktree();
-        let prev = std::env::current_dir().unwrap();
-        std::env::set_current_dir(&linked).unwrap();
-        let resolved = find_main_worktree_root();
-        std::env::set_current_dir(prev).unwrap();
-        let resolved = resolved.unwrap();
+        let resolved = main_worktree_root_from(&linked);
         assert_eq!(
             std::fs::canonicalize(&resolved).unwrap(),
             std::fs::canonicalize(&main).unwrap(),
@@ -17272,15 +17284,11 @@ mod session_root_resolution_tests {
     }
 
     /// BUG-75: from the main worktree, the helper returns the same path
-    /// `find_project_root` does (no regression).
+    /// (no regression).
     #[test]
     fn main_worktree_root_returns_main_unchanged() {
         let (_tmp, main, _linked) = fixture_with_linked_worktree();
-        let prev = std::env::current_dir().unwrap();
-        std::env::set_current_dir(&main).unwrap();
-        let resolved = find_main_worktree_root();
-        std::env::set_current_dir(prev).unwrap();
-        let resolved = resolved.unwrap();
+        let resolved = main_worktree_root_from(&main);
         assert_eq!(
             std::fs::canonicalize(&resolved).unwrap(),
             std::fs::canonicalize(&main).unwrap()
