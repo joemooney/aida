@@ -11089,6 +11089,27 @@ fn session_end(id_query: Option<&str>, yes: bool, force: bool, purge_cc: bool) -
         }
     }
 
+    // BUG-80: drop the planned-cluster manifest for this session, if any.
+    // Manifests are runtime per-session state — pinning them around past
+    // a closed lease leaks files into `.aida/sessions/`. Quiet on missing.
+    // trace:BUG-80 | ai:claude
+    let manifest_target =
+        session_manifest::manifest_path(&project_root, &target.id);
+    if manifest_target.exists() {
+        match std::fs::remove_file(&manifest_target) {
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
+                eprintln!(
+                    "{} could not delete session manifest at {}: {}",
+                    "Warning:".yellow().bold(),
+                    manifest_target.display(),
+                    e
+                );
+            }
+        }
+    }
+
     // STORY-56: drop the session activity log. Quiet on missing — short
     // sessions that never recorded any activity won't have one. We've
     // already aggregated entries into the project-level role(s) above.
@@ -12401,6 +12422,48 @@ fn session_prune_orphans(dry_run: bool, yes: bool) -> Result<()> {
         removed,
         if removed == 1 { "" } else { "s" }
     );
+
+    // BUG-80: also sweep planned-cluster manifests for leases that no
+    // longer exist in this project. Same `--orphans` flag, same dry-run /
+    // yes semantics. trace:BUG-80 | ai:claude
+    if let Ok(project_root) = find_project_root() {
+        let manifests = session_manifest::list_all_with_paths(&project_root);
+        let sessions_dir = project_root.join(".aida").join("sessions");
+        let orphan_manifests: Vec<_> = manifests
+            .into_iter()
+            .filter(|(_, m)| {
+                !sessions_dir
+                    .join(format!("{}.toml", m.session_id))
+                    .exists()
+            })
+            .collect();
+        if !orphan_manifests.is_empty() {
+            println!();
+            println!(
+                "Found {} orphan session manifest{}:",
+                orphan_manifests.len(),
+                if orphan_manifests.len() == 1 { "" } else { "s" }
+            );
+            for (p, _) in &orphan_manifests {
+                println!("  {}", p.display().to_string().dimmed());
+            }
+            if !dry_run {
+                let mut mremoved = 0usize;
+                for (p, _) in &orphan_manifests {
+                    if std::fs::remove_file(p).is_ok() {
+                        mremoved += 1;
+                    }
+                }
+                println!(
+                    "{} removed {} orphan manifest{}",
+                    "✓".green(),
+                    mremoved,
+                    if mremoved == 1 { "" } else { "s" }
+                );
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -24876,7 +24939,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 .parent()
                 .map(|p| p.to_path_buf())
                 .unwrap_or_else(|| std::path::PathBuf::from("."));
-            let active_manifests = session_manifest::list_all(&project_root_for_manifests);
+            let all_manifests = session_manifest::list_all(&project_root_for_manifests);
             let viewer_session_id = self_lease_for_routing
                 .as_ref()
                 .map(|l| l.id.clone())
@@ -25116,7 +25179,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 if let Some(req) = req {
                     if let Some(spec_id) = req.spec_id.as_deref() {
                         if let Some(other) = session_manifest::planned_by_other(
-                            &active_manifests,
+                            &all_manifests,
                             spec_id,
                             &viewer_session_id,
                         ) {
