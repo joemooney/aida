@@ -461,14 +461,15 @@ mod tests {
         let objects_root = dir.path().join("objects");
 
         // Seq 1000 → shard 000, seq 1001 → shard 001
+        let sep = std::path::MAIN_SEPARATOR;
         let mut req_a = Requirement::new("Shard boundary A".into(), "desc".into());
         req_a.spec_id = Some("FR-1000".into());
         let path_a = write_object(&objects_root, &req_a).unwrap();
-        assert!(path_a.to_str().unwrap().contains("/000/"));
+        assert!(path_a.to_str().unwrap().contains(&format!("{sep}000{sep}")));
 
         let mut req_b = Requirement::new("Shard boundary B".into(), "desc".into());
         req_b.spec_id = Some("FR-1001".into());
         let path_b = write_object(&objects_root, &req_b).unwrap();
-        assert!(path_b.to_str().unwrap().contains("/001/"));
+        assert!(path_b.to_str().unwrap().contains(&format!("{sep}001{sep}")));
     }
 }
