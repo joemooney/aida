@@ -1,0 +1,54 @@
+id: 019e14f2-6476-7921-ba83-c439f7a5a969
+spec_id: STORY-91
+agreed_id: STORY-91
+title: '/aida-review skill: dual of /aida-pr — walks review checklist, merges if green, marks items Completed'
+description: |
+  After PR-3/4/5/6/7 review cycles, the reviewer's prompt has stabilized into a repeatable pattern (same shape as the implementer's `/aida-pr`). Codify as a skill.
+
+  ## What /aida-review does
+
+  1. **Identify PR target**: from cwd's lease (`aida session show`) — scope should be PR-N. Confirm with user.
+  2. **Generate checklist**: `aida review prompt --pr N` — pulls per-spec acceptance sections + diff hints (STORY-67).
+  3. **Walk each spec**: for each item in the checklist:
+     - Read the diff against acceptance criteria
+     - Run the per-spec test plan
+     - Post verdict: ✅ PASS / ⚠️ PARTIAL / ❌ FAIL with evidence
+  4. **Mechanical fixes**: cargo fmt, lints, simple test fragility — fix-forward as small commits on the PR's branch (e.g., the cargo fmt + cfg-unix-test commits from PR-7's review).
+  5. **Verify CI**: `gh run watch` for the latest run. Block merge until green.
+  6. **Summary review**: post a consolidated comment with per-spec verdicts.
+  7. **Merge if green**: confirm with user, then `gh pr merge N --squash`.
+  8. **Mark items Completed**: walk the spec list from the PR body, `aida edit X --status completed` for each. Or post a single `aida queue done` if items are still queued.
+  9. **End the session**: prompt user that the reviewer session can now be ended (the user does the actual `aida session end` from outside the worktree).
+
+  ## Slash-command surface
+
+  ```
+  /aida-review              # from inside a reviewer session worktree, auto-detect PR-N
+  /aida-review --pr 7       # explicit
+  /aida-review --merge-only # skip the walk, just merge + mark (when user has already reviewed manually)
+  ```
+
+  ## Composes with
+
+  - /aida-pr (STORY-80) — sister skill on the implementer side; same authoring style
+  - STORY-67 (review prompt --pr) — generates the per-spec checklist; /aida-review consumes its output
+  - TASK-61 (pre-flight fmt check) — once shipped on /aida-pr side, fmt drift is impossible at PR-create; /aida-review only deals with semantic review
+  - STORY-90 (auto-queue PR for reviewer at create-time) — once that ships, /aida-pickup naturally surfaces PR-N to the reviewer; /aida-review starts from there
+
+  ## Acceptance
+
+  - [ ] `.claude/skills/aida-review.md` + matching command file
+  - [ ] Auto-detects PR-N from active session lease
+  - [ ] Runs `aida review prompt --pr N` and walks per-spec
+  - [ ] Posts verdict comment per spec (✅/⚠️/❌)
+  - [ ] Pauses for user confirmation before `gh pr merge`
+  - [ ] After merge: iterates `aida edit X --status completed` for all PR'd specs
+  - [ ] Handles CI red: waits for `gh run watch` or proceeds with user confirmation if CI is unrelated red
+  - [ ] Tested against PR-7's pattern (15 specs, 1 partial, mechanical fmt+test fixes)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T02:51:30.294721869Z
+modified_at: 2026-05-11T02:51:30.294721869Z
+req_type: Story
