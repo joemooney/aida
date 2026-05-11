@@ -47,15 +47,24 @@ aida review prompt --pr <N> --write .aida/review-prompt-pr-<N>.md
 
 `aida review prompt` walks the PR's commit range, extracts every `(REQ-ID)` trailer, loads each spec's acceptance criteria + a diff hint, and emits a structured checklist. Read the generated file; that's the worksheet.
 
-**Dim already-Completed specs.** Before walking the checklist, check each spec's current status:
+**Dim already-Completed specs — but only when they weren't subject of a commit in this PR.** Before walking the checklist, check each spec's current status AND whether it's the subject of a commit in `<base>..HEAD`:
 
 ```bash
+# 1. Current status
 for spec in <spec-ids-from-checklist>; do
     aida show "$spec" | grep '^Status:'
 done
+
+# 2. Is this spec the subject of a commit in this PR's range?
+# A commit "subjects" a spec if the spec_id appears in the trailing parens.
+git log --pretty=format:%s <base>..HEAD | grep -oE '\([^)]+\)$' | grep -oE '[A-Z]+(-[A-Z0-9_]+)?-[0-9]+' | sort -u
 ```
 
-A spec whose status is already `Completed` typically appears as a build dependency referenced by a later trailer (e.g., STORY-54 trailing in PR-8's commits because PR-8 depended on it, even though STORY-54 itself shipped in PR-7). These don't need a fresh verdict — note them in the review file as **informational** ("STORY-54 [Completed, shipped earlier] — referenced as build dependency") and skip the verdict prompt for them. Only specs that are still Approved / In-Progress / Done need a real PASS / PARTIAL / FAIL call. (TASK-72 polish)
+A spec gets the **informational** treatment ("STORY-54 [Completed, shipped earlier] — referenced as build dependency") if BOTH:
+- its current status is `Completed`, AND
+- it does NOT appear in any subject in `<base>..HEAD`.
+
+If the spec IS the subject of a commit in this PR — even if pre-marked Completed by /aida-implement's eager status update — a real PASS / PARTIAL / FAIL verdict is still required. The two-signal check prevents the failure mode where every spec gets marked Completed pre-PR (because /aida-implement does that today; the proper deferral lives behind STORY-86) and the whole checklist degenerates into informational rows. (TASK-72 polish — items 4 & 6)
 
 If `aida review prompt` returns "no specs found" — the PR has commits without `(REQ-ID)` trailers. STOP and ask the user how to attribute the diff before continuing.
 
@@ -141,15 +150,18 @@ gh pr merge <N> --squash --delete-branch=false
 
 Keep the branch around so a follow-up `aida session end` on the implementer side still resolves naming cleanly. (Branch deletion is the user's call, not the reviewer's.)
 
-### 9. Mark every covered spec Completed
+### 9. Mark every covered spec Completed (when not already)
 
-For each `REQ-ID` from the checklist whose verdict was ✅ PASS:
+For each `REQ-ID` from the checklist whose verdict was ✅ PASS, mark Completed only if it isn't already (eager-marking by /aida-implement is the norm today, so most will be no-ops — that's fine):
 
 ```bash
+# Idempotent — `aida edit` with the same status is a no-op
 aida edit <REQ-ID> --status completed
 ```
 
 For ⚠️ PARTIAL or ❌ FAIL: leave the spec In Progress (or move it to a follow-up bug). Don't mark partials Completed — the queue is the truth.
+
+Informational rows (already-Completed AND not the subject of a commit in this PR) are skipped — they're not this PR's responsibility.
 
 If the PR carried a `Review PR-N:` story (from STORY-66's auto-queue), mark THAT story Completed too:
 

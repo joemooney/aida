@@ -23627,6 +23627,15 @@ fn generate_review_prompt(
 
     let mut missing: Vec<String> = Vec::new();
     for id in &spec_ids {
+        // TASK-72 polish: PR/MR pseudo-IDs (e.g., `PR-9`, `MR-42`) aren't
+        // real specs in the store — they're forge references that can
+        // sneak into the trailer-extracted list. Skip them silently so
+        // the review prompt doesn't lead with a misleading
+        // "PR-9 — (not found in store)" row before the real spec list.
+        // trace:TASK-72 | ai:claude
+        if parse_review_scope(id).is_some() {
+            continue;
+        }
         let req = store
             .requirements
             .iter()
