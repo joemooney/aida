@@ -1,0 +1,129 @@
+id: 019e1559-1540-7c30-930d-68ff27ab1ebb
+spec_id: STORY-99
+agreed_id: STORY-99
+title: 'Workflow dashboard TUI: human-in-the-loop UI for orchestration transitions'
+description: |
+  The human-in-the-loop UI layer for EPIC-23's orchestration engine. STORY-92/93/94 make transitions programmatic; this story makes them visible and pickable when the human is the decider.
+
+  User vision 2026-05-11: "a little TUI that I exit out to from my claude code session when I /aida-pr or complete a review and it can allow me to easily launch back into the next activity."
+
+  ## When the TUI appears
+
+  Three entry points, all at natural transition moments (not a background process, not an always-on dashboard):
+
+  1. **Explicit invocation**: `aida workflow` (or `aida tui` — naming TBD) from any shell
+  2. **Post-action handoff**: `/aida-pr` and `/aida-review` skills, after their final action (gh pr create / gh pr merge), exec the TUI instead of returning to plain shell. User gets the dashboard at exactly the moment they're deciding "what's next?"
+  3. **Post-session-end**: `aida session end` optionally launches into the TUI (off by default; opt-in via flag or env)
+
+  ## Display layout (rough)
+
+  ```
+  ╔═══════════════════════════════════════════════════════════════════════╗
+  ║  αιδα · workflow dashboard                              2026-05-11 14:23 ║
+  ╠═══════════════════════════════════════════════════════════════════════╣
+  ║  ┌─ Active sessions ─────────────────────────────────────────────────┐ ║
+  ║  │ ● 019e1300  EPIC-20  batch9  implementer  ⏱ 3h    BUG-73 in-prog │ ║
+  ║  │ ◐ 019e1510  PR-8     pr-8    reviewer     💤 1h idle             │ ║
+  ║  └───────────────────────────────────────────────────────────────────┘ ║
+  ║                                                                       ║
+  ║  ┌─ Open PRs ────────────────────────────────────────────────────────┐ ║
+  ║  │ #9  EPIC-20 batch 9  ⏳ awaiting review  CI: ✓✓✓  12 items, yours│ ║
+  ║  │ #2  aida-tutor v0.2  💬 review requested                          │ ║
+  ║  └───────────────────────────────────────────────────────────────────┘ ║
+  ║                                                                       ║
+  ║  ┌─ Queue heads ─────────────────────────────────────────────────────┐ ║
+  ║  │ implementer  ⏵ BUG-73   Structural .gitignore fix      [@EPIC-20]│ ║
+  ║  │              + 8 more   (run `aida queue list` to see)            │ ║
+  ║  │ reviewer     ⏵ STORY-97 Review PR-9: EPIC-20 batch 9              │ ║
+  ║  └───────────────────────────────────────────────────────────────────┘ ║
+  ║                                                                       ║
+  ║  ┌─ Recent on main (last 5) ─────────────────────────────────────────┐ ║
+  ║  │ 14:11  PR-8 squash: session lifecycle + /aida-review              │ ║
+  ║  │ 09:22  PR-7 squash: cache freshness + 21 specs                    │ ║
+  ║  │  …                                                                │ ║
+  ║  └───────────────────────────────────────────────────────────────────┘ ║
+  ║                                                                       ║
+  ║  ┌─ What next? ──────────────────────────────────────────────────────┐ ║
+  ║  │ [1] ▶  Resume implementer (019e1300, BUG-73 in-progress)         │ ║
+  ║  │ [2] ⏵  Start review session for PR-9 (fresh)                     │ ║
+  ║  │ [3] ⏵  Start next implementer batch (batch10, top: TASK-67)      │ ║
+  ║  │ [4] ⏵  Resume idle reviewer (019e1510, no PR — end?)             │ ║
+  ║  │ [5] ⌛  Wait for CI / PR merge, exit                              │ ║
+  ║  │ [6] 🚪 Exit to shell                                              │ ║
+  ║  └───────────────────────────────────────────────────────────────────┘ ║
+  ║   ←→ navigate  ↵ select  q quit                                       ║
+  ╚═══════════════════════════════════════════════════════════════════════╝
+  ```
+
+  Context-aware menu — the options surfaced depend on current state:
+  - No active sessions, no open PRs → "Start implementer for what scope?" with EPIC list
+  - One implementer mid-flight, no PR yet → "Resume" + "End early to switch context"
+  - PR open, no reviewer yet → "Start review session" highlighted
+  - Stuck PR (CI red, no reviewer claim) → "Diagnose CI failure"
+
+  ## Action semantics
+
+  The TUI is a UI shell on top of the existing CLI. When the user picks an option, the TUI:
+
+  1. Prints the equivalent shell commands to stderr (so the user sees the audit trail)
+  2. Emits eval-able shell code to stdout (cd, aida session start, role enter, etc.)
+  3. Shell function in `aida dev shell-init` is extended to eval the TUI's stdout (same pattern as role enter / dev activate)
+  4. User lands in the right shell state to run `claude` (or the TUI execs claude directly via posix_spawn for the implementer/reviewer flows)
+
+  This means TUI actions actually mutate the user's shell — cd to worktree, env vars set, role entered — not just printed instructions.
+
+  ## Data sources (read-only)
+
+  - `.aida/sessions/*.toml` — active leases
+  - `.aida/sessions/*.manifest.toml` — session cluster intent (STORY-98)
+  - `aida queue list --all` — queue state
+  - `aida history` — recent activity
+  - `gh pr list --state open` — open PRs (with caching; rely on STORY-93's daemon if running, else direct query with timeout)
+  - `git log main..` — recent commits on main
+
+  All reads. The TUI doesn't write any aida data directly — it composes CLI commands the user picks.
+
+  ## Composes with
+
+  - **STORY-92** (auto-spawn on PR merge) — TUI's menu options use the same auto-spawn helpers
+  - **STORY-93** (aida watch daemon) — TUI reads daemon's cached state for sub-100ms render; falls back to direct queries when daemon not running
+  - **STORY-94** (auto-spawn reviewer at PR-create) — alternative trigger; TUI is the explicit/non-auto path
+  - **STORY-96** (decision policy) — TUI's "What next?" menu is the rendering of that policy
+  - **STORY-98** (session manifest) — TUI shows the scheduled cluster, not just current item
+  - **TASK-73** (aida pull verbose output) — post-pull summary becomes a section in the dashboard
+  - **TASK-69** (red errors) — TUI uses the same color scheme for consistency
+
+  ## Implementation hints
+
+  - **Framework**: `ratatui` (active fork of tui-rs) + `crossterm` (cross-platform terminal)
+  - **Layout**: vertical split via ratatui's Layout::default().direction(Vertical).constraints([...])
+  - **Async polling**: tokio for gh queries with timeout; non-blocking
+  - **Graceful degradation**:
+    - Daemon down → render with "(daemon offline; data may be stale)" footer
+    - gh missing → PR section shows install-instructions instead of data
+    - No tty (running over pipe / script) → fall back to plain-text menu (existing /aida-pr / /aida-review style)
+    - Tiny terminal (<60 cols) → reduce sections to compact one-line summaries
+
+  ## Why low priority
+
+  Premature without the EPIC-23 substrate (daemon, auto-spawn, manifest). Building the TUI first means the actions it offers (Resume, Start, End) would each be plain shell commands the user could type anyway. The TUI's value compounds dramatically once the substrate is in place — then it's "1 keypress vs 8 typed commands."
+
+  Estimate this lands 6-12 months out at current cadence. File now so the design space is captured; revisit when EPIC-23's first 2-3 stories ship.
+
+  ## Acceptance
+
+  - [ ] `aida workflow` command launches the TUI
+  - [ ] `/aida-pr` and `/aida-review` post-action hand off to TUI (off by default; opt-in via flag or `AIDA_TUI_HANDOFF=true` env)
+  - [ ] Renders the 5 sections (active sessions, open PRs, queue heads, recent main, menu)
+  - [ ] Context-aware menu surfaces the most-likely-next actions
+  - [ ] Action selection emits eval-able shell code that mutates user's shell state
+  - [ ] Shell function (`aida dev shell-init`) extended to eval TUI output
+  - [ ] Graceful degradation: daemon offline, gh missing, no tty, tiny terminal
+  - [ ] Tested with: fresh state, mid-implementer-flow, mid-review-flow, multiple concurrent sessions, PR-merged + queue continues
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T04:43:40.224387365Z
+modified_at: 2026-05-11T04:43:40.224387365Z
+req_type: Story
