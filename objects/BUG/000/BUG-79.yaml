@@ -1,0 +1,46 @@
+id: 019e15a8-ca87-7633-91ba-1058addde789
+spec_id: BUG-79
+agreed_id: BUG-79
+title: 'BUG-74 follow-up: is_executable check returns true but spawn fails with ENOENT — second-level verification needed'
+description: |
+  Caught 2026-05-11 — BUG-74's fix landed in PR-10. First production use surfaced a NEW failure mode:
+
+  ```
+  ⚠ auto-queue: `gh pr list` failed for branch `epic-20-batch10` (spawn "/usr/bin/gh": No such file or directory (os error 2)) — no reviewer story filed
+  ```
+
+  BUG-74's PATH walk + executable check successfully identified `/usr/bin/gh` as gh's location. Then `Command::new("/usr/bin/gh").arg(...).spawn()` errored with ENOENT. The `is_executable` check passed but the actual exec syscall didn't find the file.
+
+  ## Possible root causes (need user-side diagnostic)
+
+  1. **gh was uninstalled since detection ran**: bash's hash table cached `/usr/bin/gh` from an earlier session; the actual file no longer exists. `which gh` may still report the stale path. BUG-74's PATH walk + is_executable check may also be hitting cached/stale path info. `ls -la /usr/bin/gh` would confirm absence.
+
+  2. **is_executable false-positive**: returns true for a path that satisfies "exists in some sense" (e.g., dangling symlink, special file) but isn't actually a runnable binary. Need stricter check — e.g., `metadata.is_file() && executable_bit_set && !metadata.is_symlink_to_nonexistent`.
+
+  3. **PATH walk caching**: BUG-74's implementation might cache the resolved path across invocations within the same Rust process. If gh's location changes between cache-fill and use, error happens.
+
+  ## Fix
+
+  Add a second-level verification: after `is_executable` returns true, do a lightweight `Command::new(path).arg("--version").output()` with a 2s timeout. If THAT fails with ENOENT, fall back to the next candidate or treat as "gh truly missing."
+
+  Or simpler: catch the ENOENT in the actual spawn, and downgrade the message from "gh pr list failed" to "gh detected at <path> but spawn failed (stale install? broken symlink?)". Suggests the diagnostic step to the user.
+
+  ## Composes with
+
+  - BUG-74 (PATH walk + absolute-path fallback) — this is its hardening followup
+  - STORY-90 (auto-queue at PR-create) — affected; STORY-90's success depends on gh detection being accurate
+
+  ## Acceptance
+
+  - [ ] When `is_executable(path) && !can_spawn(path)`, error message names BOTH the detected path and the spawn-fail reason (not just one)
+  - [ ] Fallback to next candidate when primary's spawn fails (don't give up at first ENOENT)
+  - [ ] AIDA_DEBUG_GH=1 prints both "found at X" AND "spawn at X failed: Y" so the user has full diagnostic
+  - [ ] Tested: scenario where /usr/bin/gh exists but is a stale symlink → falls back to /usr/local/bin/gh
+  - [ ] Tested: scenario where ALL paths fail → clear "gh detected but unrunnable" message, not "gh not on PATH"
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T06:10:43.975707746Z
+modified_at: 2026-05-11T06:10:43.975707746Z
+req_type: Bug
