@@ -1919,10 +1919,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             if *tree {
                 match backend.get_requirement_by_spec_id(id)? {
                     Some(root) => {
-                        record_role_activity(
-                            root.spec_id.as_deref().unwrap_or(id),
-                            "show",
-                        );
+                        record_role_activity(root.spec_id.as_deref().unwrap_or(id), "show");
                         render_tree(&backend, &root, *depth)?;
                     }
                     None => {
@@ -1933,10 +1930,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             }
             match backend.get_requirement_by_spec_id(id)? {
                 Some(req) => {
-                    record_role_activity(
-                        req.spec_id.as_deref().unwrap_or(id),
-                        "show",
-                    );
+                    record_role_activity(req.spec_id.as_deref().unwrap_or(id), "show");
                     println!("{}: {}", "ID".bold(), req.display_id());
                     // Only show Agreed ID / Origin ID when they actually
                     // differ from the canonical display id — otherwise it's
@@ -7654,8 +7648,7 @@ fn doctor_verify_relationships(repair: bool, yes: bool) -> Result<()> {
 
     // First pass: collect every uuid present in the store + the spec
     // mapping for nicer dangling-edge reporting.
-    let all_uuids: std::collections::HashSet<uuid::Uuid> =
-        reqs.iter().map(|r| r.id).collect();
+    let all_uuids: std::collections::HashSet<uuid::Uuid> = reqs.iter().map(|r| r.id).collect();
     let _spec_by_uuid: std::collections::HashMap<uuid::Uuid, String> = reqs
         .iter()
         .filter_map(|r| r.spec_id.as_ref().map(|s| (r.id, s.clone())))
@@ -7672,10 +7665,7 @@ fn doctor_verify_relationships(repair: bool, yes: bool) -> Result<()> {
     }
     let mut dangling: Vec<Dangling> = Vec::new();
     for req in &reqs {
-        let source_spec = req
-            .spec_id
-            .clone()
-            .unwrap_or_else(|| req.id.to_string());
+        let source_spec = req.spec_id.clone().unwrap_or_else(|| req.id.to_string());
         for rel in &req.relationships {
             if !all_uuids.contains(&rel.target_id) {
                 dangling.push(Dangling {
@@ -11360,18 +11350,11 @@ fn session_leases(verbose: bool, all: bool) -> Result<()> {
         .map(|l| {
             let worktree_exists = l.worktree_path.exists();
             let live_in_worktree = live.iter().find(|s| {
-                !s.stale_cwd
-                    && (s.cwd == l.worktree_path
-                        || s.cwd.starts_with(&l.worktree_path))
+                !s.stale_cwd && (s.cwd == l.worktree_path || s.cwd.starts_with(&l.worktree_path))
             });
-            let age_hours = now
-                .signed_duration_since(l.started_at)
-                .num_hours();
-            let state = classify_lease_state(
-                worktree_exists,
-                live_in_worktree.is_some(),
-                age_hours,
-            );
+            let age_hours = now.signed_duration_since(l.started_at).num_hours();
+            let state =
+                classify_lease_state(worktree_exists, live_in_worktree.is_some(), age_hours);
             (l.clone(), state, live_in_worktree.map(|s| s.pid))
         })
         .collect();
@@ -11390,7 +11373,10 @@ fn session_leases(verbose: bool, all: bool) -> Result<()> {
     // TASK-55: adds a `state` column when --all is set. TASK-56: adds
     // `pid` + `cc-session` columns when --verbose is set.
     // trace:STORY-65, TASK-55, TASK-56 | ai:claude
-    let mut header = format!("{:<14} {:<20} {:<18} {:<14}", "id", "scope", "branch", "role");
+    let mut header = format!(
+        "{:<14} {:<20} {:<18} {:<14}",
+        "id", "scope", "branch", "role"
+    );
     if all {
         header.push_str(&format!(" {:<10}", "state"));
     }
@@ -11418,9 +11404,7 @@ fn session_leases(verbose: bool, all: bool) -> Result<()> {
             row.push_str(&format!(" {:<10}", colored));
         }
         if verbose {
-            let pid_col = pid
-                .map(|p| p.to_string())
-                .unwrap_or_else(|| "-".into());
+            let pid_col = pid.map(|p| p.to_string()).unwrap_or_else(|| "-".into());
             let cc = cc_session_id_for_worktree(&l.worktree_path)
                 .map(|s| s.chars().take(20).collect::<String>())
                 .unwrap_or_else(|| "-".into());
@@ -12692,11 +12676,7 @@ mod statusline_tests {
     /// Pathological: suffix alone overflows → just render scope-truncated.
     #[test]
     fn sess_label_pathological_long_suffix() {
-        let got = sess_label_with_suffix(
-            "EPIC-20",
-            "@really-long-branch-name-overflow",
-            10,
-        );
+        let got = sess_label_with_suffix("EPIC-20", "@really-long-branch-name-overflow", 10);
         // Suffix is dropped entirely; falls back to scope-only truncation.
         assert!(!got.contains("@really"));
     }
