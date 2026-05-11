@@ -1,0 +1,62 @@
+id: 019e14fa-2873-7752-be6b-c49569e3be9d
+spec_id: TASK-65
+agreed_id: TASK-65
+title: 'aida rel list: global listing + --type / --target / --dangling filters (parallel to aida list)'
+description: |
+  Caught 2026-05-11 — user observed `aida rel list <id>` is point-query only. No global "show me edges across the graph" command. Several useful slices missing.
+
+  ## Today's surface
+
+  ```
+  aida rel list <id>            # outgoing edges from <id>
+  aida show <id> --tree         # descendants of <id> as a tree (STORY-62)
+  ```
+
+  ## Desired additions
+
+  ```
+  aida rel list                              # all edges in the graph (paginated; default-hides terminal-status sources)
+  aida rel list --type child                 # filter by edge type
+  aida rel list --target EPIC-20             # incoming edges (what points AT EPIC-20)
+  aida rel list --source EPIC-20             # explicit form of today's positional arg
+  aida rel list --dangling                   # edges whose target UUID doesn't resolve (BUG-53 territory)
+  aida rel list --type child --dangling      # combine: dangling child edges only
+  ```
+
+  ## Output format
+
+  Same columns as today's per-req listing, but with both endpoints visible:
+
+  ```
+  FROM           TYPE        TO              TARGET-TITLE (truncated)
+  STORY-72       child       EPIC-13         Role-routed queue + producer/consumer pickup loop
+  BUG-67         child       EPIC-20         aida session start: scoped concurrent sessions ...
+  EPIC-20        parent      STORY-92        Auto-spawn next-batch implementer ...
+  TASK-51        ⚠ dangling  019e0fdc-...    (target deleted)
+  ```
+
+  Dangling edges shown with ⚠ marker. `--dangling` filters to just those.
+
+  ## Composes with
+
+  - BUG-53 (rel list shows dangling target uuid '019e0fdc...') — already fixed for point-query rendering; this extends the surface
+  - TASK-58 (doctor verify-relationships --repair) — `aida rel list --dangling` is the visualization layer; --repair is the action
+  - TASK-64 (aida list hides terminal-status by default) — same family: default to actionable, --all for archive. `aida rel list` should hide edges where BOTH endpoints are Completed/Rejected (archive of archive).
+  - TASK-52 (queue list --scope filter) — `aida rel list --scope EPIC-20` could filter to edges where source OR target is parented under EPIC-20
+
+  ## Acceptance
+
+  - [ ] `aida rel list` (no args) shows global edge listing
+  - [ ] `--type <T>` filter (child, parent, duplicate, verifies, verified-by, references, custom)
+  - [ ] `--target <id>` shows incoming edges (today's positional is outgoing-from)
+  - [ ] `--source <id>` is explicit form of positional
+  - [ ] `--dangling` filters to edges with unresolved target UUID
+  - [ ] Default hides edges between terminal-status reqs; --all shows everything
+  - [ ] Composable filters work in combination (e.g., `--type child --dangling`)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T02:59:59.219030843Z
+modified_at: 2026-05-11T02:59:59.219030843Z
+req_type: Task
