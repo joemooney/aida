@@ -10133,13 +10133,55 @@ fn session_start(
         .ok()
         .or_else(|| std::env::var("USER").ok())
         .unwrap_or_else(|| "unknown".to_string());
-    // STORY-65: inherit the calling shell's role (if any) into the lease so
-    // `aida session leases`, `aida session show`, and tooling inside the
-    // worktree all know which persona this session was started under.
-    // trace:STORY-65 | ai:claude
-    let inherited_role = std::env::var("AIDA_SESSION_ROLE")
+    // STORY-65 + TASK-67: role resolution by INTENT, not blind env
+    // inheritance. Order:
+    //   1. --role <name>             explicit override always wins
+    //   2. scope-derived default     PR-N/MR-N → reviewer; else → implementer
+    //   3. $AIDA_SESSION_ROLE        env fallback when no scope default fires
+    //                                (which currently never happens — every
+    //                                scope shape has a default — but kept as
+    //                                a safety net for future scope kinds)
+    //   4. None                      no role recorded
+    //
+    // The earlier (pre-TASK-67) behavior was step 3 only: a reviewer shell
+    // starting an EPIC session recorded reviewer, which then misrouted the
+    // queue/activity surfaces while real implementer work happened inside.
+    // When the env and scope-default disagree we warn (don't fail) — the
+    // user might genuinely want the env's role (e.g. an architect shell
+    // starting an EPIC; the implementer default would be wrong for them).
+    // trace:TASK-67 | ai:claude
+    let env_role = std::env::var("AIDA_SESSION_ROLE")
         .ok()
         .filter(|s| !s.trim().is_empty());
+    let scope_default_role: Option<&'static str> = if review_target.is_some() {
+        Some("reviewer")
+    } else {
+        Some("implementer")
+    };
+    let (inherited_role, role_origin) = if let Some(r) = launch_role.as_ref() {
+        (Some(r.clone()), "--role flag")
+    } else if let Some(d) = scope_default_role {
+        // Warn when env-role disagrees with the scope default — the user
+        // probably wanted the scope default but might have meant otherwise.
+        if let Some(env) = env_role.as_ref() {
+            if !env.eq_ignore_ascii_case(d) {
+                eprintln!(
+                    "{} active role {} doesn't match this scope's default {}.\n  \
+                     Recording: {} (scope-derived). Pass --role {} to override.",
+                    "⚠".yellow().bold(),
+                    format!("({})", env).cyan(),
+                    format!("({})", d).cyan(),
+                    d.cyan().bold(),
+                    env.cyan(),
+                );
+            }
+        }
+        (Some(d.to_string()), "scope-derived")
+    } else if let Some(env) = env_role.clone() {
+        (Some(env), "inherited")
+    } else {
+        (None, "")
+    };
 
     // STORY-73: capture the parent shell PID so `aida session end` (without
     // an arg) can resolve the right lease from the shell that ran `start`,
@@ -10199,7 +10241,7 @@ fn session_start(
             "  {}: {} {}",
             "role".bold(),
             r.cyan(),
-            "(inherited)".dimmed()
+            format!("({})", role_origin).dimmed()
         );
     }
 

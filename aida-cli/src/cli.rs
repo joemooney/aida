@@ -483,9 +483,13 @@ pub enum SessionCommand {
         #[clap(long, default_value = "bypassPermissions")]
         permission_mode: String,
 
-        /// Override the role recorded for the launched session
-        /// (defaults to $AIDA_SESSION_ROLE). Ignored without --launch.
-        /// trace:STORY-54 | ai:claude
+        /// Override the role recorded in this session's lease (and, when
+        /// `--launch` is set, the persona the launched Claude inherits).
+        /// Without `--role`, the role is derived from the scope:
+        /// `--owns PR-N` / `--owns MR-N` → reviewer; everything else →
+        /// implementer. `$AIDA_SESSION_ROLE` is a last-resort fallback
+        /// only — when it disagrees with the scope-derived default the
+        /// scope wins and a warning is printed. trace:TASK-67 | ai:claude
         #[clap(long)]
         role: Option<String>,
     },
