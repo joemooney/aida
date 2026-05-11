@@ -54,7 +54,31 @@ Collect a status table:
 
 If any non-`Completed` items exist, STOP and report them to the user with the matching commit SHAs. Ask: "ship anyway?" — `--force` (or explicit user confirmation) bypasses; default is to refuse.
 
-### 4. Attach an implementation summary comment per spec (STORY-81)
+### 4. Pre-flight: cargo fmt --check (Rust only) — trace:TASK-61
+
+Catch format drift here, not on CI. The "format-once-then-drift" pattern (TASK-57 → batch7) wastes a review cycle every time it happens.
+
+```bash
+# Detect a Rust workspace: Cargo.toml at the repo root.
+test -f Cargo.toml || skip_fmt_check
+cargo fmt --all -- --check
+```
+
+If `cargo fmt --all -- --check` exits non-zero:
+
+- STOP — do not push, do not run `gh pr create`, do not add comments per step 5
+- Report the drifted files (the diff output names them); typical fix is one command:
+  ```bash
+  cargo fmt --all
+  git add -u && git commit -m "[AI:claude] style: cargo fmt --all"
+  ```
+- Re-run `/aida-pr` once the fmt commit lands
+
+Skip silently for non-Rust projects (no `Cargo.toml` at the repo root). This is a Rust-toolchain check; it's not meaningful for pure-doc / pure-frontend repos.
+
+Bypass: `--skip-fmt-check` for the rare case where drift is intentional (e.g. an in-flight rustfmt config change). Default is to refuse.
+
+### 5. Attach an implementation summary comment per spec (STORY-81)
 
 For each `Completed` REQ-ID derived in step 2, run:
 
@@ -81,9 +105,9 @@ Mechanically derived — no creative writing required:
 
 Skip the comment for trivial fixes whose entire commit body is one line (typo, doc bump, lint) — the commit subject is the whole context.
 
-Once the PR opens (step 7) and the URL is known, revise the comments to include the actual PR URL via `aida comment edit`. This step is best-effort — if the user cancels before step 7, the comments still survive as useful "implemented via commit <sha>" markers.
+Once the PR opens (step 8) and the URL is known, revise the comments to include the actual PR URL via `aida comment edit`. This step is best-effort — if the user cancels before step 8, the comments still survive as useful "implemented via commit <sha>" markers.
 
-### 5. Push code + orphan store
+### 6. Push code + orphan store
 
 The orphan-branch store changes have to land before the PR is opened — otherwise reviewers see commits referencing requirements they can't `aida show`.
 
@@ -93,7 +117,7 @@ aida push                     # one-shot: code + orphan store
 
 If `aida push` errors with "branch behind main", surface the rebase prompt rather than carry on. (See TASK-54.)
 
-### 6. Draft the PR title + body
+### 7. Draft the PR title + body
 
 **Title format** (mirrors PR-3 through PR-6):
 
@@ -125,14 +149,14 @@ Derive `N` from the dominant `@EPIC-N` chip across the batch's requirements; der
 - [ ] <other smoke tests run during development>
 ```
 
-### 7. Confirm with the user
+### 8. Confirm with the user
 
 Show the title and the Summary paragraph. Ask explicitly: "Open this PR?"  The user can:
-- Accept (proceed to step 7)
+- Accept (proceed to step 9)
 - Edit the title/summary inline (revise and re-confirm)
 - Cancel (no `gh pr create` call)
 
-### 8. Open the PR
+### 9. Open the PR
 
 ```bash
 gh pr create --base <base> --head <branch> --title "<title>" --body "$(cat <<'EOF'
@@ -143,7 +167,7 @@ EOF
 
 Use HEREDOC for the body so markdown formatting and code fences survive intact.
 
-### 9. Output the URL
+### 10. Output the URL
 
 Print the URL `gh` returned, and optionally suggest `/aida-code-review` as the next step if the project has a reviewer role configured.
 
@@ -159,3 +183,4 @@ Print the URL `gh` returned, and optionally suggest `/aida-code-review` as the n
 - **Stale local branch**: remote has commits we don't. Surface a `git pull --rebase` prompt before pushing.
 - **Half-shipped batch**: one of the REQ-IDs is still `In Progress`. Report which commit references it and ask the user to either `aida edit <id> --status completed` first or drop the commit.
 - **REQ-ID typo**: `aida show` returns "not found". Report the commit SHA and the bad ID; ask the user to amend the commit or file the missing requirement.
+- **`cargo fmt --all --check` drift (TASK-61)**: refuse the PR and walk the user through `cargo fmt --all` + commit. Don't push the drifted code so CI doesn't have to catch it.

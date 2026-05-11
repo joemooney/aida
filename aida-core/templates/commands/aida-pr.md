@@ -15,9 +15,10 @@ Follow the workflow in `.claude/skills/aida-pr.md`:
 
 1. Walk `git log <base>..HEAD --oneline` and extract `(REQ-ID)` suffixes from each commit subject
 2. Verify every derived REQ-ID is in `Completed` status (pause and ask if any are still open)
-3. Push code + orphan store (`aida push` or equivalent two-step) before opening the PR
-4. Compose a PR title (`EPIC-N batch M: <one-line summary>`) and a body that mirrors recent PRs (per-spec sections, test plan)
-5. Show the title + first paragraph to the user and require sign-off
-6. Run `gh pr create` (HEREDOC body for proper formatting); print the URL
+3. Pre-flight `cargo fmt --all -- --check` on Rust workspaces — refuse to proceed if drift exists (TASK-61)
+4. Push code + orphan store (`aida push` or equivalent two-step) before opening the PR
+5. Compose a PR title (`EPIC-N batch M: <one-line summary>`) and a body that mirrors recent PRs (per-spec sections, test plan)
+6. Show the title + first paragraph to the user and require sign-off
+7. Run `gh pr create` (HEREDOC body for proper formatting); print the URL
 
 Pairs with `/aida-commit` (commit first, then PR) and `/aida-code-review` (reviewer side after the PR opens).

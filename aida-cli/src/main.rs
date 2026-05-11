@@ -719,6 +719,50 @@ fn handle_init_command(
     )
 }
 
+/// Append AIDA's runtime entries to the project's `.gitignore` if any are
+/// missing. Returns `true` if a new entry was written (so callers can echo
+/// "updated .gitignore"); `false` if everything was already covered or the
+/// file had to be created from scratch.
+///
+/// Entries:
+/// - `<worktree_dir>/` — the orphan-branch worktree (`.aida-store/` by default)
+/// - `.aida/session-env.sh` — STORY-52 per-session env shim. Missing it makes
+///   every post-STORY-52 `aida session end` trip BUG-67's untracked check and
+///   demand `--force`. trace:BUG-71 | ai:claude
+fn add_aida_gitignore_entries(cwd: &std::path::Path, worktree_dir: &str) -> Result<bool> {
+    use std::io::Write;
+    let gitignore_path = cwd.join(".gitignore");
+    let store_entry = format!(
+        "\n# AIDA distributed store (orphan branch worktree)\n{}/\n",
+        worktree_dir
+    );
+    let session_env_entry = "\n# AIDA session environment shim (STORY-52, gitignored per BUG-71)\n\
+         .aida/session-env.sh\n";
+
+    if !gitignore_path.exists() {
+        std::fs::write(
+            &gitignore_path,
+            format!("{}{}", store_entry, session_env_entry),
+        )?;
+        return Ok(false);
+    }
+
+    let content = std::fs::read_to_string(&gitignore_path)?;
+    let mut wrote = false;
+    let mut file = std::fs::OpenOptions::new()
+        .append(true)
+        .open(&gitignore_path)?;
+    if !content.contains(worktree_dir) {
+        file.write_all(store_entry.as_bytes())?;
+        wrote = true;
+    }
+    if !content.contains(".aida/session-env.sh") {
+        file.write_all(session_env_entry.as_bytes())?;
+        wrote = true;
+    }
+    Ok(wrote)
+}
+
 /// Workflow scaffolding shared by all `aida init` modes — builds skills,
 /// commands, hooks, MCP integration, etc. Called by both centralized and
 /// distributed init paths after their respective storage setup is complete.
@@ -3318,24 +3362,9 @@ fn handle_init_distributed_worktree(
         }
     }
 
-    // Add .aida-store to .gitignore on main branch
-    let gitignore_path = cwd.join(".gitignore");
-    let gitignore_entry = format!(
-        "\n# AIDA distributed store (orphan branch worktree)\n{}/\n",
-        worktree_dir
-    );
-    if gitignore_path.exists() {
-        let content = std::fs::read_to_string(&gitignore_path)?;
-        if !content.contains(worktree_dir) {
-            let mut file = std::fs::OpenOptions::new()
-                .append(true)
-                .open(&gitignore_path)?;
-            use std::io::Write;
-            file.write_all(gitignore_entry.as_bytes())?;
-        }
-    } else {
-        std::fs::write(&gitignore_path, gitignore_entry)?;
-    }
+    // Add .aida-store and runtime shims to .gitignore on main branch.
+    // trace:BUG-71 | ai:claude
+    add_aida_gitignore_entries(&cwd, worktree_dir)?;
 
     // Create .aida/config.toml
     std::fs::create_dir_all(&aida_dir)?;
@@ -3453,28 +3482,14 @@ fn handle_init_post_clone(
         git_ops::git_config_get("user.email").unwrap_or_else(|_| "aida@localhost".to_string());
     git_ops::configure_user(&store_path, &git_name, &git_email)?;
 
-    // Add .aida-store/ to root .gitignore (idempotent)
-    let gitignore_path = cwd.join(".gitignore");
-    let gitignore_entry = format!(
-        "\n# AIDA distributed store (orphan branch worktree)\n{}/\n",
-        worktree_dir
-    );
-    if gitignore_path.exists() {
-        let content = std::fs::read_to_string(&gitignore_path)?;
-        if !content.contains(worktree_dir) {
-            use std::io::Write;
-            let mut file = std::fs::OpenOptions::new()
-                .append(true)
-                .open(&gitignore_path)?;
-            file.write_all(gitignore_entry.as_bytes())?;
-            println!(
-                "  {} updated {}",
-                "Done".green(),
-                ".gitignore".white().bold()
-            );
-        }
-    } else {
-        std::fs::write(&gitignore_path, gitignore_entry)?;
+    // Add .aida-store/ and runtime shims to root .gitignore (idempotent).
+    // trace:BUG-71 | ai:claude
+    if add_aida_gitignore_entries(cwd, worktree_dir)? {
+        println!(
+            "  {} updated {}",
+            "Done".green(),
+            ".gitignore".white().bold()
+        );
     }
 
     // Write .aida/config.toml — same contents as a fresh init
@@ -10241,14 +10256,30 @@ fn session_start(
         // exec replaces this process; control doesn't return here on
         // success.
         // trace:STORY-54 | ai:claude
-        if cargo_target_dir.is_some() {
+        //
+        // TASK-63: before the exec, source `.aida/session-env.sh` into
+        // this process's env so the launched claude inherits
+        // CARGO_TARGET_DIR (and any future session-scoped exports).
+        // Without this, --launch defeats STORY-52's target-sharing —
+        // the user has no chance to run `source` between chdir and
+        // exec. The manual non-launch flow is unchanged: the user
+        // sources the shim themselves after `cd`.
+        // trace:TASK-63 | ai:claude
+        let env_shim = worktree_path.join(".aida").join("session-env.sh");
+        let applied_vars: Vec<String> = match std::fs::read_to_string(&env_shim) {
+            Ok(body) => apply_session_env_to_process(&body),
+            Err(_) => Vec::new(),
+        };
+        if !applied_vars.is_empty() {
             eprintln!();
             eprintln!(
                 "{} {}",
                 "ℹ".cyan(),
-                "tip: source .aida/session-env.sh in your shell to share \
-                 the parent's cargo target/ between sessions"
-                    .dimmed()
+                format!(
+                    "sourced .aida/session-env.sh ({}) into launched claude's env",
+                    applied_vars.join(", ")
+                )
+                .dimmed()
             );
         }
         eprintln!();
@@ -10658,6 +10689,74 @@ fn render_session_env_file(cargo_target_dir: &std::path::Path) -> String {
     )
 }
 
+/// TASK-63: parse a `.aida/session-env.sh` body into `(name, value)`
+/// pairs. Pure: no env mutation, so unit tests can exercise the parser
+/// without racing the live process env across parallel test threads.
+///
+/// Parser is intentionally narrow: it understands only the shape that
+/// `render_session_env_file` writes — `export VAR='single-quoted-value'`
+/// with `'\''` close-reopen escaping. Lines we don't recognize are
+/// skipped silently, so a manually-edited shim with extra noise doesn't
+/// poison the env. trace:TASK-63 | ai:claude
+fn parse_session_env(body: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for line in body.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let Some(rest) = line.strip_prefix("export ") else {
+            continue;
+        };
+        let Some((name, raw_value)) = rest.split_once('=') else {
+            continue;
+        };
+        let name = name.trim();
+        let mut chars = name.chars();
+        let first = chars.next();
+        let valid_first = matches!(first, Some(c) if c.is_ascii_alphabetic() || c == '_');
+        let valid_rest = chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
+        if !valid_first || !valid_rest {
+            continue;
+        }
+        let value = unquote_shell_single_quoted(raw_value.trim());
+        out.push((name.to_string(), value));
+    }
+    out
+}
+
+/// TASK-63: apply parsed env pairs to the current process so the
+/// subsequent `exec claude` inherits them. Returns the names that were
+/// applied so the caller can echo them to the user. Calls
+/// `std::env::set_var` for each pair — the wrapping `unsafe { }` is
+/// forward-compatibility with Edition 2024 where `set_var` is marked
+/// unsafe; safe here because `session_start --launch` is single-threaded
+/// between parse and exec. trace:TASK-63 | ai:claude
+fn apply_session_env_to_process(body: &str) -> Vec<String> {
+    let pairs = parse_session_env(body);
+    let mut applied = Vec::with_capacity(pairs.len());
+    for (name, value) in pairs {
+        #[allow(unused_unsafe)]
+        unsafe {
+            std::env::set_var(&name, &value);
+        }
+        applied.push(name);
+    }
+    applied
+}
+
+/// Inverse of `shell_single_quote` for the narrow shape we write.
+/// `'X'` → `X`. `'a'\''b'` → `a'b`. Bare (unquoted) values are returned
+/// as-is — POSIX-y enough for the shim's purposes. trace:TASK-63 | ai:claude
+fn unquote_shell_single_quoted(raw: &str) -> String {
+    let bytes = raw.as_bytes();
+    if bytes.len() < 2 || bytes[0] != b'\'' || bytes[bytes.len() - 1] != b'\'' {
+        return raw.to_string();
+    }
+    let inner = &raw[1..raw.len() - 1];
+    inner.replace("'\\''", "'")
+}
+
 /// Wrap a string in POSIX single quotes for safe inclusion in shell source.
 /// `'` inside the value is escaped via the standard `'\''` close-reopen trick.
 /// trace:STORY-52 | ai:claude
@@ -10917,9 +11016,16 @@ fn session_end(id_query: Option<&str>, yes: bool, force: bool) -> Result<()> {
     // relations to every spec referenced in the PR's commit messages. Best
     // effort: any failure here logs a warning and is otherwise silent — we
     // never fail `session_end` because of a queue side-effect.
-    // trace:STORY-66 | ai:claude
-    if let Some(summary) = try_auto_queue_pr_review(&project_root, &target.branch, &target.id) {
-        println!("{} {}", "✓".green(), summary);
+    //
+    // BUG-72: always print the outcome (filed / skipped + reason), so the
+    // user sees whether the hook fired. The silent-skip case was painful in
+    // PR-7 wrap-up: STORY-66 silently no-op'd and the reviewer queue stayed
+    // empty with no explanation. trace:STORY-66 BUG-72 | ai:claude
+    let outcome = try_auto_queue_pr_review(&project_root, &target.branch, &target.id);
+    match outcome.status {
+        AutoQueueStatus::Filed => println!("{} {}", "✓".green(), outcome.summary),
+        AutoQueueStatus::AlreadyExists => println!("{} {}", "ⓘ".cyan(), outcome.summary),
+        AutoQueueStatus::Skipped => eprintln!("{} {}", "ⓘ".dimmed(), outcome.summary.dimmed()),
     }
 
     // STORY-73: emit `unset AIDA_SESSION_ID` to stdout when wrapped via the
@@ -10941,12 +11047,29 @@ struct OpenPrInfo {
     url: String,
 }
 
-/// Look up a single open PR for `branch` via `gh`. Returns None when `gh`
-/// isn't installed, the user isn't authenticated, the branch has no open
-/// PR, or the output can't be parsed. All paths are best-effort —
-/// session_end never fails because of this hook. trace:STORY-66 | ai:claude
-fn detect_open_pr_for_branch(project_root: &std::path::Path, branch: &str) -> Option<OpenPrInfo> {
-    let out = std::process::Command::new("gh")
+/// Why `detect_open_pr_for_branch` returned no PR — so the caller (and the
+/// user reading `aida session end` output) can tell "no PR yet" from "gh
+/// isn't installed" from "gh blew up". The old None-everything return type
+/// hid the difference and made BUG-72 hard to diagnose.
+/// trace:BUG-72 | ai:claude
+enum PrLookup {
+    Found(OpenPrInfo),
+    /// `gh` ran cleanly but reported no open PR for this branch.
+    NoOpenPr,
+    /// `gh` is not on $PATH (binary missing).
+    GhMissing,
+    /// `gh` was found but its invocation failed (auth, network, parse).
+    /// String carries the trimmed stderr / parse error so the user sees
+    /// the actual cause instead of a silent no-op.
+    GhFailed(String),
+}
+
+/// Look up a single open PR for `branch` via `gh`. Never panics; never
+/// fails session_end. The richer return shape lets the caller print an
+/// honest skip reason instead of pretending nothing happened.
+/// trace:STORY-66 BUG-72 | ai:claude
+fn detect_open_pr_for_branch(project_root: &std::path::Path, branch: &str) -> PrLookup {
+    let spawned = std::process::Command::new("gh")
         .current_dir(project_root)
         .args([
             "pr",
@@ -10962,22 +11085,35 @@ fn detect_open_pr_for_branch(project_root: &std::path::Path, branch: &str) -> Op
             "-q",
             r#".[] | "\(.number)\t\(.title)\t\(.url)""#,
         ])
-        .output()
-        .ok()?;
+        .output();
+    let out = match spawned {
+        Ok(o) => o,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return PrLookup::GhMissing,
+        Err(e) => return PrLookup::GhFailed(e.to_string()),
+    };
     if !out.status.success() {
-        return None;
+        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        return PrLookup::GhFailed(if stderr.is_empty() {
+            format!("gh exited {}", out.status)
+        } else {
+            stderr
+        });
     }
     let s = String::from_utf8_lossy(&out.stdout);
-    let line = s.lines().next()?.trim();
+    let Some(line) = s.lines().next().map(str::trim) else {
+        return PrLookup::NoOpenPr;
+    };
     if line.is_empty() {
-        return None;
+        return PrLookup::NoOpenPr;
     }
     let parts: Vec<&str> = line.split('\t').collect();
     if parts.len() < 3 {
-        return None;
+        return PrLookup::GhFailed(format!("could not parse gh output: {:?}", line));
     }
-    let number: u64 = parts[0].parse().ok()?;
-    Some(OpenPrInfo {
+    let Ok(number) = parts[0].parse::<u64>() else {
+        return PrLookup::GhFailed(format!("non-numeric PR number from gh: {:?}", parts[0]));
+    };
+    PrLookup::Found(OpenPrInfo {
         number,
         title: parts[1].to_string(),
         url: parts[2].to_string(),
@@ -11157,19 +11293,79 @@ fn aida_subcmd_queue_add_for_reviewer(project_root: &std::path::Path, spec_id: &
     }
 }
 
+/// What `try_auto_queue_pr_review` did, in three buckets that map to the
+/// caller's display formatting (green check / cyan info / dim skip).
+/// trace:BUG-72 | ai:claude
+enum AutoQueueStatus {
+    /// New review story filed and queued for reviewer.
+    Filed,
+    /// PR found but a `Review PR-N` story already exists — idempotent re-run.
+    AlreadyExists,
+    /// Anything that means "no queue entry filed": no PR open for branch,
+    /// gh missing, gh failed, `aida add` failed, etc. Carries enough detail
+    /// in `summary` for the user to know why.
+    Skipped,
+}
+
+/// Outcome of the end-of-session auto-queue. Always returns SOMETHING so
+/// `session_end` can render a clear status line. trace:BUG-72 | ai:claude
+struct AutoQueueOutcome {
+    status: AutoQueueStatus,
+    summary: String,
+}
+
+impl AutoQueueOutcome {
+    fn filed(s: impl Into<String>) -> Self {
+        Self {
+            status: AutoQueueStatus::Filed,
+            summary: s.into(),
+        }
+    }
+    fn already_exists(s: impl Into<String>) -> Self {
+        Self {
+            status: AutoQueueStatus::AlreadyExists,
+            summary: s.into(),
+        }
+    }
+    fn skipped(s: impl Into<String>) -> Self {
+        Self {
+            status: AutoQueueStatus::Skipped,
+            summary: s.into(),
+        }
+    }
+}
+
 /// End-of-session auto-detect-and-queue. Runs as a side effect of
 /// `aida session end` so a forgotten `gh pr create` doesn't leave the
-/// reviewer unaware. Returns a one-line summary string when it filed (or
-/// already-skipped) something; None when there's no PR to act on.
-/// trace:STORY-66 | ai:claude
+/// reviewer unaware. Returns an outcome describing what happened — see
+/// `AutoQueueStatus` for the categories. trace:STORY-66 BUG-72 | ai:claude
 fn try_auto_queue_pr_review(
     project_root: &std::path::Path,
     branch: &str,
     session_id: &str,
-) -> Option<String> {
-    let pr = detect_open_pr_for_branch(project_root, branch)?;
+) -> AutoQueueOutcome {
+    let pr = match detect_open_pr_for_branch(project_root, branch) {
+        PrLookup::Found(pr) => pr,
+        PrLookup::NoOpenPr => {
+            return AutoQueueOutcome::skipped(format!(
+                "auto-queue: no open PR for branch `{}` — reviewer queue not filed",
+                branch
+            ));
+        }
+        PrLookup::GhMissing => {
+            return AutoQueueOutcome::skipped(
+                "auto-queue: `gh` CLI not on PATH — reviewer queue not filed".to_string(),
+            );
+        }
+        PrLookup::GhFailed(reason) => {
+            return AutoQueueOutcome::skipped(format!(
+                "auto-queue: `gh pr list` failed ({}) — reviewer queue not filed",
+                reason
+            ));
+        }
+    };
     if pr_review_story_already_exists(project_root, pr.number) {
-        return Some(format!(
+        return AutoQueueOutcome::already_exists(format!(
             "PR #{} already has a `Review PR-{}` story queued — skipping",
             pr.number, pr.number
         ));
@@ -11216,7 +11412,15 @@ fn try_auto_queue_pr_review(
     desc.push_str("- Mark this story `completed` once the PR is merged.\n");
 
     let title = format!("Review PR-{}: {}", pr.number, pr.title);
-    let new_id = aida_subcmd_add_review_story(project_root, &title, &desc)?;
+    let new_id = match aida_subcmd_add_review_story(project_root, &title, &desc) {
+        Some(id) => id,
+        None => {
+            return AutoQueueOutcome::skipped(format!(
+                "auto-queue: `aida add` failed for PR #{} (see warning above)",
+                pr.number
+            ));
+        }
+    };
 
     for id in &spec_ids {
         aida_subcmd_rel_add_implements(project_root, &new_id, id);
@@ -11235,7 +11439,7 @@ fn try_auto_queue_pr_review(
     } else {
         spec_ids.join(", ")
     };
-    Some(format!(
+    AutoQueueOutcome::filed(format!(
         "filed {} (covers {}) → reviewer queue (PR #{})",
         new_id, covers, pr.number
     ))
@@ -13168,6 +13372,39 @@ mod statusline_tests {
         assert_eq!(parse_spec_id_from_add_output("something unrelated\n"), None);
     }
 
+    /// BUG-72: the auto-queue outcome shape must distinguish Filed,
+    /// AlreadyExists, and the various Skipped reasons so `session end`
+    /// can render the right glyph and the user knows why the reviewer
+    /// queue did or didn't grow an entry. Smoke-checks the constructors
+    /// since the real flow needs a live gh + filesystem to exercise.
+    /// trace:BUG-72 | ai:claude
+    #[test]
+    fn auto_queue_outcome_constructors_tag_status_correctly() {
+        let filed =
+            AutoQueueOutcome::filed("filed STORY-99 (covers FR-1) → reviewer queue (PR #7)");
+        assert!(matches!(filed.status, AutoQueueStatus::Filed));
+        assert!(filed.summary.starts_with("filed STORY-99"));
+
+        let dup = AutoQueueOutcome::already_exists(
+            "PR #7 already has a `Review PR-7` story queued — skipping",
+        );
+        assert!(matches!(dup.status, AutoQueueStatus::AlreadyExists));
+
+        // Skip reasons all flow through one variant. Cover each phrasing so
+        // a future refactor that swaps the strings can't silently regress
+        // back into the BUG-72 "no message at all" hole.
+        for phrase in [
+            "auto-queue: no open PR for branch `epic-20-batch7` — reviewer queue not filed",
+            "auto-queue: `gh` CLI not on PATH — reviewer queue not filed",
+            "auto-queue: `gh pr list` failed (HTTP 401 — gh auth status) — reviewer queue not filed",
+            "auto-queue: `aida add` failed for PR #42 (see warning above)",
+        ] {
+            let s = AutoQueueOutcome::skipped(phrase);
+            assert!(matches!(s.status, AutoQueueStatus::Skipped));
+            assert_eq!(s.summary, phrase);
+        }
+    }
+
     /// STORY-55: scope-fallback decision table for the `@<…>` segment.
     /// Captures the four (latest-activity, active-lease) cases the
     /// statusline distinguishes.
@@ -13758,6 +13995,84 @@ mod statusline_tests {
         let written =
             std::fs::read_to_string(worktree.join(".aida").join("session-env.sh")).unwrap();
         assert!(written.contains("CARGO_TARGET_DIR='/tmp/parent/target'"));
+    }
+
+    /// TASK-63: parse_session_env handles the shape we write today.
+    /// Cover the round-trip with render_session_env_file (the source of
+    /// truth for what we produce) so a future change to the shim format
+    /// has to update both sides. trace:TASK-63 | ai:claude
+    #[test]
+    fn parse_session_env_roundtrips_with_render() {
+        let body = render_session_env_file(std::path::Path::new("/tmp/parent/target"));
+        let pairs = parse_session_env(&body);
+        assert_eq!(pairs.len(), 1, "{:?}", pairs);
+        assert_eq!(pairs[0].0, "CARGO_TARGET_DIR");
+        assert_eq!(pairs[0].1, "/tmp/parent/target");
+    }
+
+    /// TASK-63: apostrophe in the target path → close-reopen escape on
+    /// the way out, must unescape cleanly on the way back in.
+    /// trace:TASK-63 | ai:claude
+    #[test]
+    fn parse_session_env_unquotes_close_reopen_escape() {
+        let body = render_session_env_file(std::path::Path::new("/tmp/joe's repo/target"));
+        let pairs = parse_session_env(&body);
+        assert_eq!(pairs.len(), 1);
+        assert_eq!(pairs[0].1, "/tmp/joe's repo/target");
+    }
+
+    /// TASK-63: ignore comments, blanks, non-export lines, malformed
+    /// names. The shim is gitignored runtime state but a user might
+    /// hand-edit it (debug session) — don't poison the env if they do.
+    /// trace:TASK-63 | ai:claude
+    #[test]
+    fn parse_session_env_skips_noise() {
+        let body = "\
+# header comment\n\
+\n\
+export CARGO_TARGET_DIR='/x'\n\
+not an export line\n\
+export 1BAD=value\n\
+export GOOD_VAR='hello'\n\
+export NO_EQUALS\n\
+   export INDENTED='trimmed'\n\
+";
+        let pairs = parse_session_env(body);
+        let names: Vec<&str> = pairs.iter().map(|p| p.0.as_str()).collect();
+        assert_eq!(names, vec!["CARGO_TARGET_DIR", "GOOD_VAR", "INDENTED"]);
+        assert_eq!(pairs[2].1, "trimmed");
+    }
+
+    /// TASK-63: bare (unquoted) values pass through unchanged — the
+    /// parser is forgiving so a hand-written `export FOO=bar` works.
+    /// trace:TASK-63 | ai:claude
+    #[test]
+    fn parse_session_env_handles_unquoted_value() {
+        let pairs = parse_session_env("export FOO=bar\n");
+        assert_eq!(pairs, vec![("FOO".to_string(), "bar".to_string())]);
+    }
+
+    /// TASK-63: apply_session_env_to_process really mutates the process
+    /// env, and returns the names it set. Use a name unique to this test
+    /// so parallel test runs don't trample each other.
+    /// trace:TASK-63 | ai:claude
+    #[test]
+    fn apply_session_env_to_process_sets_env() {
+        const VAR: &str = "AIDA_TEST_TASK_63_APPLIED";
+        // SAFETY: scoped to this test; not racing with anything that
+        // reads VAR.
+        #[allow(unused_unsafe)]
+        unsafe {
+            std::env::remove_var(VAR);
+        }
+        let body = format!("export {}='hello world'\n", VAR);
+        let applied = apply_session_env_to_process(&body);
+        assert_eq!(applied, vec![VAR.to_string()]);
+        assert_eq!(std::env::var(VAR).unwrap(), "hello world");
+        #[allow(unused_unsafe)]
+        unsafe {
+            std::env::remove_var(VAR);
+        }
     }
 
     /// STORY-52: leases predating the cargo_target_dir field must still
@@ -14888,6 +15203,70 @@ mod worktree_dirty_entries_tests {
     fn non_git_path_is_clean() {
         let tmp = TempDir::new().unwrap();
         assert!(worktree_dirty_entries(tmp.path()).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod add_aida_gitignore_entries_tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    /// Fresh project (no .gitignore) → file is created with both entries.
+    /// Returns Ok(false) per the contract (a brand-new file isn't an
+    /// "update"). trace:BUG-71 | ai:claude
+    #[test]
+    fn creates_gitignore_with_both_entries() {
+        let tmp = TempDir::new().unwrap();
+        let updated = add_aida_gitignore_entries(tmp.path(), ".aida-store").unwrap();
+        assert!(!updated, "creation isn't an update");
+        let content = std::fs::read_to_string(tmp.path().join(".gitignore")).unwrap();
+        assert!(content.contains(".aida-store/"), "{}", content);
+        assert!(content.contains(".aida/session-env.sh"), "{}", content);
+    }
+
+    /// Existing .gitignore that already covers both entries → no write,
+    /// returns Ok(false). trace:BUG-71 | ai:claude
+    #[test]
+    fn idempotent_when_both_entries_present() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join(".gitignore");
+        let original = "target/\n.aida-store/\n.aida/session-env.sh\n";
+        std::fs::write(&path, original).unwrap();
+        let updated = add_aida_gitignore_entries(tmp.path(), ".aida-store").unwrap();
+        assert!(!updated);
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(content, original);
+    }
+
+    /// Pre-BUG-71 .gitignore (has .aida-store/ but not session-env.sh) →
+    /// only session-env.sh is appended. This is the migration path for
+    /// existing projects scaffolded before the fix. trace:BUG-71 | ai:claude
+    #[test]
+    fn appends_only_missing_session_env_entry() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join(".gitignore");
+        std::fs::write(&path, "target/\n.aida-store/\n").unwrap();
+        let updated = add_aida_gitignore_entries(tmp.path(), ".aida-store").unwrap();
+        assert!(updated, "session-env line was missing → expected an append");
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains(".aida-store/"));
+        assert!(content.contains(".aida/session-env.sh"));
+        // Original content preserved
+        assert!(content.starts_with("target/\n.aida-store/\n"));
+    }
+
+    /// .gitignore exists but neither AIDA entry → both get appended.
+    /// trace:BUG-71 | ai:claude
+    #[test]
+    fn appends_both_when_neither_present() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join(".gitignore");
+        std::fs::write(&path, "target/\n").unwrap();
+        let updated = add_aida_gitignore_entries(tmp.path(), ".aida-store").unwrap();
+        assert!(updated);
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(content.contains(".aida-store/"));
+        assert!(content.contains(".aida/session-env.sh"));
     }
 }
 
