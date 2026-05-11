@@ -55,12 +55,12 @@ description: |
   - [ ] Both layers tested with: user in worktree root, user in deep subdir, user outside worktree, user in unrelated directory
   - [ ] `aida dev shell-init --install` updated to include `aida session end` in the eval case
   - [ ] Migration: users with already-installed shell function need to re-run shell-init or manually add session end to their case list — document in upgrade notes
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T03:13:27.823914939Z
-modified_at: 2026-05-11T03:13:27.823914939Z
+modified_at: 2026-05-11T04:36:39.073412225Z
 req_type: Task
 relationships:
 - rel_type: Child
