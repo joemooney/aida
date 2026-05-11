@@ -1,0 +1,54 @@
+id: 019e14ba-3b51-73e0-be73-44d8d86c4b5b
+spec_id: TASK-61
+agreed_id: TASK-61
+title: '/aida-pr (and aida push?): pre-flight cargo fmt --all --check; fail if drift exists'
+description: |
+  Caught 2026-05-11 — PR-7 opened with TASK-57 marked Completed (cargo fmt cleanup), but later commits in batch7 (BUG-68, TASK-55/56, TASK-58) reintroduced fmt drift after TASK-57's pass. CI failed on all 3 platforms with `cargo fmt --all -- --check` errors. Classic format-once-then-drift pattern.
+
+  ## Today's behavior
+
+  Nothing in the AIDA workflow catches fmt drift before PR open. CI catches it on the runners (minutes after push). Reviewer wastes a cycle confirming fmt issues are real and reformatting.
+
+  ## Desired behavior
+
+  Add a pre-flight check to `/aida-pr` (STORY-80):
+
+  ```rust
+  // Step 3.5 (before push)
+  let fmt_check = run("cargo fmt --all -- --check");
+  if fmt_check.failed() {
+      bail!(
+          "cargo fmt --all --check reports drift in {} file(s). Run `cargo fmt --all` and commit before opening the PR.\nDrifted files:\n{}",
+          ...
+      );
+  }
+  ```
+
+  Refuses to open the PR if drift exists. User runs `cargo fmt --all` + commits + retries the PR open. Drift never reaches CI.
+
+  ## Open question: also gate aida push?
+
+  `aida push` is more general (used for any push, including WIP pushes that aren't ready for review). Gating it on fmt-check might be too aggressive. Probably NO — `/aida-pr` is the right gate because that's the "this is mergeable" moment.
+
+  Optional middle ground: `aida push` *warns* on drift but doesn't refuse; `/aida-pr` *refuses*.
+
+  ## Composes with
+
+  - TASK-57 (cargo fmt drift) — original cleanup; this prevents recurrence
+  - STORY-80 (/aida-pr skill) — the gate point
+  - STORY-90 (auto-queue redesign) — /aida-pr is gaining responsibilities; pre-flight checks fit the same surface
+
+  ## Acceptance
+
+  - [ ] `/aida-pr` runs `cargo fmt --all -- --check` before `gh pr create`
+  - [ ] Refuses to open PR if drift exists; clear message naming the drifted files
+  - [ ] Skipped automatically for non-Rust projects (detect via Cargo.toml presence at workspace root)
+  - [ ] Optional: `aida push` warns on drift (low priority addition)
+  - [ ] Tested: clean tree opens PR. Inject drift, /aida-pr refuses. Run cargo fmt, retry, succeeds.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T01:50:09.745743397Z
+modified_at: 2026-05-11T01:50:09.745743397Z
+req_type: Task
