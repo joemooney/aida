@@ -50,12 +50,12 @@ description: |
   - [ ] session_end output explicitly reports whether STORY-66 fired (success or skip reason)
   - [ ] Manual repro: `aida session start --owns X --branch Y`, open a fake gh PR (mock), `aida session end Y` — verify reviewer queue gains an entry
   - [ ] Tested with: clean session_end, --force session_end, no-PR session_end, no-gh-installed session_end
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T01:43:33.004148552Z
-modified_at: 2026-05-11T01:43:33.004148552Z
+modified_at: 2026-05-11T03:36:14.027924144Z
 req_type: Bug
 relationships:
 - rel_type: Child
