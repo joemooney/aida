@@ -1,0 +1,55 @@
+id: 019e1535-ce67-7773-964b-4d2b3a3c4f3b
+spec_id: TASK-72
+agreed_id: TASK-72
+title: '/aida-review skill polish: skip explicit-pr confirm, dim already-Completed specs, inline verdict recording'
+description: |
+  PR-8 reviewer dogfooded the new STORY-91 `/aida-review` skill for the first time 2026-05-11 and surfaced three rough edges:
+
+  ## 1. Skip "Reviewing PR-N: <title>. Proceed?" confirm when `--pr N` was passed explicitly
+
+  When the user passes `--pr N` on the slash command, they've already decided. The confirmation prompt is redundant. Reserve the confirm for the auto-detect-from-session-lease path (where the agent's guess about which PR to review should be validated).
+
+  ```
+  # Today:
+  /aida-review --pr 8
+  > Reviewing PR-8: EPIC-20 batch 8 ... Proceed? [Y/n]
+
+  # Desired:
+  /aida-review --pr 8
+  > [skips straight to checklist generation]
+  ```
+
+  ## 2. Skip verdicts for already-Completed specs
+
+  Some commit-body trailers reference specs already shipped in earlier PRs (e.g., STORY-54 surfaced as a trailer in PR-8 even though it landed in PR-7). The skill currently asks for verdicts on these too. Better: treat them as informational ("STORY-54 [Completed, shipped in PR-7] — referenced as build dependency"), don't demand a fresh verdict.
+
+  The check: at checklist-generation time, for each REQ-ID extracted from commit trailers, query its current status. If Completed AND the completion commit is on main pre-this-PR, mark informational and skip verdict.
+
+  ## 3. Direct reviewer to record verdicts inline in `.aida/review-prompt-pr-N.md`
+
+  STORY-67's `aida review prompt --pr N --write <path>` writes the checklist to a file. The skill should direct the reviewer to record each verdict (✅/⚠️/❌ + evidence) inline in that file as they walk, then summarize the file into the final PR comment.
+
+  Two benefits:
+  - Persistent record of the walk (file survives the session for later auditing)
+  - Easier to compose the PR comment (just summarize the markdown file)
+  - Composes with `aida session show <id> --review-state` (future: show in-flight review progress)
+
+  ## Composes with
+
+  - STORY-91 itself (the parent skill) — these are first-use refinements
+  - STORY-67 (aida review prompt --pr / --write) — Part 3 builds on its file output
+  - TASK-69 (red errors) — Part 2's "informational" marker should use dim, not error styling
+
+  ## Acceptance
+
+  - [ ] `--pr N` path skips the confirm prompt (auto-detect path keeps it)
+  - [ ] Already-Completed specs surfaced via trailers shown as informational, not requiring a verdict
+  - [ ] Skill workflow directs reviewer to record verdicts in the --write output file inline
+  - [ ] Dogfood: re-use on PR-9 (next cycle) and verify the rough edges are gone
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T04:05:08.327855472Z
+modified_at: 2026-05-11T04:05:08.327855472Z
+req_type: Task
