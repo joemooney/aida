@@ -1,0 +1,74 @@
+id: 019e1538-091e-7270-9854-276b048c38aa
+spec_id: TASK-73
+agreed_id: TASK-73
+title: 'aida pull: report changes pulled (specs added, status flips, comments) instead of silent ''Pull complete'''
+description: |
+  TASK-43 shipped `aida pull` (top-level symmetric counterpart of `aida push`). Output today:
+
+  ```
+  $ aida pull
+  Pulling from origin/aida-store...
+    Pull complete.
+  ```
+
+  Silent on WHAT changed. After a PR merges, pull brings down a substantial delta — status flips, new specs filed by parallel agents, comments, etc. — but the user has zero visibility without running `aida history` afterward.
+
+  ## Desired output
+
+  ```
+  $ aida pull
+  ✓ git pull (main): 3 commits, 22 files changed
+  ✓ aida store pull: 8 commits
+
+  Changes since last pull:
+    +6 specs added (filed by others)
+      BUG-70   PS1 dev-activate accumulation
+      BUG-71   .aida/session-env.sh missing from .gitignore
+      BUG-72   STORY-66 force-path miss
+      TASK-65  aida rel list extensions
+      TASK-66  CLAUDE.md fmt-check note
+      STORY-95 Multi-session scheduling
+    ~4 status changes
+      BUG-67       Approved   → Completed   (PR-7 merge)
+      STORY-79     Approved   → Completed   (PR-7 merge)
+      TASK-58      Approved   → Completed   (PR-7 merge)
+      STORY-71     InProgress → Completed   (TASK-51 wiring landed)
+    +3 comments added
+      BUG-67       "Implemented in epic-20-batch7 (PR pending)..."
+      TASK-61      "Acceptance was loose..."
+      STORY-71     "PR-5 reviewer noted..."
+
+  Run `aida history --since "5 min ago"` for the full event stream.
+  ```
+
+  ## Implementation
+
+  Before pull: snapshot the orphan-store HEAD SHA.
+  After pull: walk the diff `git log <pre-pull-sha>..HEAD` on the orphan branch. For each commit:
+  - Parse the YAML changes (which spec_ids touched, what fields changed)
+  - Aggregate into the categories above
+
+  Suppress all output with `--quiet` for scripted use.
+
+  ## Composes with
+
+  - TASK-43 (aida pull foundation) — this is its polish followup
+  - STORY-86 (Done status) — adds another status flip category to track
+  - `aida history --since` (already exists) — natural deep-dive when summary isn't enough
+  - TASK-69 (red errors) — same family of "AIDA tells you what's happening"
+
+  ## Acceptance
+
+  - [ ] `aida pull` (default) prints categorized summary of changes
+  - [ ] `aida pull --quiet` suppresses the summary (still prints errors)
+  - [ ] Empty case: "No changes" instead of a confusing empty list
+  - [ ] Comment count is correct (new comments only, not edits to existing)
+  - [ ] Status changes show source (e.g., "PR-N merge" when commit message references the PR)
+  - [ ] Performance: <100ms overhead vs today's silent pull on a 10-commit delta
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T04:07:34.430560202Z
+modified_at: 2026-05-11T04:07:34.430560202Z
+req_type: Task
