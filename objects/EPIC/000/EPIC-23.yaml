@@ -1,0 +1,51 @@
+id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
+spec_id: EPIC-23
+agreed_id: EPIC-23
+title: 'Session orchestration & autonomy: automated transitions between batch / PR / review lifecycles'
+description: |
+  The fourth conceptual axis alongside EPIC-20 (session primitives), EPIC-21 (commit↔store pairing), EPIC-22 (cross-project): how sessions transition into each other automatically, reducing manual orchestration when a productive cadence is established.
+
+  User observation 2026-05-11 after PR-7 wrap-up: "the next conceptual gap is session-to-session continuity — today each batch is a fresh `aida session start`, but the agent could auto-spawn the next batch's session after `aida session end` completes (or after PR merges)."
+
+  ## Scope
+
+  This EPIC covers:
+  - Auto-spawn next-batch implementer when a PR merges
+  - Watcher/daemon model — observe git/PR/queue state, fire triggers
+  - Auto-spawn reviewer session at PR-create time (alternative to STORY-66's queue-only approach)
+  - Multi-session scheduling — resource caps, priority, idle-detection
+  - Decision policy — "what next?" autonomy: continue same epic, switch to a different epic, file a TODO for the human
+
+  ## Non-goals
+
+  - Full agentic autonomy (Claude self-driving the whole project) — out of scope; keep the human in the loop
+  - Cross-machine session sync — single-machine for now
+  - Replacing the explicit `aida session start` flow — automation is opt-in, manual remains the supported default
+
+  ## Why this is its own EPIC
+
+  - EPIC-20 = session primitives (start/end/lease/leases/show). About what a single session IS.
+  - EPIC-21 = commit↔store pairing. About data consistency between code and store.
+  - EPIC-22 = cross-project. About scoping across multiple AIDA-managed repos.
+  - THIS EPIC = orchestration. About how sessions WAKE EACH OTHER UP automatically.
+
+  Distinct axis, will grow to 5+ stories. Filing as design capture; implementation deferred until current polish backlog (EPIC-20 children) is mostly cleared.
+
+  ## Acceptance for the EPIC
+
+  When mostly shipped, the full implementer ↔ reviewer ↔ implementer loop should require ≤3 user commands per cycle (down from today's ~10), with all transition decisions explicit and overridable.
+
+  ## Child stories (design capture below)
+
+  1. Auto-spawn next-batch implementer when PR merges
+  2. Watcher daemon — observe git/PR/queue state, fire orchestration triggers
+  3. Auto-spawn reviewer at PR-create-time (alternative trigger to STORY-66 / STORY-90)
+  4. Multi-session scheduling — resource caps + priority
+  5. Decision policy — "what next?" autonomy
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T02:57:57.210361345Z
+modified_at: 2026-05-11T02:57:57.210361345Z
+req_type: Epic
