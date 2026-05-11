@@ -16183,8 +16183,25 @@ fn handle_dev_activate(
     // so deactivate can strip exactly the same string regardless of what
     // else (e.g., `aida role enter`) has touched PS1 in between.
     // trace:TASK-19 | ai:claude
+    //
+    // BUG-70: strip ALL existing `(aida-PROFILE) ` prefixes before
+    // prepending the new one. Repeated `aida dev activate` (or switching
+    // debug ↔ release without a deactivate in between) would otherwise
+    // stack multiple prefixes like "(aida-debug) (aida-debug) joe@…".
+    // Mirrors BUG-60's loop for role-enter PS1 hygiene. The strip is
+    // pattern-based (any `(aida-WORD) ` token, with optional trailing
+    // `*` for the stale-marker variant) so stale prefixes from prior
+    // sessions / lost env vars are cleaned up too. trace:BUG-70 | ai:claude
     let ps1_prefix = format!("(aida-{}{}) ", profile, ps1_marker);
     println!("if [ -n \"${{PS1+x}}\" ]; then");
+    println!("    while case \"$PS1\" in *'(aida-'*') '*) true;; *) false;; esac; do");
+    println!("        _aida_old_ps1=\"$PS1\"");
+    println!("        _aida_after=\"${{PS1#*'(aida-'}}\"");
+    println!("        _aida_tag=\"${{_aida_after%%') '*}}\"");
+    println!("        PS1=\"${{PS1//'(aida-'$_aida_tag') '/}}\"");
+    println!("        [ \"$PS1\" = \"$_aida_old_ps1\" ] && break");
+    println!("    done");
+    println!("    unset _aida_old_ps1 _aida_after _aida_tag");
     println!("    export AIDA_DEV_PS1_PREFIX='{}'", ps1_prefix);
     println!("    export PS1=\"$AIDA_DEV_PS1_PREFIX$PS1\"");
     println!("fi");
