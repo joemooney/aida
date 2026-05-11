@@ -70,7 +70,31 @@ Show the user the item and ask whether to start. Examples:
 If the user says no (wants to skip, prioritize differently, etc.), stop
 here. Don't auto-skip to the next item — the queue order encodes priority.
 
-### Step 3: Mark in-progress
+### Step 3a: Record the planned cluster (STORY-98)
+
+If the user's confirmation covers MORE than one item — i.e. they want
+you to work a multi-item batch ("do all of TASK-67 through TASK-74",
+"work STORY-98 + STORY-90 + BUG-74", etc.) — write the planned list to
+the session manifest before starting:
+
+```bash
+aida session manifest write --items SPEC-ID-1,SPEC-ID-2,SPEC-ID-3 \
+  --source "user prompt"
+```
+
+This:
+- Records each spec's position in the cluster + its status at plan time
+- Renders a `[planned:by-<session>]` chip on those specs in other
+  sessions' `aida queue list` output, so a concurrent reviewer/agent
+  doesn't grab work you've claimed
+- Powers `aida session show --plan` (✓ Done / ◐ In progress / ○ Pending
+  status table) so you and the user can see cluster progress at a glance
+
+Skip this step for single-item pickups (one spec, no batch intent) — the
+manifest only earns its keep when there's a planned-cluster shape to
+track.
+
+### Step 3b: Mark the current item in-progress
 
 Once the user confirms:
 
@@ -78,7 +102,10 @@ Once the user confirms:
 aida edit <spec_id> --status in-progress
 ```
 
-This makes it visible to other sessions / dashboards that someone's on it.
+This makes it visible to other sessions / dashboards that someone's on
+it. If a session manifest exists (step 3a), `aida edit --status` also
+stamps the manifest row's `started_at`, so the cluster's `◐ In progress`
+column flips automatically.
 
 ### Step 4: Do the work
 
@@ -97,6 +124,9 @@ aida queue done <spec_id>
 This is one atomic step that:
 - Sets status to Completed
 - Removes the item from the queue
+- Stamps the manifest row's `completed_at` (when a session manifest
+  covers the current session) so `aida session show --plan` flips
+  ✓ Done
 
 Equivalent to: `aida edit <spec_id> --status completed && aida queue remove <spec_id>`
 

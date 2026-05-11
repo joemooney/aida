@@ -167,15 +167,33 @@ EOF
 
 Use HEREDOC for the body so markdown formatting and code fences survive intact.
 
-### 10. Output the URL
+### 10. Auto-queue the review for the reviewer role — trace:STORY-90
+
+Right after `gh pr create` returns the URL (and BEFORE step 11's URL output), file the reviewer story:
+
+```bash
+aida pr auto-queue-review
+```
+
+This invokes the same logic `aida session end` runs as a backup, but at the moment the agent's context is freshest — PR is just opened, branch is current, commits are in working memory. The command:
+
+- Detects the PR via `gh pr list --head <current-branch>`
+- Files a `Review PR-<n>: <title>` story routed to the `reviewer` role
+- Adds `implements` relationships from the story to each spec referenced in the commit range
+- Is idempotent — re-runs print `ⓘ already exists`, never duplicate-file
+
+Print whatever the command emits verbatim (✓ filed / ⓘ already exists / ⚠ needs attention). The session-end backup still fires later as a fail-safe, so a failure here isn't fatal — but a ⚠ outcome usually means `gh` is unauthenticated or PATH-broken; surface that to the user.
+
+### 11. Output the URL
 
 Print the URL `gh` returned, and optionally suggest `/aida-code-review` as the next step if the project has a reviewer role configured.
 
 ## Composes With
 
 - `/aida-commit` — commit first, then PR. Skill chain: commit → pr.
-- `/aida-code-review` — sister skill on the reviewer side; opens automatically when STORY-66's auto-queue fires.
-- STORY-66 (auto-queue PR for reviewer) — once a PR exists, `session end` auto-files a queued review item.
+- `/aida-code-review` — sister skill on the reviewer side; opens automatically once `aida pr auto-queue-review` (step 10) fires.
+- STORY-66 / STORY-90 (auto-queue PR for reviewer) — primary trigger is step 10 here; `aida session end` re-fires the same logic as an idempotent backup so a forgotten /aida-pr (or a raw `gh pr create`) still ends up routed to the reviewer.
+- BUG-74 — gh detection uses an explicit PATH walk + absolute-path fallback so the auto-queue isn't fooled by a stripped child-process PATH. `AIDA_DEBUG_GH=1` prints the search trace when gh ends up not found.
 
 ## Common Failure Modes
 
