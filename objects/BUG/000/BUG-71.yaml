@@ -1,0 +1,56 @@
+id: 019e14a1-6604-7342-9bd0-517aca7aca0b
+spec_id: BUG-71
+agreed_id: BUG-71
+title: .aida/session-env.sh missing from .gitignore — STORY-52 followup, causes spurious aida session end --force prompts
+description: |
+  Caught 2026-05-10 — `aida session end` from BUG-67's fix refused on untracked `.aida/session-env.sh`. STORY-52 added that file as runtime-generated content (`<worktree>/.aida/session-env.sh` exports `CARGO_TARGET_DIR=<parent>/target`) but didn't add it to .gitignore. Every session end on a worktree that has the file (basically all of them post-STORY-52) requires `--force`.
+
+  ## Today's behavior
+
+  `.gitignore` covers most `.aida/` runtime state:
+  ```
+  .aida/pgdata/
+  .aida/web-sessions.sqlite3
+  .aida/server.toml
+  .aida/.dev-pids/
+  .aida/.dev-*.log
+  .aida/cache.db
+  .aida/cache.db-journal
+  .aida/cache.db-shm
+  .aida/cache.db-wal
+  .aida/sessions/
+  .aida/sessions
+  .aida/roles/
+  .aida/roles
+  ```
+
+  But NOT `.aida/session-env.sh`. Result: it shows up as untracked → BUG-67's "tracked-and-modified or untracked-but-not-ignored" check refuses session end without --force.
+
+  ## Fix
+
+  Add to `.gitignore`:
+  ```
+  .aida/session-env.sh
+  ```
+
+  Templates that scaffold new projects should also include this entry — `aida-core/templates/.gitignore` or wherever the init flow generates the project .gitignore.
+
+  ## Composes with
+
+  - STORY-52 (session worktree shares target/) — this is the cleanup STORY-52 should have included
+  - BUG-67 (session end gitignored-cruft auto-force) — once .gitignore is correct, BUG-67's auto-force path handles session-env.sh cleanly
+  - TASK-55 (leases hide stale by default) — every session generates a session-env.sh, so this cleanup matters for every session-end
+
+  ## Acceptance
+
+  - [ ] `.gitignore` in the AIDA repo gains `.aida/session-env.sh`
+  - [ ] Project-init scaffolding template gains the same line (so new projects don't repeat this gap)
+  - [ ] `aida session end` no longer requires --force on worktrees where the only untracked file is session-env.sh
+  - [ ] Test: run `aida session start --owns X --branch Y`, immediately `aida session end Y`. Should succeed without --force.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T01:23:02.276233538Z
+modified_at: 2026-05-11T01:23:02.276233538Z
+req_type: Bug
