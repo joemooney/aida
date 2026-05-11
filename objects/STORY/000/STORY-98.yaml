@@ -1,0 +1,104 @@
+id: 019e1543-a707-7ba1-9d1e-ecbec841fabe
+spec_id: STORY-98
+agreed_id: STORY-98
+title: 'Session manifest: capture cluster intent on /aida-pickup; show ''planned:by-X'' chip in queue list'
+description: |
+  User observation 2026-05-11 during batch9 startup: when /aida-pickup commits to working a cluster of 10+ items, only the CURRENTLY-IN-PROGRESS item shows as `In Progress`. The other items remain `Approved`. There's no visible signal that they're "scheduled" to be worked next. Failure modes:
+
+  - Concurrent sessions could grab items that another session has already planned
+  - If the in-progress item runs into issues, the planned cluster might silently get re-scoped without an audit trail
+  - No way for another reviewer / user / agent to see "what's session 019e1300 actually working on (vs what they've claimed)?"
+
+  ## Solution shape
+
+  Two complementary additions, NO new status enum value:
+
+  ### Part 1 — Session manifest
+
+  When /aida-pickup confirms a multi-item cluster, write the planned list to `.aida/sessions/<id>.manifest.toml`:
+
+  ```toml
+  # .aida/sessions/019e1300.manifest.toml
+  session_id = "019e1300"
+  planned_at = "2026-05-11T14:23:00Z"
+  plan_source = "user prompt"   # or "auto" if /aida-pickup defaulted
+
+  [[items]]
+  spec_id = "BUG-73"
+  status_at_plan = "Approved"
+  position = 1
+
+  [[items]]
+  spec_id = "TASK-67"
+  status_at_plan = "Approved"
+  position = 2
+
+  [[items]]
+  spec_id = "TASK-68"
+  status_at_plan = "Approved"
+  position = 3
+  # ... etc
+  ```
+
+  Updated when:
+  - /aida-pickup confirms a cluster → write the full list
+  - agent flips one to InProgress → mark its row "started"
+  - agent finishes/skips/re-scopes → update the row (or remove)
+
+  ### Part 2 — Visible chip in queue list
+
+  Queue list shows `[planned:019e1300]` for any item whose spec_id appears in any active session's manifest (other than the viewer's own session):
+
+  ```
+  1. BUG-73  Structural .gitignore fix ...  [Approved]  [for:implementer]  [@EPIC-20]
+  2. TASK-67 Role-by-intent in session lease ...  [Approved]  [for:implementer]  [@EPIC-20]  [planned:019e1300]
+  3. TASK-68 Session end cwd handling ...  [Approved]  [for:implementer]  [@EPIC-20]  [planned:019e1300]
+  ```
+
+  Items "planned by" the viewer's own session don't render the chip (would be redundant).
+
+  ### Part 3 — `aida session show <id> --plan` displays the manifest
+
+  ```
+  $ aida session show 019e1300 --plan
+
+  Session 019e1300 — planned cluster (10 items, 2 done, 1 in-progress, 7 pending):
+
+    #  Status        Spec       Title
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    1  ✓ Done        BUG-73     Structural .gitignore fix
+    2  ◐ In progress TASK-67    Role-by-intent in session lease
+    3  ○ Pending     TASK-68    Session end cwd handling
+    4  ○ Pending     TASK-69    Render Error: in red
+    ...
+  ```
+
+  Survives across `claude --resume` (manifest is on disk, not in conversation state).
+
+  ## Composes with
+
+  - TASK-53 (session start pre-flight conflict detection) — already warns about file-overlap with active leases; could ALSO warn about queue-item overlap by checking other sessions' manifests
+  - STORY-65 (auto-branch + inherit role) — manifest's plan_source could record what triggered the cluster (user prompt, /aida-pickup auto-default, etc.)
+  - STORY-92 (auto-spawn next batch from EPIC-23) — manifests give the auto-spawn logic something to consume ("the just-ended session planned X but didn't get to Y — should next batch start with Y?")
+
+  ## Why NOT a new Scheduled status
+
+  - Status enum is already 7 values (Draft, Approved, Planned, InProgress, Done, Completed, Rejected). Adding Scheduled blurs the distinction with Planned and InProgress.
+  - Status is per-spec, durable, audited. Cluster intent is per-session, ephemeral. Different concepts.
+  - Manifest + chip gives the same visibility without conflating concerns.
+
+  ## Acceptance
+
+  - [ ] /aida-pickup writes a session manifest when committing to a multi-item cluster
+  - [ ] Manifest format documented (`.aida/sessions/<id>.manifest.toml`)
+  - [ ] Queue list renders `[planned:by-<id>]` chip for items in OTHER active sessions' manifests
+  - [ ] `aida session show <id> --plan` displays the manifest with item status
+  - [ ] Manifest updated when items flip InProgress / Done / Skipped
+  - [ ] Gracefully degrades when a session crashes (stale manifests cleaned up on next session start, or via aida session prune)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T04:20:15.751009438Z
+modified_at: 2026-05-11T04:20:15.751009438Z
+req_type: Story
