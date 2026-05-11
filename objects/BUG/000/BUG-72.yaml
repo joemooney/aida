@@ -1,0 +1,59 @@
+id: 019e14b4-2d8c-7991-8099-a9f73c242fbe
+spec_id: BUG-72
+agreed_id: BUG-72
+title: STORY-66 (auto-queue PR for reviewer on session end) doesn't fire on --force path or after BUG-71 .gitignore stumble
+description: |
+  Caught 2026-05-10 during PR-7 wrap-up. Sequence:
+
+  1. Ran `aida session end <batch7-lease>` — errored on BUG-71 (.aida/session-env.sh untracked)
+  2. Ran `aida session end <batch7-lease> --force` — succeeded
+  3. Started reviewer session for PR-7, ran `aida queue list --all` from inside
+  4. Reviewer queue is EMPTY — no PR-7 entry from STORY-66's auto-queue
+
+  STORY-66's help text says: "files a Story-typed review item routed to the `reviewer` role with `implements` relations to every spec referenced in the PR's commit messages." But empirically: didn't happen.
+
+  ## Likely root causes (one or more)
+
+  1. **STORY-66 hooks the success path only**: when session_end errors (BUG-71's tracked-files refusal), STORY-66's after-hook is skipped. Retry with --force may also skip the hook if it's wired to the error-free flow.
+
+  2. **STORY-66's PR detection fails on detached worktree**: gh pr view requires being on a tracked branch. If the worktree's branch state was weird at session-end time, the gh detection might silently fail.
+
+  3. **STORY-66 fires but writes to a wrong queue**: scoped/userrouted differently than expected. Need to check the entire orphan store, not just `--for reviewer`.
+
+  ## How to verify
+
+  ```bash
+  # Check queue from the parent project for any PR-7 routed item (any role, any user):
+  aida queue list --all
+  # If a PR-7 row exists with for:<not-reviewer>, STORY-66 ran but routing is off.
+  # If absent entirely, STORY-66 didn't fire.
+
+  # Check if there's a synthetic PR-7 req filed:
+  aida search "PR-7"
+  ```
+
+  ## Fix angles
+
+  - Move STORY-66's hook so it fires on BOTH the success path AND --force path (anywhere worktree removal succeeds)
+  - Better signal in session_end output: explicit "✓ filed reviewer review item PR-N" or "ⓘ skipped — no PR detected for branch X" so users know whether it fired
+  - Defensive: if STORY-66's gh-detection fails, surface stderr note instead of silent skip
+
+  ## Composes with
+
+  - STORY-66 (auto-queue itself) — this is its first production use; predictably finding edge cases
+  - BUG-71 (.gitignore session-env.sh) — the trigger that exposed the path-skipping
+  - TASK-48 (role enter shows queue head) — would have made the gap obvious sooner
+
+  ## Acceptance
+
+  - [ ] STORY-66 fires on --force path (or error-path post-worktree-remove)
+  - [ ] session_end output explicitly reports whether STORY-66 fired (success or skip reason)
+  - [ ] Manual repro: `aida session start --owns X --branch Y`, open a fake gh PR (mock), `aida session end Y` — verify reviewer queue gains an entry
+  - [ ] Tested with: clean session_end, --force session_end, no-PR session_end, no-gh-installed session_end
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T01:43:33.004148552Z
+modified_at: 2026-05-11T01:43:33.004148552Z
+req_type: Bug
