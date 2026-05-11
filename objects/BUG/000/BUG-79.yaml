@@ -37,12 +37,12 @@ description: |
   - [ ] AIDA_DEBUG_GH=1 prints both "found at X" AND "spawn at X failed: Y" so the user has full diagnostic
   - [ ] Tested: scenario where /usr/bin/gh exists but is a stale symlink → falls back to /usr/local/bin/gh
   - [ ] Tested: scenario where ALL paths fail → clear "gh detected but unrunnable" message, not "gh not on PATH"
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T06:10:43.975707746Z
-modified_at: 2026-05-11T06:12:46.355633818Z
+modified_at: 2026-05-11T06:54:10.796757683Z
 req_type: Bug
 relationships:
 - rel_type: Child
