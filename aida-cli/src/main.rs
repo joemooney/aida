@@ -11325,8 +11325,71 @@ fn resolve_gh_binary() -> Option<std::path::PathBuf> {
         .map(|v| !v.is_empty() && v != "0")
         .unwrap_or(false);
     let mut tried: Vec<std::path::PathBuf> = Vec::new();
+    let mut spawn_failures: Vec<(std::path::PathBuf, String)> = Vec::new();
 
     let exe_name = if cfg!(windows) { "gh.exe" } else { "gh" };
+
+    // BUG-79: closure that checks `is_executable` AND a sanity-spawn of
+    // `gh --version`. The metadata check is necessary but not sufficient:
+    // stale install records, broken symlinks, container mounts, and
+    // bash-hash-table caching can all produce a path whose metadata
+    // looks fine but whose spawn yields ENOENT. The sanity-spawn is the
+    // ground truth — if it fails, we fall back to the next candidate
+    // instead of returning a path that the real caller will choke on.
+    let mut check_candidate = |candidate: &std::path::Path,
+                               source: &str|
+     -> Option<std::path::PathBuf> {
+        tried.push(candidate.to_path_buf());
+        if !is_executable(candidate) {
+            return None;
+        }
+        match std::process::Command::new(candidate)
+            .arg("--version")
+            .output()
+        {
+            Ok(o) if o.status.success() => {
+                if debug {
+                    eprintln!(
+                        "{} found gh {} at {}",
+                        "AIDA_DEBUG_GH:".dimmed(),
+                        source,
+                        candidate.display()
+                    );
+                }
+                Some(candidate.to_path_buf())
+            }
+            Ok(o) => {
+                let reason = format!(
+                    "exit {} stderr={}",
+                    o.status,
+                    String::from_utf8_lossy(&o.stderr).trim()
+                );
+                if debug {
+                    eprintln!(
+                        "{} is_executable({}) ok but `--version` reported {} — falling back",
+                        "AIDA_DEBUG_GH:".dimmed(),
+                        candidate.display(),
+                        reason
+                    );
+                }
+                spawn_failures.push((candidate.to_path_buf(), reason));
+                None
+            }
+            Err(e) => {
+                let reason = format!("{}", e);
+                if debug {
+                    eprintln!(
+                        "{} is_executable({}) ok but spawn failed: {} — falling back",
+                        "AIDA_DEBUG_GH:".dimmed(),
+                        candidate.display(),
+                        reason
+                    );
+                }
+                spawn_failures.push((candidate.to_path_buf(), reason));
+                None
+            }
+        }
+    };
 
     // Pass 1: walk $PATH.
     if let Ok(path) = std::env::var("PATH") {
@@ -11336,16 +11399,8 @@ fn resolve_gh_binary() -> Option<std::path::PathBuf> {
                 continue;
             }
             let candidate = std::path::PathBuf::from(dir).join(exe_name);
-            tried.push(candidate.clone());
-            if is_executable(&candidate) {
-                if debug {
-                    eprintln!(
-                        "{} found gh on PATH at {}",
-                        "AIDA_DEBUG_GH:".dimmed(),
-                        candidate.display()
-                    );
-                }
-                return Some(candidate);
+            if let Some(p) = check_candidate(&candidate, "on PATH") {
+                return Some(p);
             }
         }
     }
@@ -11368,16 +11423,8 @@ fn resolve_gh_binary() -> Option<std::path::PathBuf> {
         v
     };
     for candidate in &fallbacks {
-        tried.push(candidate.clone());
-        if is_executable(candidate) {
-            if debug {
-                eprintln!(
-                    "{} found gh via absolute-path fallback at {}",
-                    "AIDA_DEBUG_GH:".dimmed(),
-                    candidate.display()
-                );
-            }
-            return Some(candidate.clone());
+        if let Some(p) = check_candidate(candidate, "via absolute-path fallback") {
+            return Some(p);
         }
     }
 
@@ -11394,6 +11441,16 @@ fn resolve_gh_binary() -> Option<std::path::PathBuf> {
         );
         for p in &tried {
             eprintln!("  - {}", p.display());
+        }
+        if !spawn_failures.is_empty() {
+            eprintln!(
+                "{} {} candidate(s) passed is_executable but failed to spawn:",
+                "AIDA_DEBUG_GH:".dimmed(),
+                spawn_failures.len()
+            );
+            for (p, reason) in &spawn_failures {
+                eprintln!("  - {} ({})", p.display(), reason);
+            }
         }
     }
     None
@@ -16801,6 +16858,78 @@ mod resolve_gh_binary_tests {
     fn is_executable_rejects_missing() {
         let tmp = TempDir::new().unwrap();
         assert!(!is_executable(&tmp.path().join("nope")));
+    }
+
+    /// BUG-79: a file that passes is_executable but whose spawn fails
+    /// (broken interpreter line) is not returned — we fall back to the
+    /// next candidate or return None. trace:BUG-79 | ai:claude
+    #[test]
+    fn rejects_is_executable_but_spawn_fails() {
+        let tmp = TempDir::new().unwrap();
+        let bad = tmp.path().join("gh");
+        // Shebang points at a non-existent interpreter, so spawn errors
+        // with ENOENT even though is_executable returns true.
+        std::fs::write(
+            &bad,
+            "#!/this/interpreter/does/not/exist\necho should never run\n",
+        )
+        .unwrap();
+        let mut perms = std::fs::metadata(&bad).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&bad, perms).unwrap();
+        assert!(is_executable(&bad));
+
+        let prev_path = std::env::var("PATH").ok();
+        std::env::set_var("PATH", tmp.path());
+        let resolved = resolve_gh_binary();
+        if let Some(p) = prev_path {
+            std::env::set_var("PATH", p);
+        } else {
+            std::env::remove_var("PATH");
+        }
+        // Either None (no other gh) or some other path — never the broken one.
+        if let Some(p) = resolved {
+            assert_ne!(
+                std::fs::canonicalize(&p).unwrap(),
+                std::fs::canonicalize(&bad).unwrap()
+            );
+        }
+    }
+
+    /// BUG-79: when PATH has a broken candidate followed by a working one,
+    /// the working one wins. trace:BUG-79 | ai:claude
+    #[test]
+    fn falls_back_past_broken_to_working() {
+        let broken_dir = TempDir::new().unwrap();
+        let good_dir = TempDir::new().unwrap();
+
+        let broken = broken_dir.path().join("gh");
+        std::fs::write(&broken, "#!/this/does/not/exist\n").unwrap();
+        let mut p = std::fs::metadata(&broken).unwrap().permissions();
+        p.set_mode(0o755);
+        std::fs::set_permissions(&broken, p).unwrap();
+
+        let good = good_dir.path().join("gh");
+        make_executable(&good);
+
+        let combined_path = format!(
+            "{}:{}",
+            broken_dir.path().display(),
+            good_dir.path().display()
+        );
+        let prev_path = std::env::var("PATH").ok();
+        std::env::set_var("PATH", &combined_path);
+        let resolved = resolve_gh_binary();
+        if let Some(prev) = prev_path {
+            std::env::set_var("PATH", prev);
+        } else {
+            std::env::remove_var("PATH");
+        }
+        let resolved = resolved.expect("should fall back to the working gh");
+        assert_eq!(
+            std::fs::canonicalize(&resolved).unwrap(),
+            std::fs::canonicalize(&good).unwrap()
+        );
     }
 }
 
