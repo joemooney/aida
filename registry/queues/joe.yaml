@@ -20,13 +20,6 @@
   for_role: implementer
   for_scope: EPIC-20
 - user_id: joe
-  requirement_id: 019e15a8-ca87-7633-91ba-1058addde789
-  position: 46000
-  added_by: joe
-  added_at: 2026-05-11T06:10:47.104410561Z
-  for_role: implementer
-  for_scope: EPIC-20
-- user_id: joe
   requirement_id: 019e15a9-3605-7563-9475-f86a27b3ce30
   position: 47000
   added_by: joe
