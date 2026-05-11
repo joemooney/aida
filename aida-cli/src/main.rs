@@ -72,7 +72,35 @@ fn get_default_author() -> String {
     }
 }
 
-fn main() -> Result<()> {
+fn main() {
+    // TASK-69: render anyhow-propagated errors in red instead of anyhow's
+    // default plain-text formatter. Centralizes the coloring so every
+    // `bail!` / `?` / `anyhow!` site automatically gets the highlight
+    // without per-site refactoring. Exit code 1 on error, 0 on success.
+    // trace:TASK-69 | ai:claude
+    match run() {
+        Ok(()) => {}
+        Err(err) => {
+            let msg = format!("{:?}", err);
+            // Anyhow's Debug format prints the chain as
+            //     summary
+            //     \n
+            //     Caused by:\n    inner1\n    inner2
+            // Color the first non-empty line bold-red; dim the chain so
+            // root summary stands out from causal background.
+            let mut lines = msg.lines();
+            if let Some(first) = lines.next() {
+                eprintln!("{} {}", "Error:".red().bold(), first.red());
+            }
+            for rest in lines {
+                eprintln!("{}", rest.dimmed());
+            }
+            std::process::exit(1);
+        }
+    }
+}
+
+fn run() -> Result<()> {
     // Intercept --version / -V before clap so we can include the build-time
     // banner (build.rs stamps build time + git sha + dirty flag). Clap's
     // built-in #[clap(version)] only knows the package version, which can't
