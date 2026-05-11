@@ -47,12 +47,12 @@ description: |
   - [ ] Project-init scaffolding template gains the same line (so new projects don't repeat this gap)
   - [ ] `aida session end` no longer requires --force on worktrees where the only untracked file is session-env.sh
   - [ ] Test: run `aida session start --owns X --branch Y`, immediately `aida session end Y`. Should succeed without --force.
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T01:23:02.276233538Z
-modified_at: 2026-05-11T01:23:02.276233538Z
+modified_at: 2026-05-11T03:30:40.681034075Z
 req_type: Bug
 relationships:
 - rel_type: Child
