@@ -1,0 +1,57 @@
+id: 019e14f9-2df2-7763-8b7a-4f93b98bae57
+spec_id: TASK-64
+agreed_id: TASK-64
+title: 'aida list / aida history: hide terminal-status (Completed/Rejected) by default; --all opt-in to show archive'
+description: |
+  Caught 2026-05-11 — user observed that `aida list` (no flags) returns every requirement regardless of status, but day-to-day they care about open work, not the Completed/Rejected archive. As reqs accumulate, the noise grows.
+
+  ## Today's behavior
+
+  ```
+  $ aida list
+  ... 200+ rows, mostly Completed/Rejected ...
+  ```
+
+  User has to filter explicitly: `aida list --status approved`, `aida list --status in-progress`, etc. There's no "show me what's actionable" shortcut.
+
+  ## Desired behavior
+
+  Default filter hides terminal status:
+
+  ```
+  $ aida list
+  ... shows: Draft, Approved, Planned, InProgress, Done ...
+  ... 20-30 rows typically ...
+
+  (N items hidden — pass --all to see Completed/Rejected too)
+  ```
+
+  Flag exposure:
+  - `aida list --all` — full archive (today's default)
+  - `aida list --status completed` — explicit filter overrides default
+  - `aida list --include-terminal` — alias for --all
+
+  Same default applies to `aida history`.
+
+  ## Composes with
+
+  - TASK-46 (queue list/next filter terminal-status) — exact parallel for the queue surface; both should ship together for consistency
+  - STORY-86 (new 'Done' status) — once Done exists between InProgress and Completed, "Done but not merged" stays visible, "Completed on main" hides. Distinction becomes useful.
+  - Existing `aida list --status` flags continue to work unchanged
+
+  ## Acceptance
+
+  - [ ] `aida list` (no flags) hides Completed/Rejected by default
+  - [ ] `aida list --all` shows everything
+  - [ ] `aida list --include-terminal` works as alias
+  - [ ] `aida list --status completed/rejected` continues to work (explicit filter wins)
+  - [ ] Same defaults applied to `aida history`
+  - [ ] Footer prints "N items hidden — pass --all to see them" when filter is active
+  - [ ] Tested: empty result with terminal items hidden shows the footer (gentle hint about --all)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T02:58:55.090830143Z
+modified_at: 2026-05-11T02:58:55.090830143Z
+req_type: Task
