@@ -127,3 +127,11 @@ blocks:
   range_end: 208
   next: 109
   allocated_at: 2026-05-11T17:02:53.215026666Z
+- node_id: '3'
+  owner: Joe.Mooney@work.example
+  hostname: spock
+  type_prefix: STORY
+  range_start: 141
+  range_end: 240
+  next: 141
+  allocated_at: 2026-05-11T17:02:54.570723637Z
