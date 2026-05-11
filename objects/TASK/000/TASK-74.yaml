@@ -1,0 +1,63 @@
+id: 019e153b-ac3f-7922-908c-f7646ee3642f
+spec_id: TASK-74
+agreed_id: TASK-74
+title: 'BUG-72 follow-up: clarify auto-queue skip messages — distinguish ''by-design skip'' from ''missed opportunity'''
+description: |
+  BUG-72 shipped explicit outcome reporting on every code path of STORY-66's auto-queue hook (PR-8). First production use 2026-05-11 surfaced a wording ambiguity:
+
+  ```
+  ⓘ auto-queue: no open PR for branch `pr-8` — reviewer queue not filed
+  ```
+
+  This is technically correct — but reads like a failure / missed opportunity to the user, when it's actually an intentional skip-by-design (reviewer sessions on `pr-N` branches don't produce PRs, so the hook correctly skipped).
+
+  ## Today's messages (from BUG-72's PrLookup / AutoQueueOutcome enums)
+
+  - `Filed` → "✓ auto-queued reviewer story X for PR-N"
+  - `AlreadyExists` → "ⓘ auto-queue: reviewer story already exists for PR-N (idempotent)"
+  - `Skipped(NoOpenPr)` → "ⓘ auto-queue: no open PR for branch X — reviewer queue not filed" ← ambiguous
+  - `Skipped(GhMissing)` → "ⓘ auto-queue: gh not on PATH — reviewer queue not filed" ← ambiguous
+  - `Skipped(GhFailed(reason))` → similar shape
+
+  ## Desired messages
+
+  Distinguish three categories:
+
+  1. **By-design skip** (reviewer session, no PR-producing branch):
+     ```
+     ⓘ auto-queue: reviewer session — no PR to file (skip by design)
+     ```
+
+  2. **Missing-tool skip** (gh/glab not installed; user might want to know):
+     ```
+     ⚠ auto-queue: gh CLI not found — would have queued reviewer story for branch X. Install gh to enable.
+     ```
+
+  3. **Lookup-failed skip** (gh ran but errored; reportable):
+     ```
+     ⚠ auto-queue: gh pr view failed for branch X (<reason>) — no reviewer story filed
+     ```
+
+  By-design skips use ⓘ (informational, dim) so they don't sound alarming. Missing-tool and lookup-failed use ⚠ (warning, yellow) because the user might want to fix.
+
+  The skill code path is determined by: did the session's branch ever produce a PR? Detect by checking if HEAD matches `epic-*-batch*` / similar implementer-branch shape vs `pr-*` / `mr-*` reviewer-branch shape.
+
+  ## Composes with
+
+  - BUG-72 (the outcome enum infrastructure already exists) — this is wording polish on top
+  - TASK-69 (red errors) — same family of "AIDA communicates clearly about what happened"
+  - TASK-72 (/aida-review polish) — also UX wording for first-use experiences
+
+  ## Acceptance
+
+  - [ ] Three categories of skip distinguished with different glyph (ⓘ vs ⚠) and clearer message
+  - [ ] By-design skips dimmed; missing-tool / lookup-failed skips warned
+  - [ ] Heuristic for detecting reviewer-vs-implementer branch shape (regex or lease.scope inspection)
+  - [ ] Tested: end reviewer session → ⓘ by-design. End implementer session without gh installed → ⚠ missing. End implementer session with gh failure → ⚠ lookup-failed.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T04:11:32.799801209Z
+modified_at: 2026-05-11T04:11:32.799801209Z
+req_type: Task
