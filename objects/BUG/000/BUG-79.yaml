@@ -42,7 +42,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T06:10:43.975707746Z
-modified_at: 2026-05-11T06:55:29.891601408Z
+modified_at: 2026-05-11T06:55:36.729888278Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -72,3 +72,7 @@ comments:
     Fix: in BUG-79's implementation, after is_executable returns true, do  as a smoke test. If smoke test fails, fall back to next candidate. AND log the exact path bytes when failing, not just the unicode string.
   created_at: 2026-05-11T06:12:46.355633818Z
   modified_at: 2026-05-11T06:12:46.355633818Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-11T06:55:36.729888278Z
+  implemented_by: joe
