@@ -1,0 +1,44 @@
+id: 019e1575-ca83-7d62-ab7b-fc7ab43a8ad8
+spec_id: BUG-76
+agreed_id: BUG-76
+title: 'aida session start: new branch forks from cwd''s HEAD, not project''s default branch (main) — causes batch to inherit unmerged commits'
+description: |
+  Caught 2026-05-11 — sibling of the worktree-path bug. User ran `aida session start --owns EPIC-20 --branch epic-20-batch10` from inside `~/ai/aida-pr-9` (where HEAD was on `epic-20-batch9`, PR-9's branch). Expected the new branch to fork from `origin/main`. Actually forked from PR-9's HEAD — so batch10 started with PR-9's 12 unmerged commits already on it. Attempting to rebase batch10 onto origin/main then tried to replay PR-9's commits onto pre-PR-9 main, conflicting on every shared file.
+
+  ## Today's behavior
+
+  `git worktree add -b <branch> <path> <base>` — when `<base>` isn't explicit, git uses HEAD. If the caller is inside a worktree with a different branch checked out, the new worktree's branch forks from that branch.
+
+  ## Desired behavior
+
+  `aida session start --owns X --branch Y` should fork the new branch from the project's **default branch** (main/master), not from cwd's HEAD. Resolution order:
+
+  1. `--base <ref>` flag if explicit (currently exists per --help)
+  2. Project's default branch (detect via `git symbolic-ref refs/remotes/origin/HEAD`, fallback to `main`)
+  3. Warn if cwd's HEAD doesn't match the default branch ("you're on epic-20-batch9; new session will fork from origin/main — pass --base if you want otherwise")
+
+  ## User-visible impact
+
+  - New batches inherit unmerged commits from whatever branch the caller happened to be on
+  - Rebase pain on top: trying to bring the batch onto current main means replaying inherited-but-conflict-prone commits
+  - The session model assumes each batch is a clean fork — this bug violates that invariant silently
+
+  ## Composes with
+
+  - The companion bug (worktree path from cwd not main-root) — same root cause: session_start makes cwd-relative assumptions when it should be project-relative
+  - TASK-54 (push branch-behind-main prompt, shipped) — would have caught this at push time too, but better to prevent at start time
+  - STORY-71 (PR/MR session checkout) — that's explicit-base for review sessions; this is implicit-base for fresh batches
+
+  ## Acceptance
+
+  - [ ] `aida session start --owns X --branch Y` forks from origin/HEAD (or main fallback), not cwd's HEAD
+  - [ ] `--base <ref>` explicit override continues to work
+  - [ ] Warning when cwd is on a non-default branch ("forking from origin/main; pass --base if you want this branch's HEAD")
+  - [ ] Tested: invoke from main project on main branch → same behavior. From main project on a feature branch → forks from origin/main with warning. From inside a worktree on any branch → forks from origin/main with warning.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T05:15:01.635096478Z
+modified_at: 2026-05-11T05:15:01.635096478Z
+req_type: Bug
