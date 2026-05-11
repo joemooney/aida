@@ -1,0 +1,53 @@
+id: 019e14f2-71bf-7e72-aa29-f87455f4d07b
+spec_id: TASK-63
+agreed_id: TASK-63
+title: 'aida session start --launch: auto-source .aida/session-env.sh in the launched claude''s shell'
+description: |
+  Caught 2026-05-11 — `aida session start --launch` (STORY-54) execs claude in the new worktree but doesn't pre-source `.aida/session-env.sh` (STORY-52). User has to remember the manual `source` step OR the launched claude starts without `CARGO_TARGET_DIR` set, defeating STORY-52's target-sharing.
+
+  ## Today's behavior
+
+  `aida session start --owns X --branch Y --launch` flow:
+  1. Create worktree
+  2. Write `.aida/session-env.sh` exporting CARGO_TARGET_DIR
+  3. Print "source .aida/session-env.sh" hint
+  4. cd into worktree
+  5. Exec claude
+
+  The exec happens in the same shell as step 4, but the env exports haven't been sourced.
+
+  ## Desired behavior
+
+  Step 4.5: source `.aida/session-env.sh` (if exists) before the exec. So the launched claude inherits CARGO_TARGET_DIR (and any future session-scoped env).
+
+  Equivalent shell pseudocode (the Rust impl just does it before the exec):
+  ```bash
+  cd $worktree
+  [ -f .aida/session-env.sh ] && source .aida/session-env.sh
+  exec claude ...
+  ```
+
+  ## Composes with
+
+  - STORY-52 (session-env.sh) — without auto-source, target-sharing benefit doesn't accrue when using --launch
+  - STORY-54 (--launch flag) — the launch path is the one that needs the auto-source
+  - BUG-71 (.aida/session-env.sh in .gitignore) — once gitignored, the file is unconditionally session-state; safe to auto-source
+
+  ## Open question
+
+  Should auto-source also happen in the user's parent shell (not just the launched claude)? Probably not — the parent shell is theirs to manage. Auto-source is specifically for the agent's environment.
+
+  ## Acceptance
+
+  - [ ] `aida session start --launch` auto-sources session-env.sh before exec
+  - [ ] Launched claude inherits CARGO_TARGET_DIR
+  - [ ] Hint text changes: no longer says "run source .aida/session-env.sh" when --launch is used
+  - [ ] Manual non-launch flow unchanged (user still sources it themselves)
+  - [ ] Tested: `aida session start --owns X --launch`, inside claude verify `$CARGO_TARGET_DIR` is set, run `cargo build` and confirm artifacts land in parent's target/
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T02:51:33.695351219Z
+modified_at: 2026-05-11T02:51:33.695351219Z
+req_type: Task
