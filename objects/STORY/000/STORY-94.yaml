@@ -1,0 +1,41 @@
+id: 019e14f8-66db-7dc2-a6cf-5b21e3ad6e7a
+spec_id: STORY-94
+agreed_id: STORY-94
+title: Auto-spawn reviewer session at PR-create-time (alternative trigger to STORY-66 / STORY-90 queue-only)
+description: |
+  STORY-66 (queue-only) and STORY-90 (PR-create-time queue) both file a queue ENTRY for the reviewer. This story goes further: actually spawn the reviewer session.
+
+  ## Surface
+
+  ```
+  /aida-pr ... opens the PR.
+  Then offers: "Auto-spawn reviewer session for PR-N? [Y/n]"
+
+  [Y] → fires `aida session start --owns PR-N --launch --role reviewer` in a new terminal (via tmux split, screen, alacritty -e, or whatever the user's terminal multiplexer supports)
+  [n] → standard behavior, user spawns reviewer manually
+  ```
+
+  ## Tricky parts
+
+  - Detecting/integrating with the user's terminal multiplexer (tmux > screen > native terminal app). Auto-detect via $TMUX, $STY, or $TERM_PROGRAM.
+  - If no multiplexer detected, fall back to "open new terminal window" via OS-specific commands (gnome-terminal, osascript, wt.exe).
+  - Don't fire silently — always confirm with user. Auto-spawn UX with no confirmation feels invasive.
+
+  ## Why optional / low-priority
+
+  The queue-driven approach (STORY-66 / STORY-90) is sufficient for most workflows. Auto-spawning a SHELL session crosses into "AIDA controls my terminal layout" territory which not all users want. Make it strictly opt-in.
+
+  ## Acceptance
+
+  - [ ] /aida-pr offers auto-spawn after gh pr create succeeds
+  - [ ] Detects user's terminal multiplexer; spawns in new pane/window/tab
+  - [ ] Falls back to "copy this command" if no multiplexer detected
+  - [ ] User confirmation required; default = no
+  - [ ] AIDA_AUTO_SPAWN_REVIEWER env var controls default
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T02:58:04.123959190Z
+modified_at: 2026-05-11T02:58:04.123959190Z
+req_type: Story
