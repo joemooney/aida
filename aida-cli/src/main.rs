@@ -719,30 +719,49 @@ fn handle_init_command(
     )
 }
 
-/// Append AIDA's runtime entries to the project's `.gitignore` if any are
-/// missing. Returns `true` if a new entry was written (so callers can echo
-/// "updated .gitignore"); `false` if everything was already covered or the
-/// file had to be created from scratch.
+/// Append AIDA's `.gitignore` entries if any are missing. Returns `true` if a
+/// new entry was written (so callers can echo "updated .gitignore"); `false`
+/// if everything was already covered or the file had to be created from
+/// scratch.
 ///
-/// Entries:
-/// - `<worktree_dir>/` — the orphan-branch worktree (`.aida-store/` by default)
-/// - `.aida/session-env.sh` — STORY-52 per-session env shim. Missing it makes
-///   every post-STORY-52 `aida session end` trip BUG-67's untracked check and
-///   demand `--force`. trace:BUG-71 | ai:claude
+/// Writes two blocks:
+/// - `<worktree_dir>/` (+ bare symlink form) — the orphan-branch worktree
+///   (`.aida-store/` by default). Bare-name pattern needed because session
+///   worktrees link to the canonical store. trace:EPIC-21 | ai:claude
+/// - `.aida/*` deny-by-default + `!.aida/config.toml` allow-list — covers
+///   every per-clone runtime file under `.aida/` (sessions, roles, cache,
+///   session-env, server data, review prompts, future runtime additions)
+///   without per-file whack-a-mole. trace:BUG-73 | ai:claude
+///
+/// Migration: when invoked against a `.gitignore` from an older AIDA scaffold
+/// (which listed each runtime path individually), the deny block is appended.
+/// Legacy per-file entries become redundant but remain harmless.
 fn add_aida_gitignore_entries(cwd: &std::path::Path, worktree_dir: &str) -> Result<bool> {
     use std::io::Write;
     let gitignore_path = cwd.join(".gitignore");
     let store_entry = format!(
-        "\n# AIDA distributed store (orphan branch worktree)\n{}/\n",
+        "\n# AIDA distributed store (orphan branch worktree)\n\
+         # Bare-name pattern catches session-worktree symlinks back to the\n\
+         # canonical store. trace:EPIC-21 | ai:claude\n\
+         {0}/\n\
+         {0}\n",
         worktree_dir
     );
-    let session_env_entry = "\n# AIDA session environment shim (STORY-52, gitignored per BUG-71)\n\
-         .aida/session-env.sh\n";
+    let runtime_entry = "\n# AIDA runtime state — deny-by-default. Anything under .aida/ is\n\
+         # per-clone runtime state (cache, sessions, roles, env shims, review\n\
+         # prompts, server data, etc.) unless explicitly allow-listed below.\n\
+         # Adding a new runtime file under .aida/ requires no gitignore change;\n\
+         # tracking a new project-config file requires an explicit `!` line.\n\
+         # trace:BUG-73 | ai:claude\n\
+         .aida/*\n\
+         \n\
+         # Tracked exceptions: project-level config that lives in the repo.\n\
+         !.aida/config.toml\n";
 
     if !gitignore_path.exists() {
         std::fs::write(
             &gitignore_path,
-            format!("{}{}", store_entry, session_env_entry),
+            format!("{}{}", store_entry, runtime_entry),
         )?;
         return Ok(false);
     }
@@ -756,11 +775,19 @@ fn add_aida_gitignore_entries(cwd: &std::path::Path, worktree_dir: &str) -> Resu
         file.write_all(store_entry.as_bytes())?;
         wrote = true;
     }
-    if !content.contains(".aida/session-env.sh") {
-        file.write_all(session_env_entry.as_bytes())?;
+    if !has_aida_runtime_deny_pattern(&content) {
+        file.write_all(runtime_entry.as_bytes())?;
         wrote = true;
     }
     Ok(wrote)
+}
+
+/// Detect whether the deny-by-default `.aida/*` line is present (ignoring
+/// comments and surrounding whitespace). trace:BUG-73 | ai:claude
+fn has_aida_runtime_deny_pattern(content: &str) -> bool {
+    content
+        .lines()
+        .any(|line| line.trim() == ".aida/*")
 }
 
 /// Workflow scaffolding shared by all `aida init` modes — builds skills,
@@ -15211,26 +15238,27 @@ mod add_aida_gitignore_entries_tests {
     use super::*;
     use tempfile::TempDir;
 
-    /// Fresh project (no .gitignore) → file is created with both entries.
+    /// Fresh project (no .gitignore) → file is created with both blocks.
     /// Returns Ok(false) per the contract (a brand-new file isn't an
-    /// "update"). trace:BUG-71 | ai:claude
+    /// "update"). trace:BUG-73 | ai:claude
     #[test]
-    fn creates_gitignore_with_both_entries() {
+    fn creates_gitignore_with_both_blocks() {
         let tmp = TempDir::new().unwrap();
         let updated = add_aida_gitignore_entries(tmp.path(), ".aida-store").unwrap();
         assert!(!updated, "creation isn't an update");
         let content = std::fs::read_to_string(tmp.path().join(".gitignore")).unwrap();
         assert!(content.contains(".aida-store/"), "{}", content);
-        assert!(content.contains(".aida/session-env.sh"), "{}", content);
+        assert!(has_aida_runtime_deny_pattern(&content), "{}", content);
+        assert!(content.contains("!.aida/config.toml"), "{}", content);
     }
 
-    /// Existing .gitignore that already covers both entries → no write,
-    /// returns Ok(false). trace:BUG-71 | ai:claude
+    /// Existing .gitignore that already covers both blocks → no write,
+    /// returns Ok(false). trace:BUG-73 | ai:claude
     #[test]
-    fn idempotent_when_both_entries_present() {
+    fn idempotent_when_both_blocks_present() {
         let tmp = TempDir::new().unwrap();
         let path = tmp.path().join(".gitignore");
-        let original = "target/\n.aida-store/\n.aida/session-env.sh\n";
+        let original = "target/\n.aida-store/\n.aida/*\n!.aida/config.toml\n";
         std::fs::write(&path, original).unwrap();
         let updated = add_aida_gitignore_entries(tmp.path(), ".aida-store").unwrap();
         assert!(!updated);
@@ -15238,25 +15266,30 @@ mod add_aida_gitignore_entries_tests {
         assert_eq!(content, original);
     }
 
-    /// Pre-BUG-71 .gitignore (has .aida-store/ but not session-env.sh) →
-    /// only session-env.sh is appended. This is the migration path for
-    /// existing projects scaffolded before the fix. trace:BUG-71 | ai:claude
+    /// Legacy .gitignore (has `.aida-store/` but pre-BUG-73 per-file ignores)
+    /// → the deny block is appended; the old per-file lines are left in place
+    /// (harmless but redundant). Migration path for existing projects.
+    /// trace:BUG-73 | ai:claude
     #[test]
-    fn appends_only_missing_session_env_entry() {
+    fn appends_deny_block_when_only_legacy_per_file_entries() {
         let tmp = TempDir::new().unwrap();
         let path = tmp.path().join(".gitignore");
-        std::fs::write(&path, "target/\n.aida-store/\n").unwrap();
+        std::fs::write(
+            &path,
+            "target/\n.aida-store/\n.aida/session-env.sh\n.aida/sessions/\n",
+        )
+        .unwrap();
         let updated = add_aida_gitignore_entries(tmp.path(), ".aida-store").unwrap();
-        assert!(updated, "session-env line was missing → expected an append");
+        assert!(updated, "deny block missing → expected an append");
         let content = std::fs::read_to_string(&path).unwrap();
-        assert!(content.contains(".aida-store/"));
-        assert!(content.contains(".aida/session-env.sh"));
-        // Original content preserved
-        assert!(content.starts_with("target/\n.aida-store/\n"));
+        assert!(has_aida_runtime_deny_pattern(&content));
+        assert!(content.contains("!.aida/config.toml"));
+        // Legacy entries preserved
+        assert!(content.starts_with("target/\n.aida-store/\n.aida/session-env.sh\n"));
     }
 
-    /// .gitignore exists but neither AIDA entry → both get appended.
-    /// trace:BUG-71 | ai:claude
+    /// .gitignore exists but no AIDA blocks → both get appended.
+    /// trace:BUG-73 | ai:claude
     #[test]
     fn appends_both_when_neither_present() {
         let tmp = TempDir::new().unwrap();
@@ -15266,7 +15299,20 @@ mod add_aida_gitignore_entries_tests {
         assert!(updated);
         let content = std::fs::read_to_string(&path).unwrap();
         assert!(content.contains(".aida-store/"));
-        assert!(content.contains(".aida/session-env.sh"));
+        assert!(has_aida_runtime_deny_pattern(&content));
+        assert!(content.contains("!.aida/config.toml"));
+    }
+
+    /// Detection helper: matches a bare `.aida/*` line, ignores comments
+    /// that mention the string, ignores leading/trailing whitespace.
+    /// trace:BUG-73 | ai:claude
+    #[test]
+    fn deny_pattern_detection() {
+        assert!(has_aida_runtime_deny_pattern(".aida/*\n"));
+        assert!(has_aida_runtime_deny_pattern("foo\n  .aida/*  \nbar\n"));
+        assert!(!has_aida_runtime_deny_pattern("# .aida/* is a comment\n"));
+        assert!(!has_aida_runtime_deny_pattern(".aida/session-env.sh\n"));
+        assert!(!has_aida_runtime_deny_pattern(""));
     }
 }
 
