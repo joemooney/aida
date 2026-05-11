@@ -10932,9 +10932,16 @@ fn session_end(id_query: Option<&str>, yes: bool, force: bool) -> Result<()> {
     // relations to every spec referenced in the PR's commit messages. Best
     // effort: any failure here logs a warning and is otherwise silent — we
     // never fail `session_end` because of a queue side-effect.
-    // trace:STORY-66 | ai:claude
-    if let Some(summary) = try_auto_queue_pr_review(&project_root, &target.branch, &target.id) {
-        println!("{} {}", "✓".green(), summary);
+    //
+    // BUG-72: always print the outcome (filed / skipped + reason), so the
+    // user sees whether the hook fired. The silent-skip case was painful in
+    // PR-7 wrap-up: STORY-66 silently no-op'd and the reviewer queue stayed
+    // empty with no explanation. trace:STORY-66 BUG-72 | ai:claude
+    let outcome = try_auto_queue_pr_review(&project_root, &target.branch, &target.id);
+    match outcome.status {
+        AutoQueueStatus::Filed => println!("{} {}", "✓".green(), outcome.summary),
+        AutoQueueStatus::AlreadyExists => println!("{} {}", "ⓘ".cyan(), outcome.summary),
+        AutoQueueStatus::Skipped => eprintln!("{} {}", "ⓘ".dimmed(), outcome.summary.dimmed()),
     }
 
     // STORY-73: emit `unset AIDA_SESSION_ID` to stdout when wrapped via the
@@ -10956,12 +10963,29 @@ struct OpenPrInfo {
     url: String,
 }
 
-/// Look up a single open PR for `branch` via `gh`. Returns None when `gh`
-/// isn't installed, the user isn't authenticated, the branch has no open
-/// PR, or the output can't be parsed. All paths are best-effort —
-/// session_end never fails because of this hook. trace:STORY-66 | ai:claude
-fn detect_open_pr_for_branch(project_root: &std::path::Path, branch: &str) -> Option<OpenPrInfo> {
-    let out = std::process::Command::new("gh")
+/// Why `detect_open_pr_for_branch` returned no PR — so the caller (and the
+/// user reading `aida session end` output) can tell "no PR yet" from "gh
+/// isn't installed" from "gh blew up". The old None-everything return type
+/// hid the difference and made BUG-72 hard to diagnose.
+/// trace:BUG-72 | ai:claude
+enum PrLookup {
+    Found(OpenPrInfo),
+    /// `gh` ran cleanly but reported no open PR for this branch.
+    NoOpenPr,
+    /// `gh` is not on $PATH (binary missing).
+    GhMissing,
+    /// `gh` was found but its invocation failed (auth, network, parse).
+    /// String carries the trimmed stderr / parse error so the user sees
+    /// the actual cause instead of a silent no-op.
+    GhFailed(String),
+}
+
+/// Look up a single open PR for `branch` via `gh`. Never panics; never
+/// fails session_end. The richer return shape lets the caller print an
+/// honest skip reason instead of pretending nothing happened.
+/// trace:STORY-66 BUG-72 | ai:claude
+fn detect_open_pr_for_branch(project_root: &std::path::Path, branch: &str) -> PrLookup {
+    let spawned = std::process::Command::new("gh")
         .current_dir(project_root)
         .args([
             "pr",
@@ -10977,22 +11001,35 @@ fn detect_open_pr_for_branch(project_root: &std::path::Path, branch: &str) -> Op
             "-q",
             r#".[] | "\(.number)\t\(.title)\t\(.url)""#,
         ])
-        .output()
-        .ok()?;
+        .output();
+    let out = match spawned {
+        Ok(o) => o,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return PrLookup::GhMissing,
+        Err(e) => return PrLookup::GhFailed(e.to_string()),
+    };
     if !out.status.success() {
-        return None;
+        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        return PrLookup::GhFailed(if stderr.is_empty() {
+            format!("gh exited {}", out.status)
+        } else {
+            stderr
+        });
     }
     let s = String::from_utf8_lossy(&out.stdout);
-    let line = s.lines().next()?.trim();
+    let Some(line) = s.lines().next().map(str::trim) else {
+        return PrLookup::NoOpenPr;
+    };
     if line.is_empty() {
-        return None;
+        return PrLookup::NoOpenPr;
     }
     let parts: Vec<&str> = line.split('\t').collect();
     if parts.len() < 3 {
-        return None;
+        return PrLookup::GhFailed(format!("could not parse gh output: {:?}", line));
     }
-    let number: u64 = parts[0].parse().ok()?;
-    Some(OpenPrInfo {
+    let Ok(number) = parts[0].parse::<u64>() else {
+        return PrLookup::GhFailed(format!("non-numeric PR number from gh: {:?}", parts[0]));
+    };
+    PrLookup::Found(OpenPrInfo {
         number,
         title: parts[1].to_string(),
         url: parts[2].to_string(),
@@ -11172,19 +11209,79 @@ fn aida_subcmd_queue_add_for_reviewer(project_root: &std::path::Path, spec_id: &
     }
 }
 
+/// What `try_auto_queue_pr_review` did, in three buckets that map to the
+/// caller's display formatting (green check / cyan info / dim skip).
+/// trace:BUG-72 | ai:claude
+enum AutoQueueStatus {
+    /// New review story filed and queued for reviewer.
+    Filed,
+    /// PR found but a `Review PR-N` story already exists — idempotent re-run.
+    AlreadyExists,
+    /// Anything that means "no queue entry filed": no PR open for branch,
+    /// gh missing, gh failed, `aida add` failed, etc. Carries enough detail
+    /// in `summary` for the user to know why.
+    Skipped,
+}
+
+/// Outcome of the end-of-session auto-queue. Always returns SOMETHING so
+/// `session_end` can render a clear status line. trace:BUG-72 | ai:claude
+struct AutoQueueOutcome {
+    status: AutoQueueStatus,
+    summary: String,
+}
+
+impl AutoQueueOutcome {
+    fn filed(s: impl Into<String>) -> Self {
+        Self {
+            status: AutoQueueStatus::Filed,
+            summary: s.into(),
+        }
+    }
+    fn already_exists(s: impl Into<String>) -> Self {
+        Self {
+            status: AutoQueueStatus::AlreadyExists,
+            summary: s.into(),
+        }
+    }
+    fn skipped(s: impl Into<String>) -> Self {
+        Self {
+            status: AutoQueueStatus::Skipped,
+            summary: s.into(),
+        }
+    }
+}
+
 /// End-of-session auto-detect-and-queue. Runs as a side effect of
 /// `aida session end` so a forgotten `gh pr create` doesn't leave the
-/// reviewer unaware. Returns a one-line summary string when it filed (or
-/// already-skipped) something; None when there's no PR to act on.
-/// trace:STORY-66 | ai:claude
+/// reviewer unaware. Returns an outcome describing what happened — see
+/// `AutoQueueStatus` for the categories. trace:STORY-66 BUG-72 | ai:claude
 fn try_auto_queue_pr_review(
     project_root: &std::path::Path,
     branch: &str,
     session_id: &str,
-) -> Option<String> {
-    let pr = detect_open_pr_for_branch(project_root, branch)?;
+) -> AutoQueueOutcome {
+    let pr = match detect_open_pr_for_branch(project_root, branch) {
+        PrLookup::Found(pr) => pr,
+        PrLookup::NoOpenPr => {
+            return AutoQueueOutcome::skipped(format!(
+                "auto-queue: no open PR for branch `{}` — reviewer queue not filed",
+                branch
+            ));
+        }
+        PrLookup::GhMissing => {
+            return AutoQueueOutcome::skipped(
+                "auto-queue: `gh` CLI not on PATH — reviewer queue not filed".to_string(),
+            );
+        }
+        PrLookup::GhFailed(reason) => {
+            return AutoQueueOutcome::skipped(format!(
+                "auto-queue: `gh pr list` failed ({}) — reviewer queue not filed",
+                reason
+            ));
+        }
+    };
     if pr_review_story_already_exists(project_root, pr.number) {
-        return Some(format!(
+        return AutoQueueOutcome::already_exists(format!(
             "PR #{} already has a `Review PR-{}` story queued — skipping",
             pr.number, pr.number
         ));
@@ -11231,7 +11328,15 @@ fn try_auto_queue_pr_review(
     desc.push_str("- Mark this story `completed` once the PR is merged.\n");
 
     let title = format!("Review PR-{}: {}", pr.number, pr.title);
-    let new_id = aida_subcmd_add_review_story(project_root, &title, &desc)?;
+    let new_id = match aida_subcmd_add_review_story(project_root, &title, &desc) {
+        Some(id) => id,
+        None => {
+            return AutoQueueOutcome::skipped(format!(
+                "auto-queue: `aida add` failed for PR #{} (see warning above)",
+                pr.number
+            ));
+        }
+    };
 
     for id in &spec_ids {
         aida_subcmd_rel_add_implements(project_root, &new_id, id);
@@ -11250,7 +11355,7 @@ fn try_auto_queue_pr_review(
     } else {
         spec_ids.join(", ")
     };
-    Some(format!(
+    AutoQueueOutcome::filed(format!(
         "filed {} (covers {}) → reviewer queue (PR #{})",
         new_id, covers, pr.number
     ))
@@ -13181,6 +13286,39 @@ mod statusline_tests {
         );
         // Output with no recognizable line.
         assert_eq!(parse_spec_id_from_add_output("something unrelated\n"), None);
+    }
+
+    /// BUG-72: the auto-queue outcome shape must distinguish Filed,
+    /// AlreadyExists, and the various Skipped reasons so `session end`
+    /// can render the right glyph and the user knows why the reviewer
+    /// queue did or didn't grow an entry. Smoke-checks the constructors
+    /// since the real flow needs a live gh + filesystem to exercise.
+    /// trace:BUG-72 | ai:claude
+    #[test]
+    fn auto_queue_outcome_constructors_tag_status_correctly() {
+        let filed =
+            AutoQueueOutcome::filed("filed STORY-99 (covers FR-1) → reviewer queue (PR #7)");
+        assert!(matches!(filed.status, AutoQueueStatus::Filed));
+        assert!(filed.summary.starts_with("filed STORY-99"));
+
+        let dup = AutoQueueOutcome::already_exists(
+            "PR #7 already has a `Review PR-7` story queued — skipping",
+        );
+        assert!(matches!(dup.status, AutoQueueStatus::AlreadyExists));
+
+        // Skip reasons all flow through one variant. Cover each phrasing so
+        // a future refactor that swaps the strings can't silently regress
+        // back into the BUG-72 "no message at all" hole.
+        for phrase in [
+            "auto-queue: no open PR for branch `epic-20-batch7` — reviewer queue not filed",
+            "auto-queue: `gh` CLI not on PATH — reviewer queue not filed",
+            "auto-queue: `gh pr list` failed (HTTP 401 — gh auth status) — reviewer queue not filed",
+            "auto-queue: `aida add` failed for PR #42 (see warning above)",
+        ] {
+            let s = AutoQueueOutcome::skipped(phrase);
+            assert!(matches!(s.status, AutoQueueStatus::Skipped));
+            assert_eq!(s.summary, phrase);
+        }
     }
 
     /// STORY-55: scope-fallback decision table for the `@<…>` segment.
