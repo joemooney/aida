@@ -11048,6 +11048,29 @@ fn session_end(id_query: Option<&str>, yes: bool, force: bool) -> Result<()> {
         }
     }
 
+    // TASK-68: detect whether the user's shell was sitting inside the
+    // worktree we're about to nuke. We capture cwd BEFORE we chdir away
+    // for the git ops, so we can later emit a `cd <parent>` for the
+    // shell wrapper (Layer 2 of the fix). Canonicalize both sides so
+    // symlink chains don't mask the match. trace:TASK-68 | ai:claude
+    let starting_cwd = std::env::current_dir().ok();
+    let canonical_worktree = target
+        .worktree_path
+        .canonicalize()
+        .unwrap_or_else(|_| target.worktree_path.clone());
+    let cwd_was_inside_worktree = starting_cwd
+        .as_ref()
+        .and_then(|c| c.canonicalize().ok())
+        .map(|c| c.starts_with(&canonical_worktree))
+        .unwrap_or(false);
+
+    // TASK-68 Layer 1: chdir to the parent project before running git.
+    // `git worktree remove` refuses outright when the calling process's
+    // cwd is inside the worktree being removed. Switching the Rust
+    // process's cwd here doesn't affect the parent shell — that's
+    // handled separately by Layer 2's eval'd `cd`. trace:TASK-68
+    let _ = std::env::set_current_dir(&project_root);
+
     // BUG-67: always pass `--force`. We've already gated on the dirty
     // check above, so by this point the only non-clean state is
     // gitignored (target/, .aida/cache.db, etc.) — which git still
@@ -11111,8 +11134,26 @@ fn session_end(id_query: Option<&str>, yes: bool, force: bool) -> Result<()> {
     // shell helper's `eval "$(...)"`, so the calling shell's env var
     // doesn't go stale after the lease it pointed at is gone.
     // trace:STORY-73 | ai:claude
+    //
+    // TASK-68 Layer 2: if the user's shell was sitting inside the
+    // worktree we just removed, their cwd is now a dangling (deleted)
+    // inode — every path-relative command would fail until they
+    // manually cd out. Emit a `cd <parent>` to stdout so the shell
+    // wrapper's `eval` lands them in the parent project naturally.
+    // No-op for users running `aida session end` from outside the
+    // worktree (and for direct (non-wrapped) invocation, since stdout
+    // is a TTY then). trace:TASK-68 | ai:claude
     if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
         println!("unset AIDA_SESSION_ID");
+        if cwd_was_inside_worktree {
+            let escaped = project_root.display().to_string().replace('\'', "'\\''");
+            println!("cd '{}'", escaped);
+            eprintln!(
+                "  {} cd'd back to parent project {}",
+                "↩".dimmed(),
+                project_root.display().to_string().cyan()
+            );
+        }
     }
     Ok(())
 }
