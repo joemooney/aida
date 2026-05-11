@@ -69,13 +69,6 @@
   for_role: implementer
   for_scope: EPIC-20
 - user_id: joe
-  requirement_id: 019e152b-2941-7960-8dbc-047cf890fa99
-  position: 34000
-  added_by: joe
-  note: auto-queued by `aida session end` (019e1510); covers 6 specs
-  added_at: 2026-05-11T03:53:44.917960121Z
-  for_role: reviewer
-- user_id: joe
   requirement_id: 019e134a-57d3-70e0-a15c-006dea10310d
   position: 9223372036854775807
   added_by: joe
