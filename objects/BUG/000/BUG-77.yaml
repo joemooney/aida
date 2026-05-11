@@ -1,0 +1,58 @@
+id: 019e15a1-cd98-7042-90d6-28eea08a3c8a
+spec_id: BUG-77
+agreed_id: BUG-77
+title: 'aida search with spec-id-shaped query errors with ''no such column: 9'' (FTS5 quoting)'
+description: |
+  Caught 2026-05-11 by PR-9 reviewer:
+
+  ```
+  $ aida search "PR-9"
+  Error: no such column: 9
+  ```
+
+  The query gets parsed by FTS5 as `PR:9` (column:value syntax) because the dash interacts with FTS5 tokenization. SQLite-side FTS5 then complains that there's no column named "9" in the requirements_fts schema.
+
+  ## Affects
+
+  Any query that looks like `<ID-shape>` — `PR-9`, `EPIC-20`, `STORY-86`, etc. — the exact query shape that's most common for AIDA users.
+
+  ## Fix
+
+  In the cache layer (aida-core/src/db/cache.rs FTS5 search query construction), escape user input before passing to FTS5. Options:
+
+  1. Wrap in double quotes: FTS5 treats `"PR-9"` as a phrase, not column:value
+  2. Escape the dash: replace `-` with a space or strip it
+  3. Use FTS5 prefix mode: `PR-9*` if the user wants partial match
+
+  Option 1 is the most direct fix. Quote the user's query string when building the MATCH expression:
+
+  ```rust
+  // Today (broken):
+  let q = format!("SELECT ... WHERE requirements_fts MATCH '{}'", user_query);
+
+  // Fixed:
+  let escaped = user_query.replace('"', "\"\"");  // FTS5 double-quote escape
+  let q = format!("SELECT ... WHERE requirements_fts MATCH '\"{}\"'", escaped);
+  ```
+
+  Verify with FTS5 special chars: `:`, `-`, `*`, `^`, `"`, `(`, `)`.
+
+  ## Composes with
+
+  - Cache backend (cache.rs) — this lives in the FTS5 query builder
+  - TASK-73 (verbose pull output) — uses search-like queries; same parser
+
+  ## Acceptance
+
+  - [ ] `aida search "PR-9"` returns results (or empty, gracefully) without error
+  - [ ] `aida search "EPIC-20"`, `aida search "STORY-86"`, etc. all work
+  - [ ] Free-text queries still work: `aida search "session lease enforcement"`
+  - [ ] No regression on queries with FTS5 special tokens
+  - [ ] Test fixture covers each FTS5 special char in a query string
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T06:03:06.008362630Z
+modified_at: 2026-05-11T06:03:06.008362630Z
+req_type: Bug
