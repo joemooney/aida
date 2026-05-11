@@ -1,0 +1,56 @@
+id: 019e1507-77f9-7bd0-bfa5-7075ae6cbda1
+spec_id: TASK-69
+agreed_id: TASK-69
+title: 'aida CLI: render Error: messages in red for visual distinction from informational output'
+description: |
+  Caught 2026-05-11 — `aida session end` error output (and others) renders the "Error:" prefix and message in plain text. AIDA already uses colors for success markers (✓ in green), warnings (⚠ in yellow), and dimmed annotations. Errors should match: red.
+
+  ## Today's behavior
+
+  ```
+  Error: worktree /home/joe/ai/aida-pr-7 has uncommitted changes:
+    ?? .aida/session-env.sh
+
+  Pass `--force` to `aida session end` to discard these and remove the worktree.
+  (Gitignored files like target/ and .aida/cache.db never require --force.)
+  ```
+
+  All white. Easy to skim past or confuse with informational output.
+
+  ## Desired behavior
+
+  - `Error:` prefix in bold red
+  - First line (error summary) in red
+  - Subsequent lines (hints, examples, parenthetical) in default color
+  - Composes with existing colored module — `colored::Colorize` is already a dep
+
+  ```rust
+  eprintln!("{} {}", "Error:".red().bold(), summary.red());
+  eprintln!("  {}", details);
+  eprintln!();
+  eprintln!("{}", hint);
+  ```
+
+  ## Scope
+
+  Sweep aida-cli/src/ for `eprintln!("Error:` and `bail!(` macro usage to find all error sites. Probably 20-40 sites. Mechanical refactor or a `fn fmt_error(s)` helper everyone routes through.
+
+  ## Composes with
+
+  - Existing color usage (✓, ⚠, dimmed) — consistent pattern; this fills the gap on the failure side
+  - Test environment: respects NO_COLOR env var (standard convention) — should already be honored by colored crate
+  - Windows: colored crate handles ANSI on Windows >= 10 via auto-detection; older terminals fall back to plain
+
+  ## Acceptance
+
+  - [ ] Error prefix and summary line in red
+  - [ ] NO_COLOR env var honored (silent fallback to plain)
+  - [ ] Tested on Linux + macOS + Windows
+  - [ ] Sweep covers all aida-cli/src/ error sites; consistent style throughout
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T03:14:31.545279162Z
+modified_at: 2026-05-11T03:14:31.545279162Z
+req_type: Task
