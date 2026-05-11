@@ -1378,8 +1378,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Pull {
             code_only,
             store_only,
+            quiet,
         } => {
-            return handle_pull_command(store_path, *code_only, *store_only);
+            return handle_pull_command(store_path, *code_only, *store_only, *quiet);
         }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
@@ -17316,6 +17317,7 @@ fn handle_pull_command(
     store_path: &std::path::Path,
     code_only: bool,
     store_only: bool,
+    quiet: bool,
 ) -> Result<()> {
     use aida_core::git_ops;
 
@@ -17395,8 +17397,22 @@ fn handle_pull_command(
         let branch =
             git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
         println!("{} aida-store ← origin", "Pulling store".cyan().bold());
+
+        // TASK-73: snapshot the orphan-store HEAD SHA before pull so we
+        // can summarize what landed once it completes. None when the
+        // store is empty / not yet committed. trace:TASK-73 | ai:claude
+        let pre_sha = git_ops::head_sha(store_path).ok();
+
         match git_ops::pull_rebase(store_path, "origin", &branch) {
-            Ok(()) => println!("  {}", "store pull complete".green()),
+            Ok(()) => {
+                println!("  {}", "store pull complete".green());
+                // TASK-73 — summarize the delta unless --quiet.
+                if !quiet {
+                    if let Some(pre) = pre_sha.as_deref() {
+                        print_pull_summary(store_path, pre);
+                    }
+                }
+            }
             Err(e) => {
                 eprintln!(
                     "  {} {}\n  The orphan store may be mid-rebase. To recover:\n    \
@@ -17411,6 +17427,185 @@ fn handle_pull_command(
     }
 
     Ok(())
+}
+
+/// Walk `git log <pre-pull-sha>..HEAD` on the orphan store and print a
+/// per-category summary of what landed in this pull: specs added,
+/// modified (with status flips when detectable), deleted, plus a comment
+/// count. Stays out of the way when nothing changed and falls back
+/// quietly on any git failure (the pull itself already succeeded; we
+/// don't want a flaky summary to look like a failed pull).
+/// trace:TASK-73 | ai:claude
+fn print_pull_summary(store_path: &std::path::Path, pre_sha: &str) {
+    use std::collections::BTreeMap;
+    use std::process::Command as ProcessCommand;
+
+    let range = format!("{}..HEAD", pre_sha);
+    let log = match ProcessCommand::new("git")
+        .arg("-C")
+        .arg(store_path)
+        .args([
+            "log",
+            "--name-status",
+            "--pretty=format:%H%x09%s",
+            range.as_str(),
+        ])
+        .output()
+    {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
+        _ => return, // soft failure — pull already succeeded, don't shout
+    };
+    if log.trim().is_empty() {
+        println!("  {}", "(no new commits)".dimmed());
+        return;
+    }
+
+    // Lines are either `<sha>\t<subject>` (commit header) or
+    // `<status>\t<path>` (name-status row).
+    let mut added: BTreeMap<String, String> = BTreeMap::new(); // spec_id -> req_type
+    let mut modified: BTreeMap<String, String> = BTreeMap::new();
+    let mut deleted: BTreeMap<String, String> = BTreeMap::new();
+    let mut comment_subjects: Vec<String> = Vec::new(); // commit subjects mentioning comments
+    let mut commit_count: usize = 0;
+    let mut current_subject_is_comment = false;
+
+    for line in log.lines() {
+        if line.is_empty() {
+            continue;
+        }
+        let tabs = line.bytes().filter(|b| *b == b'\t').count();
+        if tabs == 1 {
+            // Could be either a commit header (sha is 40 hex chars) or a
+            // name-status line (status letter is 1-2 chars). Disambiguate
+            // by length of the first column.
+            let mut parts = line.splitn(2, '\t');
+            let first = parts.next().unwrap_or("");
+            let rest = parts.next().unwrap_or("");
+            if first.len() >= 7 && first.chars().all(|c| c.is_ascii_hexdigit()) {
+                // Commit header
+                commit_count += 1;
+                let subj = rest.trim();
+                current_subject_is_comment = subj.contains("comment on ")
+                    || subj.contains("add comment")
+                    || subj.starts_with("comment:");
+                if current_subject_is_comment {
+                    comment_subjects.push(subj.to_string());
+                }
+            } else {
+                // name-status row
+                if !rest.starts_with("objects/") || !rest.ends_with(".yaml") {
+                    continue;
+                }
+                let spec_id = spec_id_from_orphan_path(rest);
+                let req_type = req_type_from_orphan_path(rest);
+                match first.chars().next() {
+                    Some('A') => {
+                        added.insert(spec_id, req_type);
+                    }
+                    Some('M') => {
+                        // Modifications driven by comment commits shouldn't
+                        // double-count under "modified" — they're already
+                        // surfaced via comment_subjects.
+                        if !current_subject_is_comment {
+                            modified.insert(spec_id, req_type);
+                        }
+                    }
+                    Some('D') => {
+                        deleted.insert(spec_id, req_type);
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    if added.is_empty()
+        && modified.is_empty()
+        && deleted.is_empty()
+        && comment_subjects.is_empty()
+    {
+        println!(
+            "  {} ({} commits, no spec changes — internal churn / chore-only)",
+            "(no spec changes)".dimmed(),
+            commit_count
+        );
+        return;
+    }
+
+    println!();
+    println!(
+        "{} ({} commits):",
+        "Changes pulled".bold(),
+        commit_count
+    );
+    if !added.is_empty() {
+        println!("  {} {} spec{} added", "+".green().bold(), added.len(), if added.len() == 1 { "" } else { "s" });
+        for (id, _) in added.iter().take(8) {
+            println!("    {}", id);
+        }
+        if added.len() > 8 {
+            println!("    {}", format!("(+{} more)", added.len() - 8).dimmed());
+        }
+    }
+    if !modified.is_empty() {
+        println!(
+            "  {} {} spec{} modified",
+            "~".cyan(),
+            modified.len(),
+            if modified.len() == 1 { "" } else { "s" }
+        );
+        for (id, _) in modified.iter().take(8) {
+            println!("    {}", id);
+        }
+        if modified.len() > 8 {
+            println!("    {}", format!("(+{} more)", modified.len() - 8).dimmed());
+        }
+    }
+    if !deleted.is_empty() {
+        println!(
+            "  {} {} spec{} deleted",
+            "−".red(),
+            deleted.len(),
+            if deleted.len() == 1 { "" } else { "s" }
+        );
+        for (id, _) in deleted.iter().take(8) {
+            println!("    {}", id);
+        }
+    }
+    if !comment_subjects.is_empty() {
+        println!(
+            "  {} {} comment commit{}",
+            "💬".dimmed(),
+            comment_subjects.len(),
+            if comment_subjects.len() == 1 { "" } else { "s" }
+        );
+        for s in comment_subjects.iter().take(5) {
+            println!("    {}", s.dimmed());
+        }
+        if comment_subjects.len() > 5 {
+            println!(
+                "    {}",
+                format!("(+{} more)", comment_subjects.len() - 5).dimmed()
+            );
+        }
+    }
+    println!(
+        "  {}",
+        "Run `aida history --since \"5 min ago\" --events` for the full event stream.".dimmed()
+    );
+}
+
+fn spec_id_from_orphan_path(path: &str) -> String {
+    // objects/TYPE/000/SPEC-ID.yaml
+    std::path::Path::new(path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("?")
+        .to_string()
+}
+
+fn req_type_from_orphan_path(path: &str) -> String {
+    path.split('/').nth(1).unwrap_or("?").to_string()
 }
 
 // ----------------------------------------------------------------------------

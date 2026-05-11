@@ -2198,6 +2198,11 @@ pub enum Command {
         /// Skip the orphan-store sync (only `git pull`).
         #[clap(long, conflicts_with = "code_only")]
         store_only: bool,
+        /// Suppress the per-commit change summary printed after the
+        /// orphan-store pull. Errors still print. Useful in scripts that
+        /// pipe pull output. trace:TASK-73 | ai:claude
+        #[clap(long, short = 'q')]
+        quiet: bool,
     },
 
     /// AIDA-developer-only commands: activate the in-repo dev binary,
