@@ -787,10 +787,7 @@ fn add_aida_gitignore_entries(cwd: &std::path::Path, worktree_dir: &str) -> Resu
          !.aida/config.toml\n";
 
     if !gitignore_path.exists() {
-        std::fs::write(
-            &gitignore_path,
-            format!("{}{}", store_entry, runtime_entry),
-        )?;
+        std::fs::write(&gitignore_path, format!("{}{}", store_entry, runtime_entry))?;
         return Ok(false);
     }
 
@@ -813,9 +810,7 @@ fn add_aida_gitignore_entries(cwd: &std::path::Path, worktree_dir: &str) -> Resu
 /// Detect whether the deny-by-default `.aida/*` line is present (ignoring
 /// comments and surrounding whitespace). trace:BUG-73 | ai:claude
 fn has_aida_runtime_deny_pattern(content: &str) -> bool {
-    content
-        .lines()
-        .any(|line| line.trim() == ".aida/*")
+    content.lines().any(|line| line.trim() == ".aida/*")
 }
 
 /// Workflow scaffolding shared by all `aida init` modes — builds skills,
@@ -12088,10 +12083,7 @@ fn session_prune_orphans(dry_run: bool, yes: bool) -> Result<()> {
     );
     println!();
     for o in &orphans {
-        println!(
-            "  {}",
-            o.path.display().to_string().dimmed()
-        );
+        println!("  {}", o.path.display().to_string().dimmed());
         println!(
             "      cwd: {}    {} jsonl{}",
             o.decoded_cwd.yellow(),
@@ -17817,10 +17809,7 @@ fn print_pull_summary(store_path: &std::path::Path, pre_sha: &str) {
         }
     }
 
-    if added.is_empty()
-        && modified.is_empty()
-        && deleted.is_empty()
-        && comment_subjects.is_empty()
+    if added.is_empty() && modified.is_empty() && deleted.is_empty() && comment_subjects.is_empty()
     {
         println!(
             "  {} ({} commits, no spec changes — internal churn / chore-only)",
@@ -17831,13 +17820,14 @@ fn print_pull_summary(store_path: &std::path::Path, pre_sha: &str) {
     }
 
     println!();
-    println!(
-        "{} ({} commits):",
-        "Changes pulled".bold(),
-        commit_count
-    );
+    println!("{} ({} commits):", "Changes pulled".bold(), commit_count);
     if !added.is_empty() {
-        println!("  {} {} spec{} added", "+".green().bold(), added.len(), if added.len() == 1 { "" } else { "s" });
+        println!(
+            "  {} {} spec{} added",
+            "+".green().bold(),
+            added.len(),
+            if added.len() == 1 { "" } else { "s" }
+        );
         for (id, _) in added.iter().take(8) {
             println!("    {}", id);
         }
@@ -19920,7 +19910,10 @@ fn handle_rel_list_modern(
         } else {
             "global"
         };
-        println!("{}", format!("(no {mode} relationships match the filter)").yellow());
+        println!(
+            "{}",
+            format!("(no {mode} relationships match the filter)").yellow()
+        );
         if hidden_terminal > 0 {
             println!(
                 "{}",
@@ -19934,14 +19927,24 @@ fn handle_rel_list_modern(
     }
 
     // Column widths sized to data.
-    let from_w = rows.iter().map(|r| r.from_spec.len()).max().unwrap_or(8).max(4);
+    let from_w = rows
+        .iter()
+        .map(|r| r.from_spec.len())
+        .max()
+        .unwrap_or(8)
+        .max(4);
     let type_w = rows
         .iter()
         .map(|r| rel_type_label(&r.rel_type).len())
         .max()
         .unwrap_or(8)
         .max(4);
-    let to_w = rows.iter().map(|r| r.target_spec.len()).max().unwrap_or(10).max(2);
+    let to_w = rows
+        .iter()
+        .map(|r| r.target_spec.len())
+        .max()
+        .unwrap_or(10)
+        .max(2);
 
     println!(
         "{}",

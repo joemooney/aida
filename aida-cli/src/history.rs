@@ -453,10 +453,8 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
         if hidden_terminal > 0 {
             eprintln!(
                 "{}",
-                format!(
-                    "({hidden_terminal} hidden — pass --all to see Completed/Rejected items)"
-                )
-                .dimmed()
+                format!("({hidden_terminal} hidden — pass --all to see Completed/Rejected items)")
+                    .dimmed()
             );
         }
         return Ok(());
@@ -526,10 +524,8 @@ fn run_digest(store_path: &Path, opts: &HistoryOpts) -> Result<()> {
     if hidden_terminal > 0 {
         println!(
             "{}",
-            format!(
-                "  ({hidden_terminal} hidden — pass --all to see Completed/Rejected items)"
-            )
-            .dimmed()
+            format!("  ({hidden_terminal} hidden — pass --all to see Completed/Rejected items)")
+                .dimmed()
         );
     }
 
