@@ -1,0 +1,42 @@
+id: 019e1575-bf24-76c3-8a5d-825724604977
+spec_id: BUG-75
+agreed_id: BUG-75
+title: 'aida session start: worktree path derived as sibling of cwd, not main project root — confusing when invoked from inside another worktree'
+description: |
+  Caught 2026-05-11 — user ran `aida session start --owns EPIC-20 --branch epic-20-batch10` from inside `~/ai/aida-pr-9` (a reviewer worktree). Expected the new worktree at `~/ai/aida-epic-20` (sibling of main project). Got `~/ai/aida-pr-9-epic-20` (sibling of cwd's worktree) — confusing, nested-looking path.
+
+  ## Today's behavior
+
+  Session start probably uses something like `git rev-parse --show-toplevel` to find the repo root, then derives the new worktree as a sibling: `<repo-parent>/<repo-name>-<scope-slug>/`. When the user is inside a worktree, `git rev-parse --show-toplevel` returns the WORKTREE's path, not the main project's. Result: nested sibling under the worktree's parent.
+
+  ## Desired behavior
+
+  Session start should resolve to the MAIN PROJECT root (the repo's primary checkout, where the main .git/ directory lives — not a linked worktree). Then derive the new worktree as a sibling of THAT, regardless of where the user invokes from.
+
+  Implementation: `git worktree list --porcelain` lists all worktrees with their paths. The "main" worktree is the one whose path matches `.git/` directly (vs linked worktrees with `.git` files). Use that as the root.
+
+  ## User-visible impact
+
+  - Confusing paths (`~/ai/aida-pr-9-epic-20` instead of `~/ai/aida-epic-20`)
+  - Stacking when you forget you're in a worktree: start session, get nested-named worktree, repeat → `~/ai/aida-pr-9-epic-20-pr-10` territory
+  - Auto-checkout flows (STORY-71) and shell-helper integrations don't expect the nested path
+
+  ## Composes with
+
+  - TASK-53 (pre-flight conflict detection at session start) — could add a warning when cwd-based path derivation differs from main-root derivation
+  - TASK-68 (session end cwd handling) — same family of "session_start makes cwd-derived assumptions"
+
+  ## Acceptance
+
+  - [ ] `aida session start` derives the new worktree as a sibling of the main project root, regardless of where invoked from
+  - [ ] Tested: invoke from main project root → `~/ai/aida-X` (current behavior)
+  - [ ] Tested: invoke from inside any linked worktree → still `~/ai/aida-X` (FIXED behavior)
+  - [ ] Tested: invoke from /tmp or unrelated dir → error message suggesting cd into the aida project first
+  - [ ] `--path` flag still overrides (explicit beats derived)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T05:14:58.724390456Z
+modified_at: 2026-05-11T05:14:58.724390456Z
+req_type: Bug
