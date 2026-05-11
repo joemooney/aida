@@ -9638,6 +9638,94 @@ fn find_project_root() -> Result<std::path::PathBuf> {
     }
 }
 
+/// Resolve the MAIN worktree path for the current repo. When the caller
+/// is inside a linked worktree (created via `git worktree add`),
+/// `find_project_root()` returns the LINKED worktree's path because the
+/// climb stops at the first `.git` (file or dir). Session-start path /
+/// branch derivation needs the canonical project root regardless of cwd,
+/// otherwise new sessions stack as `~/ai/aida-pr-9-epic-20` instead of
+/// landing as siblings under `~/ai/aida`. trace:BUG-75 | ai:claude
+///
+/// Uses `git worktree list --porcelain`; the first record is always the
+/// main worktree. Falls back to `find_project_root()` if git can't be
+/// invoked (e.g., tests without a real repo).
+fn find_main_worktree_root() -> Result<std::path::PathBuf> {
+    let start = find_project_root()?;
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(&start)
+        .args(["worktree", "list", "--porcelain"])
+        .output();
+    if let Ok(o) = out {
+        if o.status.success() {
+            for line in String::from_utf8_lossy(&o.stdout).lines() {
+                if let Some(p) = line.strip_prefix("worktree ") {
+                    return Ok(std::path::PathBuf::from(p));
+                }
+            }
+        }
+    }
+    Ok(start)
+}
+
+/// Resolve the project's default branch ref (e.g. `origin/main` or
+/// `origin/master`). Used by session_start to fork new branches from
+/// origin's mainline regardless of cwd's HEAD. trace:BUG-76 | ai:claude
+///
+/// Resolution order:
+/// 1. `git symbolic-ref refs/remotes/origin/HEAD` if it resolves
+/// 2. The first of `origin/main`, `origin/master`, `main`, `master` that
+///    `git rev-parse --verify` succeeds against
+/// Returns None if no reasonable default is detectable (e.g. no remotes,
+/// no main/master locally).
+fn detect_default_branch_ref(project_root: &std::path::Path) -> Option<String> {
+    let try_cmd = |args: &[&str]| -> Option<String> {
+        let o = std::process::Command::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(args)
+            .output()
+            .ok()?;
+        if o.status.success() {
+            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if !s.is_empty() {
+                return Some(s);
+            }
+        }
+        None
+    };
+
+    if let Some(s) = try_cmd(&["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]) {
+        return Some(s);
+    }
+    for c in &["origin/main", "origin/master", "main", "master"] {
+        if try_cmd(&["rev-parse", "--verify", c]).is_some() {
+            return Some((*c).to_string());
+        }
+    }
+    None
+}
+
+/// Return the branch name currently checked out at `path` (its HEAD).
+/// `None` if detached or git fails. trace:BUG-76 | ai:claude
+fn current_branch_at(path: &std::path::Path) -> Option<String> {
+    let o = std::process::Command::new("git")
+        .arg("-C")
+        .arg(path)
+        .args(["symbolic-ref", "--short", "HEAD"])
+        .output()
+        .ok()?;
+    if !o.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
+}
+
 /// STORY-61: forge-specific PR/MR scope. When `aida session start
 /// --owns PR-1` or `--owns MR-42` is invoked, we route through a
 /// review-branch fetch + worktree-on-existing-branch flow instead of
@@ -9930,7 +10018,20 @@ fn session_start(
     launch_permission_mode: &str,
     launch_role: Option<String>,
 ) -> Result<()> {
-    let project_root = find_project_root()?;
+    // BUG-75: derive paths from the MAIN worktree root, not from cwd's
+    // git ancestor — when the user invokes `aida session start` from
+    // inside a linked worktree, find_project_root() returns the linked
+    // worktree's path and new sessions stack as nested-sibling-of-sibling
+    // (~/ai/aida-pr-9-epic-20 instead of ~/ai/aida-epic-20).
+    // trace:BUG-75 | ai:claude
+    let project_root = find_main_worktree_root()?;
+    let invoking_root = find_project_root().unwrap_or_else(|_| project_root.clone());
+    let invoked_from_linked_worktree = invoking_root
+        .canonicalize()
+        .ok()
+        .zip(project_root.canonicalize().ok())
+        .map(|(a, b)| a != b)
+        .unwrap_or(false);
     let slug = slugify(owns);
     if slug.is_empty() {
         anyhow::bail!(
@@ -10101,6 +10202,43 @@ fn session_start(
     } else {
         // Default flow: create worktree on a NEW branch (the original
         // EPIC-20 behavior — work-in-progress sessions, not reviews).
+        //
+        // BUG-76: when --base isn't given, fork from the project's
+        // default branch (origin/main or fallback). The git default
+        // (HEAD) is wrong when the caller is inside a linked worktree on
+        // a feature branch — the new session would inherit unmerged
+        // commits from whatever branch happened to be checked out.
+        // trace:BUG-76 | ai:claude
+        let resolved_base: Option<String> = match base {
+            Some(b) => Some(b.to_string()),
+            None => detect_default_branch_ref(&project_root),
+        };
+
+        if base.is_none() {
+            let cwd_branch = current_branch_at(&invoking_root);
+            let default_short = resolved_base
+                .as_deref()
+                .and_then(|s| s.strip_prefix("origin/").or(Some(s)))
+                .unwrap_or("main");
+            let warn = match cwd_branch.as_deref() {
+                Some(b) if b != default_short && b != "HEAD" => Some(b.to_string()),
+                _ if invoked_from_linked_worktree => {
+                    Some(cwd_branch.unwrap_or_else(|| "<detached>".into()))
+                }
+                _ => None,
+            };
+            if let Some(b) = warn {
+                if let Some(rb) = &resolved_base {
+                    eprintln!(
+                        "{} cwd is on `{}`; forking new branch from `{}` (pass --base if you wanted this branch's HEAD)",
+                        "ⓘ".cyan(),
+                        b,
+                        rb
+                    );
+                }
+            }
+        }
+
         let mut args = vec![
             "worktree",
             "add",
@@ -10108,8 +10246,8 @@ fn session_start(
             branch_name.as_str(),
             worktree_path.to_str().unwrap(),
         ];
-        if let Some(b) = base {
-            args.push(b);
+        if let Some(rb) = resolved_base.as_deref() {
+            args.push(rb);
         }
         // STORY-73: capture stdout and re-emit to stderr. `git worktree add`
         // prints things like "HEAD is now at <sha>" to stdout, which would
@@ -16930,6 +17068,108 @@ mod resolve_gh_binary_tests {
             std::fs::canonicalize(&resolved).unwrap(),
             std::fs::canonicalize(&good).unwrap()
         );
+    }
+}
+
+#[cfg(test)]
+mod session_root_resolution_tests {
+    //! trace:BUG-75 BUG-76 | ai:claude
+    use super::*;
+    use std::process::Command;
+    use tempfile::TempDir;
+
+    fn git(p: &std::path::Path, args: &[&str]) {
+        let o = Command::new("git")
+            .arg("-C")
+            .arg(p)
+            .args(args)
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@t")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@t")
+            .output()
+            .unwrap();
+        assert!(o.status.success(), "git {:?} failed", args);
+    }
+
+    fn fixture_with_linked_worktree() -> (TempDir, std::path::PathBuf, std::path::PathBuf) {
+        let tmp = TempDir::new().unwrap();
+        let main = tmp.path().join("repo");
+        std::fs::create_dir_all(&main).unwrap();
+        git(&main, &["init", "--initial-branch=main", "--quiet"]);
+        std::fs::write(main.join("a.txt"), "x").unwrap();
+        git(&main, &["add", "a.txt"]);
+        git(&main, &["commit", "-m", "base", "--quiet"]);
+        git(&main, &["checkout", "-b", "feature", "--quiet"]);
+        std::fs::write(main.join("a.txt"), "y").unwrap();
+        git(&main, &["add", "a.txt"]);
+        git(&main, &["commit", "-m", "feature", "--quiet"]);
+        git(&main, &["checkout", "main", "--quiet"]);
+
+        let linked = tmp.path().join("repo-feature");
+        git(
+            &main,
+            &[
+                "worktree",
+                "add",
+                linked.to_str().unwrap(),
+                "feature",
+                "--quiet",
+            ],
+        );
+        (tmp, main, linked)
+    }
+
+    /// BUG-75: from inside a linked worktree, find_main_worktree_root
+    /// returns the MAIN worktree path, not the linked one.
+    #[test]
+    fn main_worktree_root_resolves_from_linked() {
+        let (_tmp, main, linked) = fixture_with_linked_worktree();
+        let prev = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&linked).unwrap();
+        let resolved = find_main_worktree_root();
+        std::env::set_current_dir(prev).unwrap();
+        let resolved = resolved.unwrap();
+        assert_eq!(
+            std::fs::canonicalize(&resolved).unwrap(),
+            std::fs::canonicalize(&main).unwrap(),
+            "expected main worktree, got {}",
+            resolved.display()
+        );
+    }
+
+    /// BUG-75: from the main worktree, the helper returns the same path
+    /// `find_project_root` does (no regression).
+    #[test]
+    fn main_worktree_root_returns_main_unchanged() {
+        let (_tmp, main, _linked) = fixture_with_linked_worktree();
+        let prev = std::env::current_dir().unwrap();
+        std::env::set_current_dir(&main).unwrap();
+        let resolved = find_main_worktree_root();
+        std::env::set_current_dir(prev).unwrap();
+        let resolved = resolved.unwrap();
+        assert_eq!(
+            std::fs::canonicalize(&resolved).unwrap(),
+            std::fs::canonicalize(&main).unwrap()
+        );
+    }
+
+    /// BUG-76: detect_default_branch_ref picks origin/main when present,
+    /// falls back to local main, returns None when neither exists.
+    #[test]
+    fn default_branch_ref_prefers_origin_main() {
+        // Origin-less repo with a local main → falls back to local.
+        let (_tmp, main, _linked) = fixture_with_linked_worktree();
+        let resolved = detect_default_branch_ref(&main);
+        assert_eq!(resolved.as_deref(), Some("main"));
+    }
+
+    /// BUG-76: current_branch_at returns the branch checked out at path.
+    #[test]
+    fn current_branch_at_returns_branch_name() {
+        let (_tmp, main, linked) = fixture_with_linked_worktree();
+        assert_eq!(current_branch_at(&main).as_deref(), Some("main"));
+        assert_eq!(current_branch_at(&linked).as_deref(), Some("feature"));
     }
 }
 
