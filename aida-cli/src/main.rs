@@ -72,7 +72,35 @@ fn get_default_author() -> String {
     }
 }
 
-fn main() -> Result<()> {
+fn main() {
+    // TASK-69: render anyhow-propagated errors in red instead of anyhow's
+    // default plain-text formatter. Centralizes the coloring so every
+    // `bail!` / `?` / `anyhow!` site automatically gets the highlight
+    // without per-site refactoring. Exit code 1 on error, 0 on success.
+    // trace:TASK-69 | ai:claude
+    match run() {
+        Ok(()) => {}
+        Err(err) => {
+            let msg = format!("{:?}", err);
+            // Anyhow's Debug format prints the chain as
+            //     summary
+            //     \n
+            //     Caused by:\n    inner1\n    inner2
+            // Color the first non-empty line bold-red; dim the chain so
+            // root summary stands out from causal background.
+            let mut lines = msg.lines();
+            if let Some(first) = lines.next() {
+                eprintln!("{} {}", "Error:".red().bold(), first.red());
+            }
+            for rest in lines {
+                eprintln!("{}", rest.dimmed());
+            }
+            std::process::exit(1);
+        }
+    }
+}
+
+fn run() -> Result<()> {
     // Intercept --version / -V before clap so we can include the build-time
     // banner (build.rs stamps build time + git sha + dirty flag). Clap's
     // built-in #[clap(version)] only knows the package version, which can't
@@ -719,31 +747,47 @@ fn handle_init_command(
     )
 }
 
-/// Append AIDA's runtime entries to the project's `.gitignore` if any are
-/// missing. Returns `true` if a new entry was written (so callers can echo
-/// "updated .gitignore"); `false` if everything was already covered or the
-/// file had to be created from scratch.
+/// Append AIDA's `.gitignore` entries if any are missing. Returns `true` if a
+/// new entry was written (so callers can echo "updated .gitignore"); `false`
+/// if everything was already covered or the file had to be created from
+/// scratch.
 ///
-/// Entries:
-/// - `<worktree_dir>/` — the orphan-branch worktree (`.aida-store/` by default)
-/// - `.aida/session-env.sh` — STORY-52 per-session env shim. Missing it makes
-///   every post-STORY-52 `aida session end` trip BUG-67's untracked check and
-///   demand `--force`. trace:BUG-71 | ai:claude
+/// Writes two blocks:
+/// - `<worktree_dir>/` (+ bare symlink form) — the orphan-branch worktree
+///   (`.aida-store/` by default). Bare-name pattern needed because session
+///   worktrees link to the canonical store. trace:EPIC-21 | ai:claude
+/// - `.aida/*` deny-by-default + `!.aida/config.toml` allow-list — covers
+///   every per-clone runtime file under `.aida/` (sessions, roles, cache,
+///   session-env, server data, review prompts, future runtime additions)
+///   without per-file whack-a-mole. trace:BUG-73 | ai:claude
+///
+/// Migration: when invoked against a `.gitignore` from an older AIDA scaffold
+/// (which listed each runtime path individually), the deny block is appended.
+/// Legacy per-file entries become redundant but remain harmless.
 fn add_aida_gitignore_entries(cwd: &std::path::Path, worktree_dir: &str) -> Result<bool> {
     use std::io::Write;
     let gitignore_path = cwd.join(".gitignore");
     let store_entry = format!(
-        "\n# AIDA distributed store (orphan branch worktree)\n{}/\n",
+        "\n# AIDA distributed store (orphan branch worktree)\n\
+         # Bare-name pattern catches session-worktree symlinks back to the\n\
+         # canonical store. trace:EPIC-21 | ai:claude\n\
+         {0}/\n\
+         {0}\n",
         worktree_dir
     );
-    let session_env_entry = "\n# AIDA session environment shim (STORY-52, gitignored per BUG-71)\n\
-         .aida/session-env.sh\n";
+    let runtime_entry = "\n# AIDA runtime state — deny-by-default. Anything under .aida/ is\n\
+         # per-clone runtime state (cache, sessions, roles, env shims, review\n\
+         # prompts, server data, etc.) unless explicitly allow-listed below.\n\
+         # Adding a new runtime file under .aida/ requires no gitignore change;\n\
+         # tracking a new project-config file requires an explicit `!` line.\n\
+         # trace:BUG-73 | ai:claude\n\
+         .aida/*\n\
+         \n\
+         # Tracked exceptions: project-level config that lives in the repo.\n\
+         !.aida/config.toml\n";
 
     if !gitignore_path.exists() {
-        std::fs::write(
-            &gitignore_path,
-            format!("{}{}", store_entry, session_env_entry),
-        )?;
+        std::fs::write(&gitignore_path, format!("{}{}", store_entry, runtime_entry))?;
         return Ok(false);
     }
 
@@ -756,11 +800,17 @@ fn add_aida_gitignore_entries(cwd: &std::path::Path, worktree_dir: &str) -> Resu
         file.write_all(store_entry.as_bytes())?;
         wrote = true;
     }
-    if !content.contains(".aida/session-env.sh") {
-        file.write_all(session_env_entry.as_bytes())?;
+    if !has_aida_runtime_deny_pattern(&content) {
+        file.write_all(runtime_entry.as_bytes())?;
         wrote = true;
     }
     Ok(wrote)
+}
+
+/// Detect whether the deny-by-default `.aida/*` line is present (ignoring
+/// comments and surrounding whitespace). trace:BUG-73 | ai:claude
+fn has_aida_runtime_deny_pattern(content: &str) -> bool {
+    content.lines().any(|line| line.trim() == ".aida/*")
 }
 
 /// Workflow scaffolding shared by all `aida init` modes — builds skills,
@@ -1323,8 +1373,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
         Command::Pull {
             code_only,
             store_only,
+            quiet,
         } => {
-            return handle_pull_command(store_path, *code_only, *store_only);
+            return handle_pull_command(store_path, *code_only, *store_only, *quiet);
         }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
@@ -1345,6 +1396,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             include_meta,
             parent,
             sync,
+            all,
             ..
         } => {
             // STORY-78: opt-in implicit sync-pull before reading. Quiet
@@ -1388,7 +1440,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 None => (cli_tags, status.clone()),
             };
             let filter = aida_core::ListFilter {
-                status: effective_status,
+                status: effective_status.clone(),
                 req_type: r#type.clone(),
                 feature: feature.clone(),
                 tags: effective_tags,
@@ -1431,8 +1483,35 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 reqs.retain(|r| !r.req_type.eq_ignore_ascii_case("meta"));
             }
 
+            // Hide terminal-status (Completed/Rejected) by default — see
+            // TASK-64 for the rationale (day-to-day `aida list` should
+            // surface actionable work, not the archive). Skip the filter
+            // when:
+            //   - `--all` was passed,
+            //   - the user explicitly filtered by status (their pick wins,
+            //     even if it is one of the terminal values), or
+            //   - the active role scope set the status (scope wins).
+            // trace:TASK-64 | ai:claude
+            let hide_terminal = !*all && effective_status.is_none();
+            let hidden_terminal_count = if hide_terminal {
+                let before = reqs.len();
+                reqs.retain(|r| !is_terminal_status_str(&r.status));
+                before - reqs.len()
+            } else {
+                0
+            };
+
             if reqs.is_empty() {
                 println!("No requirements found.");
+                if hidden_terminal_count > 0 {
+                    println!(
+                        "  {}",
+                        format!(
+                            "({hidden_terminal_count} hidden — pass --all to see Completed/Rejected items)"
+                        )
+                        .dimmed()
+                    );
+                }
             } else {
                 // Default rendering: one ID column (canonical = agreed_id
                 // when present, else spec_id). Pass --show-origin to
@@ -1487,6 +1566,15 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     }
                 }
                 println!("\n{} requirements", reqs.len());
+                if hidden_terminal_count > 0 {
+                    println!(
+                        "{}",
+                        format!(
+                            "  ({hidden_terminal_count} hidden — pass --all to see Completed/Rejected items)"
+                        )
+                        .dimmed()
+                    );
+                }
             }
         }
         Command::Add {
@@ -2554,76 +2642,30 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 println!("No relationship found from {} to {}", from, to);
             }
         }
-        Command::Rel(RelationshipCommand::List { id }) => {
-            // trace:TASK-1-020 | ai:claude
-            // BUG-68: record after successful lookup. trace:BUG-68 | ai:claude
-            let req = backend
-                .get_requirement_by_spec_id(id)?
-                .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
-            record_role_activity(req.spec_id.as_deref().unwrap_or(id), "show");
-
-            println!("{}: {}", "Requirement".blue(), req.title);
-            if let Some(spec_id) = &req.spec_id {
-                println!("{}: {}", "SPEC-ID".blue(), spec_id);
-            }
-            println!("{}: {}", "UUID".blue(), req.id);
-            println!();
-
-            if req.relationships.is_empty() {
-                println!("{}", "No relationships found.".yellow());
-            } else {
-                println!("{}:", "Relationships".green());
-                for relationship in &req.relationships {
-                    let target = backend.get_requirement(&relationship.target_id)?;
-                    let description = match &relationship.rel_type {
-                        RelationshipType::Parent => "is parent of".to_string(),
-                        RelationshipType::Child => "is child of".to_string(),
-                        RelationshipType::Duplicate => "is duplicate of".to_string(),
-                        RelationshipType::Verifies => "verifies".to_string(),
-                        RelationshipType::VerifiedBy => "is verified by".to_string(),
-                        RelationshipType::References => "references".to_string(),
-                        RelationshipType::Custom(name) => name.clone(),
-                    };
-                    if let Some(target_req) = target {
-                        let target_spec = target_req.spec_id.as_deref().unwrap_or("N/A");
-                        // BUG-53: tag rejected targets so a dangling-looking
-                        // edge is recognizable as still-resolvable rather
-                        // than removed. trace:BUG-53 | ai:claude
-                        if matches!(target_req.status, aida_core::RequirementStatus::Rejected) {
-                            println!(
-                                "  {} {} {} - {}",
-                                description.cyan(),
-                                target_spec.yellow(),
-                                "[REJECTED]".red().bold(),
-                                target_req.title
-                            );
-                        } else {
-                            println!(
-                                "  {} {} - {}",
-                                description.cyan(),
-                                target_spec.yellow(),
-                                target_req.title
-                            );
-                        }
-                    } else {
-                        // BUG-53: a relationship pointing at a uuid with no
-                        // backing object means the target was deleted (its
-                        // YAML is gone, mapping back to spec_id is lost). We
-                        // show a short uuid + "(removed)" instead of the
-                        // full 36-char uuid + "(not found)" so the line
-                        // reads as a tombstone rather than a phantom.
-                        // trace:BUG-53 | ai:claude
-                        let uuid_str = relationship.target_id.to_string();
-                        let short = &uuid_str[..uuid_str.len().min(8)];
-                        println!(
-                            "  {} {} {}",
-                            description.cyan(),
-                            short.dimmed(),
-                            "(removed — run `aida doctor verify-relationships --repair` to clean up)".red()
-                        );
-                    }
-                }
-            }
+        Command::Rel(RelationshipCommand::List {
+            id,
+            source,
+            target,
+            r#type,
+            dangling,
+            all,
+        }) => {
+            // trace:TASK-65 | ai:claude
+            // Three modes:
+            //   - target=Some                → incoming edges
+            //   - id|source=Some             → outgoing edges (legacy point query)
+            //   - none of the above          → global listing
+            // --type / --dangling / --all compose across all three modes.
+            let source_ref = source.as_deref().or(id.as_deref());
+            handle_rel_list_modern(
+                &backend,
+                store_path,
+                source_ref,
+                target.as_deref(),
+                r#type.as_deref(),
+                *dangling,
+                *all,
+            )?;
         }
 
         // Phase 1: Sync command
@@ -2912,6 +2954,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             status_changes,
             comments,
             oneline,
+            all,
         } => {
             // trace:FR-1-037 | ai:claude
             // Default max_commits scales differently per mode: digest only
@@ -2931,6 +2974,11 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 status_changes_only: *status_changes,
                 comments_only: *comments,
                 oneline: *oneline,
+                // TASK-64: hide terminal-status (Completed/Rejected) rows
+                // unless --all (or --id <ID>) overrides. --id is treated as
+                // an opt-in to that spec's full timeline regardless of
+                // status, since the user already named what they want.
+                include_terminal: *all || id.is_some(),
             };
             history::run(store_path, &opts)?;
         }
@@ -2954,6 +3002,19 @@ fn capitalize(s: &str) -> String {
         None => String::new(),
         Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
     }
+}
+
+/// String form of [`is_terminal_status`] — used by `aida list` / `aida
+/// history` to hide the archive by default (TASK-64). Case-insensitive;
+/// tolerates display vs storage casing. Companion to the enum version
+/// at line ~4807 (BUG-64); both live here so the list/history surface
+/// and the parent-guard share the same notion of "this is closed work".
+/// trace:TASK-64 | ai:claude
+pub fn is_terminal_status_str(s: &str) -> bool {
+    let t = s.trim();
+    t.eq_ignore_ascii_case("completed")
+        || t.eq_ignore_ascii_case("rejected")
+        || t.eq_ignore_ascii_case("done")
 }
 
 /// Validate a status string against the canonical set. Accepts case-
@@ -8942,10 +9003,20 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             permission_mode,
             role.clone(),
         ),
-        SessionCommand::End { id, yes, force } => session_end(id.as_deref(), *yes, *force),
+        SessionCommand::End {
+            id,
+            yes,
+            force,
+            purge_cc,
+        } => session_end(id.as_deref(), *yes, *force, *purge_cc),
         SessionCommand::Leases { verbose, all } => session_leases(*verbose, *all),
         SessionCommand::Show { id } => session_show(id.as_deref()),
-        SessionCommand::Prune { days, dry_run, yes } => session_prune(*days, *dry_run, *yes),
+        SessionCommand::Prune {
+            days,
+            dry_run,
+            yes,
+            orphans,
+        } => session_prune(*days, *dry_run, *yes, *orphans),
     }
 }
 
@@ -10096,13 +10167,55 @@ fn session_start(
         .ok()
         .or_else(|| std::env::var("USER").ok())
         .unwrap_or_else(|| "unknown".to_string());
-    // STORY-65: inherit the calling shell's role (if any) into the lease so
-    // `aida session leases`, `aida session show`, and tooling inside the
-    // worktree all know which persona this session was started under.
-    // trace:STORY-65 | ai:claude
-    let inherited_role = std::env::var("AIDA_SESSION_ROLE")
+    // STORY-65 + TASK-67: role resolution by INTENT, not blind env
+    // inheritance. Order:
+    //   1. --role <name>             explicit override always wins
+    //   2. scope-derived default     PR-N/MR-N → reviewer; else → implementer
+    //   3. $AIDA_SESSION_ROLE        env fallback when no scope default fires
+    //                                (which currently never happens — every
+    //                                scope shape has a default — but kept as
+    //                                a safety net for future scope kinds)
+    //   4. None                      no role recorded
+    //
+    // The earlier (pre-TASK-67) behavior was step 3 only: a reviewer shell
+    // starting an EPIC session recorded reviewer, which then misrouted the
+    // queue/activity surfaces while real implementer work happened inside.
+    // When the env and scope-default disagree we warn (don't fail) — the
+    // user might genuinely want the env's role (e.g. an architect shell
+    // starting an EPIC; the implementer default would be wrong for them).
+    // trace:TASK-67 | ai:claude
+    let env_role = std::env::var("AIDA_SESSION_ROLE")
         .ok()
         .filter(|s| !s.trim().is_empty());
+    let scope_default_role: Option<&'static str> = if review_target.is_some() {
+        Some("reviewer")
+    } else {
+        Some("implementer")
+    };
+    let (inherited_role, role_origin) = if let Some(r) = launch_role.as_ref() {
+        (Some(r.clone()), "--role flag")
+    } else if let Some(d) = scope_default_role {
+        // Warn when env-role disagrees with the scope default — the user
+        // probably wanted the scope default but might have meant otherwise.
+        if let Some(env) = env_role.as_ref() {
+            if !env.eq_ignore_ascii_case(d) {
+                eprintln!(
+                    "{} active role {} doesn't match this scope's default {}.\n  \
+                     Recording: {} (scope-derived). Pass --role {} to override.",
+                    "⚠".yellow().bold(),
+                    format!("({})", env).cyan(),
+                    format!("({})", d).cyan(),
+                    d.cyan().bold(),
+                    env.cyan(),
+                );
+            }
+        }
+        (Some(d.to_string()), "scope-derived")
+    } else if let Some(env) = env_role.clone() {
+        (Some(env), "inherited")
+    } else {
+        (None, "")
+    };
 
     // STORY-73: capture the parent shell PID so `aida session end` (without
     // an arg) can resolve the right lease from the shell that ran `start`,
@@ -10162,7 +10275,7 @@ fn session_start(
             "  {}: {} {}",
             "role".bold(),
             r.cyan(),
-            "(inherited)".dimmed()
+            format!("({})", role_origin).dimmed()
         );
     }
 
@@ -10774,7 +10887,7 @@ fn shell_single_quote(s: &str) -> String {
     out
 }
 
-fn session_end(id_query: Option<&str>, yes: bool, force: bool) -> Result<()> {
+fn session_end(id_query: Option<&str>, yes: bool, force: bool, purge_cc: bool) -> Result<()> {
     let project_root = find_project_root()?;
     let leases = list_leases(&project_root);
     if leases.is_empty() {
@@ -10969,6 +11082,29 @@ fn session_end(id_query: Option<&str>, yes: bool, force: bool) -> Result<()> {
         }
     }
 
+    // TASK-68: detect whether the user's shell was sitting inside the
+    // worktree we're about to nuke. We capture cwd BEFORE we chdir away
+    // for the git ops, so we can later emit a `cd <parent>` for the
+    // shell wrapper (Layer 2 of the fix). Canonicalize both sides so
+    // symlink chains don't mask the match. trace:TASK-68 | ai:claude
+    let starting_cwd = std::env::current_dir().ok();
+    let canonical_worktree = target
+        .worktree_path
+        .canonicalize()
+        .unwrap_or_else(|_| target.worktree_path.clone());
+    let cwd_was_inside_worktree = starting_cwd
+        .as_ref()
+        .and_then(|c| c.canonicalize().ok())
+        .map(|c| c.starts_with(&canonical_worktree))
+        .unwrap_or(false);
+
+    // TASK-68 Layer 1: chdir to the parent project before running git.
+    // `git worktree remove` refuses outright when the calling process's
+    // cwd is inside the worktree being removed. Switching the Rust
+    // process's cwd here doesn't affect the parent shell — that's
+    // handled separately by Layer 2's eval'd `cd`. trace:TASK-68
+    let _ = std::env::set_current_dir(&project_root);
+
     // BUG-67: always pass `--force`. We've already gated on the dirty
     // check above, so by this point the only non-clean state is
     // gitignored (target/, .aida/cache.db, etc.) — which git still
@@ -11011,6 +11147,41 @@ fn session_end(id_query: Option<&str>, yes: bool, force: bool) -> Result<()> {
         target.branch
     );
 
+    // TASK-70: handle the Claude Code project dir orphaned by the
+    // worktree removal. Claude Code stores per-session jsonls under
+    // `~/.claude/projects/<encoded-cwd>/`; once the cwd vanishes, the
+    // jsonls are stranded — `claude --resume <id>` may fail or behave
+    // unexpectedly. Default: warn + point at `session prune --orphans`.
+    // With `--purge-cc`: remove the dir atomically here.
+    // trace:TASK-70 | ai:claude
+    if let Ok(cc_dir) = session::claude_project_dir(&canonical_worktree) {
+        if cc_dir.is_dir() {
+            if purge_cc {
+                match std::fs::remove_dir_all(&cc_dir) {
+                    Ok(_) => eprintln!(
+                        "{} purged Claude Code project dir {}",
+                        "✓".green(),
+                        cc_dir.display().to_string().dimmed()
+                    ),
+                    Err(e) => eprintln!(
+                        "{} could not purge {}: {} — remove manually if you don't want it",
+                        "Warning:".yellow().bold(),
+                        cc_dir.display(),
+                        e
+                    ),
+                }
+            } else {
+                eprintln!(
+                    "{} Claude Code project dir {} is now orphaned (cwd gone). \
+                     Run `aida session prune --orphans` to clean up, or pass \
+                     `--purge-cc` on `aida session end` next time.",
+                    "ⓘ".dimmed(),
+                    cc_dir.display().to_string().dimmed()
+                );
+            }
+        }
+    }
+
     // STORY-66: when the just-ended session's branch has an open PR, file a
     // Story-typed review item routed to the `reviewer` role with `implements`
     // relations to every spec referenced in the PR's commit messages. Best
@@ -11025,15 +11196,41 @@ fn session_end(id_query: Option<&str>, yes: bool, force: bool) -> Result<()> {
     match outcome.status {
         AutoQueueStatus::Filed => println!("{} {}", "✓".green(), outcome.summary),
         AutoQueueStatus::AlreadyExists => println!("{} {}", "ⓘ".cyan(), outcome.summary),
-        AutoQueueStatus::Skipped => eprintln!("{} {}", "ⓘ".dimmed(), outcome.summary.dimmed()),
+        // TASK-74: by-design skips stay quiet (dim ⓘ); needs-attention
+        // skips bump up to yellow ⚠ so the user notices if gh broke or
+        // the rel/queue subprocess errored. trace:TASK-74 | ai:claude
+        AutoQueueStatus::SkippedByDesign => {
+            eprintln!("{} {}", "ⓘ".dimmed(), outcome.summary.dimmed())
+        }
+        AutoQueueStatus::SkippedNeedsAttention => {
+            eprintln!("{} {}", "⚠".yellow().bold(), outcome.summary.yellow())
+        }
     }
 
     // STORY-73: emit `unset AIDA_SESSION_ID` to stdout when wrapped via the
     // shell helper's `eval "$(...)"`, so the calling shell's env var
     // doesn't go stale after the lease it pointed at is gone.
     // trace:STORY-73 | ai:claude
+    //
+    // TASK-68 Layer 2: if the user's shell was sitting inside the
+    // worktree we just removed, their cwd is now a dangling (deleted)
+    // inode — every path-relative command would fail until they
+    // manually cd out. Emit a `cd <parent>` to stdout so the shell
+    // wrapper's `eval` lands them in the parent project naturally.
+    // No-op for users running `aida session end` from outside the
+    // worktree (and for direct (non-wrapped) invocation, since stdout
+    // is a TTY then). trace:TASK-68 | ai:claude
     if !std::io::IsTerminal::is_terminal(&std::io::stdout()) {
         println!("unset AIDA_SESSION_ID");
+        if cwd_was_inside_worktree {
+            let escaped = project_root.display().to_string().replace('\'', "'\\''");
+            println!("cd '{}'", escaped);
+            eprintln!(
+                "  {} cd'd back to parent project {}",
+                "↩".dimmed(),
+                project_root.display().to_string().cyan()
+            );
+        }
     }
     Ok(())
 }
@@ -11293,18 +11490,28 @@ fn aida_subcmd_queue_add_for_reviewer(project_root: &std::path::Path, spec_id: &
     }
 }
 
-/// What `try_auto_queue_pr_review` did, in three buckets that map to the
-/// caller's display formatting (green check / cyan info / dim skip).
-/// trace:BUG-72 | ai:claude
+/// What `try_auto_queue_pr_review` did, in four buckets that map to the
+/// caller's display formatting (green check / cyan info / dim by-design /
+/// yellow attention-needed). The fourth bucket (TASK-74) was carved out
+/// of the original BUG-72 "Skipped" bucket so review sessions (whose
+/// branches don't produce PRs by design) stop reading as failures, and
+/// missing-tool / lookup-failed cases stop reading as routine.
+/// trace:BUG-72 TASK-74 | ai:claude
 enum AutoQueueStatus {
     /// New review story filed and queued for reviewer.
     Filed,
     /// PR found but a `Review PR-N` story already exists — idempotent re-run.
     AlreadyExists,
-    /// Anything that means "no queue entry filed": no PR open for branch,
-    /// gh missing, gh failed, `aida add` failed, etc. Carries enough detail
-    /// in `summary` for the user to know why.
-    Skipped,
+    /// Skipped on purpose — this session shape never produces a PR (e.g.
+    /// reviewer session on a `pr-N` branch). Dimmed in output: nothing to
+    /// fix, the user just needs to know the hook checked and stepped aside.
+    /// trace:TASK-74 | ai:claude
+    SkippedByDesign,
+    /// Skipped but the user might want to do something about it: `gh`
+    /// missing, `gh pr list` failed, or the queue/rel-add subprocess
+    /// errored. Rendered in yellow so it doesn't blend into the by-design
+    /// noise floor. trace:TASK-74 | ai:claude
+    SkippedNeedsAttention,
 }
 
 /// Outcome of the end-of-session auto-queue. Always returns SOMETHING so
@@ -11327,12 +11534,37 @@ impl AutoQueueOutcome {
             summary: s.into(),
         }
     }
-    fn skipped(s: impl Into<String>) -> Self {
+    /// Skip the user shouldn't care about (review session, no PR-producing
+    /// branch). Rendered dim. trace:TASK-74 | ai:claude
+    fn skipped_by_design(s: impl Into<String>) -> Self {
         Self {
-            status: AutoQueueStatus::Skipped,
+            status: AutoQueueStatus::SkippedByDesign,
             summary: s.into(),
         }
     }
+    /// Skip the user might want to act on (missing tool, gh failed, queue
+    /// subprocess error). Rendered yellow. trace:TASK-74 | ai:claude
+    fn skipped_needs_attention(s: impl Into<String>) -> Self {
+        Self {
+            status: AutoQueueStatus::SkippedNeedsAttention,
+            summary: s.into(),
+        }
+    }
+}
+
+/// Heuristic: does this branch shape correspond to a session that, by
+/// design, never produces a PR? Today: `pr-N`, `mr-N`, `github-N`,
+/// `gitlab-N` — the local branch names `aida session start --owns PR-N`
+/// creates for review sessions. Case-insensitive. trace:TASK-74 | ai:claude
+fn is_review_session_branch(branch: &str) -> bool {
+    let lower = branch.to_ascii_lowercase();
+    let prefixes = ["pr-", "mr-", "github-", "gitlab-"];
+    prefixes.iter().any(|p| {
+        lower
+            .strip_prefix(p)
+            .map(|rest| !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit()))
+            .unwrap_or(false)
+    })
 }
 
 /// End-of-session auto-detect-and-queue. Runs as a side effect of
@@ -11344,23 +11576,36 @@ fn try_auto_queue_pr_review(
     branch: &str,
     session_id: &str,
 ) -> AutoQueueOutcome {
+    // TASK-74: short-circuit when the branch shape says "this session
+    // never produces a PR" (reviewer session on `pr-N` / `mr-N` etc.).
+    // Catches the case before we even call gh, so a reviewer with `gh`
+    // uninstalled doesn't get a misleading "gh not found" warning when
+    // the right answer is "we wouldn't have filed anyway".
+    if is_review_session_branch(branch) {
+        return AutoQueueOutcome::skipped_by_design(format!(
+            "auto-queue: reviewer session on `{}` — no PR to file (skip by design)",
+            branch
+        ));
+    }
+
     let pr = match detect_open_pr_for_branch(project_root, branch) {
         PrLookup::Found(pr) => pr,
         PrLookup::NoOpenPr => {
-            return AutoQueueOutcome::skipped(format!(
+            return AutoQueueOutcome::skipped_by_design(format!(
                 "auto-queue: no open PR for branch `{}` — reviewer queue not filed",
                 branch
             ));
         }
         PrLookup::GhMissing => {
-            return AutoQueueOutcome::skipped(
-                "auto-queue: `gh` CLI not on PATH — reviewer queue not filed".to_string(),
-            );
+            return AutoQueueOutcome::skipped_needs_attention(format!(
+                "auto-queue: `gh` CLI not on PATH — would have queued reviewer story for branch `{}`. Install gh to enable.",
+                branch
+            ));
         }
         PrLookup::GhFailed(reason) => {
-            return AutoQueueOutcome::skipped(format!(
-                "auto-queue: `gh pr list` failed ({}) — reviewer queue not filed",
-                reason
+            return AutoQueueOutcome::skipped_needs_attention(format!(
+                "auto-queue: `gh pr list` failed for branch `{}` ({}) — no reviewer story filed",
+                branch, reason
             ));
         }
     };
@@ -11415,7 +11660,7 @@ fn try_auto_queue_pr_review(
     let new_id = match aida_subcmd_add_review_story(project_root, &title, &desc) {
         Some(id) => id,
         None => {
-            return AutoQueueOutcome::skipped(format!(
+            return AutoQueueOutcome::skipped_needs_attention(format!(
                 "auto-queue: `aida add` failed for PR #{} (see warning above)",
                 pr.number
             ));
@@ -11735,7 +11980,167 @@ fn humanize_age_secs(secs: u64) -> String {
 /// doesn't self-delete from a forgotten cron-like usage. Logs each
 /// deletion to `<project>/.aida/session-prune.log` for auditing.
 /// trace:STORY-60 | ai:claude
-fn session_prune(days: u32, dry_run: bool, yes: bool) -> Result<()> {
+/// Walk `~/.claude/projects/*` and find project dirs whose recorded cwd
+/// no longer exists on disk. Each surviving jsonl encodes its cwd in
+/// every event; we read one jsonl per project dir, extract the cwd
+/// from the first event that has one, and check the filesystem. No
+/// jsonls in the dir → treat as orphan (the dir is content-less).
+/// Falls back to the lossy dir-name decode (replace `-` with `/`) when
+/// the jsonl lacks a `"cwd":` field. trace:TASK-70 | ai:claude
+fn session_prune_orphans(dry_run: bool, yes: bool) -> Result<()> {
+    let home = dirs::home_dir().context("HOME not set; cannot locate Claude project dir")?;
+    let projects = home.join(".claude/projects");
+    if !projects.is_dir() {
+        println!("(no ~/.claude/projects dir found)");
+        return Ok(());
+    }
+
+    struct Orphan {
+        path: std::path::PathBuf,
+        decoded_cwd: String,
+        jsonl_count: usize,
+    }
+
+    let mut orphans: Vec<Orphan> = Vec::new();
+    let mut active = 0usize;
+    let mut errored = 0usize;
+    for entry in std::fs::read_dir(&projects)?.filter_map(|e| e.ok()) {
+        let dir = entry.path();
+        if !dir.is_dir() {
+            continue;
+        }
+        // Read one jsonl event to recover the authoritative cwd. Skip if
+        // the dir has no jsonls — it's empty cruft, treat as orphan.
+        let mut found_cwd: Option<String> = None;
+        let mut jsonl_count = 0;
+        if let Ok(read) = std::fs::read_dir(&dir) {
+            for jsonl in read.filter_map(|e| e.ok()) {
+                if jsonl.path().extension().and_then(|s| s.to_str()) != Some("jsonl") {
+                    continue;
+                }
+                jsonl_count += 1;
+                if found_cwd.is_none() {
+                    if let Ok(text) = std::fs::read_to_string(jsonl.path()) {
+                        for line in text.lines().take(20) {
+                            if let Some(idx) = line.find("\"cwd\":\"") {
+                                let after = &line[idx + 7..];
+                                if let Some(end) = after.find('"') {
+                                    found_cwd = Some(after[..end].to_string());
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        let cwd_str = found_cwd.unwrap_or_else(|| {
+            // Lossy fallback decode: `-home-joe-ai-aida` → `/home/joe/ai/aida`.
+            let name = dir
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string();
+            name.replace('-', "/")
+        });
+        let cwd_path = std::path::Path::new(&cwd_str);
+        if cwd_path.is_dir() {
+            active += 1;
+            continue;
+        }
+        if cwd_str.is_empty() {
+            errored += 1;
+            continue;
+        }
+        orphans.push(Orphan {
+            path: dir,
+            decoded_cwd: cwd_str,
+            jsonl_count,
+        });
+    }
+
+    if orphans.is_empty() {
+        println!(
+            "(no orphan project dirs; {} active dir{} under {})",
+            active,
+            if active == 1 { "" } else { "s" },
+            projects.display()
+        );
+        if errored > 0 {
+            println!(
+                "  ({} dir{} couldn't be inspected — left in place)",
+                errored,
+                if errored == 1 { "" } else { "s" }
+            );
+        }
+        return Ok(());
+    }
+
+    println!(
+        "Found {} orphan Claude Code project dir{} (cwd missing):",
+        orphans.len(),
+        if orphans.len() == 1 { "" } else { "s" }
+    );
+    println!();
+    for o in &orphans {
+        println!("  {}", o.path.display().to_string().dimmed());
+        println!(
+            "      cwd: {}    {} jsonl{}",
+            o.decoded_cwd.yellow(),
+            o.jsonl_count,
+            if o.jsonl_count == 1 { "" } else { "s" }
+        );
+    }
+    println!();
+
+    if dry_run {
+        println!("{} (--dry-run; nothing removed)", "Dry run".dimmed());
+        return Ok(());
+    }
+
+    if !yes {
+        use std::io::Write;
+        eprint!("Remove these {} orphan dir(s)? [y/N] ", orphans.len());
+        std::io::stderr().flush()?;
+        let mut ans = String::new();
+        std::io::stdin().read_line(&mut ans)?;
+        if !matches!(ans.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+            println!("Aborted.");
+            return Ok(());
+        }
+    }
+
+    let mut removed = 0usize;
+    for o in &orphans {
+        match std::fs::remove_dir_all(&o.path) {
+            Ok(_) => removed += 1,
+            Err(e) => eprintln!(
+                "{} couldn't remove {}: {}",
+                "Warning:".yellow().bold(),
+                o.path.display(),
+                e
+            ),
+        }
+    }
+    println!(
+        "{} removed {} orphan project dir{}",
+        "✓".green(),
+        removed,
+        if removed == 1 { "" } else { "s" }
+    );
+    Ok(())
+}
+
+fn session_prune(days: u32, dry_run: bool, yes: bool, orphans: bool) -> Result<()> {
+    // TASK-70: orphan-sweep mode short-circuits the per-file age path.
+    // Iterates every project dir under ~/.claude/projects and removes any
+    // whose recorded cwd no longer exists on disk (stranded by an
+    // earlier `aida session end` that didn't `--purge-cc`).
+    // trace:TASK-70 | ai:claude
+    if orphans {
+        return session_prune_orphans(dry_run, yes);
+    }
+
     let cwd = std::env::current_dir().context("could not determine cwd")?;
     let project_root = find_project_root().unwrap_or_else(|_| cwd.clone());
 
@@ -13390,18 +13795,52 @@ mod statusline_tests {
         );
         assert!(matches!(dup.status, AutoQueueStatus::AlreadyExists));
 
-        // Skip reasons all flow through one variant. Cover each phrasing so
-        // a future refactor that swaps the strings can't silently regress
-        // back into the BUG-72 "no message at all" hole.
+        // TASK-74: skip reasons now split into ByDesign (nothing to fix —
+        // session shape never produces a PR) and NeedsAttention (missing
+        // tool, gh failed, queue subprocess errored). Cover each phrasing
+        // tagged with the right variant.
         for phrase in [
+            "auto-queue: reviewer session on `pr-7` — no PR to file (skip by design)",
             "auto-queue: no open PR for branch `epic-20-batch7` — reviewer queue not filed",
-            "auto-queue: `gh` CLI not on PATH — reviewer queue not filed",
-            "auto-queue: `gh pr list` failed (HTTP 401 — gh auth status) — reviewer queue not filed",
+        ] {
+            let s = AutoQueueOutcome::skipped_by_design(phrase);
+            assert!(matches!(s.status, AutoQueueStatus::SkippedByDesign));
+            assert_eq!(s.summary, phrase);
+        }
+        for phrase in [
+            "auto-queue: `gh` CLI not on PATH — would have queued reviewer story for branch `x`. Install gh to enable.",
+            "auto-queue: `gh pr list` failed for branch `x` (HTTP 401) — no reviewer story filed",
             "auto-queue: `aida add` failed for PR #42 (see warning above)",
         ] {
-            let s = AutoQueueOutcome::skipped(phrase);
-            assert!(matches!(s.status, AutoQueueStatus::Skipped));
+            let s = AutoQueueOutcome::skipped_needs_attention(phrase);
+            assert!(matches!(s.status, AutoQueueStatus::SkippedNeedsAttention));
             assert_eq!(s.summary, phrase);
+        }
+    }
+
+    /// TASK-74: branch-shape heuristic for "this is a reviewer session;
+    /// don't expect a PR from it". Covers the four branch prefixes the
+    /// `aida session start --owns PR-N` / `MR-N` etc. flows produce, and
+    /// rejects neighbors that just happen to start with the same letters.
+    /// trace:TASK-74 | ai:claude
+    #[test]
+    fn is_review_session_branch_recognizes_review_branches() {
+        // Positives
+        for b in ["pr-7", "PR-7", "mr-12", "MR-1", "github-99", "gitlab-3"] {
+            assert!(is_review_session_branch(b), "{}", b);
+        }
+        // Negatives — implementer-style branches must not match
+        for b in [
+            "epic-20-batch7",
+            "main",
+            "feature/foo",
+            "pr-foo",
+            "pr-",
+            "pr",
+            "fix-pr-7-handling",
+            "release-1.2.3",
+        ] {
+            assert!(!is_review_session_branch(b), "{}", b);
         }
     }
 
@@ -15211,26 +15650,27 @@ mod add_aida_gitignore_entries_tests {
     use super::*;
     use tempfile::TempDir;
 
-    /// Fresh project (no .gitignore) → file is created with both entries.
+    /// Fresh project (no .gitignore) → file is created with both blocks.
     /// Returns Ok(false) per the contract (a brand-new file isn't an
-    /// "update"). trace:BUG-71 | ai:claude
+    /// "update"). trace:BUG-73 | ai:claude
     #[test]
-    fn creates_gitignore_with_both_entries() {
+    fn creates_gitignore_with_both_blocks() {
         let tmp = TempDir::new().unwrap();
         let updated = add_aida_gitignore_entries(tmp.path(), ".aida-store").unwrap();
         assert!(!updated, "creation isn't an update");
         let content = std::fs::read_to_string(tmp.path().join(".gitignore")).unwrap();
         assert!(content.contains(".aida-store/"), "{}", content);
-        assert!(content.contains(".aida/session-env.sh"), "{}", content);
+        assert!(has_aida_runtime_deny_pattern(&content), "{}", content);
+        assert!(content.contains("!.aida/config.toml"), "{}", content);
     }
 
-    /// Existing .gitignore that already covers both entries → no write,
-    /// returns Ok(false). trace:BUG-71 | ai:claude
+    /// Existing .gitignore that already covers both blocks → no write,
+    /// returns Ok(false). trace:BUG-73 | ai:claude
     #[test]
-    fn idempotent_when_both_entries_present() {
+    fn idempotent_when_both_blocks_present() {
         let tmp = TempDir::new().unwrap();
         let path = tmp.path().join(".gitignore");
-        let original = "target/\n.aida-store/\n.aida/session-env.sh\n";
+        let original = "target/\n.aida-store/\n.aida/*\n!.aida/config.toml\n";
         std::fs::write(&path, original).unwrap();
         let updated = add_aida_gitignore_entries(tmp.path(), ".aida-store").unwrap();
         assert!(!updated);
@@ -15238,25 +15678,30 @@ mod add_aida_gitignore_entries_tests {
         assert_eq!(content, original);
     }
 
-    /// Pre-BUG-71 .gitignore (has .aida-store/ but not session-env.sh) →
-    /// only session-env.sh is appended. This is the migration path for
-    /// existing projects scaffolded before the fix. trace:BUG-71 | ai:claude
+    /// Legacy .gitignore (has `.aida-store/` but pre-BUG-73 per-file ignores)
+    /// → the deny block is appended; the old per-file lines are left in place
+    /// (harmless but redundant). Migration path for existing projects.
+    /// trace:BUG-73 | ai:claude
     #[test]
-    fn appends_only_missing_session_env_entry() {
+    fn appends_deny_block_when_only_legacy_per_file_entries() {
         let tmp = TempDir::new().unwrap();
         let path = tmp.path().join(".gitignore");
-        std::fs::write(&path, "target/\n.aida-store/\n").unwrap();
+        std::fs::write(
+            &path,
+            "target/\n.aida-store/\n.aida/session-env.sh\n.aida/sessions/\n",
+        )
+        .unwrap();
         let updated = add_aida_gitignore_entries(tmp.path(), ".aida-store").unwrap();
-        assert!(updated, "session-env line was missing → expected an append");
+        assert!(updated, "deny block missing → expected an append");
         let content = std::fs::read_to_string(&path).unwrap();
-        assert!(content.contains(".aida-store/"));
-        assert!(content.contains(".aida/session-env.sh"));
-        // Original content preserved
-        assert!(content.starts_with("target/\n.aida-store/\n"));
+        assert!(has_aida_runtime_deny_pattern(&content));
+        assert!(content.contains("!.aida/config.toml"));
+        // Legacy entries preserved
+        assert!(content.starts_with("target/\n.aida-store/\n.aida/session-env.sh\n"));
     }
 
-    /// .gitignore exists but neither AIDA entry → both get appended.
-    /// trace:BUG-71 | ai:claude
+    /// .gitignore exists but no AIDA blocks → both get appended.
+    /// trace:BUG-73 | ai:claude
     #[test]
     fn appends_both_when_neither_present() {
         let tmp = TempDir::new().unwrap();
@@ -15266,7 +15711,20 @@ mod add_aida_gitignore_entries_tests {
         assert!(updated);
         let content = std::fs::read_to_string(&path).unwrap();
         assert!(content.contains(".aida-store/"));
-        assert!(content.contains(".aida/session-env.sh"));
+        assert!(has_aida_runtime_deny_pattern(&content));
+        assert!(content.contains("!.aida/config.toml"));
+    }
+
+    /// Detection helper: matches a bare `.aida/*` line, ignores comments
+    /// that mention the string, ignores leading/trailing whitespace.
+    /// trace:BUG-73 | ai:claude
+    #[test]
+    fn deny_pattern_detection() {
+        assert!(has_aida_runtime_deny_pattern(".aida/*\n"));
+        assert!(has_aida_runtime_deny_pattern("foo\n  .aida/*  \nbar\n"));
+        assert!(!has_aida_runtime_deny_pattern("# .aida/* is a comment\n"));
+        assert!(!has_aida_runtime_deny_pattern(".aida/session-env.sh\n"));
+        assert!(!has_aida_runtime_deny_pattern(""));
     }
 }
 
@@ -16127,8 +16585,25 @@ fn handle_dev_activate(
     // so deactivate can strip exactly the same string regardless of what
     // else (e.g., `aida role enter`) has touched PS1 in between.
     // trace:TASK-19 | ai:claude
+    //
+    // BUG-70: strip ALL existing `(aida-PROFILE) ` prefixes before
+    // prepending the new one. Repeated `aida dev activate` (or switching
+    // debug ↔ release without a deactivate in between) would otherwise
+    // stack multiple prefixes like "(aida-debug) (aida-debug) joe@…".
+    // Mirrors BUG-60's loop for role-enter PS1 hygiene. The strip is
+    // pattern-based (any `(aida-WORD) ` token, with optional trailing
+    // `*` for the stale-marker variant) so stale prefixes from prior
+    // sessions / lost env vars are cleaned up too. trace:BUG-70 | ai:claude
     let ps1_prefix = format!("(aida-{}{}) ", profile, ps1_marker);
     println!("if [ -n \"${{PS1+x}}\" ]; then");
+    println!("    while case \"$PS1\" in *'(aida-'*') '*) true;; *) false;; esac; do");
+    println!("        _aida_old_ps1=\"$PS1\"");
+    println!("        _aida_after=\"${{PS1#*'(aida-'}}\"");
+    println!("        _aida_tag=\"${{_aida_after%%') '*}}\"");
+    println!("        PS1=\"${{PS1//'(aida-'$_aida_tag') '/}}\"");
+    println!("        [ \"$PS1\" = \"$_aida_old_ps1\" ] && break");
+    println!("    done");
+    println!("    unset _aida_old_ps1 _aida_after _aida_tag");
     println!("    export AIDA_DEV_PS1_PREFIX='{}'", ps1_prefix);
     println!("    export PS1=\"$AIDA_DEV_PS1_PREFIX$PS1\"");
     println!("fi");
@@ -17132,6 +17607,7 @@ fn handle_pull_command(
     store_path: &std::path::Path,
     code_only: bool,
     store_only: bool,
+    quiet: bool,
 ) -> Result<()> {
     use aida_core::git_ops;
 
@@ -17211,8 +17687,22 @@ fn handle_pull_command(
         let branch =
             git_ops::current_branch(store_path).unwrap_or_else(|_| "aida-store".to_string());
         println!("{} aida-store ← origin", "Pulling store".cyan().bold());
+
+        // TASK-73: snapshot the orphan-store HEAD SHA before pull so we
+        // can summarize what landed once it completes. None when the
+        // store is empty / not yet committed. trace:TASK-73 | ai:claude
+        let pre_sha = git_ops::head_sha(store_path).ok();
+
         match git_ops::pull_rebase(store_path, "origin", &branch) {
-            Ok(()) => println!("  {}", "store pull complete".green()),
+            Ok(()) => {
+                println!("  {}", "store pull complete".green());
+                // TASK-73 — summarize the delta unless --quiet.
+                if !quiet {
+                    if let Some(pre) = pre_sha.as_deref() {
+                        print_pull_summary(store_path, pre);
+                    }
+                }
+            }
             Err(e) => {
                 eprintln!(
                     "  {} {}\n  The orphan store may be mid-rebase. To recover:\n    \
@@ -17227,6 +17717,183 @@ fn handle_pull_command(
     }
 
     Ok(())
+}
+
+/// Walk `git log <pre-pull-sha>..HEAD` on the orphan store and print a
+/// per-category summary of what landed in this pull: specs added,
+/// modified (with status flips when detectable), deleted, plus a comment
+/// count. Stays out of the way when nothing changed and falls back
+/// quietly on any git failure (the pull itself already succeeded; we
+/// don't want a flaky summary to look like a failed pull).
+/// trace:TASK-73 | ai:claude
+fn print_pull_summary(store_path: &std::path::Path, pre_sha: &str) {
+    use std::collections::BTreeMap;
+    use std::process::Command as ProcessCommand;
+
+    let range = format!("{}..HEAD", pre_sha);
+    let log = match ProcessCommand::new("git")
+        .arg("-C")
+        .arg(store_path)
+        .args([
+            "log",
+            "--name-status",
+            "--pretty=format:%H%x09%s",
+            range.as_str(),
+        ])
+        .output()
+    {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
+        _ => return, // soft failure — pull already succeeded, don't shout
+    };
+    if log.trim().is_empty() {
+        println!("  {}", "(no new commits)".dimmed());
+        return;
+    }
+
+    // Lines are either `<sha>\t<subject>` (commit header) or
+    // `<status>\t<path>` (name-status row).
+    let mut added: BTreeMap<String, String> = BTreeMap::new(); // spec_id -> req_type
+    let mut modified: BTreeMap<String, String> = BTreeMap::new();
+    let mut deleted: BTreeMap<String, String> = BTreeMap::new();
+    let mut comment_subjects: Vec<String> = Vec::new(); // commit subjects mentioning comments
+    let mut commit_count: usize = 0;
+    let mut current_subject_is_comment = false;
+
+    for line in log.lines() {
+        if line.is_empty() {
+            continue;
+        }
+        let tabs = line.bytes().filter(|b| *b == b'\t').count();
+        if tabs == 1 {
+            // Could be either a commit header (sha is 40 hex chars) or a
+            // name-status line (status letter is 1-2 chars). Disambiguate
+            // by length of the first column.
+            let mut parts = line.splitn(2, '\t');
+            let first = parts.next().unwrap_or("");
+            let rest = parts.next().unwrap_or("");
+            if first.len() >= 7 && first.chars().all(|c| c.is_ascii_hexdigit()) {
+                // Commit header
+                commit_count += 1;
+                let subj = rest.trim();
+                current_subject_is_comment = subj.contains("comment on ")
+                    || subj.contains("add comment")
+                    || subj.starts_with("comment:");
+                if current_subject_is_comment {
+                    comment_subjects.push(subj.to_string());
+                }
+            } else {
+                // name-status row
+                if !rest.starts_with("objects/") || !rest.ends_with(".yaml") {
+                    continue;
+                }
+                let spec_id = spec_id_from_orphan_path(rest);
+                let req_type = req_type_from_orphan_path(rest);
+                match first.chars().next() {
+                    Some('A') => {
+                        added.insert(spec_id, req_type);
+                    }
+                    Some('M') => {
+                        // Modifications driven by comment commits shouldn't
+                        // double-count under "modified" — they're already
+                        // surfaced via comment_subjects.
+                        if !current_subject_is_comment {
+                            modified.insert(spec_id, req_type);
+                        }
+                    }
+                    Some('D') => {
+                        deleted.insert(spec_id, req_type);
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    if added.is_empty() && modified.is_empty() && deleted.is_empty() && comment_subjects.is_empty()
+    {
+        println!(
+            "  {} ({} commits, no spec changes — internal churn / chore-only)",
+            "(no spec changes)".dimmed(),
+            commit_count
+        );
+        return;
+    }
+
+    println!();
+    println!("{} ({} commits):", "Changes pulled".bold(), commit_count);
+    if !added.is_empty() {
+        println!(
+            "  {} {} spec{} added",
+            "+".green().bold(),
+            added.len(),
+            if added.len() == 1 { "" } else { "s" }
+        );
+        for (id, _) in added.iter().take(8) {
+            println!("    {}", id);
+        }
+        if added.len() > 8 {
+            println!("    {}", format!("(+{} more)", added.len() - 8).dimmed());
+        }
+    }
+    if !modified.is_empty() {
+        println!(
+            "  {} {} spec{} modified",
+            "~".cyan(),
+            modified.len(),
+            if modified.len() == 1 { "" } else { "s" }
+        );
+        for (id, _) in modified.iter().take(8) {
+            println!("    {}", id);
+        }
+        if modified.len() > 8 {
+            println!("    {}", format!("(+{} more)", modified.len() - 8).dimmed());
+        }
+    }
+    if !deleted.is_empty() {
+        println!(
+            "  {} {} spec{} deleted",
+            "−".red(),
+            deleted.len(),
+            if deleted.len() == 1 { "" } else { "s" }
+        );
+        for (id, _) in deleted.iter().take(8) {
+            println!("    {}", id);
+        }
+    }
+    if !comment_subjects.is_empty() {
+        println!(
+            "  {} {} comment commit{}",
+            "💬".dimmed(),
+            comment_subjects.len(),
+            if comment_subjects.len() == 1 { "" } else { "s" }
+        );
+        for s in comment_subjects.iter().take(5) {
+            println!("    {}", s.dimmed());
+        }
+        if comment_subjects.len() > 5 {
+            println!(
+                "    {}",
+                format!("(+{} more)", comment_subjects.len() - 5).dimmed()
+            );
+        }
+    }
+    println!(
+        "  {}",
+        "Run `aida history --since \"5 min ago\" --events` for the full event stream.".dimmed()
+    );
+}
+
+fn spec_id_from_orphan_path(path: &str) -> String {
+    // objects/TYPE/000/SPEC-ID.yaml
+    std::path::Path::new(path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("?")
+        .to_string()
+}
+
+fn req_type_from_orphan_path(path: &str) -> String {
+    path.split('/').nth(1).unwrap_or("?").to_string()
 }
 
 // ----------------------------------------------------------------------------
@@ -18977,8 +19644,20 @@ fn handle_relationship_command(cmd: &RelationshipCommand, storage: &Storage) -> 
                 .ok_or_else(|| anyhow::anyhow!("missing TO (positional or --to)"))?;
             remove_relationship(storage, from, to, r#type, *bidirectional)?;
         }
-        RelationshipCommand::List { id } => {
-            list_relationships(storage, id)?;
+        RelationshipCommand::List { id, source, .. } => {
+            // Legacy SQLite path doesn't implement the global/incoming/--type
+            // filters from TASK-65 — they require iterating every requirement
+            // and the legacy backend isn't the target of new work. Falls back
+            // to the point-query when an id (positional or --source) is given;
+            // refuses cleanly otherwise. trace:TASK-65 | ai:claude
+            let id_str = id.as_deref().or(source.as_deref()).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "legacy SQLite backend supports only `aida rel list <ID>`. \
+                     Global / --target / --dangling listings require the git-canonical \
+                     store — run `aida init` (or `aida db export-git` to migrate)."
+                )
+            })?;
+            list_relationships(storage, id_str)?;
         }
     }
     Ok(())
@@ -19097,6 +19776,275 @@ fn remove_relationship(
     }
 
     Ok(())
+}
+
+/// Modern `aida rel list` over the git-canonical backend. Supports three
+/// modes (global / outgoing / incoming) plus `--type`, `--dangling`, and
+/// `--all` filters. Output uses a uniform `FROM → TO   TITLE` row format
+/// across all modes for grep-friendly behavior. trace:TASK-65 | ai:claude
+fn handle_rel_list_modern(
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+    source: Option<&str>,
+    target: Option<&str>,
+    type_filter: Option<&str>,
+    dangling_only: bool,
+    include_all: bool,
+) -> Result<()> {
+    use aida_core::DatabaseBackend;
+
+    if source.is_some() && target.is_some() {
+        anyhow::bail!(
+            "pass either a source (positional or --source) or --target, not both — \
+             they pick different edge sets"
+        );
+    }
+
+    // Normalize the type filter against the canonical names. We let custom
+    // types through as exact string compare so user-defined relationship
+    // names still filter correctly.
+    let type_filter_norm: Option<RelationshipType> = type_filter.map(RelationshipType::from_str);
+
+    // Build the universe we need to read. Outgoing/global: walk every
+    // requirement. Incoming: same — there's no inverse index, so a target
+    // query is "find every edge whose target_id resolves to this UUID".
+    let all_reqs = backend.list_requirements(false)?;
+
+    // For target mode we need the target's UUID up front to compare against
+    // each edge's target_id field.
+    let target_uuid: Option<uuid::Uuid> = if let Some(t) = target {
+        Some(
+            backend
+                .get_requirement_by_spec_id(t)?
+                .ok_or_else(|| not_found::requirement_not_found(t, Some(store_path)))?
+                .id,
+        )
+    } else {
+        None
+    };
+
+    // For source mode the legacy behavior is "list relationships for one
+    // requirement"; we keep that shape, just routed through the same
+    // emitter. trace:TASK-65 | ai:claude
+    let source_uuid: Option<uuid::Uuid> = if let Some(s) = source {
+        Some(
+            backend
+                .get_requirement_by_spec_id(s)?
+                .ok_or_else(|| not_found::requirement_not_found(s, Some(store_path)))?
+                .id,
+        )
+    } else {
+        None
+    };
+
+    // Index reqs by uuid for fast target-resolution during printing.
+    use std::collections::HashMap;
+    let req_by_uuid: HashMap<uuid::Uuid, &aida_core::Requirement> =
+        all_reqs.iter().map(|r| (r.id, r)).collect();
+
+    // Collect matching edges as (from_req, &Relationship, target_req_or_none).
+    let mut rows: Vec<RelRow> = Vec::new();
+    let mut hidden_terminal = 0usize;
+    for req in &all_reqs {
+        if let Some(s) = source_uuid {
+            if req.id != s {
+                continue;
+            }
+        }
+        for rel in &req.relationships {
+            if let Some(t) = target_uuid {
+                if rel.target_id != t {
+                    continue;
+                }
+            }
+            if let Some(ref tf) = type_filter_norm {
+                if !rel_type_matches(&rel.rel_type, tf) {
+                    continue;
+                }
+            }
+            let target_req = req_by_uuid.get(&rel.target_id).copied();
+            if dangling_only && target_req.is_some() {
+                continue;
+            }
+            // Hide edges where both endpoints are terminal in global mode
+            // (no specific source/target asked). When the user explicitly
+            // names a source or target they get the full picture for that
+            // node regardless of status. trace:TASK-65 | ai:claude
+            let global_mode = source_uuid.is_none() && target_uuid.is_none();
+            if global_mode && !include_all {
+                let from_terminal = is_terminal_status(&req.status);
+                let to_terminal = target_req
+                    .map(|t| is_terminal_status(&t.status))
+                    .unwrap_or(false);
+                if from_terminal && to_terminal {
+                    hidden_terminal += 1;
+                    continue;
+                }
+            }
+            rows.push(RelRow {
+                from_spec: req.spec_id.clone().unwrap_or_else(|| "?".into()),
+                from_status: req.status.to_string(),
+                rel_type: rel.rel_type.clone(),
+                target_id_uuid: rel.target_id,
+                target_spec: target_req
+                    .and_then(|t| t.spec_id.clone())
+                    .unwrap_or_else(|| {
+                        // BUG-53: tombstone form for deleted targets.
+                        let s = rel.target_id.to_string();
+                        format!("{}…", &s[..s.len().min(8)])
+                    }),
+                target_status: target_req.map(|t| t.status.to_string()),
+                target_title: target_req
+                    .map(|t| t.title.clone())
+                    .unwrap_or_else(|| "(removed — see `aida doctor verify-relationships`)".into()),
+                target_resolved: target_req.is_some(),
+            });
+        }
+    }
+
+    if rows.is_empty() {
+        let mode = if target_uuid.is_some() {
+            "incoming"
+        } else if source_uuid.is_some() {
+            "outgoing"
+        } else {
+            "global"
+        };
+        println!(
+            "{}",
+            format!("(no {mode} relationships match the filter)").yellow()
+        );
+        if hidden_terminal > 0 {
+            println!(
+                "{}",
+                format!(
+                    "  ({hidden_terminal} hidden between Completed/Rejected reqs — pass --all to see them)"
+                )
+                .dimmed()
+            );
+        }
+        return Ok(());
+    }
+
+    // Column widths sized to data.
+    let from_w = rows
+        .iter()
+        .map(|r| r.from_spec.len())
+        .max()
+        .unwrap_or(8)
+        .max(4);
+    let type_w = rows
+        .iter()
+        .map(|r| rel_type_label(&r.rel_type).len())
+        .max()
+        .unwrap_or(8)
+        .max(4);
+    let to_w = rows
+        .iter()
+        .map(|r| r.target_spec.len())
+        .max()
+        .unwrap_or(10)
+        .max(2);
+
+    println!(
+        "{}",
+        format!(
+            "{:<from_w$}  {:<type_w$}  {:<to_w$}  TITLE",
+            "FROM",
+            "TYPE",
+            "TO",
+            from_w = from_w,
+            type_w = type_w,
+            to_w = to_w,
+        )
+        .dimmed()
+    );
+
+    for r in &rows {
+        let from = format!("{:<from_w$}", r.from_spec, from_w = from_w);
+        let typ = rel_type_label(&r.rel_type);
+        let typ_cell = format!("{:<type_w$}", typ, type_w = type_w);
+        let to = format!("{:<to_w$}", r.target_spec, to_w = to_w);
+        let title = shorten_title(&r.target_title, 60);
+        let marker = if !r.target_resolved {
+            "⚠ ".red().to_string()
+        } else if r
+            .target_status
+            .as_deref()
+            .map(is_terminal_status_str)
+            .unwrap_or(false)
+        {
+            "· ".dimmed().to_string()
+        } else {
+            "  ".into()
+        };
+        println!(
+            "{marker}{from}  {typ_cell}  {to}  {title}",
+            title = title.dimmed()
+        );
+    }
+
+    println!("\n{} edges", rows.len());
+    if hidden_terminal > 0 {
+        println!(
+            "{}",
+            format!(
+                "  ({hidden_terminal} hidden between Completed/Rejected reqs — pass --all to see them)"
+            )
+            .dimmed()
+        );
+    }
+    let _ = store_path; // suppress unused — already used for error context above
+    Ok(())
+}
+
+/// One row emitted by `aida rel list`. Decoupling the struct from the
+/// rendering loop keeps the column widths calculable in one pass.
+struct RelRow {
+    from_spec: String,
+    #[allow(dead_code)] // surfaced through future --show-status etc.
+    from_status: String,
+    rel_type: RelationshipType,
+    #[allow(dead_code)] // kept for future --uuid / --json renderers
+    target_id_uuid: uuid::Uuid,
+    target_spec: String,
+    target_status: Option<String>,
+    target_title: String,
+    target_resolved: bool,
+}
+
+/// Compare a relationship-type from storage to a user-supplied filter.
+/// Canonical types match by Display name (case-insensitive); custom types
+/// match exact string. trace:TASK-65 | ai:claude
+fn rel_type_matches(actual: &RelationshipType, want: &RelationshipType) -> bool {
+    match (actual, want) {
+        (RelationshipType::Custom(a), RelationshipType::Custom(b)) => a.eq_ignore_ascii_case(b),
+        (RelationshipType::Custom(_), _) | (_, RelationshipType::Custom(_)) => false,
+        (a, b) => std::mem::discriminant(a) == std::mem::discriminant(b),
+    }
+}
+
+/// Short label for a RelationshipType in tabular output.
+fn rel_type_label(rt: &RelationshipType) -> String {
+    match rt {
+        RelationshipType::Parent => "parent".to_string(),
+        RelationshipType::Child => "child".to_string(),
+        RelationshipType::Duplicate => "duplicate".to_string(),
+        RelationshipType::Verifies => "verifies".to_string(),
+        RelationshipType::VerifiedBy => "verified-by".to_string(),
+        RelationshipType::References => "references".to_string(),
+        RelationshipType::Custom(s) => s.clone(),
+    }
+}
+
+fn shorten_title(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        s.to_string()
+    } else {
+        let mut out: String = s.chars().take(max.saturating_sub(1)).collect();
+        out.push('…');
+        out
+    }
 }
 
 fn list_relationships(storage: &Storage, id_str: &str) -> Result<()> {
