@@ -1,0 +1,70 @@
+id: 019e15bd-1146-78b2-88c4-2269d40a53a7
+spec_id: BUG-80
+agreed_id: BUG-80
+title: 'STORY-98 follow-up: manifest files leak — session_end / session_prune don''t clean them up'
+description: |
+  PR-10 reviewer caught 2026-05-11: STORY-98 shipped the manifest writer/reader and the [planned:by-X] chip, but missed the cleanup half of acceptance bullet 6 ("Gracefully degrades when a session crashes — stale manifests cleaned up on next session start, or via aida session prune").
+
+  ## Confirmed leak
+
+  - `session_end` deletes the lease, activity log, symlinks — but NOT the manifest at `.aida/sessions/<id>.manifest.toml` (verified: no remove_file for .manifest.toml in main.rs:10916+)
+  - `session_prune` has no manifest awareness (no remove_file for .manifest.toml in main.rs:12407+)
+  - `session_manifest::list_all` walks every `.manifest.toml` regardless of whether the owning session is live (variable misleadingly named `active_manifests` at main.rs:24775)
+
+  Live evidence from PR-10 review session: lease 019e15743920 ended, manifest file remains on disk. Would emit `[planned:by-019e1574]` chips if any of its three specs were still Approved (they're Completed so the queue terminal-status filter masks the leak — bug hidden, not gone).
+
+  ## Fix
+
+  Two paths, complementary:
+
+  ### Part 1 — session_end deletes the manifest
+
+  Add to the session_end cleanup sequence (right after lease delete, before worktree remove):
+
+  ```rust
+  let manifest_path = sessions_dir.join(format!("{}.manifest.toml", lease.id));
+  if manifest_path.exists() {
+      let _ = std::fs::remove_file(&manifest_path);
+  }
+  ```
+
+  ### Part 2 — session_prune sweeps orphan manifests
+
+  When `aida session prune --orphans` runs (TASK-70 territory if not yet shipped), also delete manifests for leases that no longer exist:
+
+  ```rust
+  for manifest in session_manifest::list_all(&sessions_dir)? {
+      let lease_path = sessions_dir.join(format!("{}.toml", manifest.session_id));
+      if !lease_path.exists() {
+          std::fs::remove_file(manifest.path)?;
+      }
+  }
+  ```
+
+  ### Bonus — rename `active_manifests` → `all_manifests`
+
+  The variable name in session_manifest::list_all promises "active" but delivers "everything." Rename to match reality.
+
+  ## Why low priority
+
+  The leak is masked in practice — the `[planned:by-X]` chip's display logic already checks the underlying spec's status, and PR-10's queue list hides terminal-status by default. So a stale manifest is invisible unless a spec is somehow re-Approved. Real-world impact: directory accumulates one .manifest.toml per session ended, takes years to be noticeable.
+
+  ## Composes with
+
+  - STORY-98 (parent — original manifest feature) — this closes its acceptance bullet 6
+  - TASK-70 (Claude Code orphan project dir cleanup) — sibling cleanup work; both fit `aida session prune` naturally
+  - BUG-67 (auto-force on gitignored cruft) — manifest files are also gitignored under BUG-73's deny-by-default, so they don't trip BUG-67 either way
+
+  ## Acceptance
+
+  - [ ] `aida session end <id>` deletes the matching `.manifest.toml`
+  - [ ] `aida session prune` (or `--orphans` variant) sweeps manifests for leases that no longer exist
+  - [ ] Variable in session_manifest::list_all renamed from misleading `active_manifests` to `all_manifests`
+  - [ ] Tested: end session → manifest file gone. Run prune with orphan manifest → manifest removed.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T06:32:52.806722759Z
+modified_at: 2026-05-11T06:32:52.806722759Z
+req_type: Bug
