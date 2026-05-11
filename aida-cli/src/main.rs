@@ -14808,6 +14808,39 @@ mod statusline_tests {
         // Version-like parens shouldn't match.
         let msg = "release: v1.2.3 (1.2.3)\n";
         assert!(extract_spec_ids_from_commit(msg).is_empty());
+
+        // BUG-78: space-separated multi-spec parens.
+        let msg = "[AI:claude] feat(session): polish (STORY-98 STORY-90 BUG-74) (#10)\n";
+        assert_eq!(
+            extract_spec_ids_from_commit(msg),
+            vec![
+                "STORY-98".to_string(),
+                "STORY-90".to_string(),
+                "BUG-74".to_string()
+            ]
+        );
+
+        // Comma-separated still works.
+        let msg = "fix(api): (BUG-23, BUG-24)\n";
+        assert_eq!(
+            extract_spec_ids_from_commit(msg),
+            vec!["BUG-23".to_string(), "BUG-24".to_string()]
+        );
+
+        // Mixed comma + whitespace.
+        let msg = "fix: (FR-1, BUG-2 TASK-3)\n";
+        assert_eq!(
+            extract_spec_ids_from_commit(msg),
+            vec![
+                "FR-1".to_string(),
+                "BUG-2".to_string(),
+                "TASK-3".to_string()
+            ]
+        );
+
+        // Mixed prose + ID still rejects (so release notes don't false-match).
+        let msg = "release: stuff (foo BUG-23)\n";
+        assert!(extract_spec_ids_from_commit(msg).is_empty());
     }
 
     /// STORY-67: looks_like_spec_id validates the alpha-DASH-digits
@@ -22551,18 +22584,58 @@ fn extract_spec_ids_from_commit(message: &str) -> Vec<String> {
     let mut out = Vec::new();
     for line in message.lines() {
         let trimmed = line.trim();
-        // Walk until the LAST `(...)` group on the subject line, which
-        // is where the REQ-ID lives. Body lines occasionally mention
-        // other reqs in prose; we ignore those to avoid false matches.
-        let Some(open_at) = trimmed.rfind('(') else {
+        // Walk the trailing `(...)` group(s) on the subject line. Squash
+        // commits land with a `(#N)` PR-number suffix — strip those first
+        // so the REQ-ID paren before it gets walked. BUG-78 | ai:claude
+        let mut tail: &str = trimmed;
+        while tail.ends_with(')') {
+            let Some(open_at) = tail.rfind('(') else {
+                break;
+            };
+            let inner = &tail[open_at + 1..tail.len() - 1];
+            // Is this an `(#N)` PR suffix? Skip past it and try the next group.
+            if inner.starts_with('#')
+                && inner.len() > 1
+                && inner[1..].chars().all(|c| c.is_ascii_digit())
+            {
+                tail = tail[..open_at].trim_end();
+                continue;
+            }
+            tail = &tail[..open_at + inner.len() + 2]; // include the close paren
+            break;
+        }
+        let Some(open_at) = tail.rfind('(') else {
             continue;
         };
-        let Some(close_at) = trimmed[open_at..].find(')').map(|n| open_at + n) else {
+        if !tail.ends_with(')') {
             continue;
-        };
-        let inner = &trimmed[open_at + 1..close_at];
-        if looks_like_spec_id(inner) {
-            out.push(inner.to_string());
+        }
+        let close_at = tail.len() - 1;
+        let inner = &tail[open_at + 1..close_at];
+        // BUG-78: accept comma / whitespace separated multi-spec parens
+        // like `(STORY-98 STORY-90 BUG-74)` or `(STORY-A, STORY-B)`.
+        // Single-spec parens fall through the same path (one token, one ID).
+        let line_start = out.len();
+        let mut all_ids = true;
+        let mut tok_count = 0;
+        for tok in inner.split(|c: char| c == ',' || c.is_whitespace()) {
+            let tok = tok.trim();
+            if tok.is_empty() {
+                continue;
+            }
+            tok_count += 1;
+            if looks_like_spec_id(tok) {
+                out.push(tok.to_string());
+            } else {
+                all_ids = false;
+                break;
+            }
+        }
+        // If any token wasn't spec-id-shaped this wasn't a multi-spec paren
+        // at all (release notes, commit prose). Drop what we collected for
+        // this line so version-like parens like `(1.2.3)` still don't match.
+        if !all_ids || tok_count == 0 {
+            out.truncate(line_start);
         }
     }
     out
