@@ -1,0 +1,59 @@
+id: 019e14f8-4f8f-7333-af6a-bde98499053d
+spec_id: STORY-92
+agreed_id: STORY-92
+title: Auto-spawn next-batch implementer session when a PR merges (queue-driven)
+description: |
+  Today's pain (caught 2026-05-11): after a PR merges, the user manually:
+  1. Pulls main, rebuilds binary
+  2. Runs `aida session start --owns EPIC-N --branch X`
+  3. cd into worktree, role enter, launch claude
+
+  That's the same routine every cycle. When the queue has more work, this should be automatic.
+
+  ## Trigger
+
+  Two viable triggers:
+  - **PR-merge webhook / poll**: `aida watch` (proposed) or a gh webhook fires when PR-N transitions to MERGED. If matching session is still running, end it. Then check queue: if work remains, auto-spawn next batch.
+  - **At session-end**: if the just-ended session has an associated open PR AND the PR is already merged AND the queue has work for the same scope/role, spawn next batch.
+
+  Latter is simpler — doesn't require a watcher. Worse: requires user to explicitly run `aida session end` before auto-spawn fires.
+
+  ## Behavior
+
+  ```
+  $ aida session end <batch7-lease>
+  ✓ lease deleted
+  ✓ worktree removed
+  ⓘ PR-7 already merged. Queue has 5 items routed to role:implementer scoped @EPIC-20.
+
+  Auto-spawn next batch? [Y/n]
+    branch: epic-20-batch8 (auto-numbered)
+    worktree: /home/joe/ai/aida-epic-20
+
+  [Y] → spawns + prints recipe (cd / source / role enter / claude)
+  [n] → standard end behavior, user spawns manually
+  ```
+
+  Behind a flag (`--auto-spawn` opt-in) initially. Later: default Y, opt-out with `--no-spawn` or env var.
+
+  ## Composes with
+
+  - EPIC-23 itself (parent)
+  - STORY-66 / STORY-90 (auto-queue PR for reviewer) — the dual on the reviewer side
+  - TASK-43 (aida pull) — bundled into the spawn step
+  - STORY-86 (Done vs Completed status) — auto-bump on merge feeds the "is this PR done?" check
+
+  ## Acceptance
+
+  - [ ] `aida session end` detects PR-merged state and offers auto-spawn
+  - [ ] Auto-spawned session uses next-batch branch name (epic-N-batchM+1)
+  - [ ] User confirmation required (Y/n) — never silent spawn
+  - [ ] `--no-auto-spawn` flag and `AIDA_AUTO_SPAWN=false` env var to skip prompt
+  - [ ] Tested: PR open + merge + session end → prompt fires. PR unopened → no prompt. Queue empty → no prompt.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T02:57:58.159777765Z
+modified_at: 2026-05-11T02:57:58.159777765Z
+req_type: Story
