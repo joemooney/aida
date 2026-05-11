@@ -135,3 +135,11 @@ blocks:
   range_end: 240
   next: 141
   allocated_at: 2026-05-11T17:02:54.570723637Z
+- node_id: '3'
+  owner: Joe.Mooney@work.example
+  hostname: spock
+  type_prefix: SPIKE
+  range_start: 105
+  range_end: 204
+  next: 105
+  allocated_at: 2026-05-11T17:02:56.073593233Z
