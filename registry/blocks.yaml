@@ -95,3 +95,11 @@ blocks:
   range_end: 100
   next: 2
   allocated_at: 2026-05-09T18:10:03.237103887Z
+- node_id: '3'
+  owner: Joe.Mooney@work.example
+  hostname: spock
+  type_prefix: FR
+  range_start: 356
+  range_end: 455
+  next: 356
+  allocated_at: 2026-05-11T17:02:48.562695195Z
