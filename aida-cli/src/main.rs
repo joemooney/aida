@@ -19138,6 +19138,11 @@ fn print_pull_summary(store_path: &std::path::Path, pre_sha: &str) {
     let mut comment_subjects: Vec<String> = Vec::new(); // commit subjects mentioning comments
     let mut commit_count: usize = 0;
     let mut current_subject_is_comment = false;
+    // TASK-75: track commits so we can attribute status changes to their
+    // source. Map sha → (subject, source-label). trace:TASK-75 | ai:claude
+    let mut commit_sources: Vec<(String, String, String)> = Vec::new();
+    let mut current_sha: Option<String> = None;
+    let mut modified_specs_per_commit: BTreeMap<String, Vec<String>> = BTreeMap::new();
 
     for line in log.lines() {
         if line.is_empty() {
@@ -19161,6 +19166,9 @@ fn print_pull_summary(store_path: &std::path::Path, pre_sha: &str) {
                 if current_subject_is_comment {
                     comment_subjects.push(subj.to_string());
                 }
+                current_sha = Some(first.to_string());
+                let source = classify_commit_source(subj);
+                commit_sources.push((first.to_string(), subj.to_string(), source));
             } else {
                 // name-status row
                 if !rest.starts_with("objects/") || !rest.ends_with(".yaml") {
@@ -19177,7 +19185,13 @@ fn print_pull_summary(store_path: &std::path::Path, pre_sha: &str) {
                         // double-count under "modified" — they're already
                         // surfaced via comment_subjects.
                         if !current_subject_is_comment {
-                            modified.insert(spec_id, req_type);
+                            modified.insert(spec_id.clone(), req_type);
+                        }
+                        if let Some(sha) = &current_sha {
+                            modified_specs_per_commit
+                                .entry(sha.clone())
+                                .or_default()
+                                .push(spec_id);
                         }
                     }
                     Some('D') => {
@@ -19189,7 +19203,21 @@ fn print_pull_summary(store_path: &std::path::Path, pre_sha: &str) {
         }
     }
 
-    if added.is_empty() && modified.is_empty() && deleted.is_empty() && comment_subjects.is_empty()
+    // TASK-75: walk each commit's diff to extract status transitions
+    // (`-status: X` / `+status: Y` lines in the YAML hunk) and attribute
+    // them to the commit's source classification.
+    // trace:TASK-75 | ai:claude
+    let status_changes = extract_status_changes_from_commits(
+        store_path,
+        &commit_sources,
+        &modified_specs_per_commit,
+    );
+
+    if added.is_empty()
+        && modified.is_empty()
+        && deleted.is_empty()
+        && comment_subjects.is_empty()
+        && status_changes.is_empty()
     {
         println!(
             "  {} ({} commits, no spec changes — internal churn / chore-only)",
@@ -19257,10 +19285,151 @@ fn print_pull_summary(store_path: &std::path::Path, pre_sha: &str) {
             );
         }
     }
+    if !status_changes.is_empty() {
+        // TASK-75: group status changes by their commit source so the
+        // user can see which PR-N merge / commit / manual action drove
+        // each transition. trace:TASK-75 | ai:claude
+        let mut by_source: BTreeMap<String, Vec<&StatusTransition>> = BTreeMap::new();
+        for tr in &status_changes {
+            by_source.entry(tr.source.clone()).or_default().push(tr);
+        }
+        let total = status_changes.len();
+        println!(
+            "  {} {} status change{}",
+            "~".cyan(),
+            total,
+            if total == 1 { "" } else { "s" }
+        );
+        for (source, list) in &by_source {
+            println!("    {}", format!("({}):", source).dimmed());
+            for tr in list.iter().take(8) {
+                println!(
+                    "      {:<12} {} → {}",
+                    tr.spec_id,
+                    tr.from.yellow(),
+                    tr.to.green()
+                );
+            }
+            if list.len() > 8 {
+                println!("      {}", format!("(+{} more)", list.len() - 8).dimmed());
+            }
+        }
+    }
     println!(
         "  {}",
         "Run `aida history --since \"5 min ago\" --events` for the full event stream.".dimmed()
     );
+}
+
+/// TASK-75: a status transition extracted from a commit's YAML diff,
+/// annotated with where it came from. trace:TASK-75 | ai:claude
+struct StatusTransition {
+    spec_id: String,
+    from: String,
+    to: String,
+    source: String,
+}
+
+/// TASK-75: classify a commit subject as a "PR-N merge" (squash via
+/// `(#N)` suffix), an explicit commit referencing a REQ-ID, or "manual".
+/// trace:TASK-75 | ai:claude
+fn classify_commit_source(subject: &str) -> String {
+    let trimmed = subject.trim();
+    // PR-N merge: trailing `(#N)`.
+    if let Some(open) = trimmed.rfind('(') {
+        let inner = &trimmed[open + 1..];
+        if let Some(close) = inner.find(')') {
+            let body = &inner[..close];
+            if let Some(n) = body.strip_prefix('#') {
+                if !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()) {
+                    return format!("PR-{} merge", n);
+                }
+            }
+        }
+    }
+    // commit-with-REQ-ID: subject extractor finds at least one SPEC-ID
+    // in the trailing parens.
+    let ids = extract_spec_ids_from_commit(subject);
+    if !ids.is_empty() {
+        return format!("commit ({})", ids.join(", "));
+    }
+    "manual".to_string()
+}
+
+/// TASK-75: parse each commit's diff to find status transitions in the
+/// modified YAML files. Returns one StatusTransition per (commit, spec)
+/// pair that actually changed status. trace:TASK-75 | ai:claude
+fn extract_status_changes_from_commits(
+    store_path: &std::path::Path,
+    commits: &[(String, String, String)],
+    modified_specs_per_commit: &std::collections::BTreeMap<String, Vec<String>>,
+) -> Vec<StatusTransition> {
+    use std::process::Command as ProcessCommand;
+    let mut out = Vec::new();
+    for (sha, _subj, source) in commits {
+        let Some(specs) = modified_specs_per_commit.get(sha) else {
+            continue;
+        };
+        if specs.is_empty() {
+            continue;
+        }
+        let diff = match ProcessCommand::new("git")
+            .arg("-C")
+            .arg(store_path)
+            .args(["show", "--no-color", "--unified=0", sha, "--"])
+            .args(specs.iter().map(|s| format!("objects/*/{}.yaml", s)))
+            .output()
+        {
+            Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
+            _ => continue,
+        };
+        for tr in parse_status_transitions_from_diff(&diff) {
+            out.push(StatusTransition {
+                spec_id: tr.0,
+                from: tr.1,
+                to: tr.2,
+                source: source.clone(),
+            });
+        }
+    }
+    out
+}
+
+/// TASK-75: scan unified-diff output for status transitions. Each YAML
+/// status change appears as a `-status: X` / `+status: Y` pair within a
+/// single file's hunk. We walk file-by-file: track which spec the hunk
+/// belongs to (via `diff --git a/objects/.../X.yaml`), then pair the
+/// `-status` and `+status` lines. trace:TASK-75 | ai:claude
+fn parse_status_transitions_from_diff(diff: &str) -> Vec<(String, String, String)> {
+    let mut out = Vec::new();
+    let mut current_spec: Option<String> = None;
+    let mut prev_status: Option<String> = None;
+    for line in diff.lines() {
+        if let Some(rest) = line.strip_prefix("diff --git a/") {
+            // rest: `objects/TYPE/000/SPEC-ID.yaml b/objects/...`
+            current_spec = rest
+                .split_whitespace()
+                .next()
+                .and_then(|p| spec_id_from_orphan_path(p).into())
+                .filter(|s| s != "?");
+            prev_status = None;
+            continue;
+        }
+        let Some(spec) = current_spec.as_deref() else {
+            continue;
+        };
+        if let Some(rest) = line.strip_prefix("-status:") {
+            prev_status = Some(rest.trim().trim_matches('"').to_string());
+        } else if let Some(rest) = line.strip_prefix("+status:") {
+            let to = rest.trim().trim_matches('"').to_string();
+            if let Some(from) = prev_status.take() {
+                if from != to {
+                    out.push((spec.to_string(), from, to));
+                }
+            }
+        }
+    }
+    out
 }
 
 fn spec_id_from_orphan_path(path: &str) -> String {
@@ -19274,6 +19443,103 @@ fn spec_id_from_orphan_path(path: &str) -> String {
 
 fn req_type_from_orphan_path(path: &str) -> String {
     path.split('/').nth(1).unwrap_or("?").to_string()
+}
+
+#[cfg(test)]
+mod pull_summary_status_change_tests {
+    //! trace:TASK-75 | ai:claude
+    use super::*;
+
+    #[test]
+    fn classify_commit_source_pr_merge() {
+        assert_eq!(
+            classify_commit_source(
+                "[AI:claude] feat(session): polish (STORY-98 STORY-90 BUG-74) (#10)"
+            ),
+            "PR-10 merge"
+        );
+        assert_eq!(
+            classify_commit_source("[AI:claude] fix(x): y (BUG-77) (#42)"),
+            "PR-42 merge"
+        );
+    }
+
+    #[test]
+    fn classify_commit_source_explicit_ids() {
+        assert_eq!(
+            classify_commit_source("[AI:claude] fix(cache): foo (BUG-77)"),
+            "commit (BUG-77)"
+        );
+        assert_eq!(
+            classify_commit_source("[AI:claude] fix(s): foo (BUG-75 BUG-76)"),
+            "commit (BUG-75, BUG-76)"
+        );
+    }
+
+    #[test]
+    fn classify_commit_source_manual() {
+        assert_eq!(classify_commit_source("chore: bump dep"), "manual");
+        assert_eq!(
+            classify_commit_source("release: v1.2.3 (1.2.3)"),
+            "manual"
+        );
+    }
+
+    #[test]
+    fn diff_parser_extracts_single_status_change() {
+        let diff = r#"diff --git a/objects/BUG/000/BUG-77.yaml b/objects/BUG/000/BUG-77.yaml
+index abc..def 100644
+--- a/objects/BUG/000/BUG-77.yaml
++++ b/objects/BUG/000/BUG-77.yaml
+@@ -3 +3 @@ title: foo
+-status: Approved
++status: Completed
+"#;
+        let out = parse_status_transitions_from_diff(diff);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0], ("BUG-77".into(), "Approved".into(), "Completed".into()));
+    }
+
+    #[test]
+    fn diff_parser_handles_multiple_files() {
+        let diff = r#"diff --git a/objects/BUG/000/BUG-77.yaml b/objects/BUG/000/BUG-77.yaml
+--- a/objects/BUG/000/BUG-77.yaml
++++ b/objects/BUG/000/BUG-77.yaml
+@@ -3 +3 @@
+-status: Approved
++status: Completed
+diff --git a/objects/STORY/000/STORY-1.yaml b/objects/STORY/000/STORY-1.yaml
+--- a/objects/STORY/000/STORY-1.yaml
++++ b/objects/STORY/000/STORY-1.yaml
+@@ -3 +3 @@
+-status: InProgress
++status: Completed
+"#;
+        let out = parse_status_transitions_from_diff(diff);
+        assert_eq!(out.len(), 2);
+        assert!(out
+            .iter()
+            .any(|t| t.0 == "BUG-77" && t.1 == "Approved" && t.2 == "Completed"));
+        assert!(out
+            .iter()
+            .any(|t| t.0 == "STORY-1" && t.1 == "InProgress" && t.2 == "Completed"));
+    }
+
+    #[test]
+    fn diff_parser_skips_unchanged_status() {
+        // If status is in the diff context but didn't actually change,
+        // we shouldn't produce a transition.
+        let diff = r#"diff --git a/objects/BUG/000/BUG-77.yaml b/objects/BUG/000/BUG-77.yaml
+--- a/objects/BUG/000/BUG-77.yaml
++++ b/objects/BUG/000/BUG-77.yaml
+@@ -2,3 +2,3 @@
+ title: foo
+-status: Approved
++status: Approved
+"#;
+        let out = parse_status_transitions_from_diff(diff);
+        assert!(out.is_empty(), "unchanged status should not transition");
+    }
 }
 
 // ----------------------------------------------------------------------------
