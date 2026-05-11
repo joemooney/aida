@@ -47,12 +47,12 @@ description: |
   - [ ] NO_COLOR env var honored (silent fallback to plain)
   - [ ] Tested on Linux + macOS + Windows
   - [ ] Sweep covers all aida-cli/src/ error sites; consistent style throughout
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T03:14:31.545279162Z
-modified_at: 2026-05-11T03:14:31.545279162Z
+modified_at: 2026-05-11T04:38:05.635428844Z
 req_type: Task
 relationships:
 - rel_type: Child
