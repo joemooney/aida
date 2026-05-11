@@ -1486,11 +1486,52 @@ pub enum RelationshipCommand {
         bidirectional: bool,
     },
 
-    /// List all relationships for a requirement
+    /// List relationships — global by default, or filtered to a specific
+    /// source/target requirement.
+    ///
+    /// Examples:
+    ///   aida rel list                      # all edges in the graph
+    ///   aida rel list EPIC-20              # outgoing edges from EPIC-20
+    ///   aida rel list --source EPIC-20     # same as positional form
+    ///   aida rel list --target EPIC-20     # incoming edges (what points AT it)
+    ///   aida rel list --type child         # filter by edge type
+    ///   aida rel list --dangling           # only edges with unresolved targets
+    ///   aida rel list --type child --dangling   # composable
+    /// trace:TASK-65 | ai:claude
     #[clap(visible_alias = "show")]
     List {
-        /// Requirement ID (UUID or SPEC-ID)
-        id: String,
+        /// Source requirement ID (UUID or SPEC-ID). Positional alias of
+        /// --source. When omitted (and --target/--source unset), lists every
+        /// edge in the graph.
+        #[clap(value_name = "ID")]
+        id: Option<String>,
+
+        /// Source requirement — same as the positional. Explicit form for
+        /// scripts that want to be unambiguous.
+        #[clap(long)]
+        source: Option<String>,
+
+        /// Target requirement — inverts the query to "what edges point AT
+        /// this requirement?". Useful for "who depends on EPIC-20?".
+        #[clap(long)]
+        target: Option<String>,
+
+        /// Filter by relationship type (parent, child, duplicate, verifies,
+        /// verified-by, references, or a custom name).
+        #[clap(long = "type", short = 't')]
+        r#type: Option<String>,
+
+        /// Only show edges whose target UUID doesn't resolve (deleted-target
+        /// tombstones, BUG-53 territory). Pairs with `aida doctor
+        /// verify-relationships --repair` to clean them up.
+        #[clap(long)]
+        dangling: bool,
+
+        /// Include edges between terminal-status (Completed/Rejected)
+        /// requirements. By default the global listing hides them so the
+        /// view focuses on actionable work, matching `aida list`.
+        #[clap(long)]
+        all: bool,
     },
 }
 

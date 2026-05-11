@@ -2618,76 +2618,30 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 println!("No relationship found from {} to {}", from, to);
             }
         }
-        Command::Rel(RelationshipCommand::List { id }) => {
-            // trace:TASK-1-020 | ai:claude
-            // BUG-68: record after successful lookup. trace:BUG-68 | ai:claude
-            let req = backend
-                .get_requirement_by_spec_id(id)?
-                .ok_or_else(|| not_found::requirement_not_found(id, Some(store_path)))?;
-            record_role_activity(req.spec_id.as_deref().unwrap_or(id), "show");
-
-            println!("{}: {}", "Requirement".blue(), req.title);
-            if let Some(spec_id) = &req.spec_id {
-                println!("{}: {}", "SPEC-ID".blue(), spec_id);
-            }
-            println!("{}: {}", "UUID".blue(), req.id);
-            println!();
-
-            if req.relationships.is_empty() {
-                println!("{}", "No relationships found.".yellow());
-            } else {
-                println!("{}:", "Relationships".green());
-                for relationship in &req.relationships {
-                    let target = backend.get_requirement(&relationship.target_id)?;
-                    let description = match &relationship.rel_type {
-                        RelationshipType::Parent => "is parent of".to_string(),
-                        RelationshipType::Child => "is child of".to_string(),
-                        RelationshipType::Duplicate => "is duplicate of".to_string(),
-                        RelationshipType::Verifies => "verifies".to_string(),
-                        RelationshipType::VerifiedBy => "is verified by".to_string(),
-                        RelationshipType::References => "references".to_string(),
-                        RelationshipType::Custom(name) => name.clone(),
-                    };
-                    if let Some(target_req) = target {
-                        let target_spec = target_req.spec_id.as_deref().unwrap_or("N/A");
-                        // BUG-53: tag rejected targets so a dangling-looking
-                        // edge is recognizable as still-resolvable rather
-                        // than removed. trace:BUG-53 | ai:claude
-                        if matches!(target_req.status, aida_core::RequirementStatus::Rejected) {
-                            println!(
-                                "  {} {} {} - {}",
-                                description.cyan(),
-                                target_spec.yellow(),
-                                "[REJECTED]".red().bold(),
-                                target_req.title
-                            );
-                        } else {
-                            println!(
-                                "  {} {} - {}",
-                                description.cyan(),
-                                target_spec.yellow(),
-                                target_req.title
-                            );
-                        }
-                    } else {
-                        // BUG-53: a relationship pointing at a uuid with no
-                        // backing object means the target was deleted (its
-                        // YAML is gone, mapping back to spec_id is lost). We
-                        // show a short uuid + "(removed)" instead of the
-                        // full 36-char uuid + "(not found)" so the line
-                        // reads as a tombstone rather than a phantom.
-                        // trace:BUG-53 | ai:claude
-                        let uuid_str = relationship.target_id.to_string();
-                        let short = &uuid_str[..uuid_str.len().min(8)];
-                        println!(
-                            "  {} {} {}",
-                            description.cyan(),
-                            short.dimmed(),
-                            "(removed — run `aida doctor verify-relationships --repair` to clean up)".red()
-                        );
-                    }
-                }
-            }
+        Command::Rel(RelationshipCommand::List {
+            id,
+            source,
+            target,
+            r#type,
+            dangling,
+            all,
+        }) => {
+            // trace:TASK-65 | ai:claude
+            // Three modes:
+            //   - target=Some                → incoming edges
+            //   - id|source=Some             → outgoing edges (legacy point query)
+            //   - none of the above          → global listing
+            // --type / --dangling / --all compose across all three modes.
+            let source_ref = source.as_deref().or(id.as_deref());
+            handle_rel_list_modern(
+                &backend,
+                store_path,
+                source_ref,
+                target.as_deref(),
+                r#type.as_deref(),
+                *dangling,
+                *all,
+            )?;
         }
 
         // Phase 1: Sync command
@@ -19079,8 +19033,20 @@ fn handle_relationship_command(cmd: &RelationshipCommand, storage: &Storage) -> 
                 .ok_or_else(|| anyhow::anyhow!("missing TO (positional or --to)"))?;
             remove_relationship(storage, from, to, r#type, *bidirectional)?;
         }
-        RelationshipCommand::List { id } => {
-            list_relationships(storage, id)?;
+        RelationshipCommand::List { id, source, .. } => {
+            // Legacy SQLite path doesn't implement the global/incoming/--type
+            // filters from TASK-65 — they require iterating every requirement
+            // and the legacy backend isn't the target of new work. Falls back
+            // to the point-query when an id (positional or --source) is given;
+            // refuses cleanly otherwise. trace:TASK-65 | ai:claude
+            let id_str = id.as_deref().or(source.as_deref()).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "legacy SQLite backend supports only `aida rel list <ID>`. \
+                     Global / --target / --dangling listings require the git-canonical \
+                     store — run `aida init` (or `aida db export-git` to migrate)."
+                )
+            })?;
+            list_relationships(storage, id_str)?;
         }
     }
     Ok(())
@@ -19199,6 +19165,262 @@ fn remove_relationship(
     }
 
     Ok(())
+}
+
+/// Modern `aida rel list` over the git-canonical backend. Supports three
+/// modes (global / outgoing / incoming) plus `--type`, `--dangling`, and
+/// `--all` filters. Output uses a uniform `FROM → TO   TITLE` row format
+/// across all modes for grep-friendly behavior. trace:TASK-65 | ai:claude
+fn handle_rel_list_modern(
+    backend: &aida_core::CachedGitBackend,
+    store_path: &std::path::Path,
+    source: Option<&str>,
+    target: Option<&str>,
+    type_filter: Option<&str>,
+    dangling_only: bool,
+    include_all: bool,
+) -> Result<()> {
+    use aida_core::DatabaseBackend;
+
+    if source.is_some() && target.is_some() {
+        anyhow::bail!(
+            "pass either a source (positional or --source) or --target, not both — \
+             they pick different edge sets"
+        );
+    }
+
+    // Normalize the type filter against the canonical names. We let custom
+    // types through as exact string compare so user-defined relationship
+    // names still filter correctly.
+    let type_filter_norm: Option<RelationshipType> = type_filter.map(RelationshipType::from_str);
+
+    // Build the universe we need to read. Outgoing/global: walk every
+    // requirement. Incoming: same — there's no inverse index, so a target
+    // query is "find every edge whose target_id resolves to this UUID".
+    let all_reqs = backend.list_requirements(false)?;
+
+    // For target mode we need the target's UUID up front to compare against
+    // each edge's target_id field.
+    let target_uuid: Option<uuid::Uuid> = if let Some(t) = target {
+        Some(
+            backend
+                .get_requirement_by_spec_id(t)?
+                .ok_or_else(|| not_found::requirement_not_found(t, Some(store_path)))?
+                .id,
+        )
+    } else {
+        None
+    };
+
+    // For source mode the legacy behavior is "list relationships for one
+    // requirement"; we keep that shape, just routed through the same
+    // emitter. trace:TASK-65 | ai:claude
+    let source_uuid: Option<uuid::Uuid> = if let Some(s) = source {
+        Some(
+            backend
+                .get_requirement_by_spec_id(s)?
+                .ok_or_else(|| not_found::requirement_not_found(s, Some(store_path)))?
+                .id,
+        )
+    } else {
+        None
+    };
+
+    // Index reqs by uuid for fast target-resolution during printing.
+    use std::collections::HashMap;
+    let req_by_uuid: HashMap<uuid::Uuid, &aida_core::Requirement> =
+        all_reqs.iter().map(|r| (r.id, r)).collect();
+
+    // Collect matching edges as (from_req, &Relationship, target_req_or_none).
+    let mut rows: Vec<RelRow> = Vec::new();
+    let mut hidden_terminal = 0usize;
+    for req in &all_reqs {
+        if let Some(s) = source_uuid {
+            if req.id != s {
+                continue;
+            }
+        }
+        for rel in &req.relationships {
+            if let Some(t) = target_uuid {
+                if rel.target_id != t {
+                    continue;
+                }
+            }
+            if let Some(ref tf) = type_filter_norm {
+                if !rel_type_matches(&rel.rel_type, tf) {
+                    continue;
+                }
+            }
+            let target_req = req_by_uuid.get(&rel.target_id).copied();
+            if dangling_only && target_req.is_some() {
+                continue;
+            }
+            // Hide edges where both endpoints are terminal in global mode
+            // (no specific source/target asked). When the user explicitly
+            // names a source or target they get the full picture for that
+            // node regardless of status. trace:TASK-65 | ai:claude
+            let global_mode = source_uuid.is_none() && target_uuid.is_none();
+            if global_mode && !include_all {
+                let from_terminal = is_terminal_status(&req.status);
+                let to_terminal = target_req
+                    .map(|t| is_terminal_status(&t.status))
+                    .unwrap_or(false);
+                if from_terminal && to_terminal {
+                    hidden_terminal += 1;
+                    continue;
+                }
+            }
+            rows.push(RelRow {
+                from_spec: req.spec_id.clone().unwrap_or_else(|| "?".into()),
+                from_status: req.status.to_string(),
+                rel_type: rel.rel_type.clone(),
+                target_id_uuid: rel.target_id,
+                target_spec: target_req
+                    .and_then(|t| t.spec_id.clone())
+                    .unwrap_or_else(|| {
+                        // BUG-53: tombstone form for deleted targets.
+                        let s = rel.target_id.to_string();
+                        format!("{}…", &s[..s.len().min(8)])
+                    }),
+                target_status: target_req.map(|t| t.status.to_string()),
+                target_title: target_req
+                    .map(|t| t.title.clone())
+                    .unwrap_or_else(|| "(removed — see `aida doctor verify-relationships`)".into()),
+                target_resolved: target_req.is_some(),
+            });
+        }
+    }
+
+    if rows.is_empty() {
+        let mode = if target_uuid.is_some() {
+            "incoming"
+        } else if source_uuid.is_some() {
+            "outgoing"
+        } else {
+            "global"
+        };
+        println!("{}", format!("(no {mode} relationships match the filter)").yellow());
+        if hidden_terminal > 0 {
+            println!(
+                "{}",
+                format!(
+                    "  ({hidden_terminal} hidden between Completed/Rejected reqs — pass --all to see them)"
+                )
+                .dimmed()
+            );
+        }
+        return Ok(());
+    }
+
+    // Column widths sized to data.
+    let from_w = rows.iter().map(|r| r.from_spec.len()).max().unwrap_or(8).max(4);
+    let type_w = rows
+        .iter()
+        .map(|r| rel_type_label(&r.rel_type).len())
+        .max()
+        .unwrap_or(8)
+        .max(4);
+    let to_w = rows.iter().map(|r| r.target_spec.len()).max().unwrap_or(10).max(2);
+
+    println!(
+        "{}",
+        format!(
+            "{:<from_w$}  {:<type_w$}  {:<to_w$}  TITLE",
+            "FROM",
+            "TYPE",
+            "TO",
+            from_w = from_w,
+            type_w = type_w,
+            to_w = to_w,
+        )
+        .dimmed()
+    );
+
+    for r in &rows {
+        let from = format!("{:<from_w$}", r.from_spec, from_w = from_w);
+        let typ = rel_type_label(&r.rel_type);
+        let typ_cell = format!("{:<type_w$}", typ, type_w = type_w);
+        let to = format!("{:<to_w$}", r.target_spec, to_w = to_w);
+        let title = shorten_title(&r.target_title, 60);
+        let marker = if !r.target_resolved {
+            "⚠ ".red().to_string()
+        } else if r
+            .target_status
+            .as_deref()
+            .map(is_terminal_status_str)
+            .unwrap_or(false)
+        {
+            "· ".dimmed().to_string()
+        } else {
+            "  ".into()
+        };
+        println!(
+            "{marker}{from}  {typ_cell}  {to}  {title}",
+            title = title.dimmed()
+        );
+    }
+
+    println!("\n{} edges", rows.len());
+    if hidden_terminal > 0 {
+        println!(
+            "{}",
+            format!(
+                "  ({hidden_terminal} hidden between Completed/Rejected reqs — pass --all to see them)"
+            )
+            .dimmed()
+        );
+    }
+    let _ = store_path; // suppress unused — already used for error context above
+    Ok(())
+}
+
+/// One row emitted by `aida rel list`. Decoupling the struct from the
+/// rendering loop keeps the column widths calculable in one pass.
+struct RelRow {
+    from_spec: String,
+    #[allow(dead_code)] // surfaced through future --show-status etc.
+    from_status: String,
+    rel_type: RelationshipType,
+    #[allow(dead_code)] // kept for future --uuid / --json renderers
+    target_id_uuid: uuid::Uuid,
+    target_spec: String,
+    target_status: Option<String>,
+    target_title: String,
+    target_resolved: bool,
+}
+
+/// Compare a relationship-type from storage to a user-supplied filter.
+/// Canonical types match by Display name (case-insensitive); custom types
+/// match exact string. trace:TASK-65 | ai:claude
+fn rel_type_matches(actual: &RelationshipType, want: &RelationshipType) -> bool {
+    match (actual, want) {
+        (RelationshipType::Custom(a), RelationshipType::Custom(b)) => a.eq_ignore_ascii_case(b),
+        (RelationshipType::Custom(_), _) | (_, RelationshipType::Custom(_)) => false,
+        (a, b) => std::mem::discriminant(a) == std::mem::discriminant(b),
+    }
+}
+
+/// Short label for a RelationshipType in tabular output.
+fn rel_type_label(rt: &RelationshipType) -> String {
+    match rt {
+        RelationshipType::Parent => "parent".to_string(),
+        RelationshipType::Child => "child".to_string(),
+        RelationshipType::Duplicate => "duplicate".to_string(),
+        RelationshipType::Verifies => "verifies".to_string(),
+        RelationshipType::VerifiedBy => "verified-by".to_string(),
+        RelationshipType::References => "references".to_string(),
+        RelationshipType::Custom(s) => s.clone(),
+    }
+}
+
+fn shorten_title(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        s.to_string()
+    } else {
+        let mut out: String = s.chars().take(max.saturating_sub(1)).collect();
+        out.push('…');
+        out
+    }
 }
 
 fn list_relationships(storage: &Storage, id_str: &str) -> Result<()> {
