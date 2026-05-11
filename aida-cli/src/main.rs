@@ -12992,6 +12992,8 @@ mod statusline_tests {
     /// store has no `origin` remote configured. Exercises the failure
     /// path without needing network. Uses an isolated HOME so the test
     /// doesn't clobber the real ~/.aida/cache/last-fetch.toml.
+    // test fixture relies on $HOME governing dirs::home_dir() — unix-only; the bg_worker code itself is cross-platform.
+    #[cfg(unix)]
     #[test]
     fn bg_worker_records_error_on_missing_remote() {
         use std::process::Command;
