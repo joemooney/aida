@@ -1,0 +1,56 @@
+id: 019e15a5-681b-7001-8226-74562c450001
+spec_id: BUG-78
+agreed_id: BUG-78
+title: extract_spec_ids_from_commit doesn't parse space-separated multi-spec parens (STORY-A STORY-B BUG-C)
+description: |
+  Caught 2026-05-11 — STORY-90's auto-queue-review fired correctly on PR-10 (`✓ filed STORY-100`) but the filed review story has `covers 0 specs` because PR-10's bundled commit subjects use space-separated multi-spec parens that the extractor doesn't recognize.
+
+  ## Today's behavior
+
+  `extract_spec_ids_from_commit` parses these forms successfully:
+  - Single: `(STORY-98)` ✓
+  - Comma-separated: `(STORY-A, STORY-B)` ✓
+  - Slash-shorthand: `(TASK-45/46/47)` ✓
+  - Range-shorthand: `(BUG-25..30)` ✓ (per BUG-24's hook regex update)
+
+  But not:
+  - Space-separated: `(STORY-98 STORY-90 BUG-74)` ✗ — extracts only first spec or nothing
+
+  PR-10's commit had `(STORY-98 STORY-90 BUG-74)` (space-separated) so the auto-queue review story got 0 implements relationships.
+
+  ## Fix
+
+  Loosen the parser regex to accept whitespace as a separator alongside comma. In the hook's ID_ATOM pattern (templates/hooks/aida-commit-msg):
+
+  ```
+  ID_ATOM='[A-Za-z]+(-[A-Za-z0-9_]+)?-[0-9]+(\.\.[0-9]+)?'
+  # Before: REQ_ID_PATTERN="\\(${ID_ATOM}(,[[:space:]]*${ID_ATOM})*\\)\$"
+  # After:  REQ_ID_PATTERN="\\(${ID_ATOM}([,[:space:]]+${ID_ATOM})*\\)\$"
+  ```
+
+  Same change in the Rust-side extractor in aida-cli (wherever extract_spec_ids_from_commit lives — should be a single regex or split-and-loop).
+
+  ## Composes with
+
+  - STORY-67 (review prompt --pr) — same extraction logic; both should accept the loosened form
+  - STORY-90 (auto-queue at PR-create) — uses extract_spec_ids_from_commit; fixing this makes "covers N specs" correct
+  - BUG-24 (multi-spec / range support in commit-msg hook) — same family
+
+  ## Why low priority
+
+  Auto-queue still works correctly; the count just shows 0 instead of 3. Cosmetic for the queue entry. The review prompt's per-spec checklist may also be empty as a result — moderate impact for big multi-spec PRs.
+
+  ## Acceptance
+
+  - [ ] `(A B C)` parses same as `(A, B, C)` and `(A/B/C)`
+  - [ ] Existing forms still parse correctly (no regression)
+  - [ ] STORY-90's auto-queue: "covers N specs" reflects actual N
+  - [ ] STORY-67's review-prompt-pr-N.md: per-spec checklist includes all N specs
+  - [ ] Same change in both Rust extractor AND commit-msg hook regex
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-11T06:07:02.171358061Z
+modified_at: 2026-05-11T06:07:02.171358061Z
+req_type: Bug
