@@ -9881,6 +9881,64 @@ fn parse_pr_metadata_json(forge: ReviewForge, json: &serde_json::Value) -> PrMet
     }
 }
 
+/// TASK-76: query the PR/MR's source/head branch name via gh/glab. Used by
+/// the session_start pre-flight to detect when the PR's source branch is
+/// already held by another lease (which would make `gh pr checkout` fail
+/// with `branch already used by worktree`). Returns None when the forge
+/// CLI isn't installed or fails — pre-flight degrades to "no warning."
+/// trace:TASK-76 | ai:claude
+fn query_pr_source_branch(
+    forge: ReviewForge,
+    n: u64,
+    project_root: &std::path::Path,
+) -> Option<String> {
+    let (cli, args): (&str, Vec<String>) = match forge {
+        ReviewForge::GitHub => (
+            "gh",
+            vec![
+                "pr".into(),
+                "view".into(),
+                n.to_string(),
+                "--json".into(),
+                "headRefName".into(),
+                "-q".into(),
+                ".headRefName".into(),
+            ],
+        ),
+        ReviewForge::GitLab => (
+            "glab",
+            vec![
+                "mr".into(),
+                "view".into(),
+                n.to_string(),
+                "-F".into(),
+                "json".into(),
+            ],
+        ),
+    };
+    let out = std::process::Command::new(cli)
+        .current_dir(project_root)
+        .args(&args)
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if stdout.is_empty() {
+        return None;
+    }
+    match forge {
+        ReviewForge::GitHub => Some(stdout),
+        ReviewForge::GitLab => {
+            // glab's mr view --output json doesn't accept -q; parse the
+            // `source_branch` field out of the JSON ourselves.
+            let json: serde_json::Value = serde_json::from_str(&stdout).ok()?;
+            json["source_branch"].as_str().map(|s| s.to_string())
+        }
+    }
+}
+
 /// STORY-61: parse `PR-N` / `MR-N` scope strings (case-insensitive).
 /// Returns the implied forge + PR number when the scope matches; None
 /// otherwise (lets normal scope handling proceed).
@@ -10132,6 +10190,81 @@ fn session_start(
     let mut pr_metadata: PrMetadata = PrMetadata::default();
 
     if let Some((forge, n)) = review_target {
+        // TASK-76: pre-flight check — if PR-N's source branch is held by
+        // another active lease, any subsequent `gh pr checkout` (manual
+        // or future auto) will fail with `branch already used by worktree
+        // at ...`. Detect now and offer end / force-end / proceed-anyway.
+        // Gracefully skipped when gh/glab isn't installed.
+        // trace:TASK-76 | ai:claude
+        if let Some(source_branch) =
+            query_pr_source_branch(forge, n, &project_root)
+        {
+            let conflicting: Vec<_> = list_leases(&project_root)
+                .into_iter()
+                .filter(|l| l.branch == source_branch)
+                .collect();
+            if !conflicting.is_empty() {
+                let l = &conflicting[0];
+                eprintln!();
+                eprintln!(
+                    "{} PR-{}'s source branch `{}` is held by lease {}",
+                    "⚠".yellow().bold(),
+                    n,
+                    source_branch.yellow(),
+                    l.id.yellow()
+                );
+                eprintln!(
+                    "    role:     {}",
+                    l.role.as_deref().unwrap_or("(unset)")
+                );
+                eprintln!("    worktree: {}", l.worktree_path.display());
+                eprintln!();
+                eprintln!(
+                    "    Any `gh pr checkout {}` from the new session will fail with \
+                     `branch already used by worktree`.",
+                    n
+                );
+                eprintln!();
+                eprintln!("    Options:");
+                eprintln!("      1. End that session: `aida session end {}`", l.id);
+                eprintln!(
+                    "      2. Force-end (kills any live claude there): `aida session end {} --force`",
+                    l.id
+                );
+                eprintln!("      3. Proceed anyway (auto-checkout will need manual fixup)");
+                eprintln!();
+                use std::io::Write;
+                eprint!("    Choice [1/2/3]: ");
+                let _ = std::io::stderr().flush();
+                let mut ans = String::new();
+                std::io::stdin().read_line(&mut ans)?;
+                match ans.trim() {
+                    "1" => {
+                        anyhow::bail!(
+                            "stopping so you can `aida session end {}`; re-run this command after",
+                            l.id
+                        );
+                    }
+                    "2" => {
+                        anyhow::bail!(
+                            "stopping; run `aida session end {} --force` then re-run this command",
+                            l.id
+                        );
+                    }
+                    "3" | "" => {
+                        eprintln!(
+                            "{} proceeding — `gh pr checkout {}` from the new session will need manual fixup",
+                            "→".dimmed(),
+                            n
+                        );
+                    }
+                    other => {
+                        anyhow::bail!("unrecognized choice {:?} — aborting", other);
+                    }
+                }
+            }
+        }
+
         // STORY-61 review flow:
         //   1. fetch the PR/MR head ref from origin into the local branch
         //      <forge>-<N>; safe to re-run (creates or fast-forwards).
