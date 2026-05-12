@@ -1,0 +1,80 @@
+id: 019e1cf5-8556-7320-a45f-fe6af7576b19
+spec_id: STORY-109
+agreed_id: STORY-109
+title: '/aida-review augmentation: add adversarial deep-pass phase to catch what spec-walk misses (gap surfaced by /ultrareview on PR-15)'
+description: |
+  Caught 2026-05-12 — Claude Code's /ultrareview ran on PR-15 (after /aida-review approved + merged) and found 3 real bugs that /aida-review missed. User question: "what did /ultrareview do that aida did not do, what can we learn from this... we want aida to be competitive in this area?"
+
+  ## The three bugs /ultrareview caught
+
+  1. **bug_007 (TASK-85)**: review_title_matches is case-insensitive but derive_scope_from_entry's `strip_prefix("Review ")` is case-sensitive. Lowercase "review pr-14:" passes the matcher, fails the downstream consumer, silently falls back to spec_id (loses PR scope + --pr N route).
+
+  2. **bug_002 (TASK-84)**: read_behavior_permission_mode doesn't strip inline TOML comments. `permission_mode = "auto" # default` parses as the literal string `auto" # default`, then `claude --permission-mode` rejects it.
+
+  3. **bug_010 (TASK-81)**: `--steal` ends only the freshest lease. If multiple leases share a scope (rare but possible: manual restore, partial session_end crash, concurrent writes), session_start's guard bails on a leftover.
+
+  All three are **deep code-reading bugs**, not per-spec-acceptance-failures.
+
+  ## Why /aida-review missed them
+
+  The skill's workflow today:
+  1. Identify PR
+  2. Generate per-spec checklist
+  3. Walk each spec — verify acceptance criteria against the diff
+  4. Run fmt + tests
+  5. Post verdicts + merge
+
+  This catches "does the code do what the spec said?" but NOT:
+  - Cross-reference inconsistency (matcher vs consumer case-sensitivity)
+  - Spec-compliance edge cases (TOML inline comments allowed by format spec but unmentioned in work spec)
+  - Multiplicity reasoning (singular case works; N case fails)
+  - Adversarial code reading ("how could this break?")
+
+  ## What /ultrareview does differently
+
+  - **Multi-agent fleet**: different agents with different perspectives (parser-edge-cases, multiplicity, cross-reference). Single-agent /aida-review can't replicate naturally; one prompt biases toward one perspective.
+  - **Adversarial framing**: "find bugs" instead of "verify acceptance".
+  - **Format-spec depth**: reads TOML/JSON/git format specs, not just the work-spec.
+
+  ## Proposed fix: augment /aida-review with adversarial phase
+
+  Add a new step between "spec walk" and "fmt/test gates":
+
+  ```
+  Step N: Adversarial deep-pass
+  For each spec's touched files:
+    - Check cross-reference consistency: do parsing/matching/comparison sites in this PR all agree on case-sensitivity, escape handling, whitespace tolerance?
+    - Probe edge cases of any format spec the code interacts with (TOML, JSON, YAML, git refs, env vars, URL encoding, etc.)
+    - Reason about multiplicity: do loops/iterators handle 0, 1, N? Do conditionals branch correctly when input count varies?
+    - Specifically look for: "looks safe but has a subtle bug" — null/empty/missing, comments in config, mixed case, line endings, Unicode normalization
+  ```
+
+  This adds maybe 30-60 seconds to a review but catches a real category of bugs.
+
+  ## Optional follow-up: `/aida-review-deep` sibling skill
+
+  For stakes where the augmented /aida-review isn't enough, spawn parallel sub-agents (via aida-core's session/task infrastructure?) with different probe focuses. Approximates /ultrareview's multi-agent fleet without the cloud cost.
+
+  Out of scope for this story; file as separate STORY if pursued.
+
+  ## Composes with
+
+  - STORY-91 (parent /aida-review skill) — this is its substantial augmentation
+  - STORY-107 (positioning vs /ultrareview) — this story's outcome IS positioning content
+  - TASK-72 (skill polish — first-use dogfood findings) — same family of "/aida-review hardening from real use"
+  - EPIC-24 (living documentation) — the analysis IS doc seed material
+
+  ## Acceptance
+
+  - [ ] /aida-review skill gains a deep-pass phase between spec walk and merge gates
+  - [ ] Phase content: cross-ref consistency, format-spec edge cases, multiplicity, adversarial framing
+  - [ ] Dogfood: re-review of a recent PR catches at least 1 of the 3 ultrareview findings (or other comparable bugs)
+  - [ ] Updates STORY-107's vs-ultrareview comparison: "/aida-review (post-augment) catches edge cases that single-agent reviews historically miss; /ultrareview still wins on multi-perspective depth"
+  - [ ] Skill content explicitly lists the probe categories so they're applied consistently, not improvised
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T16:11:53.046991461Z
+modified_at: 2026-05-12T16:11:53.046991461Z
+req_type: Story
