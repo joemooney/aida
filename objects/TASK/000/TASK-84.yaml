@@ -58,12 +58,12 @@ description: |
   - [ ] `--permission-mode <mode>` flag still wins over env
   - [ ] `aida queue work --help` documents the resolution order
   - [ ] Tested: invoke from AIDA worktree (no flag/env) → bypass. From /tmp → acceptEdits. With config override → respects config.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T14:55:48.132220356Z
-modified_at: 2026-05-12T15:29:59.272300202Z
+modified_at: 2026-05-12T15:30:00.709480429Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -93,3 +93,7 @@ comments:
     Commit: cf700dd4
   created_at: 2026-05-12T15:29:59.272300202Z
   modified_at: 2026-05-12T15:29:59.272300202Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-12T15:30:00.709480429Z
+  implemented_by: joe
