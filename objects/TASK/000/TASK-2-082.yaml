@@ -1,0 +1,59 @@
+id: 019e1a5e-0d11-7280-b7cf-cfc6758cdf3c
+spec_id: TASK-2-082
+title: 'aida add: warn loudly when agreed-id block is exhausted (silently switches to node-aware format today)'
+description: |
+  Caught 2026-05-11 — user expected BUG-81 (next in global block) but got BUG-2-081 (node-aware fallback). The dispenser correctly switched per `blocks-then-fallback` policy, but the user wasn't warned. They had to grep the YAML files and check node.toml to figure out what happened.
+
+  ## Today's behavior
+
+  `aida add --type bug ...` allocates the next ID. If the agreed-id block has remaining capacity, returns BUG-N (short form). If the block is exhausted, silently falls back to BUG-NODE-N (node-aware long form). User sees the long ID in the success message but has no signal that the block ran out.
+
+  ## Desired behavior
+
+  Warn on stderr when block exhaustion triggers the fallback:
+
+  ```
+  $ aida add --type bug --title "..."
+  Added: BUG-2-081 - ...
+
+  ⚠ The BUG agreed-id block is exhausted (last short id: BUG-80).
+    Falling back to node-aware format (BUG-2-NN) for new BUGs.
+    Run `aida db merge-gate --type bug` to allocate a fresh block.
+  ```
+
+  Visible once per session (or per type), not on every add — suppress repeats via in-memory flag.
+
+  ## Also: aida db info / aida db status should show block state
+
+  ```
+  $ aida db info
+  ...
+  Agreed-id blocks:
+    BUG:     EXHAUSTED  (last: BUG-80; falling back to BUG-2-NN)
+    TASK:    EXHAUSTED  (last: TASK-77; falling back to TASK-2-NN)
+    STORY:   EXHAUSTED  (last: STORY-100; falling back to STORY-2-NN)
+    FR:      245/1000   (block 1, 755 remaining)
+    EPIC:    23/100     (block 0, 77 remaining)
+  ```
+
+  Surface block health visibly so users can pre-emptively `merge-gate` before exhaustion bites.
+
+  ## Composes with
+
+  - `aida db merge-gate` — existing command for assigning agreed short IDs from a block
+  - EPIC-9 / EPIC-11 (node identity + ID format policy) — original block-allocation infrastructure
+
+  ## Acceptance
+
+  - [ ] `aida add` warns to stderr when block exhaustion triggers node-aware fallback
+  - [ ] Warning fires once per session per type (no spam)
+  - [ ] `aida db info` shows block utilization per type
+  - [ ] `aida db merge-gate --type X` allocates a fresh block when exhausted
+  - [ ] Tested: deliberately exhaust a block, observe warning + db info change
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T04:07:11.889721519Z
+modified_at: 2026-05-12T04:07:11.889721519Z
+req_type: Task
