@@ -3,10 +3,10 @@ spec_id: TASK-77
 agreed_id: TASK-77
 title: smoke test after node identity fix
 description: remove me
-status: Draft
+status: Rejected
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T04:11:25.314429016Z
-modified_at: 2026-05-12T04:11:25.314429016Z
+modified_at: 2026-05-12T04:32:14.111421173Z
 req_type: Task
