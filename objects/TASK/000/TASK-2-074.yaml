@@ -1,5 +1,6 @@
 id: 019e1a41-7510-7b40-8152-83c6f0a0e448
 spec_id: TASK-2-074
+agreed_id: TASK-31
 title: 'aida session start --launch: pass --name to claude (derived from scope+branch+role) for /resume picker + terminal title clarity'
 description: |
   Caught 2026-05-11 — user noticed Claude Code's `--name <name>` flag (shown in prompt box, /resume picker, and terminal title). AIDA's `session start --launch` (STORY-54) currently exec's claude without `--name`, so each session gets an auto-generated name. Multiple concurrent worktrees → multiple cryptic auto-names → hard to tell them apart in `/resume` picker or terminal-title bars.

@@ -1,5 +1,6 @@
 id: 019e1a58-cc73-7442-994a-31863e4ee1aa
 spec_id: TASK-2-080
+agreed_id: TASK-32
 title: 'TASK-62 follow-up: cross-platform bg_worker test (Windows-capable home-dir isolation)'
 description: |-
   PR-11 (2026-05-11) descoped TASK-62's "Test passes on all 3 platforms" bullet because dirs = 5.0.1 on Windows resolves home via SHGetKnownFolderPath(FOLDERID_Profile) — setting USERPROFILE/HOME doesn't redirect dirs::home_dir() there. The bg_worker_records_error_on_missing_remote test is back to #[cfg(unix)] as a stopgap.
