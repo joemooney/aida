@@ -63,12 +63,12 @@ description: |
   - [ ] On FAIL with no merge: prompts user (reject / leave-in-progress)
   - [ ] Idempotent: re-running /aida-review on a story already In Progress (resume after pause) doesn't re-edit
   - [ ] Tested: PR-11 review showed STORY-2-075 stayed Approved; after this fix, walks through Approved → In Progress → Completed
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T04:04:24.175782397Z
-modified_at: 2026-05-12T04:54:17.379666053Z
+modified_at: 2026-05-12T04:55:06.200633013Z
 req_type: Bug
 relationships:
 - rel_type: Child
