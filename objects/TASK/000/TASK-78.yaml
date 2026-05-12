@@ -1,0 +1,78 @@
+id: 019e1a67-a68c-7f93-b532-9ce942276b8d
+spec_id: TASK-78
+agreed_id: TASK-78
+title: 'aida pull: integrate merge-gate run (--gate flag or AIDA_AUTO_MERGE_GATE config)'
+description: |
+  Caught 2026-05-11 — `aida db merge-gate` is the right step to run after pulling (promotes any node-aware IDs from other clones to short agreed-ids). But it's a separate explicit step that's easy to forget. Result: user sees node-aware IDs in queue/list/show, thinks something's wrong, has to remember `merge-gate` exists.
+
+  Surfaced when: after running `aida pull` to sync with spock (node 3) and the local clone (node 1), user saw TASK-2-074, STORY-2-076 etc. in queue and didn't realize they needed to run merge-gate to promote.
+
+  ## Today's behavior
+
+  ```
+  $ aida pull
+  Pulling from origin/aida-store...
+    Pull complete.
+
+  # (user has to remember to manually run:)
+  $ aida db merge-gate
+  Assigned 2 agreed ID(s):
+    TASK-2-082 → TASK-36
+    BUG-2-081  → BUG-34
+  ```
+
+  Two-step ritual. Easy to skip the second.
+
+  ## Desired behavior
+
+  ### Option A: --gate flag (opt-in)
+
+  ```
+  $ aida pull --gate
+  Pulling from origin/aida-store...
+    Pull complete.
+  Running merge-gate...
+    Assigned 2 agreed ID(s): TASK-2-082 → TASK-36, BUG-2-081 → BUG-34
+  ```
+
+  ### Option B: AIDA_AUTO_MERGE_GATE config (default-on)
+
+  ```
+  # In .aida/config.toml:
+  [behavior]
+  auto_merge_gate_on_pull = true   # default
+
+  $ aida pull
+  ... pull complete ...
+  ✓ Auto-gate ran: 2 promotions
+  ```
+
+  Both safe to combine: `--no-gate` opts out per-invocation; config gates the default.
+
+  ### Option C: Just always run it (no config)
+
+  merge-gate is idempotent and cheap when there's nothing to promote. Could just always run it post-pull. Simplest.
+
+  Recommendation: Option C if performance is fine (likely is — merge-gate is fast). Otherwise A+B.
+
+  ## Composes with
+
+  - TASK-43 (aida pull) — parent feature
+  - TASK-75 (aida pull verbose output) — both expand pull's output; share the post-pull report section
+  - `aida db merge-gate` — the underlying op
+
+  ## Acceptance
+
+  - [ ] `aida pull` runs merge-gate automatically (Option A/B/C)
+  - [ ] Reports promotions inline with pull output
+  - [ ] No-op when nothing to promote (silent, or "no items to promote" footer)
+  - [ ] Idempotent: re-running pull on already-gated state is fast + no-op
+  - [ ] Opt-out path: `--no-gate` flag or config disable
+  - [ ] Tested: pull with pending node-aware IDs → gate runs, IDs promoted in output
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T04:17:41.004770990Z
+modified_at: 2026-05-12T04:17:41.004770990Z
+req_type: Task
