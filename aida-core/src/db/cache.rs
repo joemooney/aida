@@ -63,6 +63,25 @@ pub struct ListFilter {
     pub limit: Option<usize>,
 }
 
+/// Escape a user-supplied search string for FTS5 MATCH.
+///
+/// FTS5 treats `-`, `:`, `*`, `^`, `(`, `)`, `"` as syntax. A bare query like
+/// `PR-9` parses as `PR:9` (column:value) and errors with `no such column: 9`.
+/// Wrapping each whitespace-separated token in double quotes turns it into a
+/// phrase match; quoted tokens are joined by space (implicit AND) so multi-word
+/// queries still behave as expected.
+///
+/// Empty input yields empty output (FTS5 treats `MATCH ''` as match-nothing,
+/// which is the desired behavior for an empty query).
+/// trace:BUG-77 | ai:claude
+pub(crate) fn escape_fts5_query(query: &str) -> String {
+    query
+        .split_whitespace()
+        .map(|tok| format!("\"{}\"", tok.replace('"', "\"\"")))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// Strip space/hyphen/underscore and lowercase. Mirrors the normalization
 /// in `Requirement::set_status_from_str` so the user-typed filter value
 /// matches the cache's stored Debug form regardless of casing or word-break
@@ -274,6 +293,12 @@ impl Cache {
     /// Uses MATCH semantics — pass an FTS5 query expression (a bare word
     /// works for prefix-tolerant token matching).
     pub fn search(&self, query: &str, limit: usize) -> Result<Vec<RequirementSummary>> {
+        let escaped = escape_fts5_query(query);
+        // Empty query (or whitespace-only) → FTS5 rejects an empty MATCH
+        // expression. Return no rows instead of erroring. trace:BUG-77 | ai:claude
+        if escaped.is_empty() {
+            return Ok(Vec::new());
+        }
         let conn = self.conn.lock().unwrap();
         // FTS5 requires the MATCH clause to use the bare table name, not an
         // alias — hence no `f` alias on requirements_fts.
@@ -288,7 +313,7 @@ impl Cache {
                    LIMIT ?";
         let mut stmt = conn.prepare(sql)?;
         let rows = stmt
-            .query_map(params![query, limit as i64], row_to_summary)?
+            .query_map(params![escaped, limit as i64], row_to_summary)?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(rows)
     }
@@ -519,6 +544,56 @@ mod tests {
         let titles: Vec<_> = hits.iter().map(|h| h.title.as_str()).collect();
         assert!(titles.contains(&"git canonical storage"));
         assert!(titles.contains(&"canonical readme"));
+    }
+
+    #[test]
+    fn search_handles_spec_id_shaped_queries() {
+        // trace:BUG-77 | ai:claude
+        let dir = tempdir().unwrap();
+        let cache = Cache::open(dir.path().join("cache.db")).unwrap();
+
+        let mut store = RequirementsStore::new();
+        let mut a = sample_req("PR-9", "PR-9 thing");
+        a.spec_id = Some("PR-9".into());
+        store.requirements.push(a);
+        store.requirements.push(sample_req("FR-1-002", "unrelated"));
+
+        cache.rebuild_from_store(&store, "head").unwrap();
+
+        // Each of these used to error with `no such column: 9` (or similar).
+        for q in &["PR-9", "EPIC-20", "STORY-86", "BUG:78", "*foo", "(a)"] {
+            let _ = cache.search(q, 10).unwrap_or_else(|e| {
+                panic!("search({:?}) errored: {}", q, e);
+            });
+        }
+
+        // Multi-word still does implicit-AND across tokens.
+        let mut s = RequirementsStore::new();
+        s.requirements
+            .push(sample_req("FR-2-001", "alpha beta gamma"));
+        s.requirements.push(sample_req("FR-2-002", "alpha delta"));
+        let dir2 = tempdir().unwrap();
+        let c2 = Cache::open(dir2.path().join("cache.db")).unwrap();
+        c2.rebuild_from_store(&s, "head").unwrap();
+        let hits = c2.search("alpha beta", 10).unwrap();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].title, "alpha beta gamma");
+
+        // Empty query: well-formed (returns nothing rather than panicking).
+        assert!(cache.search("", 10).is_ok());
+        assert!(cache.search("   ", 10).is_ok());
+    }
+
+    #[test]
+    fn escape_fts5_query_quotes_each_token() {
+        // trace:BUG-77 | ai:claude
+        assert_eq!(escape_fts5_query("PR-9"), "\"PR-9\"");
+        assert_eq!(escape_fts5_query("EPIC-20"), "\"EPIC-20\"");
+        assert_eq!(escape_fts5_query("alpha beta"), "\"alpha\" \"beta\"");
+        assert_eq!(escape_fts5_query(""), "");
+        assert_eq!(escape_fts5_query("   "), "");
+        // Embedded double-quote → doubled.
+        assert_eq!(escape_fts5_query(r#"a"b"#), "\"a\"\"b\"");
     }
 
     #[test]

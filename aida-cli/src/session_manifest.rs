@@ -100,6 +100,16 @@ pub fn save(path: &Path, manifest: &SessionManifest) -> Result<()> {
 /// Errors on individual files are swallowed (best-effort scan) so a single
 /// malformed manifest can't block the chip rendering for the rest.
 pub fn list_all(project_root: &Path) -> Vec<SessionManifest> {
+    list_all_with_paths(project_root)
+        .into_iter()
+        .map(|(_, m)| m)
+        .collect()
+}
+
+/// Like `list_all` but also returns the manifest file's path — used by
+/// `session prune` to remove orphan manifests whose owning lease has been
+/// deleted. trace:BUG-80 | ai:claude
+pub fn list_all_with_paths(project_root: &Path) -> Vec<(PathBuf, SessionManifest)> {
     let dir = project_root.join(".aida").join("sessions");
     if !dir.exists() {
         return Vec::new();
@@ -117,7 +127,7 @@ pub fn list_all(project_root: &Path) -> Vec<SessionManifest> {
             continue;
         }
         if let Ok(m) = load(&p) {
-            out.push(m);
+            out.push((p, m));
         }
     }
     out
@@ -313,6 +323,34 @@ mod tests {
         assert_eq!(classify_item(&it, None), ItemStatus::InProgress);
         it.completed_at = Some(chrono::Utc::now());
         assert_eq!(classify_item(&it, None), ItemStatus::Done);
+    }
+
+    #[test]
+    fn list_all_with_paths_returns_pairs() {
+        // trace:BUG-80 | ai:claude
+        let dir = tempfile::tempdir().unwrap();
+        let sessions = dir.path().join(".aida").join("sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+
+        let p1 = sessions.join("s1.manifest.toml");
+        save(&p1, &manifest("s1", &[("X", 1)])).unwrap();
+        let p2 = sessions.join("s2.manifest.toml");
+        save(&p2, &manifest("s2", &[("Y", 1)])).unwrap();
+
+        let pairs = list_all_with_paths(dir.path());
+        assert_eq!(pairs.len(), 2);
+        let ids: Vec<_> = pairs.iter().map(|(_, m)| m.session_id.as_str()).collect();
+        assert!(ids.contains(&"s1"));
+        assert!(ids.contains(&"s2"));
+        // Each pair's path is the file we wrote.
+        for (p, m) in &pairs {
+            assert!(p.exists());
+            assert!(p
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap()
+                .starts_with(&m.session_id));
+        }
     }
 
     #[test]

@@ -121,6 +121,7 @@ Rules:
 - `type` required: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
 - `(scope)` optional: component or area affected
 - `(REQ-ID)` required for feat/fix; optional for chore/docs
+- Style/fmt-cleanup tasks (`style`/`fmt`/`refactor` types) must verify with `cargo fmt --all -- --check` (the `--check` flag exits non-zero on drift). Plain `cargo fmt --all` rewrites in place and silently masks dirty diffs — CI runs `--check` and will fail if you skip it locally. (TASK-66)
 
 Set `AIDA_COMMIT_STRICT=true` to reject non-conforming commits.
 

@@ -38,7 +38,9 @@ CONVENTIONAL_PATTERN='^(\[AI:[a-zA-Z]+(:(high|med|low))?\] )?(feat|fix|docs|styl
 #   NODE   is optional, alphanumeric + `_-` per validate_node_id
 #   SEQ    is required digits at the end
 ID_ATOM='[A-Za-z]+(-[A-Za-z0-9_]+)?-[0-9]+(\.\.[0-9]+)?'
-REQ_ID_PATTERN="\\(${ID_ATOM}(,[[:space:]]*${ID_ATOM})*\\)\$"
+# BUG-78: accept whitespace as a separator alongside comma — squash commits
+# from multi-spec PRs land subjects like `(STORY-98 STORY-90 BUG-74)`.
+REQ_ID_PATTERN="\\(${ID_ATOM}([,[:space:]]+${ID_ATOM})*\\)\$"
 FEAT_FIX_PATTERN='^(\[AI:[a-zA-Z]+(:(high|med|low))?\] )?(feat|fix)'
 
 ERRORS=()
