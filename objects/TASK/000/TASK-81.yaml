@@ -25,12 +25,12 @@ description: |
   - [ ] Preferred path: ends the holding session first; falls back to local claim if can't end
   - [ ] Without --steal: refusal message names the holding lease + suggests --steal
   - [ ] Tested: item In Progress on session A; from session B, `aida queue work <id>` refuses; `--steal` proceeds.
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T06:37:13.750047240Z
-modified_at: 2026-05-12T15:25:01.284657747Z
+modified_at: 2026-05-12T15:25:06.778867147Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -53,3 +53,7 @@ comments:
     Commit: 03338606
   created_at: 2026-05-12T15:25:01.284657747Z
   modified_at: 2026-05-12T15:25:01.284657747Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-12T15:25:06.778867147Z
+  implemented_by: joe
