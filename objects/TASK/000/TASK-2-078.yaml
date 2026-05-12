@@ -1,5 +1,6 @@
 id: 019e1a56-8038-7d13-a893-caeb9409de67
 spec_id: TASK-2-078
+agreed_id: TASK-33
 title: 'aida queue list --tree: group entries by parent EPIC for visual cluster overview'
 description: |
   Caught 2026-05-11 — `aida queue list` shows a flat list; as items accumulate (~15+ in steady state), the parent-EPIC clusters get visually lost. A `--tree` view groups them.

@@ -1,5 +1,6 @@
 id: 019e1a42-e729-7871-bf46-20aa5f4f9219
 spec_id: STORY-2-075
+agreed_id: STORY-41
 title: 'Review PR-11: EPIC-20 batch 11: session_start robustness + extractor/search FTS5 fixes + workflow polish'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e15c3`) for branch `epic-20-batch11`.

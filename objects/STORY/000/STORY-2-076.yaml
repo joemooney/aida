@@ -1,5 +1,6 @@
 id: 019e1a4d-8d9c-7a00-8539-364579481756
 spec_id: STORY-2-076
+agreed_id: STORY-42
 title: 'aida queue work [<id>]: one-shot session-setup + claude-launch for a queued item (skill-routed by item type)'
 description: |
   User observation 2026-05-11: even after `/aida-pr` + `/aida-review` + STORY-66's auto-queue, the per-cycle setup is still 5-7 commands (pull, build, session start, cd, source, role enter, claude). Proposing a one-shot:

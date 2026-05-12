@@ -1,5 +1,6 @@
 id: 019e1a4f-a336-7d20-b374-7cbe1fa663e7
 spec_id: TASK-2-077
+agreed_id: TASK-34
 title: 'TASK-76 follow-up: add ''retry later'' option to held-branch pre-flight prompt + accept Ctrl+C / empty input as cancel'
 description: |
   Caught 2026-05-11 on first production use of TASK-76's pre-flight detection. The prompt offers three options:
