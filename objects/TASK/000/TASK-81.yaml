@@ -30,9 +30,26 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T06:37:13.750047240Z
-modified_at: 2026-05-12T15:18:21.576019053Z
+modified_at: 2026-05-12T15:25:01.284657747Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-12T06:37:14.972124291Z
+comments:
+- id: 019e1cca-9de4-7043-a080-b3328063e498
+  author: joe
+  content: |-
+    Implemented --steal flag on aida queue work.
+
+    - cli.rs: --steal bool on QueueCommand::Work
+    - main.rs: pre-flight in handle_queue_work calls find_scope_lease_conflict(); without --steal, refuses with lease id/role/worktree + suggests --steal; with --steal, session_end(yes=true, force=false) the holder first
+    - new pure helper find_scope_lease_conflict(): case-insensitive scope match, freshest-by-started_at wins
+    - tests: 4 new unit tests in queue_work_tests covering empty/mismatched/exact/case-insensitive/freshest paths (all 239 aida-cli tests green)
+    - manual smoke: `aida queue work TASK-84 --no-launch --no-pull` against the live EPIC-23 lease produces the new error naming lease 019e1cc3 and --steal
+
+    Uncommitted-changes guard on session_end is intentionally NOT escalated to --force under --steal — that would silently discard in-flight work. The error surface tells the user to use `aida session end <id> --force` manually for the destructive path.
+
+    Commit: 03338606
+  created_at: 2026-05-12T15:25:01.284657747Z
+  modified_at: 2026-05-12T15:25:01.284657747Z
