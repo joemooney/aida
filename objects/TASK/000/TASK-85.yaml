@@ -42,9 +42,35 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:03:46.569495464Z
-modified_at: 2026-05-12T15:30:05.429684408Z
+modified_at: 2026-05-12T15:32:10.946499817Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-12T15:03:48.044808683Z
+comments:
+- id: 019e1cd1-2c42-7842-b5b6-a0900e2efd68
+  author: joe
+  content: |-
+    Implemented PR-N/MR-N pickup resolver in aida queue work.
+
+    Resolver chain (in order):
+    1. Head mode (no arg)
+    2. Item mode (uuid / spec_id / agreed_id match)
+    3. **NEW: PR-N / MR-N → search queue for "Review PR-N:" title prefix** (case-insensitive prefix, exact number — PR-14 never matches PR-140)
+    4. Cluster mode (parent scope with queued children)
+
+    Outcomes:
+    - 1 match → item-mode pickup (reviewer skill auto-routed via existing derive_scope_from_entry)
+    - 0 matches → error with pointer to `gh pr view N` + `aida pr auto-queue-review`
+    - 2+ matches → disambiguation listing each candidate spec_id + title
+
+    Helpers: `review_title_matches` (pure predicate), `format_review_label` (centralizes PR-N/MR-N labels for error consistency).
+
+    7 new unit tests cover canonical happy path, case-insensitivity, leading whitespace, all rejection modes including the PR-14/PR-140 substring trap. All 251 aida-cli tests green; fmt clean.
+
+    Smoke: PR-99 (no story) and PR-10 (Completed story, terminal-filtered) both produce the new error.
+
+    Commit: 48344155
+  created_at: 2026-05-12T15:32:10.946499817Z
+  modified_at: 2026-05-12T15:32:10.946499817Z
