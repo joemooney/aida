@@ -7065,24 +7065,37 @@ fn emit_role_enter_eval(
     // sections below can resolve spec_id → title and surface the
     // role's queue head. Failures are silent — falls back to the
     // legacy minimal rendering. trace:TASK-48 | ai:claude
+    //
+    // BUG-83: the lookup also carries a preferred display id
+    // (agreed_id when assigned, else spec_id) so the "Queued for
+    // this role" and "Last touched" sections render the short form
+    // once `aida db merge-gate` has run. The map is keyed by both
+    // spec_id AND agreed_id so an activity-log entry recorded under
+    // either form resolves to the same row.
+    // trace:BUG-83 | ai:claude
     let store_path = project_root.join(".aida-store");
-    let (titles, queue_for_role): (
-        std::collections::HashMap<String, String>,
+    let (lookup, queue_for_role): (
+        std::collections::HashMap<String, (String, String)>,
         Vec<aida_core::QueueEntry>,
     ) = if store_path.exists() {
         let storage = Storage::new(store_path);
-        let titles = storage
+        let lookup = storage
             .load()
             .map(|s| {
-                s.requirements
-                    .iter()
-                    .filter_map(|r| {
-                        r.spec_id
-                            .as_deref()
-                            .or(r.agreed_id.as_deref())
-                            .map(|sid| (sid.to_string(), r.title.clone()))
-                    })
-                    .collect::<std::collections::HashMap<_, _>>()
+                let mut map: std::collections::HashMap<String, (String, String)> =
+                    std::collections::HashMap::new();
+                for r in &s.requirements {
+                    let display = r.display_id();
+                    let title = r.title.clone();
+                    if let Some(sid) = r.spec_id.as_deref() {
+                        map.insert(sid.to_string(), (title.clone(), display.clone()));
+                    }
+                    if let Some(aid) = r.agreed_id.as_deref() {
+                        map.entry(aid.to_string())
+                            .or_insert((title.clone(), display.clone()));
+                    }
+                }
+                map
             })
             .unwrap_or_default();
         let user_id = std::env::var("AIDA_USER")
@@ -7097,7 +7110,7 @@ fn emit_role_enter_eval(
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
-        (titles, queue_for_role)
+        (lookup, queue_for_role)
     } else {
         (Default::default(), Vec::new())
     };
@@ -7124,19 +7137,17 @@ fn emit_role_enter_eval(
                 None
             };
             for entry in queue_for_role.iter().take(show_n) {
-                let (spec_id, title) = store_snapshot
+                // BUG-83: prefer agreed_id (short merge-gated id) over
+                // spec_id so this section stops drifting from `aida queue
+                // list` / `aida queue next`. trace:BUG-83 | ai:claude
+                let (display_id, title) = store_snapshot
                     .as_ref()
                     .and_then(|s| s.requirements.iter().find(|r| r.id == entry.requirement_id))
-                    .map(|r| {
-                        (
-                            r.spec_id.clone().unwrap_or_else(|| "?".into()),
-                            truncate(&r.title, 60).to_string(),
-                        )
-                    })
+                    .map(|r| (r.display_id(), truncate(&r.title, 60).to_string()))
                     .unwrap_or_else(|| ("(deleted)".into(), String::new()));
                 println!(
                     "echo '    {:<12} {}'",
-                    spec_id,
+                    display_id,
                     title.replace('\'', "'\\''")
                 );
             }
@@ -7159,21 +7170,24 @@ fn emit_role_enter_eval(
         println!("echo '  Last touched while in this role:'");
         for entry in state.activity.iter().take(5) {
             let when = humanize_relative(entry.at);
-            let title = titles
-                .get(&entry.spec_id)
-                .map(|t| truncate(t, 60).to_string())
-                .unwrap_or_default();
+            // BUG-83: resolve the activity-log key (recorded as either
+            // spec_id or agreed_id form depending on what the user typed
+            // when the event fired) to the requirement's current preferred
+            // display id, so merge-gated rows show as the short form here
+            // too. Falls back to the raw stored id if the requirement is
+            // gone from the store. trace:BUG-83 | ai:claude
+            let (title, display_id) = match lookup.get(&entry.spec_id) {
+                Some((t, d)) => (truncate(t, 60).to_string(), d.clone()),
+                None => (String::new(), entry.spec_id.clone()),
+            };
             // Match the queue-head column widths so the two sections
-            // line up: 12-wide spec_id, then title, then action+time.
+            // line up: 12-wide id, then title, then action+time.
             if title.is_empty() {
-                println!(
-                    "echo '    {:<12} {} ({})'",
-                    entry.spec_id, entry.action, when
-                );
+                println!("echo '    {:<12} {} ({})'", display_id, entry.action, when);
             } else {
                 println!(
                     "echo '    {:<12} {:<60} {} ({})'",
-                    entry.spec_id,
+                    display_id,
                     title.replace('\'', "'\\''"),
                     entry.action,
                     when
@@ -7330,10 +7344,19 @@ fn handle_role_show(project_root: &std::path::Path, name: Option<&str>) -> Resul
     if !state.activity.is_empty() {
         println!();
         println!("Recent activity (newest first):");
+        // BUG-83: resolve each log entry's stored id to the requirement's
+        // preferred display id (agreed_id when assigned) so this section
+        // matches `aida role enter`'s "Last touched" view.
+        // trace:BUG-83 | ai:claude
+        let display_lookup = build_display_id_lookup(project_root);
         for entry in &state.activity {
+            let display_id = display_lookup
+                .get(&entry.spec_id)
+                .cloned()
+                .unwrap_or_else(|| entry.spec_id.clone());
             println!(
                 "  {:<14} {:<10} {}",
-                entry.spec_id,
+                display_id,
                 entry.action,
                 humanize_relative(entry.at)
             );
@@ -13304,12 +13327,23 @@ fn session_show(id: Option<&str>, plan: bool) -> Result<()> {
         println!("{}", "Activity in this session: (none yet)".bold());
     } else {
         println!("{}", "Activity in this session:".bold());
+        // BUG-83: resolve activity-log spec_id keys to their preferred
+        // display id (agreed_id when assigned). The log records whatever
+        // form the user typed at the call site, so a row written under
+        // legacy `STORY-2-076` should render here as the short
+        // post-merge-gate id once one's been minted.
+        // trace:BUG-83 | ai:claude
+        let display_lookup = build_display_id_lookup(&project_root);
         let mut sorted = activity.entries.clone();
         sorted.sort_by_key(|e| std::cmp::Reverse(e.at));
         for e in sorted.iter().take(10) {
+            let display_id = display_lookup
+                .get(&e.spec_id)
+                .cloned()
+                .unwrap_or_else(|| e.spec_id.clone());
             println!(
                 "  {:<14} {:<10} {} ({})",
-                e.spec_id.cyan(),
+                display_id.cyan(),
                 e.action,
                 e.role.dimmed(),
                 humanize_relative(e.at).dimmed()
@@ -13407,14 +13441,18 @@ fn render_session_manifest(project_root: &std::path::Path, session_id: &str) -> 
     let mut pending = 0usize;
     let total = manifest.items.len();
 
-    // Pre-compute per-item (status, title).
+    // Pre-compute per-item (status, title, display_id).
+    // BUG-83: the manifest stores spec_id (canonical), but the table
+    // should display agreed_id when present so the plan view matches
+    // `aida list` / queue. trace:BUG-83 | ai:claude
     let mut rows: Vec<(
         session_manifest::ItemStatus,
         &session_manifest::ManifestItem,
-        String,
+        String, // title
+        String, // display_id
     )> = Vec::with_capacity(total);
     for item in &manifest.items {
-        let (status_str, title) = if let Some(store) = &store {
+        let (status_str, title, display_id) = if let Some(store) = &store {
             let req = store
                 .requirements
                 .iter()
@@ -13423,9 +13461,11 @@ fn render_session_manifest(project_root: &std::path::Path, session_id: &str) -> 
                 req.map(|r| format!("{}", r.status)),
                 req.map(|r| r.title.clone())
                     .unwrap_or_else(|| "(not found)".to_string()),
+                req.map(|r| r.display_id())
+                    .unwrap_or_else(|| item.spec_id.clone()),
             )
         } else {
-            (None, String::new())
+            (None, String::new(), item.spec_id.clone())
         };
         let st = session_manifest::classify_item(item, status_str.as_deref());
         match st {
@@ -13433,7 +13473,7 @@ fn render_session_manifest(project_root: &std::path::Path, session_id: &str) -> 
             session_manifest::ItemStatus::InProgress => in_progress += 1,
             session_manifest::ItemStatus::Pending => pending += 1,
         }
-        rows.push((st, item, title));
+        rows.push((st, item, title, display_id));
     }
 
     println!(
@@ -13462,7 +13502,7 @@ fn render_session_manifest(project_root: &std::path::Path, session_id: &str) -> 
         "Spec".dimmed(),
         "Title".dimmed()
     );
-    for (st, item, title) in &rows {
+    for (st, item, title, display_id) in &rows {
         let glyph = st.glyph();
         let label = st.label();
         let display = format!("{} {}", glyph, label);
@@ -13475,7 +13515,7 @@ fn render_session_manifest(project_root: &std::path::Path, session_id: &str) -> 
             "  {:<3} {:<14} {:<14} {}",
             item.position,
             colored,
-            item.spec_id.bold(),
+            display_id.bold(),
             title
         );
     }
@@ -13546,6 +13586,33 @@ fn update_manifest_for_status(spec_id: &str, canonical_status: &str) {
             e
         );
     }
+}
+
+/// Build a map from "any id form a caller might have stored"
+/// (spec_id or agreed_id) to the requirement's preferred display id
+/// (agreed_id when assigned, else spec_id). Used by the session-show
+/// activity rows so log entries written under either form render
+/// consistently as the short post-merge-gate id once one's been minted.
+///
+/// Returns an empty map when the store can't be loaded — callers fall
+/// back to the raw stored id. trace:BUG-83 | ai:claude
+fn build_display_id_lookup(
+    project_root: &std::path::Path,
+) -> std::collections::HashMap<String, String> {
+    let Some(store) = load_store_for_lookup(project_root) else {
+        return std::collections::HashMap::new();
+    };
+    let mut map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    for r in &store.requirements {
+        let display = r.display_id();
+        if let Some(sid) = r.spec_id.as_deref() {
+            map.insert(sid.to_string(), display.clone());
+        }
+        if let Some(aid) = r.agreed_id.as_deref() {
+            map.entry(aid.to_string()).or_insert(display);
+        }
+    }
+    map
 }
 
 /// Best-effort load of the requirements store for read-only spec-id /
@@ -13653,16 +13720,23 @@ fn session_manifest_write(items: &str, source: &str, session_query: Option<&str>
 
     let now = chrono::Utc::now();
     let mut manifest_items: Vec<session_manifest::ManifestItem> = Vec::with_capacity(parsed.len());
+    // BUG-83: collect parallel display_ids so the confirmation echo
+    // shows agreed_id when one's been assigned. The manifest itself
+    // keeps spec_id (canonical) on disk so mark-started / mark-completed
+    // continue to key off it. trace:BUG-83 | ai:claude
+    let mut display_ids: Vec<String> = Vec::with_capacity(parsed.len());
     for (i, spec_id) in parsed.iter().enumerate() {
-        let status = store
-            .as_ref()
-            .and_then(|s| {
-                s.requirements
-                    .iter()
-                    .find(|r| r.spec_id.as_deref() == Some(spec_id.as_str()))
-            })
+        let req = store.as_ref().and_then(|s| {
+            s.requirements
+                .iter()
+                .find(|r| r.spec_id.as_deref() == Some(spec_id.as_str()))
+        });
+        let status = req
             .map(|r| format!("{}", r.status))
             .unwrap_or_else(|| "Unknown".to_string());
+        let display_id = req
+            .map(|r| r.display_id())
+            .unwrap_or_else(|| spec_id.clone());
         manifest_items.push(session_manifest::ManifestItem {
             spec_id: spec_id.clone(),
             position: (i + 1) as u32,
@@ -13671,6 +13745,7 @@ fn session_manifest_write(items: &str, source: &str, session_query: Option<&str>
             completed_at: None,
             note: None,
         });
+        display_ids.push(display_id);
     }
 
     let manifest = session_manifest::SessionManifest {
@@ -13690,11 +13765,11 @@ fn session_manifest_write(items: &str, source: &str, session_query: Option<&str>
         (&lease.id[..lease.id.len().min(8)]).yellow(),
         manifest.items.len()
     );
-    for it in &manifest.items {
+    for (it, display_id) in manifest.items.iter().zip(display_ids.iter()) {
         println!(
             "  {}. {}  [{}]",
             it.position.to_string().dimmed(),
-            it.spec_id.bold(),
+            display_id.bold(),
             it.status_at_plan.dimmed()
         );
     }
@@ -26512,12 +26587,19 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         } else {
                             "├─"
                         };
-                        let spec_id = entry.spec_id.as_deref().unwrap_or("???");
+                        // BUG-83: prefer cached agreed_id over spec_id to
+                        // stay consistent with `aida list` / local queue
+                        // after `aida db merge-gate`. trace:BUG-83 | ai:claude
+                        let display_id = entry
+                            .agreed_id
+                            .as_deref()
+                            .or(entry.spec_id.as_deref())
+                            .unwrap_or("???");
                         let title = entry.title.as_deref().unwrap_or("(no cached title)");
                         println!(
                             "  {} {}  {}  {}",
                             glyph.dimmed(),
-                            spec_id.bold(),
+                            display_id.bold(),
                             title,
                             format!("[origin:{}]", entry.project_name).dimmed(),
                         );
@@ -26642,13 +26724,19 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // on the cached spec_id/title in the entry. trace:FR-1-012
             for (idx, entry) in global_entries.iter().enumerate() {
                 let i = entries.len() + idx;
-                let spec_id = entry.spec_id.as_deref().unwrap_or("???");
+                // BUG-83: prefer cached agreed_id; falls back to spec_id.
+                // trace:BUG-83 | ai:claude
+                let display_id = entry
+                    .agreed_id
+                    .as_deref()
+                    .or(entry.spec_id.as_deref())
+                    .unwrap_or("???");
                 let title = entry.title.as_deref().unwrap_or("(no cached title)");
 
                 print!(
                     "  {}. {} {}",
                     (i + 1).to_string().dimmed(),
-                    spec_id.bold(),
+                    display_id.bold(),
                     title
                 );
                 if entry.added_by != user_id {
@@ -26837,6 +26925,10 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     project_root,
                     project_name: project_name.clone(),
                     spec_id: req.spec_id.clone(),
+                    // BUG-83: cache agreed_id too so the global queue
+                    // can render the short id once one's been assigned.
+                    // trace:BUG-83 | ai:claude
+                    agreed_id: req.agreed_id.clone(),
                     title: Some(req.title.clone()),
                     position,
                     added_by: user_id.clone(),
@@ -26925,12 +27017,19 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                             "--global requires --for <role> or an active role (AIDA_SESSION_ROLE)."
                         )
                     })?;
-                // Match by spec_id from the global entries (no local store needed).
+                // Match by spec_id OR agreed_id from the global entries (no
+                // local store needed). BUG-83: prior code matched on spec_id
+                // only, so `aida queue remove --global FR-1` would miss an
+                // entry cached under the legacy spec_id form `FR-1-042`.
+                // trace:BUG-83 | ai:claude
                 let entries = global_queue::load(&role).unwrap_or_default();
                 let target = entries.iter().find(|e| {
                     e.spec_id
                         .as_deref()
                         .is_some_and(|s| s.eq_ignore_ascii_case(id))
+                        || e.agreed_id
+                            .as_deref()
+                            .is_some_and(|s| s.eq_ignore_ascii_case(id))
                         || uuid::Uuid::parse_str(id)
                             .map(|u| u == e.requirement_id)
                             .unwrap_or(false)
@@ -26944,10 +27043,18 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     Some(&target.project_root),
                 )?;
                 if removed {
+                    // BUG-83: prefer cached agreed_id (short form) for
+                    // display when one's been assigned; fall back to
+                    // spec_id. trace:BUG-83 | ai:claude
+                    let display_id = target
+                        .agreed_id
+                        .as_deref()
+                        .or(target.spec_id.as_deref())
+                        .unwrap_or("???");
                     println!(
                         "{} Removed {} from global queue [role:{}, origin:{}]",
                         "✓".green(),
-                        target.spec_id.as_deref().unwrap_or("???").bold(),
+                        display_id.bold(),
                         role,
                         target.project_name
                     );
@@ -27349,10 +27456,17 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
 
             // If only the global has an item, render it and return.
             if let Some(entry) = global_next {
-                let spec_id = entry.spec_id.as_deref().unwrap_or("???");
+                // BUG-83: prefer cached agreed_id; falls back to spec_id.
+                // The `aida show` suggestion uses the same display id since
+                // the resolver accepts both forms. trace:BUG-83 | ai:claude
+                let display_id = entry
+                    .agreed_id
+                    .as_deref()
+                    .or(entry.spec_id.as_deref())
+                    .unwrap_or("???");
                 let title = entry.title.as_deref().unwrap_or("(no cached title)");
                 println!("{}", "Next up:".bold());
-                println!("  {}: {}", spec_id.green().bold(), title.bold());
+                println!("  {}: {}", display_id.green().bold(), title.bold());
                 println!(
                     "  {} {}",
                     format!("[role:{}]", entry.for_role).cyan(),
@@ -27366,7 +27480,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 println!(
                     "  cd {}  &&  aida show {}",
                     entry.project_root.display().to_string().cyan(),
-                    spec_id
+                    display_id
                 );
                 return Ok(());
             }

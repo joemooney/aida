@@ -28,6 +28,13 @@ pub struct GlobalQueueEntry {
     /// Cached spec id for display when the foreign project is offline.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spec_id: Option<String>,
+    /// Cached agreed_id (short, merge-gated id) for display when the foreign
+    /// project is offline. Mirrors the spec_id cache; renderers prefer
+    /// `agreed_id.or(spec_id)` so global queue surfaces stop diverging
+    /// from `aida list` / local queue after `aida db merge-gate`.
+    /// trace:BUG-83 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agreed_id: Option<String>,
     /// Cached title for display when the foreign project is offline.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
