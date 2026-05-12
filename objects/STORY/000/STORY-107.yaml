@@ -73,3 +73,7 @@ feature: Uncategorized
 created_at: 2026-05-12T15:51:25.341027642Z
 modified_at: 2026-05-12T15:51:25.341027642Z
 req_type: Story
+relationships:
+- rel_type: Child
+  target_id: 019e1cca-9950-78a0-bf56-b1393eacdcc5
+  created_at: 2026-05-12T15:51:26.551613863Z
