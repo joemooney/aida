@@ -1,0 +1,51 @@
+id: 019e1cfc-a0b5-72f1-aabd-f846cf6225d9
+spec_id: DOC-1-083
+title: Why aida doc exists + the add surface
+description: |-
+  ## What
+
+  `aida doc add` captures narrative tied to specs — rationale, scenarios, recipes, gotchas.
+
+  ## When
+
+  During or right after work on a spec, when context is fresh. The EPIC-24 vision is that this lands while the WHY is still in the agent or user's head.
+
+  ## Example
+
+  ```
+  aida doc add \
+    --title "When to use `aida queue work --steal`" \
+    --about TASK-81 --about STORY-42 \
+    --scenario "muddle recovery" \
+    --audience user,agent \
+    --description-from-file recipe.md
+  ```
+
+  ## Data model
+
+  Doc entries are a top-level RequirementType (prefix `DOC`), not a Meta subtype — that mirrors how Principle/Vision/Decision/Term were added under FR-1-074. `--about` is modeled as `References` relationships on the doc, which means existing rel infrastructure (cache projection, MCP exposure, graph rendering) Just Works.
+
+  ## Composes with
+
+  - `aida doc show <SPEC>` walks the References edge backwards to find every Doc about that spec.
+  - `aida docs build` (plural — the layered-docs projection) will eventually fold these in.
+  - STORY-105 (/aida-doc proactive skill) will prompt for capture at natural checkpoints.
+
+  ## See also
+
+  - EPIC-24 (parent — living documentation vision)
+  - STORY-105 (proactive capture skill)
+  - STORY-107 (positioning doc)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T16:19:38.805220581Z
+modified_at: 2026-05-12T16:19:38.805220581Z
+req_type: Doc
+tags:
+- doc-meta
+- epic-24
+custom_fields:
+  audience: user,agent,developer
+  scenario: tool introduction
