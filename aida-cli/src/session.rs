@@ -380,11 +380,37 @@ fn sanitize_for_tsv(s: &str) -> String {
 /// is `Some(...)`, also passes `--name <n>` so the launched session is
 /// labeled in the /resume picker and terminal title. trace:TASK-31 | ai:claude
 fn exec_claude_new(permission_mode: &str, name: Option<&str>) -> Result<()> {
+    exec_claude(permission_mode, name, None)
+}
+
+/// STORY-42: replace this process with `claude --permission-mode <mode>
+/// [--name <n>] [<initial_prompt>]`. The initial prompt becomes claude's
+/// first message — pass `/aida-pickup` / `/aida-review --pr N` so the
+/// agent routes into the right skill on launch with no extra typing.
+/// trace:STORY-42 | ai:claude
+pub fn exec_claude_with_prompt(
+    permission_mode: &str,
+    name: Option<&str>,
+    initial_prompt: &str,
+) -> Result<()> {
+    exec_claude(permission_mode, name, Some(initial_prompt))
+}
+
+fn exec_claude(
+    permission_mode: &str,
+    name: Option<&str>,
+    initial_prompt: Option<&str>,
+) -> Result<()> {
     use std::process::Command;
     let mut cmd = Command::new("claude");
     cmd.args(["--permission-mode", permission_mode]);
     if let Some(n) = name {
         cmd.args(["--name", n]);
+    }
+    if let Some(p) = initial_prompt {
+        // Positional first-message — claude treats trailing positionals
+        // as the initial prompt for the session.
+        cmd.arg(p);
     }
     #[cfg(unix)]
     {

@@ -2039,6 +2039,64 @@ pub enum QueueCommand {
         #[clap(long, short = 'y')]
         yes: bool,
     },
+    /// Pick up a queued item (or scope-cluster of queued items) and launch
+    /// claude in a fresh session worktree, with the role + skill routed
+    /// from the item's metadata. Collapses the 5-7 manual steps (pull,
+    /// session start, cd, role enter, claude /aida-pickup) into one
+    /// command. With no `id`, picks the head of the active role's queue.
+    /// With `id` matching a queued entry, that single item is the pickup
+    /// target. With `id` resolving to an EPIC/STORY whose children are
+    /// queued, drains the cluster — pre-populates the session manifest
+    /// and routes the right skill. trace:STORY-42 | ai:claude
+    Work {
+        /// Queued requirement ID (UUID, SPEC-ID, or agreed-id) for item
+        /// pickup, OR an EPIC/STORY id with queued children for cluster
+        /// pickup. Omit to pick up the head of the active role's queue.
+        id: Option<String>,
+        /// Permission mode for the launched claude. Defaults to
+        /// `acceptEdits` (auto-accept edits, still prompt for shell).
+        /// Env override: `AIDA_PERMISSION_MODE`. Common alt values:
+        /// `bypassPermissions` (equivalent to the legacy
+        /// `--dangerously-skip-permissions`), `plan` (read-only),
+        /// `default` (prompt on everything).
+        #[clap(long, value_name = "MODE")]
+        permission_mode: Option<String>,
+        /// Run the full setup (worktree, lease, manifest) but skip the
+        /// final `claude` exec. Useful for scripting / debugging the
+        /// resolver.
+        #[clap(long)]
+        no_launch: bool,
+        /// Override the inferred role. Without this, the role is derived
+        /// from the queue items' `for_role` (single-item: that item's
+        /// role; cluster: majority with a warning about minority items).
+        /// Falls back to active shell role when items have no `for_role`.
+        #[clap(long, value_name = "NAME")]
+        role: Option<String>,
+        /// Skip the pre-pickup `aida db sync --pull`. By default queue
+        /// work pulls the orphan-store branch first so the queue view is
+        /// fresh; pass this when offline or when the user has just
+        /// pulled in another shell.
+        #[clap(long)]
+        no_pull: bool,
+        /// Cluster-mode filter: when `id` resolves to a parent scope,
+        /// only drain queued children whose requirement type matches.
+        /// E.g. `--type bug` to grab just the bug cluster under
+        /// EPIC-20. Case-insensitive. Ignored in single-item / head
+        /// pickup modes.
+        #[clap(long = "type", value_name = "TYPE")]
+        type_filter: Option<String>,
+        /// Override the auto-derived branch name. Mirrors
+        /// `aida session start --branch`.
+        #[clap(long)]
+        branch: Option<String>,
+        /// Override the auto-derived worktree path. Mirrors
+        /// `aida session start --path`.
+        #[clap(long)]
+        path: Option<String>,
+        /// User ID (defaults to AIDA_USER or system user)
+        #[clap(long)]
+        user: Option<String>,
+    },
 }
 
 #[derive(Subcommand, Debug)]

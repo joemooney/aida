@@ -19722,6 +19722,261 @@ diff --git a/objects/STORY/000/STORY-1.yaml b/objects/STORY/000/STORY-1.yaml
     }
 }
 
+#[cfg(test)]
+mod queue_work_tests {
+    //! STORY-42: cover the pure-decision helpers used by `aida queue work`.
+    //! Side-effecting bits (session_start, exec) are integration-tested
+    //! by hand in the merge gate; these unit tests pin role inference,
+    //! prompt routing, scope derivation, and spec-id matching so future
+    //! refactors don't silently break the resolver.
+    //! trace:STORY-42 | ai:claude
+    use super::*;
+    use aida_core::{QueueEntry, Relationship, Requirement, RequirementType, RequirementsStore};
+    use uuid::Uuid;
+
+    fn req(spec_id: &str, agreed: Option<&str>, t: RequirementType) -> Requirement {
+        let mut r = Requirement::new(spec_id.to_string(), String::new());
+        r.spec_id = Some(spec_id.into());
+        r.agreed_id = agreed.map(String::from);
+        r.req_type = t;
+        r
+    }
+
+    fn entry(req_id: Uuid, for_role: Option<&str>, for_scope: Option<&str>) -> QueueEntry {
+        QueueEntry {
+            user_id: "u".into(),
+            requirement_id: req_id,
+            position: 1,
+            added_by: "u".into(),
+            note: None,
+            added_at: chrono::Utc::now(),
+            for_role: for_role.map(String::from),
+            for_scope: for_scope.map(String::from),
+            for_session: None,
+        }
+    }
+
+    fn resolved(spec: &str, qe: QueueEntry) -> QueueWorkEntry {
+        QueueWorkEntry {
+            queue: qe,
+            spec_id: spec.into(),
+            status_at_plan: "Approved".into(),
+        }
+    }
+
+    fn plan_with(mode: QueueWorkMode, scope: &str, entries: Vec<QueueWorkEntry>) -> QueueWorkPlan {
+        let review_target = parse_review_scope(scope);
+        QueueWorkPlan {
+            mode,
+            entries,
+            scope: scope.into(),
+            review_target,
+            anchor_display: scope.into(),
+            anchor_title: "anchor".into(),
+        }
+    }
+
+    /// Single-role cluster → that role, "cluster-derived", no warnings.
+    #[test]
+    fn role_uniform_cluster_picks_that_role() {
+        let r = req("BUG-1", None, RequirementType::Bug);
+        let e1 = resolved("BUG-1", entry(r.id, Some("implementer"), None));
+        let e2 = resolved("BUG-2", entry(Uuid::now_v7(), Some("implementer"), None));
+        let plan = plan_with(QueueWorkMode::Cluster, "EPIC-20", vec![e1, e2]);
+        let (role, origin, warns) = infer_queue_work_role(&plan, None);
+        assert_eq!(role, "implementer");
+        assert_eq!(origin, "cluster-derived");
+        assert!(warns.is_none());
+    }
+
+    /// Mixed-role cluster → majority wins + a warning about the minority.
+    #[test]
+    fn role_majority_wins_with_warning() {
+        let mut entries = Vec::new();
+        for _ in 0..3 {
+            entries.push(resolved(
+                "X",
+                entry(Uuid::now_v7(), Some("implementer"), None),
+            ));
+        }
+        entries.push(resolved("Y", entry(Uuid::now_v7(), Some("reviewer"), None)));
+        let plan = plan_with(QueueWorkMode::Cluster, "EPIC-20", entries);
+        let (role, origin, warns) = infer_queue_work_role(&plan, None);
+        assert_eq!(role, "implementer");
+        assert_eq!(origin, "cluster-derived");
+        let warns = warns.expect("minority should warn");
+        assert!(warns
+            .iter()
+            .any(|w| w.contains("reviewer") || w.contains("other role")));
+    }
+
+    /// Explicit --role override beats the cluster tally and the
+    /// scope default.
+    #[test]
+    fn role_override_wins() {
+        let e = resolved("BUG-1", entry(Uuid::now_v7(), Some("implementer"), None));
+        let plan = plan_with(QueueWorkMode::Item, "EPIC-20", vec![e]);
+        let (role, origin, warns) = infer_queue_work_role(&plan, Some("architect"));
+        assert_eq!(role, "architect");
+        assert_eq!(origin, "--role flag");
+        assert!(warns.is_none());
+    }
+
+    /// Empty cluster (no for_role on any entry) + PR-N scope → reviewer
+    /// default. trace:STORY-42 | ai:claude
+    #[test]
+    fn role_scope_default_pr_is_reviewer() {
+        let e = resolved("STORY-1", entry(Uuid::now_v7(), None, None));
+        let plan = plan_with(QueueWorkMode::Cluster, "PR-11", vec![e]);
+        let (role, origin, _) = infer_queue_work_role(&plan, None);
+        assert_eq!(role, "reviewer");
+        assert_eq!(origin, "scope-default");
+    }
+
+    /// Empty cluster + non-PR scope → implementer default.
+    #[test]
+    fn role_scope_default_non_pr_is_implementer() {
+        let e = resolved("STORY-1", entry(Uuid::now_v7(), None, None));
+        let plan = plan_with(QueueWorkMode::Cluster, "EPIC-20", vec![e]);
+        let (role, origin, _) = infer_queue_work_role(&plan, None);
+        assert_eq!(role, "implementer");
+        assert_eq!(origin, "scope-default");
+    }
+
+    /// Reviewer role + PR scope → `/aida-review --pr N`.
+    #[test]
+    fn prompt_reviewer_pr_passes_number() {
+        let e = resolved("STORY-X", entry(Uuid::now_v7(), Some("reviewer"), None));
+        let plan = plan_with(QueueWorkMode::Cluster, "PR-11", vec![e]);
+        assert_eq!(
+            derive_queue_work_prompt(&plan, "reviewer"),
+            "/aida-review --pr 11"
+        );
+    }
+
+    /// Reviewer role + non-PR scope → bare `/aida-review`.
+    #[test]
+    fn prompt_reviewer_non_pr_is_bare() {
+        let e = resolved("STORY-X", entry(Uuid::now_v7(), Some("reviewer"), None));
+        let plan = plan_with(QueueWorkMode::Cluster, "EPIC-20", vec![e]);
+        assert_eq!(derive_queue_work_prompt(&plan, "reviewer"), "/aida-review");
+    }
+
+    /// Implementer + item mode → `/aida-pickup <ID>` (focus directive).
+    #[test]
+    fn prompt_implementer_item_passes_focus() {
+        let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
+        let plan = QueueWorkPlan {
+            mode: QueueWorkMode::Item,
+            entries: vec![e],
+            scope: "EPIC-20".into(),
+            review_target: None,
+            anchor_display: "BUG-83".into(),
+            anchor_title: "title".into(),
+        };
+        assert_eq!(
+            derive_queue_work_prompt(&plan, "implementer"),
+            "/aida-pickup BUG-83"
+        );
+    }
+
+    /// Implementer + cluster/head → bare `/aida-pickup` (manifest carries
+    /// the context; no need for a focus arg).
+    #[test]
+    fn prompt_implementer_cluster_is_bare() {
+        let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
+        let plan = plan_with(QueueWorkMode::Cluster, "EPIC-20", vec![e]);
+        assert_eq!(
+            derive_queue_work_prompt(&plan, "implementer"),
+            "/aida-pickup"
+        );
+    }
+
+    /// Title shape "Review PR-11: …" overrides for_scope and parent
+    /// EPIC — review-mode session for PR-11.
+    #[test]
+    fn scope_review_title_wins_over_for_scope() {
+        let mut review = req("STORY-9", None, RequirementType::Story);
+        review.title = "Review PR-11: clean up sync flow".into();
+        let qe = entry(review.id, Some("reviewer"), Some("EPIC-99"));
+        let store = RequirementsStore {
+            requirements: vec![review.clone()],
+            ..Default::default()
+        };
+        let (scope, target) = derive_scope_from_entry(&qe, &review, &store);
+        assert_eq!(scope, "PR-11");
+        assert!(target.is_some());
+    }
+
+    /// for_scope wins over derived parent EPIC when both exist.
+    #[test]
+    fn scope_for_scope_beats_parent_epic() {
+        let epic = req("EPIC-20", None, RequirementType::Epic);
+        let mut bug = req("BUG-1", None, RequirementType::Bug);
+        bug.relationships.push(Relationship {
+            rel_type: RelationshipType::Child,
+            target_id: epic.id,
+            created_at: Some(chrono::Utc::now()),
+            created_by: Some("t".into()),
+        });
+        let qe = entry(bug.id, Some("implementer"), Some("EPIC-21"));
+        let store = RequirementsStore {
+            requirements: vec![epic, bug.clone()],
+            ..Default::default()
+        };
+        let (scope, _) = derive_scope_from_entry(&qe, &bug, &store);
+        assert_eq!(scope, "EPIC-21");
+    }
+
+    /// No for_scope → falls back to derived parent EPIC.
+    #[test]
+    fn scope_falls_back_to_parent_epic() {
+        let epic = req("EPIC-20", None, RequirementType::Epic);
+        let mut bug = req("BUG-1", None, RequirementType::Bug);
+        bug.relationships.push(Relationship {
+            rel_type: RelationshipType::Child,
+            target_id: epic.id,
+            created_at: Some(chrono::Utc::now()),
+            created_by: Some("t".into()),
+        });
+        let qe = entry(bug.id, Some("implementer"), None);
+        let store = RequirementsStore {
+            requirements: vec![epic, bug.clone()],
+            ..Default::default()
+        };
+        let (scope, _) = derive_scope_from_entry(&qe, &bug, &store);
+        assert_eq!(scope, "EPIC-20");
+    }
+
+    /// No for_scope and no parent EPIC → falls back to req's own
+    /// display id.
+    #[test]
+    fn scope_falls_back_to_own_id() {
+        let bug = req("BUG-1", None, RequirementType::Bug);
+        let qe = entry(bug.id, Some("implementer"), None);
+        let store = RequirementsStore {
+            requirements: vec![bug.clone()],
+            ..Default::default()
+        };
+        let (scope, _) = derive_scope_from_entry(&qe, &bug, &store);
+        assert_eq!(scope, "BUG-1");
+    }
+
+    /// spec_matches walks uuid, spec_id (case-insensitive), and
+    /// agreed_id (case-insensitive). trace:STORY-42 | ai:claude
+    #[test]
+    fn spec_matches_covers_uuid_and_ids() {
+        let mut r = req("BUG-1-099", Some("BUG-42"), RequirementType::Bug);
+        r.id = Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap();
+        assert!(spec_matches(&r, "11111111-1111-1111-1111-111111111111"));
+        assert!(spec_matches(&r, "BUG-1-099"));
+        assert!(spec_matches(&r, "bug-1-099")); // case-insensitive
+        assert!(spec_matches(&r, "BUG-42")); // agreed_id
+        assert!(spec_matches(&r, "bug-42"));
+        assert!(!spec_matches(&r, "BUG-99"));
+    }
+}
+
 // ----------------------------------------------------------------------------
 // `aida status` — comprehensive project overview, with extra sections when
 // the current project is the aida repo itself.
@@ -27287,7 +27542,721 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 "run `aida queue next` to see what's next".dimmed()
             );
         }
+        // STORY-42: one-shot queue pickup → session start → claude launch.
+        // trace:STORY-42 | ai:claude
+        QueueCommand::Work {
+            id,
+            permission_mode,
+            no_launch,
+            role,
+            no_pull,
+            type_filter,
+            branch,
+            path,
+            user,
+        } => {
+            let user_id = get_user(user);
+            handle_queue_work(
+                storage,
+                &user_id,
+                id.as_deref(),
+                permission_mode.as_deref(),
+                *no_launch,
+                role.as_deref(),
+                *no_pull,
+                type_filter.as_deref(),
+                branch.as_deref(),
+                path.as_deref(),
+            )?;
+        }
     }
+    Ok(())
+}
+
+/// STORY-42: resolved pickup plan — which queue entries we're working,
+/// in which mode, against which scope/branch, with which skill.
+/// trace:STORY-42 | ai:claude
+#[derive(Debug, Clone)]
+struct QueueWorkPlan {
+    /// "head" (no arg), "item" (single queued entry), or "cluster"
+    /// (parent scope draining children).
+    mode: QueueWorkMode,
+    /// Pre-resolved view of each queued entry we're picking up, in
+    /// queue order. Carries the display SPEC-ID and current status
+    /// at plan time so manifest writing doesn't need a second store
+    /// load (the second load races against `aida db sync --pull` /
+    /// concurrent edits and can return a different requirements set
+    /// from a sibling worktree's perspective).
+    entries: Vec<QueueWorkEntry>,
+    /// Resolved scope string for `--owns` (e.g. "EPIC-20", "PR-11",
+    /// "BUG-82"). Always non-empty.
+    scope: String,
+    /// Forge + PR number when scope is a PR-N / MR-N. Lets the caller
+    /// route to the review session flow without re-parsing.
+    review_target: Option<(ReviewForge, u64)>,
+    /// Display SPEC-ID of the "anchor" requirement (the first entry
+    /// for head/item modes; the parent for cluster mode). Surfaced in
+    /// human output so the user can confirm we resolved the right thing.
+    anchor_display: String,
+    /// Title of the anchor requirement (e.g., "Review PR-11: …" or the
+    /// real spec title). Used to detect Review-PR shape for skill
+    /// routing without re-querying.
+    anchor_title: String,
+}
+
+/// STORY-42: per-entry resolved view used by manifest writing and role
+/// tally. trace:STORY-42 | ai:claude
+#[derive(Debug, Clone)]
+struct QueueWorkEntry {
+    /// The underlying queue entry (carries position, for_role,
+    /// for_scope so the role tally and ordering work).
+    queue: aida_core::QueueEntry,
+    /// Display SPEC-ID for the manifest (agreed_id → spec_id → "?").
+    spec_id: String,
+    /// Status at plan time, formatted as the manifest field expects
+    /// ("Approved", "In Progress", …).
+    status_at_plan: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum QueueWorkMode {
+    Head,
+    Item,
+    Cluster,
+}
+
+/// STORY-42: resolve the user's queue-work argument into a concrete plan.
+///
+///   - `arg = None`            → head-pickup mode: top item from the
+///                                active role's queue (with the same
+///                                role + scope filters `queue next` uses).
+///   - `arg` matches a queued  → item-pickup mode: just that entry.
+///     entry's spec_id/agreed_id/uuid
+///   - `arg` resolves to a req → cluster-pickup mode: every queued entry
+///     that isn't queued but   whose for_scope == <id> OR whose req's
+///     has queued children    derived parent EPIC == <id>.
+///
+/// `type_filter` only applies in cluster mode (filters drained children
+/// by req type, case-insensitive). trace:STORY-42 | ai:claude
+fn resolve_queue_work_plan(
+    storage: &Storage,
+    user_id: &str,
+    arg: Option<&str>,
+    type_filter: Option<&str>,
+) -> Result<QueueWorkPlan> {
+    let entries = storage.queue_list(user_id, /* include_completed */ false)?;
+    let store = storage.load()?;
+
+    // Head-pickup: pick the top item for the active role, honoring the
+    // same filters as `queue next` (role routing + active-role scope +
+    // terminal-status skip). We don't re-implement that whole filter
+    // chain here; queue work is best-effort and the user can pass an
+    // explicit id when the head heuristic picks the wrong thing.
+    if arg.is_none() {
+        let role_filter: Option<String> = std::env::var("AIDA_SESSION_ROLE")
+            .ok()
+            .filter(|s| !s.is_empty());
+        let head = entries
+            .iter()
+            .filter(|e| match &role_filter {
+                Some(r) => e.for_role.as_deref() == Some(r.as_str()),
+                None => true,
+            })
+            .filter(|e| {
+                let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id) else {
+                    return true;
+                };
+                !is_terminal_status(&req.status)
+            })
+            .min_by_key(|e| e.position)
+            .cloned()
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "queue is empty for {}; pass an id explicitly or run `aida queue list`",
+                    role_filter.as_deref().unwrap_or("any role")
+                )
+            })?;
+        let req = store
+            .requirements
+            .iter()
+            .find(|r| r.id == head.requirement_id)
+            .ok_or_else(|| anyhow::anyhow!("queue head's requirement is missing from the store"))?;
+        let (scope, review_target) = derive_scope_from_entry(&head, req, &store);
+        let anchor_display = req
+            .agreed_id
+            .clone()
+            .or_else(|| req.spec_id.clone())
+            .unwrap_or_else(|| "?".to_string());
+        let resolved = build_resolved_entry(head, req);
+        return Ok(QueueWorkPlan {
+            mode: QueueWorkMode::Head,
+            entries: vec![resolved],
+            scope,
+            review_target,
+            anchor_display,
+            anchor_title: req.title.clone(),
+        });
+    }
+
+    let arg = arg.unwrap();
+
+    // Item-pickup: look for a queue entry whose req matches the arg by
+    // uuid / spec_id / agreed_id (case-insensitive).
+    let matched_item: Option<aida_core::QueueEntry> = entries
+        .iter()
+        .find(|e| {
+            let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id) else {
+                return false;
+            };
+            spec_matches(req, arg)
+        })
+        .cloned();
+
+    if let Some(entry) = matched_item {
+        let req = store
+            .requirements
+            .iter()
+            .find(|r| r.id == entry.requirement_id)
+            .unwrap();
+        let (scope, review_target) = derive_scope_from_entry(&entry, req, &store);
+        let anchor_display = req
+            .agreed_id
+            .clone()
+            .or_else(|| req.spec_id.clone())
+            .unwrap_or_else(|| arg.to_string());
+        let resolved = build_resolved_entry(entry, req);
+        return Ok(QueueWorkPlan {
+            mode: QueueWorkMode::Item,
+            entries: vec![resolved],
+            scope,
+            review_target,
+            anchor_display,
+            anchor_title: req.title.clone(),
+        });
+    }
+
+    // Cluster-pickup: arg names a req that isn't queued itself but has
+    // queued children. Find them via for_scope match OR derived parent
+    // EPIC match. The arg must resolve to a req in the store.
+    let anchor_req = store
+        .requirements
+        .iter()
+        .find(|r| spec_matches(r, arg))
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "`{}` doesn't match any queued entry or known requirement",
+                arg
+            )
+        })?;
+    let anchor_id_upper = anchor_req
+        .agreed_id
+        .as_deref()
+        .or(anchor_req.spec_id.as_deref())
+        .map(|s| s.to_uppercase())
+        .unwrap_or_default();
+    let type_filter_lower = type_filter.map(|s| s.to_ascii_lowercase());
+
+    let cluster: Vec<aida_core::QueueEntry> = entries
+        .iter()
+        .filter(|e| {
+            let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id) else {
+                return false;
+            };
+            // Skip terminal-status reqs (they shouldn't ever be in the
+            // queue but defensive).
+            if is_terminal_status(&req.status) {
+                return false;
+            }
+            // Match by explicit for_scope.
+            let scope_match = e
+                .for_scope
+                .as_deref()
+                .map(|s| s.eq_ignore_ascii_case(&anchor_id_upper))
+                .unwrap_or(false);
+            // Match by derived parent EPIC (when anchor is itself an
+            // EPIC; otherwise the function returns None so this branch
+            // is harmless).
+            let parent_match = derive_parent_epic_label(req, &store)
+                .map(|p| p.eq_ignore_ascii_case(&anchor_id_upper))
+                .unwrap_or(false);
+            if !(scope_match || parent_match) {
+                return false;
+            }
+            // Type filter (cluster only).
+            if let Some(want) = &type_filter_lower {
+                let actual = format!("{:?}", req.req_type).to_ascii_lowercase();
+                if actual != *want {
+                    return false;
+                }
+            }
+            true
+        })
+        .cloned()
+        .collect();
+
+    if cluster.is_empty() {
+        anyhow::bail!(
+            "`{}` resolves to {} but no queued children match (try `aida queue list --tree` or pass a queued id directly)",
+            arg,
+            anchor_id_upper
+        );
+    }
+
+    // Sort cluster by queue position so the manifest reflects intent.
+    let mut cluster_sorted = cluster;
+    cluster_sorted.sort_by_key(|e| e.position);
+
+    // Pre-resolve each entry's display id + status so manifest writing
+    // doesn't need a second store load.
+    let resolved_entries: Vec<QueueWorkEntry> = cluster_sorted
+        .into_iter()
+        .filter_map(|entry| {
+            let req = store
+                .requirements
+                .iter()
+                .find(|r| r.id == entry.requirement_id)?;
+            Some(build_resolved_entry(entry, req))
+        })
+        .collect();
+
+    let scope = anchor_id_upper.clone();
+    let review_target = parse_review_scope(&scope);
+    Ok(QueueWorkPlan {
+        mode: QueueWorkMode::Cluster,
+        entries: resolved_entries,
+        scope,
+        review_target,
+        anchor_display: anchor_id_upper,
+        anchor_title: anchor_req.title.clone(),
+    })
+}
+
+/// STORY-42: zip a queue entry with its current requirement state so
+/// later steps (role tally, manifest write) don't need to re-look-up
+/// against a potentially-different Storage handle.
+/// trace:STORY-42 | ai:claude
+fn build_resolved_entry(
+    queue: aida_core::QueueEntry,
+    req: &aida_core::Requirement,
+) -> QueueWorkEntry {
+    let spec_id = req
+        .agreed_id
+        .clone()
+        .or_else(|| req.spec_id.clone())
+        .unwrap_or_else(|| "?".to_string());
+    let status_at_plan = format!("{}", req.status);
+    QueueWorkEntry {
+        queue,
+        spec_id,
+        status_at_plan,
+    }
+}
+
+/// STORY-42: case-insensitive match against a requirement's uuid,
+/// spec_id, or agreed_id. trace:STORY-42 | ai:claude
+fn spec_matches(req: &aida_core::Requirement, query: &str) -> bool {
+    if let Ok(uuid) = uuid::Uuid::parse_str(query) {
+        return req.id == uuid;
+    }
+    let q = query.to_ascii_uppercase();
+    if let Some(s) = &req.spec_id {
+        if s.to_ascii_uppercase() == q {
+            return true;
+        }
+    }
+    if let Some(a) = &req.agreed_id {
+        if a.to_ascii_uppercase() == q {
+            return true;
+        }
+    }
+    false
+}
+
+/// STORY-42: pick the scope string for a single queued entry.
+/// Preference order:
+///   1. PR-N / MR-N parsed from "Review PR-N: …" title → "PR-N"
+///   2. entry.for_scope (explicit STORY-57 tag)
+///   3. derived parent EPIC from req relationships (TASK-44)
+///   4. fall back to the req's own display id
+/// Also returns the parsed review target (if any) so the caller can
+/// thread it into session_start without re-parsing.
+/// trace:STORY-42 | ai:claude
+fn derive_scope_from_entry(
+    entry: &aida_core::QueueEntry,
+    req: &aida_core::Requirement,
+    store: &RequirementsStore,
+) -> (String, Option<(ReviewForge, u64)>) {
+    // Review-PR shape — title carries the PR ref; e.g. "Review PR-11: …".
+    if let Some(rest) = req.title.strip_prefix("Review ") {
+        let pr_token = rest.split([':', ' ']).next().unwrap_or("");
+        if let Some(target) = parse_review_scope(pr_token) {
+            return (pr_token.to_uppercase(), Some(target));
+        }
+    }
+    if let Some(s) = &entry.for_scope {
+        let target = parse_review_scope(s);
+        return (s.to_uppercase(), target);
+    }
+    if let Some(p) = derive_parent_epic_label(req, store) {
+        let target = parse_review_scope(&p);
+        return (p.to_uppercase(), target);
+    }
+    let fallback = req
+        .agreed_id
+        .clone()
+        .or_else(|| req.spec_id.clone())
+        .unwrap_or_else(|| "scope".to_string());
+    let target = parse_review_scope(&fallback);
+    (fallback, target)
+}
+
+/// STORY-42: pick the role for a resolved queue-work plan.
+/// trace:STORY-42 | ai:claude
+fn infer_queue_work_role(
+    plan: &QueueWorkPlan,
+    override_role: Option<&str>,
+) -> (String, &'static str, Option<Vec<String>>) {
+    if let Some(r) = override_role {
+        return (r.to_string(), "--role flag", None);
+    }
+    // Tally for_role across entries. None counts as "unrouted".
+    let mut tally: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    for e in &plan.entries {
+        if let Some(r) = &e.queue.for_role {
+            *tally.entry(r.to_ascii_lowercase()).or_default() += 1;
+        }
+    }
+    let total_routed: usize = tally.values().sum();
+    let mut warnings: Vec<String> = Vec::new();
+    let chosen = if let Some((best, count)) = tally
+        .iter()
+        .max_by_key(|(_, c)| **c)
+        .map(|(k, c)| (k.clone(), *c))
+    {
+        if count < total_routed {
+            warnings.push(format!(
+                "cluster has {} item{} routed to other role(s); using majority `{}` ({}/{})",
+                total_routed - count,
+                if total_routed - count == 1 { "" } else { "s" },
+                best,
+                count,
+                total_routed
+            ));
+        }
+        (best, "cluster-derived")
+    } else {
+        // No entry has for_role set — fall through to scope default
+        // (PR-N → reviewer; else implementer) then env.
+        let scope_default = if plan.review_target.is_some() {
+            "reviewer"
+        } else {
+            "implementer"
+        };
+        let env_role = std::env::var("AIDA_SESSION_ROLE")
+            .ok()
+            .filter(|s| !s.is_empty());
+        match env_role {
+            Some(r) if !r.eq_ignore_ascii_case(scope_default) => {
+                warnings.push(format!(
+                    "no for_role on queued items; scope default `{}` overrides shell role `{}` (pass --role {} to keep shell role)",
+                    scope_default, r, r
+                ));
+                (scope_default.to_string(), "scope-default")
+            }
+            _ => (scope_default.to_string(), "scope-default"),
+        }
+    };
+    let warns = if warnings.is_empty() {
+        None
+    } else {
+        Some(warnings)
+    };
+    (chosen.0, chosen.1, warns)
+}
+
+/// STORY-42: build the initial-prompt string fed to `claude <prompt>`.
+/// Routes by role:
+///   - reviewer → `/aida-review --pr N` (when scope parses as PR-N/MR-N)
+///                else `/aida-review`
+///   - implementer / other → `/aida-pickup [<ITEM-ID>]` (item mode focuses
+///                a single id; cluster/head mode lets the skill walk the
+///                manifest / queue head).
+/// trace:STORY-42 | ai:claude
+fn derive_queue_work_prompt(plan: &QueueWorkPlan, role: &str) -> String {
+    let role_lower = role.to_ascii_lowercase();
+    if role_lower == "reviewer" {
+        if let Some((_, n)) = plan.review_target {
+            return format!("/aida-review --pr {}", n);
+        }
+        return "/aida-review".to_string();
+    }
+    // Implementer (and unknown roles): /aida-pickup with optional focus.
+    if plan.mode == QueueWorkMode::Item {
+        return format!("/aida-pickup {}", plan.anchor_display);
+    }
+    "/aida-pickup".to_string()
+}
+
+/// STORY-42: the orchestrator. Resolves the plan, optionally pulls,
+/// runs session_start in non-launch mode (so we can write the manifest
+/// from the freshly minted lease), then either prints next-steps or
+/// chdirs + execs claude with the skill prompt.
+/// trace:STORY-42 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn handle_queue_work(
+    storage: &Storage,
+    user_id: &str,
+    arg: Option<&str>,
+    permission_mode: Option<&str>,
+    no_launch: bool,
+    role_override: Option<&str>,
+    no_pull: bool,
+    type_filter: Option<&str>,
+    branch_override: Option<&str>,
+    path_override: Option<&str>,
+) -> Result<()> {
+    let plan = resolve_queue_work_plan(storage, user_id, arg, type_filter)?;
+    let (role, role_origin, warnings) = infer_queue_work_role(&plan, role_override);
+
+    // Permission mode: explicit flag → AIDA_PERMISSION_MODE env → "acceptEdits".
+    let permission_mode = permission_mode
+        .map(|s| s.to_string())
+        .or_else(|| {
+            std::env::var("AIDA_PERMISSION_MODE")
+                .ok()
+                .filter(|s| !s.is_empty())
+        })
+        .unwrap_or_else(|| "acceptEdits".to_string());
+
+    let prompt = derive_queue_work_prompt(&plan, &role);
+
+    // Pre-flight summary so the user sees what we resolved before any
+    // side effects fire (worktree create, lease, exec). Goes to stderr.
+    eprintln!();
+    eprintln!(
+        "{} queue work {} mode",
+        "▶".green().bold(),
+        format!("({:?})", plan.mode).to_lowercase().cyan()
+    );
+    let line = |label: &str, value: String| {
+        // Pad label to 8 chars so anchor/scope/role/mode/skill/cluster
+        // line up vertically. The bold() call doesn't affect width as
+        // seen by humans (terminal renders the same column).
+        eprintln!("  {:<8} {}", format!("{}:", label).bold(), value);
+    };
+    line(
+        "anchor",
+        format!(
+            "{}  {}",
+            plan.anchor_display.cyan(),
+            plan.anchor_title.dimmed()
+        ),
+    );
+    line("scope", plan.scope.cyan().to_string());
+    line(
+        "role",
+        format!("{} {}", role.cyan(), format!("({})", role_origin).dimmed()),
+    );
+    line("mode", permission_mode.cyan().to_string());
+    line("skill", prompt.cyan().to_string());
+    if plan.entries.len() > 1 {
+        line(
+            "cluster",
+            format!(
+                "{} item{}",
+                plan.entries.len().to_string().cyan(),
+                if plan.entries.len() == 1 { "" } else { "s" }
+            ),
+        );
+    }
+    if let Some(warns) = &warnings {
+        for w in warns {
+            eprintln!("  {} {}", "⚠".yellow().bold(), w.yellow());
+        }
+    }
+
+    // Pull the orphan store before resolving the worktree — keeps the
+    // queue + req view fresh for the new session. Best-effort: a
+    // failed pull (offline, divergent) prints a note and continues
+    // with local view rather than aborting the whole pickup.
+    if !no_pull {
+        if let Err(e) = run_aida_db_sync_pull(storage.path()) {
+            eprintln!(
+                "  {} {}",
+                "⚠".yellow().bold(),
+                format!("pre-pickup pull failed; proceeding with local view: {}", e).yellow()
+            );
+        }
+    }
+
+    // Set AIDA_SESSION_ROLE for the exec'd claude (and for any in-process
+    // logic the rest of this command runs against). session_start reads
+    // it to record the lease's role field when --role isn't passed; we
+    // pass --role anyway, but the env var is what the claude SessionStart
+    // hook sees on launch.
+    std::env::set_var("AIDA_SESSION_ROLE", &role);
+
+    // session_start handles worktree creation, lease persistence, env
+    // shim, conflict detection. We always pass launch=false so we can
+    // (a) write the cluster manifest from the new lease and (b) emit
+    // a queue-work-specific launch summary before exec.
+    session_start(
+        &plan.scope,
+        branch_override,
+        /* base */ None,
+        path_override,
+        /* forge_override */ None,
+        /* branch_style */ "auto",
+        /* launch */ false,
+        /* launch_title */ None,
+        /* launch_name */ None,
+        /* permission_mode */ &permission_mode,
+        /* role */ Some(role.clone()),
+    )?;
+
+    // Look up the lease we just minted: by scope, by owner=us, freshest.
+    let project_root = find_main_worktree_root()?;
+    let lease = list_leases(&project_root)
+        .into_iter()
+        .filter(|l| l.scope.eq_ignore_ascii_case(&plan.scope))
+        .max_by_key(|l| l.started_at)
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "session_start completed but no lease for scope `{}` is visible — try `aida session leases`",
+                plan.scope
+            )
+        })?;
+
+    // Cluster manifest: pre-populate items so /aida-pickup can walk
+    // them top-down. Skip for head/item modes (single item → no plan
+    // needed beyond the queue head). trace:STORY-98 | ai:claude
+    if plan.mode == QueueWorkMode::Cluster {
+        write_queue_work_manifest(&project_root, &lease, &plan)?;
+        eprintln!(
+            "  {} wrote manifest with {} planned item(s)",
+            "✓".green(),
+            plan.entries.len()
+        );
+    }
+
+    if no_launch {
+        eprintln!();
+        eprintln!(
+            "{} setup complete; launch deferred (`--no-launch`).",
+            "✓".green().bold()
+        );
+        eprintln!(
+            "  {}",
+            format!("cd {}", lease.worktree_path.display()).cyan()
+        );
+        eprintln!(
+            "  {}    {}",
+            "source .aida/session-env.sh".cyan(),
+            "# share parent's cargo target/".dimmed()
+        );
+        eprintln!(
+            "  {} {}",
+            "claude --permission-mode".cyan(),
+            format!("{} \"{}\"", permission_mode, prompt).cyan()
+        );
+        return Ok(());
+    }
+
+    // Chdir + source session-env shim + exec claude with the skill prompt.
+    // Mirrors session_start's launch path (TASK-63 env sourcing).
+    let env_shim = lease.worktree_path.join(".aida").join("session-env.sh");
+    let applied_vars: Vec<String> = match std::fs::read_to_string(&env_shim) {
+        Ok(body) => apply_session_env_to_process(&body),
+        Err(_) => Vec::new(),
+    };
+    if !applied_vars.is_empty() {
+        eprintln!(
+            "  {} sourced .aida/session-env.sh ({})",
+            "ℹ".cyan(),
+            applied_vars.join(", ").dimmed()
+        );
+    }
+    std::env::set_current_dir(&lease.worktree_path)
+        .with_context(|| format!("failed to chdir into {}", lease.worktree_path.display()))?;
+
+    let name = session::derive_session_name(&plan.scope, &lease.branch, &role);
+    eprintln!();
+    eprintln!(
+        "{} {}",
+        "▶".green().bold(),
+        format!(
+            "launching claude in {} (permission-mode {}, prompt `{}`)",
+            lease.worktree_path.display(),
+            permission_mode,
+            prompt
+        )
+        .cyan()
+    );
+    session::exec_claude_with_prompt(&permission_mode, name.as_deref(), &prompt)
+}
+
+/// STORY-42: shell out to `aida db sync --pull`. We could refactor the
+/// inline implementation in main(), but it's deeply tangled with the
+/// dispatch and backend init — a child-process invocation is cheap
+/// (sub-second when there's nothing to fetch) and lets queue work
+/// reuse the canonical sync flow verbatim (conflict detection, cache
+/// rebuild, the works). trace:STORY-42 | ai:claude
+fn run_aida_db_sync_pull(store_path: &std::path::Path) -> Result<()> {
+    eprintln!(
+        "  {} pulling orphan-store via `aida db sync --pull` ...",
+        "↻".cyan()
+    );
+    let mut cmd = std::process::Command::new(
+        std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("aida")),
+    );
+    cmd.args(["db", "sync", "--pull"]);
+    // Force the child to look at the same store as us — avoids ambiguity
+    // when queue work runs from a sibling worktree.
+    let _ = store_path; // signature future-proofing; current binary
+                        // resolves the store via cwd's project root,
+                        // which matches ours.
+    let status = cmd
+        .status()
+        .with_context(|| "spawn `aida db sync --pull`")?;
+    if !status.success() {
+        anyhow::bail!("`aida db sync --pull` exited with {}", status);
+    }
+    Ok(())
+}
+
+/// STORY-42: write the session manifest from a queue-work plan so
+/// /aida-pickup can walk the cluster top-down on launch. Items carry
+/// the spec_id + status_at_plan that the resolver already computed,
+/// so this function does not re-load the store.
+/// trace:STORY-42 STORY-98 | ai:claude
+fn write_queue_work_manifest(
+    project_root: &std::path::Path,
+    lease: &SessionLease,
+    plan: &QueueWorkPlan,
+) -> Result<()> {
+    use crate::session_manifest::{ManifestItem, SessionManifest};
+
+    let items: Vec<ManifestItem> = plan
+        .entries
+        .iter()
+        .enumerate()
+        .map(|(idx, e)| ManifestItem {
+            spec_id: e.spec_id.clone(),
+            position: (idx + 1) as u32,
+            status_at_plan: e.status_at_plan.clone(),
+            started_at: None,
+            completed_at: None,
+            note: None,
+        })
+        .collect();
+    let manifest = SessionManifest {
+        session_id: lease.id.clone(),
+        planned_at: chrono::Utc::now(),
+        plan_source: "queue work".to_string(),
+        items,
+    };
+    let path = session_manifest::manifest_path(project_root, &lease.id);
+    session_manifest::save(&path, &manifest)?;
     Ok(())
 }
 
