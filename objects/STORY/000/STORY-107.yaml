@@ -71,7 +71,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:51:25.341027642Z
-modified_at: 2026-05-12T15:51:45.202898089Z
+modified_at: 2026-05-12T15:52:20.663394050Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -117,3 +117,28 @@ comments:
     *Doc seed per EPIC-24. Promote to docs/positioning/vs-ultrareview.md when that structure exists per STORY-107's acceptance.*
   created_at: 2026-05-12T15:51:45.202898089Z
   modified_at: 2026-05-12T15:51:45.202898089Z
+- id: 019e1ce3-a1b7-71a0-acc5-b9bcbc79e094
+  author: joe
+  content: |-
+    ## Doc seed correction (2026-05-12): /ultrareview cost reality
+
+    User-confirmed pricing model when prompted to launch:
+
+    "Free ultrareview 1 of 3."
+
+    So /ultrareview has a free tier (3 uses) and presumably bills / consumes Max quota beyond that. The exact post-free behavior (incremental $, Max-quota draw, hard cutoff?) needs verification via https://code.claude.com/docs/en/claude-code-on-the-web — should be confirmed before publishing the comparison doc.
+
+    Replacing the Cost cell in the comparison table with:
+
+    | Cost | Free — already paying for your claude session | Free tier (3 uses); beyond that consumes Max quota or bills (per docs) |
+
+    This is a more honest framing. The earlier 'consumes Claude Max quota (or billed depending on plan)' was hedging; the prompt's '1 of 3' confirms there's at least a quantity-limited free tier.
+
+    Implications for the positioning narrative:
+    - /aida-review is genuinely unlimited within your claude session (no per-review billing) since it runs as part of the conversation
+    - /ultrareview has measurable per-use cost (or quota draw); reserved for higher-stakes reviews
+    - This makes the 'compose them when you want deep + cheap-tracking' workflow more concrete: /ultrareview for the 'must-not-miss' reviews; /aida-review always for the lifecycle bookkeeping
+
+    Future writer of docs/positioning/vs-ultrareview.md should cite the actual pricing docs (https://code.claude.com/docs/en/claude-code-on-the-web) for accuracy and link the source.
+  created_at: 2026-05-12T15:52:20.663394050Z
+  modified_at: 2026-05-12T15:52:20.663394050Z
