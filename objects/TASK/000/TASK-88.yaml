@@ -1,0 +1,42 @@
+id: 019e1ce7-a775-70f2-880c-d7d50a803d26
+spec_id: TASK-88
+agreed_id: TASK-88
+title: 'aida node migrate-identity --to <id>: safely change this clone''s node identity to an existing or new registry entry'
+description: |
+  Caught 2026-05-12 — diagnosed local node.toml drift (config said node 2 + hostname "spock"; registry actually had only node 1 imac + node 3 spock). Fixed by hand-editing .aida-store/.aida/node.toml. Should be a CLI command.
+
+  ## Surface
+
+  ```
+  aida node migrate-identity --to 1               # adopt existing registry entry node 1
+  aida node migrate-identity --to 1 --force       # if registry already has a clone at 1, override
+
+  # Or new-identity mode:
+  aida node migrate-identity --new --hostname imac  # acquire fresh slot
+  ```
+
+  Behavior:
+  1. Verifies target node id exists in registry (or refuses, or acquires per flag)
+  2. Updates local .aida/node.toml to match registry's entry exactly (id, hostname, email, registered_at)
+  3. Validates: any existing reqs issued under the OLD node id stay as-is (immutable history)
+  4. Warns about counter-collision risk if the target node has issued IDs you'd re-issue under the new identity
+
+  ## Composes with
+
+  - aida node acquire/release/list/show (already exists)
+  - aida db merge-gate (would re-allocate short IDs after the migration if needed)
+
+  ## Acceptance
+
+  - [ ] `aida node migrate-identity --to N` succeeds when registry has entry for N matching this clone
+  - [ ] Refuses when no registry entry exists for N (suggest --new)
+  - [ ] Refuses when registry entry for N is held by a different machine (suggest --force)
+  - [ ] Existing reqs under OLD node id unchanged
+  - [ ] Tested: drift recovery scenario (local config says wrong node) → migrate to correct node → resolve
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T15:56:44.277896607Z
+modified_at: 2026-05-12T15:56:44.277896607Z
+req_type: Task
