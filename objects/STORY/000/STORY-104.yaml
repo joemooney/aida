@@ -1,0 +1,59 @@
+id: 019e1cca-9dc9-77f3-add4-aff2792fc33c
+spec_id: STORY-104
+agreed_id: STORY-104
+title: aida doc data model + aida doc add command — first-class documentation type
+description: |
+  Foundation primitive for EPIC-24. Define how documentation entries are stored + the minimal CLI surface to capture them.
+
+  ## Data model
+
+  Documentation entries are a sub-type of Meta requirements (or a new top-level RequirementType — design call):
+
+  ```toml
+  type = "doc"
+  title = "When to use aida queue work --steal"
+  about = ["TASK-81", "STORY-42"]
+  scenario = "muddle recovery"
+  audience = ["user", "agent"]
+  description = """
+  ## When to use
+  - Agent crashed mid-work; lease lingers In-Progress
+  - Forgotten cleanup after a session ended
+  - Cross-machine handoff
+  ...
+
+  ## Alternatives
+  Most cases are covered by `aida edit X --status approved` + normal pickup.
+
+  ## Example
+  aida queue work TASK-X --steal
+
+  ## See also
+  - STORY-42 (parent feature)
+  - BUG-61 (related session-end protection)
+  """
+  ```
+
+  ## Surface
+
+  ```
+  aida doc add --about TASK-81 --scenario "muddle recovery" --audience user
+  aida doc list                          # browse all doc entries
+  aida doc show TASK-81                  # all docs about TASK-81
+  aida doc generate --book docs/book/    # render structured chapters
+  ```
+
+  ## Acceptance
+
+  - [ ] `RequirementType::Doc` or `Meta::Documentation` variant exists
+  - [ ] `aida doc add` captures: title, about, scenario, description, audience
+  - [ ] `aida doc list/show` surfaces them
+  - [ ] Stored as YAML in objects/ (same shard pattern)
+  - [ ] Cross-references to other reqs via `about` field
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T15:25:01.257060072Z
+modified_at: 2026-05-12T15:25:01.257060072Z
+req_type: Story
