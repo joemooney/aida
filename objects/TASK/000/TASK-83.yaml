@@ -1,0 +1,56 @@
+id: 019e1afc-fc7a-7fd1-b0e4-5113c6ce3dc8
+spec_id: TASK-83
+agreed_id: TASK-83
+title: 'STORY-42 follow-up: accept Claude Code''s ''auto'' permission mode (research preview); consider as default'
+description: |
+  PR-13 shipped STORY-42 with `--permission-mode` accepting (presumably): default, acceptEdits, plan, bypassPermissions. User asked 2026-05-12 about Claude Code's `auto` mode — confirmed real, exact gap-filler between acceptEdits (prompts on most shells) and bypassPermissions (accepts everything).
+
+  ## Claude Code's auto mode
+
+  Per Claude Code 2.1.139 docs:
+  - Auto-approves tool calls with background safety checks
+  - Verifies actions align with the user's request
+  - Research preview status (stability not guaranteed)
+  - Can be disabled via managed setting `permissions.disableAutoMode: "disable"`
+
+  Positioned as the "safer than bypass" middle ground — exactly what users want for `aida queue work` long-running flows.
+
+  ## Fix
+
+  ### Part 1 — accept `auto` in the permission-mode validation
+
+  If STORY-42 validates against a closed list (default/acceptEdits/plan/bypassPermissions), add `auto`. If it passes through any string to claude, no change needed (already works).
+
+  ### Part 2 — reconsider default
+
+  STORY-42's current default is `acceptEdits` (safe but prompt-heavy on aida commands). Options:
+
+  | default | tradeoff |
+  |---|---|
+  | acceptEdits (current) | safe but slow; user clicks through aida commands |
+  | auto | faster; trusts Claude Code's safety verification; research preview |
+  | auto + TASK-82's settings.json pre-allow for aida-family | belt + suspenders: pre-allowed aida commands skip even the auto safety check |
+
+  Recommendation: keep `acceptEdits` as the stable default, expose `auto` as a documented opt-in. Document the tradeoff in CLAUDE.md and in `aida queue work --help`.
+
+  Or, more aggressively: switch default to `auto` if Claude Code's research-preview track shows stability over the next month. Configurable per-user via AIDA_PERMISSION_MODE env or per-project via .aida/config.toml.
+
+  ## Composes with
+
+  - STORY-42 (parent — queue work)
+  - TASK-82 (settings.json pre-allow for aida-family) — even better solution: pre-allow at Claude Code config level so individual commands skip prompts regardless of permission mode
+
+  ## Acceptance
+
+  - [ ] `aida queue work --permission-mode auto` accepts the value (passes through to claude)
+  - [ ] `AIDA_PERMISSION_MODE=auto` env override works
+  - [ ] `aida queue work --help` lists auto as a valid mode with brief description ("auto-approves with background safety checks; research preview")
+  - [ ] CLAUDE.md documents the permission-mode landscape (when to use each)
+  - [ ] Tested: invoke with auto, verify Claude Code receives it cleanly
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T07:00:47.866909338Z
+modified_at: 2026-05-12T07:00:47.866909338Z
+req_type: Task
