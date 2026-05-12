@@ -1,0 +1,55 @@
+id: 019e1cec-035b-76a2-8fe0-310338713740
+spec_id: BUG-87
+agreed_id: BUG-87
+title: 'TASK-71 follow-up: aida queue list --all --for X ignores --for filter (returns all items, not just X-routed)'
+description: |
+  Caught 2026-05-12 — `aida queue list --all --for reviewer` returned 7 items, all `[for:implementer]`. Expected: only reviewer-routed items, across all users. Got: all items, ignoring the --for filter.
+
+  The two filters don't compose correctly. TASK-71's acceptance promised:
+  > "Composes with --all, --for, --user (existing filters)"
+
+  But empirically: `--all` wins. The `--for reviewer` is silently dropped.
+
+  ## Today's behavior
+
+  ```
+  $ aida queue list --all --for reviewer
+  My Queue (7 items)
+    1. BUG-85 ... [for:implementer]   ← should not appear when --for reviewer
+    2. STORY-104 ... [for:implementer]
+    ...
+  ```
+
+  vs `--for reviewer` (no --all): correctly shows 0 items.
+
+  ## Fix
+
+  In the queue-list handler, the filter logic order:
+  1. Start with all queued entries
+  2. Apply --all OR (default-active-role + non-terminal) filter
+  3. Apply --for filter (if set)
+  4. Apply --scope filter (if set)
+  5. Apply --user filter (if set)
+
+  Step 2 currently returns ALL when --all is set; step 3's --for predicate isn't running afterward. Likely an early-return or filter-list construction bug.
+
+  ## Composes with
+
+  - TASK-71 (parent — --for filter)
+  - TASK-64 (default-hide-terminal) — same handler; sweep
+  - TASK-52 (--scope filter) — same handler; verify it composes with --all + --for too
+
+  ## Acceptance
+
+  - [ ] `aida queue list --all --for reviewer` returns only reviewer-routed items across all users
+  - [ ] `aida queue list --all --for any` returns only unrouted items across all users
+  - [ ] `aida queue list --all --scope EPIC-N --for X` triple-filter works
+  - [ ] No regression: `aida queue list` (no flags) still defaults to active-role + non-terminal
+  - [ ] Tested: items routed to reviewer/implementer/any/triage with various scopes; verify each filter combo
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T16:01:29.947354479Z
+modified_at: 2026-05-12T16:01:29.947354479Z
+req_type: Bug
