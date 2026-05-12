@@ -1,0 +1,53 @@
+id: 019e1af9-a4a3-74a0-a7de-a337983a9c44
+spec_id: TASK-82
+agreed_id: TASK-82
+title: 'aida init scaffolding: include Claude Code settings.json fragment that pre-allows aida-family bash commands'
+description: |
+  Caught 2026-05-12 — STORY-42's default permission mode `acceptEdits` (the safer middle ground) prompts on every shell command. AIDA's agents run many shell commands (aida show, aida edit, aida queue *, aida session *, etc.) so users see a flood of approval prompts. Each individual prompt is fast, but the volume undermines the "set it and walk away" feel of `aida queue work`.
+
+  User feedback 2026-05-12: "lots of aida command approvals"
+
+  ## Fix
+
+  `aida init` should emit a Claude Code settings.json fragment (at `.claude/settings.local.json` or merged into `.claude/settings.json`) that pre-allows the aida-family bash commands:
+
+  ```json
+  {
+    "permissions": {
+      "allow": [
+        "Bash(aida *)",
+        "Bash(aida)",
+        "Bash(./target/release/aida *)",
+        "Bash(./target/debug/aida *)"
+      ]
+    }
+  }
+  ```
+
+  This means: when `acceptEdits` mode is active, aida commands proceed without prompts (they're trusted CLI ops on the user's own AIDA store). External commands (rm, curl, git push, etc.) still prompt.
+
+  ## Scope
+
+  - Update `aida-core/templates/settings.json` to include the allow list
+  - Include in scaffolding for new projects (`aida init`)
+  - For existing projects, document the snippet in CLAUDE.md so users can add it manually
+  - Composes with STORY-42's permission-mode default (acceptEdits): users get safety on non-aida ops + speed on aida ops
+
+  ## Edge cases
+
+  - `aida session end --force` (kills claude) — should this be pre-allowed? Probably yes; AIDA owns its own lifecycle.
+  - `aida push` (git push under the hood) — pre-allowed; risk is contained to user's own repos.
+
+  ## Acceptance
+
+  - [ ] `aida-core/templates/settings.json` includes the aida-family allow list
+  - [ ] New `aida init` projects get the fragment
+  - [ ] CLAUDE.md documents the snippet for existing-project upgrade
+  - [ ] Tested: in a new project with acceptEdits mode, `aida queue list` doesn't prompt; `rm -rf /tmp/foo` still prompts
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T06:57:08.771943458Z
+modified_at: 2026-05-12T06:57:08.771943458Z
+req_type: Task
