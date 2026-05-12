@@ -127,7 +127,7 @@ Set `AIDA_COMMIT_STRICT=true` to reject non-conforming commits.
 
 ## Claude Code skills
 
-`aida init` scaffolds 22 skills under `.claude/skills/` and matching slash commands under `.claude/commands/`. Daily drivers: `/aida-req`, `/aida-implement`, `/aida-commit`, `/aida-capture`, `/aida-search`, `/aida-plan`, `/aida-onboard`. Run `aida` (no args) for the full CLI, or `ls .claude/skills/` for the full skill catalog.
+`aida init` scaffolds 28 skills under `.claude/skills/` and matching slash commands under `.claude/commands/`. Daily drivers: `/aida-req`, `/aida-implement`, `/aida-commit`, `/aida-capture`, `/aida-doc`, `/aida-search`, `/aida-plan`, `/aida-onboard`. Run `aida` (no args) for the full CLI, or `ls .claude/skills/` for the full skill catalog.
 
 ### MCP server
 
