@@ -63,9 +63,33 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T14:55:48.132220356Z
-modified_at: 2026-05-12T15:26:51.478323940Z
+modified_at: 2026-05-12T15:29:59.272300202Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-12T14:55:49.277053612Z
+comments:
+- id: 019e1ccf-29e8-7bd2-92ba-e9504b6d0d16
+  author: joe
+  content: |-
+    Implemented context-aware permission-mode default for aida queue work.
+
+    Resolution order (first non-empty wins):
+    1. --permission-mode flag
+    2. AIDA_PERMISSION_MODE env
+    3. .aida/config.toml [behavior] permission_mode
+    4. AIDA worktree default → bypassPermissions (NEW)
+    5. fallback → acceptEdits
+
+    Pre-flight summary now shows the origin: `mode: bypassPermissions (aida-worktree default)` so the resolution is auditable before any side effects.
+
+    - Pure resolver `resolve_queue_work_permission_mode` (flag/env/config/is_aida_worktree) → (mode, origin)
+    - `read_behavior_permission_mode` parses [behavior] permission_mode from .aida/config.toml
+    - 9 new unit tests cover all 5 levels + empty-string handling + config file parsing
+    - All 248 aida-cli tests green; fmt --check clean
+    - Smoke from AIDA worktree (env unset): bypassPermissions (aida-worktree default). Smoke from /tmp: queue lookup fails first, never reaches resolver — covered by unit test.
+
+    Commit: cf700dd4
+  created_at: 2026-05-12T15:29:59.272300202Z
+  modified_at: 2026-05-12T15:29:59.272300202Z
