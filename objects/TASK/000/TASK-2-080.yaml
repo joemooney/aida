@@ -1,0 +1,38 @@
+id: 019e1a58-cc73-7442-994a-31863e4ee1aa
+spec_id: TASK-2-080
+title: 'TASK-62 follow-up: cross-platform bg_worker test (Windows-capable home-dir isolation)'
+description: |-
+  PR-11 (2026-05-11) descoped TASK-62's "Test passes on all 3 platforms" bullet because dirs = 5.0.1 on Windows resolves home via SHGetKnownFolderPath(FOLDERID_Profile) — setting USERPROFILE/HOME doesn't redirect dirs::home_dir() there. The bg_worker_records_error_on_missing_remote test is back to #[cfg(unix)] as a stopgap.
+
+  ## Goal
+
+  Make bg_worker_records_error_on_missing_remote (and any sibling tests that use dirs::home_dir() for isolation) pass on Windows without clobbering the real user profile.
+
+  ## Approach options (pick one)
+
+  1. **AIDA_HOME env-aware wrapper** — introduce a `fn home_dir()` helper inside aida-cli (and aida-core where relevant) that checks `AIDA_HOME` first, then falls back to `dirs::home_dir()`. Replace direct `dirs::home_dir()` calls in the bg_worker code path. Tests set AIDA_HOME to a tempdir. Cleanest separation; doesn't touch dirs.
+
+  2. **Swap to the `home` crate** — `home::home_dir()` honors HOME on unix and USERPROFILE on Windows (different impl than `dirs`). Verify on Windows first — depending on version it may also use SHGetKnownFolderPath. If so, this doesn't help.
+
+  3. **Inject the home path** — refactor `write_last_fetch_entry` (and the bg_worker entrypoint) to accept the cache root path as an arg rather than deriving it from `dirs::home_dir()`. Tests pass the tempdir directly. Most invasive but eliminates the env-var-vs-API mismatch entirely.
+
+  Recommend option 1 — narrow blast radius, clear test hook, doesn't require auditing every dirs::home_dir() call site.
+
+  ## Acceptance
+
+  - [ ] bg_worker_records_error_on_missing_remote runs on Windows, macOS, and Linux without clobbering the real ~/.aida/cache/last-fetch.toml
+  - [ ] CI green on all 3 platforms
+  - [ ] Sweep aida-cli/aida-core for similar #[cfg(unix)] gates on home-dependent tests; apply the same fix
+  - [ ] Documented in the test comment why the chosen approach works on Windows
+
+  ## Composes with
+
+  - TASK-62 (parent — this is its proper completion)
+  - STORY-79 (the bg_worker feature itself)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T04:01:27.667119999Z
+modified_at: 2026-05-12T04:01:27.667119999Z
+req_type: Task
