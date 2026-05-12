@@ -9,7 +9,8 @@
         web-build web-build-release web-serve web-serve-force web-clean web-deps \
         sync-templates check-templates \
         docker-build docker-up docker-up-d docker-down docker-shell \
-        dev dev-server dev-web dev-pg dev-stop
+        dev dev-server dev-web dev-pg dev-stop \
+        release-patch release-minor release-major release-version
 
 # Default database path
 DB ?= requirements.db
@@ -65,6 +66,10 @@ help: ## Show this help message
 	@echo "$(CYAN)Docker:$(RESET)"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; /^docker/ {printf "  $(GREEN)%-20s$(RESET) %s\n", $$1, $$2}'
+	@echo ""
+	@echo "$(CYAN)Release:$(RESET)"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+		awk 'BEGIN {FS = ":.*?## "}; /^release/ {printf "  $(GREEN)%-20s$(RESET) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(YELLOW)Variables:$(RESET)"
 	@echo "  DB=<path>           Database file (default: requirements.db)"
@@ -125,6 +130,22 @@ install-released: ## Install latest released binary to ~/.local/bin (end user)
 
 install-released-version: ## Install a specific released version (use VERSION=v0.4.0)
 	./scripts/install.sh --version $(VERSION)
+
+#==============================================================================
+# RELEASE TARGETS (wrap scripts/release.sh for discoverability via make help)
+#==============================================================================
+
+release-patch: ## Cut a patch release (0.4.5 → 0.4.6)
+	./scripts/release.sh patch
+
+release-minor: ## Cut a minor release (0.4.5 → 0.5.0)
+	./scripts/release.sh minor
+
+release-major: ## Cut a major release (0.4.5 → 1.0.0)
+	./scripts/release.sh major
+
+release-version: ## Cut a release with explicit version (use VERSION=0.5.0)
+	./scripts/release.sh $(VERSION)
 
 #==============================================================================
 # RUN TARGETS
