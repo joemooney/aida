@@ -3592,5 +3592,13 @@ operations:
 
       - BUG-77 / TASK-36 (block-exhaustion warning on `aida add`) — same "validate-at-write-boundary" pattern, dispenser side
       - BUG-81 (queue list show agreed_id) — confused users were the downstream symptom
-clock: 448
+- id: 019e1acc-df47-7281-a8e9-071a9748c1ab
+  target_id: 019e1ac4-ab72-7590-8e0c-c0e87e97b74c
+  author: aida
+  node_id: '1'
+  lamport: 449
+  timestamp: 2026-05-12T06:08:14.663631512Z
+  kind: !SetStatus
+    status: Completed
+clock: 449
 node_id: '1'
