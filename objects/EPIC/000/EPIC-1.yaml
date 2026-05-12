@@ -7,7 +7,7 @@ priority: High
 owner: ''
 feature: 132-traceability
 created_at: 2025-12-11T00:36:45.384876724Z
-modified_at: 2026-05-04T19:37:43.022555731Z
+modified_at: 2026-05-12T15:54:44.888990Z
 req_type: Epic
 relationships:
 - rel_type: Parent
@@ -49,3 +49,39 @@ comments:
   content: ''
   created_at: 2026-05-04T19:37:41.151542157Z
   modified_at: 2026-05-04T19:37:41.151542157Z
+- id: 019e1ce5-d518-7eb3-8aab-63dddb6ba9d1
+  author: joe
+  content: |-
+    ## Doc seed: Node identity + dispenser blocks (2026-05-12)
+
+    Captured after diagnosing node-config drift and block exhaustion. Future tutorial section for the distributed-mode architecture chapter.
+
+    ### Three layers of ID resolution
+
+    1. **Spec ID (file name)**: The on-disk file is always `<TYPE>-<NODE>-<SEQ>.yaml` for distributed mode (e.g., TASK-2-074.yaml). This is immutable history.
+    2. **Agreed ID (short form)**: After merge-gate runs, the req gains an `agreed_id` field with the short form (e.g., TASK-31). This is the canonical display name post-promotion.
+    3. **Display logic**: CLI surfaces should prefer agreed_id when present, fall back to spec_id. BUG-81 + BUG-83 fixed straggler render paths.
+
+    ### Block allocation
+
+    Each TYPE has a block (e.g., BUG-1..80) allocated up-front. When the block is exhausted, the dispenser falls back to node-aware format until `aida db merge-gate` allocates a new block. Symptoms of exhaustion: new reqs get BUG-2-NN, TASK-2-NN format instead of short BUG-N. TASK-36 added a warning when this happens; `aida db info` shows block utilization per type.
+
+    ### Diagnosing identity drift
+
+    `.aida-store/.aida/node.toml` records THIS clone's node identity. `.aida-store/registry/nodes.toml` records the global registry of all clones. They CAN drift (saw this 2026-05-12: local config said node 2 + hostname spock, registry had node 1 imac). Fix: edit local node.toml to match registry's entry for this clone.
+
+    ### When to run aida db merge-gate
+
+    - After pulling from origin (TASK-78 makes this automatic via aida pull --gate)
+    - Before opening a PR (so commit trailers can use short IDs — BUG-78 + BUG-82 territory)
+    - Periodically as a hygiene step
+
+    ### Cross-machine choreography
+
+    If you have clones on multiple machines (e.g., laptop = node 1, work box = node 3), they each issue node-aware IDs. The first clone to push + run merge-gate after the others' work lands gets to allocate the short IDs. No coordination needed; merge-gate is idempotent and collision-resistant (BUG-82 fixed the pre-existing collision bug).
+
+    ---
+
+    *Doc seed per EPIC-24. Promote to docs/tutorials/distributed-mode-and-identity.md.*
+  created_at: 2026-05-12T15:54:44.888990Z
+  modified_at: 2026-05-12T15:54:44.888990Z
