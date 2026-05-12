@@ -1,0 +1,57 @@
+id: 019e1ce7-c1d4-7f63-942f-1d2de99e0e87
+spec_id: TASK-90
+agreed_id: TASK-90
+title: 'aida session end / aida pull: optional local branch auto-cleanup for merged PRs'
+description: |
+  Every PR cycle leaves local branches behind:
+  - `epic-N-batchM` after the implementer PR merges
+  - `pr-N` after the reviewer session ends
+
+  These are merged on origin (PRs are squash-merged) so the local branches are dead history. Manual cleanup: `git branch -D <name>` per branch. Across 14 PRs in this session, that's 28+ manual deletes.
+
+  ## Surface options
+
+  ### Option A: aida session end --delete-branch
+
+  ```
+  aida session end <id> --delete-branch
+  # Removes the lease, the worktree, AND deletes the local branch (force-delete since merged via squash).
+  ```
+
+  ### Option B: aida pull cleans up merged branches
+
+  ```
+  aida pull
+  # After successful pull: detects local branches that are merged on main (via git branch --merged) and offers to delete them.
+  ⓘ The following local branches are merged on main and can be removed:
+    epic-20-batch11, epic-20-batch12, pr-13, pr-14
+  Delete them now? [y/N]
+  ```
+
+  ### Option C: separate aida cleanup command
+
+  ```
+  aida cleanup branches         # interactive: shows merged local branches, prompts to delete
+  aida cleanup branches --yes   # non-interactive
+  ```
+
+  Recommendation: Option B + Option A. Pull's auto-detect handles the common case; --delete-branch on session end is the precise scalpel for individual cleanups.
+
+  ## Composes with
+
+  - aida session end (BUG-67 + BUG-71 + BUG-61 already handle worktree + lease cleanup; branch cleanup is the missing piece)
+  - aida pull (TASK-43 + TASK-78 already integrate merge-gate; branch cleanup is the next natural integration)
+
+  ## Acceptance
+
+  - [ ] `aida session end --delete-branch` removes the local branch (force-delete OK since merged via squash)
+  - [ ] `aida pull` detects merged local branches and offers cleanup
+  - [ ] Doesn't touch branches that aren't merged (safety: never lose un-merged work)
+  - [ ] Tested: standard cycle — implementer batch → PR → merge → session end with --delete-branch → branch gone, no errors
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T15:56:51.028136238Z
+modified_at: 2026-05-12T15:56:51.028136238Z
+req_type: Task
