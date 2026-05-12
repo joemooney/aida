@@ -50,12 +50,12 @@ description: |
   - [ ] `aida doc list/show` surfaces them
   - [ ] Stored as YAML in objects/ (same shard pattern)
   - [ ] Cross-references to other reqs via `about` field
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:25:01.257060072Z
-modified_at: 2026-05-12T15:25:01.257060072Z
+modified_at: 2026-05-12T16:05:44.331936956Z
 req_type: Story
 relationships:
 - rel_type: Child
