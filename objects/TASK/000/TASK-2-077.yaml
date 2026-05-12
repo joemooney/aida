@@ -1,0 +1,63 @@
+id: 019e1a4f-a336-7d20-b374-7cbe1fa663e7
+spec_id: TASK-2-077
+title: 'TASK-76 follow-up: add ''retry later'' option to held-branch pre-flight prompt + accept Ctrl+C / empty input as cancel'
+description: |
+  Caught 2026-05-11 on first production use of TASK-76's pre-flight detection. The prompt offers three options:
+
+  ```
+  1. End that session: `aida session end 019e15c3a2a4`
+  2. Force-end (kills any live claude there): `aida session end 019e15c3a2a4 --force`
+  3. Proceed anyway (auto-checkout will need manual fixup)
+  ```
+
+  But all three are "do something now." Missing: a graceful exit path so the user can go handle the situation manually (e.g., switch to the batch's terminal, Ctrl+D to exit claude cleanly, then re-run the session start).
+
+  Option 1 also has a hidden gotcha: it'll often refuse via BUG-61's protection ("live claude inside") if the user hasn't exited the batch's claude first. So option 1 → user types it → gets refused → has to pick option 2 (destructive) or abort by hitting Ctrl+C (which today might leave the session lease in a half-created state).
+
+  ## Desired behavior
+
+  Add option 4 (and accept multiple escape hatches):
+
+  ```
+  1. End that session: `aida session end 019e15c3a2a4`
+  2. Force-end (kills any live claude there): `aida session end 019e15c3a2a4 --force`
+  3. Proceed anyway (auto-checkout will need manual fixup)
+  4. Cancel — let me handle it manually (no changes; rerun `aida session start --owns PR-N` when ready)
+
+  Choice [1/2/3/4, Ctrl+C to cancel]:
+  ```
+
+  - Numbered 4 explicitly = "cancel cleanly, no state changes"
+  - Ctrl+C, "q", "x", or empty input also map to cancel
+  - "Cancel" exits with status 1 and no warning noise — silently graceful
+
+  ## Bonus: option 1's refusal handling
+
+  When user picks option 1 and the underlying `aida session end` refuses on "live claude inside," the prompt could re-display with a friendlier note instead of failing:
+
+  ```
+  1. End: 019e15c3a2a4 — refused, live claude inside worktree. Exit that claude first or use option 2 (force).
+
+  Choice [1/2/3/4]:
+  ```
+
+  ## Composes with
+
+  - TASK-76 (parent — held-branch pre-flight detection, just shipped in PR-11)
+  - BUG-61 (refuse session end with live claude) — option 1's failure mode comes from this; the polish surfaces it
+  - BUG-79 (gh detection) — different surface but same "graceful escape" pattern
+
+  ## Acceptance
+
+  - [ ] Option 4 added to the prompt (cancel cleanly, exit 1)
+  - [ ] Ctrl+C / "q" / "x" / empty input also cancel
+  - [ ] No state changes on cancel (no lease half-created, no worktree partial)
+  - [ ] When option 1 fails on live-claude refusal, re-prompt with friendlier note
+  - [ ] Tested: cancel via numeric option, cancel via Ctrl+C, cancel via empty input, all leave state untouched
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T03:51:27.286565509Z
+modified_at: 2026-05-12T03:51:27.286565509Z
+req_type: Task
