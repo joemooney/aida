@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T19:13:18.798953916Z
-modified_at: 2026-05-12T04:34:58.038128972Z
+modified_at: 2026-05-12T04:35:54.786812199Z
 req_type: Story
 tags:
 - collision
@@ -45,3 +45,21 @@ comments:
     This is the natural surface for overnight drains and themed batches. Composes with STORY-98 (manifest) — cluster pickup pre-writes the manifest so the agent + user have a shared view of intent.
   created_at: 2026-05-12T04:34:58.038128972Z
   modified_at: 2026-05-12T04:34:58.038128972Z
+- id: 019e1a78-5722-74a0-b168-265533ade03d
+  author: joe
+  content: |-
+    Role inference (additional clarification 2026-05-11):
+
+    `aida queue work` should set the session's role automatically based on the cluster's routing:
+
+    - All items for:implementer → `--role implementer` + launch with /aida-pickup
+    - All items for:reviewer → `--role reviewer` + launch with /aida-review
+    - Single item → role = item's for_role
+    - Cluster with mixed routing → use the majority; warn user about the minority items
+    - Override: `--role <name>` explicit flag wins
+
+    So `aida queue work EPIC-20` not only resolves the cluster + writes manifest + starts session, but ALSO enters the role implicitly. Zero manual role-enter ceremony.
+
+    Composes with TASK-67 (role-by-intent in lease) — both encode 'role is derived from the work, not from the shell's stale env.' STORY-42's cluster-derived role is the natural extension of TASK-67's scope-derived role.
+  created_at: 2026-05-12T04:35:54.786812199Z
+  modified_at: 2026-05-12T04:35:54.786812199Z
