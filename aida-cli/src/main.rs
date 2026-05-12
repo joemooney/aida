@@ -1384,8 +1384,9 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             code_only,
             store_only,
             quiet,
+            no_gate,
         } => {
-            return handle_pull_command(store_path, *code_only, *store_only, *quiet);
+            return handle_pull_command(store_path, *code_only, *store_only, *quiet, *no_gate);
         }
         Command::Upgrade { .. } => unreachable!("upgrade is dispatched before storage init"),
         Command::Dev(_) => unreachable!("dev is dispatched before storage init"),
@@ -1852,6 +1853,37 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                                         node_id,
                                         type_prefix,
                                         type_prefix
+                                    );
+                                }
+                                // TASK-36: if the only thing missing is an
+                                // *active* block (exhausted blocks exist for
+                                // this type), the user just rolled off the
+                                // last short id and we're silently switching
+                                // to the node-aware format. Surface that with
+                                // the highest issued short id and a pointer
+                                // to merge-gate. trace:TASK-36 | ai:claude
+                                let prefix_upper = type_prefix.to_uppercase();
+                                let last_short = registry
+                                    .blocks
+                                    .iter()
+                                    .filter(|b| b.type_prefix.to_uppercase() == prefix_upper)
+                                    .map(|b| b.range_end)
+                                    .max();
+                                if let Some(last) = last_short {
+                                    eprintln!(
+                                        "{} {} agreed-id block exhausted (last short id: {}-{}).",
+                                        "⚠".yellow().bold(),
+                                        prefix_upper,
+                                        prefix_upper,
+                                        last
+                                    );
+                                    eprintln!(
+                                        "  {} Falling back to node-aware ids ({}-NODE-NN). Run \
+                                         `aida db block claim --type {} --size 100` to allocate \
+                                         a fresh block.",
+                                        "→".dimmed(),
+                                        prefix_upper,
+                                        prefix_upper
                                     );
                                 }
                             }
@@ -2532,6 +2564,65 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 println!("{}: {}", "Git".bold(), status_str);
                 if let Ok(sha) = aida_core::git_ops::head_sha(store_path) {
                     println!("{}: {}", "HEAD".bold(), sha);
+                }
+            }
+
+            // TASK-36: surface agreed-id block utilization so users spot
+            // imminent exhaustion before it bites at `aida add` time.
+            // Aggregates across nodes (sum within each type prefix).
+            // trace:TASK-36 | ai:claude
+            let blocks_path = store_path.join("registry").join("blocks.yaml");
+            if let Ok(registry) = aida_core::BlockRegistry::load(&blocks_path) {
+                if !registry.blocks.is_empty() {
+                    println!();
+                    println!("{}", "Agreed-id blocks".bold());
+                    use std::collections::BTreeMap;
+                    #[derive(Default)]
+                    struct Agg {
+                        end: u32,
+                        next: u32,
+                        exhausted: bool,
+                        blocks: u32,
+                    }
+                    let mut by_prefix: BTreeMap<String, Agg> = BTreeMap::new();
+                    for b in &registry.blocks {
+                        let key = b.type_prefix.to_uppercase();
+                        let agg = by_prefix.entry(key).or_default();
+                        agg.blocks += 1;
+                        if b.range_end > agg.end {
+                            agg.end = b.range_end;
+                            agg.next = b.next;
+                            agg.exhausted = b.is_exhausted();
+                        }
+                    }
+                    for (prefix, agg) in &by_prefix {
+                        let pad = format!("{:<8}", format!("{}:", prefix));
+                        if agg.exhausted {
+                            println!(
+                                "  {} {}  (last: {}-{}; falling back to node-aware)",
+                                pad,
+                                "EXHAUSTED".red().bold(),
+                                prefix,
+                                agg.end
+                            );
+                        } else {
+                            let remaining = if agg.next > agg.end {
+                                0
+                            } else {
+                                agg.end - agg.next + 1
+                            };
+                            let issued = agg.end - remaining;
+                            println!(
+                                "  {} {}/{}  ({} remaining, {} block{})",
+                                pad,
+                                issued,
+                                agg.end,
+                                remaining,
+                                agg.blocks,
+                                if agg.blocks == 1 { "" } else { "s" }
+                            );
+                        }
+                    }
                 }
             }
         }
@@ -9004,7 +9095,7 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             title,
             permission_mode,
             role,
-        } => session::new_session(title.clone(), permission_mode, role.clone()),
+        } => session::new_session(title.clone(), permission_mode, role.clone(), None),
         SessionCommand::Start {
             owns,
             branch,
@@ -9014,6 +9105,7 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             branch_style,
             launch,
             title,
+            name,
             permission_mode,
             role,
         } => session_start(
@@ -9025,6 +9117,7 @@ fn handle_session_command(cmd: &SessionCommand) -> Result<()> {
             branch_style,
             *launch,
             title.clone(),
+            name.clone(),
             permission_mode,
             role.clone(),
         ),
@@ -10078,6 +10171,7 @@ fn session_start(
     branch_style: &str,
     launch_claude: bool,
     launch_title: Option<String>,
+    launch_name: Option<String>,
     launch_permission_mode: &str,
     launch_role: Option<String>,
 ) -> Result<()> {
@@ -10232,12 +10326,27 @@ fn session_start(
                     l.id
                 );
                 eprintln!("      3. Proceed anyway (auto-checkout will need manual fixup)");
+                eprintln!("      4. Cancel — let me handle it manually (no changes made)");
                 eprintln!();
                 use std::io::Write;
-                eprint!("    Choice [1/2/3]: ");
+                eprint!("    Choice [1/2/3/4, Ctrl+C or empty to cancel]: ");
                 let _ = std::io::stderr().flush();
                 let mut ans = String::new();
-                std::io::stdin().read_line(&mut ans)?;
+                // TASK-34: treat read_line errors (Ctrl+D / closed stdin) as
+                // a cancel rather than bubbling up an unrelated I/O error.
+                // trace:TASK-34 | ai:claude
+                let read = std::io::stdin().read_line(&mut ans);
+                let cancel_clean = || -> ! {
+                    eprintln!();
+                    eprintln!(
+                        "{} cancelled — no changes made; re-run when ready.",
+                        "✓".dimmed()
+                    );
+                    std::process::exit(1);
+                };
+                if read.is_err() {
+                    cancel_clean();
+                }
                 match ans.trim() {
                     "1" => {
                         anyhow::bail!(
@@ -10251,12 +10360,19 @@ fn session_start(
                             l.id
                         );
                     }
-                    "3" | "" => {
+                    "3" => {
                         eprintln!(
                             "{} proceeding — `gh pr checkout {}` from the new session will need manual fixup",
                             "→".dimmed(),
                             n
                         );
+                    }
+                    // TASK-34: cancel path — accepts the explicit `4`, plus
+                    // empty input / q / x as common "get me out of here"
+                    // signals. Spec calls for exit 1 with no state changes.
+                    // trace:TASK-34 | ai:claude
+                    "4" | "" | "q" | "Q" | "x" | "X" | "cancel" | "Cancel" => {
+                        cancel_clean();
                     }
                     other => {
                         anyhow::bail!("unrecognized choice {:?} — aborting", other);
@@ -10705,7 +10821,24 @@ fn session_start(
         );
         std::env::set_current_dir(&worktree_path)
             .with_context(|| format!("failed to chdir into {}", worktree_path.display()))?;
-        return session::new_session(launch_title, launch_permission_mode, launch_role);
+        // TASK-31: pass a display name to claude so the /resume picker and
+        // terminal title can distinguish concurrent worktrees. Explicit
+        // --name wins; otherwise derive from scope+branch+role.
+        // trace:TASK-31 | ai:claude
+        let role_for_name = launch_role
+            .clone()
+            .or_else(|| std::env::var("AIDA_SESSION_ROLE").ok())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "implementer".to_string());
+        let derived_name = launch_name
+            .filter(|s| !s.trim().is_empty())
+            .or_else(|| session::derive_session_name(owns, &branch_name, &role_for_name));
+        return session::new_session(
+            launch_title,
+            launch_permission_mode,
+            launch_role,
+            derived_name,
+        );
     }
 
     eprintln!();
@@ -13750,7 +13883,7 @@ fn local_lags_origin(
 /// an error, or the timestamp is unparseable — all of which collapse to
 /// "Unknown" in the freshness classifier. trace:STORY-78 | ai:claude
 fn read_last_fetch_age_secs(project_root: &std::path::Path) -> Option<u64> {
-    let home = dirs::home_dir()?;
+    let home = aida_home_dir()?;
     let toml_path = home.join(".aida/cache/last-fetch.toml");
     let raw = std::fs::read_to_string(&toml_path).ok()?;
     let value: toml::Value = toml::from_str(&raw).ok()?;
@@ -13914,7 +14047,7 @@ fn write_last_fetch_entry(store_path: &std::path::Path, result: &str) -> Result<
     let canon = project_root
         .canonicalize()
         .unwrap_or_else(|_| project_root.to_path_buf());
-    let home = dirs::home_dir().context("no home dir")?;
+    let home = aida_home_dir().context("no home dir")?;
     let cache_dir = home.join(".aida/cache");
     std::fs::create_dir_all(&cache_dir)?;
     let path = cache_dir.join("last-fetch.toml");
@@ -13990,7 +14123,7 @@ fn bg_fetch_lock_path(store_path: &std::path::Path) -> Option<std::path::PathBuf
         h ^= *b as u64;
         h = h.wrapping_mul(0x100000001b3);
     }
-    let home = dirs::home_dir()?;
+    let home = aida_home_dir()?;
     Some(
         home.join(".aida/cache")
             .join(format!(".bg-fetch-{}-{:016x}.lock", basename, h)),
@@ -14001,10 +14134,25 @@ fn bg_fetch_lock_path(store_path: &std::path::Path) -> Option<std::path::PathBuf
 /// Returns Ok even if creation fails — caller treats missing dir as
 /// "skip background fetch this render". trace:STORY-79 | ai:claude
 fn ensure_cache_dir() -> Option<std::path::PathBuf> {
-    let home = dirs::home_dir()?;
+    let home = aida_home_dir()?;
     let cache = home.join(".aida/cache");
     std::fs::create_dir_all(&cache).ok()?;
     Some(cache)
+}
+
+/// TASK-32: cross-platform home-dir lookup with an `AIDA_HOME` override.
+/// On Windows, `dirs::home_dir()` resolves via `SHGetKnownFolderPath`,
+/// which ignores env vars — that breaks bg_worker tests that need to
+/// isolate writes from the real user profile. Checking `AIDA_HOME` first
+/// gives tests a deterministic hook on every platform without changing
+/// the production lookup. trace:TASK-32 | ai:claude
+fn aida_home_dir() -> Option<std::path::PathBuf> {
+    if let Ok(p) = std::env::var("AIDA_HOME") {
+        if !p.is_empty() {
+            return Some(std::path::PathBuf::from(p));
+        }
+    }
+    dirs::home_dir()
 }
 
 /// Should statusline kick off a fresh background fetch for this project?
@@ -14634,46 +14782,37 @@ mod statusline_tests {
     // `git fetch` on file:// remotes (rare; CI rolls everything).
     // trace:STORY-79 | ai:claude
 
-    /// RAII guard that points dirs::home_dir() at `path` for the test's
-    /// duration. Unix-only because `dirs = 5.0.1` on Windows resolves
-    /// home via `SHGetKnownFolderPath(FOLDERID_Profile)` — env vars
-    /// (USERPROFILE / HOME) have no effect there, so this guard cannot
-    /// isolate the test on Windows. A Windows-capable approach is
-    /// tracked as the TASK-62 follow-up (likely an `AIDA_HOME` override
-    /// or swap to the `home` crate). trace:TASK-62 | ai:claude
-    #[cfg(unix)]
-    struct TempHomeEnv {
-        prev_home: Option<String>,
+    /// RAII guard that points `aida_home_dir()` at `path` for the test's
+    /// duration via the AIDA_HOME override. TASK-32: replaces the old
+    /// HOME-clobbering guard, which couldn't isolate on Windows (dirs
+    /// uses SHGetKnownFolderPath there). trace:TASK-32 | ai:claude
+    struct TempAidaHomeEnv {
+        prev: Option<String>,
     }
 
-    #[cfg(unix)]
-    impl TempHomeEnv {
+    impl TempAidaHomeEnv {
         fn set(path: &std::path::Path) -> Self {
-            let prev_home = std::env::var("HOME").ok();
-            std::env::set_var("HOME", path);
-            Self { prev_home }
+            let prev = std::env::var("AIDA_HOME").ok();
+            std::env::set_var("AIDA_HOME", path);
+            Self { prev }
         }
     }
 
-    #[cfg(unix)]
-    impl Drop for TempHomeEnv {
+    impl Drop for TempAidaHomeEnv {
         fn drop(&mut self) {
-            match &self.prev_home {
-                Some(v) => std::env::set_var("HOME", v),
-                None => std::env::remove_var("HOME"),
+            match &self.prev {
+                Some(v) => std::env::set_var("AIDA_HOME", v),
+                None => std::env::remove_var("AIDA_HOME"),
             }
         }
     }
 
     /// Worker writes `result = "error: ..."` to last-fetch.toml when the
     /// store has no `origin` remote configured. Exercises the failure
-    /// path without needing network. Uses an isolated HOME so the test
-    /// doesn't clobber the real ~/.aida/cache/last-fetch.toml.
-    // trace:TASK-62 | ai:claude — unix-only: dirs::home_dir() on Windows
-    // ignores env vars (uses SHGetKnownFolderPath), so the test cannot
-    // isolate from the real user profile there. Windows-capable test
-    // deferred to TASK-62 follow-up.
-    #[cfg(unix)]
+    /// path without needing network. Uses an isolated AIDA_HOME so the
+    /// test doesn't clobber the real ~/.aida/cache/last-fetch.toml.
+    /// trace:TASK-32 | ai:claude — Windows-capable now that bg_worker
+    /// routes home-dir lookups through `aida_home_dir()`.
     #[test]
     fn bg_worker_records_error_on_missing_remote() {
         use std::process::Command;
@@ -14700,8 +14839,11 @@ mod statusline_tests {
         run(&["commit", "--allow-empty", "-m", "base", "--quiet"]);
         // No `origin` remote configured → fetch fails.
 
-        // Redirect HOME so write_last_fetch_entry lands under our temp dir.
-        let _home_guard = TempHomeEnv::set(&fake_home);
+        // Redirect AIDA_HOME so write_last_fetch_entry lands under our
+        // temp dir — works on all platforms (HOME alone can't isolate
+        // on Windows because dirs uses SHGetKnownFolderPath there).
+        // trace:TASK-32 | ai:claude
+        let _home_guard = TempAidaHomeEnv::set(&fake_home);
         let result = handle_bg_fetch_command(&store);
         drop(_home_guard);
         assert!(result.is_ok());
@@ -18976,6 +19118,7 @@ fn handle_pull_command(
     code_only: bool,
     store_only: bool,
     quiet: bool,
+    no_gate: bool,
 ) -> Result<()> {
     use aida_core::git_ops;
 
@@ -19070,6 +19213,41 @@ fn handle_pull_command(
                         print_pull_summary(store_path, pre);
                     }
                 }
+                // TASK-78: post-pull merge-gate. The pull may have brought
+                // in commits from collaborators with un-gated node-aware
+                // ids; promoting them now means subsequent `aida list` /
+                // queue surfaces show short ids without an extra ritual.
+                // Skipped by `--no-gate` or `AIDA_AUTO_MERGE_GATE=false`.
+                // Idempotent (no-op when there's nothing pending) and
+                // cheap. trace:TASK-78 | ai:claude
+                if !no_gate && auto_merge_gate_enabled() {
+                    match git_ops::merge_gate(store_path) {
+                        Ok(assignments) if assignments.is_empty() => {
+                            // Stay silent when nothing was promoted — pull
+                            // already printed its summary; an empty footer
+                            // would just be noise.
+                        }
+                        Ok(assignments) => {
+                            println!(
+                                "  {} ({} promotion{})",
+                                "auto-gate ran".cyan(),
+                                assignments.len(),
+                                if assignments.len() == 1 { "" } else { "s" }
+                            );
+                            for (node_id, agreed_id) in &assignments {
+                                println!("    {} → {}", node_id, agreed_id.green().bold());
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!(
+                                "  {} merge-gate failed: {} \
+                                 (run `aida db merge-gate` manually to retry)",
+                                "Warning:".yellow().bold(),
+                                e
+                            );
+                        }
+                    }
+                }
             }
             Err(e) => {
                 eprintln!(
@@ -19085,6 +19263,20 @@ fn handle_pull_command(
     }
 
     Ok(())
+}
+
+/// TASK-78: project-wide opt-out for the post-pull merge-gate. Defaults to
+/// on; set `AIDA_AUTO_MERGE_GATE=false` (or `0`, `no`, `off`) to disable.
+/// Mirrors the env-var convention used for `AIDA_BG_FETCH`.
+/// trace:TASK-78 | ai:claude
+fn auto_merge_gate_enabled() -> bool {
+    match std::env::var("AIDA_AUTO_MERGE_GATE") {
+        Ok(v) => !matches!(
+            v.trim().to_ascii_lowercase().as_str(),
+            "false" | "0" | "no" | "off"
+        ),
+        Err(_) => true,
+    }
 }
 
 /// Walk `git log <pre-pull-sha>..HEAD` on the orphan store and print a
@@ -20982,6 +21174,66 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
                     println!("Backend:        Git-backed sharded YAML");
                     println!("Object files:   objects/TYPE/NNN/SPEC-ID.yaml");
                     println!("Sync:           git push/pull");
+
+                    // TASK-36: show block utilization so users can spot an
+                    // imminent exhaustion before it bites at `aida add` time.
+                    // trace:TASK-36 | ai:claude
+                    let blocks_path = requirements_path.join("registry").join("blocks.yaml");
+                    if let Ok(registry) = aida_core::BlockRegistry::load(&blocks_path) {
+                        if !registry.blocks.is_empty() {
+                            println!();
+                            println!("{}", "Agreed-id blocks".bold());
+                            println!("{}", "─".repeat(40));
+                            // Aggregate per type prefix (sum across nodes).
+                            use std::collections::BTreeMap;
+                            #[derive(Default)]
+                            struct Agg {
+                                next: u32,
+                                end: u32,
+                                exhausted: bool,
+                                blocks: u32,
+                            }
+                            let mut by_prefix: BTreeMap<String, Agg> = BTreeMap::new();
+                            for b in &registry.blocks {
+                                let key = b.type_prefix.to_uppercase();
+                                let agg = by_prefix.entry(key).or_default();
+                                agg.blocks += 1;
+                                if b.range_end > agg.end {
+                                    agg.end = b.range_end;
+                                    agg.next = b.next;
+                                    agg.exhausted = b.is_exhausted();
+                                }
+                            }
+                            for (prefix, agg) in &by_prefix {
+                                let pad = format!("{:<8}", format!("{}:", prefix));
+                                if agg.exhausted {
+                                    println!(
+                                        "  {} {}  (last: {}-{}; falling back to node-aware)",
+                                        pad,
+                                        "EXHAUSTED".red().bold(),
+                                        prefix,
+                                        agg.end,
+                                    );
+                                } else {
+                                    let remaining = if agg.next > agg.end {
+                                        0
+                                    } else {
+                                        agg.end - agg.next + 1
+                                    };
+                                    let issued = agg.end - remaining;
+                                    println!(
+                                        "  {} {}/{}  ({} remaining, {} block{})",
+                                        pad,
+                                        issued,
+                                        agg.end,
+                                        remaining,
+                                        agg.blocks,
+                                        if agg.blocks == 1 { "" } else { "s" },
+                                    );
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -25652,6 +25904,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             sync: _,
             include_terminal,
             scope: scope_filter,
+            tree,
         } => {
             let user_id = get_user(user);
             let raw_entries = if *global {
@@ -25886,12 +26139,168 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             let local_project_name =
                 global_queue::project_name_for(storage.path().parent().unwrap_or(storage.path()));
 
+            // TASK-33: --tree groups local entries by their derived parent
+            // EPIC so a multi-cluster queue reads as discrete sub-batches
+            // instead of one long interleaved list. Globals stay flat
+            // after — we don't have foreign stores loaded to derive their
+            // parents. trace:TASK-33 | ai:claude
+            if *tree {
+                use std::collections::BTreeMap;
+                let mut groups: BTreeMap<String, Vec<&aida_core::QueueEntry>> = BTreeMap::new();
+                let unscoped_key = "~unscoped".to_string();
+                for entry in &entries {
+                    let Some(req) = store
+                        .requirements
+                        .iter()
+                        .find(|r| r.id == entry.requirement_id)
+                    else {
+                        groups.entry(unscoped_key.clone()).or_default().push(entry);
+                        continue;
+                    };
+                    let key = entry
+                        .for_scope
+                        .clone()
+                        .or_else(|| derive_parent_epic_label(req, &store))
+                        .unwrap_or_else(|| unscoped_key.clone());
+                    groups.entry(key).or_default().push(entry);
+                }
+                // Sort groups: real EPICs by count desc then name; unscoped last.
+                let mut ordered: Vec<(String, Vec<&aida_core::QueueEntry>)> =
+                    groups.into_iter().collect();
+                ordered.sort_by(|a, b| {
+                    let a_unscoped = a.0 == unscoped_key;
+                    let b_unscoped = b.0 == unscoped_key;
+                    match (a_unscoped, b_unscoped) {
+                        (true, false) => std::cmp::Ordering::Greater,
+                        (false, true) => std::cmp::Ordering::Less,
+                        _ => b.1.len().cmp(&a.1.len()).then_with(|| a.0.cmp(&b.0)),
+                    }
+                });
+
+                let render_entry_inline =
+                    |entry: &aida_core::QueueEntry, is_last: bool, id_col_width: usize| {
+                        let req = store
+                            .requirements
+                            .iter()
+                            .find(|r| r.id == entry.requirement_id);
+                        let display_id = req
+                            .and_then(|r| r.agreed_id.as_deref().or(r.spec_id.as_deref()))
+                            .unwrap_or("???");
+                        let title = req.map(|r| r.title.as_str()).unwrap_or("(deleted)");
+                        let status = req
+                            .map(|r| format!("{}", r.status))
+                            .unwrap_or_else(|| "Unknown".to_string());
+                        let status_colored = match status.as_str() {
+                            "Draft" => status.dimmed(),
+                            "Approved" => status.blue(),
+                            "Planned" => status.cyan(),
+                            "In Progress" => status.yellow(),
+                            "Completed" => status.green(),
+                            "Rejected" => status.red(),
+                            _ => status.normal(),
+                        };
+                        let glyph = if is_last { "└─" } else { "├─" };
+                        let pad = " ".repeat(id_col_width.saturating_sub(display_id.len()));
+                        println!(
+                            "  {} {}{}  {}  [{}]",
+                            glyph.dimmed(),
+                            display_id.bold(),
+                            pad,
+                            title,
+                            status_colored,
+                        );
+                    };
+
+                for (key, group) in &ordered {
+                    let header = if key == &unscoped_key {
+                        "Unscoped".to_string()
+                    } else {
+                        key.clone()
+                    };
+                    println!();
+                    println!(
+                        "{} ({} item{})",
+                        header.cyan().bold(),
+                        group.len(),
+                        if group.len() == 1 { "" } else { "s" }
+                    );
+                    let id_col_width = group
+                        .iter()
+                        .map(|e| {
+                            store
+                                .requirements
+                                .iter()
+                                .find(|r| r.id == e.requirement_id)
+                                .and_then(|r| r.agreed_id.as_deref().or(r.spec_id.as_deref()))
+                                .map(|s| s.len())
+                                .unwrap_or(3)
+                        })
+                        .max()
+                        .unwrap_or(0);
+                    for (i, entry) in group.iter().enumerate() {
+                        let is_last = i + 1 == group.len();
+                        render_entry_inline(entry, is_last, id_col_width);
+                    }
+                }
+
+                if !global_entries.is_empty() {
+                    println!();
+                    println!(
+                        "{} ({} item{})",
+                        "Global queue".cyan().bold(),
+                        global_entries.len(),
+                        if global_entries.len() == 1 { "" } else { "s" }
+                    );
+                    for (i, entry) in global_entries.iter().enumerate() {
+                        let glyph = if i + 1 == global_entries.len() {
+                            "└─"
+                        } else {
+                            "├─"
+                        };
+                        let spec_id = entry.spec_id.as_deref().unwrap_or("???");
+                        let title = entry.title.as_deref().unwrap_or("(no cached title)");
+                        println!(
+                            "  {} {}  {}  {}",
+                            glyph.dimmed(),
+                            spec_id.bold(),
+                            title,
+                            format!("[origin:{}]", entry.project_name).dimmed(),
+                        );
+                    }
+                }
+
+                if hidden_terminal_count > 0 {
+                    println!();
+                    println!(
+                        "{} ({} pass --include-terminal to show)",
+                        format!(
+                            "{} terminal-status entr{} hidden",
+                            hidden_terminal_count,
+                            if hidden_terminal_count == 1 {
+                                "y"
+                            } else {
+                                "ies"
+                            }
+                        )
+                        .dimmed(),
+                        "Completed/Rejected;".dimmed()
+                    );
+                }
+                return Ok(());
+            }
+
             for (i, entry) in entries.iter().enumerate() {
                 let req = store
                     .requirements
                     .iter()
                     .find(|r| r.id == entry.requirement_id);
-                let spec_id = req.and_then(|r| r.spec_id.as_deref()).unwrap_or("???");
+                // BUG-81: prefer agreed_id (short form) when assigned;
+                // fall back to spec_id. Mirrors `aida list` / `aida show` /
+                // `aida search` so the queue stops drifting after
+                // `aida db merge-gate`. trace:BUG-81 | ai:claude
+                let display_id = req
+                    .and_then(|r| r.agreed_id.as_deref().or(r.spec_id.as_deref()))
+                    .unwrap_or("???");
                 let title = req.map(|r| r.title.as_str()).unwrap_or("(deleted)");
                 let status = req
                     .map(|r| format!("{}", r.status))
@@ -25910,7 +26319,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 print!(
                     "  {}. {} {}",
                     (i + 1).to_string().dimmed(),
-                    spec_id.bold(),
+                    display_id.bold(),
                     title
                 );
                 print!("  [{}]", status_colored);
@@ -26095,14 +26504,20 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // bulk reclassification. The error message points at the
             // escape hatch. trace:TASK-45 | ai:claude
             if is_terminal_status(&req.status) && !*force {
-                let spec_id = req.spec_id.as_deref().unwrap_or("?");
+                // BUG-81: surface the short id when one's been assigned.
+                // trace:BUG-81 | ai:claude
+                let display_id = req
+                    .agreed_id
+                    .as_deref()
+                    .or(req.spec_id.as_deref())
+                    .unwrap_or("?");
                 anyhow::bail!(
                     "{} is {} — re-queueing closed work is usually a mistake.\n  \
                      Pass `--force` if you really mean to re-queue it, or file a \
                      new requirement that supersedes {}.",
-                    spec_id,
+                    display_id,
                     req.status,
-                    spec_id
+                    display_id
                 );
             }
 
@@ -26114,6 +26529,14 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             };
 
             let spec_id = req.spec_id.as_deref().unwrap_or("???");
+            // BUG-81: short id for user-facing prints; `spec_id` stays
+            // canonical for the activity-log key (consistency with edit/
+            // show/comment events). trace:BUG-81 | ai:claude
+            let display_id = req
+                .agreed_id
+                .as_deref()
+                .or(req.spec_id.as_deref())
+                .unwrap_or("???");
 
             // --global routes to ~/.aida/queue/<role>.yaml. The role comes
             // from --for, falling back to the active role. Refuse silently
@@ -26175,7 +26598,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 println!(
                     "{} Added {} ({}) to {} {}",
                     "✓".green(),
-                    spec_id.bold(),
+                    display_id.bold(),
                     req.title,
                     "global queue".cyan(),
                     format!("[role:{}, origin:{}]", role, project_name).dimmed()
@@ -26219,7 +26642,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             println!(
                 "{} Added {} ({}) to queue{}",
                 "✓".green(),
-                spec_id.bold(),
+                display_id.bold(),
                 req.title,
                 routing
             );
@@ -26286,8 +26709,13 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
 
             storage.queue_remove(&user_id, &req.id)?;
-            let spec_id = req.spec_id.as_deref().unwrap_or("???");
-            println!("{} Removed {} from queue", "✓".green(), spec_id.bold());
+            // BUG-81: short id when present. trace:BUG-81 | ai:claude
+            let display_id = req
+                .agreed_id
+                .as_deref()
+                .or(req.spec_id.as_deref())
+                .unwrap_or("???");
+            println!("{} Removed {} from queue", "✓".green(), display_id.bold());
         }
         QueueCommand::Move {
             id,
@@ -26376,8 +26804,13 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             };
 
             storage.queue_reorder(&user_id, &[(req.id, new_position)])?;
-            let spec_id = req.spec_id.as_deref().unwrap_or("???");
-            println!("{} Moved {} in queue", "✓".green(), spec_id.bold());
+            // BUG-81: short id when present. trace:BUG-81 | ai:claude
+            let display_id = req
+                .agreed_id
+                .as_deref()
+                .or(req.spec_id.as_deref())
+                .unwrap_or("???");
+            println!("{} Moved {} in queue", "✓".green(), display_id.bold());
         }
         QueueCommand::Clear { user, completed } => {
             let user_id = get_user(user);
@@ -26574,12 +27007,18 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     if let Some(picked) = scope_fallback_pick(&store, self_l, scope.as_ref()) {
                         let approved_count = picked.approved_count;
                         let pick = picked.pick;
+                        // BUG-81: short id when assigned. trace:BUG-81 | ai:claude
+                        let pick_display_id = pick
+                            .agreed_id
+                            .as_deref()
+                            .or(pick.spec_id.as_deref())
+                            .unwrap_or("?");
                         println!(
                             "{} {} has {} approved child(ren); picking {} {}",
                             "Queue empty —".dimmed(),
                             self_l.scope.cyan().bold(),
                             approved_count,
-                            pick.spec_id.as_deref().unwrap_or("?").green().bold(),
+                            pick_display_id.green().bold(),
                             "(scope fallback)".dimmed(),
                         );
                         println!();
@@ -26598,7 +27037,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         }
                         println!();
                         println!("{}", "Suggested:".dimmed());
-                        let id_for_cmd = pick.spec_id.as_deref().unwrap_or("?");
+                        let id_for_cmd = pick_display_id;
                         println!(
                             "  aida show {}  &&  aida edit {} --status in-progress",
                             id_for_cmd, id_for_cmd
@@ -26686,7 +27125,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         .requirements
                         .iter()
                         .find(|r| r.id == entry.requirement_id);
-                    let spec_id = req.and_then(|r| r.spec_id.as_deref()).unwrap_or("???");
+                    // BUG-81: prefer short id; mirrors `aida list` / queue
+                    // list rendering. trace:BUG-81 | ai:claude
+                    let spec_id = req
+                        .and_then(|r| r.agreed_id.as_deref().or(r.spec_id.as_deref()))
+                        .unwrap_or("???");
                     let title = req.map(|r| r.title.as_str()).unwrap_or("(deleted)");
                     let status = req
                         .map(|r| format!("{}", r.status))
@@ -26754,11 +27197,19 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             .ok_or_else(|| not_found::requirement_not_found(id, Some(storage.path())))?;
 
             let spec_id = req.spec_id.as_deref().unwrap_or("???");
+            // BUG-81: display short id when one's been assigned; canonical
+            // spec_id stays for activity-log / manifest matching (those
+            // keys were written with spec_id form). trace:BUG-81 | ai:claude
+            let display_id = req
+                .agreed_id
+                .as_deref()
+                .or(req.spec_id.as_deref())
+                .unwrap_or("???");
 
             if !yes {
                 eprintln!(
                     "Mark {} ({}) as completed and remove from queue?",
-                    spec_id.bold(),
+                    display_id.bold(),
                     req.title
                 );
                 eprintln!("Type 'y' to confirm:");
@@ -26829,7 +27280,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             println!(
                 "{} {} marked completed and removed from queue.",
                 "✓".green(),
-                spec_id.bold()
+                display_id.bold()
             );
             println!(
                 "  ({})",
