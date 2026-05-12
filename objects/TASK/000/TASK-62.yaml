@@ -51,7 +51,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T02:21:34.843287316Z
-modified_at: 2026-05-12T04:01:17.939147913Z
+modified_at: 2026-05-12T04:01:32.933256128Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -70,6 +70,11 @@ comments:
     Descoped the "Test passes on all 3 platforms" acceptance bullet here: fix-forward commit bc788e88 gates the test and the simplified TempHomeEnv guard on #[cfg(unix)] to unblock the PR. The proper Windows-capable approach is filed as a follow-up TASK (link in the next comment).
   created_at: 2026-05-12T04:01:17.939147913Z
   modified_at: 2026-05-12T04:01:17.939147913Z
+- id: 019e1a58-e105-78e3-8e2d-5af66188562d
+  author: joe
+  content: Follow-up filed as TASK-2-080 (will get short ID at next merge-gate).
+  created_at: 2026-05-12T04:01:32.933256128Z
+  modified_at: 2026-05-12T04:01:32.933256128Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-11T06:50:35.572732431Z
