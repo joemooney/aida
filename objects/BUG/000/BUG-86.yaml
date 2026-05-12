@@ -1,0 +1,63 @@
+id: 019e1ceb-00c7-76d0-9b88-31fb0807b454
+spec_id: BUG-86
+agreed_id: BUG-86
+title: '/aida-pr skill: auto-queue-review step should surface failure visibly (silent skip leaves reviewer queue empty)'
+description: |
+  Caught 2026-05-12 — PR-15 opened via /aida-pr, but no review story appeared in the reviewer queue. STORY-90's auto-queue-review step apparently failed silently. User had to manually fire `aida pr auto-queue-review --branch X`.
+
+  ## Today's behavior
+
+  /aida-pr's step 10 invokes `aida pr auto-queue-review` after `gh pr create` succeeds. If the invocation:
+  - Fails to find gh → may print ⚠ but only if BUG-74's PATH walk catches it
+  - Errors during gh pr list → may swallow
+  - Filed successfully but printed silently → user doesn't know
+
+  Result: user opens PR thinking everything's wired, then notices the reviewer queue is empty hours later.
+
+  ## Fix
+
+  /aida-pr's step 10 should be loud:
+
+  ```
+  ✓ PR-15 opened: https://github.com/.../pull/15
+  ✓ filed STORY-N → reviewer queue (PR #15)       # success: explicit ✓
+  # OR
+  ⚠ /aida-pr step 10 (auto-queue-review) FAILED:
+      aida pr auto-queue-review --branch epic-23 exited 1
+      stderr: <reason>
+    Run manually: `aida pr auto-queue-review --branch epic-23`
+  # OR
+  ⓘ auto-queue-review skipped (gh not installed / no PR detected) — reviewer queue NOT filed.
+    Run manually: `aida pr auto-queue-review --branch epic-23`
+  ```
+
+  The agent shouldn't conclude "PR opened" with the same casual tone whether or not the auto-queue fired. The user's mental model depends on the reviewer queue being populated.
+
+  ## Verify against today's incident
+
+  After PR-15: user ran `aida queue list --all --for reviewer` and saw empty. Manual fix:
+  ```
+  aida pr auto-queue-review --branch epic-23
+  ```
+
+  If that manual run succeeds → confirms step 10 silently dropped the result. If it also fails → there's an upstream issue (gh, branch resolution, etc.) that needs surfacing.
+
+  ## Composes with
+
+  - STORY-90 (auto-queue at PR-create) — parent feature; this is hardening
+  - BUG-72 (outcome reporting) — same family; BUG-72 made session_end's auto-queue explicit; this does the same for /aida-pr's step 10
+  - TASK-87 (skill end-of-flow next-steps) — composes; "next steps" can include "reviewer queue: STORY-N" only when step 10 succeeded
+
+  ## Acceptance
+
+  - [ ] /aida-pr step 10 prints explicit ✓ / ⚠ / ⓘ for filed / failed / skipped outcomes
+  - [ ] On failure: prints the exact command to re-run manually
+  - [ ] On skip: explains why (gh missing, no PR, etc.)
+  - [ ] Tested: succeed path prints ✓; force failure (rename gh temporarily) prints ⚠
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T16:00:23.751172789Z
+modified_at: 2026-05-12T16:00:23.751172789Z
+req_type: Bug
