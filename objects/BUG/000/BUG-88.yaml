@@ -1,0 +1,55 @@
+id: 019e1cfb-bf0d-7df3-9d13-bc73a07250aa
+spec_id: BUG-88
+agreed_id: BUG-88
+title: 'Agent guidance: pushing to a branch with a merged PR should warn ''PR is merged; new commits are stranded — open a follow-up PR'''
+description: |
+  Caught 2026-05-12 — agent pushed commit 2a8feb37 to `origin/epic-23` after running /ultrareview, with the chat message "Pushed 2a8feb37 to PR-15". But PR-15 had already merged 30 minutes earlier. The push succeeded technically but **the commit isn't on main and isn't tied to any open PR**. Stranded fix.
+
+  The agent's misleading wording suggests they didn't check PR-15's state before claiming the push "extended" it. /aida-pr or a general "before pushing to a branch" helper should check:
+
+  ```bash
+  gh pr list --head <branch> --state open
+  # If empty: gh pr list --head <branch> --state merged
+  # If merged: WARN — pushing to this branch puts commits on a stranded ref
+  ```
+
+  ## Surface
+
+  Option A: aida-side guidance — `aida push` (or a new `aida git push` wrapper) checks branch's PR state and warns:
+
+  ```
+  $ aida push
+  Pushing code epic-23 → origin
+  ⚠ Warning: branch epic-23 was the head of merged PR-15. New commits land on origin/epic-23 but won't reach main without a new PR.
+    Open follow-up PR: `gh pr create --base main --head epic-23 --title "..." --body "..."`
+    Or: cherry-pick to a fresh branch off current main.
+
+  Push anyway? [Y/n]:
+  ```
+
+  Option B: skill-side — /aida-pr and /aida-review skill content advises checking before any push to a previously-merged branch.
+
+  Option C: aida-side hint without prompt — print the warning but proceed.
+
+  Recommendation: Option C as a minimum (silent warning never; user always informed); Option A if we want a safety gate.
+
+  ## Composes with
+
+  - STORY-106 (CLI workflow hints) — this is one specific hint
+  - TASK-90 (local branch auto-cleanup) — branches with merged PRs are candidates for cleanup; this bug surfaces them
+  - aida push (FR-264) — natural place for the check
+
+  ## Acceptance
+
+  - [ ] `aida push` detects when pushing to a branch whose PR is merged
+  - [ ] Warns the user explicitly with concrete fix paths (open follow-up PR / cherry-pick)
+  - [ ] No false positives: only warns when there WAS a PR on this branch + it's now merged
+  - [ ] Agent skills (/aida-pr, /aida-review) updated to check this state before claiming a push "extends" a PR
+  - [ ] Tested: push to a merged-PR branch → warning. Push to fresh branch → no warning. Push to open-PR branch → no warning.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T16:18:41.037832798Z
+modified_at: 2026-05-12T16:18:41.037832798Z
+req_type: Bug
