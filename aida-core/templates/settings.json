@@ -44,5 +44,17 @@
   "statusLine": {
     "type": "command",
     "command": "aida statusline --color=always 2>/dev/null || printf '%s' \"$(pwd)\""
+  },
+  "permissions": {
+    "allow": [
+      "Bash(aida)",
+      "Bash(aida *)",
+      "Bash(aida-on)",
+      "Bash(aida-off)",
+      "Bash(./target/debug/aida)",
+      "Bash(./target/debug/aida *)",
+      "Bash(./target/release/aida)",
+      "Bash(./target/release/aida *)"
+    ]
   }
 }

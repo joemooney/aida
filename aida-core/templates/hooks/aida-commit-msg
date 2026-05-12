@@ -25,7 +25,12 @@ fi
 
 # Patterns
 AI_TAG_PATTERN='^\[AI:[a-zA-Z]+(:(high|med|low))?\]'
-CONVENTIONAL_PATTERN='^(\[AI:[a-zA-Z]+(:(high|med|low))?\] )?(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-zA-Z0-9_-]+\))?: .+'
+# BUG-84: scope class accepts commas (and whitespace, slashes) so the
+# conventional-commits spec's comma-separated scope syntax works —
+# `fix(queue,session,role): ...` and `feat(api, ui): ...` are both valid
+# per conventionalcommits.org. Also accept `/` for monorepo path-as-scope
+# like `feat(packages/foo): ...`. trace:BUG-84 | ai:claude
+CONVENTIONAL_PATTERN='^(\[AI:[a-zA-Z]+(:(high|med|low))?\] )?(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-zA-Z0-9_,/[:space:]-]+\))?: .+'
 # Match a REQ-ID at end of line in any of:
 #   - single id (centralized):    (FR-42)
 #   - single id (distributed):    (FR-1-042) or (FR-JPM-42) — node id may be alphanumeric
