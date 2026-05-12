@@ -10201,9 +10201,7 @@ fn session_start(
         // at ...`. Detect now and offer end / force-end / proceed-anyway.
         // Gracefully skipped when gh/glab isn't installed.
         // trace:TASK-76 | ai:claude
-        if let Some(source_branch) =
-            query_pr_source_branch(forge, n, &project_root)
-        {
+        if let Some(source_branch) = query_pr_source_branch(forge, n, &project_root) {
             let conflicting: Vec<_> = list_leases(&project_root)
                 .into_iter()
                 .filter(|l| l.branch == source_branch)
@@ -10218,10 +10216,7 @@ fn session_start(
                     source_branch.yellow(),
                     l.id.yellow()
                 );
-                eprintln!(
-                    "    role:     {}",
-                    l.role.as_deref().unwrap_or("(unset)")
-                );
+                eprintln!("    role:     {}", l.role.as_deref().unwrap_or("(unset)"));
                 eprintln!("    worktree: {}", l.worktree_path.display());
                 eprintln!();
                 eprintln!(
@@ -11369,8 +11364,7 @@ fn session_end(id_query: Option<&str>, yes: bool, force: bool, purge_cc: bool) -
     // Manifests are runtime per-session state — pinning them around past
     // a closed lease leaks files into `.aida/sessions/`. Quiet on missing.
     // trace:BUG-80 | ai:claude
-    let manifest_target =
-        session_manifest::manifest_path(&project_root, &target.id);
+    let manifest_target = session_manifest::manifest_path(&project_root, &target.id);
     if manifest_target.exists() {
         match std::fs::remove_file(&manifest_target) {
             Ok(_) => {}
@@ -11612,60 +11606,59 @@ fn resolve_gh_binary() -> Option<std::path::PathBuf> {
     // looks fine but whose spawn yields ENOENT. The sanity-spawn is the
     // ground truth — if it fails, we fall back to the next candidate
     // instead of returning a path that the real caller will choke on.
-    let mut check_candidate = |candidate: &std::path::Path,
-                               source: &str|
-     -> Option<std::path::PathBuf> {
-        tried.push(candidate.to_path_buf());
-        if !is_executable(candidate) {
-            return None;
-        }
-        match std::process::Command::new(candidate)
-            .arg("--version")
-            .output()
-        {
-            Ok(o) if o.status.success() => {
-                if debug {
-                    eprintln!(
-                        "{} found gh {} at {}",
-                        "AIDA_DEBUG_GH:".dimmed(),
-                        source,
-                        candidate.display()
-                    );
-                }
-                Some(candidate.to_path_buf())
+    let mut check_candidate =
+        |candidate: &std::path::Path, source: &str| -> Option<std::path::PathBuf> {
+            tried.push(candidate.to_path_buf());
+            if !is_executable(candidate) {
+                return None;
             }
-            Ok(o) => {
-                let reason = format!(
-                    "exit {} stderr={}",
-                    o.status,
-                    String::from_utf8_lossy(&o.stderr).trim()
-                );
-                if debug {
-                    eprintln!(
-                        "{} is_executable({}) ok but `--version` reported {} — falling back",
-                        "AIDA_DEBUG_GH:".dimmed(),
-                        candidate.display(),
-                        reason
-                    );
+            match std::process::Command::new(candidate)
+                .arg("--version")
+                .output()
+            {
+                Ok(o) if o.status.success() => {
+                    if debug {
+                        eprintln!(
+                            "{} found gh {} at {}",
+                            "AIDA_DEBUG_GH:".dimmed(),
+                            source,
+                            candidate.display()
+                        );
+                    }
+                    Some(candidate.to_path_buf())
                 }
-                spawn_failures.push((candidate.to_path_buf(), reason));
-                None
-            }
-            Err(e) => {
-                let reason = format!("{}", e);
-                if debug {
-                    eprintln!(
-                        "{} is_executable({}) ok but spawn failed: {} — falling back",
-                        "AIDA_DEBUG_GH:".dimmed(),
-                        candidate.display(),
-                        reason
+                Ok(o) => {
+                    let reason = format!(
+                        "exit {} stderr={}",
+                        o.status,
+                        String::from_utf8_lossy(&o.stderr).trim()
                     );
+                    if debug {
+                        eprintln!(
+                            "{} is_executable({}) ok but `--version` reported {} — falling back",
+                            "AIDA_DEBUG_GH:".dimmed(),
+                            candidate.display(),
+                            reason
+                        );
+                    }
+                    spawn_failures.push((candidate.to_path_buf(), reason));
+                    None
                 }
-                spawn_failures.push((candidate.to_path_buf(), reason));
-                None
+                Err(e) => {
+                    let reason = format!("{}", e);
+                    if debug {
+                        eprintln!(
+                            "{} is_executable({}) ok but spawn failed: {} — falling back",
+                            "AIDA_DEBUG_GH:".dimmed(),
+                            candidate.display(),
+                            reason
+                        );
+                    }
+                    spawn_failures.push((candidate.to_path_buf(), reason));
+                    None
+                }
             }
-        }
-    };
+        };
 
     // Pass 1: walk $PATH.
     if let Ok(path) = std::env::var("PATH") {
@@ -12764,11 +12757,7 @@ fn session_prune_orphans(dry_run: bool, yes: bool) -> Result<()> {
         let sessions_dir = project_root.join(".aida").join("sessions");
         let orphan_manifests: Vec<_> = manifests
             .into_iter()
-            .filter(|(_, m)| {
-                !sessions_dir
-                    .join(format!("{}.toml", m.session_id))
-                    .exists()
-            })
+            .filter(|(_, m)| !sessions_dir.join(format!("{}.toml", m.session_id)).exists())
             .collect();
         if !orphan_manifests.is_empty() {
             println!();
@@ -19479,10 +19468,7 @@ mod pull_summary_status_change_tests {
     #[test]
     fn classify_commit_source_manual() {
         assert_eq!(classify_commit_source("chore: bump dep"), "manual");
-        assert_eq!(
-            classify_commit_source("release: v1.2.3 (1.2.3)"),
-            "manual"
-        );
+        assert_eq!(classify_commit_source("release: v1.2.3 (1.2.3)"), "manual");
     }
 
     #[test]
@@ -19497,7 +19483,10 @@ index abc..def 100644
 "#;
         let out = parse_status_transitions_from_diff(diff);
         assert_eq!(out.len(), 1);
-        assert_eq!(out[0], ("BUG-77".into(), "Approved".into(), "Completed".into()));
+        assert_eq!(
+            out[0],
+            ("BUG-77".into(), "Approved".into(), "Completed".into())
+        );
     }
 
     #[test]

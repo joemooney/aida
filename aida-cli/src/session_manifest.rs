@@ -133,7 +133,6 @@ pub fn list_all_with_paths(project_root: &Path) -> Vec<(PathBuf, SessionManifest
     out
 }
 
-
 /// For a given spec_id, return the session_id of any *other* session
 /// whose manifest plans it. `viewer_session` is the current session's id
 /// (skipped from the search) — pass empty string when there's no active

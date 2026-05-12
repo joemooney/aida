@@ -556,9 +556,7 @@ mod tests {
         let mut a = sample_req("PR-9", "PR-9 thing");
         a.spec_id = Some("PR-9".into());
         store.requirements.push(a);
-        store
-            .requirements
-            .push(sample_req("FR-1-002", "unrelated"));
+        store.requirements.push(sample_req("FR-1-002", "unrelated"));
 
         cache.rebuild_from_store(&store, "head").unwrap();
 
