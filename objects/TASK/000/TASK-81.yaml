@@ -1,0 +1,34 @@
+id: 019e1ae7-6896-7993-9b07-4bb5dd99b03e
+spec_id: TASK-81
+agreed_id: TASK-81
+title: 'STORY-42 follow-up: aida queue work --steal for In-Progress override (currently refuses)'
+description: |
+  PR-13's STORY-42 ships `aida queue work` with a guardrail: if the target item is already In Progress on another session's lease, it refuses. The original spec mentioned `--steal` as the override; PR-13 didn't implement that flag.
+
+  ## Surface
+
+  ```
+  aida queue work STORY-42 --steal
+  ```
+
+  When the item is In Progress on another lease:
+  - Default: refuse with "owned by lease 019e1300 — pass --steal to override"
+  - `--steal`: proceeds; either:
+    - End the other session first (preferred — frees the worktree cleanly), OR
+    - Just claim the item locally; leave the other session running with a stale Inprogress marker
+
+  The "end other session" approach is cleaner since it composes with BUG-61's protection (refuse-with-live-claude) — would surface the conflict to the user with clear options.
+
+  ## Acceptance
+
+  - [ ] `aida queue work <id> --steal` overrides the In-Progress guard
+  - [ ] Preferred path: ends the holding session first; falls back to local claim if can't end
+  - [ ] Without --steal: refusal message names the holding lease + suggests --steal
+  - [ ] Tested: item In Progress on session A; from session B, `aida queue work <id>` refuses; `--steal` proceeds.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T06:37:13.750047240Z
+modified_at: 2026-05-12T06:37:13.750047240Z
+req_type: Task
