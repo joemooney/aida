@@ -59,9 +59,32 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:20:08.185506367Z
-modified_at: 2026-05-12T15:32:19.385049160Z
+modified_at: 2026-05-12T15:35:27.314385636Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-12T15:20:09.282626203Z
+comments:
+- id: 019e1cd4-2b52-7543-9ff1-310227f7b074
+  author: joe
+  content: |-
+    Implemented --auto-first signal between aida queue work and /aida-pickup skill.
+
+    derive_queue_work_prompt now emits:
+    - Cluster/Head + implementer → `/aida-pickup --auto-first` (skip first confirm)
+    - Item + implementer → `/aida-pickup <ITEM-ID>` (keep confirm; user named the item)
+    - Reviewer paths unchanged
+
+    aida-pickup.md skill master template (aida-core/templates/skills/aida-pickup.md) documents:
+    - Skip the first confirm when invoked with --auto-first (consent given via queue-work pre-flight)
+    - Keep confirm for direct /aida-pickup invocation and item-mode wrappers
+    - After the first item in a planned-cluster walk, per-item confirms are friction-without-value (manifest is the consent record)
+
+    Tests: replaced `prompt_implementer_cluster_is_bare` with `_is_auto_first`; added `prompt_implementer_head_is_auto_first`. All 252 aida-cli tests green; fmt clean.
+
+    Smoke: `aida queue work` (head) → skill: /aida-pickup --auto-first; `aida queue work TASK-86` (item) → skill: /aida-pickup TASK-86. Symlink delivers the updated skill content into .claude/skills/.
+
+    Commit: fb230097
+  created_at: 2026-05-12T15:35:27.314385636Z
+  modified_at: 2026-05-12T15:35:27.314385636Z
