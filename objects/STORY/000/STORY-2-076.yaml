@@ -68,12 +68,12 @@ description: |
   - [ ] Refuses to steal items In Progress on another session (without --steal)
   - [ ] Tested: implementer pickup of EPIC-20 child → opens new batch session. Reviewer pickup of Review-PR story → opens PR-N reviewer session with auto-checkout.
   - [ ] Tested: explicit --permission-mode propagates to claude; default is acceptEdits
-status: Approved
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T03:49:10.684910674Z
-modified_at: 2026-05-12T03:49:10.684910674Z
+modified_at: 2026-05-12T06:52:03.959895037Z
 req_type: Story
 relationships:
 - rel_type: Child
