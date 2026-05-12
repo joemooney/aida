@@ -1,0 +1,69 @@
+id: 019e1cd9-9e1c-7362-87b3-2f644ea066a1
+spec_id: TASK-87
+agreed_id: TASK-87
+title: '/aida-pickup, /aida-review, /aida-pr: end-of-skill structured ''Next steps'' recommendations'
+description: |
+  User observation 2026-05-12: every AIDA skill's terminal state has natural follow-on actions (drained queue → open PR; PR opened → start reviewer; review merged → end session, start next batch). Today these are improvised by the agent ("Want me to push?") — inconsistent across skills, sometimes missing entirely.
+
+  Codifying as a "Next steps" section at every skill's terminal moment makes the workflow self-guiding.
+
+  ## Surface
+
+  Each skill ends with a structured block:
+
+  ```
+  [skill summary]
+  ...
+
+  Next steps (recommended order):
+    1. ▶ <highest-leverage next action> → `<concrete command>`
+    2. ⏵ <alternative path> → `<concrete command>`
+    3. 🚪 <stop/exit> → `<concrete command>`
+  ```
+
+  Examples:
+
+  **/aida-pickup terminal** (cluster drained):
+  ```
+  Drained 4 items from EPIC-23 cluster. Next steps:
+    1. ▶ Open PR-N → `/aida-pr` (uses TASK-61's pre-flight fmt check + STORY-90 auto-queue at PR-create)
+    2. ⏵ Keep working → `aida queue work` (no-arg = queue head) or `aida queue work EPIC-M`
+    3. 🚪 Stop here → exit claude (Ctrl+D), then `aida session end <id>` from parent shell
+  ```
+
+  **/aida-pr terminal** (PR opened):
+  ```
+  PR-N opened: https://github.com/.../pull/N
+  STORY-103 filed as review story; reviewer queue has it at head.
+
+  Next steps:
+    1. ▶ Start review session → `aida queue work STORY-103` (or `aida queue work PR-N` per TASK-85)
+    2. ⏵ Wait for CI → `gh run watch` (block until green, then start review)
+    3. 🚪 End implementer session, take a break → Ctrl+D + `aida session end <lease>`
+  ```
+
+  **/aida-review terminal** (merged):
+  ```
+  PR-N merged. 9 specs marked Completed. Review story STORY-103 closed.
+
+  Next steps:
+    1. ▶ Sync + decide next batch → `cd ~/ai/<project>` then `aida pull && cargo build --release` then `aida queue work EPIC-M`
+    2. ⏵ Cut a patch release → `make release-patch YES=1`
+    3. 🚪 End reviewer session, stop → Ctrl+D + `aida session end <lease>`
+  ```
+
+  ## Acceptance
+
+  - [ ] `/aida-pickup` skill content updated with terminal "Next steps" template
+  - [ ] `/aida-review` same
+  - [ ] `/aida-pr` same
+  - [ ] Recommendations are CONCRETE (named commands, named IDs), not generic ("you might want to...")
+  - [ ] Detects current state: cluster drained vs partial, PR opened vs not, CI green vs pending
+  - [ ] Templates use consistent glyphs (▶ primary, ⏵ alternate, 🚪 stop)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T15:41:24.380983051Z
+modified_at: 2026-05-12T15:41:24.380983051Z
+req_type: Task
