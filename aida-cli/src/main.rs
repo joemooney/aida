@@ -9638,6 +9638,99 @@ fn find_project_root() -> Result<std::path::PathBuf> {
     }
 }
 
+/// Resolve the MAIN worktree path given a starting checkout (which may
+/// itself be a linked worktree). When the caller is inside a linked
+/// worktree (created via `git worktree add`), `find_project_root()`
+/// returns the LINKED worktree's path because the climb stops at the
+/// first `.git` (file or dir). Session-start path / branch derivation
+/// needs the canonical project root regardless of cwd, otherwise new
+/// sessions stack as `~/ai/aida-pr-9-epic-20` instead of landing as
+/// siblings under `~/ai/aida`. trace:BUG-75 | ai:claude
+///
+/// Uses `git worktree list --porcelain`; the first record is always the
+/// main worktree. Falls back to `start` when git can't be invoked.
+fn main_worktree_root_from(start: &std::path::Path) -> std::path::PathBuf {
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(start)
+        .args(["worktree", "list", "--porcelain"])
+        .output();
+    if let Ok(o) = out {
+        if o.status.success() {
+            for line in String::from_utf8_lossy(&o.stdout).lines() {
+                if let Some(p) = line.strip_prefix("worktree ") {
+                    return std::path::PathBuf::from(p);
+                }
+            }
+        }
+    }
+    start.to_path_buf()
+}
+
+/// Convenience wrapper that walks up from cwd. Same fallback semantics.
+fn find_main_worktree_root() -> Result<std::path::PathBuf> {
+    let start = find_project_root()?;
+    Ok(main_worktree_root_from(&start))
+}
+
+/// Resolve the project's default branch ref (e.g. `origin/main` or
+/// `origin/master`). Used by session_start to fork new branches from
+/// origin's mainline regardless of cwd's HEAD. trace:BUG-76 | ai:claude
+///
+/// Resolution order:
+/// 1. `git symbolic-ref refs/remotes/origin/HEAD` if it resolves
+/// 2. The first of `origin/main`, `origin/master`, `main`, `master` that
+///    `git rev-parse --verify` succeeds against
+/// Returns None if no reasonable default is detectable (e.g. no remotes,
+/// no main/master locally).
+fn detect_default_branch_ref(project_root: &std::path::Path) -> Option<String> {
+    let try_cmd = |args: &[&str]| -> Option<String> {
+        let o = std::process::Command::new("git")
+            .arg("-C")
+            .arg(project_root)
+            .args(args)
+            .output()
+            .ok()?;
+        if o.status.success() {
+            let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if !s.is_empty() {
+                return Some(s);
+            }
+        }
+        None
+    };
+
+    if let Some(s) = try_cmd(&["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]) {
+        return Some(s);
+    }
+    for c in &["origin/main", "origin/master", "main", "master"] {
+        if try_cmd(&["rev-parse", "--verify", c]).is_some() {
+            return Some((*c).to_string());
+        }
+    }
+    None
+}
+
+/// Return the branch name currently checked out at `path` (its HEAD).
+/// `None` if detached or git fails. trace:BUG-76 | ai:claude
+fn current_branch_at(path: &std::path::Path) -> Option<String> {
+    let o = std::process::Command::new("git")
+        .arg("-C")
+        .arg(path)
+        .args(["symbolic-ref", "--short", "HEAD"])
+        .output()
+        .ok()?;
+    if !o.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&o.stdout).trim().to_string();
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
+}
+
 /// STORY-61: forge-specific PR/MR scope. When `aida session start
 /// --owns PR-1` or `--owns MR-42` is invoked, we route through a
 /// review-branch fetch + worktree-on-existing-branch flow instead of
@@ -9793,6 +9886,64 @@ fn parse_pr_metadata_json(forge: ReviewForge, json: &serde_json::Value) -> PrMet
     }
 }
 
+/// TASK-76: query the PR/MR's source/head branch name via gh/glab. Used by
+/// the session_start pre-flight to detect when the PR's source branch is
+/// already held by another lease (which would make `gh pr checkout` fail
+/// with `branch already used by worktree`). Returns None when the forge
+/// CLI isn't installed or fails — pre-flight degrades to "no warning."
+/// trace:TASK-76 | ai:claude
+fn query_pr_source_branch(
+    forge: ReviewForge,
+    n: u64,
+    project_root: &std::path::Path,
+) -> Option<String> {
+    let (cli, args): (&str, Vec<String>) = match forge {
+        ReviewForge::GitHub => (
+            "gh",
+            vec![
+                "pr".into(),
+                "view".into(),
+                n.to_string(),
+                "--json".into(),
+                "headRefName".into(),
+                "-q".into(),
+                ".headRefName".into(),
+            ],
+        ),
+        ReviewForge::GitLab => (
+            "glab",
+            vec![
+                "mr".into(),
+                "view".into(),
+                n.to_string(),
+                "-F".into(),
+                "json".into(),
+            ],
+        ),
+    };
+    let out = std::process::Command::new(cli)
+        .current_dir(project_root)
+        .args(&args)
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if stdout.is_empty() {
+        return None;
+    }
+    match forge {
+        ReviewForge::GitHub => Some(stdout),
+        ReviewForge::GitLab => {
+            // glab's mr view --output json doesn't accept -q; parse the
+            // `source_branch` field out of the JSON ourselves.
+            let json: serde_json::Value = serde_json::from_str(&stdout).ok()?;
+            json["source_branch"].as_str().map(|s| s.to_string())
+        }
+    }
+}
+
 /// STORY-61: parse `PR-N` / `MR-N` scope strings (case-insensitive).
 /// Returns the implied forge + PR number when the scope matches; None
 /// otherwise (lets normal scope handling proceed).
@@ -9930,7 +10081,20 @@ fn session_start(
     launch_permission_mode: &str,
     launch_role: Option<String>,
 ) -> Result<()> {
-    let project_root = find_project_root()?;
+    // BUG-75: derive paths from the MAIN worktree root, not from cwd's
+    // git ancestor — when the user invokes `aida session start` from
+    // inside a linked worktree, find_project_root() returns the linked
+    // worktree's path and new sessions stack as nested-sibling-of-sibling
+    // (~/ai/aida-pr-9-epic-20 instead of ~/ai/aida-epic-20).
+    // trace:BUG-75 | ai:claude
+    let project_root = find_main_worktree_root()?;
+    let invoking_root = find_project_root().unwrap_or_else(|_| project_root.clone());
+    let invoked_from_linked_worktree = invoking_root
+        .canonicalize()
+        .ok()
+        .zip(project_root.canonicalize().ok())
+        .map(|(a, b)| a != b)
+        .unwrap_or(false);
     let slug = slugify(owns);
     if slug.is_empty() {
         anyhow::bail!(
@@ -10031,6 +10195,76 @@ fn session_start(
     let mut pr_metadata: PrMetadata = PrMetadata::default();
 
     if let Some((forge, n)) = review_target {
+        // TASK-76: pre-flight check — if PR-N's source branch is held by
+        // another active lease, any subsequent `gh pr checkout` (manual
+        // or future auto) will fail with `branch already used by worktree
+        // at ...`. Detect now and offer end / force-end / proceed-anyway.
+        // Gracefully skipped when gh/glab isn't installed.
+        // trace:TASK-76 | ai:claude
+        if let Some(source_branch) = query_pr_source_branch(forge, n, &project_root) {
+            let conflicting: Vec<_> = list_leases(&project_root)
+                .into_iter()
+                .filter(|l| l.branch == source_branch)
+                .collect();
+            if !conflicting.is_empty() {
+                let l = &conflicting[0];
+                eprintln!();
+                eprintln!(
+                    "{} PR-{}'s source branch `{}` is held by lease {}",
+                    "⚠".yellow().bold(),
+                    n,
+                    source_branch.yellow(),
+                    l.id.yellow()
+                );
+                eprintln!("    role:     {}", l.role.as_deref().unwrap_or("(unset)"));
+                eprintln!("    worktree: {}", l.worktree_path.display());
+                eprintln!();
+                eprintln!(
+                    "    Any `gh pr checkout {}` from the new session will fail with \
+                     `branch already used by worktree`.",
+                    n
+                );
+                eprintln!();
+                eprintln!("    Options:");
+                eprintln!("      1. End that session: `aida session end {}`", l.id);
+                eprintln!(
+                    "      2. Force-end (kills any live claude there): `aida session end {} --force`",
+                    l.id
+                );
+                eprintln!("      3. Proceed anyway (auto-checkout will need manual fixup)");
+                eprintln!();
+                use std::io::Write;
+                eprint!("    Choice [1/2/3]: ");
+                let _ = std::io::stderr().flush();
+                let mut ans = String::new();
+                std::io::stdin().read_line(&mut ans)?;
+                match ans.trim() {
+                    "1" => {
+                        anyhow::bail!(
+                            "stopping so you can `aida session end {}`; re-run this command after",
+                            l.id
+                        );
+                    }
+                    "2" => {
+                        anyhow::bail!(
+                            "stopping; run `aida session end {} --force` then re-run this command",
+                            l.id
+                        );
+                    }
+                    "3" | "" => {
+                        eprintln!(
+                            "{} proceeding — `gh pr checkout {}` from the new session will need manual fixup",
+                            "→".dimmed(),
+                            n
+                        );
+                    }
+                    other => {
+                        anyhow::bail!("unrecognized choice {:?} — aborting", other);
+                    }
+                }
+            }
+        }
+
         // STORY-61 review flow:
         //   1. fetch the PR/MR head ref from origin into the local branch
         //      <forge>-<N>; safe to re-run (creates or fast-forwards).
@@ -10101,6 +10335,43 @@ fn session_start(
     } else {
         // Default flow: create worktree on a NEW branch (the original
         // EPIC-20 behavior — work-in-progress sessions, not reviews).
+        //
+        // BUG-76: when --base isn't given, fork from the project's
+        // default branch (origin/main or fallback). The git default
+        // (HEAD) is wrong when the caller is inside a linked worktree on
+        // a feature branch — the new session would inherit unmerged
+        // commits from whatever branch happened to be checked out.
+        // trace:BUG-76 | ai:claude
+        let resolved_base: Option<String> = match base {
+            Some(b) => Some(b.to_string()),
+            None => detect_default_branch_ref(&project_root),
+        };
+
+        if base.is_none() {
+            let cwd_branch = current_branch_at(&invoking_root);
+            let default_short = resolved_base
+                .as_deref()
+                .and_then(|s| s.strip_prefix("origin/").or(Some(s)))
+                .unwrap_or("main");
+            let warn = match cwd_branch.as_deref() {
+                Some(b) if b != default_short && b != "HEAD" => Some(b.to_string()),
+                _ if invoked_from_linked_worktree => {
+                    Some(cwd_branch.unwrap_or_else(|| "<detached>".into()))
+                }
+                _ => None,
+            };
+            if let Some(b) = warn {
+                if let Some(rb) = &resolved_base {
+                    eprintln!(
+                        "{} cwd is on `{}`; forking new branch from `{}` (pass --base if you wanted this branch's HEAD)",
+                        "ⓘ".cyan(),
+                        b,
+                        rb
+                    );
+                }
+            }
+        }
+
         let mut args = vec![
             "worktree",
             "add",
@@ -10108,8 +10379,8 @@ fn session_start(
             branch_name.as_str(),
             worktree_path.to_str().unwrap(),
         ];
-        if let Some(b) = base {
-            args.push(b);
+        if let Some(rb) = resolved_base.as_deref() {
+            args.push(rb);
         }
         // STORY-73: capture stdout and re-emit to stderr. `git worktree add`
         // prints things like "HEAD is now at <sha>" to stdout, which would
@@ -11089,6 +11360,26 @@ fn session_end(id_query: Option<&str>, yes: bool, force: bool, purge_cc: bool) -
         }
     }
 
+    // BUG-80: drop the planned-cluster manifest for this session, if any.
+    // Manifests are runtime per-session state — pinning them around past
+    // a closed lease leaks files into `.aida/sessions/`. Quiet on missing.
+    // trace:BUG-80 | ai:claude
+    let manifest_target = session_manifest::manifest_path(&project_root, &target.id);
+    if manifest_target.exists() {
+        match std::fs::remove_file(&manifest_target) {
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
+                eprintln!(
+                    "{} could not delete session manifest at {}: {}",
+                    "Warning:".yellow().bold(),
+                    manifest_target.display(),
+                    e
+                );
+            }
+        }
+    }
+
     // STORY-56: drop the session activity log. Quiet on missing — short
     // sessions that never recorded any activity won't have one. We've
     // already aggregated entries into the project-level role(s) above.
@@ -11304,8 +11595,70 @@ fn resolve_gh_binary() -> Option<std::path::PathBuf> {
         .map(|v| !v.is_empty() && v != "0")
         .unwrap_or(false);
     let mut tried: Vec<std::path::PathBuf> = Vec::new();
+    let mut spawn_failures: Vec<(std::path::PathBuf, String)> = Vec::new();
 
     let exe_name = if cfg!(windows) { "gh.exe" } else { "gh" };
+
+    // BUG-79: closure that checks `is_executable` AND a sanity-spawn of
+    // `gh --version`. The metadata check is necessary but not sufficient:
+    // stale install records, broken symlinks, container mounts, and
+    // bash-hash-table caching can all produce a path whose metadata
+    // looks fine but whose spawn yields ENOENT. The sanity-spawn is the
+    // ground truth — if it fails, we fall back to the next candidate
+    // instead of returning a path that the real caller will choke on.
+    let mut check_candidate =
+        |candidate: &std::path::Path, source: &str| -> Option<std::path::PathBuf> {
+            tried.push(candidate.to_path_buf());
+            if !is_executable(candidate) {
+                return None;
+            }
+            match std::process::Command::new(candidate)
+                .arg("--version")
+                .output()
+            {
+                Ok(o) if o.status.success() => {
+                    if debug {
+                        eprintln!(
+                            "{} found gh {} at {}",
+                            "AIDA_DEBUG_GH:".dimmed(),
+                            source,
+                            candidate.display()
+                        );
+                    }
+                    Some(candidate.to_path_buf())
+                }
+                Ok(o) => {
+                    let reason = format!(
+                        "exit {} stderr={}",
+                        o.status,
+                        String::from_utf8_lossy(&o.stderr).trim()
+                    );
+                    if debug {
+                        eprintln!(
+                            "{} is_executable({}) ok but `--version` reported {} — falling back",
+                            "AIDA_DEBUG_GH:".dimmed(),
+                            candidate.display(),
+                            reason
+                        );
+                    }
+                    spawn_failures.push((candidate.to_path_buf(), reason));
+                    None
+                }
+                Err(e) => {
+                    let reason = format!("{}", e);
+                    if debug {
+                        eprintln!(
+                            "{} is_executable({}) ok but spawn failed: {} — falling back",
+                            "AIDA_DEBUG_GH:".dimmed(),
+                            candidate.display(),
+                            reason
+                        );
+                    }
+                    spawn_failures.push((candidate.to_path_buf(), reason));
+                    None
+                }
+            }
+        };
 
     // Pass 1: walk $PATH.
     if let Ok(path) = std::env::var("PATH") {
@@ -11315,16 +11668,8 @@ fn resolve_gh_binary() -> Option<std::path::PathBuf> {
                 continue;
             }
             let candidate = std::path::PathBuf::from(dir).join(exe_name);
-            tried.push(candidate.clone());
-            if is_executable(&candidate) {
-                if debug {
-                    eprintln!(
-                        "{} found gh on PATH at {}",
-                        "AIDA_DEBUG_GH:".dimmed(),
-                        candidate.display()
-                    );
-                }
-                return Some(candidate);
+            if let Some(p) = check_candidate(&candidate, "on PATH") {
+                return Some(p);
             }
         }
     }
@@ -11347,16 +11692,8 @@ fn resolve_gh_binary() -> Option<std::path::PathBuf> {
         v
     };
     for candidate in &fallbacks {
-        tried.push(candidate.clone());
-        if is_executable(candidate) {
-            if debug {
-                eprintln!(
-                    "{} found gh via absolute-path fallback at {}",
-                    "AIDA_DEBUG_GH:".dimmed(),
-                    candidate.display()
-                );
-            }
-            return Some(candidate.clone());
+        if let Some(p) = check_candidate(candidate, "via absolute-path fallback") {
+            return Some(p);
         }
     }
 
@@ -11373,6 +11710,16 @@ fn resolve_gh_binary() -> Option<std::path::PathBuf> {
         );
         for p in &tried {
             eprintln!("  - {}", p.display());
+        }
+        if !spawn_failures.is_empty() {
+            eprintln!(
+                "{} {} candidate(s) passed is_executable but failed to spawn:",
+                "AIDA_DEBUG_GH:".dimmed(),
+                spawn_failures.len()
+            );
+            for (p, reason) in &spawn_failures {
+                eprintln!("  - {} ({})", p.display(), reason);
+            }
         }
     }
     None
@@ -12401,6 +12748,44 @@ fn session_prune_orphans(dry_run: bool, yes: bool) -> Result<()> {
         removed,
         if removed == 1 { "" } else { "s" }
     );
+
+    // BUG-80: also sweep planned-cluster manifests for leases that no
+    // longer exist in this project. Same `--orphans` flag, same dry-run /
+    // yes semantics. trace:BUG-80 | ai:claude
+    if let Ok(project_root) = find_project_root() {
+        let manifests = session_manifest::list_all_with_paths(&project_root);
+        let sessions_dir = project_root.join(".aida").join("sessions");
+        let orphan_manifests: Vec<_> = manifests
+            .into_iter()
+            .filter(|(_, m)| !sessions_dir.join(format!("{}.toml", m.session_id)).exists())
+            .collect();
+        if !orphan_manifests.is_empty() {
+            println!();
+            println!(
+                "Found {} orphan session manifest{}:",
+                orphan_manifests.len(),
+                if orphan_manifests.len() == 1 { "" } else { "s" }
+            );
+            for (p, _) in &orphan_manifests {
+                println!("  {}", p.display().to_string().dimmed());
+            }
+            if !dry_run {
+                let mut mremoved = 0usize;
+                for (p, _) in &orphan_manifests {
+                    if std::fs::remove_file(p).is_ok() {
+                        mremoved += 1;
+                    }
+                }
+                println!(
+                    "{} removed {} orphan manifest{}",
+                    "✓".green(),
+                    mremoved,
+                    if mremoved == 1 { "" } else { "s" }
+                );
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -14249,11 +14634,45 @@ mod statusline_tests {
     // `git fetch` on file:// remotes (rare; CI rolls everything).
     // trace:STORY-79 | ai:claude
 
+    /// RAII guard that points dirs::home_dir() at `path` for the test's
+    /// duration. Unix-only because `dirs = 5.0.1` on Windows resolves
+    /// home via `SHGetKnownFolderPath(FOLDERID_Profile)` — env vars
+    /// (USERPROFILE / HOME) have no effect there, so this guard cannot
+    /// isolate the test on Windows. A Windows-capable approach is
+    /// tracked as the TASK-62 follow-up (likely an `AIDA_HOME` override
+    /// or swap to the `home` crate). trace:TASK-62 | ai:claude
+    #[cfg(unix)]
+    struct TempHomeEnv {
+        prev_home: Option<String>,
+    }
+
+    #[cfg(unix)]
+    impl TempHomeEnv {
+        fn set(path: &std::path::Path) -> Self {
+            let prev_home = std::env::var("HOME").ok();
+            std::env::set_var("HOME", path);
+            Self { prev_home }
+        }
+    }
+
+    #[cfg(unix)]
+    impl Drop for TempHomeEnv {
+        fn drop(&mut self) {
+            match &self.prev_home {
+                Some(v) => std::env::set_var("HOME", v),
+                None => std::env::remove_var("HOME"),
+            }
+        }
+    }
+
     /// Worker writes `result = "error: ..."` to last-fetch.toml when the
     /// store has no `origin` remote configured. Exercises the failure
     /// path without needing network. Uses an isolated HOME so the test
     /// doesn't clobber the real ~/.aida/cache/last-fetch.toml.
-    // test fixture relies on $HOME governing dirs::home_dir() — unix-only; the bg_worker code itself is cross-platform.
+    // trace:TASK-62 | ai:claude — unix-only: dirs::home_dir() on Windows
+    // ignores env vars (uses SHGetKnownFolderPath), so the test cannot
+    // isolate from the real user profile there. Windows-capable test
+    // deferred to TASK-62 follow-up.
     #[cfg(unix)]
     #[test]
     fn bg_worker_records_error_on_missing_remote() {
@@ -14282,13 +14701,9 @@ mod statusline_tests {
         // No `origin` remote configured → fetch fails.
 
         // Redirect HOME so write_last_fetch_entry lands under our temp dir.
-        let prev_home = std::env::var("HOME").ok();
-        std::env::set_var("HOME", &fake_home);
+        let _home_guard = TempHomeEnv::set(&fake_home);
         let result = handle_bg_fetch_command(&store);
-        match prev_home {
-            Some(v) => std::env::set_var("HOME", v),
-            None => std::env::remove_var("HOME"),
-        }
+        drop(_home_guard);
         assert!(result.is_ok());
 
         let toml_path = fake_home.join(".aida/cache/last-fetch.toml");
@@ -14807,6 +15222,39 @@ mod statusline_tests {
         assert!(extract_spec_ids_from_commit(msg).is_empty());
         // Version-like parens shouldn't match.
         let msg = "release: v1.2.3 (1.2.3)\n";
+        assert!(extract_spec_ids_from_commit(msg).is_empty());
+
+        // BUG-78: space-separated multi-spec parens.
+        let msg = "[AI:claude] feat(session): polish (STORY-98 STORY-90 BUG-74) (#10)\n";
+        assert_eq!(
+            extract_spec_ids_from_commit(msg),
+            vec![
+                "STORY-98".to_string(),
+                "STORY-90".to_string(),
+                "BUG-74".to_string()
+            ]
+        );
+
+        // Comma-separated still works.
+        let msg = "fix(api): (BUG-23, BUG-24)\n";
+        assert_eq!(
+            extract_spec_ids_from_commit(msg),
+            vec!["BUG-23".to_string(), "BUG-24".to_string()]
+        );
+
+        // Mixed comma + whitespace.
+        let msg = "fix: (FR-1, BUG-2 TASK-3)\n";
+        assert_eq!(
+            extract_spec_ids_from_commit(msg),
+            vec![
+                "FR-1".to_string(),
+                "BUG-2".to_string(),
+                "TASK-3".to_string()
+            ]
+        );
+
+        // Mixed prose + ID still rejects (so release notes don't false-match).
+        let msg = "release: stuff (foo BUG-23)\n";
         assert!(extract_spec_ids_from_commit(msg).is_empty());
     }
 
@@ -16590,7 +17038,41 @@ mod branch_behind_main_tests {
 mod resolve_gh_binary_tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt;
+    use std::sync::Mutex;
     use tempfile::TempDir;
+
+    // Serialize PATH-mutating tests against each other. Prepending (vs
+    // replacing) PATH means other parallel tests keep finding `git` and
+    // friends, but two concurrent PATH mutators still need to serialize
+    // so they don't restore the wrong predecessor value. trace:BUG-79
+    static PATH_LOCK: Mutex<()> = Mutex::new(());
+
+    /// Acquire the PATH lock and prepend `dir` to PATH for the test's
+    /// duration. Returns an RAII guard that restores PATH on drop.
+    /// Prepending (instead of overwriting) keeps system `git` reachable
+    /// from any parallel test that spawns subprocesses.
+    fn scoped_prepend_path(dir: &std::path::Path) -> impl Drop {
+        struct G {
+            _lock: std::sync::MutexGuard<'static, ()>,
+            prev: Option<String>,
+        }
+        impl Drop for G {
+            fn drop(&mut self) {
+                match &self.prev {
+                    Some(v) => std::env::set_var("PATH", v),
+                    None => std::env::remove_var("PATH"),
+                }
+            }
+        }
+        let lock = PATH_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        let prev = std::env::var("PATH").ok();
+        let new = match &prev {
+            Some(v) => format!("{}:{}", dir.display(), v),
+            None => format!("{}", dir.display()),
+        };
+        std::env::set_var("PATH", &new);
+        G { _lock: lock, prev }
+    }
 
     fn make_executable(path: &std::path::Path) {
         std::fs::write(path, "#!/bin/sh\necho gh fake\n").unwrap();
@@ -16613,17 +17095,8 @@ mod resolve_gh_binary_tests {
         let tmp = TempDir::new().unwrap();
         let gh = tmp.path().join("gh");
         make_executable(&gh);
-        // Set PATH to ONLY our temp dir so we don't conflict with the
-        // system gh and we know exactly what was resolved.
-        let prev_path = std::env::var("PATH").ok();
-        std::env::set_var("PATH", tmp.path());
-        let resolved = resolve_gh_binary();
-        if let Some(p) = prev_path {
-            std::env::set_var("PATH", p);
-        } else {
-            std::env::remove_var("PATH");
-        }
-        let resolved = resolved.expect("expected to find fake gh on PATH");
+        let _g = scoped_prepend_path(tmp.path());
+        let resolved = resolve_gh_binary().expect("expected to find fake gh on PATH");
         assert_eq!(
             std::fs::canonicalize(&resolved).unwrap(),
             std::fs::canonicalize(&gh).unwrap()
@@ -16636,14 +17109,9 @@ mod resolve_gh_binary_tests {
         let tmp = TempDir::new().unwrap();
         let gh = tmp.path().join("gh");
         make_non_executable(&gh);
-        let prev_path = std::env::var("PATH").ok();
-        std::env::set_var("PATH", tmp.path());
+        let _g = scoped_prepend_path(tmp.path());
         let resolved = resolve_gh_binary();
-        if let Some(p) = prev_path {
-            std::env::set_var("PATH", p);
-        } else {
-            std::env::remove_var("PATH");
-        }
+        drop(_g);
         // We may still pick up a real system gh via the absolute-path
         // fallback — but we should NOT have picked up our broken fake.
         if let Some(p) = resolved {
@@ -16674,6 +17142,163 @@ mod resolve_gh_binary_tests {
     fn is_executable_rejects_missing() {
         let tmp = TempDir::new().unwrap();
         assert!(!is_executable(&tmp.path().join("nope")));
+    }
+
+    /// BUG-79: a file that passes is_executable but whose spawn fails
+    /// (broken interpreter line) is not returned — we fall back to the
+    /// next candidate or return None. trace:BUG-79 | ai:claude
+    #[test]
+    fn rejects_is_executable_but_spawn_fails() {
+        let tmp = TempDir::new().unwrap();
+        let bad = tmp.path().join("gh");
+        // Shebang points at a non-existent interpreter, so spawn errors
+        // with ENOENT even though is_executable returns true.
+        std::fs::write(
+            &bad,
+            "#!/this/interpreter/does/not/exist\necho should never run\n",
+        )
+        .unwrap();
+        let mut perms = std::fs::metadata(&bad).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&bad, perms).unwrap();
+        assert!(is_executable(&bad));
+
+        let _g = scoped_prepend_path(tmp.path());
+        let resolved = resolve_gh_binary();
+        drop(_g);
+        // Either None (no other gh) or some other path — never the broken one.
+        if let Some(p) = resolved {
+            assert_ne!(
+                std::fs::canonicalize(&p).unwrap(),
+                std::fs::canonicalize(&bad).unwrap()
+            );
+        }
+    }
+
+    /// BUG-79: when PATH has a broken candidate followed by a working one,
+    /// the working one wins. trace:BUG-79 | ai:claude
+    #[test]
+    fn falls_back_past_broken_to_working() {
+        let broken_dir = TempDir::new().unwrap();
+        let good_dir = TempDir::new().unwrap();
+
+        let broken = broken_dir.path().join("gh");
+        std::fs::write(&broken, "#!/this/does/not/exist\n").unwrap();
+        let mut p = std::fs::metadata(&broken).unwrap().permissions();
+        p.set_mode(0o755);
+        std::fs::set_permissions(&broken, p).unwrap();
+
+        let good = good_dir.path().join("gh");
+        make_executable(&good);
+
+        // Prepend BOTH dirs so the broken one is hit first, then the good
+        // one. Order matters: broken_dir wins on lookup order.
+        let combined = std::path::PathBuf::from(format!(
+            "{}:{}",
+            broken_dir.path().display(),
+            good_dir.path().display()
+        ));
+        let _g = scoped_prepend_path(&combined);
+        let resolved = resolve_gh_binary().expect("should fall back to the working gh");
+        drop(_g);
+        assert_eq!(
+            std::fs::canonicalize(&resolved).unwrap(),
+            std::fs::canonicalize(&good).unwrap()
+        );
+    }
+}
+
+#[cfg(test)]
+mod session_root_resolution_tests {
+    //! trace:BUG-75 BUG-76 | ai:claude
+    use super::*;
+    use std::process::Command;
+    use tempfile::TempDir;
+
+    fn git(p: &std::path::Path, args: &[&str]) {
+        let o = Command::new("git")
+            .arg("-C")
+            .arg(p)
+            .args(args)
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@t")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@t")
+            .output()
+            .unwrap();
+        assert!(o.status.success(), "git {:?} failed", args);
+    }
+
+    fn fixture_with_linked_worktree() -> (TempDir, std::path::PathBuf, std::path::PathBuf) {
+        let tmp = TempDir::new().unwrap();
+        let main = tmp.path().join("repo");
+        std::fs::create_dir_all(&main).unwrap();
+        git(&main, &["init", "--initial-branch=main", "--quiet"]);
+        std::fs::write(main.join("a.txt"), "x").unwrap();
+        git(&main, &["add", "a.txt"]);
+        git(&main, &["commit", "-m", "base", "--quiet"]);
+        git(&main, &["checkout", "-b", "feature", "--quiet"]);
+        std::fs::write(main.join("a.txt"), "y").unwrap();
+        git(&main, &["add", "a.txt"]);
+        git(&main, &["commit", "-m", "feature", "--quiet"]);
+        git(&main, &["checkout", "main", "--quiet"]);
+
+        let linked = tmp.path().join("repo-feature");
+        git(
+            &main,
+            &[
+                "worktree",
+                "add",
+                linked.to_str().unwrap(),
+                "feature",
+                "--quiet",
+            ],
+        );
+        (tmp, main, linked)
+    }
+
+    /// BUG-75: from inside a linked worktree, main_worktree_root_from
+    /// returns the MAIN worktree path, not the linked one.
+    #[test]
+    fn main_worktree_root_resolves_from_linked() {
+        let (_tmp, main, linked) = fixture_with_linked_worktree();
+        let resolved = main_worktree_root_from(&linked);
+        assert_eq!(
+            std::fs::canonicalize(&resolved).unwrap(),
+            std::fs::canonicalize(&main).unwrap(),
+            "expected main worktree, got {}",
+            resolved.display()
+        );
+    }
+
+    /// BUG-75: from the main worktree, the helper returns the same path
+    /// (no regression).
+    #[test]
+    fn main_worktree_root_returns_main_unchanged() {
+        let (_tmp, main, _linked) = fixture_with_linked_worktree();
+        let resolved = main_worktree_root_from(&main);
+        assert_eq!(
+            std::fs::canonicalize(&resolved).unwrap(),
+            std::fs::canonicalize(&main).unwrap()
+        );
+    }
+
+    /// BUG-76: detect_default_branch_ref picks origin/main when present,
+    /// falls back to local main, returns None when neither exists.
+    #[test]
+    fn default_branch_ref_prefers_origin_main() {
+        // Origin-less repo with a local main → falls back to local.
+        let (_tmp, main, _linked) = fixture_with_linked_worktree();
+        let resolved = detect_default_branch_ref(&main);
+        assert_eq!(resolved.as_deref(), Some("main"));
+    }
+
+    /// BUG-76: current_branch_at returns the branch checked out at path.
+    #[test]
+    fn current_branch_at_returns_branch_name() {
+        let (_tmp, main, linked) = fixture_with_linked_worktree();
+        assert_eq!(current_branch_at(&main).as_deref(), Some("main"));
+        assert_eq!(current_branch_at(&linked).as_deref(), Some("feature"));
     }
 }
 
@@ -18501,6 +19126,11 @@ fn print_pull_summary(store_path: &std::path::Path, pre_sha: &str) {
     let mut comment_subjects: Vec<String> = Vec::new(); // commit subjects mentioning comments
     let mut commit_count: usize = 0;
     let mut current_subject_is_comment = false;
+    // TASK-75: track commits so we can attribute status changes to their
+    // source. Map sha → (subject, source-label). trace:TASK-75 | ai:claude
+    let mut commit_sources: Vec<(String, String, String)> = Vec::new();
+    let mut current_sha: Option<String> = None;
+    let mut modified_specs_per_commit: BTreeMap<String, Vec<String>> = BTreeMap::new();
 
     for line in log.lines() {
         if line.is_empty() {
@@ -18524,6 +19154,9 @@ fn print_pull_summary(store_path: &std::path::Path, pre_sha: &str) {
                 if current_subject_is_comment {
                     comment_subjects.push(subj.to_string());
                 }
+                current_sha = Some(first.to_string());
+                let source = classify_commit_source(subj);
+                commit_sources.push((first.to_string(), subj.to_string(), source));
             } else {
                 // name-status row
                 if !rest.starts_with("objects/") || !rest.ends_with(".yaml") {
@@ -18540,7 +19173,13 @@ fn print_pull_summary(store_path: &std::path::Path, pre_sha: &str) {
                         // double-count under "modified" — they're already
                         // surfaced via comment_subjects.
                         if !current_subject_is_comment {
-                            modified.insert(spec_id, req_type);
+                            modified.insert(spec_id.clone(), req_type);
+                        }
+                        if let Some(sha) = &current_sha {
+                            modified_specs_per_commit
+                                .entry(sha.clone())
+                                .or_default()
+                                .push(spec_id);
                         }
                     }
                     Some('D') => {
@@ -18552,7 +19191,21 @@ fn print_pull_summary(store_path: &std::path::Path, pre_sha: &str) {
         }
     }
 
-    if added.is_empty() && modified.is_empty() && deleted.is_empty() && comment_subjects.is_empty()
+    // TASK-75: walk each commit's diff to extract status transitions
+    // (`-status: X` / `+status: Y` lines in the YAML hunk) and attribute
+    // them to the commit's source classification.
+    // trace:TASK-75 | ai:claude
+    let status_changes = extract_status_changes_from_commits(
+        store_path,
+        &commit_sources,
+        &modified_specs_per_commit,
+    );
+
+    if added.is_empty()
+        && modified.is_empty()
+        && deleted.is_empty()
+        && comment_subjects.is_empty()
+        && status_changes.is_empty()
     {
         println!(
             "  {} ({} commits, no spec changes — internal churn / chore-only)",
@@ -18620,10 +19273,151 @@ fn print_pull_summary(store_path: &std::path::Path, pre_sha: &str) {
             );
         }
     }
+    if !status_changes.is_empty() {
+        // TASK-75: group status changes by their commit source so the
+        // user can see which PR-N merge / commit / manual action drove
+        // each transition. trace:TASK-75 | ai:claude
+        let mut by_source: BTreeMap<String, Vec<&StatusTransition>> = BTreeMap::new();
+        for tr in &status_changes {
+            by_source.entry(tr.source.clone()).or_default().push(tr);
+        }
+        let total = status_changes.len();
+        println!(
+            "  {} {} status change{}",
+            "~".cyan(),
+            total,
+            if total == 1 { "" } else { "s" }
+        );
+        for (source, list) in &by_source {
+            println!("    {}", format!("({}):", source).dimmed());
+            for tr in list.iter().take(8) {
+                println!(
+                    "      {:<12} {} → {}",
+                    tr.spec_id,
+                    tr.from.yellow(),
+                    tr.to.green()
+                );
+            }
+            if list.len() > 8 {
+                println!("      {}", format!("(+{} more)", list.len() - 8).dimmed());
+            }
+        }
+    }
     println!(
         "  {}",
         "Run `aida history --since \"5 min ago\" --events` for the full event stream.".dimmed()
     );
+}
+
+/// TASK-75: a status transition extracted from a commit's YAML diff,
+/// annotated with where it came from. trace:TASK-75 | ai:claude
+struct StatusTransition {
+    spec_id: String,
+    from: String,
+    to: String,
+    source: String,
+}
+
+/// TASK-75: classify a commit subject as a "PR-N merge" (squash via
+/// `(#N)` suffix), an explicit commit referencing a REQ-ID, or "manual".
+/// trace:TASK-75 | ai:claude
+fn classify_commit_source(subject: &str) -> String {
+    let trimmed = subject.trim();
+    // PR-N merge: trailing `(#N)`.
+    if let Some(open) = trimmed.rfind('(') {
+        let inner = &trimmed[open + 1..];
+        if let Some(close) = inner.find(')') {
+            let body = &inner[..close];
+            if let Some(n) = body.strip_prefix('#') {
+                if !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()) {
+                    return format!("PR-{} merge", n);
+                }
+            }
+        }
+    }
+    // commit-with-REQ-ID: subject extractor finds at least one SPEC-ID
+    // in the trailing parens.
+    let ids = extract_spec_ids_from_commit(subject);
+    if !ids.is_empty() {
+        return format!("commit ({})", ids.join(", "));
+    }
+    "manual".to_string()
+}
+
+/// TASK-75: parse each commit's diff to find status transitions in the
+/// modified YAML files. Returns one StatusTransition per (commit, spec)
+/// pair that actually changed status. trace:TASK-75 | ai:claude
+fn extract_status_changes_from_commits(
+    store_path: &std::path::Path,
+    commits: &[(String, String, String)],
+    modified_specs_per_commit: &std::collections::BTreeMap<String, Vec<String>>,
+) -> Vec<StatusTransition> {
+    use std::process::Command as ProcessCommand;
+    let mut out = Vec::new();
+    for (sha, _subj, source) in commits {
+        let Some(specs) = modified_specs_per_commit.get(sha) else {
+            continue;
+        };
+        if specs.is_empty() {
+            continue;
+        }
+        let diff = match ProcessCommand::new("git")
+            .arg("-C")
+            .arg(store_path)
+            .args(["show", "--no-color", "--unified=0", sha, "--"])
+            .args(specs.iter().map(|s| format!("objects/*/{}.yaml", s)))
+            .output()
+        {
+            Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).to_string(),
+            _ => continue,
+        };
+        for tr in parse_status_transitions_from_diff(&diff) {
+            out.push(StatusTransition {
+                spec_id: tr.0,
+                from: tr.1,
+                to: tr.2,
+                source: source.clone(),
+            });
+        }
+    }
+    out
+}
+
+/// TASK-75: scan unified-diff output for status transitions. Each YAML
+/// status change appears as a `-status: X` / `+status: Y` pair within a
+/// single file's hunk. We walk file-by-file: track which spec the hunk
+/// belongs to (via `diff --git a/objects/.../X.yaml`), then pair the
+/// `-status` and `+status` lines. trace:TASK-75 | ai:claude
+fn parse_status_transitions_from_diff(diff: &str) -> Vec<(String, String, String)> {
+    let mut out = Vec::new();
+    let mut current_spec: Option<String> = None;
+    let mut prev_status: Option<String> = None;
+    for line in diff.lines() {
+        if let Some(rest) = line.strip_prefix("diff --git a/") {
+            // rest: `objects/TYPE/000/SPEC-ID.yaml b/objects/...`
+            current_spec = rest
+                .split_whitespace()
+                .next()
+                .and_then(|p| spec_id_from_orphan_path(p).into())
+                .filter(|s| s != "?");
+            prev_status = None;
+            continue;
+        }
+        let Some(spec) = current_spec.as_deref() else {
+            continue;
+        };
+        if let Some(rest) = line.strip_prefix("-status:") {
+            prev_status = Some(rest.trim().trim_matches('"').to_string());
+        } else if let Some(rest) = line.strip_prefix("+status:") {
+            let to = rest.trim().trim_matches('"').to_string();
+            if let Some(from) = prev_status.take() {
+                if from != to {
+                    out.push((spec.to_string(), from, to));
+                }
+            }
+        }
+    }
+    out
 }
 
 fn spec_id_from_orphan_path(path: &str) -> String {
@@ -18637,6 +19431,103 @@ fn spec_id_from_orphan_path(path: &str) -> String {
 
 fn req_type_from_orphan_path(path: &str) -> String {
     path.split('/').nth(1).unwrap_or("?").to_string()
+}
+
+#[cfg(test)]
+mod pull_summary_status_change_tests {
+    //! trace:TASK-75 | ai:claude
+    use super::*;
+
+    #[test]
+    fn classify_commit_source_pr_merge() {
+        assert_eq!(
+            classify_commit_source(
+                "[AI:claude] feat(session): polish (STORY-98 STORY-90 BUG-74) (#10)"
+            ),
+            "PR-10 merge"
+        );
+        assert_eq!(
+            classify_commit_source("[AI:claude] fix(x): y (BUG-77) (#42)"),
+            "PR-42 merge"
+        );
+    }
+
+    #[test]
+    fn classify_commit_source_explicit_ids() {
+        assert_eq!(
+            classify_commit_source("[AI:claude] fix(cache): foo (BUG-77)"),
+            "commit (BUG-77)"
+        );
+        assert_eq!(
+            classify_commit_source("[AI:claude] fix(s): foo (BUG-75 BUG-76)"),
+            "commit (BUG-75, BUG-76)"
+        );
+    }
+
+    #[test]
+    fn classify_commit_source_manual() {
+        assert_eq!(classify_commit_source("chore: bump dep"), "manual");
+        assert_eq!(classify_commit_source("release: v1.2.3 (1.2.3)"), "manual");
+    }
+
+    #[test]
+    fn diff_parser_extracts_single_status_change() {
+        let diff = r#"diff --git a/objects/BUG/000/BUG-77.yaml b/objects/BUG/000/BUG-77.yaml
+index abc..def 100644
+--- a/objects/BUG/000/BUG-77.yaml
++++ b/objects/BUG/000/BUG-77.yaml
+@@ -3 +3 @@ title: foo
+-status: Approved
++status: Completed
+"#;
+        let out = parse_status_transitions_from_diff(diff);
+        assert_eq!(out.len(), 1);
+        assert_eq!(
+            out[0],
+            ("BUG-77".into(), "Approved".into(), "Completed".into())
+        );
+    }
+
+    #[test]
+    fn diff_parser_handles_multiple_files() {
+        let diff = r#"diff --git a/objects/BUG/000/BUG-77.yaml b/objects/BUG/000/BUG-77.yaml
+--- a/objects/BUG/000/BUG-77.yaml
++++ b/objects/BUG/000/BUG-77.yaml
+@@ -3 +3 @@
+-status: Approved
++status: Completed
+diff --git a/objects/STORY/000/STORY-1.yaml b/objects/STORY/000/STORY-1.yaml
+--- a/objects/STORY/000/STORY-1.yaml
++++ b/objects/STORY/000/STORY-1.yaml
+@@ -3 +3 @@
+-status: InProgress
++status: Completed
+"#;
+        let out = parse_status_transitions_from_diff(diff);
+        assert_eq!(out.len(), 2);
+        assert!(out
+            .iter()
+            .any(|t| t.0 == "BUG-77" && t.1 == "Approved" && t.2 == "Completed"));
+        assert!(out
+            .iter()
+            .any(|t| t.0 == "STORY-1" && t.1 == "InProgress" && t.2 == "Completed"));
+    }
+
+    #[test]
+    fn diff_parser_skips_unchanged_status() {
+        // If status is in the diff context but didn't actually change,
+        // we shouldn't produce a transition.
+        let diff = r#"diff --git a/objects/BUG/000/BUG-77.yaml b/objects/BUG/000/BUG-77.yaml
+--- a/objects/BUG/000/BUG-77.yaml
++++ b/objects/BUG/000/BUG-77.yaml
+@@ -2,3 +2,3 @@
+ title: foo
+-status: Approved
++status: Approved
+"#;
+        let out = parse_status_transitions_from_diff(diff);
+        assert!(out.is_empty(), "unchanged status should not transition");
+    }
 }
 
 // ----------------------------------------------------------------------------
@@ -22551,18 +23442,58 @@ fn extract_spec_ids_from_commit(message: &str) -> Vec<String> {
     let mut out = Vec::new();
     for line in message.lines() {
         let trimmed = line.trim();
-        // Walk until the LAST `(...)` group on the subject line, which
-        // is where the REQ-ID lives. Body lines occasionally mention
-        // other reqs in prose; we ignore those to avoid false matches.
-        let Some(open_at) = trimmed.rfind('(') else {
+        // Walk the trailing `(...)` group(s) on the subject line. Squash
+        // commits land with a `(#N)` PR-number suffix — strip those first
+        // so the REQ-ID paren before it gets walked. BUG-78 | ai:claude
+        let mut tail: &str = trimmed;
+        while tail.ends_with(')') {
+            let Some(open_at) = tail.rfind('(') else {
+                break;
+            };
+            let inner = &tail[open_at + 1..tail.len() - 1];
+            // Is this an `(#N)` PR suffix? Skip past it and try the next group.
+            if inner.starts_with('#')
+                && inner.len() > 1
+                && inner[1..].chars().all(|c| c.is_ascii_digit())
+            {
+                tail = tail[..open_at].trim_end();
+                continue;
+            }
+            tail = &tail[..open_at + inner.len() + 2]; // include the close paren
+            break;
+        }
+        let Some(open_at) = tail.rfind('(') else {
             continue;
         };
-        let Some(close_at) = trimmed[open_at..].find(')').map(|n| open_at + n) else {
+        if !tail.ends_with(')') {
             continue;
-        };
-        let inner = &trimmed[open_at + 1..close_at];
-        if looks_like_spec_id(inner) {
-            out.push(inner.to_string());
+        }
+        let close_at = tail.len() - 1;
+        let inner = &tail[open_at + 1..close_at];
+        // BUG-78: accept comma / whitespace separated multi-spec parens
+        // like `(STORY-98 STORY-90 BUG-74)` or `(STORY-A, STORY-B)`.
+        // Single-spec parens fall through the same path (one token, one ID).
+        let line_start = out.len();
+        let mut all_ids = true;
+        let mut tok_count = 0;
+        for tok in inner.split(|c: char| c == ',' || c.is_whitespace()) {
+            let tok = tok.trim();
+            if tok.is_empty() {
+                continue;
+            }
+            tok_count += 1;
+            if looks_like_spec_id(tok) {
+                out.push(tok.to_string());
+            } else {
+                all_ids = false;
+                break;
+            }
+        }
+        // If any token wasn't spec-id-shaped this wasn't a multi-spec paren
+        // at all (release notes, commit prose). Drop what we collected for
+        // this line so version-like parens like `(1.2.3)` still don't match.
+        if !all_ids || tok_count == 0 {
+            out.truncate(line_start);
         }
     }
     out
@@ -22684,6 +23615,15 @@ fn generate_review_prompt(
 
     let mut missing: Vec<String> = Vec::new();
     for id in &spec_ids {
+        // TASK-72 polish: PR/MR pseudo-IDs (e.g., `PR-9`, `MR-42`) aren't
+        // real specs in the store — they're forge references that can
+        // sneak into the trailer-extracted list. Skip them silently so
+        // the review prompt doesn't lead with a misleading
+        // "PR-9 — (not found in store)" row before the real spec list.
+        // trace:TASK-72 | ai:claude
+        if parse_review_scope(id).is_some() {
+            continue;
+        }
         let req = store
             .requirements
             .iter()
@@ -24772,7 +25712,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 .parent()
                 .map(|p| p.to_path_buf())
                 .unwrap_or_else(|| std::path::PathBuf::from("."));
-            let active_manifests = session_manifest::list_all(&project_root_for_manifests);
+            let all_manifests = session_manifest::list_all(&project_root_for_manifests);
             let viewer_session_id = self_lease_for_routing
                 .as_ref()
                 .map(|l| l.id.clone())
@@ -25012,7 +25952,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 if let Some(req) = req {
                     if let Some(spec_id) = req.spec_id.as_deref() {
                         if let Some(other) = session_manifest::planned_by_other(
-                            &active_manifests,
+                            &all_manifests,
                             spec_id,
                             &viewer_session_id,
                         ) {
