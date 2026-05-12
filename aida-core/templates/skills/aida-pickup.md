@@ -70,6 +70,23 @@ Show the user the item and ask whether to start. Examples:
 If the user says no (wants to skip, prioritize differently, etc.), stop
 here. Don't auto-skip to the next item — the queue order encodes priority.
 
+**Skip the confirm when invoked with `--auto-first`** (TASK-86). When
+`aida queue work` launches the skill in cluster mode (drain a parent
+scope) or head mode (no-arg, top of queue), it passes `--auto-first` to
+signal that the user has already authorized draining via the queue-work
+pre-flight summary. In that case, skip the "want me to start?" prompt
+and proceed straight to Step 3a/3b — re-asking inside the launched
+session is friction-without-value.
+
+Keep the confirm for:
+- Direct `/aida-pickup` invocation (no upstream consent)
+- `aida queue work <ITEM-ID>` (item mode — user named one item, may
+  want to verify it's the right pickup)
+
+After the first item, you can also skip the per-item confirm when
+walking a planned cluster — the manifest IS the consent record. Surface
+each item briefly (one line) and move to mark-in-progress.
+
 ### Step 3a: Record the planned cluster (STORY-98)
 
 If the user's confirmation covers MORE than one item — i.e. they want
