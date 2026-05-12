@@ -8,9 +8,40 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T19:13:18.798953916Z
-modified_at: 2026-05-09T19:43:56.353657845Z
+modified_at: 2026-05-12T04:34:58.038128972Z
 req_type: Story
 tags:
 - collision
 - node-ids
 - ux
+comments:
+- id: 019e1a77-7976-7a82-b1b6-a1bda68d245f
+  author: joe
+  content: |-
+    User refinement 2026-05-11: `aida queue work` should also accept EPIC-ID (or any scope-shape) and drain all queued children, not just pick up one item.
+
+    Two distinct argument shapes for the same command:
+
+    1. **Item pickup** (original): `aida queue work TASK-34`
+       - Looks up TASK-34 in queue
+       - Resolves its parent EPIC / for_scope as session scope
+       - Session manifest gets just that one item
+       - Launches claude with /aida-pickup focused on TASK-34
+
+    2. **Cluster pickup** (new): `aida queue work EPIC-20`
+       - EPIC-20 itself isn't queued; finds all queued items where for_scope == EPIC-20 OR parent == EPIC-20 OR has scope chip [@EPIC-20]
+       - Writes session manifest pre-populated with that cluster
+       - Launches with --owns EPIC-20 and /aida-pickup; agent walks the manifest top-down
+       - Bonus: with --filter accepted, `aida queue work EPIC-20 --type bug` drains just the EPIC-20 bug cluster
+
+    3. **Queue head pickup** (no arg, already in original spec): `aida queue work`
+       - Picks queue head for active role
+
+    Argument disambiguation: `aida queue work <ID>`:
+    - If ID is in the queue → item pickup
+    - Else if ID resolves to an EPIC / STORY with queued children → cluster pickup
+    - Else → error 'no queue match for <ID>'
+
+    This is the natural surface for overnight drains and themed batches. Composes with STORY-98 (manifest) — cluster pickup pre-writes the manifest so the agent + user have a shared view of intent.
+  created_at: 2026-05-12T04:34:58.038128972Z
+  modified_at: 2026-05-12T04:34:58.038128972Z
