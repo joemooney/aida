@@ -47,12 +47,12 @@ description: |
   - [ ] `aida queue work --help` lists auto as a valid mode with brief description ("auto-approves with background safety checks; research preview")
   - [ ] CLAUDE.md documents the permission-mode landscape (when to use each)
   - [ ] Tested: invoke with auto, verify Claude Code receives it cleanly
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T07:00:47.866909338Z
-modified_at: 2026-05-12T14:53:52.548631185Z
+modified_at: 2026-05-12T14:55:41.647326927Z
 req_type: Task
 relationships:
 - rel_type: Child
