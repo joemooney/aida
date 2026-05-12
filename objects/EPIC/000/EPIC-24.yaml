@@ -1,0 +1,55 @@
+id: 019e1cca-9950-78a0-bf56-b1393eacdcc5
+spec_id: EPIC-24
+agreed_id: EPIC-24
+title: 'Living documentation: capture rationale, use cases, recipes, and tutorial seeds DURING work — book-as-living-document'
+description: |
+  User observation 2026-05-12 after 14 PRs of substantive work: AIDA tracks WHAT (specs, status, relations) but loses the WHY — the narrative around design decisions, use-case patterns, alternative approaches, gotchas, recipes. Rich context is generated during work (agent dialogues, design debates, edge-case discoveries) but evaporates unless someone hand-curates it later.
+
+  Specific example 2026-05-12: TASK-81 (`aida queue work --steal`) shipped with acceptance criteria but no narrative. A user reading the spec doesn't know:
+  - WHEN it's useful (muddle recovery, not daily use)
+  - WHY it exists (agent crashes, forgotten cleanup, cross-machine handoff)
+  - WHAT alternatives exist (`aida edit X --status approved` + normal pickup is often simpler)
+  - HOW it composes (alternative to ending the holding session manually)
+
+  The reqs in the store have this context buried in their comments + commit bodies — but it's not surfaced as documentation.
+
+  User framing: "If we were writing an Aida book this would be ideal."
+
+  ## Vision
+
+  Treat documentation as a first-class output of AIDA work, captured *while* the work happens (so the rationale is fresh), structured for downstream consumption (book chapters, tutorial sections, FAQ entries).
+
+  ## Child stories (design capture)
+
+  1. **`aida doc` data model** — a Documentation type (or sub-type of Meta) capturing: title, scenario, code-pointer, related-specs, audience (user/agent/developer), examples
+  2. **`aida doc add` capture command** — `aida doc add --about TASK-81 --scenario "muddle recovery"` from any session
+  3. **`/aida-doc` proactive skill** — during work, asks "what was the WHY?" at natural checkpoints (after status flip to Completed, after PR open)
+  4. **Auto-generated tutorial structure** — `docs/tutorials/` rendered from req metadata + linked doc entries
+  5. **Book chapter composition** — feature clusters auto-organize into chapters (e.g., EPIC-23 = "Session orchestration & autonomy" chapter, populated from its child stories + their doc entries)
+  6. **Cross-reference rendering** — feature → uses → composes-with edges in tutorial pages
+  7. **Auto-capture during /aida-pickup and /aida-review** — agent prompts user for rationale notes as they walk specs
+  8. **Diff-driven docs prompt** — when a PR opens, scan diff for "new public surface" and prompt for doc coverage
+
+  ## Composes with
+
+  - META requirements (existing AI prompt customization) — doc captures could leverage the same Meta infrastructure
+  - /aida-pr + /aida-review skills — natural moments to prompt for doc capture
+  - STORY-67 (review prompt --pr) — review prompts already extract acceptance sections; could extract or prompt for "scenario" sections too
+  - Existing rich comment threads on reqs — many already contain doc-worthy narrative; can be promoted/extracted
+
+  ## Non-goals
+
+  - Replacing CLAUDE.md / OVERVIEW.md hand-curation entirely (humans still need the synthesis layer)
+  - Generating publish-ready prose (just structured raw material; humans polish)
+  - Forcing doc capture for every spec (low-value reqs don't need narrative; opt-in)
+
+  ## Acceptance (EPIC-level)
+
+  When mostly shipped, a developer asking "when should I use `aida queue work --steal`?" gets a clean tutorial answer in `docs/tutorials/` or `aida doc show TASK-81` instead of grepping commit history. A new contributor can read the auto-generated book index and find conceptual chapters that reflect AIDA's actual feature landscape.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T15:25:00.112532296Z
+modified_at: 2026-05-12T15:25:00.112532296Z
+req_type: Epic
