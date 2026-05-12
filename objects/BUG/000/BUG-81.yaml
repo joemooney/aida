@@ -1,0 +1,56 @@
+id: 019e1a66-a2ff-79f1-bce2-a376de2de5c0
+spec_id: BUG-81
+agreed_id: BUG-81
+title: aida queue list displays spec_id (long form) instead of agreed_id (short form) when both exist
+description: |
+  Caught 2026-05-11 — `aida queue list` renders items as `TASK-2-074`, `STORY-2-076`, `BUG-2-081` etc. even though those items have agreed_ids assigned (`TASK-31`, `STORY-42`, `BUG-34`). Other commands like `aida list`, `aida show`, `aida search` prefer the agreed_id when present and only fall back to spec_id when no agreed exists.
+
+  ## Today's behavior
+
+  Queue list renders `entry.spec_id` (the file-name form, distributed-aware). Other surfaces render `entry.agreed_id.unwrap_or(entry.spec_id)`.
+
+  ## User-visible impact
+
+  After running `aida db merge-gate`, the user expects the queue to show short IDs (the whole point of merge-gate). Instead they see no change in the queue and assume merge-gate didn't work. Confusing and undermines confidence in the gate.
+
+  ## Fix
+
+  In the queue list handler (aida-cli/src/main.rs, queue list rendering), prefer `req.agreed_id.as_deref().unwrap_or(req.spec_id.as_deref().unwrap_or("???"))` — same pattern as the rest of the CLI.
+
+  Also: `aida queue next`, `aida queue add` confirmation output, `aida queue done` output — all should follow the same rule (display agreed_id when present).
+
+  ## Verification
+
+  After fix:
+  ```
+  $ aida queue list
+  1. TASK-31     aida session start --launch: pass --name to claude...
+  2. STORY-42    aida queue work [<id>]...
+  3. TASK-34     TASK-76 follow-up: retry later option...
+  ...
+  ```
+
+  vs today's:
+  ```
+  1. TASK-2-074  aida session start --launch...
+  2. STORY-2-076 aida queue work [<id>]...
+  3. TASK-2-077  TASK-76 follow-up...
+  ```
+
+  ## Composes with
+
+  - `aida db merge-gate` (already exists) — this fix makes the gate's effect visible
+  - TASK-2-078 / TASK-78 (queue list --tree) — same display layer; both should use agreed_id
+
+  ## Acceptance
+
+  - [ ] `aida queue list` displays agreed_id when present, spec_id otherwise
+  - [ ] Same fix applies to `aida queue next`, `aida queue done`, `aida queue add` output
+  - [ ] Tested: merge-gate runs, then queue list shows the new short IDs
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T04:16:34.559432835Z
+modified_at: 2026-05-12T04:16:34.559432835Z
+req_type: Bug
