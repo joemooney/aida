@@ -10199,6 +10199,29 @@ fn parse_review_scope(scope: &str) -> Option<(ReviewForge, u64)> {
     }
 }
 
+/// TASK-85: short label for a review forge + number, e.g. "PR-14" / "MR-7".
+/// Centralized so the error messages stay consistent with how STORY-66 /
+/// STORY-90 produce the auto-queue titles. trace:TASK-85 | ai:claude
+fn format_review_label(forge: ReviewForge, n: u64) -> String {
+    let prefix = match forge {
+        ReviewForge::GitHub => "PR",
+        ReviewForge::GitLab => "MR",
+    };
+    format!("{}-{}", prefix, n)
+}
+
+/// TASK-85: predicate for `aida queue work PR-N` resolution. Returns
+/// true when the requirement title is a review story for this PR/MR —
+/// i.e. starts with `Review <LABEL>:` (case-insensitive on the prefix,
+/// exact on the number). Kept pure so the resolver path can be unit
+/// tested without a fake store. trace:TASK-85 | ai:claude
+fn review_title_matches(title: &str, forge: ReviewForge, n: u64) -> bool {
+    let label = format_review_label(forge, n);
+    let lower = title.trim_start().to_ascii_lowercase();
+    let want = format!("review {}:", label.to_ascii_lowercase());
+    lower.starts_with(&want)
+}
+
 /// STORY-61: detect the project's forge by inspecting `origin`'s URL.
 /// Returns None for hosts we don't recognize (Bitbucket, self-hosted
 /// without telltale domain, etc.) — caller can require `--forge`.
@@ -20079,15 +20102,30 @@ mod queue_work_tests {
         );
     }
 
-    /// Implementer + cluster/head → bare `/aida-pickup` (manifest carries
-    /// the context; no need for a focus arg).
+    /// Implementer + cluster/head → `/aida-pickup --auto-first`
+    /// (manifest carries the context; STORY-42 pre-flight is the consent
+    /// point so the skill skips its own confirm). trace:TASK-86 | ai:claude
     #[test]
-    fn prompt_implementer_cluster_is_bare() {
+    fn prompt_implementer_cluster_is_auto_first() {
         let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
         let plan = plan_with(QueueWorkMode::Cluster, "EPIC-20", vec![e]);
         assert_eq!(
             derive_queue_work_prompt(&plan, "implementer"),
-            "/aida-pickup"
+            "/aida-pickup --auto-first"
+        );
+    }
+
+    /// Implementer + head mode → also `/aida-pickup --auto-first`.
+    /// The no-arg invocation explicitly opts into queue-driven flow, so
+    /// the confirm is the same friction-without-value as cluster mode.
+    /// trace:TASK-86 | ai:claude
+    #[test]
+    fn prompt_implementer_head_is_auto_first() {
+        let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
+        let plan = plan_with(QueueWorkMode::Head, "EPIC-20", vec![e]);
+        assert_eq!(
+            derive_queue_work_prompt(&plan, "implementer"),
+            "/aida-pickup --auto-first"
         );
     }
 
@@ -20173,6 +20211,245 @@ mod queue_work_tests {
         assert!(spec_matches(&r, "BUG-42")); // agreed_id
         assert!(spec_matches(&r, "bug-42"));
         assert!(!spec_matches(&r, "BUG-99"));
+    }
+
+    fn lease_for(id: &str, scope: &str, age_secs: i64) -> SessionLease {
+        SessionLease {
+            id: id.to_string(),
+            scope: scope.to_string(),
+            slug: scope.to_lowercase(),
+            owner: "u".into(),
+            worktree_path: std::path::PathBuf::from(format!("/tmp/wt-{}", id)),
+            branch: format!("br-{}", id),
+            started_at: chrono::Utc::now() - chrono::Duration::seconds(age_secs),
+            hostname: "h".into(),
+            role: Some("implementer".into()),
+            creator_pid: None,
+            cargo_target_dir: None,
+            parent_project_root: None,
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
+        }
+    }
+
+    /// No leases → no conflict. trace:TASK-81 | ai:claude
+    #[test]
+    fn lease_conflict_empty() {
+        assert!(find_scope_lease_conflict(&[], "TASK-81").is_none());
+    }
+
+    /// Lease on a different scope → no conflict. trace:TASK-81 | ai:claude
+    #[test]
+    fn lease_conflict_mismatched_scope() {
+        let leases = vec![lease_for("aaaa", "EPIC-20", 10)];
+        assert!(find_scope_lease_conflict(&leases, "TASK-81").is_none());
+    }
+
+    /// Exact scope match → that lease is the conflict.
+    /// trace:TASK-81 | ai:claude
+    #[test]
+    fn lease_conflict_exact_match() {
+        let leases = vec![lease_for("aaaa", "TASK-81", 10)];
+        let got = find_scope_lease_conflict(&leases, "TASK-81").unwrap();
+        assert_eq!(got.id, "aaaa");
+    }
+
+    /// Case-insensitive scope match — `aida queue work task-81` should
+    /// still detect a lease owning `TASK-81`. trace:TASK-81 | ai:claude
+    #[test]
+    fn lease_conflict_case_insensitive() {
+        let leases = vec![lease_for("aaaa", "TASK-81", 10)];
+        let got = find_scope_lease_conflict(&leases, "task-81").unwrap();
+        assert_eq!(got.id, "aaaa");
+    }
+
+    /// Multiple leases on the same scope → freshest (smallest age) wins,
+    /// so `session_end` targets the live one rather than a stale ghost.
+    /// trace:TASK-81 | ai:claude
+    #[test]
+    fn lease_conflict_picks_freshest() {
+        let leases = vec![
+            lease_for("oldold", "TASK-81", 600),
+            lease_for("freshh", "TASK-81", 10),
+        ];
+        let got = find_scope_lease_conflict(&leases, "TASK-81").unwrap();
+        assert_eq!(got.id, "freshh");
+    }
+
+    /// --permission-mode flag beats everything else.
+    /// trace:TASK-84 | ai:claude
+    #[test]
+    fn permission_mode_flag_wins() {
+        let (m, o) =
+            resolve_queue_work_permission_mode(Some("plan"), Some("auto"), Some("default"), true);
+        assert_eq!(m, "plan");
+        assert_eq!(o, "--permission-mode flag");
+    }
+
+    /// AIDA_PERMISSION_MODE env wins over config + worktree default.
+    /// trace:TASK-84 | ai:claude
+    #[test]
+    fn permission_mode_env_beats_config() {
+        let (m, o) = resolve_queue_work_permission_mode(None, Some("auto"), Some("default"), true);
+        assert_eq!(m, "auto");
+        assert_eq!(o, "AIDA_PERMISSION_MODE env");
+    }
+
+    /// config.toml [behavior] beats the worktree default.
+    /// trace:TASK-84 | ai:claude
+    #[test]
+    fn permission_mode_config_beats_worktree_default() {
+        let (m, o) = resolve_queue_work_permission_mode(None, None, Some("acceptEdits"), true);
+        assert_eq!(m, "acceptEdits");
+        assert_eq!(o, ".aida/config.toml");
+    }
+
+    /// Inside an AIDA worktree with no overrides → bypassPermissions
+    /// (the autonomous-overnight default). trace:TASK-84 | ai:claude
+    #[test]
+    fn permission_mode_aida_worktree_default_is_bypass() {
+        let (m, o) = resolve_queue_work_permission_mode(None, None, None, true);
+        assert_eq!(m, "bypassPermissions");
+        assert_eq!(o, "aida-worktree default");
+    }
+
+    /// Outside an AIDA worktree → acceptEdits (foreign cwd, safe).
+    /// trace:TASK-84 | ai:claude
+    #[test]
+    fn permission_mode_non_aida_default_is_acceptedits() {
+        let (m, o) = resolve_queue_work_permission_mode(None, None, None, false);
+        assert_eq!(m, "acceptEdits");
+        assert_eq!(o, "non-aida default");
+    }
+
+    /// Empty string from env/config is treated as absent (so an empty
+    /// shell variable doesn't accidentally lock the user out of the
+    /// AIDA-worktree default). trace:TASK-84 | ai:claude
+    #[test]
+    fn permission_mode_empty_strings_are_ignored() {
+        let (m, o) = resolve_queue_work_permission_mode(Some(""), Some(""), Some(""), true);
+        assert_eq!(m, "bypassPermissions");
+        assert_eq!(o, "aida-worktree default");
+    }
+
+    /// `read_behavior_permission_mode` parses `[behavior]
+    /// permission_mode = "..."` and ignores other sections.
+    /// trace:TASK-84 | ai:claude
+    #[test]
+    fn read_behavior_permission_mode_parses_value() {
+        let tmp = std::env::temp_dir().join(format!(
+            "aida-task84-config-{}",
+            chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
+        ));
+        let aida = tmp.join(".aida");
+        std::fs::create_dir_all(&aida).unwrap();
+        std::fs::write(
+            aida.join("config.toml"),
+            "[id_format]\npolicy = \"node-aware-only\"\n\n[behavior]\npermission_mode = \"auto\"\n",
+        )
+        .unwrap();
+        let got = read_behavior_permission_mode(&tmp);
+        assert_eq!(got.as_deref(), Some("auto"));
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// Missing config file → None. trace:TASK-84 | ai:claude
+    #[test]
+    fn read_behavior_permission_mode_missing_is_none() {
+        let tmp = std::env::temp_dir().join(format!(
+            "aida-task84-noconf-{}",
+            chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&tmp).unwrap();
+        assert!(read_behavior_permission_mode(&tmp).is_none());
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// `review_title_matches` accepts the canonical "Review PR-N: ..."
+    /// shape, leading whitespace, and is case-insensitive on the prefix
+    /// but exact on the number. trace:TASK-85 | ai:claude
+    #[test]
+    fn review_title_matches_canonical() {
+        assert!(review_title_matches(
+            "Review PR-14: shave this yak",
+            ReviewForge::GitHub,
+            14
+        ));
+        assert!(review_title_matches(
+            "  Review PR-14: leading space",
+            ReviewForge::GitHub,
+            14
+        ));
+        assert!(review_title_matches(
+            "review pr-14: lowercase prefix",
+            ReviewForge::GitHub,
+            14
+        ));
+        assert!(review_title_matches(
+            "Review MR-7: gitlab works",
+            ReviewForge::GitLab,
+            7
+        ));
+    }
+
+    /// Reject titles that aren't review stories, that name a different
+    /// number, or that name the wrong forge. trace:TASK-85 | ai:claude
+    #[test]
+    fn review_title_matches_rejects_mismatches() {
+        // Different PR number.
+        assert!(!review_title_matches(
+            "Review PR-15: nope",
+            ReviewForge::GitHub,
+            14
+        ));
+        // Different forge.
+        assert!(!review_title_matches(
+            "Review PR-14: github not gitlab",
+            ReviewForge::GitLab,
+            14
+        ));
+        // Title doesn't start with Review.
+        assert!(!review_title_matches(
+            "Fixing PR-14",
+            ReviewForge::GitHub,
+            14
+        ));
+        // PR-14 mentioned but not as review.
+        assert!(!review_title_matches(
+            "Follow-up to PR-14",
+            ReviewForge::GitHub,
+            14
+        ));
+        // Substring number — `PR-140` must not match PR-14.
+        assert!(!review_title_matches(
+            "Review PR-140: longer number",
+            ReviewForge::GitHub,
+            14
+        ));
+    }
+
+    /// `format_review_label` produces the human-facing label that error
+    /// messages use. trace:TASK-85 | ai:claude
+    #[test]
+    fn format_review_label_shapes() {
+        assert_eq!(format_review_label(ReviewForge::GitHub, 14), "PR-14");
+        assert_eq!(format_review_label(ReviewForge::GitLab, 7), "MR-7");
+    }
+
+    /// `[behavior]` section absent → None, even when other sections exist.
+    /// trace:TASK-84 | ai:claude
+    #[test]
+    fn read_behavior_permission_mode_section_absent() {
+        let tmp = std::env::temp_dir().join(format!(
+            "aida-task84-noseq-{}",
+            chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
+        ));
+        let aida = tmp.join(".aida");
+        std::fs::create_dir_all(&aida).unwrap();
+        std::fs::write(aida.join("config.toml"), "[id_format]\npolicy = \"x\"\n").unwrap();
+        assert!(read_behavior_permission_mode(&tmp).is_none());
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 }
 
@@ -27798,6 +28075,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             type_filter,
             branch,
             path,
+            steal,
             user,
         } => {
             let user_id = get_user(user);
@@ -27812,6 +28090,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 type_filter.as_deref(),
                 branch.as_deref(),
                 path.as_deref(),
+                *steal,
             )?;
         }
     }
@@ -27978,6 +28257,83 @@ fn resolve_queue_work_plan(
             anchor_display,
             anchor_title: req.title.clone(),
         });
+    }
+
+    // TASK-85: PR-N / MR-N pickup by review-story title. The auto-queued
+    // review stories live in the queue with titles like "Review PR-14:
+    // ...", but their spec_id (e.g., STORY-103) isn't memorable. Let
+    // `aida queue work PR-14` find the corresponding queue entry by
+    // title prefix so the user doesn't have to look up the story id.
+    // Composes with STORY-66/STORY-90 (auto-queue at PR-create) which
+    // produce these stories. trace:TASK-85 | ai:claude
+    if let Some((forge, n)) = parse_review_scope(arg) {
+        let matches: Vec<aida_core::QueueEntry> = entries
+            .iter()
+            .filter(|e| {
+                let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id) else {
+                    return false;
+                };
+                if is_terminal_status(&req.status) {
+                    return false;
+                }
+                review_title_matches(&req.title, forge, n)
+            })
+            .cloned()
+            .collect();
+        match matches.len() {
+            0 => {
+                let label = format_review_label(forge, n);
+                anyhow::bail!(
+                    "no queued review story for {} — check `gh pr view {}` (or `glab mr view {}`) and run `aida pr auto-queue-review --branch <branch>` if needed",
+                    label,
+                    n,
+                    n
+                );
+            }
+            1 => {
+                let entry = matches.into_iter().next().unwrap();
+                let req = store
+                    .requirements
+                    .iter()
+                    .find(|r| r.id == entry.requirement_id)
+                    .unwrap();
+                let (scope, review_target) = derive_scope_from_entry(&entry, req, &store);
+                let anchor_display = req
+                    .agreed_id
+                    .clone()
+                    .or_else(|| req.spec_id.clone())
+                    .unwrap_or_else(|| arg.to_string());
+                let resolved = build_resolved_entry(entry, req);
+                return Ok(QueueWorkPlan {
+                    mode: QueueWorkMode::Item,
+                    entries: vec![resolved],
+                    scope,
+                    review_target,
+                    anchor_display,
+                    anchor_title: req.title.clone(),
+                });
+            }
+            _ => {
+                let label = format_review_label(forge, n);
+                let mut msg = format!(
+                    "{} matches {} queued review stories — pass the specific spec_id instead:",
+                    label,
+                    matches.len()
+                );
+                for e in &matches {
+                    if let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id)
+                    {
+                        let id = req
+                            .agreed_id
+                            .as_deref()
+                            .or(req.spec_id.as_deref())
+                            .unwrap_or("?");
+                        msg.push_str(&format!("\n  · {} — {}", id, req.title));
+                    }
+                }
+                anyhow::bail!(msg);
+            }
+        }
     }
 
     // Cluster-pickup: arg names a req that isn't queued itself but has
@@ -28223,9 +28579,14 @@ fn infer_queue_work_role(
 /// Routes by role:
 ///   - reviewer → `/aida-review --pr N` (when scope parses as PR-N/MR-N)
 ///                else `/aida-review`
-///   - implementer / other → `/aida-pickup [<ITEM-ID>]` (item mode focuses
-///                a single id; cluster/head mode lets the skill walk the
-///                manifest / queue head).
+///   - implementer / other → `/aida-pickup [<ITEM-ID> | --auto-first]`
+///                Item mode focuses a single id and keeps the skill's
+///                pre-pickup confirm (user named one item, may want to
+///                verify). Cluster / head mode passes `--auto-first` so
+///                the skill skips the first confirm — STORY-42's
+///                pre-flight summary is the consent point and re-asking
+///                inside the launched session is friction-without-value.
+///                trace:TASK-86 | ai:claude
 /// trace:STORY-42 | ai:claude
 fn derive_queue_work_prompt(plan: &QueueWorkPlan, role: &str) -> String {
     let role_lower = role.to_ascii_lowercase();
@@ -28239,7 +28600,9 @@ fn derive_queue_work_prompt(plan: &QueueWorkPlan, role: &str) -> String {
     if plan.mode == QueueWorkMode::Item {
         return format!("/aida-pickup {}", plan.anchor_display);
     }
-    "/aida-pickup".to_string()
+    // Cluster / Head: drain-intent already confirmed by the queue work
+    // pre-flight; pass --auto-first so the skill skips its own confirm.
+    "/aida-pickup --auto-first".to_string()
 }
 
 /// STORY-42: the orchestrator. Resolves the plan, optionally pulls,
@@ -28259,24 +28622,40 @@ fn handle_queue_work(
     type_filter: Option<&str>,
     branch_override: Option<&str>,
     path_override: Option<&str>,
+    steal: bool,
 ) -> Result<()> {
     let plan = resolve_queue_work_plan(storage, user_id, arg, type_filter)?;
     let (role, role_origin, warnings) = infer_queue_work_role(&plan, role_override);
 
-    // Permission mode: explicit flag → AIDA_PERMISSION_MODE env →
-    // `acceptEdits` (safe default — prompts on shell but auto-accepts
-    // edits). The pass-through to `claude --permission-mode` is
-    // unvalidated, so users can pick `auto` (research preview), `plan`,
-    // `bypassPermissions`, or any other mode the installed Claude Code
-    // understands. trace:STORY-42, TASK-83 | ai:claude
-    let permission_mode = permission_mode
-        .map(|s| s.to_string())
-        .or_else(|| {
-            std::env::var("AIDA_PERMISSION_MODE")
-                .ok()
-                .filter(|s| !s.is_empty())
-        })
-        .unwrap_or_else(|| "acceptEdits".to_string());
+    // Permission mode resolution (TASK-83 → TASK-84). Order:
+    //   1. --permission-mode flag (explicit override always wins)
+    //   2. AIDA_PERMISSION_MODE env var (process-level opt-out)
+    //   3. .aida/config.toml [behavior] permission_mode (project policy)
+    //   4. AIDA-managed worktree default → `bypassPermissions` (TASK-84:
+    //      worktree is sandboxed git state; the prompt flood was eating
+    //      autonomous overnight runs and circuit breakers stay in place)
+    //   5. Non-AIDA default → `acceptEdits` (safe default for foreign cwd)
+    // The pass-through to `claude --permission-mode` is unvalidated, so
+    // users can pick `auto`, `plan`, etc. trace:STORY-42, TASK-83, TASK-84
+    // | ai:claude
+    let env_mode = std::env::var("AIDA_PERMISSION_MODE")
+        .ok()
+        .filter(|s| !s.is_empty());
+    let project_root_for_config = find_main_worktree_root().ok();
+    let config_mode = project_root_for_config
+        .as_deref()
+        .and_then(read_behavior_permission_mode);
+    let is_aida_worktree = detect_distributed_store().is_some()
+        || project_root_for_config
+            .as_deref()
+            .map(|p| p.join(".aida").join("config.toml").exists())
+            .unwrap_or(false);
+    let (permission_mode, permission_mode_origin) = resolve_queue_work_permission_mode(
+        permission_mode,
+        env_mode.as_deref(),
+        config_mode.as_deref(),
+        is_aida_worktree,
+    );
 
     let prompt = derive_queue_work_prompt(&plan, &role);
 
@@ -28307,7 +28686,14 @@ fn handle_queue_work(
         "role",
         format!("{} {}", role.cyan(), format!("({})", role_origin).dimmed()),
     );
-    line("mode", permission_mode.cyan().to_string());
+    line(
+        "mode",
+        format!(
+            "{} {}",
+            permission_mode.cyan(),
+            format!("({})", permission_mode_origin).dimmed()
+        ),
+    );
     line("skill", prompt.cyan().to_string());
     if plan.entries.len() > 1 {
         line(
@@ -28322,6 +28708,61 @@ fn handle_queue_work(
     if let Some(warns) = &warnings {
         for w in warns {
             eprintln!("  {} {}", "⚠".yellow().bold(), w.yellow());
+        }
+    }
+
+    // TASK-81: scope-conflict pre-flight. If another active lease already
+    // owns plan.scope, `session_start` would refuse with "scope X already
+    // owned by session Y". Surface that here with a queue-work-flavored
+    // message that names --steal as the override, and when --steal is
+    // passed, end the holding session cleanly first so session_start
+    // sees a free scope. Uncommitted-changes guards in session_end still
+    // apply — we don't escalate to --force on the user's behalf because
+    // that would silently discard their in-flight work; the message
+    // points at `aida session end --force` for the user-driven path.
+    // trace:TASK-81 | ai:claude
+    {
+        let project_root_for_conflict = find_main_worktree_root()?;
+        if let Some(conflict) =
+            find_scope_lease_conflict(&list_leases(&project_root_for_conflict), &plan.scope)
+        {
+            if steal {
+                eprintln!(
+                    "  {} {} — ending it first (--steal)",
+                    "⟲".cyan().bold(),
+                    format!(
+                        "scope `{}` owned by lease {}",
+                        plan.scope,
+                        &conflict.id[..conflict.id.len().min(8)]
+                    )
+                    .cyan()
+                );
+                session_end(
+                    Some(&conflict.id),
+                    /* yes */ true,
+                    /* force */ false,
+                    /* purge_cc */ false,
+                )
+                .with_context(|| {
+                    format!(
+                        "--steal could not end lease {} cleanly. \
+                         Resolve manually (`aida session end {} --force` to discard, \
+                         or commit/stash the worktree's changes first) then re-run.",
+                        &conflict.id[..conflict.id.len().min(8)],
+                        &conflict.id[..conflict.id.len().min(8)]
+                    )
+                })?;
+            } else {
+                anyhow::bail!(
+                    "scope `{}` is owned by lease {} ({}, worktree: {}) — pass --steal to end \
+                     that session first and take over, or `aida session end {}` manually.",
+                    plan.scope,
+                    &conflict.id[..conflict.id.len().min(8)],
+                    conflict.role.as_deref().unwrap_or("(unset)"),
+                    conflict.worktree_path.display(),
+                    &conflict.id[..conflict.id.len().min(8)]
+                );
+            }
         }
     }
 
@@ -28443,6 +28884,88 @@ fn handle_queue_work(
         .cyan()
     );
     session::exec_claude_with_prompt(&permission_mode, name.as_deref(), &prompt)
+}
+
+/// TASK-84: pure resolver for `aida queue work` permission-mode.
+/// Order (first non-None wins):
+///   1. `flag`   — `--permission-mode` on the command line
+///   2. `env`    — `AIDA_PERMISSION_MODE` env var
+///   3. `config` — `.aida/config.toml [behavior] permission_mode`
+///   4. `is_aida_worktree=true` default → `bypassPermissions` (worktree is
+///      git-sandboxed; prompt flood ate autonomous runs — see TASK-84
+///      description)
+///   5. fallback → `acceptEdits` (safe default for non-AIDA cwd)
+/// Returns the mode + a short origin string for the pre-flight summary.
+/// Pure decision helper — kept separate so unit tests can pin the
+/// resolution order without env/config side effects. trace:TASK-84 | ai:claude
+fn resolve_queue_work_permission_mode(
+    flag: Option<&str>,
+    env: Option<&str>,
+    config: Option<&str>,
+    is_aida_worktree: bool,
+) -> (String, &'static str) {
+    if let Some(m) = flag.filter(|s| !s.is_empty()) {
+        return (m.to_string(), "--permission-mode flag");
+    }
+    if let Some(m) = env.filter(|s| !s.is_empty()) {
+        return (m.to_string(), "AIDA_PERMISSION_MODE env");
+    }
+    if let Some(m) = config.filter(|s| !s.is_empty()) {
+        return (m.to_string(), ".aida/config.toml");
+    }
+    if is_aida_worktree {
+        return ("bypassPermissions".to_string(), "aida-worktree default");
+    }
+    ("acceptEdits".to_string(), "non-aida default")
+}
+
+/// TASK-84: read `[behavior] permission_mode = "..."` from
+/// `.aida/config.toml`. Returns `None` when the file is missing, the
+/// section is absent, or the value is empty. We use a hand-rolled
+/// section-aware scan (rather than pulling in serde for one optional
+/// string) to stay consistent with `read_id_format_settings`.
+/// trace:TASK-84 | ai:claude
+fn read_behavior_permission_mode(project_dir: &std::path::Path) -> Option<String> {
+    let config_path = project_dir.join(".aida").join("config.toml");
+    let content = std::fs::read_to_string(&config_path).ok()?;
+    let mut in_behavior = false;
+    for raw in content.lines() {
+        let line = raw.trim();
+        if line.starts_with('#') || line.is_empty() {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix('[') {
+            in_behavior = rest.trim_end_matches(']').trim() == "behavior";
+            continue;
+        }
+        if !in_behavior {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("permission_mode") {
+            if let Some(val) = rest.split('=').nth(1) {
+                let v = val.trim().trim_matches('"').trim_matches('\'').to_string();
+                if v.is_empty() {
+                    return None;
+                }
+                return Some(v);
+            }
+        }
+    }
+    None
+}
+
+/// TASK-81: search a lease list for any active lease whose scope matches
+/// the requested scope (case-insensitive). Returns the freshest match by
+/// `started_at` so the caller has a stable target for `session_end` even
+/// if multiple stale leases somehow share a scope. Pure decision helper —
+/// kept separate so the unit test in `queue_work_tests` doesn't need to
+/// touch disk. trace:TASK-81 | ai:claude
+fn find_scope_lease_conflict(leases: &[SessionLease], scope: &str) -> Option<SessionLease> {
+    leases
+        .iter()
+        .filter(|l| l.scope.eq_ignore_ascii_case(scope))
+        .max_by_key(|l| l.started_at)
+        .cloned()
 }
 
 /// STORY-42: shell out to `aida db sync --pull`. We could refactor the

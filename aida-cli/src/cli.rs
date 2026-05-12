@@ -2083,17 +2083,21 @@ pub enum QueueCommand {
         /// pickup, OR an EPIC/STORY id with queued children for cluster
         /// pickup. Omit to pick up the head of the active role's queue.
         id: Option<String>,
-        /// Permission mode for the launched claude. Defaults to
-        /// `acceptEdits` (auto-accept edits, still prompt for shell —
-        /// the safe but prompt-heavy choice for long autonomous runs).
-        /// Env override: `AIDA_PERMISSION_MODE`. Common alt values:
-        /// `auto` (research preview: auto-approves tool calls with
-        /// background safety checks; pairs well with the aida-family
-        /// pre-allow list from `aida init`'s settings.json — TASK-82),
-        /// `bypassPermissions` (equivalent to the legacy
-        /// `--dangerously-skip-permissions`), `plan` (read-only),
-        /// `default` (prompt on everything). Passed through to
-        /// `claude --permission-mode`. trace:STORY-42, TASK-83 | ai:claude
+        /// Permission mode for the launched claude. Resolution order:
+        ///   1. this flag
+        ///   2. `AIDA_PERMISSION_MODE` env var
+        ///   3. `.aida/config.toml [behavior] permission_mode`
+        ///   4. AIDA-managed worktree default → `bypassPermissions`
+        ///      (TASK-84 — the worktree is git-sandboxed; the prompt
+        ///      flood was eating autonomous overnight runs and Claude
+        ///      Code keeps the rm -rf circuit breakers on)
+        ///   5. fallback → `acceptEdits`
+        /// Common values: `auto` (research preview: auto-approves with
+        /// background safety checks; pairs with TASK-82's pre-allow list),
+        /// `bypassPermissions` (legacy `--dangerously-skip-permissions`),
+        /// `plan` (read-only), `default` (prompt on everything). Passed
+        /// through unvalidated to `claude --permission-mode`.
+        /// trace:STORY-42, TASK-83, TASK-84 | ai:claude
         #[clap(long, value_name = "MODE")]
         permission_mode: Option<String>,
         /// Run the full setup (worktree, lease, manifest) but skip the
@@ -2128,6 +2132,15 @@ pub enum QueueCommand {
         /// `aida session start --path`.
         #[clap(long)]
         path: Option<String>,
+        /// Override the In-Progress guard when the target scope is already
+        /// held by another active lease. Without --steal, `aida queue work`
+        /// refuses and names the holding lease. With --steal, the holding
+        /// session is ended first (`aida session end <id>` — clean exit;
+        /// uncommitted work still blocks, exit those manually or use
+        /// `aida session end --force`) and the new session takes over.
+        /// trace:TASK-81 | ai:claude
+        #[clap(long)]
+        steal: bool,
         /// User ID (defaults to AIDA_USER or system user)
         #[clap(long)]
         user: Option<String>,
