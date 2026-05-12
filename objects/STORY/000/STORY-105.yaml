@@ -1,0 +1,36 @@
+id: 019e1cca-b253-73a3-8a34-4bac108db442
+spec_id: STORY-105
+agreed_id: STORY-105
+title: /aida-doc skill — proactive doc capture at natural work checkpoints
+description: |
+  After EPIC-24's data model lands, a slash command for proactive capture:
+
+  ```
+  /aida-doc           # prompts: what just shipped that's worth documenting?
+  /aida-doc TASK-81   # focuses on capturing doc for a specific spec
+  ```
+
+  The skill workflow:
+  1. Identify recently-touched specs (last activity in this session)
+  2. For each, prompt user with seed questions:
+     - "When is this useful?" (scenario)
+     - "What does it replace / improve?" (motivation)
+     - "What are alternatives?" (decision tree)
+     - "What's a quick example?" (one-liner)
+  3. Capture user's answer (or agent-drafted answer reviewed by user) via `aida doc add`
+  4. Optionally cross-link to existing tutorials
+
+  Trigger points where /aida-doc is naturally useful:
+  - After `/aida-pickup` completes (newly-shipped feature has rich context fresh)
+  - After `/aida-review` merges (review surfaces rationale that should be captured)
+  - At session end (last-chance prompt for the day's work)
+  - Manually invoked when user notices "this needs docs"
+
+  Composes with TASK-72 (/aida-review polish: scenario-aware verdicts) — the same scenario field used by /aida-doc could surface in review prompts ("verify the docs cover the published scenario").
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T15:25:06.515771037Z
+modified_at: 2026-05-12T15:25:06.515771037Z
+req_type: Story
