@@ -217,6 +217,7 @@ pub fn new_session(
     title: Option<String>,
     permission_mode: &str,
     role_override: Option<String>,
+    display_name: Option<String>,
 ) -> Result<()> {
     let role = role_override
         .or_else(|| std::env::var("AIDA_SESSION_ROLE").ok())
@@ -233,14 +234,107 @@ pub fn new_session(
 
     append_launch_log(&role, permission_mode, &title)?;
 
+    let name_for_log = display_name.as_deref().unwrap_or("(auto)");
     eprintln!(
-        "{} {} → claude --permission-mode {}",
+        "{} {} → claude --permission-mode {} (name: {})",
         "▶".green().bold(),
         format!("session new (role:{}, title:{:?})", role, title).dimmed(),
         permission_mode,
+        name_for_log,
     );
 
-    exec_claude_new(permission_mode)
+    exec_claude_new(permission_mode, display_name.as_deref())
+}
+
+/// TASK-31: derive a claude `--name` value from session metadata. Keeps the
+/// /resume picker and terminal title legible when multiple concurrent
+/// worktrees are open.
+///
+/// Convention:
+///   - role=reviewer            → `review@<scope>`               (PR/MR work)
+///   - scope=EPIC-N + batchM    → `EPIC-N:batchM`                (epic-batch)
+///   - other implementer shapes → `<role-label>@<scope>:<suffix>` or
+///                                `<role-label>@<scope>` if no suffix
+///
+/// `<suffix>` is the part of the branch name after `<scope-slug>-`. Returns
+/// `None` when scope is empty (defensive — the caller already validates).
+/// Result is truncated to 64 chars to fit common terminal-title budgets.
+/// trace:TASK-31 | ai:claude
+pub fn derive_session_name(scope: &str, branch: &str, role: &str) -> Option<String> {
+    if scope.trim().is_empty() {
+        return None;
+    }
+    let scope_display = normalize_scope_for_display(scope);
+    let role_lower = role.to_ascii_lowercase();
+    if role_lower == "reviewer" {
+        return Some(truncate(&format!("review@{}", scope_display), 64));
+    }
+    let is_epic = scope_display.starts_with("EPIC-");
+    if is_epic {
+        if let Some(batch) = extract_batch_suffix(branch) {
+            return Some(truncate(&format!("{}:{}", scope_display, batch), 64));
+        }
+    }
+    let role_label = role_label_for(&role_lower);
+    let result = match extract_branch_suffix(branch, scope) {
+        Some(s) if !s.is_empty() => format!("{}@{}:{}", role_label, scope_display, s),
+        _ => format!("{}@{}", role_label, scope_display),
+    };
+    Some(truncate(&result, 64))
+}
+
+fn normalize_scope_for_display(scope: &str) -> String {
+    // Uppercase only when it looks like a SPEC-ID (TYPE-NUM); leave
+    // free-form scopes (path globs, "feature:auth") alone.
+    let parts: Vec<&str> = scope.splitn(2, '-').collect();
+    if parts.len() == 2
+        && !parts[1].is_empty()
+        && parts[1].chars().all(|c| c.is_ascii_digit())
+        && parts[0].chars().all(|c| c.is_ascii_alphabetic())
+    {
+        return scope.to_uppercase();
+    }
+    scope.to_string()
+}
+
+fn role_label_for(role_lower: &str) -> String {
+    match role_lower {
+        "implementer" => "impl".to_string(),
+        "reviewer" => "review".to_string(),
+        "" | "-" => "session".to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn extract_batch_suffix(branch: &str) -> Option<&str> {
+    let last = branch.rsplit('-').next()?;
+    if last.len() > 5 && last.starts_with("batch") && last[5..].chars().all(|c| c.is_ascii_digit())
+    {
+        Some(last)
+    } else {
+        None
+    }
+}
+
+fn extract_branch_suffix<'a>(branch: &'a str, scope: &str) -> Option<&'a str> {
+    let scope_lower = scope.to_ascii_lowercase();
+    let prefix = format!("{}-", scope_lower);
+    let branch_lower = branch.to_ascii_lowercase();
+    if branch_lower.starts_with(&prefix) {
+        let tail = &branch[prefix.len()..];
+        if !tail.is_empty() {
+            return Some(tail);
+        }
+    }
+    None
+}
+
+fn truncate(s: &str, max: usize) -> String {
+    if s.len() <= max {
+        s.to_string()
+    } else {
+        s.chars().take(max).collect()
+    }
 }
 
 const LAUNCH_LOG_REL: &str = ".aida/session-launches.log";
@@ -282,23 +376,25 @@ fn sanitize_for_tsv(s: &str) -> String {
     s.replace('\t', " ").replace('\n', " ").replace('\r', " ")
 }
 
-/// Replace this process with `claude --permission-mode <mode>`.
-fn exec_claude_new(permission_mode: &str) -> Result<()> {
+/// Replace this process with `claude --permission-mode <mode>`. When `name`
+/// is `Some(...)`, also passes `--name <n>` so the launched session is
+/// labeled in the /resume picker and terminal title. trace:TASK-31 | ai:claude
+fn exec_claude_new(permission_mode: &str, name: Option<&str>) -> Result<()> {
     use std::process::Command;
+    let mut cmd = Command::new("claude");
+    cmd.args(["--permission-mode", permission_mode]);
+    if let Some(n) = name {
+        cmd.args(["--name", n]);
+    }
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
-        let err = Command::new("claude")
-            .args(["--permission-mode", permission_mode])
-            .exec();
+        let err = cmd.exec();
         anyhow::bail!("failed to exec claude: {}", err);
     }
     #[cfg(not(unix))]
     {
-        let status = Command::new("claude")
-            .args(["--permission-mode", permission_mode])
-            .status()
-            .context("failed to spawn claude")?;
+        let status = cmd.status().context("failed to spawn claude")?;
         std::process::exit(status.code().unwrap_or(1));
     }
 }
@@ -986,6 +1082,79 @@ mod tests {
         assert_eq!(
             extract_str(line, "\"cwd\":\""),
             Some("/home/joe/ai/aida-epic-20".into())
+        );
+    }
+
+    /// TASK-31: reviewer sessions get `review@<scope>` regardless of branch.
+    #[test]
+    fn derive_session_name_reviewer_uses_review_prefix() {
+        assert_eq!(
+            derive_session_name("PR-10", "pr-10", "reviewer"),
+            Some("review@PR-10".to_string())
+        );
+        assert_eq!(
+            derive_session_name("MR-7", "mr-7-anything", "reviewer"),
+            Some("review@MR-7".to_string())
+        );
+    }
+
+    /// TASK-31: implementer on epic-batch shape collapses to EPIC-N:batchM.
+    #[test]
+    fn derive_session_name_epic_batch_shape() {
+        assert_eq!(
+            derive_session_name("EPIC-20", "epic-20-batch11", "implementer"),
+            Some("EPIC-20:batch11".to_string())
+        );
+        // Case-insensitive scope; batch must be `batch<digits>`.
+        assert_eq!(
+            derive_session_name("epic-20", "epic-20-batch12", "implementer"),
+            Some("EPIC-20:batch12".to_string())
+        );
+    }
+
+    /// TASK-31: implementer with branch tail beyond the scope-slug uses
+    /// `<role>@<scope>:<suffix>`.
+    #[test]
+    fn derive_session_name_implementer_with_suffix() {
+        assert_eq!(
+            derive_session_name("FR-42", "fr-42-spike", "implementer"),
+            Some("impl@FR-42:spike".to_string())
+        );
+    }
+
+    /// TASK-31: when the branch matches the scope-slug exactly, fall back
+    /// to the no-suffix form.
+    #[test]
+    fn derive_session_name_implementer_no_suffix() {
+        assert_eq!(
+            derive_session_name("FR-42", "fr-42", "implementer"),
+            Some("impl@FR-42".to_string())
+        );
+    }
+
+    /// TASK-31: long names are truncated to 64 chars.
+    #[test]
+    fn derive_session_name_truncates() {
+        let scope = "feature:".to_string() + &"x".repeat(80);
+        let name = derive_session_name(&scope, "feature-x", "implementer").unwrap();
+        assert!(name.len() <= 64, "got len {}: {}", name.len(), name);
+    }
+
+    /// TASK-31: empty/sentinel role falls back to `session@<scope>`.
+    #[test]
+    fn derive_session_name_empty_role_uses_session_label() {
+        assert_eq!(
+            derive_session_name("FR-42", "fr-42-misc", "-"),
+            Some("session@FR-42:misc".to_string())
+        );
+    }
+
+    /// TASK-31: free-form scopes (not TYPE-NUM) keep their original case.
+    #[test]
+    fn derive_session_name_free_form_scope_keeps_case() {
+        assert_eq!(
+            derive_session_name("feature:auth", "feature-auth-login", "implementer"),
+            Some("impl@feature:auth".to_string())
         );
     }
 }
