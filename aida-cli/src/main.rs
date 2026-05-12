@@ -28263,7 +28263,12 @@ fn handle_queue_work(
     let plan = resolve_queue_work_plan(storage, user_id, arg, type_filter)?;
     let (role, role_origin, warnings) = infer_queue_work_role(&plan, role_override);
 
-    // Permission mode: explicit flag → AIDA_PERMISSION_MODE env → "acceptEdits".
+    // Permission mode: explicit flag → AIDA_PERMISSION_MODE env →
+    // `acceptEdits` (safe default — prompts on shell but auto-accepts
+    // edits). The pass-through to `claude --permission-mode` is
+    // unvalidated, so users can pick `auto` (research preview), `plan`,
+    // `bypassPermissions`, or any other mode the installed Claude Code
+    // understands. trace:STORY-42, TASK-83 | ai:claude
     let permission_mode = permission_mode
         .map(|s| s.to_string())
         .or_else(|| {
