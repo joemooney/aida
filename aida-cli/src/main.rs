@@ -20437,6 +20437,57 @@ mod queue_work_tests {
         assert_eq!(format_review_label(ReviewForge::GitLab, 7), "MR-7");
     }
 
+    /// Quote-aware inline-comment stripping for TOML lines.
+    /// trace:TASK-84 | ai:claude
+    #[test]
+    fn strip_toml_inline_comment_basics() {
+        // No comment → unchanged.
+        assert_eq!(strip_toml_inline_comment(""), "");
+        assert_eq!(strip_toml_inline_comment("key = \"v\""), "key = \"v\"");
+        // Trailing comment stripped.
+        assert_eq!(
+            strip_toml_inline_comment("key = \"v\" # trailing"),
+            "key = \"v\" "
+        );
+        // Whole-line comment.
+        assert_eq!(strip_toml_inline_comment("# only"), "");
+        // `#` inside a double-quoted string preserved.
+        assert_eq!(
+            strip_toml_inline_comment("key = \"hash #inside\""),
+            "key = \"hash #inside\""
+        );
+        // `#` inside a single-quoted string preserved.
+        assert_eq!(
+            strip_toml_inline_comment("key = 'hash #inside'"),
+            "key = 'hash #inside'"
+        );
+        // Quote followed by `#` outside any string → stripped.
+        assert_eq!(
+            strip_toml_inline_comment("key = \"v\"#tight"),
+            "key = \"v\""
+        );
+    }
+
+    /// `read_behavior_permission_mode` honors inline TOML comments
+    /// (regression for ultrareview bug_002). trace:TASK-84 | ai:claude
+    #[test]
+    fn read_behavior_permission_mode_strips_inline_comment() {
+        let tmp = std::env::temp_dir().join(format!(
+            "aida-task84-inline-{}",
+            chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
+        ));
+        let aida = tmp.join(".aida");
+        std::fs::create_dir_all(&aida).unwrap();
+        std::fs::write(
+            aida.join("config.toml"),
+            "[behavior]\npermission_mode = \"auto\"  # default for autonomous runs\n",
+        )
+        .unwrap();
+        let got = read_behavior_permission_mode(&tmp);
+        assert_eq!(got.as_deref(), Some("auto"));
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
     /// `[behavior]` section absent → None, even when other sections exist.
     /// trace:TASK-84 | ai:claude
     #[test]
@@ -28297,7 +28348,16 @@ fn resolve_queue_work_plan(
                     .iter()
                     .find(|r| r.id == entry.requirement_id)
                     .unwrap();
-                let (scope, review_target) = derive_scope_from_entry(&entry, req, &store);
+                // PR review pickup: scope + review_target come straight from
+                // the (forge, n) parse_review_scope just gave us. We don't
+                // delegate to derive_scope_from_entry because its title-based
+                // path is case-sensitive on `strip_prefix("Review ")` while
+                // review_title_matches is case-insensitive — a lowercase
+                // "review pr-14: …" title would pass the matcher but fall
+                // through to the spec_id fallback, losing the PR scope and
+                // the --pr N reviewer-skill route. trace:TASK-85 | ai:claude
+                let scope = format_review_label(forge, n);
+                let review_target = Some((forge, n));
                 let anchor_display = req
                     .agreed_id
                     .clone()
@@ -28711,48 +28771,32 @@ fn handle_queue_work(
         }
     }
 
-    // TASK-81: scope-conflict pre-flight. If another active lease already
+    // TASK-81: scope-conflict pre-flight. If any active lease already
     // owns plan.scope, `session_start` would refuse with "scope X already
     // owned by session Y". Surface that here with a queue-work-flavored
     // message that names --steal as the override, and when --steal is
-    // passed, end the holding session cleanly first so session_start
-    // sees a free scope. Uncommitted-changes guards in session_end still
-    // apply — we don't escalate to --force on the user's behalf because
-    // that would silently discard their in-flight work; the message
-    // points at `aida session end --force` for the user-driven path.
+    // passed, end EACH holding session cleanly first so session_start
+    // sees a free scope. Re-list + re-detect after every end so we drain
+    // the rare-but-possible multi-lease-same-scope state (manual lease
+    // restores, partial session_end crashes, concurrent writes) — the
+    // helper itself returns only the freshest, but session_start's guard
+    // bails on ANY same-scope lease, so we must sweep until clean.
+    // Uncommitted-changes guards in session_end still apply — we don't
+    // escalate to --force on the user's behalf because that would
+    // silently discard their in-flight work; the message points at
+    // `aida session end --force` for the user-driven path.
     // trace:TASK-81 | ai:claude
     {
         let project_root_for_conflict = find_main_worktree_root()?;
-        if let Some(conflict) =
+        // Safety cap: in practice this resolves in 1 iteration for the
+        // canonical case, 2-3 for the multi-lease state. A bound prevents
+        // a hypothetical infinite loop if session_end ever returns Ok
+        // without actually removing the lease (defense-in-depth).
+        let mut remaining = 16usize;
+        while let Some(conflict) =
             find_scope_lease_conflict(&list_leases(&project_root_for_conflict), &plan.scope)
         {
-            if steal {
-                eprintln!(
-                    "  {} {} — ending it first (--steal)",
-                    "⟲".cyan().bold(),
-                    format!(
-                        "scope `{}` owned by lease {}",
-                        plan.scope,
-                        &conflict.id[..conflict.id.len().min(8)]
-                    )
-                    .cyan()
-                );
-                session_end(
-                    Some(&conflict.id),
-                    /* yes */ true,
-                    /* force */ false,
-                    /* purge_cc */ false,
-                )
-                .with_context(|| {
-                    format!(
-                        "--steal could not end lease {} cleanly. \
-                         Resolve manually (`aida session end {} --force` to discard, \
-                         or commit/stash the worktree's changes first) then re-run.",
-                        &conflict.id[..conflict.id.len().min(8)],
-                        &conflict.id[..conflict.id.len().min(8)]
-                    )
-                })?;
-            } else {
+            if !steal {
                 anyhow::bail!(
                     "scope `{}` is owned by lease {} ({}, worktree: {}) — pass --steal to end \
                      that session first and take over, or `aida session end {}` manually.",
@@ -28761,6 +28805,39 @@ fn handle_queue_work(
                     conflict.role.as_deref().unwrap_or("(unset)"),
                     conflict.worktree_path.display(),
                     &conflict.id[..conflict.id.len().min(8)]
+                );
+            }
+            eprintln!(
+                "  {} {} — ending it first (--steal)",
+                "⟲".cyan().bold(),
+                format!(
+                    "scope `{}` owned by lease {}",
+                    plan.scope,
+                    &conflict.id[..conflict.id.len().min(8)]
+                )
+                .cyan()
+            );
+            session_end(
+                Some(&conflict.id),
+                /* yes */ true,
+                /* force */ false,
+                /* purge_cc */ false,
+            )
+            .with_context(|| {
+                format!(
+                    "--steal could not end lease {} cleanly. \
+                     Resolve manually (`aida session end {} --force` to discard, \
+                     or commit/stash the worktree's changes first) then re-run.",
+                    &conflict.id[..conflict.id.len().min(8)],
+                    &conflict.id[..conflict.id.len().min(8)]
+                )
+            })?;
+            remaining -= 1;
+            if remaining == 0 {
+                anyhow::bail!(
+                    "--steal sweep gave up after 16 iterations on scope `{}` — \
+                     the lease store may be corrupt; inspect `.aida/sessions/`",
+                    plan.scope
                 );
             }
         }
@@ -28919,6 +28996,27 @@ fn resolve_queue_work_permission_mode(
     ("acceptEdits".to_string(), "non-aida default")
 }
 
+/// TASK-84: quote-aware strip of an inline TOML comment.
+/// Returns the slice of `s` before the first unquoted `#`. Tracks both
+/// `"` and `'` so `key = "value with # inside"` round-trips correctly.
+/// Spec-compliant TOML allows trailing `# comment` on key/value lines;
+/// without this helper, a line like `permission_mode = "auto" # ...`
+/// would parse to the literal string `auto" # ...` and get rejected by
+/// `claude --permission-mode`. trace:TASK-84 | ai:claude
+fn strip_toml_inline_comment(s: &str) -> &str {
+    let mut in_dquote = false;
+    let mut in_squote = false;
+    for (i, c) in s.char_indices() {
+        match c {
+            '"' if !in_squote => in_dquote = !in_dquote,
+            '\'' if !in_dquote => in_squote = !in_squote,
+            '#' if !in_dquote && !in_squote => return &s[..i],
+            _ => {}
+        }
+    }
+    s
+}
+
 /// TASK-84: read `[behavior] permission_mode = "..."` from
 /// `.aida/config.toml`. Returns `None` when the file is missing, the
 /// section is absent, or the value is empty. We use a hand-rolled
@@ -28930,7 +29028,10 @@ fn read_behavior_permission_mode(project_dir: &std::path::Path) -> Option<String
     let content = std::fs::read_to_string(&config_path).ok()?;
     let mut in_behavior = false;
     for raw in content.lines() {
-        let line = raw.trim();
+        // Strip trailing inline comments before any other parsing so a
+        // legitimate `permission_mode = "auto"  # default` doesn't end up
+        // with the comment glued onto the value. trace:TASK-84 | ai:claude
+        let line = strip_toml_inline_comment(raw).trim();
         if line.starts_with('#') || line.is_empty() {
             continue;
         }
