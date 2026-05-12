@@ -1,0 +1,75 @@
+id: 019e1ce2-c99d-7682-bb79-112c105f23e5
+spec_id: STORY-107
+agreed_id: STORY-107
+title: 'Positioning + ecosystem comparison doc: ''why AIDA, how it fits'' kept current as the AI/dev-tools landscape evolves'
+description: |
+  User observation 2026-05-12 prompted by encountering Claude Code's /ultrareview: the question "what does AIDA do that <tool X> doesn't?" comes up every time a user explores the ecosystem. Today there's no maintained answer.
+
+  The ecosystem AIDA touches:
+  - **Code review tools**: /ultrareview (Claude Code built-in multi-agent), /review (Claude Code single-agent), CodeRabbit, etc.
+  - **Requirements/issue tracking**: Linear, Jira, GitHub Issues/Projects, Notion, Karpathy-style "structured markdown queryable by Claude"
+  - **Agent frameworks**: LangChain, AutoGPT, Aider, Continue, Cursor's agent features
+  - **Workflow orchestration**: GitHub Actions, custom scripts, makefiles
+  - **Documentation tooling**: mdBook, Docusaurus, Sphinx (where AIDA's docs eventually render)
+
+  For each, users ask: "should I use AIDA or X?" The honest answer is usually "different scopes; sometimes both." But that nuance is invisible without docs.
+
+  ## Proposed structure
+
+  `docs/positioning/` directory with:
+
+  ```
+  docs/positioning/
+  ├── README.md              # Why AIDA + the defensible niche statement
+  ├── vs-ultrareview.md      # AIDA-review vs /ultrareview: scope, cost, integration
+  ├── vs-linear.md           # AIDA vs Linear: req tracking vs full PM suite
+  ├── vs-jira.md             # AIDA vs Jira: lightweight git-canonical vs enterprise
+  ├── vs-github-projects.md  # AIDA vs GitHub Projects: code-aware vs surface-level
+  ├── vs-karpathy-md.md      # AIDA vs structured markdown: relationship graph + IDs
+  ├── composition.md         # Which tools COMPOSE with AIDA (use both)
+  └── when-not-to-use-aida.md  # Honest scope limits — when X is better
+  ```
+
+  Each file:
+  - Single sharp comparison
+  - What each tool is good at
+  - When to pick which (or both)
+  - Maintained alongside ecosystem changes (new tool appears → new file or update)
+
+  ## Companion: when-tool-X-changes triggers an AIDA doc review
+
+  When a competing/composing tool ships a major feature (e.g., Claude Code adds /ultrareview), the positioning doc may need an update. Could be tracked via:
+  - META requirement: "Watch tool X for changes"
+  - Periodic prompt: "Has anything in the AI-dev-tools ecosystem changed recently that affects our positioning?"
+  - Manual sweep on each AIDA release
+
+  ## First seeds to capture (right now)
+
+  From this conversation alone, we have positioning answers worth preserving:
+
+  1. **AIDA-review vs /ultrareview**: scope + cost + integration tradeoff (per the table I drew earlier)
+  2. **AIDA vs Karpathy-style markdown**: AIDA adds relationship graph + stable IDs + MCP server (per CLAUDE.md's existing line)
+  3. **AIDA vs Jira/Linear**: git-canonical storage + code-aware (trace comments) + zero-server overhead vs hosted SaaS
+
+  These can ship as the initial content even before the structure is formal.
+
+  ## Composes with
+
+  - EPIC-24 parent (living documentation) — this is the highest-level / strategic layer of the doc system
+  - README.md / OVERVIEW.md — positioning content cross-links to these
+  - `aida doc` data model (STORY-104) — positioning docs are themselves doc entries
+
+  ## Acceptance
+
+  - [ ] `docs/positioning/` directory created with the initial structure
+  - [ ] At least 3 comparison docs seeded with current best-thinking content (vs ultrareview, vs Karpathy-md, vs Linear/Jira)
+  - [ ] CLAUDE.md and OVERVIEW.md link to positioning docs
+  - [ ] A maintenance rhythm documented (when to update, who triggers it)
+  - [ ] When AIDA ships a release that meaningfully changes positioning vs another tool, positioning doc updated as part of the release subtasks (composes with EPIC-25's release subtask model)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T15:51:25.341027642Z
+modified_at: 2026-05-12T15:51:25.341027642Z
+req_type: Story
