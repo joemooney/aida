@@ -1,0 +1,52 @@
+id: 019e1acb-8346-72a0-a37c-21a689ac0c5c
+spec_id: BUG-82
+agreed_id: BUG-82
+title: merge-gate must detect agreed-id collisions before assigning short IDs
+description: |-
+  Caught during PR-12 review (2026-05-11). When the implementer ran merge-gate before opening the PR, the gate assigned agreed_ids that **collided** with already-existing requirements in the store. Result: the commit's REQ-ID trailer references IDs that resolve to the wrong requirements.
+
+  ## Symptom
+
+  In PR-12's commit `94920fcc`, the REQ-ID trailer reads `(BUG-81 TASK-31 TASK-32 TASK-33 TASK-34 TASK-36 TASK-78 BUG-34)`. But:
+
+  | trailer | actual work (node-aware spec_id) | colliding existing req                             |
+  |---------|-----------------------------------|-----------------------------------------------------|
+  | TASK-31 | TASK-2-074 (session --name)       | TASK-31 `[FR-215 test] child req` (Rejected)        |
+  | TASK-32 | TASK-2-080 (bg_worker)            | TASK-32 `[FR-215 verify] child` (Rejected)          |
+  | TASK-33 | TASK-2-078 (queue --tree)         | TASK-33 `[FR-215 v2] child` (Rejected)              |
+  | TASK-34 | TASK-2-077 (held-branch)          | TASK-34 `Convention v2/v3 follow-ups...` (Approved) |
+  | BUG-34  | BUG-2-081 (review skill)          | BUG-34 `[test] dispense skip verification` (Rejected) |
+
+  `aida show TASK-31` resolves to the **rejected test artifact**, not the work the PR actually delivered. In-code `trace:TASK-31 | ai:claude` comments now point at unrelated rejected reqs.
+
+  ## Today's behavior
+
+  `aida db merge-gate` walks pending node-aware spec_ids (e.g. `TASK-2-074`), allocates the next short ID from the agreed-id block (e.g. `TASK-31`), writes `agreed_id: TASK-31` into the YAML, and continues — without checking whether `TASK-31` is already owned by a different requirement.
+
+  This is the merge-gate analog of TASK-36's fix on the `aida add` side: TASK-36 added a warning when a fresh `aida add` falls back to node-aware because the block is exhausted. But merge-gate appears to have a parallel/distinct issue: it doesn't detect when the next short ID it's about to assign is already in use.
+
+  ## Desired behavior
+
+  Before assigning each agreed_id during merge-gate:
+  1. Check whether that short ID already exists in the store (as either `spec_id` or `agreed_id` on a different object).
+  2. If it does → either skip & advance the block pointer, or hard-error with a clear pointer to the colliding requirement.
+  3. Either way: never silently produce two requirements that resolve to the same short ID.
+
+  ## Verification
+
+  - [ ] merge-gate detects collisions before write
+  - [ ] On collision: print the offending pair (pending node-aware id + existing owner) and either advance or refuse
+  - [ ] Tested: create rejected `TASK-31` artifact, then merge-gate a pending `TASK-2-074` that would naturally land on TASK-31 → expect detection
+  - [ ] PR-12's existing collisions documented as known-baseline; consider an `aida db check --collisions` audit command to clean up retroactively
+
+  ## Composes with
+
+  - TASK-36 (block exhaustion warning on `aida add`) — same family, dispenser side
+  - BUG-81 (queue list show agreed_id) — confused users were the symptom
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T06:06:45.574043126Z
+modified_at: 2026-05-12T06:06:45.574043126Z
+req_type: Bug
