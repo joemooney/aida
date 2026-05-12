@@ -1,0 +1,46 @@
+id: 019e1cb7-2a89-78f3-823b-bd07ea93ec2b
+spec_id: TASK-85
+agreed_id: TASK-85
+title: 'STORY-42 follow-up: aida queue work PR-N resolves to the queued review story for that PR'
+description: |
+  Caught 2026-05-12 — user ran `aida queue work PR-14` expecting it to find and pick up the queued review story for PR-14. Got: "Error: `PR-14` doesn't match any queued entry or known requirement."
+
+  STORY-42's resolver tries to match the argument as:
+  1. A queued item by spec_id
+  2. A known requirement (any req in the store, by spec_id or agreed_id)
+  3. An EPIC/scope (cluster pickup mode)
+
+  PR-N isn't any of those — it's a PR number / GitHub-side reference. But the auto-queued review story IS in the queue with a title like "Review PR-N: ...". User shouldn't have to know its spec_id.
+
+  ## Fix
+
+  Resolver checks: does the argument match `^(PR|MR)-(\d+)$`?
+
+  If yes:
+  1. Search the queue for a story whose title starts with `Review PR-N:` or `Review MR-N:`
+  2. If exactly one match, treat the argument as that story's pickup (item mode, route to reviewer)
+  3. If zero matches, error: "no queued review story for PR-N; check `gh pr view N` and run `aida pr auto-queue-review --branch <branch>` if needed"
+  4. If multiple matches (rare; shouldn't happen with STORY-90's idempotency), error with disambiguation list
+
+  Equivalent to: `aida queue work PR-14` → looks up `STORY-103` automatically and proceeds.
+
+  ## Composes with
+
+  - STORY-42 (parent — queue work resolver)
+  - STORY-66 + STORY-90 (auto-queue at PR-create) — produces the review stories this resolver finds
+  - aida pr auto-queue-review — manual fire path; same naming convention
+
+  ## Acceptance
+
+  - [ ] `aida queue work PR-14` resolves to the queued `Review PR-14:` story
+  - [ ] `aida queue work MR-7` works for GitLab MRs (same shape)
+  - [ ] Error message names the issue when no review story exists for the PR
+  - [ ] Composes with `--permission-mode`, `--no-launch`, `--no-pull` from STORY-42
+  - [ ] Tested: PR with auto-queued review → works; PR without (gh failure etc.) → clear error
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T15:03:46.569495464Z
+modified_at: 2026-05-12T15:03:46.569495464Z
+req_type: Task
