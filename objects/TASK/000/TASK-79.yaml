@@ -1,0 +1,65 @@
+id: 019e1abd-d1ca-7be0-8369-58ef2fd82957
+spec_id: TASK-79
+agreed_id: TASK-79
+title: 'scripts/release.sh: handle non-interactive (no-tty) invocation gracefully — auto-confirm with --yes / AIDA_RELEASE_YES env'
+description: |
+  Caught 2026-05-11 — `make release-minor` (newly added target wrapping scripts/release.sh) appears to fail when invoked via pipe/capture because scripts/release.sh has an interactive `read -r -p "Commit + tag v$new + push? [y/N]:"` prompt. Without a TTY, `read` gets EOF, treats it as "no," and exits 1 — leaving the working tree with bumped version files but no commit.
+
+  Reproduction:
+  ```
+  $ make release-minor 2>&1 | tail -30
+  ... shows tag notes preview ...
+  make: *** [release-minor] Error 1
+  ```
+
+  Looks like a release-script failure but is actually "no tty, can't prompt."
+
+  ## Fix paths
+
+  ### Option A: --yes flag for non-interactive
+
+  ```
+  ./scripts/release.sh minor --yes      # skip the prompt, proceed
+  make release-minor RELEASE_YES=1      # makefile passes --yes
+  ```
+
+  ### Option B: Detect non-tty + warn + auto-confirm with explicit env
+
+  ```bash
+  if ! [ -t 0 ]; then
+      if [ "${AIDA_RELEASE_YES:-}" = "1" ]; then
+          answer=y
+      else
+          echo "non-interactive run detected and AIDA_RELEASE_YES not set; aborting after bump"
+          exit 1   # current behavior, but with clearer reason
+      fi
+  else
+      read -r -p "Commit + tag v$new + push? [y/N]: " answer
+  fi
+  ```
+
+  ### Option C: Defer the bump until after confirmation
+
+  Currently the script bumps Cargo files BEFORE prompting. If the user cancels, working tree is dirty (the bump). Better: do all the read+preview first, then bump+commit+tag+push as one atomic block on yes. Easier rollback on cancel.
+
+  Recommendation: combine A + C. The make target then passes --yes naturally; users running interactively still get the prompt; cancelled runs leave a clean tree.
+
+  ## Composes with
+
+  - `make release-{patch,minor,major,version}` targets — they're the use case
+  - `scripts/release.sh` itself — this is its polish
+
+  ## Acceptance
+
+  - [ ] `scripts/release.sh minor --yes` skips the prompt and proceeds
+  - [ ] Non-interactive without --yes errors clearly ("no tty, pass --yes for unattended runs")
+  - [ ] Makefile targets pass --yes when invoked
+  - [ ] Cancelled runs (no --yes, user types n) leave a clean tree (no half-bumped state)
+  - [ ] Tested: make release-minor in a tty (prompts), in a pipe (auto-yes via env or fails clearly)
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T05:51:48.170501309Z
+modified_at: 2026-05-12T05:51:48.170501309Z
+req_type: Task
