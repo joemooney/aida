@@ -1,0 +1,67 @@
+id: 019e1caf-dda4-7272-8519-b0f2026db9a6
+spec_id: TASK-84
+agreed_id: TASK-84
+title: 'STORY-42 follow-up: default permission-mode to bypassPermissions when invoked inside an AIDA worktree (.aida/ present)'
+description: |
+  User feedback 2026-05-12 after overnight run was stymied by permission prompts: "within the context of aida directory and worktrees, I see no reason to not allow full permissions. It is all in git."
+
+  The safety calculus is genuinely different inside an AIDA worktree:
+  - Everything is git-tracked or gitignored runtime state — destructive ops recoverable
+  - Agent's work area is a worktree that can be force-removed (BUG-67's fix handles this)
+  - Claude Code retains the `rm -rf /` and `rm -rf ~` circuit breakers even in bypassPermissions
+  - User has `skipDangerousModePermissionPrompt: true` set globally — explicit trust opt-in
+
+  STORY-42's current default (acceptEdits) is appropriate for SOME contexts (random projects, untrusted code) but is wrong for AIDA-managed work. The prompt flood undermines the very feature STORY-42 was built for (autonomous overnight drains).
+
+  ## Fix
+
+  In STORY-42's permission-mode resolution, detect AIDA-managed context and default accordingly:
+
+  ```rust
+  fn resolve_permission_mode(flag: Option<&str>, env_var: Option<&str>) -> &'static str {
+      if let Some(mode) = flag { return mode; }
+      if let Some(mode) = env_var { return mode; }
+      if in_aida_managed_worktree() {
+          // Inside an AIDA worktree: trusted bounded context
+          return "bypassPermissions";
+      }
+      // Outside an AIDA worktree: conservative default
+      "acceptEdits"
+  }
+  ```
+
+  `in_aida_managed_worktree()` checks: does cwd (or any ancestor up to repo root) contain a `.aida/` directory + `.aida-store/` link? If yes, this is AIDA-managed.
+
+  ## Configurable safety floor
+
+  For users who DO want the prompts even in AIDA worktrees: respect `.aida/config.toml`:
+
+  ```toml
+  [behavior]
+  permission_mode = "acceptEdits"   # opt OUT of context-aware default
+  ```
+
+  Per-user fallback also via `~/.aida/preferences.toml`.
+
+  ## Composes with
+
+  - STORY-42 (parent — queue work command)
+  - TASK-82 (settings.json pre-allow fragment) — orthogonal but composes; even within bypass mode, the pre-allow list documents the trust boundary
+  - TASK-83 (auto mode support) — could be used as an INTERMEDIATE default (auto for AIDA worktrees, acceptEdits for non-AIDA), but bypass is simpler for the AIDA case
+
+  ## Acceptance
+
+  - [ ] `aida queue work` from inside an AIDA worktree defaults to bypassPermissions
+  - [ ] From outside (`cwd` not in any AIDA project): defaults to acceptEdits (unchanged)
+  - [ ] `.aida/config.toml [behavior] permission_mode = "..."` overrides the context default
+  - [ ] `AIDA_PERMISSION_MODE` env still wins over config
+  - [ ] `--permission-mode <mode>` flag still wins over env
+  - [ ] `aida queue work --help` documents the resolution order
+  - [ ] Tested: invoke from AIDA worktree (no flag/env) → bypass. From /tmp → acceptEdits. With config override → respects config.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T14:55:48.132220356Z
+modified_at: 2026-05-12T14:55:48.132220356Z
+req_type: Task
