@@ -27,12 +27,12 @@ description: |
   - Manually invoked when user notices "this needs docs"
 
   Composes with TASK-72 (/aida-review polish: scenario-aware verdicts) — the same scenario field used by /aida-doc could surface in review prompts ("verify the docs cover the published scenario").
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:25:06.515771037Z
-modified_at: 2026-05-12T15:25:06.515771037Z
+modified_at: 2026-05-12T16:24:39.023764165Z
 req_type: Story
 relationships:
 - rel_type: Child
