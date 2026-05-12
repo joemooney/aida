@@ -1,0 +1,27 @@
+id: 019e1ae8-8d90-7201-8bb7-807194316d34
+spec_id: STORY-102
+agreed_id: STORY-102
+title: 'Review PR-13: EPIC-23 batch 1: aida queue work + merge-gate collision guard (STORY-42 BUG-82)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `019e1acf`) for branch `epic-23-batch1`.
+
+  - PR: <https://github.com/joemooney/aida/pull/13>
+  - Branch: `epic-23-batch1` → `main`
+
+  ## Covers
+
+  - STORY-42
+  - BUG-82
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 13` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T06:38:28.752762319Z
+modified_at: 2026-05-12T06:38:28.752762319Z
+req_type: Story
