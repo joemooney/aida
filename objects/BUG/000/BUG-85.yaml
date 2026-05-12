@@ -1,0 +1,53 @@
+id: 019e1cb6-6b18-7e13-ab53-2af6363f4691
+spec_id: BUG-85
+agreed_id: BUG-85
+title: 'STORY-90 auto-queue ''covers N specs'' over-counts: includes referenced specs (trace comments) not just delivered ones'
+description: |
+  Caught 2026-05-12 — `aida session end` for batch14 reported `✓ filed STORY-103 (covers TASK-83, TASK-82, TASK-79, BUG-84, TASK-80, BUG-83, TASK-48, TASK-49, STORY-98) → reviewer queue (PR #14)`.
+
+  PR-14 actually delivered 6 specs: TASK-83, TASK-82, TASK-79, BUG-84, TASK-80, BUG-83. The extra 3 (TASK-48, TASK-49, STORY-98) are referenced via trace comments in the touched files but weren't delivered by this PR — they shipped in earlier batches.
+
+  ## Root cause
+
+  The spec-extractor walks commit subjects + bodies (and maybe trace comments in changed files?) and collects all REQ-IDs it finds. Doesn't distinguish:
+  - **Delivered**: spec IDs in `(REQ-ID)` parens of commit subjects — the canonical "this commit ships this spec" marker
+  - **Referenced**: spec IDs anywhere else in commit body or as trace comments in touched files
+
+  The "covers" list should only include delivered specs.
+
+  ## Fix
+
+  Restrict spec extraction to the `(REQ-ID)` suffix of commit SUBJECTS only — not body content, not trace comments. Each commit subject has at most one parens-list of delivered REQ-IDs per AIDA convention.
+
+  ```rust
+  // Current (over-counts):
+  let specs = extract_all_req_ids(&commit_subject + commit_body + touched_file_traces);
+
+  // Fixed (delivered only):
+  let specs = extract_req_ids_from_parens_suffix(&commit_subject);
+  ```
+
+  For "referenced" tracking (also useful but distinct), keep a separate field on the review story:
+  - `delivered_specs: Vec<...>` — what this PR ships
+  - `referenced_specs: Vec<...>` — what this PR's code touches but doesn't own
+
+  The reviewer agent uses `delivered_specs` for the per-spec verdict walk; `referenced_specs` is informational ("these specs' code areas are affected; spot-check for regressions").
+
+  ## Composes with
+
+  - STORY-66 + STORY-90 (parent — auto-queue) — this refines the spec list quality
+  - BUG-78 (multi-spec parens parser) — same extractor; sweep
+  - STORY-67 (review prompt --pr) — also consumes the spec list; same fix benefits both
+
+  ## Acceptance
+
+  - [ ] "covers N specs" matches the count of `(REQ-ID)` parens-suffix items in commit subjects
+  - [ ] Referenced specs from trace comments / body content tracked separately, not in "covers"
+  - [ ] Tested: PR with 6 spec-delivering commits + 1 commit referencing other specs in body → covers = 6, not 6+N
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T15:02:57.560667499Z
+modified_at: 2026-05-12T15:02:57.560667499Z
+req_type: Bug
