@@ -20102,15 +20102,30 @@ mod queue_work_tests {
         );
     }
 
-    /// Implementer + cluster/head → bare `/aida-pickup` (manifest carries
-    /// the context; no need for a focus arg).
+    /// Implementer + cluster/head → `/aida-pickup --auto-first`
+    /// (manifest carries the context; STORY-42 pre-flight is the consent
+    /// point so the skill skips its own confirm). trace:TASK-86 | ai:claude
     #[test]
-    fn prompt_implementer_cluster_is_bare() {
+    fn prompt_implementer_cluster_is_auto_first() {
         let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
         let plan = plan_with(QueueWorkMode::Cluster, "EPIC-20", vec![e]);
         assert_eq!(
             derive_queue_work_prompt(&plan, "implementer"),
-            "/aida-pickup"
+            "/aida-pickup --auto-first"
+        );
+    }
+
+    /// Implementer + head mode → also `/aida-pickup --auto-first`.
+    /// The no-arg invocation explicitly opts into queue-driven flow, so
+    /// the confirm is the same friction-without-value as cluster mode.
+    /// trace:TASK-86 | ai:claude
+    #[test]
+    fn prompt_implementer_head_is_auto_first() {
+        let e = resolved("BUG-83", entry(Uuid::now_v7(), Some("implementer"), None));
+        let plan = plan_with(QueueWorkMode::Head, "EPIC-20", vec![e]);
+        assert_eq!(
+            derive_queue_work_prompt(&plan, "implementer"),
+            "/aida-pickup --auto-first"
         );
     }
 
@@ -28564,9 +28579,14 @@ fn infer_queue_work_role(
 /// Routes by role:
 ///   - reviewer → `/aida-review --pr N` (when scope parses as PR-N/MR-N)
 ///                else `/aida-review`
-///   - implementer / other → `/aida-pickup [<ITEM-ID>]` (item mode focuses
-///                a single id; cluster/head mode lets the skill walk the
-///                manifest / queue head).
+///   - implementer / other → `/aida-pickup [<ITEM-ID> | --auto-first]`
+///                Item mode focuses a single id and keeps the skill's
+///                pre-pickup confirm (user named one item, may want to
+///                verify). Cluster / head mode passes `--auto-first` so
+///                the skill skips the first confirm — STORY-42's
+///                pre-flight summary is the consent point and re-asking
+///                inside the launched session is friction-without-value.
+///                trace:TASK-86 | ai:claude
 /// trace:STORY-42 | ai:claude
 fn derive_queue_work_prompt(plan: &QueueWorkPlan, role: &str) -> String {
     let role_lower = role.to_ascii_lowercase();
@@ -28580,7 +28600,9 @@ fn derive_queue_work_prompt(plan: &QueueWorkPlan, role: &str) -> String {
     if plan.mode == QueueWorkMode::Item {
         return format!("/aida-pickup {}", plan.anchor_display);
     }
-    "/aida-pickup".to_string()
+    // Cluster / Head: drain-intent already confirmed by the queue work
+    // pre-flight; pass --auto-first so the skill skips its own confirm.
+    "/aida-pickup --auto-first".to_string()
 }
 
 /// STORY-42: the orchestrator. Resolves the plan, optionally pulls,
