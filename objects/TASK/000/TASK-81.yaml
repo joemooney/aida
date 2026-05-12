@@ -30,7 +30,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T06:37:13.750047240Z
-modified_at: 2026-05-12T15:25:06.778867147Z
+modified_at: 2026-05-12T15:25:29.370941182Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -53,6 +53,47 @@ comments:
     Commit: 03338606
   created_at: 2026-05-12T15:25:01.284657747Z
   modified_at: 2026-05-12T15:25:01.284657747Z
+- id: 019e1ccb-0b9a-71c0-9c60-66c09c9c46d6
+  author: joe
+  content: |-
+    ## When to use `aida queue work --steal` (doc seed, 2026-05-12)
+
+    **TL;DR**: Muddle recovery tool, not daily use.
+
+    ### Scenarios where --steal is needed
+
+    | scenario | typical cause |
+    |---|---|
+    | Agent crashed mid-work | claude process killed (OOM, network, system shutdown); lease + status In-Progress lingers |
+    | Forgotten cleanup | User stopped working an item but didn't mark done/rejected |
+    | Cross-machine handoff | Node 3 (spock work) picked up item, went idle; node 1 (imac) wants to take over |
+    | Stale after `--force` end | Session-end forcibly killed the claude; lease cleaned but req status not flipped |
+    | Re-do from scratch | User wants to redo an item on a different branch / approach |
+
+    ### Alternatives that cover ~90% of cases
+
+    ```bash
+    # Just flip the status back to Approved — claim it via normal pickup:
+    aida edit TASK-X --status approved
+    aida queue work TASK-X
+
+    # Or end the holding session if accessible:
+    aida session leases
+    aida session end <id> --force
+    aida queue work TASK-X
+    ```
+
+    So `--steal` is the one-step shortcut for the recovery dance. Without it: 2-3 commands. With it: 1 command + a confirmation prompt.
+
+    ### Honest priority assessment
+
+    Filed as Low because: workarounds exist; muddle-state is rare; not blocking anything. Worth shipping eventually for completeness, not urgently.
+
+    ---
+
+    *This comment is a documentation seed per EPIC-24 (living documentation). Future `aida doc generate` could extract sections like this into `docs/tutorials/` book chapters.*
+  created_at: 2026-05-12T15:25:29.370941182Z
+  modified_at: 2026-05-12T15:25:29.370941182Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-12T15:25:06.778867147Z
