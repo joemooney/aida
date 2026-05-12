@@ -1,0 +1,49 @@
+id: 019e1ce7-b4ef-7833-a8a6-0e04ad7d4d42
+spec_id: TASK-89
+agreed_id: TASK-89
+title: 'aida node verify: detect and surface drift between local node.toml and registry'
+description: |
+  Sibling to migrate-identity. Detects the drift before the user runs into it.
+
+  ## Surface
+
+  ```
+  aida node verify
+  ```
+
+  Output when consistent:
+  ```
+  ✓ node.toml matches registry entry: node 1 (imac, joe.mooney@gmail.com)
+  ```
+
+  Output when drift detected:
+  ```
+  ⚠ node identity drift detected:
+    Local .aida/node.toml:
+      node_id=2, hostname="spock", registered=2026-05-06
+    Registry has NO entry for node 2.
+    Registry entry matching this clone's hostname/email:
+      node 1 (imac, joe.mooney@gmail.com)
+
+    Likely fix:
+      aida node migrate-identity --to 1
+  ```
+
+  Could fire automatically:
+  - On `aida session start` (pre-flight check)
+  - On `aida` first invocation per shell (cheap, single read of local + registry)
+  - As part of `aida doctor` (when EPIC-19 matures)
+
+  ## Acceptance
+
+  - [ ] `aida node verify` reports consistent state when local matches registry
+  - [ ] Reports drift with concrete fix suggestion when not
+  - [ ] Composes with `aida node migrate-identity` (the suggested fix)
+  - [ ] Optional: auto-fire on session start with hint-only output
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T15:56:47.727478499Z
+modified_at: 2026-05-12T15:56:47.727478499Z
+req_type: Task
