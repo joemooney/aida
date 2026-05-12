@@ -847,6 +847,29 @@ pub fn merge_gate(store_path: &Path) -> Result<Vec<(String, String)>> {
     let files = object_store::list_objects(&objects_root)?;
     let mut assignments = Vec::new();
 
+    // BUG-82: collision guard. Build a set of every short id the store
+    // already resolves to — spec_ids that are themselves in global form
+    // (e.g. legacy `FR-140` migrated by FR-1-071), and every existing
+    // agreed_id. Candidate agreed_ids that collide with this set get
+    // skipped + retried so the counter walks past taken numbers instead
+    // of overwriting them. Without this, merge-gate could (and did, in
+    // PR-12) assign `TASK-34` to a node-aware req while `TASK-34` already
+    // resolved to a different requirement. trace:BUG-82 | ai:claude
+    let mut taken_short_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for (_spec_id, path) in &files {
+        let Ok(existing) = object_store::read_object_from_path(path) else {
+            continue;
+        };
+        if let Some(s) = &existing.spec_id {
+            if is_global_id_format(s) {
+                taken_short_ids.insert(s.to_ascii_uppercase());
+            }
+        }
+        if let Some(a) = &existing.agreed_id {
+            taken_short_ids.insert(a.to_ascii_uppercase());
+        }
+    }
+
     for (_spec_id, path) in &files {
         let mut req = match object_store::read_object_from_path(path) {
             Ok(r) => r,
@@ -895,8 +918,45 @@ pub fn merge_gate(store_path: &Path) -> Result<Vec<(String, String)>> {
             crate::models::RequirementType::Decision => "ADR",
             crate::models::RequirementType::Term => "TERM",
         };
-        let seq = counters.next(&type_prefix);
-        let agreed = AgreedCounters::format_agreed_id(&type_prefix, seq);
+
+        // BUG-82: walk past any candidate that already resolves to an
+        // existing requirement. Cap the retries so a pathologically
+        // dense counter range can't loop forever; 1000 is far above
+        // any real-world collision rate. Log skips to stderr so the
+        // gap in the counter sequence is visible. trace:BUG-82 | ai:claude
+        let mut seq = counters.next(type_prefix);
+        let mut agreed = AgreedCounters::format_agreed_id(type_prefix, seq);
+        let mut skipped: Vec<String> = Vec::new();
+        for _ in 0..1000 {
+            if !taken_short_ids.contains(&agreed.to_ascii_uppercase()) {
+                break;
+            }
+            skipped.push(agreed.clone());
+            seq = counters.next(type_prefix);
+            agreed = AgreedCounters::format_agreed_id(type_prefix, seq);
+        }
+        if taken_short_ids.contains(&agreed.to_ascii_uppercase()) {
+            anyhow::bail!(
+                "BUG-82 collision guard: walked 1000 candidates for prefix `{}` \
+                 without finding a free agreed-id (last tried: {}); aborting before \
+                 assigning a collision",
+                type_prefix,
+                agreed
+            );
+        }
+        if !skipped.is_empty() {
+            eprintln!(
+                "  ⚠ BUG-82: skipped {} taken candidate(s) when gating {} → {} ({})",
+                skipped.len(),
+                spec_id,
+                agreed,
+                skipped.join(", ")
+            );
+        }
+
+        // Reserve this id so a later iteration of THIS merge-gate run
+        // doesn't double-allocate it.
+        taken_short_ids.insert(agreed.to_ascii_uppercase());
 
         req.agreed_id = Some(agreed.clone());
         object_store::write_object(&objects_root, &req)?;
@@ -1124,5 +1184,103 @@ mod tests {
             suggest_free_node_id(&aida, "AL").unwrap(),
             NodeIdProbe::Free
         );
+    }
+
+    /// BUG-82: merge_gate must skip agreed-id candidates that already
+    /// resolve to an existing requirement. Seed the store with
+    /// `TASK-1` in legacy global form (so it counts as a taken short
+    /// id) and a fresh node-aware `TASK-2-001` waiting for gate. With
+    /// the counter starting at 0, the naive next() would propose
+    /// `TASK-1` — the guard must walk past it and assign `TASK-2`.
+    /// trace:BUG-82 | ai:claude
+    #[test]
+    fn merge_gate_skips_existing_short_id_collisions() {
+        use crate::models::{Requirement, RequirementType};
+        use crate::object_store;
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().to_path_buf();
+        let objects = store.join("objects");
+        std::fs::create_dir_all(&objects).unwrap();
+
+        // Existing requirement with a global-form spec_id `TASK-1`
+        // (mimics the FR-1-071 legacy-migration state).
+        let mut taken = Requirement::new("TASK-1".into(), String::new());
+        taken.spec_id = Some("TASK-1".into());
+        taken.req_type = RequirementType::Task;
+        object_store::write_object(&objects, &taken).unwrap();
+
+        // New requirement with node-aware spec_id, no agreed_id yet.
+        let mut pending = Requirement::new("TASK-2-001".into(), String::new());
+        pending.spec_id = Some("TASK-2-001".into());
+        pending.req_type = RequirementType::Task;
+        object_store::write_object(&objects, &pending).unwrap();
+
+        // Init the store as a git repo so merge_gate's commit path
+        // doesn't fail — merge_gate operates on store_path as a
+        // workdir.
+        init(&store).unwrap();
+        configure_user(&store, "Test", "test@example.com").unwrap();
+
+        let assignments = merge_gate(&store).unwrap();
+
+        // Exactly one assignment: TASK-2-001 → TASK-2 (NOT TASK-1).
+        assert_eq!(assignments.len(), 1, "exactly one gating expected");
+        let (origin, agreed) = &assignments[0];
+        assert_eq!(origin, "TASK-2-001");
+        assert_eq!(
+            agreed, "TASK-2",
+            "must skip TASK-1 because it's already taken"
+        );
+
+        // Re-running merge_gate is idempotent now that the pending
+        // req has been assigned (the legacy short-form TASK-1 is
+        // skipped because is_global_id_format catches it before the
+        // collision walk fires).
+        let second = merge_gate(&store).unwrap();
+        assert!(second.is_empty(), "second run should be a no-op");
+    }
+
+    /// BUG-82: when an EARLIER candidate from the same merge-gate run
+    /// has already been assigned, the next candidate must also walk
+    /// past it (within-run reservation). Seed with `TASK-1` taken,
+    /// then two pending node-aware tasks; expect `TASK-2` and
+    /// `TASK-3` assigned in order (no double-allocation of TASK-2).
+    /// trace:BUG-82 | ai:claude
+    #[test]
+    fn merge_gate_reserves_within_run() {
+        use crate::models::{Requirement, RequirementType};
+        use crate::object_store;
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = dir.path().to_path_buf();
+        let objects = store.join("objects");
+        std::fs::create_dir_all(&objects).unwrap();
+
+        let mut taken = Requirement::new("TASK-1".into(), String::new());
+        taken.spec_id = Some("TASK-1".into());
+        taken.req_type = RequirementType::Task;
+        object_store::write_object(&objects, &taken).unwrap();
+
+        for s in &["TASK-2-001", "TASK-2-002"] {
+            let mut r = Requirement::new(s.to_string(), String::new());
+            r.spec_id = Some(s.to_string());
+            r.req_type = RequirementType::Task;
+            object_store::write_object(&objects, &r).unwrap();
+        }
+
+        init(&store).unwrap();
+        configure_user(&store, "Test", "test@example.com").unwrap();
+
+        let mut assignments = merge_gate(&store).unwrap();
+        assignments.sort_by(|a, b| a.0.cmp(&b.0));
+        assert_eq!(assignments.len(), 2);
+        let agreed: Vec<&str> = assignments.iter().map(|(_, a)| a.as_str()).collect();
+        // Both new ids must be free, and neither may equal TASK-1.
+        for a in &agreed {
+            assert!(*a != "TASK-1");
+        }
+        // Distinct → no within-run double-allocation.
+        assert_ne!(agreed[0], agreed[1]);
     }
 }
