@@ -30,10 +30,10 @@ description: |-
 
   - TASK-62 (parent — this is its proper completion)
   - STORY-79 (the bg_worker feature itself)
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T04:01:27.667119999Z
-modified_at: 2026-05-12T04:45:30.223254157Z
+modified_at: 2026-05-12T04:47:14.346964902Z
 req_type: Task
