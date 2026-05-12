@@ -1,0 +1,63 @@
+id: 019e1cd9-aca1-7c03-932b-3e5a9a15577f
+spec_id: STORY-106
+agreed_id: STORY-106
+title: 'aida CLI: print contextual workflow hints inline at state transitions (queue done → ''open PR?'', PR merged → ''next batch?'')'
+description: |
+  Bigger architectural piece: aida CLI commands detect state transitions and print contextual workflow hints inline. Complements the skill-side recommendations (sibling TASK) by surfacing the same hints when the user runs commands directly (no agent involved).
+
+  ## Examples
+
+  ```
+  $ aida queue done TASK-86
+  ✓ TASK-86 marked Completed; removed from queue.
+
+  ⓘ Workflow hint: queue is now empty for role:implementer @EPIC-23 (4 commits on this branch).
+    Open a PR with `/aida-pr` (or `gh pr create`), or pick a new cluster with `aida queue work <scope>`.
+
+  $ aida session end 019e1cc3 --force
+  ✓ lease deleted; ✓ worktree removed
+  ⓘ filed STORY-104 (covers TASK-81, TASK-84, TASK-85, TASK-86) → reviewer queue (PR #15)
+
+  ⓘ Workflow hint: PR #15 has a reviewer story in the queue. Start the review with:
+    `aida queue work STORY-104` (or `aida queue work PR-15` per TASK-85).
+
+  $ gh pr merge 15 --squash
+  ... gh output ...
+
+  ⓘ Workflow hint (aida): PR-15 merged. Sync + decide next:
+    `aida pull && cargo build --release`
+    then `aida queue list --tree` to see what's queued and pick a cluster.
+  ```
+
+  ## Implementation
+
+  - aida-cli watches its own command's terminal state. Specific hooks:
+    - `queue done`: if queue empty for this role/scope, hint about PR
+    - `queue add`: if queue head changed, brief mention of new head (one line)
+    - `session end`: if PR detected on branch, hint about reviewer queue
+    - `edit X --status completed`: same as queue done, with context check
+    - `push`: if was the first push on a new branch, hint about `gh pr create`
+  - Hints are concise (1-2 lines), prefixed with ⓘ, dimmed (not error-bright)
+  - Disable via env: `AIDA_HINTS=false` or `aida config workflow_hints false`
+  - Don't fire on every invocation — only on STATE-TRANSITION moments (queue → empty, status → completed, etc.)
+
+  ## Composes with
+
+  - Skill-side recommendations (sibling TASK) — both surface the same advice; skills phrase it as agent suggestion, CLI hints phrase as inline footer
+  - STORY-99 (workflow dashboard TUI, EPIC-23) — TUI eventually replaces these inline hints with structured menu; until then, hints are the bridge
+  - EPIC-23's auto-spawn (STORY-92) — once shipped, hints can include "I can auto-spawn this for you — pass --auto-next"
+
+  ## Acceptance
+
+  - [ ] aida CLI prints workflow hints at recognized state-transition moments
+  - [ ] Hints concrete (named commands, IDs), not generic
+  - [ ] AIDA_HINTS=false disables; `aida config workflow_hints false` persists
+  - [ ] No regression on script-piping use cases (hints go to stderr, never stdout)
+  - [ ] Tested: queue drain → hint fires. queue done on non-terminal item → no hint. session end with no PR → no PR hint.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T15:41:28.097562148Z
+modified_at: 2026-05-12T15:41:28.097562148Z
+req_type: Story
