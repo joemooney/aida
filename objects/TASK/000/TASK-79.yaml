@@ -56,12 +56,12 @@ description: |
   - [ ] Makefile targets pass --yes when invoked
   - [ ] Cancelled runs (no --yes, user types n) leave a clean tree (no half-bumped state)
   - [ ] Tested: make release-minor in a tty (prompts), in a pipe (auto-yes via env or fails clearly)
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T05:51:48.170501309Z
-modified_at: 2026-05-12T14:49:34.302748400Z
+modified_at: 2026-05-12T14:52:05.903864854Z
 req_type: Task
 relationships:
 - rel_type: Child
