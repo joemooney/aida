@@ -1,0 +1,76 @@
+id: 019e1a4d-8d9c-7a00-8539-364579481756
+spec_id: STORY-2-076
+title: 'aida queue work [<id>]: one-shot session-setup + claude-launch for a queued item (skill-routed by item type)'
+description: |
+  User observation 2026-05-11: even after `/aida-pr` + `/aida-review` + STORY-66's auto-queue, the per-cycle setup is still 5-7 commands (pull, build, session start, cd, source, role enter, claude). Proposing a one-shot:
+
+  ```
+  aida queue work [<id>] [--permission-mode <mode>] [--no-launch]
+  ```
+
+  Picks up a queued item, runs the full setup, launches claude with the right skill — for the right role, in the right worktree, with the right permission mode.
+
+  ## Surface
+
+  ```
+  aida queue work                         # picks the queue head for active role
+  aida queue work STORY-2-075             # explicit pickup of a specific queued item
+  aida queue work --permission-mode acceptEdits   # override the default mode
+  aida queue work --no-launch             # do the setup but skip claude launch
+  ```
+
+  ## What it does (per item type)
+
+  The command inspects the queued item's type and routes:
+
+  | item shape | actions |
+  |---|---|
+  | Review story (Title starts with "Review PR-N:") | aida pull + build + session start --owns PR-N --branch pr-N --role reviewer + cd + role enter + `claude "/aida-review --pr N"` |
+  | Implementer item with scope=EPIC-N | pull + build + session start --owns EPIC-N --branch epic-N-batchM+1 --role implementer + cd + role enter + `claude "/aida-pickup"` |
+  | Implementer item without scope (loose TASK) | pull + build + session start with derived scope from --parent EPIC + claude /aida-pickup |
+  | Ambiguous (no clear routing) | error: "ambiguous; pass --role and/or --owns explicitly" |
+
+  The skill argument fed to claude (`/aida-review --pr 11` or `/aida-pickup`) means the agent immediately starts the right workflow with no first-message prompt needed.
+
+  ## Permission mode
+
+  User has been using `--dangerously-skip-permissions` for ship velocity. The "less dangerous" middle ground is Claude Code's `--permission-mode acceptEdits` — auto-accepts file edits but still prompts for shell commands. Defaults proposed:
+
+  - `aida queue work` → `acceptEdits` (the safer-but-still-streamlined default)
+  - `aida queue work --permission-mode bypassPermissions` → equivalent to today's `--dangerously-skip-permissions`
+  - `aida queue work --permission-mode plan` → read-only planning mode
+  - AIDA_PERMISSION_MODE env var sets the default project-wide
+
+  ## Composes with
+
+  - STORY-92 (auto-spawn on PR merge, EPIC-23) — auto-spawn fires THIS command; user gets dropped into the next batch automatically
+  - STORY-99 (workflow dashboard TUI) — TUI's "Start work" menu actions call into this command
+  - STORY-66/STORY-90 (auto-queue at PR-create) — fills the reviewer queue; `aida queue work` consumes it
+  - STORY-71 (auto-checkout for PR-N) — same flow; this command threads PR-N into session start which does the checkout
+  - STORY-98 (session manifest) — when an item is picked up, manifest gets written for the planned cluster
+  - BUG-71 + BUG-67 (session_end cleanups) — already handled at the lifecycle's other end
+
+  ## Failure modes to handle
+
+  - Item is already In Progress on another session → refuse with hint "owned by lease X; pass --steal to override"
+  - Item's scope doesn't resolve to a clean branch (e.g., scope is "feature:auth" free-form) → fall back to manual branch input
+  - Session-start fails (BUG-75/76 territory) → bubble up with clear error; don't half-create
+  - Claude Code not installed → clear error suggesting installation
+
+  ## Acceptance
+
+  - [ ] `aida queue work` with no args picks queue head for active role and runs full setup
+  - [ ] `aida queue work <id>` explicit pickup works
+  - [ ] Routing per item type: review story → /aida-review, implementer item → /aida-pickup
+  - [ ] `--permission-mode <mode>` flag override; `acceptEdits` default; `AIDA_PERMISSION_MODE` env override
+  - [ ] `--no-launch` skips the claude exec (does setup only — useful for scripting / debugging)
+  - [ ] Refuses to steal items In Progress on another session (without --steal)
+  - [ ] Tested: implementer pickup of EPIC-20 child → opens new batch session. Reviewer pickup of Review-PR story → opens PR-N reviewer session with auto-checkout.
+  - [ ] Tested: explicit --permission-mode propagates to claude; default is acceptEdits
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T03:49:10.684910674Z
+modified_at: 2026-05-12T03:49:10.684910674Z
+req_type: Story
