@@ -1115,6 +1115,28 @@ pub enum DbCommand {
         #[clap(subcommand)]
         subcommand: BlockCommand,
     },
+
+    /// Audit the store for consistency problems. Currently supports
+    /// `--collisions` (two requirements claiming the same short id, the
+    /// shape BUG-82 prevents at gate time but doesn't retroactively detect).
+    /// trace:TASK-80 | ai:claude
+    Check {
+        /// Report requirements whose preferred display id (agreed_id
+        /// when assigned, else spec_id) collides with another
+        /// requirement's spec_id or agreed_id. Pre-existing collisions
+        /// from before BUG-82's gate-time check (e.g., the 5 surfaced
+        /// by PR-12) persist in the store and won't auto-clear.
+        #[clap(long)]
+        collisions: bool,
+
+        /// When used with `--collisions`, re-gate the later (higher
+        /// position-encoded) claimant's agreed_id to the next free
+        /// short id. The earlier claimant keeps the contested id.
+        /// Without this flag, the command only reports; the operator
+        /// decides which to keep.
+        #[clap(long)]
+        repair: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]

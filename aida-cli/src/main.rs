@@ -2991,6 +2991,16 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             handle_retire_legacy_ids(&backend, store_path, *dry_run)?;
         }
 
+        // trace:TASK-80 | ai:claude
+        Command::Db(DbCommand::Check { collisions, repair }) => {
+            if !*collisions {
+                anyhow::bail!(
+                    "`aida db check` requires a check flag. Try `--collisions` (currently the only supported audit)."
+                );
+            }
+            handle_db_check_collisions(&backend, store_path, *repair)?;
+        }
+
         // Phase 3: Export to git backend
         Command::Db(DbCommand::ExportGit { output }) => {
             let output_path = std::path::PathBuf::from(output);
@@ -5522,6 +5532,120 @@ fn handle_retire_legacy_ids(
         if renames.len() == 1 { "" } else { "s" }
     );
     Ok(())
+}
+
+/// Audit the store for pre-existing agreed-id collisions — two requirements
+/// claiming the same short id across their (spec_id, agreed_id) pair.
+///
+/// Background: BUG-82's gate-time guard prevents NEW collisions, but the
+/// 5 pre-existing collisions surfaced by PR-12 (TASK-31, TASK-32, TASK-33,
+/// TASK-34, BUG-34) persist in the store with no audit surface. This
+/// reports each collision with all claimants' (spec_id, agreed_id, title,
+/// status) so the operator can decide which to keep and re-gate the rest.
+///
+/// `--repair` is currently a not-yet-implemented placeholder; resolving
+/// a collision typically means picking a winner manually because
+/// "automatically re-gate the later claimant" interacts with the
+/// pre-allocated block registry (FR-2-005) in ways that need policy
+/// decisions, not just code. trace:TASK-80 | ai:claude
+fn handle_db_check_collisions(
+    backend: &aida_core::CachedGitBackend,
+    _store_path: &std::path::Path,
+    repair: bool,
+) -> Result<()> {
+    use aida_core::DatabaseBackend;
+
+    let store = backend.load()?;
+
+    // For each requirement, collect the set of short-id strings it claims:
+    // its spec_id and its agreed_id (if any, and not equal to spec_id).
+    // Then invert: short_id → set of claimant UUIDs. A short_id claimed by
+    // more than one distinct requirement is a collision.
+    let mut claims: std::collections::BTreeMap<String, Vec<uuid::Uuid>> =
+        std::collections::BTreeMap::new();
+    for req in &store.requirements {
+        let mut seen_for_this_req: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
+        for id in [req.spec_id.as_deref(), req.agreed_id.as_deref()]
+            .into_iter()
+            .flatten()
+        {
+            if seen_for_this_req.insert(id.to_string()) {
+                claims.entry(id.to_string()).or_default().push(req.id);
+            }
+        }
+    }
+
+    // A "collision" is a short_id claimed by 2+ distinct requirements.
+    let collisions: Vec<(&String, &Vec<uuid::Uuid>)> = claims
+        .iter()
+        .filter(|(_, claimants)| claimants.len() > 1)
+        .collect();
+
+    if collisions.is_empty() {
+        println!(
+            "{} No agreed-id collisions found ({} requirements scanned).",
+            "✓".green(),
+            store.requirements.len()
+        );
+        return Ok(());
+    }
+
+    println!(
+        "{} {} collision{} found across {} requirements:",
+        "✗".red().bold(),
+        collisions.len(),
+        if collisions.len() == 1 { "" } else { "s" },
+        store.requirements.len()
+    );
+    println!("{}", "─".repeat(72));
+
+    for (short_id, claimants) in &collisions {
+        println!();
+        println!("  {} {}", "Short ID:".bold(), short_id.yellow().bold());
+        for uuid in claimants.iter() {
+            let req = store.requirements.iter().find(|r| r.id == *uuid);
+            let Some(req) = req else {
+                continue;
+            };
+            let spec = req.spec_id.as_deref().unwrap_or("?");
+            let agreed = req
+                .agreed_id
+                .as_deref()
+                .map(|a| format!(", agreed_id={}", a))
+                .unwrap_or_default();
+            println!(
+                "    {} {}{}  —  {}  ({})",
+                "Claim:".dimmed(),
+                spec.cyan(),
+                agreed.dimmed(),
+                req.title,
+                format!("{}", req.status).dimmed()
+            );
+        }
+    }
+
+    println!();
+    println!("{}", "─".repeat(72));
+    println!(
+        "  {} pick one claimant to keep the contested short id; for the others,",
+        "Action:".bold()
+    );
+    println!("  edit the YAML to clear or rewrite `agreed_id`, then re-run `aida db merge-gate`.");
+
+    if repair {
+        println!();
+        println!(
+            "  {} `--repair` is not yet implemented — automatic re-gating",
+            "Note:".yellow().bold()
+        );
+        println!("  interacts with the pre-allocated block registry (FR-2-005) in ways");
+        println!("  that need policy decisions (which claimant wins, which block to draw");
+        println!("  from for the loser). For now, resolve manually using the action above.");
+    }
+
+    // Non-zero exit so CI / hooks can wire this in. trace:TASK-80 | ai:claude
+    std::process::exit(1);
 }
 
 fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Result<()> {
@@ -21594,6 +21718,13 @@ fn handle_db_command(cmd: &DbCommand, requirements_path: &std::path::PathBuf) ->
         DbCommand::RetireLegacyIds { .. } => {
             println!(
                 "{} retire-legacy-ids only applies to git-backed stores.",
+                "!".yellow()
+            );
+        }
+        // trace:TASK-80 | ai:claude
+        DbCommand::Check { .. } => {
+            println!(
+                "{} db check only applies to git-backed stores. Run `aida init` to migrate.",
                 "!".yellow()
             );
         }
