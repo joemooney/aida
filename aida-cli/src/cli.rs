@@ -2128,6 +2128,15 @@ pub enum QueueCommand {
         /// `aida session start --path`.
         #[clap(long)]
         path: Option<String>,
+        /// Override the In-Progress guard when the target scope is already
+        /// held by another active lease. Without --steal, `aida queue work`
+        /// refuses and names the holding lease. With --steal, the holding
+        /// session is ended first (`aida session end <id>` — clean exit;
+        /// uncommitted work still blocks, exit those manually or use
+        /// `aida session end --force`) and the new session takes over.
+        /// trace:TASK-81 | ai:claude
+        #[clap(long)]
+        steal: bool,
         /// User ID (defaults to AIDA_USER or system user)
         #[clap(long)]
         user: Option<String>,

@@ -20174,6 +20174,70 @@ mod queue_work_tests {
         assert!(spec_matches(&r, "bug-42"));
         assert!(!spec_matches(&r, "BUG-99"));
     }
+
+    fn lease_for(id: &str, scope: &str, age_secs: i64) -> SessionLease {
+        SessionLease {
+            id: id.to_string(),
+            scope: scope.to_string(),
+            slug: scope.to_lowercase(),
+            owner: "u".into(),
+            worktree_path: std::path::PathBuf::from(format!("/tmp/wt-{}", id)),
+            branch: format!("br-{}", id),
+            started_at: chrono::Utc::now() - chrono::Duration::seconds(age_secs),
+            hostname: "h".into(),
+            role: Some("implementer".into()),
+            creator_pid: None,
+            cargo_target_dir: None,
+            parent_project_root: None,
+            pr_head_sha: None,
+            pr_base_sha: None,
+            pr_base_ref: None,
+        }
+    }
+
+    /// No leases → no conflict. trace:TASK-81 | ai:claude
+    #[test]
+    fn lease_conflict_empty() {
+        assert!(find_scope_lease_conflict(&[], "TASK-81").is_none());
+    }
+
+    /// Lease on a different scope → no conflict. trace:TASK-81 | ai:claude
+    #[test]
+    fn lease_conflict_mismatched_scope() {
+        let leases = vec![lease_for("aaaa", "EPIC-20", 10)];
+        assert!(find_scope_lease_conflict(&leases, "TASK-81").is_none());
+    }
+
+    /// Exact scope match → that lease is the conflict.
+    /// trace:TASK-81 | ai:claude
+    #[test]
+    fn lease_conflict_exact_match() {
+        let leases = vec![lease_for("aaaa", "TASK-81", 10)];
+        let got = find_scope_lease_conflict(&leases, "TASK-81").unwrap();
+        assert_eq!(got.id, "aaaa");
+    }
+
+    /// Case-insensitive scope match — `aida queue work task-81` should
+    /// still detect a lease owning `TASK-81`. trace:TASK-81 | ai:claude
+    #[test]
+    fn lease_conflict_case_insensitive() {
+        let leases = vec![lease_for("aaaa", "TASK-81", 10)];
+        let got = find_scope_lease_conflict(&leases, "task-81").unwrap();
+        assert_eq!(got.id, "aaaa");
+    }
+
+    /// Multiple leases on the same scope → freshest (smallest age) wins,
+    /// so `session_end` targets the live one rather than a stale ghost.
+    /// trace:TASK-81 | ai:claude
+    #[test]
+    fn lease_conflict_picks_freshest() {
+        let leases = vec![
+            lease_for("oldold", "TASK-81", 600),
+            lease_for("freshh", "TASK-81", 10),
+        ];
+        let got = find_scope_lease_conflict(&leases, "TASK-81").unwrap();
+        assert_eq!(got.id, "freshh");
+    }
 }
 
 // ----------------------------------------------------------------------------
@@ -27798,6 +27862,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             type_filter,
             branch,
             path,
+            steal,
             user,
         } => {
             let user_id = get_user(user);
@@ -27812,6 +27877,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 type_filter.as_deref(),
                 branch.as_deref(),
                 path.as_deref(),
+                *steal,
             )?;
         }
     }
@@ -28259,6 +28325,7 @@ fn handle_queue_work(
     type_filter: Option<&str>,
     branch_override: Option<&str>,
     path_override: Option<&str>,
+    steal: bool,
 ) -> Result<()> {
     let plan = resolve_queue_work_plan(storage, user_id, arg, type_filter)?;
     let (role, role_origin, warnings) = infer_queue_work_role(&plan, role_override);
@@ -28322,6 +28389,61 @@ fn handle_queue_work(
     if let Some(warns) = &warnings {
         for w in warns {
             eprintln!("  {} {}", "⚠".yellow().bold(), w.yellow());
+        }
+    }
+
+    // TASK-81: scope-conflict pre-flight. If another active lease already
+    // owns plan.scope, `session_start` would refuse with "scope X already
+    // owned by session Y". Surface that here with a queue-work-flavored
+    // message that names --steal as the override, and when --steal is
+    // passed, end the holding session cleanly first so session_start
+    // sees a free scope. Uncommitted-changes guards in session_end still
+    // apply — we don't escalate to --force on the user's behalf because
+    // that would silently discard their in-flight work; the message
+    // points at `aida session end --force` for the user-driven path.
+    // trace:TASK-81 | ai:claude
+    {
+        let project_root_for_conflict = find_main_worktree_root()?;
+        if let Some(conflict) =
+            find_scope_lease_conflict(&list_leases(&project_root_for_conflict), &plan.scope)
+        {
+            if steal {
+                eprintln!(
+                    "  {} {} — ending it first (--steal)",
+                    "⟲".cyan().bold(),
+                    format!(
+                        "scope `{}` owned by lease {}",
+                        plan.scope,
+                        &conflict.id[..conflict.id.len().min(8)]
+                    )
+                    .cyan()
+                );
+                session_end(
+                    Some(&conflict.id),
+                    /* yes */ true,
+                    /* force */ false,
+                    /* purge_cc */ false,
+                )
+                .with_context(|| {
+                    format!(
+                        "--steal could not end lease {} cleanly. \
+                         Resolve manually (`aida session end {} --force` to discard, \
+                         or commit/stash the worktree's changes first) then re-run.",
+                        &conflict.id[..conflict.id.len().min(8)],
+                        &conflict.id[..conflict.id.len().min(8)]
+                    )
+                })?;
+            } else {
+                anyhow::bail!(
+                    "scope `{}` is owned by lease {} ({}, worktree: {}) — pass --steal to end \
+                     that session first and take over, or `aida session end {}` manually.",
+                    plan.scope,
+                    &conflict.id[..conflict.id.len().min(8)],
+                    conflict.role.as_deref().unwrap_or("(unset)"),
+                    conflict.worktree_path.display(),
+                    &conflict.id[..conflict.id.len().min(8)]
+                );
+            }
         }
     }
 
@@ -28443,6 +28565,20 @@ fn handle_queue_work(
         .cyan()
     );
     session::exec_claude_with_prompt(&permission_mode, name.as_deref(), &prompt)
+}
+
+/// TASK-81: search a lease list for any active lease whose scope matches
+/// the requested scope (case-insensitive). Returns the freshest match by
+/// `started_at` so the caller has a stable target for `session_end` even
+/// if multiple stale leases somehow share a scope. Pure decision helper —
+/// kept separate so the unit test in `queue_work_tests` doesn't need to
+/// touch disk. trace:TASK-81 | ai:claude
+fn find_scope_lease_conflict(leases: &[SessionLease], scope: &str) -> Option<SessionLease> {
+    leases
+        .iter()
+        .filter(|l| l.scope.eq_ignore_ascii_case(scope))
+        .max_by_key(|l| l.started_at)
+        .cloned()
 }
 
 /// STORY-42: shell out to `aida db sync --pull`. We could refactor the
