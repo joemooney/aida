@@ -1,0 +1,43 @@
+id: 019e1b05-1ae2-78b2-b689-ff036718b194
+spec_id: BUG-84
+agreed_id: BUG-84
+title: 'commit-msg hook rejects comma-separated scopes (fix(a,b): ...); conventional-commits spec allows them'
+description: |
+  Caught 2026-05-12 during BUG-83 overnight commit. The agent tried:
+
+  ```
+  [AI:claude] fix(queue,session,role): prefer agreed_id in all straggler render paths
+  ```
+
+  The aida-commit-msg hook rejected with: "Commit message must follow conventional format."
+
+  Reason: the hook's regex for scope is `\([a-zA-Z0-9_-]+\)` — only a single word, no commas. Comma-separated scopes like `(queue,session,role)` fail to match. But conventional-commits spec explicitly allows comma-separated scopes (e.g., `feat(api,ui): support new field`).
+
+  ## Fix
+
+  In `aida-core/templates/hooks/aida-commit-msg`, expand the scope character class:
+
+  ```
+  # Before:
+  CONVENTIONAL_PATTERN='...(\([a-zA-Z0-9_-]+\))?: .+'
+
+  # After (accepts commas + spaces between):
+  CONVENTIONAL_PATTERN='...(\([a-zA-Z0-9_,/[:space:]-]+\))?: .+'
+  ```
+
+  Optional: also allow `/` for paths-as-scope (common in monorepos).
+
+  ## Acceptance
+
+  - [ ] `fix(queue,session,role): ...` passes hook validation
+  - [ ] `feat(api, ui): ...` (with space after comma) also passes
+  - [ ] Single-word scope still works (no regression)
+  - [ ] Empty scope (`fix: ...`) still works
+  - [ ] Tested: 5+ variations from real conventional-commits examples
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T07:09:39.938796624Z
+modified_at: 2026-05-12T07:09:39.938796624Z
+req_type: Bug
