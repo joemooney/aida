@@ -1,0 +1,65 @@
+id: 019e1a41-7510-7b40-8152-83c6f0a0e448
+spec_id: TASK-2-074
+title: 'aida session start --launch: pass --name to claude (derived from scope+branch+role) for /resume picker + terminal title clarity'
+description: |
+  Caught 2026-05-11 — user noticed Claude Code's `--name <name>` flag (shown in prompt box, /resume picker, and terminal title). AIDA's `session start --launch` (STORY-54) currently exec's claude without `--name`, so each session gets an auto-generated name. Multiple concurrent worktrees → multiple cryptic auto-names → hard to tell them apart in `/resume` picker or terminal-title bars.
+
+  AIDA already has the perfect naming info at session-start time: scope, branch, role. Use it.
+
+  ## Today's behavior
+
+  ```rust
+  // aida session start --launch flow
+  Command::new("claude").arg("--permission-mode").arg(mode)...exec()
+  ```
+
+  No `--name` passed.
+
+  ## Desired behavior
+
+  Construct a name from the lease's scope/branch/role and pass it:
+
+  ```
+  aida session start --owns EPIC-20 --branch epic-20-batch11 --launch
+    → exec: claude --name "EPIC-20:batch11" ...
+
+  aida session start --owns PR-10 --branch pr-10 --launch --role reviewer
+    → exec: claude --name "review@PR-10" ...
+  ```
+
+  Naming convention (proposed):
+
+  - Reviewer sessions: `review@<scope>` (e.g., `review@PR-10`, `review@MR-7`)
+  - Implementer sessions on epic-batch shape: `<EPIC-N>:<batchM>` (e.g., `EPIC-20:batch11`)
+  - Implementer sessions on other shapes: `<role>@<scope>:<branch-suffix>` (e.g., `impl@FR-42:spike`)
+  - Fallback: `<role>@<scope>` if no meaningful branch suffix
+
+  Truncate to claude's max name length (TBD — probably 32-64 chars; check Claude Code's docs/source for the limit).
+
+  ## Explicit override
+
+  `aida session start --launch --name "<custom>"` overrides the derived name. Useful for cases where the user wants a custom label.
+
+  ## Composes with
+
+  - STORY-54 (--launch flag) — this lives in the --launch path
+  - STORY-65 (auto-branch + inherit role) — same family of "session start derives smart defaults"
+  - TASK-67 (role-by-intent in lease) — naming uses the lease's recorded role, which TASK-67 makes accurate
+  - TASK-60 (sess: batch indicator in statusline) — same naming convention; share the suffix-extraction helper
+
+  ## Acceptance
+
+  - [ ] `aida session start --launch` passes `--name <derived>` to claude
+  - [ ] Naming follows convention: review@PR-N, EPIC-N:batchM, role@scope fallbacks
+  - [ ] `--name "<custom>"` override on `aida session start` flag, takes precedence
+  - [ ] Truncation to claude's max name length (TBD; document the limit)
+  - [ ] Tested: reviewer session gets `review@PR-N` in /resume picker + terminal title
+  - [ ] Tested: implementer batch gets `EPIC-N:batchM` in same places
+  - [ ] Tested: custom --name override works
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T03:35:57.968249704Z
+modified_at: 2026-05-12T03:35:57.968249704Z
+req_type: Task
