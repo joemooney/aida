@@ -6,7 +6,7 @@ Guidance for Claude Code working in the AIDA repository. Project background and 
 
 AIDA = AI Design Assistant. The defensible niche is the **agent-collaboration layer**: stable spec IDs, typed relationships, code-to-spec trace comments, and an MCP server that exposes the requirement graph to coding agents. Karpathy-style "structured markdown queryable by Claude" is the floor; AIDA adds the relationship graph + identifier stability + enforcement loop.
 
-For the full vision, architecture, and surface inventory see `OVERVIEW.md`. For the path-forward audit and current direction see `docs/plans/2026-05-02-git-canonical-storage.md`.
+For the full vision, architecture, and surface inventory see `OVERVIEW.md`. For the path-forward audit and current direction see `docs/plans/2026-05-02-git-canonical-storage.md`. For the *"should I use AIDA or X?"* question in any of its forms see `docs/positioning/` (one focused comparison per neighbor tool: `vs-ultrareview.md`, `vs-karpathy-md.md`, `vs-saas-pm.md`).
 
 **Workspace** (5 crates): `aida-core` (engine), `aida-cli` (`aida` binary + MCP server), `aida-crate` (published `aida` crate metadata), `aida-server` (REST + gRPC, port 8080), `aida-generate-types` (Rust → TypeScript). React dashboard at `aida-web-react/` (port 5173 dev). Native desktop and WASM clients were extracted to a separate repo on 2026-05-02.
 
@@ -127,7 +127,7 @@ Set `AIDA_COMMIT_STRICT=true` to reject non-conforming commits.
 
 ## Claude Code skills
 
-`aida init` scaffolds 22 skills under `.claude/skills/` and matching slash commands under `.claude/commands/`. Daily drivers: `/aida-req`, `/aida-implement`, `/aida-commit`, `/aida-capture`, `/aida-search`, `/aida-plan`, `/aida-onboard`. Run `aida` (no args) for the full CLI, or `ls .claude/skills/` for the full skill catalog.
+`aida init` scaffolds 28 skills under `.claude/skills/` and matching slash commands under `.claude/commands/`. Daily drivers: `/aida-req`, `/aida-implement`, `/aida-commit`, `/aida-capture`, `/aida-doc`, `/aida-search`, `/aida-plan`, `/aida-onboard`. Run `aida` (no args) for the full CLI, or `ls .claude/skills/` for the full skill catalog.
 
 ### MCP server
 
@@ -154,7 +154,7 @@ Hook commands in `settings.json` should use `$CLAUDE_PROJECT_DIR/...` paths so t
 
 Always verify CLI arguments with `aida <command> --help`. Common parameters:
 
-- `--type` (lowercase): `functional`, `non-functional`, `system`, `user`, `bug`, `epic`, `story`, `task`, `spike`, `sprint`, `folder`, `meta`
+- `--type` (lowercase): `functional`, `non-functional`, `system`, `user`, `bug`, `epic`, `story`, `task`, `spike`, `sprint`, `folder`, `meta`, `doc`
 - `--feature`: feature category name (NOT a type)
 - `--status`: `draft`, `approved`, `in-progress`, `completed`, `rejected`
 - `--priority`: `high`, `medium`, `low`
@@ -166,6 +166,7 @@ Use `task` for chores, documentation, tooling, and work that doesn't fit a tradi
 - **Requirements**: `functional`, `non-functional`, `system`, `user` (features, behaviors, constraints)
 - **Agile**: `epic`, `story`, `task`, `bug`, `spike`, `sprint`
 - **Organizational**: `folder` (hierarchy, stateless), `meta` (AI prompts, templates, stateless)
+- **Living docs**: `doc` (EPIC-24 — narrative explanation linked to other specs via `aida doc add --about <ID>`)
 
 ### Meta requirements (AI prompt customization)
 

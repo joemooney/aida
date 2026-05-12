@@ -54,10 +54,10 @@ use aida_core::{
 
 use crate::cli::{
     BlockCommand, CacheCommand, Cli, Command, CommentCommand, ConfigCommand, DbCommand, DevCommand,
-    DocsCommand, FeatureCommand, GitHubCommand, GitLabCommand, JiraCommand, NodeCommand, PrCommand,
-    QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand, ReviewCommand, RoleCommand,
-    RolePromptCommand, RoleScopeCommand, ScaffoldCommand, ServerCommand, SessionCommand,
-    SessionManifestCommand, TraceCommand, TypeCommand,
+    DocCommand, DocsCommand, FeatureCommand, GitHubCommand, GitLabCommand, JiraCommand,
+    NodeCommand, PrCommand, QueueCommand, RelDefCommand, RelationshipCommand, ReportCommand,
+    ReviewCommand, RoleCommand, RolePromptCommand, RoleScopeCommand, ScaffoldCommand,
+    ServerCommand, SessionCommand, SessionManifestCommand, TraceCommand, TypeCommand,
 };
 
 /// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
@@ -615,6 +615,16 @@ fn run() -> Result<()> {
             // through to legacy means the user is on a SQLite-only project.
             anyhow::bail!(
                 "aida history requires the distributed git-canonical store \
+                 (run `aida init` to migrate, or this project is on the \
+                 deprecated --centralized backend)"
+            );
+        }
+        Command::Doc(_) => {
+            // `aida doc` is git-canonical-only — Doc entries live in the
+            // orphan store alongside every other requirement. Legacy SQLite
+            // projects fall through to this arm. trace:STORY-104 | ai:claude
+            anyhow::bail!(
+                "aida doc requires the distributed git-canonical store \
                  (run `aida init` to migrate, or this project is on the \
                  deprecated --centralized backend)"
             );
@@ -1720,7 +1730,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 // BUG-48: surface the error instead of dropping silently.
                 let rt = parse_requirement_type(t).map_err(|e| {
                     anyhow::anyhow!(
-                        "{} — expected one of: functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term",
+                        "{} — expected one of: functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc",
                         e
                     )
                 })?;
@@ -2287,7 +2297,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 // valid-list hint as --status / --priority.
                 let rt = parse_requirement_type(t).map_err(|e| {
                     anyhow::anyhow!(
-                        "{} — expected one of: functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term",
+                        "{} — expected one of: functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc",
                         e
                     )
                 })?;
@@ -3068,6 +3078,10 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             let storage = Storage::new(store_path);
             handle_scaffold_command(scaffold_cmd, &storage, store_path)?;
         }
+        Command::Doc(doc_cmd) => {
+            // trace:STORY-104 | ai:claude
+            handle_doc_command(doc_cmd, store_path, &backend)?;
+        }
         Command::History {
             limit,
             max_commits,
@@ -3287,7 +3301,28 @@ fn parse_requirement_type(s: &str) -> Result<RequirementType> {
         "constraint" | "con" => Ok(RequirementType::Constraint),
         "decision" | "adr" => Ok(RequirementType::Decision),
         "term" | "glossary" => Ok(RequirementType::Term),
+        // trace:STORY-104 | ai:claude
+        "doc" | "documentation" => Ok(RequirementType::Doc),
         _ => anyhow::bail!("Unknown requirement type: {}", s),
+    }
+}
+
+#[cfg(test)]
+mod parse_requirement_type_tests {
+    use super::*;
+
+    /// `--type doc` and `--type documentation` both resolve to
+    /// `RequirementType::Doc`. Aliases keep the user-facing surface tolerant
+    /// to spell-outs, matching the precedent set by `--type adr`/`decision`.
+    /// trace:STORY-104 | ai:claude
+    #[test]
+    fn parses_doc_aliases() {
+        assert_eq!(parse_requirement_type("doc").unwrap(), RequirementType::Doc);
+        assert_eq!(parse_requirement_type("DOC").unwrap(), RequirementType::Doc);
+        assert_eq!(
+            parse_requirement_type("documentation").unwrap(),
+            RequirementType::Doc
+        );
     }
 }
 
@@ -4455,6 +4490,7 @@ fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
         RequirementType::Constraint => "Constraint",
         RequirementType::Decision => "Decision",
         RequirementType::Term => "Term",
+        RequirementType::Doc => "Doc",
     };
     println!("{}: {}", "Type".blue(), type_str);
 
@@ -4655,7 +4691,9 @@ fn edit_requirement_cli(
             "sprint" => RequirementType::Sprint,
             "folder" => RequirementType::Folder,
             "meta" => RequirementType::Meta,
-            _ => anyhow::bail!("Invalid type '{}'. Use: functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta", type_str),
+            // trace:STORY-104 | ai:claude
+            "doc" | "documentation" => RequirementType::Doc,
+            _ => anyhow::bail!("Invalid type '{}'. Use: functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta, doc", type_str),
         };
         if new_type != req.req_type {
             changes.push(Requirement::field_change(
@@ -4983,6 +5021,8 @@ fn parse_type(type_str: &str) -> Result<RequirementType> {
         "constraint" | "con" => Ok(RequirementType::Constraint),
         "decision" | "adr" => Ok(RequirementType::Decision),
         "term" | "glossary" => Ok(RequirementType::Term),
+        // trace:STORY-104 | ai:claude
+        "doc" | "documentation" => Ok(RequirementType::Doc),
         _ => anyhow::bail!("Invalid requirement type: {}", type_str),
     }
 }
@@ -5967,6 +6007,323 @@ fn handle_block_command(cmd: &BlockCommand, store_path: &std::path::Path) -> Res
 fn handle_docs_command(cmd: &DocsCommand, storage: &Storage) -> Result<()> {
     let store = storage.load()?;
     handle_docs_with_store(cmd, &store)
+}
+
+/// Dispatch `aida doc {add,list,show}`. Always operates against the
+/// distributed git-canonical backend — Doc entries are just requirements
+/// with `req_type == Doc` and `--about` modeled as `References`
+/// relationships. trace:STORY-104 | ai:claude
+fn handle_doc_command(
+    cmd: &DocCommand,
+    store_path: &std::path::Path,
+    backend: &aida_core::CachedGitBackend,
+) -> Result<()> {
+    use aida_core::models::{Relationship, RelationshipType, RequirementStatus, RequirementType};
+    use aida_core::DatabaseBackend;
+
+    match cmd {
+        DocCommand::Add {
+            title,
+            about,
+            scenario,
+            audience,
+            description,
+            description_from_file,
+            description_stdin,
+            tags,
+        } => {
+            let resolved_description =
+                resolve_description(description, description_from_file, *description_stdin)?
+                    .unwrap_or_default();
+
+            // Resolve every --about id up front. Bail before writing anything
+            // if any reference is missing, so we never produce an entry
+            // pointing at a phantom spec.
+            let mut about_targets: Vec<aida_core::models::Requirement> =
+                Vec::with_capacity(about.len());
+            for raw in about {
+                let id = raw.trim();
+                if id.is_empty() {
+                    continue;
+                }
+                let found = backend.get_requirement_by_spec_id(id)?.ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "--about target `{}` not found in the store. Refusing to \
+                         create a doc entry that references a phantom spec.",
+                        id
+                    )
+                })?;
+                about_targets.push(found);
+            }
+
+            let mut doc = aida_core::models::Requirement::new(title.clone(), resolved_description);
+            doc.req_type = RequirementType::Doc;
+            // Doc entries aren't workflow items — default to Approved so they
+            // show up in default `aida doc list` without needing an explicit
+            // status flip. Users can still `aida edit DOC-N --status draft`
+            // if they want a review gate.
+            doc.status = RequirementStatus::Approved;
+            if let Some(s) = scenario {
+                if !s.trim().is_empty() {
+                    doc.custom_fields
+                        .insert("scenario".to_string(), s.trim().to_string());
+                }
+            }
+            if !audience.is_empty() {
+                let cleaned: Vec<String> = audience
+                    .iter()
+                    .map(|a| a.trim().to_lowercase())
+                    .filter(|a| !a.is_empty())
+                    .collect();
+                if !cleaned.is_empty() {
+                    doc.custom_fields
+                        .insert("audience".to_string(), cleaned.join(","));
+                }
+            }
+            if let Some(t) = tags {
+                for tag in t.split(',') {
+                    let tag = tag.trim();
+                    if !tag.is_empty() {
+                        doc.tags.insert(tag.to_string());
+                    }
+                }
+            }
+
+            // Allocate spec_id via the same path `aida add` uses — keeps
+            // sharding, dispenser, and id-format policy consistent.
+            let store = backend.update_atomically(|store| {
+                let type_prefix = store.get_type_prefix(&doc.req_type);
+                store.add_requirement_with_id(doc.clone(), None, type_prefix.as_deref());
+            })?;
+
+            let written = store.requirements.last().cloned().ok_or_else(|| {
+                anyhow::anyhow!("add_requirement_with_id produced no requirement")
+            })?;
+            aida_core::object_store::write_object(&store_path.join("objects"), &written)?;
+
+            // Append References edges to each --about target. Done after the
+            // initial save so the doc has its uuid + spec_id.
+            if !about_targets.is_empty() {
+                let now = chrono::Utc::now();
+                let mut doc_with_rels = written.clone();
+                for target in &about_targets {
+                    doc_with_rels.relationships.push(Relationship {
+                        target_id: target.id,
+                        rel_type: RelationshipType::References,
+                        created_at: Some(now),
+                        created_by: None,
+                    });
+                }
+                backend.update_requirement(&doc_with_rels)?;
+                aida_core::object_store::write_object(&store_path.join("objects"), &doc_with_rels)?;
+            }
+
+            println!(
+                "Added: {} - {}",
+                written.spec_id.as_deref().unwrap_or("?"),
+                written.title
+            );
+            if !about_targets.is_empty() {
+                let refs = about_targets
+                    .iter()
+                    .map(|r| r.spec_id.as_deref().unwrap_or("?").to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                println!("  About: {}", refs);
+            }
+            if let Some(sid) = written.spec_id.as_deref() {
+                record_role_activity(sid, "add");
+            }
+        }
+
+        DocCommand::List {
+            about,
+            scenario,
+            audience,
+        } => {
+            let store = backend.load()?;
+
+            let about_uuid: Option<uuid::Uuid> = if let Some(id) = about {
+                let target = backend.get_requirement_by_spec_id(id)?.ok_or_else(|| {
+                    anyhow::anyhow!("--about target `{}` not found in the store", id)
+                })?;
+                Some(target.id)
+            } else {
+                None
+            };
+
+            let audience_filter = audience.as_deref().map(|s| s.trim().to_lowercase());
+
+            let mut docs: Vec<&aida_core::models::Requirement> = store
+                .requirements
+                .iter()
+                .filter(|r| r.req_type == RequirementType::Doc && !r.archived)
+                .filter(|r| match &about_uuid {
+                    Some(uuid) => r.relationships.iter().any(|rel| {
+                        rel.rel_type == RelationshipType::References && rel.target_id == *uuid
+                    }),
+                    None => true,
+                })
+                .filter(|r| match scenario {
+                    Some(s) => {
+                        r.custom_fields.get("scenario").map(|x| x.as_str()) == Some(s.as_str())
+                    }
+                    None => true,
+                })
+                .filter(|r| match &audience_filter {
+                    Some(needle) => r
+                        .custom_fields
+                        .get("audience")
+                        .map(|csv| {
+                            csv.split(',')
+                                .any(|a| a.trim().eq_ignore_ascii_case(needle))
+                        })
+                        .unwrap_or(false),
+                    None => true,
+                })
+                .collect();
+            docs.sort_by(|a, b| a.display_id().cmp(&b.display_id()));
+
+            if docs.is_empty() {
+                println!("(no doc entries found)");
+                return Ok(());
+            }
+
+            for d in docs {
+                let scenario_str = d
+                    .custom_fields
+                    .get("scenario")
+                    .map(|s| format!(" · {}", s))
+                    .unwrap_or_default();
+                let about_ids: Vec<String> = d
+                    .relationships
+                    .iter()
+                    .filter(|rel| rel.rel_type == RelationshipType::References)
+                    .filter_map(|rel| {
+                        store
+                            .requirements
+                            .iter()
+                            .find(|r| r.id == rel.target_id)
+                            .and_then(|r| r.spec_id.clone())
+                    })
+                    .collect();
+                let about_str = if about_ids.is_empty() {
+                    String::new()
+                } else {
+                    format!(" · about: {}", about_ids.join(", "))
+                };
+                println!(
+                    "{}{} · {}{}",
+                    d.display_id().cyan(),
+                    scenario_str,
+                    d.title,
+                    about_str
+                );
+            }
+        }
+
+        DocCommand::Show { id } => {
+            let store = backend.load()?;
+
+            // First try treating <id> as the doc itself.
+            let direct = backend.get_requirement_by_spec_id(id)?;
+            if let Some(req) = direct.as_ref() {
+                if req.req_type == RequirementType::Doc {
+                    print_doc_detail(req, &store);
+                    return Ok(());
+                }
+            }
+
+            // Otherwise treat <id> as a referenced spec and find Docs about it.
+            let target = direct
+                .or(backend.get_requirement_by_spec_id(id)?)
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "`{}` not found — pass a Doc id (e.g., DOC-3) to show a \
+                         single entry, or any other spec id to list docs about it.",
+                        id
+                    )
+                })?;
+            let target_uuid = target.id;
+            let mut about_docs: Vec<&aida_core::models::Requirement> = store
+                .requirements
+                .iter()
+                .filter(|r| r.req_type == RequirementType::Doc && !r.archived)
+                .filter(|r| {
+                    r.relationships.iter().any(|rel| {
+                        rel.rel_type == RelationshipType::References && rel.target_id == target_uuid
+                    })
+                })
+                .collect();
+            about_docs.sort_by(|a, b| a.display_id().cmp(&b.display_id()));
+
+            println!(
+                "Docs about {} ({}):",
+                target.display_id().cyan(),
+                target.title
+            );
+            if about_docs.is_empty() {
+                println!("  (none — capture one with `aida doc add --about {}`)", id);
+            } else {
+                for d in about_docs {
+                    let scenario_str = d
+                        .custom_fields
+                        .get("scenario")
+                        .map(|s| format!(" · {}", s))
+                        .unwrap_or_default();
+                    println!("  {}{} · {}", d.display_id().cyan(), scenario_str, d.title);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Print the full detail view for a single Doc entry.
+/// trace:STORY-104 | ai:claude
+fn print_doc_detail(req: &aida_core::models::Requirement, store: &aida_core::RequirementsStore) {
+    use aida_core::models::RelationshipType;
+
+    println!("{}: {}", "ID".blue(), req.display_id());
+    println!("{}: {}", "Title".blue(), req.title);
+    if let Some(s) = req.custom_fields.get("scenario") {
+        println!("{}: {}", "Scenario".blue(), s);
+    }
+    if let Some(a) = req.custom_fields.get("audience") {
+        println!("{}: {}", "Audience".blue(), a);
+    }
+    let about_ids: Vec<String> = req
+        .relationships
+        .iter()
+        .filter(|rel| rel.rel_type == RelationshipType::References)
+        .filter_map(|rel| {
+            store
+                .requirements
+                .iter()
+                .find(|r| r.id == rel.target_id)
+                .map(|r| {
+                    let id = r.spec_id.as_deref().unwrap_or("?");
+                    format!("{} ({})", id, r.title)
+                })
+        })
+        .collect();
+    if !about_ids.is_empty() {
+        println!("{}: {}", "About".blue(), about_ids.join(", "));
+    }
+    if !req.tags.is_empty() {
+        let mut t: Vec<&String> = req.tags.iter().collect();
+        t.sort();
+        let csv = t.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ");
+        println!("{}: {}", "Tags".blue(), csv);
+    }
+    println!("{}: {}", "Status".blue(), req.status);
+    println!("{}: {}", "Created".blue(), req.created_at);
+    println!("{}: {}", "Modified".blue(), req.modified_at);
+    if !req.description.is_empty() {
+        println!();
+        println!("{}", req.description);
+    }
 }
 
 /// Shared implementation — both the legacy Storage path and the git-canonical

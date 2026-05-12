@@ -1030,6 +1030,86 @@ pub enum DocsCommand {
     },
 }
 
+/// Living-documentation entry surface (EPIC-24 / STORY-104).
+///
+/// `Doc` requirements are narrative captured *during* work — rationale,
+/// scenarios, recipes, gotchas — linked back to the specs they explain via
+/// `References` relationships. They flow through the same orphan-store /
+/// cache pipeline as every other requirement; this subcommand exists to
+/// make capture and lookup ergonomic so the docs land while the context
+/// is still fresh.
+/// trace:STORY-104 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum DocCommand {
+    /// Capture a documentation entry — narrative tied to one or more specs.
+    Add {
+        /// Title of the doc entry (e.g., "When to use `aida queue work --steal`").
+        #[clap(long)]
+        title: String,
+
+        /// Specs this entry is about. Repeat or comma-separate. Each id is
+        /// resolved against the store and linked as a `References`
+        /// relationship — that's what `aida doc show <SPEC>` walks to find
+        /// docs about a given spec. trace:STORY-104 | ai:claude
+        #[clap(long, value_delimiter = ',')]
+        about: Vec<String>,
+
+        /// Scenario tag — short label for the situation this doc covers
+        /// (e.g., "muddle recovery", "first-time setup"). Stored in
+        /// `custom_fields["scenario"]`; used as a filter axis by
+        /// `aida doc list --scenario <name>`.
+        #[clap(long)]
+        scenario: Option<String>,
+
+        /// Audience tags (repeat or comma-separate) — who this doc is for:
+        /// `user`, `agent`, `developer`. Stored as a comma-joined string in
+        /// `custom_fields["audience"]`.
+        #[clap(long, value_delimiter = ',')]
+        audience: Vec<String>,
+
+        /// Description body. For long-form prose use --description-from-file
+        /// or --description-stdin (mirrors `aida add`).
+        #[clap(long, conflicts_with_all = ["description_from_file", "description_stdin"])]
+        description: Option<String>,
+
+        /// Read the description body from a file.
+        #[clap(long, conflicts_with_all = ["description", "description_stdin"])]
+        description_from_file: Option<PathBuf>,
+
+        /// Read the description body from stdin.
+        #[clap(long, conflicts_with_all = ["description", "description_from_file"])]
+        description_stdin: bool,
+
+        /// Tags for the entry (comma-separated).
+        #[clap(long)]
+        tags: Option<String>,
+    },
+
+    /// List documentation entries.
+    List {
+        /// Show only docs that reference <id> via `--about`. Resolves <id>
+        /// against the store and walks the `References` edges back.
+        #[clap(long, value_name = "ID")]
+        about: Option<String>,
+
+        /// Show only docs whose scenario tag matches exactly.
+        #[clap(long)]
+        scenario: Option<String>,
+
+        /// Show only docs whose audience tag set contains <name>.
+        #[clap(long)]
+        audience: Option<String>,
+    },
+
+    /// Show docs. If <id> is a Doc spec id (e.g., DOC-3), print the entry's
+    /// full detail. Otherwise treat <id> as a referenced spec and print
+    /// every Doc that mentions it via `--about`.
+    Show {
+        /// Doc spec id, or any other spec id to walk `--about` references.
+        id: String,
+    },
+}
+
 #[derive(Subcommand, Debug)]
 pub enum DbCommand {
     /// Print the path to the active store (the orphan-branch worktree, in
@@ -2177,7 +2257,7 @@ pub enum Command {
         #[clap(long)]
         priority: Option<String>,
 
-        /// Type of requirement: functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term
+        /// Type of requirement: functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc
         #[clap(long)]
         r#type: Option<String>,
 
@@ -2330,7 +2410,7 @@ pub enum Command {
         #[clap(long)]
         priority: Option<String>,
 
-        /// New type: functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term
+        /// New type: functional, non-functional, system, user, bug, epic, story, task, spike, sprint, folder, meta, principle, vision, constraint, decision, term, doc
         #[clap(long)]
         r#type: Option<String>,
 
@@ -2715,6 +2795,15 @@ pub enum Command {
     /// trace:FR-1-077 | ai:claude
     #[clap(subcommand)]
     Docs(DocsCommand),
+
+    /// Living-documentation entries — narrative captured during work
+    /// (rationale, scenarios, recipes, gotchas) linked to the specs they
+    /// explain. Different from `aida docs` (plural), which renders the
+    /// graph as a layered docs tree; this is the *raw* doc entry surface
+    /// powering EPIC-24's book/tutorial projection.
+    /// trace:STORY-104 | ai:claude
+    #[clap(subcommand)]
+    Doc(DocCommand),
 
     /// Search requirements for a pattern (like grep)
     #[clap(hide = true)]

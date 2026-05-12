@@ -349,6 +349,7 @@ impl SqliteBackend {
             RequirementType::Constraint => "Constraint",
             RequirementType::Decision => "Decision",
             RequirementType::Term => "Term",
+            RequirementType::Doc => "Doc",
         }
     }
 
@@ -368,6 +369,7 @@ impl SqliteBackend {
             "Sprint" => RequirementType::Sprint,
             "Folder" => RequirementType::Folder,
             "Meta" => RequirementType::Meta,
+            "Doc" => RequirementType::Doc,
             _ => RequirementType::Functional,
         }
     }
