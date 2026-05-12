@@ -10199,6 +10199,29 @@ fn parse_review_scope(scope: &str) -> Option<(ReviewForge, u64)> {
     }
 }
 
+/// TASK-85: short label for a review forge + number, e.g. "PR-14" / "MR-7".
+/// Centralized so the error messages stay consistent with how STORY-66 /
+/// STORY-90 produce the auto-queue titles. trace:TASK-85 | ai:claude
+fn format_review_label(forge: ReviewForge, n: u64) -> String {
+    let prefix = match forge {
+        ReviewForge::GitHub => "PR",
+        ReviewForge::GitLab => "MR",
+    };
+    format!("{}-{}", prefix, n)
+}
+
+/// TASK-85: predicate for `aida queue work PR-N` resolution. Returns
+/// true when the requirement title is a review story for this PR/MR —
+/// i.e. starts with `Review <LABEL>:` (case-insensitive on the prefix,
+/// exact on the number). Kept pure so the resolver path can be unit
+/// tested without a fake store. trace:TASK-85 | ai:claude
+fn review_title_matches(title: &str, forge: ReviewForge, n: u64) -> bool {
+    let label = format_review_label(forge, n);
+    let lower = title.trim_start().to_ascii_lowercase();
+    let want = format!("review {}:", label.to_ascii_lowercase());
+    lower.starts_with(&want)
+}
+
 /// STORY-61: detect the project's forge by inspecting `origin`'s URL.
 /// Returns None for hosts we don't recognize (Bitbucket, self-hosted
 /// without telltale domain, etc.) — caller can require `--forge`.
@@ -20328,6 +20351,77 @@ mod queue_work_tests {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
+    /// `review_title_matches` accepts the canonical "Review PR-N: ..."
+    /// shape, leading whitespace, and is case-insensitive on the prefix
+    /// but exact on the number. trace:TASK-85 | ai:claude
+    #[test]
+    fn review_title_matches_canonical() {
+        assert!(review_title_matches(
+            "Review PR-14: shave this yak",
+            ReviewForge::GitHub,
+            14
+        ));
+        assert!(review_title_matches(
+            "  Review PR-14: leading space",
+            ReviewForge::GitHub,
+            14
+        ));
+        assert!(review_title_matches(
+            "review pr-14: lowercase prefix",
+            ReviewForge::GitHub,
+            14
+        ));
+        assert!(review_title_matches(
+            "Review MR-7: gitlab works",
+            ReviewForge::GitLab,
+            7
+        ));
+    }
+
+    /// Reject titles that aren't review stories, that name a different
+    /// number, or that name the wrong forge. trace:TASK-85 | ai:claude
+    #[test]
+    fn review_title_matches_rejects_mismatches() {
+        // Different PR number.
+        assert!(!review_title_matches(
+            "Review PR-15: nope",
+            ReviewForge::GitHub,
+            14
+        ));
+        // Different forge.
+        assert!(!review_title_matches(
+            "Review PR-14: github not gitlab",
+            ReviewForge::GitLab,
+            14
+        ));
+        // Title doesn't start with Review.
+        assert!(!review_title_matches(
+            "Fixing PR-14",
+            ReviewForge::GitHub,
+            14
+        ));
+        // PR-14 mentioned but not as review.
+        assert!(!review_title_matches(
+            "Follow-up to PR-14",
+            ReviewForge::GitHub,
+            14
+        ));
+        // Substring number — `PR-140` must not match PR-14.
+        assert!(!review_title_matches(
+            "Review PR-140: longer number",
+            ReviewForge::GitHub,
+            14
+        ));
+    }
+
+    /// `format_review_label` produces the human-facing label that error
+    /// messages use. trace:TASK-85 | ai:claude
+    #[test]
+    fn format_review_label_shapes() {
+        assert_eq!(format_review_label(ReviewForge::GitHub, 14), "PR-14");
+        assert_eq!(format_review_label(ReviewForge::GitLab, 7), "MR-7");
+    }
+
     /// `[behavior]` section absent → None, even when other sections exist.
     /// trace:TASK-84 | ai:claude
     #[test]
@@ -28148,6 +28242,83 @@ fn resolve_queue_work_plan(
             anchor_display,
             anchor_title: req.title.clone(),
         });
+    }
+
+    // TASK-85: PR-N / MR-N pickup by review-story title. The auto-queued
+    // review stories live in the queue with titles like "Review PR-14:
+    // ...", but their spec_id (e.g., STORY-103) isn't memorable. Let
+    // `aida queue work PR-14` find the corresponding queue entry by
+    // title prefix so the user doesn't have to look up the story id.
+    // Composes with STORY-66/STORY-90 (auto-queue at PR-create) which
+    // produce these stories. trace:TASK-85 | ai:claude
+    if let Some((forge, n)) = parse_review_scope(arg) {
+        let matches: Vec<aida_core::QueueEntry> = entries
+            .iter()
+            .filter(|e| {
+                let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id) else {
+                    return false;
+                };
+                if is_terminal_status(&req.status) {
+                    return false;
+                }
+                review_title_matches(&req.title, forge, n)
+            })
+            .cloned()
+            .collect();
+        match matches.len() {
+            0 => {
+                let label = format_review_label(forge, n);
+                anyhow::bail!(
+                    "no queued review story for {} — check `gh pr view {}` (or `glab mr view {}`) and run `aida pr auto-queue-review --branch <branch>` if needed",
+                    label,
+                    n,
+                    n
+                );
+            }
+            1 => {
+                let entry = matches.into_iter().next().unwrap();
+                let req = store
+                    .requirements
+                    .iter()
+                    .find(|r| r.id == entry.requirement_id)
+                    .unwrap();
+                let (scope, review_target) = derive_scope_from_entry(&entry, req, &store);
+                let anchor_display = req
+                    .agreed_id
+                    .clone()
+                    .or_else(|| req.spec_id.clone())
+                    .unwrap_or_else(|| arg.to_string());
+                let resolved = build_resolved_entry(entry, req);
+                return Ok(QueueWorkPlan {
+                    mode: QueueWorkMode::Item,
+                    entries: vec![resolved],
+                    scope,
+                    review_target,
+                    anchor_display,
+                    anchor_title: req.title.clone(),
+                });
+            }
+            _ => {
+                let label = format_review_label(forge, n);
+                let mut msg = format!(
+                    "{} matches {} queued review stories — pass the specific spec_id instead:",
+                    label,
+                    matches.len()
+                );
+                for e in &matches {
+                    if let Some(req) = store.requirements.iter().find(|r| r.id == e.requirement_id)
+                    {
+                        let id = req
+                            .agreed_id
+                            .as_deref()
+                            .or(req.spec_id.as_deref())
+                            .unwrap_or("?");
+                        msg.push_str(&format!("\n  · {} — {}", id, req.title));
+                    }
+                }
+                anyhow::bail!(msg);
+            }
+        }
     }
 
     // Cluster-pickup: arg names a req that isn't queued itself but has
