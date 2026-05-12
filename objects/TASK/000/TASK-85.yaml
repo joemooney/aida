@@ -37,12 +37,12 @@ description: |
   - [ ] Error message names the issue when no review story exists for the PR
   - [ ] Composes with `--permission-mode`, `--no-launch`, `--no-pull` from STORY-42
   - [ ] Tested: PR with auto-queued review → works; PR without (gh failure etc.) → clear error
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:03:46.569495464Z
-modified_at: 2026-05-12T15:03:46.569495464Z
+modified_at: 2026-05-12T15:30:05.429684408Z
 req_type: Task
 relationships:
 - rel_type: Child
