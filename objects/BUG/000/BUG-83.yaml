@@ -43,12 +43,12 @@ description: |
   - [ ] Same fix applied to `aida session show --plan` if affected
   - [ ] Sweep aida-cli/ for other "spec_id-only" render sites that should prefer agreed_id
   - [ ] Tested: items with both spec_id and agreed_id render as agreed_id everywhere
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T06:15:12.784743235Z
-modified_at: 2026-05-12T06:15:12.784743235Z
+modified_at: 2026-05-12T06:58:08.987597910Z
 req_type: Bug
 relationships:
 - rel_type: Child
