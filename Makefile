@@ -135,17 +135,22 @@ install-released-version: ## Install a specific released version (use VERSION=v0
 # RELEASE TARGETS (wrap scripts/release.sh for discoverability via make help)
 #==============================================================================
 
-release-patch: ## Cut a patch release (0.4.5 → 0.4.6)
-	./scripts/release.sh patch
+# trace:TASK-79 | ai:claude — RELEASE_YES=1 (or `make release-patch YES=1`)
+# threads --yes through to scripts/release.sh so non-interactive invocations
+# (`make release-patch | tee log`) don't EOF on the confirm prompt.
+RELEASE_YES_FLAG := $(if $(filter 1 yes y true,$(RELEASE_YES) $(YES)),--yes,)
 
-release-minor: ## Cut a minor release (0.4.5 → 0.5.0)
-	./scripts/release.sh minor
+release-patch: ## Cut a patch release (0.4.5 → 0.4.6) — set YES=1 to skip prompt
+	./scripts/release.sh patch $(RELEASE_YES_FLAG)
 
-release-major: ## Cut a major release (0.4.5 → 1.0.0)
-	./scripts/release.sh major
+release-minor: ## Cut a minor release (0.4.5 → 0.5.0) — set YES=1 to skip prompt
+	./scripts/release.sh minor $(RELEASE_YES_FLAG)
 
-release-version: ## Cut a release with explicit version (use VERSION=0.5.0)
-	./scripts/release.sh $(VERSION)
+release-major: ## Cut a major release (0.4.5 → 1.0.0) — set YES=1 to skip prompt
+	./scripts/release.sh major $(RELEASE_YES_FLAG)
+
+release-version: ## Cut a release with explicit version (use VERSION=0.5.0; YES=1 to skip prompt)
+	./scripts/release.sh $(VERSION) $(RELEASE_YES_FLAG)
 
 #==============================================================================
 # RUN TARGETS
