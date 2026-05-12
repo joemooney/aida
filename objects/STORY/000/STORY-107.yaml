@@ -71,9 +71,49 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:51:25.341027642Z
-modified_at: 2026-05-12T15:51:25.341027642Z
+modified_at: 2026-05-12T15:51:45.202898089Z
 req_type: Story
 relationships:
 - rel_type: Child
   target_id: 019e1cca-9950-78a0-bf56-b1393eacdcc5
   created_at: 2026-05-12T15:51:26.551613863Z
+comments:
+- id: 019e1ce3-1732-78a0-b936-7919214135e1
+  author: joe
+  content: |-
+    ## Doc seed: aida-review vs /ultrareview (2026-05-12)
+
+    Comparison written during conversation, captured for future docs/positioning/vs-ultrareview.md:
+
+    ### Different scopes, complementary
+
+    | | aida-review (AIDA skill) | /ultrareview (Claude Code built-in) |
+    |---|---|---|
+    | Engine | Local single agent (this claude session) | Cloud-based multi-agent review |
+    | Cost | Free — already paying for your claude session | Consumes Claude Max quota (or billed depending on plan) |
+    | Driven by | AIDA's req metadata — walks each linked SPEC-ID's acceptance criteria against the diff | The diff itself — multiple agents with different perspectives |
+    | Output | Per-spec verdicts (✅/⚠️/❌) + consolidated PR comment + handles merge + flips status to Completed | Multi-perspective review report; doesn't touch req status |
+    | Best for | AIDA-integrated workflow: spec-driven review with lifecycle bookkeeping | Deep code review when you want fresh eyes on PR diff regardless of req tracking |
+    | Launchable | Anywhere a claude session can run | User-triggered only (Claude Code controls) |
+
+    ### Compose them
+
+    A thorough workflow uses both:
+    1. PR opens
+    2. `/ultrareview` first → multi-agent deep code review (different classes of issues than single agent catches)
+    3. `/aida-review --pr N` second → AIDA-driven per-spec walk, applies verdicts to queue + status, merges if green
+
+    ### Use one or the other
+
+    - AIDA-tracked work that doesn't need extra eyes → just `/aida-review`
+    - High-stakes change in non-AIDA code → just `/ultrareview`
+
+    ### Honest scope statement
+
+    AIDA-review's value isn't "better review than /ultrareview" — it's "review that knows about your requirement graph and handles the lifecycle bookkeeping." That's a complementary capability, not a substitute.
+
+    ---
+
+    *Doc seed per EPIC-24. Promote to docs/positioning/vs-ultrareview.md when that structure exists per STORY-107's acceptance.*
+  created_at: 2026-05-12T15:51:45.202898089Z
+  modified_at: 2026-05-12T15:51:45.202898089Z
