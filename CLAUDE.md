@@ -154,7 +154,7 @@ Hook commands in `settings.json` should use `$CLAUDE_PROJECT_DIR/...` paths so t
 
 Always verify CLI arguments with `aida <command> --help`. Common parameters:
 
-- `--type` (lowercase): `functional`, `non-functional`, `system`, `user`, `bug`, `epic`, `story`, `task`, `spike`, `sprint`, `folder`, `meta`
+- `--type` (lowercase): `functional`, `non-functional`, `system`, `user`, `bug`, `epic`, `story`, `task`, `spike`, `sprint`, `folder`, `meta`, `doc`
 - `--feature`: feature category name (NOT a type)
 - `--status`: `draft`, `approved`, `in-progress`, `completed`, `rejected`
 - `--priority`: `high`, `medium`, `low`
@@ -166,6 +166,7 @@ Use `task` for chores, documentation, tooling, and work that doesn't fit a tradi
 - **Requirements**: `functional`, `non-functional`, `system`, `user` (features, behaviors, constraints)
 - **Agile**: `epic`, `story`, `task`, `bug`, `spike`, `sprint`
 - **Organizational**: `folder` (hierarchy, stateless), `meta` (AI prompts, templates, stateless)
+- **Living docs**: `doc` (EPIC-24 — narrative explanation linked to other specs via `aida doc add --about <ID>`)
 
 ### Meta requirements (AI prompt customization)
 

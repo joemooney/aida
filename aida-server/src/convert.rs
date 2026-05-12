@@ -92,14 +92,15 @@ pub fn req_type_to_proto(req_type: &CoreReqType) -> proto::RequirementType {
         CoreReqType::Sprint => proto::RequirementType::Sprint,
         CoreReqType::Folder => proto::RequirementType::Folder,
         CoreReqType::Meta => proto::RequirementType::Meta,
-        // Docs-layer entity types (FR-1-074) — gRPC proto doesn't yet expose
-        // dedicated variants, so they project to Meta for transport. Update
-        // when the proto is regenerated with the new tags.
+        // Docs-layer entity types (FR-1-074, STORY-104) — gRPC proto doesn't
+        // yet expose dedicated variants, so they project to Meta for
+        // transport. Update when the proto is regenerated with the new tags.
         CoreReqType::Principle
         | CoreReqType::Vision
         | CoreReqType::Constraint
         | CoreReqType::Decision
-        | CoreReqType::Term => proto::RequirementType::Meta,
+        | CoreReqType::Term
+        | CoreReqType::Doc => proto::RequirementType::Meta,
     }
 }
 

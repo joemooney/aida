@@ -87,6 +87,13 @@ pub enum RequirementType {
     /// Glossary term — domain language entry, ubiquitous-language anchor.
     /// Stateless.
     Term,
+    /// Living-documentation entry — narrative captured during work (rationale,
+    /// scenarios, recipes, gotchas) and linked back to the specs it explains
+    /// via the `relationships` field. Distinct from `Decision` (a single
+    /// recorded choice + its rationale) and `Term` (glossary definition):
+    /// `Doc` is generic explanatory prose that powers the EPIC-24 book/tutorial
+    /// projection. trace:STORY-104 | ai:claude
+    Doc,
 }
 
 impl fmt::Display for RequirementType {
@@ -110,6 +117,7 @@ impl fmt::Display for RequirementType {
             RequirementType::Constraint => write!(f, "Constraint"),
             RequirementType::Decision => write!(f, "Decision"),
             RequirementType::Term => write!(f, "Term"),
+            RequirementType::Doc => write!(f, "Doc"),
         }
     }
 }
@@ -140,6 +148,7 @@ impl RequirementType {
             RequirementType::Constraint => "CON",
             RequirementType::Decision => "ADR",
             RequirementType::Term => "TERM",
+            RequirementType::Doc => "DOC",
         }
     }
 }
@@ -3681,6 +3690,7 @@ impl RequirementsStore {
             RequirementType::Constraint => "Constraint",
             RequirementType::Decision => "Decision",
             RequirementType::Term => "Term",
+            RequirementType::Doc => "Doc",
         };
         self.type_definitions.iter().find(|td| td.name == type_name)
     }
@@ -4660,6 +4670,7 @@ impl RequirementsStore {
             RequirementType::Constraint => ("Constraint", "CON"),
             RequirementType::Decision => ("Decision", "ADR"),
             RequirementType::Term => ("Term", "TERM"),
+            RequirementType::Doc => ("Doc", "DOC"),
         };
         // Try database first, fall back to built-in prefix
         self.id_config
@@ -4791,6 +4802,7 @@ impl RequirementsStore {
                     RequirementType::Constraint => Some("CON".to_string()),
                     RequirementType::Decision => Some("ADR".to_string()),
                     RequirementType::Term => Some("TERM".to_string()),
+                    RequirementType::Doc => Some("DOC".to_string()),
                 };
                 (i, prefix_override, feature_prefix, type_prefix)
             })
@@ -4972,6 +4984,7 @@ impl RequirementsStore {
                     RequirementType::Constraint => Some("CON".to_string()),
                     RequirementType::Decision => Some("ADR".to_string()),
                     RequirementType::Term => Some("TERM".to_string()),
+                    RequirementType::Doc => Some("DOC".to_string()),
                 };
                 (i, prefix_override, feature_prefix, type_prefix)
             })
@@ -5869,6 +5882,28 @@ impl Default for RequirementsStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `RequirementType::Doc` is the EPIC-24 living-documentation type. Lock
+    /// in its prefix + display string so a careless rename doesn't silently
+    /// orphan existing DOC-N spec ids on disk. trace:STORY-104 | ai:claude
+    #[test]
+    fn doc_type_has_stable_prefix_and_display() {
+        let t = RequirementType::Doc;
+        assert_eq!(t.default_prefix(), "DOC");
+        assert_eq!(t.to_string(), "Doc");
+    }
+
+    /// `get_type_prefix` is the dynamic dispatcher used everywhere a spec_id
+    /// gets generated — it must know about the Doc variant or `aida doc add`
+    /// silently falls back to the wrong prefix. trace:STORY-104 | ai:claude
+    #[test]
+    fn doc_type_resolves_through_get_type_prefix() {
+        let store = RequirementsStore::new();
+        assert_eq!(
+            store.get_type_prefix(&RequirementType::Doc).as_deref(),
+            Some("DOC")
+        );
+    }
 
     #[test]
     fn test_add_requirement_with_spec_id() {
