@@ -1,0 +1,71 @@
+id: 019e1a5b-7def-7f50-a2a5-d77a9b5312d2
+spec_id: BUG-2-081
+title: /aida-review skill doesn't flip the auto-filed review story's status (stays Approved, never In Progress/Completed)
+description: |
+  Caught 2026-05-11 during PR-11 review. STORY-2-075 was auto-filed by STORY-90 at PR-create time with status=Approved. The /aida-review skill started, walked all 11 specs, but STORY-2-075 itself stayed as `Approved`:
+
+  ```
+  $ aida queue list
+    1. STORY-2-075 Review PR-11: ... [Approved]  "auto-queued by `aida pr` ..."
+  ```
+
+  Even though the agent is actively reviewing. After merge, STORY-2-075 will probably stay Approved indefinitely unless the reviewer manually flips it.
+
+  ## Today's behavior
+
+  /aida-review skill workflow:
+  1. Identify PR target ✓
+  2. Generate checklist ✓
+  3. Walk per-spec ✓ (each PR'd spec gets verdict; individual spec status managed correctly)
+  4. Mechanical fixes ✓
+  5. CI gate ✓
+  6. Post summary comment ✓
+  7. Merge ✓
+  8. **Mark per-spec specs Completed ✓ — but the synthetic review story itself isn't touched**
+
+  The auto-filed review story (STORY-2-075 for PR-11, STORY-100 for PR-10, etc.) is the SUBJECT of the review work — it should follow its own lifecycle.
+
+  ## Desired behavior
+
+  /aida-review skill adds:
+
+  **On entry** (right after identifying the PR target):
+  ```
+  aida edit STORY-2-075 --status in-progress
+  ```
+
+  **On merge success**:
+  ```
+  aida edit STORY-2-075 --status completed
+  aida queue done STORY-2-075   # atomic dequeue + status
+  ```
+
+  **On merge skipped (user said no)**:
+  - Leave status as `in-progress` — review is paused, not abandoned. Next /aida-review --pr N picks up where it left off.
+
+  **On review concluded with FAIL** (no merge):
+  - Status flips to `rejected` if blocking issues; or leaves `in-progress` if iteration needed. Skill prompts user for which.
+
+  ## Composes with
+
+  - STORY-90 (auto-queue at PR-create) — produces the synthetic review story; this closes its lifecycle
+  - STORY-91 (/aida-review skill — parent) — this is its polish
+  - TASK-72 (/aida-review polish, item 4) — same family of "skill lifecycle hygiene"; different gap (item 4 is /aida-pr side, this is /aida-review side)
+  - BUG-65 (activity log on edit/done) — the status flips will correctly bump activity once this ships
+  - TASK-72 item 4 (STORY-86 territory) — once Done vs Completed lands, the per-spec verdicts can use Done (work-on-branch), and STORY-2-075 itself transitions Approved → InProgress → Completed (when PR merged) cleanly
+
+  ## Acceptance
+
+  - [ ] /aida-review's skill content updated: marks review story In Progress on entry
+  - [ ] On merge success: marks review story Completed + queue done
+  - [ ] On user cancel (review paused): leaves In Progress
+  - [ ] On FAIL with no merge: prompts user (reject / leave-in-progress)
+  - [ ] Idempotent: re-running /aida-review on a story already In Progress (resume after pause) doesn't re-edit
+  - [ ] Tested: PR-11 review showed STORY-2-075 stayed Approved; after this fix, walks through Approved → In Progress → Completed
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T04:04:24.175782397Z
+modified_at: 2026-05-12T04:04:24.175782397Z
+req_type: Bug
