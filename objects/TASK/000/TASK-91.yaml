@@ -1,0 +1,62 @@
+id: 019e1cfa-ef2d-7dc2-b25f-39448f90f216
+spec_id: TASK-91
+agreed_id: TASK-91
+title: 'Auto-queue review stories: display as ''PR-N (STORY-NNN)'' or ''review PR-N'' instead of STORY-NNN-only in queue listings'
+description: |
+  User observation 2026-05-12: STORY-90's auto-filed review stories show as `STORY-108  Review PR-15: ...` in queue listings. PR-15 is the conceptually-primary identifier — users think "I need to review PR-15", not "I need to work STORY-108".
+
+  ## Today's behavior
+
+  ```
+  $ aida queue list --for reviewer
+    1. STORY-108  Review PR-15: EPIC-23 ...    [Approved]
+  ```
+
+  The STORY-NNN is technically the canonical req id in the store. But for these synthetic auto-filed stories, the PR-N is the more meaningful handle to the user.
+
+  ## Desired
+
+  Option A: PR-prominent display:
+  ```
+    1. PR-15 (STORY-108)  EPIC-23 ...
+  ```
+
+  Option B: PR-only display, STORY-id in detail view:
+  ```
+  $ aida queue list --for reviewer
+    1. review PR-15  EPIC-23 ...
+  $ aida show STORY-108
+  ID: STORY-108
+  Type: Story (auto-queued review)
+  About: PR-15
+  ...
+  ```
+
+  Option C: dual-id chip
+  ```
+    1. STORY-108 [@PR-15]  Review PR-15: EPIC-23 ...
+  ```
+
+  Recommendation: Option A — keep both identifiers visible (PR-N primary, STORY-id secondary) so users can still `aida edit STORY-108 --status completed` if they want to operate on the req directly.
+
+  ## Composes with
+
+  - STORY-90 (parent — auto-queue at PR-create) — this is its display polish
+  - BUG-83 (agreed_id rendering everywhere) — same family of display-format consistency
+  - aida queue work PR-N resolver (TASK-85, shipped) — that already accepts PR-N; queue list display should match
+  - /aida-review skill — also displays the review story; should follow same convention
+
+  ## Acceptance
+
+  - [ ] Queue list renders auto-queued review stories with PR-N prominent
+  - [ ] STORY-NNN still visible (so direct edit operations still work)
+  - [ ] /aida-review skill display matches
+  - [ ] aida show for the synthetic story shows both ids
+  - [ ] Tested: filed via aida pr auto-queue-review, listed correctly, picked up via `aida queue work PR-N`
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T16:17:47.821721148Z
+modified_at: 2026-05-12T16:17:47.821721148Z
+req_type: Task
