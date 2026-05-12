@@ -1,0 +1,52 @@
+id: 019e1ad3-4090-7310-ad61-23d794ab9c2d
+spec_id: BUG-83
+agreed_id: BUG-83
+title: 'BUG-81 follow-up: aida role enter''s ''Queued for this role'' section shows spec_id, not agreed_id'
+description: |
+  PR-12 shipped BUG-81 (queue list/add/remove/move/done/next prefer agreed_id over spec_id). But `aida role enter`'s newly-added "Queued for this role" section (TASK-48) still displays spec_id:
+
+  ```
+  $ aida role enter implementer
+  ✓ Resumed role: implementer ...
+
+    Queued for this role (2):
+      STORY-2-076  aida queue work [<id>]: one-shot...     ← spec_id, should be STORY-42
+      STORY-86     New status 'Done': ...                  ← already short, no issue
+  ```
+
+  vs `aida queue list` (correctly post-BUG-81):
+
+  ```
+  1. STORY-42  aida queue work [<id>]: one-shot...
+  2. STORY-86  New status 'Done': ...
+  ```
+
+  Different render path; BUG-81's fix didn't extend to role enter's display.
+
+  ## Fix
+
+  In the role-enter handler's queue rendering (aida-cli/src/main.rs, role_enter pseudo-step where "Queued for this role" is composed), use the same `agreed_id.as_deref().unwrap_or(spec_id.as_deref().unwrap_or("???"))` pattern that BUG-81 applied to queue commands.
+
+  Probably also applies to:
+  - `aida session show --plan` (manifest's per-item rows) — verify whether STORY-98's rendering uses agreed_id too
+  - Any other "list of queued / pending items" surface
+
+  ## Composes with
+
+  - BUG-81 (parent — agreed_id display in queue commands) — this extends the pattern
+  - TASK-48 (role enter shows queue head) — the surface this affects
+  - TASK-49 (role enter shows titles) — same render path; share helper
+
+  ## Acceptance
+
+  - [ ] `aida role enter <role>` "Queued for this role" section uses agreed_id when present
+  - [ ] Same fix applied to `aida session show --plan` if affected
+  - [ ] Sweep aida-cli/ for other "spec_id-only" render sites that should prefer agreed_id
+  - [ ] Tested: items with both spec_id and agreed_id render as agreed_id everywhere
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T06:15:12.784743235Z
+modified_at: 2026-05-12T06:15:12.784743235Z
+req_type: Bug
