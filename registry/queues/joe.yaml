@@ -27,13 +27,6 @@
   for_role: implementer
   for_scope: EPIC-23
 - user_id: joe
-  requirement_id: 019e1ae8-8d90-7201-8bb7-807194316d34
-  position: 7000
-  added_by: joe
-  note: auto-queued by `session end` (019e1acf); covers 2 specs
-  added_at: 2026-05-12T06:38:35.872325050Z
-  for_role: reviewer
-- user_id: joe
   requirement_id: 019e134a-57d3-70e0-a15c-006dea10310d
   position: 9223372036854775807
   added_by: joe
