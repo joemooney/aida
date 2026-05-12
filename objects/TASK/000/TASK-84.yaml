@@ -63,7 +63,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T14:55:48.132220356Z
-modified_at: 2026-05-12T15:30:00.709480429Z
+modified_at: 2026-05-12T15:54:42.872987065Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -93,6 +93,65 @@ comments:
     Commit: cf700dd4
   created_at: 2026-05-12T15:29:59.272300202Z
   modified_at: 2026-05-12T15:29:59.272300202Z
+- id: 019e1ce5-cd38-7512-b6ea-a70ed2ded637
+  author: joe
+  content: |-
+    ## Doc seed: Permission mode decision tree (2026-05-12)
+
+    Captured during AIDA-context permission-mode discussion. Future tutorial section on configuring agent permissions for AIDA work.
+
+    ### The five modes Claude Code 2.x offers
+
+    | mode | behavior | when to use |
+    |---|---|---|
+    | `default` | Prompts on every file edit + shell command | Unfamiliar repos; learning Claude Code |
+    | `acceptEdits` | Auto-accepts file edits + common fs ops; prompts for other shells | General use outside AIDA worktrees |
+    | `plan` | Read-only; no edits, no shells | Audit-only / read-through sessions |
+    | `auto` (research preview) | Auto-approves with background safety checks | Interactive work where you want safety + low friction |
+    | `bypassPermissions` (= old --dangerously-skip-permissions) | All prompts skipped (rm -rf / circuit breakers retained) | AIDA-context work, overnight unattended runs |
+
+    ### Decision tree
+
+    ```
+    Are you inside an AIDA worktree (`.aida/` present)?
+    ├── YES — everything's in git, recoverable, bounded
+    │   ├── Overnight / unattended? → bypassPermissions
+    │   ├── Interactive / want some safety? → auto OR acceptEdits + allowlist
+    │   └── Want maximum audit trail? → default (prompts everything)
+    └── NO — random code, unbounded context
+        ├── Untrusted source? → default or plan
+        ├── Trusted but unfamiliar? → acceptEdits
+        └── You vouch for the code? → auto
+    ```
+
+    ### TASK-84 (this story) addresses the AIDA-worktree default
+
+    Inside an AIDA worktree, the safety calculus is different: git is the safety net, the agent's work is bounded to the worktree, BUG-71+BUG-67 handle session cleanup, BUG-61 prevents leaked claudes. So bypassPermissions becomes the reasonable default rather than the scary fallback.
+
+    Outside an AIDA worktree, conservative defaults still apply.
+
+    ### The settings.json allowlist (TASK-82) is a complementary layer
+
+    Even in acceptEdits mode, you can pre-allow trusted command families:
+
+    ```json
+    {
+      "permissions": {
+        "allow": [
+          "Bash(aida *)", "Bash(cargo *)", "Bash(git *)", "Bash(gh *)",
+          "Bash(rg *)", "Bash(awk *)", "Bash(sed *)", ...
+        ]
+      }
+    }
+    ```
+
+    Combination of bypassPermissions in AIDA worktrees + allowlist for the rest = best balance.
+
+    ---
+
+    *Doc seed per EPIC-24. Promote to docs/tutorials/permission-modes.md.*
+  created_at: 2026-05-12T15:54:42.872987065Z
+  modified_at: 2026-05-12T15:54:42.872987065Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-12T15:30:00.709480429Z
