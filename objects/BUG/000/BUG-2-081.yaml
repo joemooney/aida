@@ -1,5 +1,6 @@
 id: 019e1a5b-7def-7f50-a2a5-d77a9b5312d2
 spec_id: BUG-2-081
+agreed_id: BUG-34
 title: /aida-review skill doesn't flip the auto-filed review story's status (stays Approved, never In Progress/Completed)
 description: |
   Caught 2026-05-11 during PR-11 review. STORY-2-075 was auto-filed by STORY-90 at PR-create time with status=Approved. The /aida-review skill started, walked all 11 specs, but STORY-2-075 itself stayed as `Approved`:

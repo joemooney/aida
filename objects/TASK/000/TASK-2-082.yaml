@@ -1,5 +1,6 @@
 id: 019e1a5e-0d11-7280-b7cf-cfc6758cdf3c
 spec_id: TASK-2-082
+agreed_id: TASK-36
 title: 'aida add: warn loudly when agreed-id block is exhausted (silently switches to node-aware format today)'
 description: |
   Caught 2026-05-11 — user expected BUG-81 (next in global block) but got BUG-2-081 (node-aware fallback). The dispenser correctly switched per `blocks-then-fallback` policy, but the user wasn't warned. They had to grep the YAML files and check node.toml to figure out what happened.
