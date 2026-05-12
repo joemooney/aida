@@ -1,0 +1,63 @@
+id: 019e1cc6-24f9-7373-9eb7-115e9314a877
+spec_id: TASK-86
+agreed_id: TASK-86
+title: '/aida-pickup skill: skip the ''want me to start?'' confirm in cluster mode (or add --auto flag)'
+description: |
+  Caught 2026-05-12 — `aida queue work EPIC-23` (cluster mode) drops into /aida-pickup which asks "Want me to start on TASK-81?" before doing anything. Redundant — the user's `aida queue work EPIC-N` invocation already authorized draining; the cluster's items were pre-populated in the manifest.
+
+  User's framing: "looks good but maybe I don't want the initial prompt, I am torn."
+
+  ## Today's behavior
+
+  `/aida-pickup` always confirms before flipping the queue head to In Progress, regardless of how it was launched:
+
+  ```
+  Active role: implementer. Queue head:
+    TASK-81 — STORY-42 follow-up: aida queue work --steal ...
+
+  Want me to start on TASK-81? I'll mark it in-progress and drive it to completion.
+  ```
+
+  This makes sense for:
+  - Direct `/aida-pickup` invocation (no upstream consent)
+  - `aida queue work TASK-81` (specific-item pickup — user named it but didn't authorize "for all queued items today")
+
+  But is friction-without-value for:
+  - `aida queue work EPIC-N` (cluster mode — user already said "drain this scope")
+  - `aida queue work` no-arg (queue-head mode — user explicitly invoked queue-driven flow)
+
+  ## Desired behavior
+
+  Pass an `--auto-first` flag (or similar) through STORY-42 to the skill prompt when launched in cluster/head mode. The skill detects the flag and skips the first confirmation:
+
+  ```
+  # Cluster mode (skip first confirm; assume drain intent):
+  aida queue work EPIC-23  →  exec claude "/aida-pickup --auto-first"
+
+  # Item mode (keep confirm — user named one item, may want to verify):
+  aida queue work TASK-81  →  exec claude "/aida-pickup TASK-81"
+  ```
+
+  Or simpler: make the confirm a single keypress instead of a multi-line block. Less ceremonious, similar safety.
+
+  Or: pre-flight summary at session-start time (STORY-42 already does this) is the consent point. Skill assumes consent was given and proceeds.
+
+  ## Composes with
+
+  - STORY-42 (parent — queue work) — STORY-42's pre-flight summary already shows what's about to happen; skill shouldn't re-confirm in cluster mode
+  - TASK-72 (/aida-review polish: skip explicit-pr confirm) — exact same pattern on the reviewer side
+
+  ## Acceptance
+
+  - [ ] `aida queue work EPIC-N` (cluster) skips the initial /aida-pickup confirm
+  - [ ] `aida queue work` (queue-head) skips the initial confirm
+  - [ ] `aida queue work TASK-N` (item) keeps the confirm (user might want to verify the specific pickup)
+  - [ ] Direct `/aida-pickup` invocation (no STORY-42 wrapper) keeps the confirm (no upstream consent)
+  - [ ] User-facing comment in the skill content documents WHEN it confirms vs not
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T15:20:08.185506367Z
+modified_at: 2026-05-12T15:20:08.185506367Z
+req_type: Task
