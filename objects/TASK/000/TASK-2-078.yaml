@@ -68,12 +68,12 @@ description: |
   - [ ] Item count next to each group title
   - [ ] Composes with --all, --for, --user, --scope
   - [ ] Default flat view unchanged
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T03:58:57.080959838Z
-modified_at: 2026-05-12T04:47:18.187165339Z
+modified_at: 2026-05-12T04:49:18.709459461Z
 req_type: Task
 relationships:
 - rel_type: Child
