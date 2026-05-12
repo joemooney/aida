@@ -1,0 +1,43 @@
+id: 019e1ae7-59a5-7513-a3c6-027aa616101d
+spec_id: TASK-80
+agreed_id: TASK-80
+title: 'BUG-82 follow-up: aida db check --collisions audit command for surfacing existing agreed-id collisions'
+description: |
+  PR-13's BUG-82 fix prevents future merge-gate collisions but doesn't audit pre-existing ones. PR-12 surfaced 5 such collisions (TASK-31, TASK-32, TASK-33, TASK-34, BUG-34 — committed agreed_ids that collided with rejected/unrelated existing reqs). These persist in the store; the fix doesn't retroactively detect them.
+
+  ## Surface
+
+  ```
+  aida db check --collisions
+  ```
+
+  Walks every requirement; for each that has an `agreed_id` set, checks if any OTHER requirement (by spec_id or agreed_id) claims the same short form. Reports:
+
+  ```
+  Collision found:
+    Short ID: TASK-34
+      Claim 1: TASK-2-077 — "TASK-76 follow-up: retry later option..." (Completed)
+      Claim 2: TASK-34    — "Convention: v2/v3 follow-ups must be filed as STORYs" (Approved)
+    Action: pick one to keep agreed=TASK-34; re-gate the other; or merge if duplicate.
+  ```
+
+  `--repair` option could attempt to re-gate the lower-priority claim (probably the one filed later) and persist the change.
+
+  ## Composes with
+
+  - BUG-82 (parent — collision prevention at gate time)
+  - aida doctor verify-relationships --repair (similar audit-and-repair shape; TASK-58 territory)
+
+  ## Acceptance
+
+  - [ ] `aida db check --collisions` reports all existing agreed-id collisions
+  - [ ] Output names both claimants + their titles + statuses
+  - [ ] Optional `--repair` re-gates lower-priority claim to next available short id
+  - [ ] No-op when no collisions exist
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T06:37:09.925228123Z
+modified_at: 2026-05-12T06:37:09.925228123Z
+req_type: Task
