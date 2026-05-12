@@ -8,7 +8,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-09T19:13:18.798953916Z
-modified_at: 2026-05-12T06:38:32.200802540Z
+modified_at: 2026-05-12T15:54:43.817072407Z
 req_type: Story
 tags:
 - collision
@@ -68,3 +68,70 @@ comments:
     Composes with TASK-67 (role-by-intent in lease) — both encode 'role is derived from the work, not from the shell's stale env.' STORY-42's cluster-derived role is the natural extension of TASK-67's scope-derived role.
   created_at: 2026-05-12T04:35:54.786812199Z
   modified_at: 2026-05-12T04:35:54.786812199Z
+- id: 019e1ce5-d0e9-7b43-89ab-39facbd8c574
+  author: joe
+  content: |-
+    ## Doc seed: The implementer↔reviewer cycle pattern (2026-05-12)
+
+    Workflow recipe refined across PR-3 through PR-14 (12 PRs). After STORY-42 (aida queue work) shipped, this collapses dramatically. Captured for future tutorial chapter.
+
+    ### The full cycle (with STORY-42's aida queue work)
+
+    ```
+    1. Start implementer batch
+       aida queue work EPIC-N
+       # → pulls main + orphan store, starts session, writes manifest, launches claude with /aida-pickup
+
+    2. Agent ships items, opens PR
+       /aida-pr
+       # → walks git log, drafts title+body, runs pre-flight fmt check, fires gh pr create, auto-queues review story
+
+    3. End implementer session (from parent shell)
+       aida session end <lease> [--force]
+       # → BUG-71 + BUG-67 + BUG-61 handle cleanup correctly now
+       # → STORY-66/90 auto-queue PR for reviewer if not already done
+
+    4. Start reviewer session
+       aida queue work STORY-N    # the auto-queued review story (per TASK-85, can also use aida queue work PR-N)
+       # → checks out the PR branch, launches claude with /aida-review --pr N
+
+    5. Reviewer walks specs, merges
+       # Via /aida-review skill: per-spec verdicts → consolidated PR comment → gh pr merge --squash → marks specs Completed
+
+    6. End reviewer session
+       aida session end <lease>
+
+    7. Loop: pull + decide next batch
+       aida pull && aida queue work <next-scope>
+    ```
+
+    ### Pre-STORY-42 (7-command version)
+
+    The pre-STORY-42 setup was 7-9 commands per phase. Still works but tedious:
+
+    ```bash
+    cd ~/ai/aida
+    git pull
+    aida db sync --pull           # (TASK-43 collapsed to aida pull)
+    cargo build --release
+    aida session start --owns EPIC-N --branch epic-N-batchM
+    cd ~/ai/aida-epic-N
+    source .aida/session-env.sh    # (TASK-63 auto-sources on --launch)
+    aida role enter implementer
+    claude                          # paste prompt
+    ```
+
+    ### Rebase risk pattern
+
+    When PR-A and PR-B run concurrently (different branches, same project), the second one to merge may rebase on PR-A's main. Saw this 4+ times in PR-3..PR-14 cycle. TASK-53 (pre-flight conflict detection) and TASK-54 (push branch-behind-main prompt) mitigate but don't eliminate.
+
+    ### When to wait, when to parallelize
+
+    - WAIT for PR-A to merge before starting batch-B if both touch session_start, main.rs, cli.rs (high collision risk)
+    - PARALLELIZE when batches touch unrelated areas (e.g., listing surface + statusline)
+
+    ---
+
+    *Doc seed per EPIC-24. Promote to docs/tutorials/implementer-reviewer-cycle.md.*
+  created_at: 2026-05-12T15:54:43.817072407Z
+  modified_at: 2026-05-12T15:54:43.817072407Z
