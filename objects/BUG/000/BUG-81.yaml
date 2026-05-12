@@ -47,12 +47,12 @@ description: |
   - [ ] `aida queue list` displays agreed_id when present, spec_id otherwise
   - [ ] Same fix applies to `aida queue next`, `aida queue done`, `aida queue add` output
   - [ ] Tested: merge-gate runs, then queue list shows the new short IDs
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T04:16:34.559432835Z
-modified_at: 2026-05-12T04:16:34.559432835Z
+modified_at: 2026-05-12T04:36:52.617922689Z
 req_type: Bug
 relationships:
 - rel_type: Child
