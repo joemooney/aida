@@ -3545,5 +3545,52 @@ operations:
   timestamp: 2026-05-12T06:01:22.258139422Z
   kind: !SetStatus
     status: In Progress
-clock: 446
+- id: 019e1acb-c42b-7311-801f-372cdbf5deaf
+  target_id: 019e1acb-8346-72a0-a37c-21a689ac0c5c
+  author: aida
+  node_id: '1'
+  lamport: 447
+  timestamp: 2026-05-12T06:07:02.187391690Z
+  kind: !SetTitle
+    title: aida db merge-gate assigns agreed-IDs that collide with existing requirements (skipped collision check)
+- id: 019e1acb-c45b-7711-8ae9-d90a5a105adf
+  target_id: 019e1acb-8346-72a0-a37c-21a689ac0c5c
+  author: aida
+  node_id: '1'
+  lamport: 448
+  timestamp: 2026-05-12T06:07:02.235080405Z
+  kind: !SetDescription
+    description: |-
+      Caught during PR-12 review (2026-05-11). Follow-up in the same family as BUG-77 / TASK-36 — the "validate-at-write-boundary" pattern. TASK-36 fixed the `aida add` side (warn on block exhaustion + node-aware fallback); this bug is the `aida db merge-gate` parallel.
+
+      ## Symptom
+
+      When merge-gate assigns short agreed-ids to pending node-aware spec_ids, it allocates the next id from the agreed-id block without checking whether that short id already resolves to a different requirement in the store. Result: two requirements end up resolving to the same short id, and `aida show <short-id>` returns whichever the resolver picks first (typically not the one the implementer meant).
+
+      ## PR-12 evidence (existing colliding pairs)
+
+      In commit `94920fcc`, the REQ-ID trailer reads `(BUG-81 TASK-31 TASK-32 TASK-33 TASK-34 TASK-36 TASK-78 BUG-34)`. Five of those eight collide:
+
+      | trailer | actual work (node-aware spec_id) | colliding existing req                              |
+      |---------|-----------------------------------|------------------------------------------------------|
+      | TASK-31 | TASK-2-074 (session --name)       | TASK-31 `[FR-215 test] child req` (Rejected)         |
+      | TASK-32 | TASK-2-080 (bg_worker)            | TASK-32 `[FR-215 verify] child` (Rejected)           |
+      | TASK-33 | TASK-2-078 (queue --tree)         | TASK-33 `[FR-215 v2] child` (Rejected)               |
+      | TASK-34 | TASK-2-077 (held-branch)          | TASK-34 `Convention v2/v3 follow-ups...` (Approved!) |
+      | BUG-34  | BUG-2-081 (review skill)          | BUG-34 `[test] dispense skip verification` (Rejected) |
+
+      `aida show TASK-31` resolves to the rejected test artifact, not the session-name work the PR delivered. In-code `trace:TASK-31 | ai:claude` comments are now pointing at a rejected req.
+
+      ## Acceptance
+
+      - [ ] merge-gate must check if the candidate agreed-id resolves to an existing requirement before assigning
+      - [ ] On collision: skip + try next number in the block + log the skip (so users see the gap)
+      - [ ] Test: with `TASK-N` already in store, merge-gate on a new node-aware item must NOT assign `TASK-N`
+      - [ ] Migration: surface the existing colliding pairs (PR-12 list above as evidence) so they can be manually re-gated — e.g. `aida db check --collisions` audit command or a one-shot script that re-gates affected items
+
+      ## Composes with
+
+      - BUG-77 / TASK-36 (block-exhaustion warning on `aida add`) — same "validate-at-write-boundary" pattern, dispenser side
+      - BUG-81 (queue list show agreed_id) — confused users were the downstream symptom
+clock: 448
 node_id: '1'
