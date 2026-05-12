@@ -404,8 +404,13 @@ pub enum SessionCommand {
 
         /// Claude Code permission mode. Most common values:
         /// `bypassPermissions` (default — no prompts), `acceptEdits`
-        /// (auto-accept edits, prompt other tools), `default` (prompt
-        /// for everything), `plan`.
+        /// (auto-accept edits, prompt other tools), `auto` (research
+        /// preview: auto-approves tool calls with background safety
+        /// checks — fills the gap between acceptEdits and bypass),
+        /// `default` (prompt for everything), `plan`. The string is
+        /// passed straight through to `claude --permission-mode`, so
+        /// any value the installed Claude Code understands works.
+        /// trace:TASK-83 | ai:claude
         #[clap(long, default_value = "bypassPermissions")]
         permission_mode: String,
 
@@ -487,9 +492,12 @@ pub enum SessionCommand {
         name: Option<String>,
 
         /// Claude Code permission mode for the launch. Common values:
-        /// `bypassPermissions` (default), `acceptEdits`, `default`,
-        /// `plan`. Ignored without --launch.
-        /// trace:STORY-54 | ai:claude
+        /// `bypassPermissions` (default), `acceptEdits`, `auto`
+        /// (research-preview middle ground — see `aida queue work
+        /// --help` for the tradeoff), `default`, `plan`. Pass-through
+        /// to `claude --permission-mode`, so any installed-claude value
+        /// works. Ignored without --launch.
+        /// trace:STORY-54, TASK-83 | ai:claude
         #[clap(long, default_value = "bypassPermissions")]
         permission_mode: String,
 
@@ -1114,6 +1122,28 @@ pub enum DbCommand {
     Block {
         #[clap(subcommand)]
         subcommand: BlockCommand,
+    },
+
+    /// Audit the store for consistency problems. Currently supports
+    /// `--collisions` (two requirements claiming the same short id, the
+    /// shape BUG-82 prevents at gate time but doesn't retroactively detect).
+    /// trace:TASK-80 | ai:claude
+    Check {
+        /// Report requirements whose preferred display id (agreed_id
+        /// when assigned, else spec_id) collides with another
+        /// requirement's spec_id or agreed_id. Pre-existing collisions
+        /// from before BUG-82's gate-time check (e.g., the 5 surfaced
+        /// by PR-12) persist in the store and won't auto-clear.
+        #[clap(long)]
+        collisions: bool,
+
+        /// When used with `--collisions`, re-gate the later (higher
+        /// position-encoded) claimant's agreed_id to the next free
+        /// short id. The earlier claimant keeps the contested id.
+        /// Without this flag, the command only reports; the operator
+        /// decides which to keep.
+        #[clap(long)]
+        repair: bool,
     },
 }
 
@@ -2054,11 +2084,16 @@ pub enum QueueCommand {
         /// pickup. Omit to pick up the head of the active role's queue.
         id: Option<String>,
         /// Permission mode for the launched claude. Defaults to
-        /// `acceptEdits` (auto-accept edits, still prompt for shell).
+        /// `acceptEdits` (auto-accept edits, still prompt for shell —
+        /// the safe but prompt-heavy choice for long autonomous runs).
         /// Env override: `AIDA_PERMISSION_MODE`. Common alt values:
+        /// `auto` (research preview: auto-approves tool calls with
+        /// background safety checks; pairs well with the aida-family
+        /// pre-allow list from `aida init`'s settings.json — TASK-82),
         /// `bypassPermissions` (equivalent to the legacy
         /// `--dangerously-skip-permissions`), `plan` (read-only),
-        /// `default` (prompt on everything).
+        /// `default` (prompt on everything). Passed through to
+        /// `claude --permission-mode`. trace:STORY-42, TASK-83 | ai:claude
         #[clap(long, value_name = "MODE")]
         permission_mode: Option<String>,
         /// Run the full setup (worktree, lease, manifest) but skip the

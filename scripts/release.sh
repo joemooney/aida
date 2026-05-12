@@ -24,6 +24,40 @@
 
 set -euo pipefail
 
+# Parse args first so --help works in any repo state. Support `--yes` /
+# `-y` to skip the interactive prompt (also satisfied by env
+# `AIDA_RELEASE_YES=1`). Non-tty invocations (CI, `make ... | tee`,
+# captured shells) require one of these because bash's `read` returns
+# EOF immediately on a closed stdin and the prompt falls through to
+# "cancelled" without ever pausing. trace:TASK-79 | ai:claude
+auto_yes=${AIDA_RELEASE_YES:-0}
+bump=
+for arg in "$@"; do
+    case "$arg" in
+        --yes|-y) auto_yes=1 ;;
+        -h|--help)
+            echo "usage: $0 [--yes] {major|minor|patch|<explicit-version>}"
+            exit 0
+            ;;
+        -*)
+            echo "error: unknown flag '$arg'" >&2
+            exit 1
+            ;;
+        *)
+            if [ -n "$bump" ]; then
+                echo "error: multiple positional args; pass exactly one bump or version" >&2
+                exit 1
+            fi
+            bump=$arg
+            ;;
+    esac
+done
+
+if [ -z "$bump" ]; then
+    echo "usage: $0 [--yes] {major|minor|patch|<explicit-version>}" >&2
+    exit 1
+fi
+
 # Refuse to run anywhere but the aida repo itself.
 if ! grep -q 'repository = "https://github.com/joemooney/aida"' Cargo.toml 2>/dev/null; then
     echo "error: must be run from the root of the joemooney/aida repo" >&2
@@ -37,18 +71,11 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
     exit 1
 fi
 
-if [ $# -ne 1 ]; then
-    echo "usage: $0 {major|minor|patch|<explicit-version>}" >&2
-    exit 1
-fi
-
 current=$(awk '/^\[workspace\.package\]/{f=1; next} f && /^version/{gsub(/[" ]/,""); split($0, a, "="); print a[2]; exit}' Cargo.toml)
 if [ -z "$current" ]; then
     echo "error: could not parse current workspace.package version" >&2
     exit 1
 fi
-
-bump=$1
 case "$bump" in
     major|minor|patch)
         IFS='.' read -r maj min pat <<<"$current"
@@ -120,7 +147,34 @@ echo
 echo "─── End tag notes ───"
 echo
 
-read -r -p "Commit + tag v$new + push? [y/N]: " answer
+if [ "$auto_yes" = "1" ]; then
+    echo "auto-confirm: --yes (or AIDA_RELEASE_YES=1) — proceeding without prompt."
+    answer=y
+elif [ ! -t 0 ]; then
+    # Non-interactive stdin (piped, captured by `make … | tee`, CI without
+    # TTY allocation) and no explicit consent — refuse rather than silently
+    # treating EOF as "no" and leaving a half-applied version bump on disk.
+    cat <<EOM >&2
+
+error: release script invoked without a TTY and without explicit consent.
+
+The version bump has been applied to the working tree but the commit/tag/push
+step requires confirmation. Pick one:
+
+  - rerun interactively (gives you the diff + tag-notes preview), or
+  - pass --yes on the command line:    $0 $bump --yes
+  - set the env:                       AIDA_RELEASE_YES=1 $0 $bump
+
+The version bump is still in your working tree. Either commit it manually,
+or run \`git restore Cargo.toml Cargo.lock aida-cli/Cargo.toml aida-crate/Cargo.toml\`
+to discard.
+
+Tag notes saved at: $notes_file
+EOM
+    exit 1
+else
+    read -r -p "Commit + tag v$new + push? [y/N]: " answer
+fi
 case "${answer,,}" in
     y|yes)
         ;;
