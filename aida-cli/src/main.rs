@@ -14635,36 +14635,32 @@ mod statusline_tests {
     // trace:STORY-79 | ai:claude
 
     /// RAII guard that points dirs::home_dir() at `path` for the test's
-    /// duration on all 3 platforms. dirs::home_dir() reads HOME on unix
-    /// and USERPROFILE on Windows; without both set, Windows tests write
-    /// to the real user home and the assertion misses. trace:TASK-62 | ai:claude
+    /// duration. Unix-only because `dirs = 5.0.1` on Windows resolves
+    /// home via `SHGetKnownFolderPath(FOLDERID_Profile)` — env vars
+    /// (USERPROFILE / HOME) have no effect there, so this guard cannot
+    /// isolate the test on Windows. A Windows-capable approach is
+    /// tracked as the TASK-62 follow-up (likely an `AIDA_HOME` override
+    /// or swap to the `home` crate). trace:TASK-62 | ai:claude
+    #[cfg(unix)]
     struct TempHomeEnv {
         prev_home: Option<String>,
-        prev_userprofile: Option<String>,
     }
 
+    #[cfg(unix)]
     impl TempHomeEnv {
         fn set(path: &std::path::Path) -> Self {
             let prev_home = std::env::var("HOME").ok();
-            let prev_userprofile = std::env::var("USERPROFILE").ok();
             std::env::set_var("HOME", path);
-            std::env::set_var("USERPROFILE", path);
-            Self {
-                prev_home,
-                prev_userprofile,
-            }
+            Self { prev_home }
         }
     }
 
+    #[cfg(unix)]
     impl Drop for TempHomeEnv {
         fn drop(&mut self) {
             match &self.prev_home {
                 Some(v) => std::env::set_var("HOME", v),
                 None => std::env::remove_var("HOME"),
-            }
-            match &self.prev_userprofile {
-                Some(v) => std::env::set_var("USERPROFILE", v),
-                None => std::env::remove_var("USERPROFILE"),
             }
         }
     }
@@ -14673,8 +14669,11 @@ mod statusline_tests {
     /// store has no `origin` remote configured. Exercises the failure
     /// path without needing network. Uses an isolated HOME so the test
     /// doesn't clobber the real ~/.aida/cache/last-fetch.toml.
-    // trace:TASK-62 | ai:claude — cross-platform: set USERPROFILE on Windows
-    // so dirs::home_dir() resolves to the temp dir on all 3 platforms.
+    // trace:TASK-62 | ai:claude — unix-only: dirs::home_dir() on Windows
+    // ignores env vars (uses SHGetKnownFolderPath), so the test cannot
+    // isolate from the real user profile there. Windows-capable test
+    // deferred to TASK-62 follow-up.
+    #[cfg(unix)]
     #[test]
     fn bg_worker_records_error_on_missing_remote() {
         use std::process::Command;
