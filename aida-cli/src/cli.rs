@@ -476,6 +476,16 @@ pub enum SessionCommand {
         #[clap(long, short = 't')]
         title: Option<String>,
 
+        /// Display name passed to Claude Code via `--name`. Shown in
+        /// claude's prompt box, /resume picker, and terminal title.
+        /// Without this, --launch derives a name from scope+branch+role:
+        /// `review@PR-N` for reviewer sessions, `EPIC-N:batchM` for
+        /// implementer epic-batch shapes, `<role>@<scope>:<suffix>`
+        /// fallback. Truncated to 64 chars. Only honored with --launch.
+        /// trace:TASK-31 | ai:claude
+        #[clap(long, short = 'n')]
+        name: Option<String>,
+
         /// Claude Code permission mode for the launch. Common values:
         /// `bypassPermissions` (default), `acceptEdits`, `default`,
         /// `plan`. Ignored without --launch.
@@ -1882,6 +1892,12 @@ pub enum QueueCommand {
         /// trace:TASK-52 | ai:claude
         #[clap(long, value_name = "CSV")]
         scope: Option<String>,
+        /// Group entries by their parent EPIC for a visual cluster view.
+        /// EPICs are sorted by item count desc; unscoped items appear
+        /// under a final "Unscoped" group. Within each group, queue
+        /// position order is preserved. trace:TASK-33 | ai:claude
+        #[clap(long)]
+        tree: bool,
     },
     /// Add a requirement to your queue
     Add {
@@ -2326,6 +2342,14 @@ pub enum Command {
         /// pipe pull output. trace:TASK-73 | ai:claude
         #[clap(long, short = 'q')]
         quiet: bool,
+        /// Skip the post-pull merge-gate run. By default `aida pull`
+        /// promotes any pending node-aware ids to their agreed short
+        /// form after a successful orphan-store pull (idempotent + cheap;
+        /// no-ops when nothing's pending). Set the env var
+        /// `AIDA_AUTO_MERGE_GATE=false` for a project-wide opt-out.
+        /// trace:TASK-78 | ai:claude
+        #[clap(long)]
+        no_gate: bool,
     },
 
     /// AIDA-developer-only commands: activate the in-repo dev binary,

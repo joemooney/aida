@@ -39,6 +39,19 @@ If the active session's scope is `PR-N`, use that. Otherwise accept `--pr N` fro
 
 **Confirm with the user only when the PR was auto-detected** (from the session lease or other heuristics). When `--pr N` was passed explicitly, the user has already decided — skip the prompt and go straight to step 2. The confirm is there to catch a wrong guess, not to second-guess an explicit choice. (TASK-72 polish)
 
+**Flip the review story to In Progress.** STORY-66's auto-queue files a `Review PR-N: ...` Story when /aida-pr runs. Once we've identified the PR target and the user has confirmed (or `--pr N` was explicit), that story belongs to *this* review session — bump it so `aida session show --plan`, `aida queue list`, and the statusline reflect the work as actively underway, not still Approved. Idempotent: a story already In Progress isn't re-edited.
+
+```bash
+# Locate the review story by title (STORY-66 uses "Review PR-<N>:" prefix).
+# If your project has agreed_ids assigned, both forms resolve.
+review_story=$(aida search "Review PR-<N>" --status approved | awk 'NR>2 && $1 ~ /^STORY-/ {print $1; exit}')
+if [ -n "$review_story" ]; then
+    aida edit "$review_story" --status in-progress
+fi
+```
+
+If no review story exists (the PR was opened without `/aida-pr` or auto-queue is disabled), this is a silent no-op — the manual review path is unaffected. (BUG-34)
+
 ### 2. Generate the per-spec checklist (STORY-67)
 
 ```bash
@@ -163,11 +176,23 @@ For ⚠️ PARTIAL or ❌ FAIL: leave the spec In Progress (or move it to a foll
 
 Informational rows (already-Completed AND not the subject of a commit in this PR) are skipped — they're not this PR's responsibility.
 
-If the PR carried a `Review PR-N:` story (from STORY-66's auto-queue), mark THAT story Completed too:
+If the PR carried a `Review PR-N:` story (from STORY-66's auto-queue), close out its lifecycle now. Step 1's In Progress flip moves it Approved → In Progress; the merge moves it In Progress → Completed and dequeues it atomically:
 
 ```bash
 aida queue done <review-story-id> --yes
 ```
+
+**Cancel / FAIL handling.** If the user requested changes (step 7 "Request changes" branch) or you concluded with ❌ FAIL and no merge:
+
+- **Iteration expected** (implementer will push fixes) → leave the review story In Progress. A subsequent `/aida-review` run picks up where it left off; no extra bookkeeping needed.
+- **Review rejected outright** (PR will be closed without merging) → ask the user explicitly: "Mark the Review PR-N story rejected?" If yes:
+
+  ```bash
+  aida edit <review-story-id> --status rejected
+  aida queue remove <review-story-id> --yes
+  ```
+
+Never silently leave a review story in In Progress when the PR was closed without merge — the next session would see it as still-active work. (BUG-34)
 
 ### 10. Hand off
 
