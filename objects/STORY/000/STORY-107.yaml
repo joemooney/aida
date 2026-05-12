@@ -71,7 +71,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:51:25.341027642Z
-modified_at: 2026-05-12T15:52:20.663394050Z
+modified_at: 2026-05-12T16:12:34.528606074Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -142,3 +142,50 @@ comments:
     Future writer of docs/positioning/vs-ultrareview.md should cite the actual pricing docs (https://code.claude.com/docs/en/claude-code-on-the-web) for accuracy and link the source.
   created_at: 2026-05-12T15:52:20.663394050Z
   modified_at: 2026-05-12T15:52:20.663394050Z
+- id: 019e1cf6-2760-7843-a9bd-0472a8c34a4c
+  author: joe
+  content: |-
+    ## Doc seed: What /ultrareview catches that /aida-review misses (2026-05-12)
+
+    Captured live: ran /ultrareview on PR-15 after /aida-review approved + merged. Found 3 real bugs. Promote to docs/positioning/vs-ultrareview.md.
+
+    ### The bug categories /ultrareview catches that single-agent review misses
+
+    | category | example from PR-15 | why single-agent misses |
+    |---|---|---|
+    | **Cross-reference inconsistency** | review_title_matches case-insensitive but derive_scope_from_entry case-sensitive | One prompt biases toward one perspective; doesn't naturally check 'do all consumers agree?' |
+    | **Format-spec edge cases** | TOML inline comments (`key = "v" # cmt`) not stripped | Acceptance walk verifies spec compliance, not 'does it handle everything the FORMAT spec allows?' |
+    | **Multiplicity reasoning** | --steal handles N=1 lease but not N>1 | Singular case dominates testing; multiplicity reasoning is a separate cognitive step |
+
+    ### Why /ultrareview wins on depth
+
+    - Multi-agent fleet with explicitly different framings ("find bugs" vs "verify acceptance")
+    - Each agent reads the same code with a DIFFERENT mental model
+    - Composite findings catch what any single mental model would miss
+
+    ### The complementary workflow (recommendation)
+
+    For substantive PRs:
+    1. /aida-review (free, integrated with lifecycle, fast)
+    2. /ultrareview (paid/quota, multi-agent depth, ~5-10 min cloud)
+    3. Address any /ultrareview findings via fixup commits on the same PR
+    4. Merge
+
+    For routine PRs (small / well-bounded):
+    1. /aida-review alone suffices
+
+    The 3 free /ultrareview uses (per the prompt seen 2026-05-12) reserve nicely for the 'substantive PRs' bucket — feature PRs with new public surface or complex logic. Polish/cleanup PRs probably don't justify the spend.
+
+    ### What /aida-review can DO to close the gap (STORY-109 territory)
+
+    Augment the skill with an explicit adversarial phase: cross-ref consistency, format-spec edge cases, multiplicity reasoning. Single-agent so won't fully match /ultrareview, but closes the most common gap. STORY-109 filed for this 2026-05-12.
+
+    ### Honest positioning statement
+
+    "/aida-review is the cheap, integrated lifecycle layer. /ultrareview is the depth layer when stakes warrant. Compose them — they're not substitutes."
+
+    ---
+
+    *Doc seed per EPIC-24. Promote to docs/positioning/vs-ultrareview.md when that structure exists.*
+  created_at: 2026-05-12T16:12:34.528606074Z
+  modified_at: 2026-05-12T16:12:34.528606074Z
