@@ -1,0 +1,28 @@
+id: 019e1cff-0d4e-7c40-9a22-918aa02c3208
+spec_id: STORY-110
+agreed_id: STORY-110
+title: 'Review PR-16: fix(queue): ultrareview nits on PR-15 (TASK-81 TASK-84 TASK-85)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `pr16-ultrareview-fixes`.
+
+  - PR: <https://github.com/joemooney/aida/pull/16>
+  - Branch: `pr16-ultrareview-fixes` → `main`
+
+  ## Covers
+
+  - TASK-81
+  - TASK-84
+  - TASK-85
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 16` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T16:22:17.678392279Z
+modified_at: 2026-05-12T16:22:17.678392279Z
+req_type: Story
