@@ -57,12 +57,12 @@ description: |
   - [ ] Tested: reviewer session gets `review@PR-N` in /resume picker + terminal title
   - [ ] Tested: implementer batch gets `EPIC-N:batchM` in same places
   - [ ] Tested: custom --name override works
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T03:35:57.968249704Z
-modified_at: 2026-05-12T03:35:57.968249704Z
+modified_at: 2026-05-12T04:41:39.546195016Z
 req_type: Task
 relationships:
 - rel_type: Child
