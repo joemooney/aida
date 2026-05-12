@@ -20238,6 +20238,110 @@ mod queue_work_tests {
         let got = find_scope_lease_conflict(&leases, "TASK-81").unwrap();
         assert_eq!(got.id, "freshh");
     }
+
+    /// --permission-mode flag beats everything else.
+    /// trace:TASK-84 | ai:claude
+    #[test]
+    fn permission_mode_flag_wins() {
+        let (m, o) =
+            resolve_queue_work_permission_mode(Some("plan"), Some("auto"), Some("default"), true);
+        assert_eq!(m, "plan");
+        assert_eq!(o, "--permission-mode flag");
+    }
+
+    /// AIDA_PERMISSION_MODE env wins over config + worktree default.
+    /// trace:TASK-84 | ai:claude
+    #[test]
+    fn permission_mode_env_beats_config() {
+        let (m, o) = resolve_queue_work_permission_mode(None, Some("auto"), Some("default"), true);
+        assert_eq!(m, "auto");
+        assert_eq!(o, "AIDA_PERMISSION_MODE env");
+    }
+
+    /// config.toml [behavior] beats the worktree default.
+    /// trace:TASK-84 | ai:claude
+    #[test]
+    fn permission_mode_config_beats_worktree_default() {
+        let (m, o) = resolve_queue_work_permission_mode(None, None, Some("acceptEdits"), true);
+        assert_eq!(m, "acceptEdits");
+        assert_eq!(o, ".aida/config.toml");
+    }
+
+    /// Inside an AIDA worktree with no overrides → bypassPermissions
+    /// (the autonomous-overnight default). trace:TASK-84 | ai:claude
+    #[test]
+    fn permission_mode_aida_worktree_default_is_bypass() {
+        let (m, o) = resolve_queue_work_permission_mode(None, None, None, true);
+        assert_eq!(m, "bypassPermissions");
+        assert_eq!(o, "aida-worktree default");
+    }
+
+    /// Outside an AIDA worktree → acceptEdits (foreign cwd, safe).
+    /// trace:TASK-84 | ai:claude
+    #[test]
+    fn permission_mode_non_aida_default_is_acceptedits() {
+        let (m, o) = resolve_queue_work_permission_mode(None, None, None, false);
+        assert_eq!(m, "acceptEdits");
+        assert_eq!(o, "non-aida default");
+    }
+
+    /// Empty string from env/config is treated as absent (so an empty
+    /// shell variable doesn't accidentally lock the user out of the
+    /// AIDA-worktree default). trace:TASK-84 | ai:claude
+    #[test]
+    fn permission_mode_empty_strings_are_ignored() {
+        let (m, o) = resolve_queue_work_permission_mode(Some(""), Some(""), Some(""), true);
+        assert_eq!(m, "bypassPermissions");
+        assert_eq!(o, "aida-worktree default");
+    }
+
+    /// `read_behavior_permission_mode` parses `[behavior]
+    /// permission_mode = "..."` and ignores other sections.
+    /// trace:TASK-84 | ai:claude
+    #[test]
+    fn read_behavior_permission_mode_parses_value() {
+        let tmp = std::env::temp_dir().join(format!(
+            "aida-task84-config-{}",
+            chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
+        ));
+        let aida = tmp.join(".aida");
+        std::fs::create_dir_all(&aida).unwrap();
+        std::fs::write(
+            aida.join("config.toml"),
+            "[id_format]\npolicy = \"node-aware-only\"\n\n[behavior]\npermission_mode = \"auto\"\n",
+        )
+        .unwrap();
+        let got = read_behavior_permission_mode(&tmp);
+        assert_eq!(got.as_deref(), Some("auto"));
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// Missing config file → None. trace:TASK-84 | ai:claude
+    #[test]
+    fn read_behavior_permission_mode_missing_is_none() {
+        let tmp = std::env::temp_dir().join(format!(
+            "aida-task84-noconf-{}",
+            chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&tmp).unwrap();
+        assert!(read_behavior_permission_mode(&tmp).is_none());
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// `[behavior]` section absent → None, even when other sections exist.
+    /// trace:TASK-84 | ai:claude
+    #[test]
+    fn read_behavior_permission_mode_section_absent() {
+        let tmp = std::env::temp_dir().join(format!(
+            "aida-task84-noseq-{}",
+            chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
+        ));
+        let aida = tmp.join(".aida");
+        std::fs::create_dir_all(&aida).unwrap();
+        std::fs::write(aida.join("config.toml"), "[id_format]\npolicy = \"x\"\n").unwrap();
+        assert!(read_behavior_permission_mode(&tmp).is_none());
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
 }
 
 // ----------------------------------------------------------------------------
@@ -28330,20 +28434,35 @@ fn handle_queue_work(
     let plan = resolve_queue_work_plan(storage, user_id, arg, type_filter)?;
     let (role, role_origin, warnings) = infer_queue_work_role(&plan, role_override);
 
-    // Permission mode: explicit flag → AIDA_PERMISSION_MODE env →
-    // `acceptEdits` (safe default — prompts on shell but auto-accepts
-    // edits). The pass-through to `claude --permission-mode` is
-    // unvalidated, so users can pick `auto` (research preview), `plan`,
-    // `bypassPermissions`, or any other mode the installed Claude Code
-    // understands. trace:STORY-42, TASK-83 | ai:claude
-    let permission_mode = permission_mode
-        .map(|s| s.to_string())
-        .or_else(|| {
-            std::env::var("AIDA_PERMISSION_MODE")
-                .ok()
-                .filter(|s| !s.is_empty())
-        })
-        .unwrap_or_else(|| "acceptEdits".to_string());
+    // Permission mode resolution (TASK-83 → TASK-84). Order:
+    //   1. --permission-mode flag (explicit override always wins)
+    //   2. AIDA_PERMISSION_MODE env var (process-level opt-out)
+    //   3. .aida/config.toml [behavior] permission_mode (project policy)
+    //   4. AIDA-managed worktree default → `bypassPermissions` (TASK-84:
+    //      worktree is sandboxed git state; the prompt flood was eating
+    //      autonomous overnight runs and circuit breakers stay in place)
+    //   5. Non-AIDA default → `acceptEdits` (safe default for foreign cwd)
+    // The pass-through to `claude --permission-mode` is unvalidated, so
+    // users can pick `auto`, `plan`, etc. trace:STORY-42, TASK-83, TASK-84
+    // | ai:claude
+    let env_mode = std::env::var("AIDA_PERMISSION_MODE")
+        .ok()
+        .filter(|s| !s.is_empty());
+    let project_root_for_config = find_main_worktree_root().ok();
+    let config_mode = project_root_for_config
+        .as_deref()
+        .and_then(read_behavior_permission_mode);
+    let is_aida_worktree = detect_distributed_store().is_some()
+        || project_root_for_config
+            .as_deref()
+            .map(|p| p.join(".aida").join("config.toml").exists())
+            .unwrap_or(false);
+    let (permission_mode, permission_mode_origin) = resolve_queue_work_permission_mode(
+        permission_mode,
+        env_mode.as_deref(),
+        config_mode.as_deref(),
+        is_aida_worktree,
+    );
 
     let prompt = derive_queue_work_prompt(&plan, &role);
 
@@ -28374,7 +28493,14 @@ fn handle_queue_work(
         "role",
         format!("{} {}", role.cyan(), format!("({})", role_origin).dimmed()),
     );
-    line("mode", permission_mode.cyan().to_string());
+    line(
+        "mode",
+        format!(
+            "{} {}",
+            permission_mode.cyan(),
+            format!("({})", permission_mode_origin).dimmed()
+        ),
+    );
     line("skill", prompt.cyan().to_string());
     if plan.entries.len() > 1 {
         line(
@@ -28565,6 +28691,74 @@ fn handle_queue_work(
         .cyan()
     );
     session::exec_claude_with_prompt(&permission_mode, name.as_deref(), &prompt)
+}
+
+/// TASK-84: pure resolver for `aida queue work` permission-mode.
+/// Order (first non-None wins):
+///   1. `flag`   — `--permission-mode` on the command line
+///   2. `env`    — `AIDA_PERMISSION_MODE` env var
+///   3. `config` — `.aida/config.toml [behavior] permission_mode`
+///   4. `is_aida_worktree=true` default → `bypassPermissions` (worktree is
+///      git-sandboxed; prompt flood ate autonomous runs — see TASK-84
+///      description)
+///   5. fallback → `acceptEdits` (safe default for non-AIDA cwd)
+/// Returns the mode + a short origin string for the pre-flight summary.
+/// Pure decision helper — kept separate so unit tests can pin the
+/// resolution order without env/config side effects. trace:TASK-84 | ai:claude
+fn resolve_queue_work_permission_mode(
+    flag: Option<&str>,
+    env: Option<&str>,
+    config: Option<&str>,
+    is_aida_worktree: bool,
+) -> (String, &'static str) {
+    if let Some(m) = flag.filter(|s| !s.is_empty()) {
+        return (m.to_string(), "--permission-mode flag");
+    }
+    if let Some(m) = env.filter(|s| !s.is_empty()) {
+        return (m.to_string(), "AIDA_PERMISSION_MODE env");
+    }
+    if let Some(m) = config.filter(|s| !s.is_empty()) {
+        return (m.to_string(), ".aida/config.toml");
+    }
+    if is_aida_worktree {
+        return ("bypassPermissions".to_string(), "aida-worktree default");
+    }
+    ("acceptEdits".to_string(), "non-aida default")
+}
+
+/// TASK-84: read `[behavior] permission_mode = "..."` from
+/// `.aida/config.toml`. Returns `None` when the file is missing, the
+/// section is absent, or the value is empty. We use a hand-rolled
+/// section-aware scan (rather than pulling in serde for one optional
+/// string) to stay consistent with `read_id_format_settings`.
+/// trace:TASK-84 | ai:claude
+fn read_behavior_permission_mode(project_dir: &std::path::Path) -> Option<String> {
+    let config_path = project_dir.join(".aida").join("config.toml");
+    let content = std::fs::read_to_string(&config_path).ok()?;
+    let mut in_behavior = false;
+    for raw in content.lines() {
+        let line = raw.trim();
+        if line.starts_with('#') || line.is_empty() {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix('[') {
+            in_behavior = rest.trim_end_matches(']').trim() == "behavior";
+            continue;
+        }
+        if !in_behavior {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("permission_mode") {
+            if let Some(val) = rest.split('=').nth(1) {
+                let v = val.trim().trim_matches('"').trim_matches('\'').to_string();
+                if v.is_empty() {
+                    return None;
+                }
+                return Some(v);
+            }
+        }
+    }
+    None
 }
 
 /// TASK-81: search a lease list for any active lease whose scope matches
