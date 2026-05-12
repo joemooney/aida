@@ -1,0 +1,76 @@
+id: 019e1a56-8038-7d13-a893-caeb9409de67
+spec_id: TASK-2-078
+title: 'aida queue list --tree: group entries by parent EPIC for visual cluster overview'
+description: |
+  Caught 2026-05-11 — `aida queue list` shows a flat list; as items accumulate (~15+ in steady state), the parent-EPIC clusters get visually lost. A `--tree` view groups them.
+
+  ## Today's behavior
+
+  ```
+  $ aida queue list --all
+  1. BUG-71  ...  [Approved]  [@EPIC-20]
+  2. STORY-91 ...  [Approved]  [@EPIC-20]
+  3. STORY-86 ...  [Approved]  [@EPIC-21]
+  4. STORY-2-076 ... [Approved]  [@EPIC-23]
+  5. TASK-2-074 ...  [Approved]  [@EPIC-20]
+  ...
+  ```
+
+  Items belonging to the same EPIC are interleaved with others; user has to scan and mentally group.
+
+  ## Desired output
+
+  ```
+  $ aida queue list --tree
+
+  EPIC-20 — session ergonomics (4 items)
+    ├─ BUG-71      .gitignore session-env.sh         [Approved]
+    ├─ STORY-91    /aida-review skill                [Approved]
+    ├─ TASK-2-074  claude --name on launch           [Approved]
+    └─ TASK-2-077  retry option for held-branch      [Approved]
+
+  EPIC-21 — commit pairing (1 item)
+    └─ STORY-86    Done vs Completed                 [Approved]
+
+  EPIC-23 — session orchestration (1 item)
+    └─ STORY-2-076 aida queue work                   [Approved]
+
+  Unscoped (3 items)
+    ├─ BUG-69      ...                               [Approved]
+    └─ TASK-66     CLAUDE.md fmt-check note          [Approved]
+  ```
+
+  Sort by:
+  - EPICs first (sorted by priority high→low, then by item count desc)
+  - Unscoped last
+  - Within each group: queue position order (preserves the user-curated ordering)
+
+  ## Composes with
+
+  - TASK-44 (auto-derived parent EPIC chip) — uses the same derive_parent_epic_label helper
+  - TASK-64 (hide terminal-status by default) — tree groups only show actionable items
+  - TASK-52 (--scope filter) — `--scope EPIC-20 --tree` collapses to just that EPIC's subtree
+  - TASK-65 (rel list global view) — similar tree-rendering pattern; share a helper
+
+  ## Flag combinations
+
+  - `aida queue list --tree` — grouped by parent EPIC
+  - `aida queue list --tree --all` — same plus archive items (rare)
+  - `aida queue list --tree --for reviewer` — only reviewer-routed items, grouped
+  - `aida queue list --tree --scope EPIC-20` — equivalent to `aida queue list --scope EPIC-20` (single EPIC, no group needed)
+
+  ## Acceptance
+
+  - [ ] `--tree` flag groups queued items by parent EPIC
+  - [ ] Sort: by EPIC priority high→low, then by item count
+  - [ ] Unscoped items shown last under "Unscoped" group
+  - [ ] Item count next to each group title
+  - [ ] Composes with --all, --for, --user, --scope
+  - [ ] Default flat view unchanged
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-12T03:58:57.080959838Z
+modified_at: 2026-05-12T03:58:57.080959838Z
+req_type: Task
