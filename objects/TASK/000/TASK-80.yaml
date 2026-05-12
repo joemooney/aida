@@ -34,12 +34,12 @@ description: |
   - [ ] Output names both claimants + their titles + statuses
   - [ ] Optional `--repair` re-gates lower-priority claim to next available short id
   - [ ] No-op when no collisions exist
-status: Approved
+status: InProgress
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T06:37:09.925228123Z
-modified_at: 2026-05-12T06:37:09.925228123Z
+modified_at: 2026-05-12T14:43:51.575376133Z
 req_type: Task
 relationships:
 - rel_type: Child
