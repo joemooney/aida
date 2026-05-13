@@ -49,12 +49,12 @@ description: |-
   - [ ] Test: write to store with a binary that can't parse existing yaml — assert unparseable files survive the commit
   - [ ] Test: write a new spec adjacent to unparseable files — assert only the new file is added, none deleted
   - [ ] docs/git-workflow.md or session-lifecycle.md updated with the safety guarantee (parse failures are recoverable; never auto-cleaned)
-status: Approved
+status: InProgress
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T15:18:22.753480821Z
-modified_at: 2026-05-13T15:18:22.753480821Z
+modified_at: 2026-05-13T15:47:40.950154185Z
 req_type: Bug
 tags:
 - critical
