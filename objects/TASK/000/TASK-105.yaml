@@ -1,0 +1,64 @@
+id: 019e1fe8-3e3c-76c0-b403-23c7b01e539d
+spec_id: TASK-105
+agreed_id: TASK-105
+title: 'Proactive-invocation playbook: when an agent should fire /aida-rebase unprompted'
+description: |-
+  The behavioral pattern piece. /aida-rebase being available is necessary but not sufficient — agents also need clear heuristics for when to invoke it without being asked. This TASK captures those heuristics in a form that lives somewhere durable (skill frontmatter, doc seed, or a dedicated playbook).
+
+  ## Heuristics (initial draft)
+
+  | Trigger | Action | Rationale |
+  |---|---|---|
+  | About to commit, session has been open >15 min | Run /aida-rebase --dry-run; if behind, surface | High-signal pattern — captured in feedback_fetch_before_commit memory; turns discipline into automation |
+  | User says any of: 'rebase', 'pull', 'push', 'is this up to date?', 'let's ship' | Run /aida-rebase --dry-run inline, surface | Explicit signal; surface the result before they act |
+  | About to open a PR | Run /aida-rebase --dry-run | Pre-PR catch; cheaper than after-the-fact PR rebase |
+  | 30+ minutes idle then activity resumes on long session | Optional re-check | Catches drift over breaks; risk of nag — make user-configurable |
+  | Long-running build/test just finished | Defer surface until task completes, then suggest | Don't interrupt critical-path work |
+  | User explicitly says 'don't rebase' or 'i'll handle git' | Suppress for remainder of session | Respect explicit opt-out |
+
+  ## What does NOT trigger /aida-rebase
+
+  - Read-only operations (aida show, aida list) — no need
+  - Operations on detached HEAD or non-tracked branches — different problem
+  - Per-keystroke triggers — too noisy
+  - Repeated suggestions when user already declined this session
+
+  ## Where the playbook lives
+
+  Three options, possibly all three:
+
+  1. **In /aida-rebase skill frontmatter** (the canonical 'when to use' section)
+  2. **In feedback_fetch_before_commit memory** (update to point at /aida-rebase as the action)
+  3. **Standalone doc**: docs/recipes/proactive-rebase.md (new convention — docs/recipes/ doesn't exist yet)
+
+  Lean toward (1) + (2) for now. Skip (3) until we have other recipes to live alongside it.
+
+  ## Composition
+
+  When this lands, update:
+
+  - feedback_fetch_before_commit.md — point at /aida-rebase as the action verb
+  - docs/git-workflow.md — add a 'Proactive invocation' section referencing the playbook
+  - /aida-commit skill — its precheck step should call /aida-rebase rather than custom git logic
+  - /aida-pickup skill — when picking up a queued item, check if base is stale
+
+  ## Acceptance
+
+  - [ ] Heuristics documented somewhere durable (skill frontmatter is acceptable)
+  - [ ] feedback_fetch_before_commit memory updated to reference /aida-rebase as the action verb
+  - [ ] At least one cross-reference from another skill (/aida-commit or /aida-pickup) demonstrating delegation pattern
+  - [ ] docs/git-workflow.md updated with a Proactive Invocation subsection
+  - [ ] Opt-out mechanism documented (env var or session-flag)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T05:56:14.524958296Z
+modified_at: 2026-05-13T05:56:14.524958296Z
+req_type: Task
+tags:
+- agent
+- heuristics
+- playbook
+- proactivity
+- rebase
