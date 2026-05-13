@@ -1,0 +1,26 @@
+id: 019e1ffb-f472-7641-9684-11cd5332553f
+spec_id: STORY-116
+agreed_id: STORY-116
+title: 'Review PR-20: EPIC-21 STORY-86: split Done from Completed status'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e1fd1`) for branch `epic-21`.
+
+  - PR: <https://github.com/joemooney/aida/pull/20>
+  - Branch: `epic-21` → `main`
+
+  ## Covers
+
+  - STORY-86
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 20` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T06:17:46.354015070Z
+modified_at: 2026-05-13T06:17:46.354015070Z
+req_type: Story
