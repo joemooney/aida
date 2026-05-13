@@ -1,0 +1,56 @@
+id: 019e2213-33a9-7f23-a00a-4cc4e630d8b9
+spec_id: BUG-97
+agreed_id: BUG-97
+title: 'aida show: returns ''Requirement not found'' when YAML parse fails (hides the real cause)'
+description: |-
+  When a requirement's YAML file fails to deserialize (e.g. binary lacks a new enum variant that the file references), aida show returns:
+
+    Requirement not found: STORY-86
+      Searched in: /home/joe/ai/aida/.aida-store
+      Mode: distributed git-canonical
+      Hint: check the spec ID (try aida list or aida search <terms>).
+
+  This is misleading. The spec ID is correct, the YAML file exists, the parse just failed. The hint sends the user down a wrong-spec-id investigation that gets them nowhere.
+
+  ## Expected behavior
+
+  Surface the actual error and the likely cause:
+
+    Parse failed: STORY-86
+      File: /home/joe/ai/aida/.aida-store/objects/STORY/000/STORY-86.yaml
+      Reason: unknown variant 'Done' for enum RequirementStatus
+      Likely cause: binary version mismatch — this YAML was written by a newer
+                    aida than the one reading it.
+      Recovery: check aida --version vs the binary that wrote this file.
+                See docs/git-workflow.md (BUG-96 followup).
+
+  ## Composes with
+
+  - BUG-96 (parse-fail-equals-delete data loss) — same parse-failure root; the read-side UX should match the write-side fix in honesty about failures
+  - TASK-102 (aida show enumerate relationships) — both are aida show UX improvements
+  - docs/git-workflow.md retrospective — recovery instructions
+
+  ## Discovered via
+
+  2026-05-13 session — user ran aida show STORY-86 with main's binary (no Done variant) after PR-21 fixup work was on a feature branch. The error told them STORY-86 didn't exist; they spent several minutes verifying spec_id, searching, checking the store path. The actual cause (binary version skew) wasn't surfaced anywhere.
+
+  ## Acceptance
+
+  - [ ] aida show emits parse-specific error message when the file exists but fails to deserialize
+  - [ ] Error names the file, the specific deserialization failure, and the likely cause
+  - [ ] Hint points at aida --version + the docs recovery section
+  - [ ] 'Not found' only fires when the file genuinely doesn't exist
+  - [ ] Tests cover: file exists + parse fails; file missing; file exists + parses fine
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T16:02:24.297290386Z
+modified_at: 2026-05-13T16:02:24.297290386Z
+req_type: Bug
+tags:
+- discoverability
+- error-message
+- parse-failure
+- show
+- ux
