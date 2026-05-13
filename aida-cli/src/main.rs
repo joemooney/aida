@@ -10,6 +10,7 @@ mod process_probe;
 mod prompts;
 mod session;
 mod session_manifest;
+mod workflow_hints;
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -2356,6 +2357,17 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                         update_manifest_for_status(spec_id, status_str);
                     }
                 }
+
+                // STORY-106: workflow hint when a status flip to Completed
+                // emptied the queue for the active role+scope. Mirrors the
+                // queue-done hint so direct `aida edit --status completed`
+                // surfaces the same Next-step. Best-effort.
+                // trace:STORY-106 | ai:claude
+                if new_status_for_manifest.as_deref() == Some("Completed") {
+                    let storage = Storage::new(store_path.to_path_buf());
+                    let user_id = current_user_id(None);
+                    maybe_hint_after_queue_drain(&storage, &user_id);
+                }
             } else {
                 println!("No changes specified. Use --title, --status, --priority, etc.");
             }
@@ -3071,6 +3083,14 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             toml: emit_toml,
         }) => {
             handle_config_user(node_id.as_deref(), email.as_deref(), *emit_toml)?;
+        }
+        // STORY-106: `aida config hints` reads/writes `.aida/config.toml`
+        // — project-level, no store mutation needed. Route through the
+        // git-backend path so it works in modern projects.
+        // trace:STORY-106 | ai:claude
+        Command::Config(ConfigCommand::Hints { enabled }) => {
+            let storage = Storage::new(store_path);
+            handle_config_hints(enabled.as_deref(), &storage)?;
         }
         Command::Scaffold(scaffold_cmd) => {
             // Scaffold apply / status / preview / extract — same pattern.
@@ -5345,8 +5365,67 @@ fn handle_config_command(cmd: &ConfigCommand, storage: &Storage) -> Result<()> {
             // trace:STORY-44 | ai:claude
             handle_config_user(node_id.as_deref(), email.as_deref(), *emit_toml)?;
         }
+        ConfigCommand::Hints { enabled } => {
+            // trace:STORY-106 | ai:claude
+            handle_config_hints(enabled.as_deref(), storage)?;
+        }
     }
 
+    Ok(())
+}
+
+/// Handle `aida config hints [true|false]` — show or persist the
+/// `[hints] workflow_hints` setting. trace:STORY-106 | ai:claude
+fn handle_config_hints(arg: Option<&str>, storage: &Storage) -> Result<()> {
+    let project_root = storage
+        .path()
+        .parent()
+        .map(|p| p.to_path_buf())
+        .ok_or_else(|| anyhow::anyhow!("could not resolve project root from storage path"))?;
+
+    match arg {
+        None => {
+            let effective = workflow_hints::enabled(Some(&project_root));
+            let env = std::env::var("AIDA_HINTS").ok().filter(|s| !s.is_empty());
+            println!(
+                "Workflow hints: {}",
+                if effective {
+                    "enabled".green().to_string()
+                } else {
+                    "disabled".yellow().to_string()
+                }
+            );
+            if let Some(v) = env {
+                println!("  source: AIDA_HINTS={} (env)", v);
+            } else {
+                println!("  source: .aida/config.toml (or default if unset)");
+            }
+        }
+        Some(raw) => {
+            let value = match raw.trim().to_ascii_lowercase().as_str() {
+                "true" | "1" | "yes" | "on" => true,
+                "false" | "0" | "no" | "off" => false,
+                _ => anyhow::bail!("Invalid value `{}` — use `true` or `false`.", raw),
+            };
+            let prior = workflow_hints::persist_setting(&project_root, value)?;
+            println!(
+                "{} workflow_hints {} {}",
+                "✓".green(),
+                if value { "enabled" } else { "disabled" },
+                match prior {
+                    Some(p) if p == value => "(no change)".dimmed().to_string(),
+                    Some(p) => format!("(was {})", p).dimmed().to_string(),
+                    None => "(was unset, using default)".dimmed().to_string(),
+                }
+            );
+            if std::env::var("AIDA_HINTS").is_ok() {
+                eprintln!(
+                    "{} AIDA_HINTS env var is set — it overrides this config until unset.",
+                    "Note:".yellow()
+                );
+            }
+        }
+    }
     Ok(())
 }
 
@@ -11438,6 +11517,88 @@ fn probe_dangling_claudes_at_path(worktree: &std::path::Path) -> Vec<process_pro
 ///     pretending we know the answer).
 /// Prefers `origin/main` when present so users with stale local
 /// `main` still see the right delta. trace:TASK-54 | ai:claude
+/// STORY-106: count commits this branch is ahead of `origin/main` (falls
+/// back to `main` when origin isn't available). Best-effort — returns
+/// `None` on any git failure so callers can degrade silently.
+/// trace:STORY-106 | ai:claude
+fn branch_commits_ahead_main(repo: &std::path::Path, branch: &str) -> Option<u32> {
+    if branch == "main" || branch == "HEAD" {
+        return None;
+    }
+    let rev_parse = |refname: &str| {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(["rev-parse", "--verify", "--quiet", refname])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .filter(|s| !s.is_empty())
+    };
+    let main_ref = rev_parse("origin/main")
+        .map(|_| "origin/main")
+        .or_else(|| rev_parse("main").map(|_| "main"))?;
+    let range = format!("{}..{}", main_ref, branch);
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["rev-list", "--count", &range])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&out.stdout).trim().parse().ok()
+}
+
+/// STORY-106: best-effort emit the "queue empty for this role" workflow
+/// hint after a successful `queue done` (or `edit --status completed` on
+/// a queue-tracked spec). Detects role+scope from the session env / lease,
+/// counts remaining queue entries, and fires the hint only when the
+/// active-role queue is now empty. Silent on any detection failure —
+/// hints are nice-to-have, not load-bearing.
+/// trace:STORY-106 | ai:claude
+fn maybe_hint_after_queue_drain(storage: &Storage, user_id: &str) {
+    let project_root = match storage.path().parent() {
+        Some(p) => p.to_path_buf(),
+        None => return,
+    };
+    let role = std::env::var("AIDA_SESSION_ROLE")
+        .ok()
+        .filter(|s| !s.is_empty());
+
+    // Filter remaining queue entries by the active role when one is set.
+    // No active role → treat the entire user queue as the scope.
+    let remaining = storage.queue_list(user_id, false).unwrap_or_default();
+    let filtered: Vec<&aida_core::QueueEntry> = match role.as_deref() {
+        Some(r) => remaining
+            .iter()
+            .filter(|e| e.for_role.as_deref() == Some(r))
+            .collect(),
+        None => remaining.iter().collect(),
+    };
+    if !filtered.is_empty() {
+        return;
+    }
+
+    let scope = std::env::current_dir()
+        .ok()
+        .and_then(|cwd| active_lease_for_cwd(&project_root, &cwd))
+        .map(|l| l.scope);
+
+    let commits_ahead = current_branch_at(&project_root)
+        .as_deref()
+        .and_then(|b| branch_commits_ahead_main(&project_root, b));
+
+    workflow_hints::after_queue_drained(
+        Some(&project_root),
+        role.as_deref(),
+        scope.as_deref(),
+        commits_ahead,
+    );
+}
+
 fn branch_behind_main(repo: &std::path::Path, branch: &str) -> Option<(u64, Vec<String>)> {
     if branch == "main" || branch == "HEAD" {
         return None;
@@ -12190,6 +12351,24 @@ fn session_end(id_query: Option<&str>, yes: bool, force: bool, purge_cc: bool) -
     );
     render_auto_queue_outcome(&outcome);
 
+    // STORY-106: workflow hint when a review story is now queued for this
+    // session's PR. Fires for both Filed (just minted) and AlreadyExists
+    // (idempotent re-fire) — either way, the reviewer story is in the
+    // queue and the user's next action is `aida queue work`.
+    // trace:STORY-106 | ai:claude
+    if matches!(
+        outcome.status,
+        AutoQueueStatus::Filed | AutoQueueStatus::AlreadyExists
+    ) {
+        if let Some(pr_n) = outcome.pr_number {
+            workflow_hints::after_session_end_with_pr(
+                Some(&project_root),
+                pr_n,
+                outcome.review_story_id.as_deref(),
+            );
+        }
+    }
+
     // STORY-73: emit `unset AIDA_SESSION_ID` to stdout when wrapped via the
     // shell helper's `eval "$(...)"`, so the calling shell's env var
     // doesn't go stale after the lease it pointed at is gone.
@@ -12687,6 +12866,16 @@ enum AutoQueueStatus {
 struct AutoQueueOutcome {
     status: AutoQueueStatus,
     summary: String,
+    /// STORY-106: PR number this outcome relates to (set on Filed and
+    /// AlreadyExists). Drives the post-session "start the review"
+    /// workflow hint. `None` for the skip cases.
+    /// trace:STORY-106 | ai:claude
+    pr_number: Option<u64>,
+    /// STORY-106: review story id when known. Filed knows it (just
+    /// minted the story); AlreadyExists doesn't look it up (the
+    /// `aida queue work PR-N` form handles the unknown case).
+    /// trace:STORY-106 | ai:claude
+    review_story_id: Option<String>,
 }
 
 impl AutoQueueOutcome {
@@ -12694,13 +12883,28 @@ impl AutoQueueOutcome {
         Self {
             status: AutoQueueStatus::Filed,
             summary: s.into(),
+            pr_number: None,
+            review_story_id: None,
         }
     }
     fn already_exists(s: impl Into<String>) -> Self {
         Self {
             status: AutoQueueStatus::AlreadyExists,
             summary: s.into(),
+            pr_number: None,
+            review_story_id: None,
         }
+    }
+    /// STORY-106: attach the PR number that this outcome refers to. Used
+    /// by `session_end` to emit a concrete "start the review" hint.
+    fn with_pr(mut self, pr_number: u64) -> Self {
+        self.pr_number = Some(pr_number);
+        self
+    }
+    /// STORY-106: attach the newly-filed review story id (Filed only).
+    fn with_review_story(mut self, story_id: impl Into<String>) -> Self {
+        self.review_story_id = Some(story_id.into());
+        self
     }
     /// Skip the user shouldn't care about (review session, no PR-producing
     /// branch). Rendered dim. trace:TASK-74 | ai:claude
@@ -12708,6 +12912,8 @@ impl AutoQueueOutcome {
         Self {
             status: AutoQueueStatus::SkippedByDesign,
             summary: s.into(),
+            pr_number: None,
+            review_story_id: None,
         }
     }
     /// Skip the user might want to act on (missing tool, gh failed, queue
@@ -12716,6 +12922,8 @@ impl AutoQueueOutcome {
         Self {
             status: AutoQueueStatus::SkippedNeedsAttention,
             summary: s.into(),
+            pr_number: None,
+            review_story_id: None,
         }
     }
 }
@@ -12807,7 +13015,8 @@ fn try_auto_queue_pr_review(
         return AutoQueueOutcome::already_exists(format!(
             "PR #{} already has a `Review PR-{}` story queued — skipping",
             pr.number, pr.number
-        ));
+        ))
+        .with_pr(pr.number);
     }
 
     // Pull the commit-range spec ids using the existing helpers from STORY-67.
@@ -12889,6 +13098,8 @@ fn try_auto_queue_pr_review(
         "filed {} (covers {}) → reviewer queue (PR #{})",
         new_id, covers, pr.number
     ))
+    .with_pr(pr.number)
+    .with_review_story(new_id)
 }
 
 /// Print an `AutoQueueOutcome` in the convention shared by `aida session
@@ -28510,6 +28721,12 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 "  ({})",
                 "run `aida queue next` to see what's next".dimmed()
             );
+
+            // STORY-106: workflow hint when the queue is now empty for the
+            // active role+scope. Best-effort: any state-detection failure
+            // skips the hint silently rather than failing the command.
+            // trace:STORY-106 | ai:claude
+            maybe_hint_after_queue_drain(storage, &user_id);
         }
         // STORY-42: one-shot queue pickup → session start → claude launch.
         // trace:STORY-42 | ai:claude
