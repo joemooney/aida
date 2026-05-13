@@ -1,0 +1,36 @@
+id: 019e1f07-f9ec-7923-8af9-b8b63c16979c
+spec_id: BUG-90
+agreed_id: BUG-90
+title: 'BUG-89 follow-up: add integration tests for queue user_id consistency'
+description: |-
+  PR-18's review (STORY-111) closed BUG-89's structural fix but left two acceptance bullets unmet because no automated tests were added:
+
+  - "Tested: queue add + queue list from same shell → list shows the just-added item without --user flag"
+  - "Tested: agent invocations (which may set AIDA_USER differently) → still consistent within their session"
+
+  The fix is structurally correct (all queue paths now route through `current_user_id()` in aida-cli/src/main.rs:27063, so by construction add/list/move/next/done/remove/role-show/statusline agree), and the original bug-report symptom is fixed by the `entry_scope_session_match` no-lease change. But the spec asked for tests; they should exist.
+
+  ## Scope
+
+  Two new integration tests under aida-cli's `mod queue_work_tests` (or a sibling module):
+
+  1. **Same-shell round-trip.** With `USER` set and no AIDA_USER, `queue add` then `queue list` from the same env returns the just-added entry. No `--user` flag.
+  2. **Agent-style AIDA_USER.** With `AIDA_USER=agent-foo` and `USER=joe`, both `add` and `list` resolve to `agent-foo`. Both should see the same queue file.
+
+  Bonus (low-cost): a unit test of `current_user_id` itself covering the override chain — easy to write with `temp_env` or by saving/restoring env vars.
+
+  ## Out of scope
+
+  The actual structural fix (PR-18) — that already landed.
+
+  ## Composes with
+
+  - BUG-89 (the original bug; closed by PR-18)
+  - STORY-111 (the review story for PR-18)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T01:51:16.972365413Z
+modified_at: 2026-05-13T01:51:16.972365413Z
+req_type: Bug
