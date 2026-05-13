@@ -1,0 +1,47 @@
+id: 019e1fdb-bba8-7c82-9aad-838ae69cc3d6
+spec_id: TASK-100
+agreed_id: TASK-100
+title: 'aida queue done: detect stale base, offer rebase before marking done'
+description: |-
+  Counterpart to TASK on the queue-work start side. When aida queue done <spec> runs, check whether the current branch is behind origin/<default-branch>. If yes, offer rebase before allowing the done transition.
+
+  Pattern: session runs for hours/days; main moves forward (PR merges, direct commits); session's branch ends up N commits behind. Without this check, the implementer marks done, opens a PR, and only THEN notices 'N commits behind main' — the rebase happens late, potentially with conflicts that could have been caught earlier.
+
+  This catches it pre-PR. Pairs with TASK-54 (aida push: detect 'branch behind main' and prompt for rebase) which catches it at push time — this fires earlier in the same lifecycle.
+
+  Implementation:
+
+  1. Before flipping status to Done (or Completed in legacy flow), git fetch origin <default-branch>
+  2. Compute behind-count: git rev-list --count HEAD..origin/<default-branch>
+  3. If behind by N > 0:
+     - Print: 'Branch behind origin/<default> by N commits.'
+     - Show diverged file paths (git log --name-only HEAD..origin/<default> | sort -u)
+     - Prompt: 'Rebase before marking done? [Y/n/skip]'
+       - Y: git pull --rebase, then proceed with queue done
+       - n: prompt 'Mark done on stale base? You'll likely need to rebase before PR. [y/N]'
+       - skip: proceed (silent equivalent of n)
+  4. Honor --yes to auto-rebase (or auto-skip — config decision)
+  5. Surface a single-line summary in queue done's output: 'rebased N commits' / 'base was current' / 'marked done on stale base (N behind)'
+
+  Triggered by 2026-05-13 incident (Pattern B documented in feedback_fetch_before_commit memory).
+
+  ## Acceptance
+
+  - [ ] aida queue done checks behind-count vs origin/<default> before status flip
+  - [ ] Interactive Y/n/skip prompt when behind
+  - [ ] --yes auto-resolves (default: auto-rebase if no conflict, else skip with warning)
+  - [ ] Shows diverged file paths so user can judge risk
+  - [ ] Bypassable via --no-fetch or AIDA_QUEUE_DONE_PRECHECK=skip env
+  - [ ] queue done summary line reports the result inline
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T05:42:34.664586913Z
+modified_at: 2026-05-13T05:42:34.664586913Z
+req_type: Task
+tags:
+- base-freshness
+- done
+- queue
+- rebase
