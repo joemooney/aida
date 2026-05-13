@@ -1,0 +1,81 @@
+id: 019e1ee3-81a1-7c81-84ac-4781f8b990f6
+spec_id: BUG-89
+agreed_id: BUG-89
+title: aida queue list (default) and aida queue add use different user resolution → items invisible to their own queuer
+description: |
+  Caught 2026-05-12 — user couldn't see their queue. `aida queue list` returned "Your queue (no items routed to role implementer)" while `aida queue list --all --user joe` showed 9 items, all routed to implementer, all owned by "joe".
+
+  So items exist for the right user + right role, but the default filter excludes them. Cause: `aida queue list` and `aida queue add` resolve "current user" differently.
+
+  ## Evidence
+
+  ```
+  $ aida role show
+  Role: implementer [global]
+  ...
+
+  $ aida queue list
+  Your queue (no items routed to role implementer; pass --all to see your full queue)
+
+  $ aida queue list --all --user joe
+  My Queue (9 items)        ← 9 items belong to user "joe"
+    1. BUG-85 ... [for:implementer]
+    ...
+
+  $ aida queue list --all --user joe.mooney@gmail.com
+  Your queue is empty.        ← not stored under email
+
+  $ aida queue list --all --user joe.mooney@work.example
+  Your queue is empty.        ← not stored under that email either
+  ```
+
+  So the queue stores items under `user_id="joe"` (likely $USER). But `aida queue list` (no flags) is resolving to something OTHER than "joe" — likely the active role's stored user_id or an email-based identity.
+
+  ## Likely root cause
+
+  `get_user(None)` in aida-cli's queue list handler probably falls through to one of:
+  - node.toml's email field
+  - role.toml's stored user_id
+  - A UUID-based identity that doesn't match the string-based queue entries
+
+  While `aida queue add` uses `$USER` directly (or has different fallback order).
+
+  ## Fix
+
+  Canonical `current_user_id()` helper used by ALL queue paths (add, list, next, done, remove, move). Resolution order:
+
+  1. `--user <id>` flag if passed
+  2. `AIDA_USER` env var if set
+  3. `$USER` env var (POSIX shell convention)
+  4. Fallback "default" with warning
+
+  NEVER fall through to role.user_id, node email, or other identity layers — those are different identity domains. The queue's user_id is the SHELL's user_id, period.
+
+  ## Composes with
+
+  - EPIC-9 / EPIC-11 (node identity infrastructure) — keep queue user_id distinct from node identity
+  - Existing queue add user_id resolution — needs to be the canonical reference; queue list mirrors it
+
+  ## Acceptance
+
+  - [ ] All queue paths use a single `current_user_id()` helper
+  - [ ] Helper documented as: --user > AIDA_USER > $USER > "default"
+  - [ ] Tested: queue add + queue list from same shell → list shows the just-added item without --user flag
+  - [ ] Tested: agent invocations (which may set AIDA_USER differently) → still consistent within their session
+  - [ ] Migration: existing queue items remain accessible (user_id strings don't change)
+  - [ ] Document in CLAUDE.md that queue user_id is shell-based, not node-identity-based
+
+  ## Why this matters
+
+  Without this fix, every user runs into "where's my queue?" the first time they switch contexts. Discoverability of queued work is broken. This is the foundation of /aida-pickup, /aida-review, aida queue work — ALL workflows depend on `aida queue list` returning the right items.
+
+  ## Severity rationale
+
+  Marked High because it broke the basic "queue is my work list" mental model in a single session. The user couldn't find their queued items via the default command — they had to know to pass `--user joe` explicitly. Fundamental queue UX failure.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T01:11:26.881810830Z
+modified_at: 2026-05-13T01:11:26.881810830Z
+req_type: Bug
