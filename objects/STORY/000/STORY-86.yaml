@@ -59,12 +59,12 @@ description: |
   - [ ] `aida history` differentiates Done vs Completed visually
   - [ ] Migration tooling for existing Completed reqs (treat as already-bumped; no action needed)
   - [ ] Documented in CLAUDE.md and the META prompts (so agents know to use the new status)
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T19:08:19.795760812Z
-modified_at: 2026-05-13T05:33:42.094797670Z
+modified_at: 2026-05-13T05:58:29.240056031Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -76,3 +76,7 @@ comments:
   content: 'Implementation plan generated via /ultraplan 2026-05-13, saved to docs/plans/2026-05-13-story-86-done-status.md. Covers: enum variant placement, auto_bump_done_to_completed helper hooked from handle_pull_command + DbCommand::Sync, file-by-file changes (models.rs / main.rs / history.rs / import.rs / sqlite+postgres backends / cache.rs / React UI / templates), 7-step verification script, followups (revert handling, statusline color, manual reconcile-status). Est. ~250 prod LOC + ~150 test LOC across 4 commits, risk medium-low. Ready for implementer pickup.'
   created_at: 2026-05-13T04:09:39.709430171Z
   modified_at: 2026-05-13T04:09:39.709430171Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-13T05:58:29.240056031Z
+  implemented_by: joe
