@@ -8,10 +8,25 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T05:48:05.637187178Z
-modified_at: 2026-05-13T05:48:05.637187178Z
+modified_at: 2026-05-13T07:00:35.258635658Z
 req_type: Task
 tags:
 - discoverability
 - relations
 - show
 - ux
+comments:
+- id: 019e2023-273a-7010-809f-90ce72e31f0f
+  author: joe
+  content: |-
+    Another failed-attempt signal observed 2026-05-13: agent ran aida relations STORY-86 expecting a top-level relations subcommand. None exists — the actual command is aida rel list <ID> (under the rel subcommand tree).
+
+    This expands TASK-102's scope: not just inline enumeration in aida show, but also adding aida relations <ID> as a top-level alias for aida rel list <ID> (or aida rel show <ID>). The aida rel tree is fine for power users; top-level discoverable verbs are what agents reach for first.
+
+    Suggested expansion to acceptance:
+    - [ ] aida relations <ID> works as an alias for aida rel list <ID>
+    - [ ] aida rel as a bare subcommand surfaces 'try aida rel list <ID>' or similar discoverable hint
+
+    Same TASK-102 pattern: failed agent attempts at command shape are diagnostic UX signals, not noise.
+  created_at: 2026-05-13T07:00:35.258635658Z
+  modified_at: 2026-05-13T07:00:35.258635658Z
