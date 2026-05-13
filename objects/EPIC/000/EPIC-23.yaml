@@ -47,7 +47,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-11T02:57:57.210361345Z
-modified_at: 2026-05-11T02:57:57.210361345Z
+modified_at: 2026-05-13T05:48:54.467203785Z
 req_type: Epic
 relationships:
 - rel_type: Parent
@@ -119,3 +119,9 @@ relationships:
 - rel_type: Parent
   target_id: 019e1fdb-e304-7d11-a6d8-8f691b8c0574
   created_at: 2026-05-13T05:42:46.772178044Z
+comments:
+- id: 019e1fe1-8743-7b20-ae23-8a92398430e7
+  author: joe
+  content: Added docs/git-workflow.md (commit 862d631b) — base-freshness layered defense documentation. Names Pattern A (divergent branches) vs Pattern B (stale base), maps each TASK in the layered system to its lifecycle moment, includes the full recovery recipe and the 2026-05-13 origin-story incident. Counterpart to .claude/AIDA.md's user-facing recipe (added in 699fc5dd).
+  created_at: 2026-05-13T05:48:54.467203785Z
+  modified_at: 2026-05-13T05:48:54.467203785Z
