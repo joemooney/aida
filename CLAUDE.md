@@ -57,6 +57,10 @@ aida db sync --pull --push             # Sync orphan branch with remote
 aida cache status                      # Compare cache HEAD vs git HEAD
 ```
 
+### Queue identity (BUG-89)
+
+The queue's `user_id` is the **shell's** user identity — not the node identity from `~/.aida/node.toml`, not the email in `[node]`, not the role's stored `user_id`. Every queue path (`add`, `list`, `next`, `done`, `remove`, `move`, the role-show queue head, the statusline depth) routes through `current_user_id()` in `aida-cli`, which resolves in order: `--user <id>` flag → `AIDA_USER` env → `USER` env → `USERNAME` env (Windows) → `"default"`. If `aida queue list` ever returns nothing where you expect items, check `echo $USER` and `echo $AIDA_USER` first — the queue is keyed off whichever the shell sees.
+
 ### Proactive requirements workflow
 
 **Requirement-first development.** Before implementing any feature or fix, ensure a requirement exists:
