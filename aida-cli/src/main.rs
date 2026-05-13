@@ -2135,6 +2135,22 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     }
                     println!("{}: {}", "UUID".bold(), req.id);
                     println!("{}: {}", "Title".bold(), req.title);
+                    // TASK-91: surface PR-N for auto-queued review stories
+                    // so `aida show STORY-108` reads "About: PR-15" right
+                    // next to the title, mirroring what `aida queue list`
+                    // promotes to the prominent id. Dual-id discoverable
+                    // from a single command. trace:TASK-91 | ai:claude
+                    if let Some((primary, _)) =
+                        format_review_story_display(req.display_id().as_str(), req.title.as_str())
+                    {
+                        // primary is "PR-N (STORY-NNN)"; strip the
+                        // parenthetical for a cleaner About: line.
+                        let about = primary
+                            .split_once(' ')
+                            .map(|(pr, _)| pr.to_string())
+                            .unwrap_or(primary);
+                        println!("{}: {}", "About".bold(), about.cyan());
+                    }
                     println!("{}: {:?}", "Type".bold(), req.req_type);
                     println!("{}: {}", "Status".bold(), req.effective_status());
                     println!("{}: {}", "Priority".bold(), req.effective_priority());
@@ -9996,6 +10012,32 @@ fn append_session_activity(
 ///   - the target's type isn't Epic.
 /// Pure — no I/O — so the decision rules can be unit-tested without
 /// fixtures. trace:TASK-44 | ai:claude
+/// TASK-91: detect a synthetic review-story title `Review PR-<n>:` filed
+/// by STORY-90's auto-queue and return a display tuple where PR-N is the
+/// prominent id and the canonical STORY-NNN is the parenthetical
+/// secondary. Returns `None` when the title doesn't match the pattern;
+/// callers fall back to the unchanged (display_id, title) pair.
+///
+/// Rendering convention (Option A from TASK-91):
+///   STORY-108  Review PR-15: EPIC-23 wrap-up      →  display_id stays STORY-108
+///                                                    title stays "Review PR-15: EPIC-23 wrap-up"
+///   becomes:
+///   PR-15 (STORY-108)  EPIC-23 wrap-up            →  prominent PR-N, dual id, trimmed title
+///
+/// PR-N is the conceptual handle the user reaches for ("I need to review
+/// PR-15"); STORY-NNN stays visible for direct `aida edit` operations.
+/// trace:TASK-91 | ai:claude
+fn format_review_story_display(display_id: &str, title: &str) -> Option<(String, String)> {
+    let rest = title.strip_prefix("Review PR-")?;
+    let (pr_n, after) = rest.split_once(':')?;
+    if pr_n.is_empty() || !pr_n.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    let combined = format!("PR-{} ({})", pr_n, display_id);
+    let trimmed = after.trim_start().to_string();
+    Some((combined, trimmed))
+}
+
 fn derive_parent_epic_label(
     req: &aida_core::Requirement,
     store: &RequirementsStore,
@@ -17511,6 +17553,77 @@ mod derive_parent_epic_label_tests {
             derive_parent_epic_label(&task, &store),
             Some("EPIC-20".to_string())
         );
+    }
+}
+
+#[cfg(test)]
+mod format_review_story_display_tests {
+    use super::*;
+
+    /// TASK-91: a synthetic `Review PR-15: ...` title produces a
+    /// PR-prominent display tuple, with the STORY-NNN as parenthetical.
+    #[test]
+    fn rewrites_synthetic_review_story_title() {
+        let result =
+            format_review_story_display("STORY-108", "Review PR-15: EPIC-23 batch wrap-up");
+        assert_eq!(
+            result,
+            Some((
+                "PR-15 (STORY-108)".to_string(),
+                "EPIC-23 batch wrap-up".to_string()
+            ))
+        );
+    }
+
+    /// agreed_id wins over spec_id at the call site; this helper is
+    /// id-agnostic — whatever display id the caller passes ends up in
+    /// the parenthetical.
+    #[test]
+    fn passes_through_agreed_id_when_present() {
+        let result = format_review_story_display("STORY-7", "Review PR-2: tiny fix");
+        assert_eq!(
+            result,
+            Some(("PR-2 (STORY-7)".to_string(), "tiny fix".to_string()))
+        );
+    }
+
+    /// Non-review titles return None so the caller falls back to the
+    /// untransformed (display_id, title) pair.
+    #[test]
+    fn returns_none_for_non_review_title() {
+        assert_eq!(
+            format_review_story_display("STORY-50", "Add OAuth provider"),
+            None
+        );
+    }
+
+    /// Defensive: `Review PR-` followed by non-digits isn't the
+    /// auto-queue pattern; don't claim it.
+    #[test]
+    fn returns_none_when_pr_number_not_digits() {
+        assert_eq!(
+            format_review_story_display("STORY-99", "Review PR-abc: malformed title"),
+            None
+        );
+    }
+
+    /// A title that mentions PR-N but doesn't use the auto-queue
+    /// prefix shouldn't be rewritten.
+    #[test]
+    fn returns_none_for_partial_match() {
+        assert_eq!(
+            format_review_story_display("STORY-99", "Reviewer should look at PR-7 carefully"),
+            None
+        );
+    }
+
+    /// Edge case: empty after-colon (theoretical — auto-queue always
+    /// includes a title). Should still produce a tuple, just with an
+    /// empty trimmed-title.
+    #[test]
+    fn handles_empty_title_after_colon() {
+        let result = format_review_story_display("STORY-1", "Review PR-99:");
+        assert_eq!(result, Some(("PR-99 (STORY-1)".to_string(), String::new())));
     }
 }
 
@@ -27606,6 +27719,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                             .and_then(|r| r.agreed_id.as_deref().or(r.spec_id.as_deref()))
                             .unwrap_or("???");
                         let title = req.map(|r| r.title.as_str()).unwrap_or("(deleted)");
+                        // TASK-91: PR-N (STORY-NNN) for auto-queued review
+                        // stories. trace:TASK-91 | ai:claude
+                        let (display_id_owned, title_owned) =
+                            format_review_story_display(display_id, title)
+                                .unwrap_or_else(|| (display_id.to_string(), title.to_string()));
                         let status = req
                             .map(|r| format!("{}", r.status))
                             .unwrap_or_else(|| "Unknown".to_string());
@@ -27619,13 +27737,13 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                             _ => status.normal(),
                         };
                         let glyph = if is_last { "└─" } else { "├─" };
-                        let pad = " ".repeat(id_col_width.saturating_sub(display_id.len()));
+                        let pad = " ".repeat(id_col_width.saturating_sub(display_id_owned.len()));
                         println!(
                             "  {} {}{}  {}  [{}]",
                             glyph.dimmed(),
-                            display_id.bold(),
+                            display_id_owned.bold(),
                             pad,
-                            title,
+                            title_owned,
                             status_colored,
                         );
                     };
@@ -27643,16 +27761,21 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         group.len(),
                         if group.len() == 1 { "" } else { "s" }
                     );
+                    // TASK-91: width must account for the PR-N (STORY-NNN)
+                    // expansion so the column lines up after the transform.
+                    // trace:TASK-91 | ai:claude
                     let id_col_width = group
                         .iter()
                         .map(|e| {
-                            store
-                                .requirements
-                                .iter()
-                                .find(|r| r.id == e.requirement_id)
+                            let req = store.requirements.iter().find(|r| r.id == e.requirement_id);
+                            let raw_id = req
                                 .and_then(|r| r.agreed_id.as_deref().or(r.spec_id.as_deref()))
-                                .map(|s| s.len())
-                                .unwrap_or(3)
+                                .unwrap_or("???");
+                            let raw_title = req.map(|r| r.title.as_str()).unwrap_or("");
+                            match format_review_story_display(raw_id, raw_title) {
+                                Some((expanded, _)) => expanded.len(),
+                                None => raw_id.len(),
+                            }
                         })
                         .max()
                         .unwrap_or(0);
@@ -27728,6 +27851,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     .and_then(|r| r.agreed_id.as_deref().or(r.spec_id.as_deref()))
                     .unwrap_or("???");
                 let title = req.map(|r| r.title.as_str()).unwrap_or("(deleted)");
+                // TASK-91: PR-N (STORY-NNN) for auto-queued review stories.
+                // trace:TASK-91 | ai:claude
+                let (display_id_owned, title_owned) =
+                    format_review_story_display(display_id, title)
+                        .unwrap_or_else(|| (display_id.to_string(), title.to_string()));
                 let status = req
                     .map(|r| format!("{}", r.status))
                     .unwrap_or_else(|| "Unknown".to_string());
@@ -27745,8 +27873,8 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 print!(
                     "  {}. {} {}",
                     (i + 1).to_string().dimmed(),
-                    display_id.bold(),
-                    title
+                    display_id_owned.bold(),
+                    title_owned
                 );
                 print!("  [{}]", status_colored);
                 if entry.added_by != user_id {
@@ -28555,8 +28683,17 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     .or(entry.spec_id.as_deref())
                     .unwrap_or("???");
                 let title = entry.title.as_deref().unwrap_or("(no cached title)");
+                // TASK-91: PR-N (STORY-NNN) for auto-queued review stories.
+                // trace:TASK-91 | ai:claude
+                let (display_id_owned, title_owned) =
+                    format_review_story_display(display_id, title)
+                        .unwrap_or_else(|| (display_id.to_string(), title.to_string()));
                 println!("{}", "Next up:".bold());
-                println!("  {}: {}", display_id.green().bold(), title.bold());
+                println!(
+                    "  {}: {}",
+                    display_id_owned.green().bold(),
+                    title_owned.bold()
+                );
                 println!(
                     "  {} {}",
                     format!("[role:{}]", entry.for_role).cyan(),
@@ -28567,6 +28704,8 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 }
                 println!();
                 println!("{}", "Suggested:".dimmed());
+                // `aida show` still resolves via the canonical id; show
+                // both forms so the user knows their hand-off targets.
                 println!(
                     "  cd {}  &&  aida show {}",
                     entry.project_root.display().to_string().cyan(),
@@ -28590,6 +28729,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         .and_then(|r| r.agreed_id.as_deref().or(r.spec_id.as_deref()))
                         .unwrap_or("???");
                     let title = req.map(|r| r.title.as_str()).unwrap_or("(deleted)");
+                    // TASK-91: PR-N (STORY-NNN) for auto-queued review
+                    // stories. trace:TASK-91 | ai:claude
+                    let (display_id_owned, title_owned) =
+                        format_review_story_display(spec_id, title)
+                            .unwrap_or_else(|| (spec_id.to_string(), title.to_string()));
                     let status = req
                         .map(|r| format!("{}", r.status))
                         .unwrap_or_else(|| "Unknown".to_string());
@@ -28600,7 +28744,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     let description = req.map(|r| r.description.as_str()).unwrap_or("");
 
                     println!("{}", "Next up:".bold());
-                    println!("  {}: {}", spec_id.green().bold(), title.bold());
+                    println!(
+                        "  {}: {}",
+                        display_id_owned.green().bold(),
+                        title_owned.bold()
+                    );
                     println!(
                         "  Status: {}  ·  Priority: {}{}",
                         status,
