@@ -1,0 +1,76 @@
+id: 019e2023-1477-7712-b5c4-cbd1f59d7606
+spec_id: TASK-217
+agreed_id: TASK-217
+title: 'aida queue work: status-aware error message when spec isn''t queued (suggest recovery based on current status)'
+description: |-
+  When aida queue work SPEC-ID resolves the SPEC but finds no queued children, today's error is honest but not helpful in the most common stuck scenarios:
+
+  Current error:
+    Error: STORY-86 resolves to STORY-86 but no queued children match (try aida queue list --tree or pass a queued id directly)
+
+  This fires after the spec is queue-emptied — typically when:
+  1. The spec was just marked Done by an implementer session
+  2. PR was opened, review came back with changes needed
+  3. User comes back to fix and is surprised the queue is empty
+
+  The error doesn't differentiate between distinct stuck states. Surface SPEC's current status + suggest recovery per status:
+
+  ## Status-aware messages
+
+  When status is Approved:
+    Error: STORY-86 isn't queued. Status is Approved.
+    To queue and start: aida queue add STORY-86 --for <role>; aida queue work STORY-86
+
+  When status is Planned:
+    Error: STORY-86 isn't queued. Status is Planned (still in planning).
+    To work it: aida edit STORY-86 --status approved; aida queue add STORY-86 --for <role>
+
+  When status is InProgress (but not in queue — anomalous):
+    Error: STORY-86 isn't queued, but status is InProgress.
+    Probably the lease was lost. Run aida queue list --all to inspect; aida queue add STORY-86 --for <role> to re-queue.
+
+  When status is Done:
+    Error: STORY-86 isn't queued. Status is Done (work finished on branch).
+    If review found issues and more commits are needed:
+      aida edit STORY-86 --status in-progress
+      aida queue add STORY-86 --for <role>
+      aida queue work STORY-86
+    If just waiting for merge: nothing to do — auto-bump fires when PR merges.
+
+  When status is Completed:
+    Error: STORY-86 is Completed (already shipped). Nothing to work on.
+    If you want to re-open: aida edit STORY-86 --status in-progress --force (TASK-47 guard)
+
+  When status is Rejected:
+    Error: STORY-86 is Rejected. Pick a different spec, or aida edit --status approved --force to re-open.
+
+  ## Discovered via
+
+  2026-05-13 — reviewer session on PR-20 returned changes-needed; implementer came back to aida queue work STORY-86 and got the current opaque error. Same pattern as TASK-102 (failed flag attempts are UX signals) — the user/agent had a clear mental model that didn't match the tool's surface.
+
+  ## Composes with
+
+  - TASK-102 (aida show enumerate relationships): same discoverability theme
+  - TASK-110 (next-steps ordering): related — both are about session-handoff UX
+  - TASK-112 (resume claude session): if implemented, the Done-case message could also offer --resume
+
+  ## Acceptance
+
+  - [ ] aida queue work emits status-aware error message when spec isn't queued
+  - [ ] Each of the 6 status cases (Approved / Planned / InProgress / Done / Completed / Rejected) has a tailored recovery suggestion
+  - [ ] Recovery suggestions are CONCRETE — exact commands, not paraphrases
+  - [ ] Tests cover the 6 status branches
+  - [ ] aida queue work --help references this behavior
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T07:00:30.455249397Z
+modified_at: 2026-05-13T07:00:30.455249397Z
+req_type: Task
+tags:
+- discoverability
+- error-message
+- queue-work
+- status-aware
+- ux
