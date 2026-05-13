@@ -1,0 +1,44 @@
+id: 019e1fdb-9656-79d1-8c4e-5e858c69279b
+spec_id: TASK-99
+agreed_id: TASK-99
+title: 'aida queue work: also pull code branch (not just orphan store) before creating worktree'
+description: |-
+  Today aida queue work --help describes its pre-pickup pull as: 'By default queue work pulls the orphan-store branch first.' Only the orphan store. The code branch (main / default) is NOT pulled, so the new worktree branches off whatever local main was at the time queue work ran — potentially stale by N commits from origin.
+
+  This is Pattern B in the 2026-05-13 divergent-branches retrospective (see feedback_fetch_before_commit memory):
+
+  - Pattern A: local main diverged from origin/main → recovery handled by TASK-97 (aida pull --autorebase) and TASK-98 (/aida-commit precheck).
+  - Pattern B: session's branch has stale base; main moved forward while session ran (or before session started). NOT diverged from origin — just behind. PRs eventually flag 'N commits behind main'; integration risk grows over session lifetime.
+
+  Closing the start-of-session half of Pattern B: when aida queue work creates a new worktree, pull code first too.
+
+  Implementation sketch:
+
+  1. Before creating the worktree, run git pull (with rebase or ff-only — see TASK-97's --autorebase work) on the default branch in the main repo
+  2. THEN create the worktree off the freshly-updated HEAD
+  3. Surface 'pulled N new commits from origin/main' in the queue-work pre-launch summary
+  4. Honor existing --no-pull flag to skip both store AND code pulls (today --no-pull only skips store)
+  5. If the code pull fails (divergent — Pattern A), abort queue work with the recovery hint and don't create a worktree on a stale base
+
+  Composes with TASK-97 (aida pull --autorebase): once that lands, queue work's code pull benefits from autorebase too.
+
+  ## Acceptance
+
+  - [ ] aida queue work pulls the code branch in addition to the orphan store
+  - [ ] --no-pull skips both pulls (today it only skips store)
+  - [ ] Pre-launch summary reports 'pulled N commits from origin/<branch>'
+  - [ ] On code-pull failure (divergence): abort with recovery hint, don't create worktree
+  - [ ] aida queue work --help text updated to reflect the new behavior
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T05:42:25.110265092Z
+modified_at: 2026-05-13T05:42:25.110265092Z
+req_type: Task
+tags:
+- base-freshness
+- pull
+- queue
+- session
+- worktree
