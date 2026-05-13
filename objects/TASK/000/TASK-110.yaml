@@ -58,7 +58,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:20:03.365833533Z
-modified_at: 2026-05-13T06:24:17.050065316Z
+modified_at: 2026-05-13T06:56:38.060694152Z
 req_type: Task
 tags:
 - aida-pr
@@ -81,3 +81,8 @@ comments:
   content: 'Documented in docs/session-lifecycle.md (added 2026-05-13). See section ''Transition 3→4: Next-steps ordering.'''
   created_at: 2026-05-13T06:24:17.050065316Z
   modified_at: 2026-05-13T06:24:17.050065316Z
+- id: 019e201f-88ac-7752-b8a5-9f09cbac76e9
+  author: joe
+  content: '/aida-review has the same next-steps ordering bug — observed in PR-20 reviewer session 2026-05-13. The reviewer''s emitted Next steps listed ''End reviewer session'' as step 3 (cleanup) when it should be step 1 (release lease before doing anything else). Scope this TASK to cover both /aida-pr and /aida-review (and any other skill with a Next-steps block); grep aida-core/templates/skills/ for ''Next steps'' to find all of them. Already filed: /aida-pickup, /aida-pr, /aida-review per earlier grep.'
+  created_at: 2026-05-13T06:56:38.060694152Z
+  modified_at: 2026-05-13T06:56:38.060694152Z
