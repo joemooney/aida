@@ -59,12 +59,25 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T16:00:23.751172789Z
-modified_at: 2026-05-13T02:26:41.705367879Z
+modified_at: 2026-05-13T04:06:37.356393624Z
 req_type: Bug
 relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-12T16:00:25.113979902Z
+comments:
+- id: 019e1f83-e22c-7a92-996c-7aa758899a3e
+  author: joe
+  content: |-
+    Implemented via commit 1c434141 (on epic-23-2; PR pending):
+
+    - aida pr auto-queue-review: now prints `Re-run manually: aida pr auto-queue-review --branch <branch>` on every non-success outcome (yellow for needs-attention, dim for by-design skip)
+    - /aida-pr skill step 10 rewritten to enumerate all four outcome shapes (✓ filed, ⓘ already exists, ⓘ by-design skip, ⚠ needs attention) with explicit per-case instructions
+    - New STOP rule: on ⚠ the agent must call out the failure, name the empty reviewer queue, quote the re-run command, suggest `gh auth status` — before claiming the implementer→reviewer hand-off succeeded
+
+    Test status: smoke-tested the re-run hint on a by-design skip (nonexistent branch). The needs-attention path uses the same render block, symmetrically.
+  created_at: 2026-05-13T04:06:37.356393624Z
+  modified_at: 2026-05-13T04:06:37.356393624Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-13T02:26:41.705367879Z
