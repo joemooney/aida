@@ -367,13 +367,40 @@ impl DatabaseBackend for GitBackend {
             }
         }
 
-        // Delete object files that are no longer in the store
+        // Delete object files that are no longer in the store.
+        //
+        // Safety: never delete a file we couldn't parse. `current_specs` is
+        // built from the in-memory store, which `load()` populates by
+        // skipping-and-warning on parse failures (see
+        // `object_store::load_all_objects`). An unparseable file is therefore
+        // absent from `current_specs` *not because the user deleted it* but
+        // because this binary couldn't read it — typically because a newer
+        // binary wrote a serde variant this one doesn't recognize. Deleting
+        // here silently destroys the other binary's work and is the
+        // exact failure mode BUG-96 documents (incident 2026-05-13: six
+        // STORY/VIS/CON/ADR/PRIN/TERM files removed by a single
+        // `aida add`). Skip-and-warn mirrors the load-side policy so the
+        // file survives until a binary that *can* parse it runs.
+        // trace:BUG-96 | ai:claude
         let mut deleted_specs: Vec<String> = Vec::new();
+        let mut preserved_unparseable: Vec<String> = Vec::new();
         for spec_id in &existing_specs {
             if !current_specs.contains(spec_id) {
+                if object_store::read_object(&self.objects_root, spec_id).is_err() {
+                    preserved_unparseable.push(spec_id.clone());
+                    continue;
+                }
                 let _ = object_store::delete_object(&self.objects_root, spec_id);
                 deleted_specs.push(spec_id.clone());
             }
+        }
+        if !preserved_unparseable.is_empty() {
+            eprintln!(
+                "Warning: preserved {} unparseable object file(s) during save: {} \
+                 (a binary that can parse them will pick them up)",
+                preserved_unparseable.len(),
+                preserved_unparseable.join(", ")
+            );
         }
 
         // Pick a commit message that reflects what actually changed instead
@@ -942,6 +969,95 @@ mod tests {
 
         assert!(root.join("objects/FR/000/FR-001.yaml").exists());
         assert!(!root.join("objects/FR/000/FR-002.yaml").exists());
+    }
+
+    /// BUG-96: a bulk `save()` must NEVER delete a YAML file just because
+    /// `load_all_objects` couldn't parse it. The failure mode this prevents
+    /// is a newer binary writing a serde variant the current binary lacks;
+    /// without this guard, the next save sweeps the unrecognized file out
+    /// of the store and the work is lost. trace:BUG-96 | ai:claude
+    #[test]
+    fn test_save_preserves_unparseable_object_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap();
+
+        // Seed: one parseable spec written via the normal path.
+        let mut keeper = Requirement::new("Keeper".into(), "kept".into());
+        keeper.spec_id = Some("FR-001".into());
+        let mut store = RequirementsStore::new();
+        store.requirements.push(keeper.clone());
+        backend.save(&store).unwrap();
+
+        // Drop in an unparseable file as if a newer binary wrote it. The
+        // path matches the sharded layout so `list_objects` will pick it up
+        // but `read_object` will fail. The bug we're guarding against is
+        // `save()` deleting this file because it isn't in `current_specs`.
+        let unparseable_path = root.join("objects/STORY/000/STORY-86.yaml");
+        std::fs::create_dir_all(unparseable_path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &unparseable_path,
+            "id: 019e21ea-e521-76e2-9b34-52626ea25a4b\n\
+             status: !FromTheFutureVariant\n\
+             title: a story from a newer binary\n",
+        )
+        .unwrap();
+        assert!(unparseable_path.exists());
+
+        // Trigger the bulk save path. The current store still contains
+        // only FR-001; STORY-86 is "missing" from the store from save()'s
+        // perspective — exactly the condition that used to delete the file.
+        backend.save(&store).unwrap();
+
+        // The keeper must still be on disk.
+        assert!(root.join("objects/FR/000/FR-001.yaml").exists());
+
+        // The unparseable file must survive — this is the BUG-96 guarantee.
+        assert!(
+            unparseable_path.exists(),
+            "save() deleted an unparseable file (BUG-96 regression)"
+        );
+    }
+
+    /// BUG-96: even when `save()` is also writing a brand-new add, an
+    /// unparseable neighbour must survive. The 2026-05-13 incident was
+    /// exactly this shape: `aida add` of TASK-0396 deleted six other specs
+    /// in the same commit. trace:BUG-96 | ai:claude
+    #[test]
+    fn test_save_preserves_unparseable_alongside_new_add() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("aida-store");
+        let backend = GitBackend::new(&root).unwrap();
+
+        // Initial state: empty store, persist metadata.
+        backend.save(&RequirementsStore::new()).unwrap();
+
+        // Stage an unparseable file the current binary can't decode.
+        let unparseable_path = root.join("objects/STORY/000/STORY-86.yaml");
+        std::fs::create_dir_all(unparseable_path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &unparseable_path,
+            "id: 019e21ea-e521-76e2-9b34-52626ea25a4b\n\
+             status: !FromTheFutureVariant\n\
+             title: a story from a newer binary\n",
+        )
+        .unwrap();
+
+        // Now do an "aida add" equivalent: load, push, save.
+        let mut store = backend.load().unwrap();
+        let mut newcomer = Requirement::new("New work".into(), "freshly added".into());
+        newcomer.spec_id = Some("TASK-1".into());
+        store.requirements.push(newcomer);
+        backend.save(&store).unwrap();
+
+        // The new file is added.
+        assert!(root.join("objects/TASK/000/TASK-1.yaml").exists());
+
+        // The unparseable file is preserved — the headline BUG-96 promise.
+        assert!(
+            unparseable_path.exists(),
+            "save() with a concurrent add deleted an unparseable neighbour (BUG-96 regression)"
+        );
     }
 
     #[test]
