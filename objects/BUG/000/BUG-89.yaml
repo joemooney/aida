@@ -77,9 +77,15 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T01:11:26.881810830Z
-modified_at: 2026-05-13T01:11:26.881810830Z
+modified_at: 2026-05-13T01:14:56.479500921Z
 req_type: Bug
 relationships:
 - rel_type: Child
   target_id: 08beead7-df0a-470f-a7c4-099682d8e24d
   created_at: 2026-05-13T01:11:28.105274159Z
+comments:
+- id: 019e1ee6-b45f-7492-ab8d-1a97f48f5a01
+  author: joe
+  content: "## Updated diagnosis 2026-05-12 (after further probing)\n\nThe bug is broader than user resolution alone. New evidence:\n\n```\naida queue list --user joe       → 0 items\naida queue list --all --user joe → 10 items\n```\n\nSo even with explicit --user, the default filter excludes items. `--all` is doing MORE than 'all users' — it's bypassing the for_session / for_scope filters too (per STORY-57's design).\n\n## Real root cause (revised)\n\n`aida queue list` (default) applies an implicit filter stack:\n1. for_user = current_user_id() \n2. for_role = AIDA_SESSION_ROLE\n3. for_scope = auto-derived from active lease (per STORY-57)\n4. for_session = ?? (STORY-57 also added this)\n5. status NOT IN (Completed, Rejected) per TASK-64\n\nWhen items were added during agent invocations, STORY-57 auto-filled for_scope (e.g., EPIC-23) and possibly for_session (Claude Code session id). When the user later lists from a shell that's NOT inside any of those scopes/sessions, the implicit filter excludes everything.\n\nThe shell user has no way to know what implicit filters are active OR how to disable just the session/scope ones (--no-scope didn't help in this case).\n\n## Broader fix\n\nIn addition to BUG-89's original user-resolution fix:\n\n1. **`aida queue list` should be more transparent about its implicit filters** — print a footer like:\n   ```\n   (filtering: user=joe, role=implementer, scope=<auto-detected from cwd>, session=<auto>)\n   Pass --all to bypass all implicit filters.\n   ```\n\n2. **Default filter should NOT include for_session** when no Claude Code session id is detectable — silent exclusion is too aggressive.\n\n3. **Add a granular bypass**: --no-scope, --no-session, --no-user, --no-role flags individually. `--all` becomes the combined alias.\n\n## Composes with\n\n- BUG-87 (--all overrides --for) — same root cause: --all does too much\n- TASK-71 (--for filter doesn't compose) — same family\n- STORY-57 (--scope, --for-session auto-fill) — its silent default is what trips users up\n\n## Bigger lesson\n\nImplicit filters need explicit visibility. The user shouldn't have to read code to know WHY their queue looks empty."
+  created_at: 2026-05-13T01:14:56.479500921Z
+  modified_at: 2026-05-13T01:14:56.479500921Z
