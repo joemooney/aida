@@ -1,0 +1,86 @@
+id: 019e2025-d7e4-7ad0-8bfb-9f00c9c31017
+spec_id: TASK-218
+agreed_id: TASK-218
+title: 'aida queue rework SPEC (+ aida rework SPEC alias): single verb for the flip-requeue-rework pattern'
+description: |-
+  Recurring three-command sequence that shows up every implementer to reviewer to fixup cycle:
+
+    aida edit SPEC --status in-progress
+    aida queue add SPEC --for ROLE
+    aida queue work SPEC
+
+  Encapsulate as aida queue rework SPEC, with aida rework SPEC as a top-level alias for discoverability (same pattern as TASK-102's aida relations alias for aida rel list).
+
+  ## Shape
+
+  aida queue rework SPEC                       — flip status + add to queue; don't launch session
+  aida queue rework SPEC --work                — also launch session (chains aida queue work)
+  aida queue rework SPEC --for ROLE            — override routing role (default: spec's current role)
+  aida queue rework SPEC --status STATE        — override target status (default: smart per current)
+  aida queue rework SPEC --reason 'TEXT'       — capture an aida comment add audit trail entry
+  aida queue rework SPEC --resume              — chain TASK-112 resume when shipped
+  aida rework SPEC                             — top-level alias for aida queue rework
+
+  ## Smart status transitions
+
+  When current status is Approved: no flip, just queue + optional work
+  When current status is Planned: flip to InProgress (skip back through Approved)
+  When current status is InProgress: warn 'already in progress'; require --force to re-queue
+  When current status is Done: flip to InProgress (the typical PR-review-found-issues case)
+  When current status is Completed: --force prompt (TASK-47 guard re-opening terminal status)
+  When current status is Rejected: --force prompt to flip to Approved
+
+  The --status flag overrides the smart default.
+
+  ## Composes with
+
+  - TASK-217 (status-aware error): the Done-case error in aida queue work could suggest aida queue rework SPEC --work instead of spelling out the 3-step recovery
+  - TASK-112 (resume claude session): aida queue rework --work --resume chains both — full 'PR review came back, fix it with prior context' in one command
+  - TASK-96 (queue done extracts Followups): if followups are queued under the spec, rework path needs to handle gracefully — either re-queue the parent only (leaving followups for later) or surface 'parent has N queued children; re-queue all?'
+  - TASK-110 (next-steps ordering): /aida-pr and /aida-review next-steps blocks could suggest aida queue rework SPEC --work instead of the manual 3-step
+  - session-lifecycle.md: phase 6 FIXUP becomes aida queue rework + --work + --resume — would simplify the documented loop
+
+  ## Edge cases
+
+  1. Spec already InProgress and queued: warn + no-op (or --force to re-queue)
+  2. Spec is currently leased by an active session: refuse unless --steal (mirror TASK-81 pattern)
+  3. Spec has 0 children to rework when invoked on a parent (e.g. aida queue rework EPIC-X): operate on the spec itself
+  4. Spec ID is ambiguous (multiple matches): same disambiguation as other aida verbs
+  5. --reason text is multiline: pass through to aida comment add intact
+
+  ## Why a verb beats the 3-command sequence
+
+  - One mental unit (rework) vs three steps (status, queue, work) — easier to recall
+  - Atomic from user POV: if step 2 fails, step 1 doesn't leave the spec dangling at InProgress without a queue entry
+  - Composable in chains: aida queue rework SPEC --work --resume is one command vs 3 + remember-to-resume
+  - Captures intent (rework, not random state transitions) — useful for activity log and audit
+  - Documentable in skills (/aida-review, /aida-pr next-steps blocks) as a single concrete recovery path
+
+  ## Acceptance
+
+  - [ ] aida queue rework SPEC subcommand implemented with all 6 flags above
+  - [ ] aida rework SPEC top-level alias for aida queue rework SPEC
+  - [ ] Smart status transitions per the 6-case table; --status flag overrides
+  - [ ] --reason captured as a comment on the spec via aida comment add path
+  - [ ] --resume conditional on TASK-112 having shipped (else error with hint)
+  - [ ] --steal pattern for active-lease conflicts (mirror TASK-81)
+  - [ ] Tests cover all 6 status transitions + the 5 edge cases above
+  - [ ] /aida-pr and /aida-review next-steps blocks updated to suggest aida queue rework as the recovery (composes with TASK-110)
+  - [ ] docs/session-lifecycle.md updated: phase 6 FIXUP shows aida queue rework + --work + --resume as the canonical one-command flow
+
+  ## Discovered via
+
+  2026-05-13 session — PR-20 review came back with changes; implementer fixup required the manual 3-command sequence (aida edit + aida queue add + aida queue work). User asked: 'did the series of commands you gave me correspond to say an aida rework or aida queue rework command?' — naming the missing primitive that's been hiding in plain sight all session.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T07:03:31.556415989Z
+modified_at: 2026-05-13T07:03:31.556415989Z
+req_type: Task
+tags:
+- lifecycle
+- queue
+- rework
+- verb
+- workflow
