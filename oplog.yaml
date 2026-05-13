@@ -3992,5 +3992,50 @@ operations:
   timestamp: 2026-05-13T05:52:23.303929665Z
   kind: !SetStatus
     status: Completed
-clock: 486
+- id: 019e1fe9-36ec-79f1-ac48-a91f4d923b80
+  target_id: 019e1fe7-e0b3-72f3-849d-4b57348cdbe7
+  author: aida
+  node_id: '1'
+  lamport: 487
+  timestamp: 2026-05-13T05:57:18.189003914Z
+  kind: !SetDescription
+    description: |-
+      The agent-facing surface. Skill file under aida-core/templates/skills/aida-rebase.md (per the template architecture), scaffolded into .claude/skills/ by aida init. Master copy as always.
+
+      ## Skill responsibilities
+
+      1. Run aida rebase --json --dry-run first to get structured classification without side effects.
+      2. Surface the classification to the user/agent in natural language:
+         - clean / ahead-only → 'Already in sync (or ahead-only). No rebase needed.'
+         - behind-only → 'Behind by N commits, no local commits to replay. Safe rebase — proceed?'
+         - diverged-safe → 'Both sides advanced (M ahead, N behind), no file overlap. Safe rebase — proceed?'
+         - diverged-risky → 'Both sides advanced (M ahead, N behind), overlap on: [files]. Inspect before proceeding.'
+      3. Execute or defer based on user/agent decision.
+      4. Cross-link to related skills in the frontmatter:
+         - /aida-commit (calls /aida-rebase when precheck detects stale)
+         - /aida-pickup (verifies fresh base at session pickup time)
+         - /aida-pr (verifies before opening PR)
+
+      ## Skill file shape
+
+      Mirror the conventions of existing skills (/aida-pickup.md, /aida-commit.md):
+
+      - YAML frontmatter with name, description, and allowed-tools (likely just Bash)
+      - Purpose section (one sentence)
+      - When to Use section (heuristics — populated from TASK-105's playbook)
+      - Workflow section (numbered steps starting with the dry-run probe)
+      - CLI Reference section listing the aida rebase invocations the skill calls
+
+      The skill is thin — most logic lives in aida rebase CLI (TASK-103). The skill's job is to invoke, parse JSON output, and surface decisions in agent-readable text.
+
+      ## Acceptance
+
+      - [ ] Skill file at aida-core/templates/skills/aida-rebase.md following existing skill conventions
+      - [ ] Matching command file at aida-core/templates/commands/aida-rebase.md
+      - [ ] make sync-templates relinks correctly
+      - [ ] aida init scaffolds the skill + command
+      - [ ] Skill calls aida rebase --json --dry-run, parses classification, surfaces in agent-readable text
+      - [ ] Cross-links in frontmatter description to /aida-commit, /aida-pickup, /aida-pr
+      - [ ] Skill catalog in scaffolded AIDA.md mentions /aida-rebase as a daily driver
+clock: 487
 node_id: '1'
