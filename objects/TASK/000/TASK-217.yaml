@@ -66,7 +66,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T07:00:30.455249397Z
-modified_at: 2026-05-13T07:00:30.455249397Z
+modified_at: 2026-05-13T07:03:40.651332824Z
 req_type: Task
 tags:
 - discoverability
@@ -78,3 +78,22 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-13T07:00:32.766999234Z
+comments:
+- id: 019e2025-fb6b-7401-bf1d-464b3824514d
+  author: joe
+  content: |-
+    Once TASK-218 (aida queue rework) ships, the status-aware error suggestions in this TASK can shorten dramatically. Compare:
+
+    Today's recovery for Done status (from TASK-217 spec):
+      aida edit STORY-86 --status in-progress
+      aida queue add STORY-86 --for implementer
+      aida queue work STORY-86
+
+    Post-TASK-218 recovery:
+      aida queue rework STORY-86 --work
+
+    Three lines collapse to one. Update TASK-217's acceptance to reference aida queue rework SPEC --work in each of the 6 status-case error messages (where applicable) instead of the manual 3-step sequence.
+
+    Cross-link: TASK-218 (aida queue rework verb) composes here.
+  created_at: 2026-05-13T07:03:40.651332824Z
+  modified_at: 2026-05-13T07:03:40.651332824Z
