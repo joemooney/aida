@@ -71,7 +71,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:51:25.341027642Z
-modified_at: 2026-05-13T02:36:03.689227674Z
+modified_at: 2026-05-13T03:58:41.316386827Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -286,6 +286,47 @@ comments:
     *Doc seed correction per EPIC-24. Empirical update to docs/positioning/vs-ultraplan.md content.*
   created_at: 2026-05-13T02:36:03.689227674Z
   modified_at: 2026-05-13T02:36:03.689227674Z
+- id: 019e1f7c-9ea4-7080-93d7-f37068c1fbf4
+  author: joe
+  content: |-
+    ## Doc seed: /ultraplan has a 90-min approval window (2026-05-13)
+
+    Discovered empirically: STORY-86 plan was generated, cloud session waited for review/approval, **terminated after 90 minutes with no action**. Plan content lost (or at least no longer accessible).
+
+    ### Implication
+
+    /ultraplan is NOT 'fire and forget.' It's a synchronous collaboration tool — you fire it, it drafts, you must engage within the approval window or the session expires.
+
+    ### Workflow rules to add to docs/positioning/vs-ultraplan.md
+
+    1. Only fire /ultraplan when you have the next 30-90 min to engage
+    2. Don't fire it as a 'background process' to consult later
+    3. If you fire and walk away, save the cloud session URL — even if it terminates, the URL might preserve content (verify next time)
+    4. For 'draft and consult later' workflow → wait for STORY-112 (/aida-plan local skill, no time pressure)
+
+    ### Composition revision
+
+    Previous workflow recommendation: 'Substantive story → /ultraplan → AIDA local execute'
+
+    Revised: 'Substantive story AND you have an hour to review collaboratively → /ultraplan → AIDA local execute. Otherwise → local plan or wait for /aida-plan to ship.'
+
+    ### Comparison row update
+
+    | feature | /ultraplan | /aida-plan (proposed, STORY-112) |
+    |---|---|---|
+    | Cost | Free with Max | Free (local) |
+    | Approval window | 90 min sync | No time pressure |
+    | Collaborative review | Browser UI, inline comments, emoji | Markdown file review |
+    | Cloud-vs-local | Cloud session | Local in claude session |
+    | Integration with AIDA queue | Manual (teleport then aida queue work) | Native |
+
+    This time-pressure tradeoff is a real reason STORY-112 (/aida-plan) is more valuable than just 'a redundant alternative to /ultraplan.' Different workflow tempo.
+
+    ---
+
+    *Doc seed per EPIC-24. /ultraplan timeout observed 2026-05-13.*
+  created_at: 2026-05-13T03:58:41.316386827Z
+  modified_at: 2026-05-13T03:58:41.316386827Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-12T16:33:02.328974663Z
