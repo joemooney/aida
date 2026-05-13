@@ -58,12 +58,26 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T16:17:47.821721148Z
-modified_at: 2026-05-13T02:40:40.576908369Z
+modified_at: 2026-05-13T04:06:53.029518079Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-12T16:17:49.456787589Z
+comments:
+- id: 019e1f84-1f65-73d1-9063-a9ac51a5f8d7
+  author: joe
+  content: |-
+    Implemented via commit c2c208b8 (on epic-23-2; PR pending):
+
+    - New helper format_review_story_display(display_id, title) detects `Review PR-<n>: <rest>` titles and returns (`PR-<n> (STORY-NNN)`, `<rest>`)
+    - Wired into queue list (flat + tree), queue next (global + local paths), aida show (adds `About: PR-N` line)
+    - Tree-mode id_col_width calc updated so the expanded id still aligns the title column
+    - STORY-NNN remains visible everywhere so `aida edit STORY-108 --status completed` still works as a direct operation; PR-N is just the prominent handle
+
+    Test status: 6 new format_review_story_display unit tests (synthetic match, agreed_id pass-through, non-review titles, malformed PR-N, partial match, empty title). aida-cli test count 263 → 269. Verified `aida show STORY-100` renders `About: PR-10` correctly.
+  created_at: 2026-05-13T04:06:53.029518079Z
+  modified_at: 2026-05-13T04:06:53.029518079Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-13T02:34:07.008416886Z
