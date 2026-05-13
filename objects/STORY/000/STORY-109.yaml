@@ -76,12 +76,28 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T16:11:53.046991461Z
-modified_at: 2026-05-13T02:29:57.181728708Z
+modified_at: 2026-05-13T04:06:45.394351459Z
 req_type: Story
 relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-12T16:11:54.807687586Z
+comments:
+- id: 019e1f84-0192-70f0-8d19-ebb94ce9e7a3
+  author: joe
+  content: |-
+    Implemented via commit 8dc5be03 (on epic-23-2; PR pending):
+
+    - New step 4 in /aida-review between spec walk and merge gates
+    - Four systematic probes: cross-reference consistency, format-spec edge cases, multiplicity (0/1/N), adversarial "looks safe but isn't"
+    - Each probe documented with concrete patterns to look for + the PR-15 example that motivated it (TASK-81/84/85)
+    - Findings record inline in the gitignored review-prompt worksheet; step 7's consolidated PR comment renders them with the per-spec verdicts
+    - Existing steps 4-10 renumbered to 5-11; all cross-references updated
+    - Positioning doc (docs/positioning/vs-ultrareview.md) updated to past-tense the augmentation and reaffirm /ultrareview's multi-perspective edge
+
+    Test status: skill text changes (no code). Dogfood validation deferred to the next /aida-review run that exercises the deep-pass on a substantive PR.
+  created_at: 2026-05-13T04:06:45.394351459Z
+  modified_at: 2026-05-13T04:06:45.394351459Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-13T02:29:57.181728708Z
