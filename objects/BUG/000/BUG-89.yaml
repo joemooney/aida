@@ -79,3 +79,7 @@ feature: Uncategorized
 created_at: 2026-05-13T01:11:26.881810830Z
 modified_at: 2026-05-13T01:11:26.881810830Z
 req_type: Bug
+relationships:
+- rel_type: Child
+  target_id: 08beead7-df0a-470f-a7c4-099682d8e24d
+  created_at: 2026-05-13T01:11:28.105274159Z
