@@ -1,0 +1,63 @@
+id: 019e220c-e62e-7d23-8d18-6dddad5c1968
+spec_id: TASK-222
+agreed_id: TASK-222
+title: 'aida queue list: keep Done items visible (in-flight on PR awaiting merge) until Completed'
+description: |-
+  Done was designed (STORY-86) as a non-terminal status — 'work finished on branch, not yet merged.' The intent is that Done specs are visibly *in flight* between InProgress and Completed, with auto-bump to Completed firing when the referencing commit lands on the default branch.
+
+  But aida queue list filters them out: when aida queue done runs (typically at /aida-pr / session end), the queue entry is removed regardless of whether the new status is terminal. So Done specs vanish from queue views even though they're conceptually still active work (just waiting on merge).
+
+  Concrete example 2026-05-13: user shipped BUG-96 via PR-22. The implementer session ran queue done; BUG-96 status flipped to Done; PR-22 opened; reviewer queue gained STORY-118. User ran aida queue list --all and didn't see BUG-96 — even though the work is genuinely in flight. Recoverable via aida show BUG-96 but invisible to the natural 'what am I waiting on' view.
+
+  ## Proposed behavior
+
+  Default aida queue list shows:
+  - Pending: Approved + Planned + InProgress
+  - In-flight: Done items whose linked PR isn't merged (separated visually — e.g. dim, or under a 'Done — awaiting merge' subsection)
+  - Hidden by default: Completed + Rejected (today's terminal filter)
+
+  Flags:
+  - aida queue list                — pending + in-flight (new default)
+  - aida queue list --no-in-flight — old behavior (pending only)
+  - aida queue list --include-terminal — also Completed + Rejected (existing)
+  - aida queue list --in-flight-only — only Done items awaiting merge
+
+  ## Linkage to PR (for the in-flight detection)
+
+  Done items already have implementation_info.implementation_sha (when present) per STORY-86's plan. The in-flight view can:
+  1. Group Done items by associated PR (if discoverable via the trace graph or via gh)
+  2. Show 'PR #N: <state>' inline for each Done item (e.g. 'awaiting review', 'awaiting CI', 'awaiting merge')
+  3. Composes with the future aida status command (TASK-220) and the CI-aware session end (TASK-111)
+
+  ## Composes with
+
+  - STORY-86 (the lifecycle change that introduced Done as non-terminal) — this TASK finishes the queue-side of that intent
+  - TASK-218 (aida queue rework verb) — rework needs to handle 'Done spec not in queue' anyway; this TASK reduces the 'not in queue' surface
+  - TASK-220 (aida status) — could surface in-flight specs in its queue section
+  - TASK-111 (CI-aware session end) — CI state is the right signal for in-flight subcategorization
+
+  ## Acceptance
+
+  - [ ] aida queue list default includes Done items in an in-flight section
+  - [ ] --no-in-flight / --in-flight-only flags work
+  - [ ] Done items display their associated PR state when discoverable (best-effort; graceful degrade)
+  - [ ] Tests cover the 4 main filter combinations
+  - [ ] CLAUDE.md / AIDA.md daily-commands section mentions the in-flight view
+
+  ## Discovered via
+
+  2026-05-13 — user shipped BUG-96 in PR-22, ran aida queue list --all expecting to see BUG-96 in flight, found it absent. Was findable via aida show BUG-96 but invisible to the natural workflow view.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T15:55:31.246695225Z
+modified_at: 2026-05-13T15:55:31.246695225Z
+req_type: Task
+tags:
+- done
+- in-flight
+- lifecycle
+- list
+- queue
+- visibility
