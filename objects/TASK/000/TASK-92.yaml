@@ -1,0 +1,57 @@
+id: 019e1f25-6ed2-7821-ad67-9bb0347a7b90
+spec_id: TASK-92
+agreed_id: TASK-92
+title: 'docs/plans/: add structured plan template (approach, files, tests, risks) so AIDA plans look consistent'
+description: |
+  Today AIDA plans in docs/plans/ are free-form markdown. Inspired by /ultraplan's structured plan output, propose a template:
+
+  ```markdown
+  # Plan: <STORY-N or title>
+
+  Date: YYYY-MM-DD
+  Specs: STORY-N, BUG-M
+  Status: Draft | Approved | In Progress | Completed
+
+  ## Context
+  Why this work, what's known, what's unknown.
+
+  ## Approach
+  High-level strategy. Why this approach over alternatives.
+
+  ## Files
+  - aida-cli/src/foo.rs — new module
+  - aida-core/src/models.rs — extend X
+
+  ## Tests
+  - Unit: cover the new helper
+  - Integration: end-to-end via X command
+
+  ## Risks
+  - Migration concerns
+  - Backward compat
+  - Performance
+
+  ## Related
+  - Builds on: STORY-X
+  - Blocks: BUG-Y
+  - See also: docs/positioning/...
+
+  ## Decision log
+  - YYYY-MM-DD: chose X over Y because...
+  ```
+
+  Template lives at aida-core/templates/plan-template.md. `aida init` scaffolds it into docs/plans/_TEMPLATE.md for user reference.
+
+  ## Acceptance
+
+  - [ ] Plan template at aida-core/templates/plan-template.md
+  - [ ] aida init scaffolds it
+  - [ ] docs/plans/_TEMPLATE.md becomes the convention
+  - [ ] CLAUDE.md updated with plan-template usage
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T02:23:27.442361366Z
+modified_at: 2026-05-13T02:23:27.442361366Z
+req_type: Task
