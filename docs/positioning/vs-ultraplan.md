@@ -50,6 +50,20 @@ The STORY-86 case study (`docs/plans/2026-05-13-story-86-done-status.md` — sav
 
 AIDA's `/aida-plan` skill is more decomposition-oriented (vertical-slice child reqs, design-decision comments) and doesn't generate the dense file-by-file prose. That's a real gap when the work warrants it.
 
+### Multi-agent architecture (reported, hedged)
+
+A third-party explainer describes `/ultraplan`'s internal architecture as a Mixture-of-Agents pattern: three parallel "explorer" agents each independently attempt the planning problem in separate context windows, then a fourth "critic" agent evaluates their outputs and synthesizes a final plan that may include elements from none of the explorers verbatim. This claim is plausible (it matches published MoA research and would explain the consistently high "decision callout" quality we observed in the STORY-86 plan) but should be attributed to a secondhand explainer rather than vendor-confirmed documentation. Treat the structural details as best-effort context, not specification.
+
+If the description is accurate, the practical implications are:
+
+- **Genuine diversity, not paraphrased sameness.** Independent context windows let explorers arrive at substantively different approaches (architectural pattern, tradeoff profile, abstraction level, risk tolerance) rather than three rewrites of the same idea.
+- **Critic synthesis beats single-explorer best.** The critic can combine the architecture from explorer 1 with the error-handling from explorer 2 and the test strategy from explorer 3 — final plan quality exceeds any single run.
+- **Convergence-as-confidence signal.** When all three explorers converge on a similar approach, that's strong evidence the approach is sound. When they diverge, the critic surfaces explicit tradeoff discussion. A single-agent plan can't tell you whether the AI was confident or just committed to its first thought.
+- **Wall-clock parallelism.** Three explorers running in parallel costs roughly the time of one explorer running alone, plus the critic pass. Higher quality without proportional latency.
+- **Multi-agent invoked conditionally.** Simple requests reportedly bypass the full pipeline — single-agent suffices. This explains why some /ultraplan outputs feel denser than others.
+
+**AIDA's contrast:** `/aida-plan` runs in a single local Claude session — same context window throughout, no parallel exploration, no separate critic. The local model can be prompted to "consider three approaches, then evaluate," but anchoring bias persists because all three approaches share the same context. This is a real asymmetry; AIDA shouldn't claim parity here.
+
 ### Browser review surface — separate from the prose strength
 
 Distinct from the depth of the generated plan itself, `/ultraplan` brings a review-and-revise interface that local-terminal planning genuinely can't match:
@@ -127,6 +141,47 @@ It is NOT compatible with the AIDA model because:
 - No spec-anchored execution rationale; the PR commit messages may or may not reference SPEC-IDs
 
 If your work needs AIDA's lifecycle tracking, **always teleport back**. If your work is genuinely a one-off where the bookkeeping doesn't pay back, cloud execution is fine.
+
+---
+
+## Tightening AIDA's integration with `/ultraplan`
+
+`/ultraplan` exposes no API or MCP surface (as of research preview, 2026-05-13). Integration is **workflow-tight, not API-tight.** Two real directions:
+
+### Direction A — AIDA → `/ultraplan`: rich prompt assembly
+
+Today the user types a free-form prompt. AIDA has rich context for any SPEC: description + acceptance criteria + comments (including design seeds) + parent/child/sibling reqs + trace-comment graph + plan-template scaffolding. A new command (planned, see related TASKs) could assemble all of this into a structured prompt that gives `/ultraplan`'s three explorers something concrete to anchor on — turning a 100-word user prompt into a 2000-word prompt with the full requirement graph behind it.
+
+Pseudo-shape:
+
+```
+aida ultraplan <SPEC>           # assemble rich prompt, copy to clipboard
+aida ultraplan <SPEC> --browser # open /ultraplan launch URL
+aida ultraplan <SPEC> --stdout  # print for inspection
+```
+
+The assembled prompt includes: target SPEC's acceptance criteria, parent/sibling spec summaries, the AIDA 11-section plan template (from TASK-92), known reusable helpers (from TASK-94's trace-graph derivation), and a "symbol refs preferred" style note.
+
+### Direction B — `/ultraplan` → AIDA: auto-import saved plan
+
+After the user teleports back and saves the plan file, a new skill processes it into AIDA's first-class state in one command:
+
+1. Detect target SPEC-ID (from filename, frontmatter, or first heading)
+2. Rename + move to `docs/plans/YYYY-MM-DD-<slug>.md` (AIDA convention)
+3. Post `aida comment add <SPEC>` pinning the plan to its target
+4. Parse Critical Files section into the session manifest hint (composes with TASK-95)
+5. Parse Followups section into draft TASKs (composes with TASK-96)
+6. Run `aida plan verify <file>` to re-anchor line refs to symbols (composes with TASK-93)
+7. Optionally `aida queue add <SPEC> --for implementer` if invoked with `--queue`
+
+### What's NOT possible today
+
+- **Programmatic invocation** of `/ultraplan` from AIDA — no API/MCP exposed
+- **Reading `/ultraplan` output without manual teleport-back-save** — browser session is opaque from outside
+- **Capturing the 3-explorer outputs separately** to show divergence — only the critic's synthesized output is exposed
+- **Watching the CLI status indicator** (`◆ ultraplan ready`) programmatically — no documented hook
+
+If Anthropic eventually exposes an MCP server for `/ultraplan`, the integration could become much tighter (e.g., AIDA polling for "ready" status, auto-pulling the output, programmatic confidence-signal extraction). Until then, workflow-tight is the ceiling.
 
 ---
 
