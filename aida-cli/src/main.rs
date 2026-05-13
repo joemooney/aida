@@ -11610,24 +11610,56 @@ fn maybe_hint_after_queue_drain(storage: &Storage, user_id: &str) {
         .ok()
         .filter(|s| !s.is_empty());
 
-    // Filter remaining queue entries by the active role when one is set.
-    // No active role → treat the entire user queue as the scope.
-    let remaining = storage.queue_list(user_id, false).unwrap_or_default();
-    let filtered: Vec<&aida_core::QueueEntry> = match role.as_deref() {
-        Some(r) => remaining
-            .iter()
-            .filter(|e| e.for_role.as_deref() == Some(r))
-            .collect(),
-        None => remaining.iter().collect(),
-    };
-    if !filtered.is_empty() {
-        return;
-    }
-
+    // Match the filter `aida queue list` uses for the active session:
+    //   1. role: matches AIDA_SESSION_ROLE
+    //   2. scope: matches the active session lease's scope (unscoped
+    //      entries pass through, same as queue list inside a session)
+    //   3. the entry's requirement still exists in the store — dangling
+    //      entries pointing to deleted/renamed UUIDs are noise and `aida
+    //      queue list` hides them. Without #3 the hint sees stale queue
+    //      cruft and never fires.
+    // trace:STORY-106 | ai:claude
     let scope = std::env::current_dir()
         .ok()
         .and_then(|cwd| active_lease_for_cwd(&project_root, &cwd))
         .map(|l| l.scope);
+
+    let remaining = storage.queue_list(user_id, false).unwrap_or_default();
+    let store_snapshot = storage.load().ok();
+    // Entry counts as "open work for this user" only when its
+    // requirement (a) still exists in the store and (b) hasn't already
+    // reached terminal status. The second check mirrors `aida queue
+    // list`'s terminal-hide behavior (TASK-46) — without it, queue
+    // entries left behind after `aida edit --status completed` (which
+    // doesn't auto-dequeue) read as "still in flight" and suppress the
+    // hint forever.
+    let entry_open = |e: &aida_core::QueueEntry| -> bool {
+        let Some(snap) = &store_snapshot else {
+            return true;
+        };
+        let Some(req) = snap.requirements.iter().find(|r| r.id == e.requirement_id) else {
+            return false;
+        };
+        !is_terminal_status(&req.status)
+    };
+    let filtered: Vec<&aida_core::QueueEntry> = remaining
+        .iter()
+        .filter(|e| entry_open(e))
+        .filter(|e| match role.as_deref() {
+            Some(r) => e.for_role.as_deref() == Some(r),
+            None => true,
+        })
+        .filter(|e| match scope.as_deref() {
+            Some(s) => match e.for_scope.as_deref() {
+                Some(es) => es == s,
+                None => true,
+            },
+            None => true,
+        })
+        .collect();
+    if !filtered.is_empty() {
+        return;
+    }
 
     let commits_ahead = current_branch_at(&project_root)
         .as_deref()
