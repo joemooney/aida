@@ -1,0 +1,37 @@
+id: 019e201e-e1b0-77a2-9c7e-3c3661018f05
+spec_id: BUG-94
+agreed_id: BUG-94
+title: aida db sync --pull auto-bump scan range collapses to empty (snapshot timing bug)
+description: |-
+  Follow-up from PR-20 deep-pass review (STORY-86 implementation).
+
+  Reviewer found: in aida db sync --pull, the pre_sha snapshot is taken AFTER the store-pull (around main.rs:2916), at a time when the code branch hasn't moved yet. The auto-bump scan range pre_sha..default_ref then collapses to empty because pre_sha == current HEAD on the code branch. The auto-bump is functionally a no-op for this code path.
+
+  aida pull (the top-level wrapper, main.rs:20500) works correctly — pre_sha is captured before the code pull, scan range is non-empty after the pull. The bug is isolated to the aida db sync --pull entry point.
+
+  ## Fix sketch
+
+  Reorder so the snapshot is captured BEFORE any pull (code OR store), and the scan happens AFTER the code pull. Or: pass the snapshot as a parameter to the shared auto-bump helper rather than re-capturing it inside.
+
+  ## Acceptance
+
+  - [ ] aida db sync --pull captures pre_sha before the code pull
+  - [ ] Auto-bump scan executes against a non-empty range when commits land on default branch
+  - [ ] Test: simulate teammate merge, run aida db sync --pull, assert Done specs bump to Completed
+  - [ ] Verify no regression on aida pull (which already works)
+
+  ## Discovered via
+
+  PR-20 /aida-review deep-pass 2026-05-13. See PR comment at https://github.com/joemooney/aida/pull/20#issuecomment-4438122221
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T06:55:55.312738078Z
+modified_at: 2026-05-13T06:55:55.312738078Z
+req_type: Bug
+tags:
+- auto-bump
+- db-sync
+- snapshot
+- timing
