@@ -1,0 +1,60 @@
+id: 019e1ff2-4f0c-7501-b5fc-098cbcc7edd8
+spec_id: STORY-115
+agreed_id: STORY-115
+title: 'AIDA git-mirror verb surface: granularity, fetch, dry-run, discoverability'
+description: |-
+  Umbrella for the question: when AIDA grows a verb that bundles git operations across the code+store split, what's the convention?
+
+  ## Context
+
+  AIDA bundles git operations across two branches: the code branch and the orphan aida-store branch. This is the genuine added value of aida push / aida pull over raw git — one network round-trip, paired ordering, cache-invalidation hooks. The bundle becomes vestigial naming when no genuine bundling happens.
+
+  The 2026-05-13 conversation that prompted this STORY identified:
+
+  1. Cadence asymmetry — store updates are continuous (every aida add / edit / comment), code pushes are discrete milestones. The default bundle doesn't always match the desired action.
+  2. Discoverability gap — the user assumed aida push only pushed store; the two-leg behavior wasn't obvious from help text or pre-push summary.
+  3. Missing verbs — no aida fetch (cheap refresh, no merge), no dry-run on push/pull (mirroring planned aida rebase --dry-run).
+  4. Convention drift risk — without a named convention, future verbs (aida cherry-pick? aida tag?) won't know whether to bundle or not.
+
+  ## Children
+
+  This STORY breaks into:
+
+  - TASK: --code-only / --store-only granularity flags on push + pull
+  - TASK: aida fetch (cheap two-leg refresh, no merge)
+  - TASK: aida push --dry-run + aida pull --dry-run
+  - TASK: docs/git-verb-surface.md design reference
+
+  Plus a probable cross-link to STORY-114 (aida rebase) since it's the third example of the same convention.
+
+  ## Convention statement (to formalize in the design doc)
+
+  An AIDA verb that mirrors a git verb earns its name when it bundles meaningful behavior across the code + store legs. The bundle's default is to act on BOTH legs. Granularity flags (--code-only / --store-only) let users scope; dry-run flags let them inspect; the discoverability surface (help text, pre-action summary) explicitly names what each leg will do.
+
+  Intentional non-mirrors:
+
+  - aida merge — workflow is rebase-first, merge across legs has no use case
+  - aida stash — git's stash already works, no AIDA semantics to add
+  - aida cherry-pick — code-only operation, no store dimension
+  - aida tag — code-only operation, no store dimension
+
+  ## Acceptance
+
+  - [ ] All 4 children TASKs landed
+  - [ ] docs/git-verb-surface.md captures the convention + intentional non-mirrors list
+  - [ ] aida push / pull help text explicitly names the two-leg behavior
+  - [ ] Cross-reference from STORY-114 (aida rebase) for the rebase verb
+  - [ ] CLAUDE.md / AIDA.md mention the convention as a daily-workflow reference
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T06:07:14.188359449Z
+modified_at: 2026-05-13T06:07:14.188359449Z
+req_type: Story
+tags:
+- convention
+- design
+- git
+- symmetry
+- verbs
