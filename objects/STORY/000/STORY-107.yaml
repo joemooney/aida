@@ -71,7 +71,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:51:25.341027642Z
-modified_at: 2026-05-12T16:47:16.161761355Z
+modified_at: 2026-05-13T02:22:57.496992621Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -238,6 +238,11 @@ comments:
     *Doc seed correction per EPIC-24. Promote to docs/positioning/vs-ultrareview.md.*
   created_at: 2026-05-12T16:47:16.161761355Z
   modified_at: 2026-05-12T16:47:16.161761355Z
+- id: 019e1f24-f9d8-76b0-b42e-878fa6436f5e
+  author: joe
+  content: "## Doc seed: /ultraplan vs AIDA (2026-05-13)\n\nResearched via claude-code-guide agent. Future docs/positioning/vs-ultraplan.md content.\n\n### What /ultraplan does\n\nCloud-based single agent in 'plan mode'. Drafts implementation plans for a single work item (e.g., 'migrate auth from sessions to JWTs'). Output is a structured plan (sections, diffs, tasks) reviewable in browser with inline comments + emoji reactions. Execution: cloud (opens PR) or 'teleport back' to local terminal.\n\n### Cost contrast with /ultrareview\n\n- **/ultraplan**: included with Claude Code on the web subscription (no per-use cost)\n- **/ultrareview**: 3 free uses, then $5-$20 USD per use\n\nBig difference. /ultraplan can be daily-use; /ultrareview is reserve-for-stakes.\n\n### Layer alignment with AIDA\n\n| layer | AIDA | /ultraplan |\n|---|---|---|\n| WHAT (requirements) | ✓ owns | — |\n| WHO + HOW + WHEN (decomposition + status) | ✓ owns | — |\n| Implementation planning (HOW the code change happens) | weak (docs/plans/ static markdown) | ✓ owns |\n| Code execution | via skills + agent in claude | via cloud agent or teleport-to-local |\n| Review (post-implementation) | /aida-review (free, local) | (use /ultrareview separately, paid) |\n\nAIDA + /ultraplan compose cleanly. The natural workflow:\n1. `aida add --type story --title \"...\"` — define WHAT\n2. `/ultraplan \"implement STORY-N — context\"` — draft HOW in cloud\n3. Review plan in browser, iterate\n4. Execute (cloud → PR, or local → continue in AIDA worktree)\n5. AIDA tracks status as PR lands\n\n### What AIDA could learn from /ultraplan\n\n| /ultraplan feature | AIDA equivalent today | Gap to address |\n|---|---|---|\n| Web-collaborative plan review | docs/plans/*.md static markdown | No collaborative review of plan docs |\n| Plan-mode agent separation | Implementer agent codes directly | Could file: 'plan-mode skill that drafts without committing — review before execute' |\n| Teleport back to local handoff | None | Interesting — cloud-plan + local-execute integration |\n\n### Positioning statement\n\n/ultraplan and AIDA are **complementary layers**:\n- AIDA = the *graph* (requirements, relationships, status, trace links)  \n- /ultraplan = the *workshop* (where you collaboratively shape an implementation before committing)\n- /aida-review + /ultrareview = the *gates* (lifecycle bookkeeping + adversarial verification)\n\nNone of them replace each other. They stack.\n\n### Honest assessment of competitive risk\n\n/ultraplan is NOT a threat to AIDA. /ultraplan doesn't track requirements, doesn't maintain stable IDs, doesn't manage status across many work items, doesn't compose with the queue or review skills. It's a single-shot planning surface.\n\nThe only competitive overlap: AIDA's docs/plans/ markdown files could be enriched to be more interactive (comments, reactions, iteration tracking). But that's a UX gap, not an existential threat — and pursuing it would mean AIDA grows a web layer (counter to the local-first design choice).\n\n### Should you USE /ultraplan to write its own positioning doc?\n\nNo — /ultraplan is designed for 'plan this code change,' not 'compare these tools.' Use it for legitimate planning targets like STORY-86 (Done status implementation).\n\n---\n\n*Doc seed per EPIC-24. Promote to docs/positioning/vs-ultraplan.md.*"
+  created_at: 2026-05-13T02:22:57.496992621Z
+  modified_at: 2026-05-13T02:22:57.496992621Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-12T16:33:02.328974663Z
