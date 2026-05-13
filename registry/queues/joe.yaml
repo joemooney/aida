@@ -76,6 +76,13 @@
   for_role: implementer
   for_scope: EPIC-20
 - user_id: joe
+  requirement_id: 019e1eff-6ac2-7553-a527-d979cda99d5e
+  position: 23000
+  added_by: joe
+  note: auto-queued by `aida pr` ((no-sess); covers 1 spec
+  added_at: 2026-05-13T01:42:00.922783954Z
+  for_role: reviewer
+- user_id: joe
   requirement_id: 019e134a-57d3-70e0-a15c-006dea10310d
   position: 9223372036854775807
   added_by: joe
