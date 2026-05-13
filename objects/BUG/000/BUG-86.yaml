@@ -54,12 +54,12 @@ description: |
   - [ ] On failure: prints the exact command to re-run manually
   - [ ] On skip: explains why (gh missing, no PR, etc.)
   - [ ] Tested: succeed path prints ✓; force failure (rename gh temporarily) prints ⚠
-status: Approved
+status: InProgress
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T16:00:23.751172789Z
-modified_at: 2026-05-12T16:00:23.751172789Z
+modified_at: 2026-05-13T02:24:51.440056497Z
 req_type: Bug
 relationships:
 - rel_type: Child
