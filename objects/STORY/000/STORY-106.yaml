@@ -54,14 +54,18 @@ description: |
   - [ ] AIDA_HINTS=false disables; `aida config workflow_hints false` persists
   - [ ] No regression on script-piping use cases (hints go to stderr, never stdout)
   - [ ] Tested: queue drain → hint fires. queue done on non-terminal item → no hint. session end with no PR → no PR hint.
-status: InProgress
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:41:28.097562148Z
-modified_at: 2026-05-13T02:14:17.408979698Z
+modified_at: 2026-05-13T02:24:42.591077426Z
 req_type: Story
 relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-12T15:41:29.210745891Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-13T02:24:42.591077426Z
+  implemented_by: joe
