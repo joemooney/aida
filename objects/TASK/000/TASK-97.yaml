@@ -1,0 +1,46 @@
+id: 019e1fd4-3773-7281-8717-26360349ff3e
+spec_id: TASK-97
+agreed_id: TASK-97
+title: 'aida pull --autorebase: opt-in safe-rebase for code-side divergence'
+description: |-
+  Today aida pull's code-side leg (aida-cli/src/main.rs:20120-20138) uses git pull --ff-only by deliberate design — refuses divergent-branch pulls rather than auto-rebasing a working tree (which could surprise the user). On failure it prints a hint suggesting git pull --rebase or git pull --no-rebase.
+
+  The orphan-store leg by contrast uses git pull --rebase (line 19678) because store conflicts are rare and the worktree is AIDA-managed.
+
+  Gap: experienced users running aida pull repeatedly hit the same divergence pattern (single local-ahead commit, single remote-ahead commit, no file overlap → trivially safe to rebase) and have to manually drop to git. Add an opt-in --autorebase flag that:
+
+  1. Detects divergence (already done — that's what triggers the ff-only failure)
+  2. Inspects safety:
+     - Count local-ahead and remote-ahead commits
+     - Compute file-path overlap: git log --name-only @{u}..HEAD vs HEAD..@{u}
+     - If no overlap AND working tree is clean (or autoStash is on) → safe
+     - If overlap → fall back to today's behavior (refuse + hint)
+  3. On safe: run git pull --rebase + report the rebased commits
+  4. On unsafe: today's --ff-only error + hint, plus surface 'overlap detected on: <paths>' so the user knows why
+
+  Config: aida.toml [pull] autorebase = 'safe' | 'always' | 'never' (default 'never' to preserve today's behavior). --autorebase flag overrides.
+
+  Composes with TASK-43 (aida pull baseline) and TASK-54 (aida push behind-detection). Counterpart agent-side discipline saved as feedback_fetch_before_commit memory.
+
+  Triggered by 2026-05-13 incident: user's git pull hit divergent-branches error after agent committed locally on stale main while PR #19 merged.
+
+  ## Acceptance
+
+  - [ ] aida pull --autorebase flag implemented
+  - [ ] File-path overlap inspection drives safe vs unsafe decision
+  - [ ] aida.toml [pull] autorebase config respected
+  - [ ] On safe rebase: report rebased commits inline (not just 'rebase complete')
+  - [ ] On unsafe: surface overlap paths so user can resolve manually
+  - [ ] Docs: CLAUDE.md mentions the flag + when to enable autorebase='safe' globally
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T05:34:22.067699133Z
+modified_at: 2026-05-13T05:34:22.067699133Z
+req_type: Task
+tags:
+- git
+- pull
+- rebase
+- tooling
