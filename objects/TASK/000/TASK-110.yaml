@@ -1,0 +1,68 @@
+id: 019e1ffe-0ba5-7a23-9a8a-6f655be09761
+spec_id: TASK-110
+agreed_id: TASK-110
+title: '/aida-pr next-steps block: reorder to End implementer → Wait CI → Start reviewer (currently inverted)'
+description: |-
+  Today /aida-pr produces a 'Next steps (recommended order)' block (aida-core/templates/skills/aida-pr.md:259-263 success template, :271-275 auto-queue-failed template) listing:
+
+  1. Start review session
+  2. Wait for CI to settle first
+  3. End implementer session
+
+  The ordering is inverted. Ending the implementer session should come FIRST (it's a prerequisite for the reviewer session, not cleanup). Suggested reorder, with CI handling sequenced properly:
+
+  ## Correct ordering
+
+  Conservative (assume CI might fail):
+  1. ▶ Wait for CI to settle → gh run watch (block until green) — STAY in implementer session so you can push fixup commits if CI fails
+  2. ⏵ End implementer session once green → Ctrl+D + aida session end <session-id> from parent shell
+  3. 🚪 Start review session → aida queue work <STORY-X>
+
+  Or optimistic (CI usually passes, get reviewer queued in parallel):
+  1. ▶ End implementer session → release lease, clean worktree
+  2. ⏵ Start review session → aida queue work <STORY-X>
+  3. (background: gh run watch — review can proceed independent of CI in most cases)
+
+  The currently-shipped ordering is neither — it puts 'start review' first while implementer lease is still held. That risks lease overlap (reviewer would need --steal to claim the same scope), worktree confusion, and statusline showing wrong role.
+
+  ## Why end-first matters
+
+  - Implementer lease still owns the STORY/PR scope. Reviewer session on same scope would conflict or require --steal (intended for stuck-lease recovery, not normal handoffs).
+  - Implementer worktree stays on disk + checked out — disk + cognitive overhead.
+  - Statusline shows role:implementer; commands accidentally run from that shell apply to wrong role.
+  - Queue items routed to 'implementer' might land while role is 'done but not ended.'
+
+  ## CI-failure exception
+
+  If CI fails, the implementer session is where you'd push fixup commits. So 'wait for CI in implementer' before 'end implementer' is the conservative path. The current text already supports this — it just doesn't sequence it correctly.
+
+  ## Files to edit
+
+  aida-core/templates/skills/aida-pr.md
+  - Lines 259-263: success template (auto-queue succeeded variant)
+  - Lines 271-275: auto-queue-skipped/failed variant
+
+  Both blocks need the same reorder. Glyph convention preserved (▶/⏵/🚪 — see line 246).
+
+  ## Acceptance
+
+  - [ ] Both Next-Steps templates in aida-pr.md reordered to End → Start (or Wait-CI → End → Start for conservative path)
+  - [ ] Skill instruction text (line 230-234) updated to describe new ordering rationale
+  - [ ] Sister skills /aida-pickup and /aida-review checked for analogous lifecycle-ordering bugs (grep for 'Next steps')
+  - [ ] Brief test that the rendered output makes sense in both auto-queue branches
+  - [ ] make sync-templates verifies the change picks up symlinks (this is the master copy)
+
+  trace:TASK-87 (the original Next-steps block introduction, per the comment at line 230)
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T06:20:03.365833533Z
+modified_at: 2026-05-13T06:20:03.365833533Z
+req_type: Task
+tags:
+- aida-pr
+- ordering
+- session-lifecycle
+- skill
+- workflow
