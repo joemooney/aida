@@ -1,0 +1,73 @@
+id: 019e2000-f3ad-7a31-9c80-e73d4fe3a341
+spec_id: TASK-112
+agreed_id: TASK-112
+title: 'aida queue work --resume: relaunch claude with prior session''s conversation history'
+description: |-
+  Today aida queue work always spawns a fresh claude session. Claude's conversation JSONL on disk preserves the full context of what was done — every decision, search, tool use, commit rationale. Resuming that session when re-picking up the same scope avoids cold-launching with no memory.
+
+  ## Use cases
+
+  1. CI fails after session end → resume to fix without losing context (composes with TASK-111: when TASK-111's CI-aware end warns about red CI, it can mention 'you can always come back via aida queue work --resume <SPEC>')
+  2. Reviewer found a bug → implementer resumes prior session, fixes, re-PRs. Full conversation continuity across the implementer→reviewer→fixup loop.
+  3. Multi-day work → end session at end of day, resume next morning with full thread intact (today the alternative is keeping a session open indefinitely or losing context).
+  4. Pickup by a different agent later → if claude conversation is still relevant, resume is a clean handoff signal.
+
+  ## Behavior
+
+  aida queue work STORY-86 --resume — use most recent recorded claude session for this scope
+  aida queue work STORY-86 --resume <session-id> — use specific session ID
+  aida queue work STORY-86 --fresh — today's behavior (cold launch)
+  aida queue work STORY-86 — prompt if previous claude session exists; default fresh if none
+
+  aida queue work --list-sessions STORY-86 — show recorded claude sessions for this scope, most recent first
+
+  ## Implementation pieces
+
+  1. Capture claude session ID at launch — claude --print-session-id or similar; also visible as JSONL filename under ~/.claude/projects/<project>/<id>.jsonl. Record in AIDA session manifest's claude_session_id field.
+  2. Manifest lookup — when aida queue work is invoked, look across past AIDA session manifests for matching scope. Surface most-recent claude_session_id.
+  3. Worktree handling — if old worktree was cleaned up by previous aida session end, recreate it with same branch. If still around (some session-end paths leave it), reuse and skip recreate.
+  4. Spawn — claude --resume <session-id> instead of fresh claude. The worktree CWD is what matters; the resume flag pulls in the conversation history.
+  5. Pre-resume fresh-pull — same path as TASK-99: aida fetch + pull both legs before launching claude.
+
+  ## Edge cases
+
+  - **Compacted sessions** — claude's context compactor may have summarized the relevant detail away. Resume still works, just with reduced raw history. Surface a warning when resuming a compacted session: 'this session was compacted at <timestamp>; some detail may be summarized.'
+  - **Multi-node** — claude session JSONL is per-machine. If user invokes --resume on a machine that doesn't have the JSONL, fail gracefully: 'no claude session found locally for this scope (last recorded on node:<other>). Use --fresh or work from that node.'
+  - **Multiple past sessions on same scope** — STORY-86 might have had 3 prior AIDA sessions. Default to most recent. --list-sessions shows all.
+  - **Session corruption** — JSONL exists but malformed. Detect, fall back to fresh with warning.
+  - **claude --resume failure** — if claude itself refuses the resume (e.g., version mismatch), fall back to fresh with warning.
+
+  ## Composition
+
+  - TASK-111 (CI-aware session end): when CI red and user chooses 'End anyway', surface 'you can resume via aida queue work --resume <SPEC>' in the end summary.
+  - TASK-99 (queue work pulls code): resume path needs the same fresh-pull before launching claude. Reuse the same code path.
+  - TASK-95 (queue work pre-populates manifest from plan): orthogonal — plan content is independent of conversation history; both should work together.
+  - STORY-114 (/aida-rebase): resume path may want to invoke /aida-rebase as a pre-launch check (if branch is stale, surface before resuming).
+
+  ## Why this matters
+
+  Cold-launching claude on the same scope is wasteful: the model has to re-orient (read files, search the codebase, re-understand decisions) before doing useful work. Resume eliminates that cold-start tax. For the implementer→reviewer→fixup loop specifically, the implementer's cold-restart cost is exactly what makes 'small fixup commits' feel disproportionately expensive — resuming makes them cheap.
+
+  ## Acceptance
+
+  - [ ] aida queue work --resume flag implemented; --fresh flag implemented; default prompts when ambiguous
+  - [ ] AIDA session manifest records claude_session_id when launched
+  - [ ] aida queue work --list-sessions enumerates prior claude sessions for a scope
+  - [ ] Worktree recreation path works when prior worktree was cleaned up
+  - [ ] All 5 edge cases above handled with graceful fallback (compacted / multi-node / multiple / corrupt / resume-refused)
+  - [ ] Pre-resume fresh-pull fires (composes with TASK-99)
+  - [ ] TASK-111's end summary updated to mention resume option when CI failed (composes)
+  - [ ] Tests cover fresh / resume / resume-failure / no-prior-session paths
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T06:23:13.837377870Z
+modified_at: 2026-05-13T06:23:13.837377870Z
+req_type: Task
+tags:
+- claude
+- continuity
+- resume
+- session
+- workflow
