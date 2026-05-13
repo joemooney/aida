@@ -139,13 +139,17 @@ aida queue done <spec_id>
 ```
 
 This is one atomic step that:
-- Sets status to Completed
+- Sets status to **Done** (STORY-86: work finished on a branch, not yet
+  merged to main). `aida pull` / `aida db sync --pull` automatically
+  bumps `Done → Completed` once a commit referencing the spec lands on
+  the default branch, so you don't need a second command after the PR
+  merges.
 - Removes the item from the queue
 - Stamps the manifest row's `completed_at` (when a session manifest
   covers the current session) so `aida session show --plan` flips
   ✓ Done
 
-Equivalent to: `aida edit <spec_id> --status completed && aida queue remove <spec_id>`
+Equivalent to: `aida edit <spec_id> --status done && aida queue remove <spec_id>`
 
 ### Step 6: Next steps (state-aware) — trace:TASK-87
 

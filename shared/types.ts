@@ -4,11 +4,11 @@
 
 // It is used to keep Rust and TypeScript types in sync.
 
-export type RequirementStatus = "Draft" | "Approved" | "Planned" | "InProgress" | "Completed" | "Rejected";
+export type RequirementStatus = "Draft" | "Approved" | "Planned" | "InProgress" | "Done" | "Completed" | "Rejected";
 
 export type RequirementPriority = "High" | "Medium" | "Low";
 
-export type RequirementType = "Functional" | "NonFunctional" | "System" | "User" | "ChangeRequest" | "Bug" | "Epic" | "Story" | "Task" | "Spike" | "Sprint" | "Folder" | "Meta";
+export type RequirementType = "Functional" | "NonFunctional" | "System" | "User" | "ChangeRequest" | "Bug" | "Epic" | "Story" | "Task" | "Spike" | "Sprint" | "Folder" | "Meta" | "Principle" | "Vision" | "Constraint" | "Decision" | "Term" | "Doc";
 
 export type MetaSubtype = "Prompt" | "Skill" | "Command" | "Template" | "Config";
 
@@ -550,7 +550,20 @@ implemented_at?: string | null,
 /**
  * Who performed the implementation
  */
-implemented_by?: string | null, };
+implemented_by?: string | null, 
+/**
+ * When the auto-bump from `Done` → `Completed` fired (i.e. when a
+ * commit referencing this spec landed on the default branch).
+ * Stamped by the `aida pull` auto-bump path, not by `aida queue done`.
+ * trace:STORY-86 | ai:claude
+ */
+completed_at?: string | null, 
+/**
+ * The default-branch commit SHA that triggered the auto-bump.
+ * Stamped alongside `completed_at`.
+ * trace:STORY-86 | ai:claude
+ */
+completion_sha?: string | null, };
 
 export type Comment = { 
 /**
@@ -668,13 +681,14 @@ id: string,
 /**
  * Human-friendly specification ID (e.g., "SPEC-001")
  */
-spec_id: string | null,
+spec_id: string | null, 
 /**
  * Short agreed ID assigned at merge-to-trunk (e.g., "FR-423").
  * Only populated in distributed mode after the merge gate runs.
+ * In centralized mode, spec_id is already the short form so this is unused.
  * Both spec_id and agreed_id permanently resolve to the same UUID.
  */
-agreed_id?: string | null,
+agreed_id?: string | null, 
 /**
  * Optional prefix override for the spec_id (e.g., "SEC" for security requirements)
  * If set, uses this prefix instead of deriving from feature/type
@@ -1101,17 +1115,3 @@ export type ImproveDescriptionResponse = { improved_description: string, changes
 export type GeneratedChild = { title: string, description: string, type: string, rationale: string, };
 
 export type GenerateChildrenResponse = { suggested_children: Array<GeneratedChild>, };
-
-// Queue entry type (STORY-0369)
-export type QueueEntry = {
-    requirementId: string;
-    specId: string | null;
-    title: string;
-    status: string;
-    priority: string;
-    reqType: string;
-    position: number;
-    addedBy: string;
-    note: string | null;
-    addedAt: string;
-};

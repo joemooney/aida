@@ -1,6 +1,6 @@
 ---
 name: aida-pr
-description: Wrap up the current batch of commits and open a pull request with linked specs and a test plan. Walks `git log <base>..HEAD` to derive REQ-IDs, confirms they're all Completed, pushes, drafts the PR body in the established batch format, and runs `gh pr create` after user sign-off.
+description: Wrap up the current batch of commits and open a pull request with linked specs and a test plan. Walks `git log <base>..HEAD` to derive REQ-IDs, confirms they're all Done (or Completed), pushes, drafts the PR body in the established batch format, and runs `gh pr create` after user sign-off.
 disable-model-invocation: true
 allowed-tools:
   - Bash
@@ -22,7 +22,18 @@ Use this skill when:
 
 ## Core Philosophy
 
-**Every shipped commit links back to a Completed requirement.** A PR composed of commits whose REQ-IDs are still `In Progress` is a sign the batch isn't actually done — pause and surface that to the user rather than open a misleading PR.
+**Every shipped commit links back to a finished requirement.** STORY-86
+split the post-implementation lifecycle into two states:
+
+- `Done` — work finished on a branch. This is the expected state for
+  every REQ-ID in a fresh PR. `aida queue done` flips here.
+- `Completed` — merged to the default branch. `aida pull` auto-bumps
+  `Done → Completed` once the referencing commit lands.
+
+A PR composed of commits whose REQ-IDs are still `In Progress` /
+`Approved` is a sign the batch isn't actually done — pause and surface
+that to the user rather than open a misleading PR. `Done` and
+`Completed` are both green-light states for opening the PR.
 
 ## Workflow
 
@@ -47,12 +58,15 @@ aida show <REQ-ID>            # for each derived id
 ```
 
 Collect a status table:
-- `Completed` — green check
+- `Completed` — green check (already merged on a previous PR; can ship)
+- `Done` — green check (STORY-86: work finished on this branch; expected
+  state for fresh batches; will auto-bump to Completed once the PR
+  merges and `aida pull` runs)
 - `In Progress` / `Approved` — yellow warning, this batch isn't actually done
 - `Rejected` — red error, this commit shouldn't be in the batch
 - not found — red error, commit references a deleted/typo'd ID
 
-If any non-`Completed` items exist, STOP and report them to the user with the matching commit SHAs. Ask: "ship anyway?" — `--force` (or explicit user confirmation) bypasses; default is to refuse.
+If any non-`Done` / non-`Completed` items exist, STOP and report them to the user with the matching commit SHAs. Ask: "ship anyway?" — `--force` (or explicit user confirmation) bypasses; default is to refuse.
 
 ### 4. Pre-flight: cargo fmt --check (Rust only) — trace:TASK-61
 
@@ -80,7 +94,7 @@ Bypass: `--skip-fmt-check` for the rare case where drift is intentional (e.g. an
 
 ### 5. Attach an implementation summary comment per spec (STORY-81)
 
-For each `Completed` REQ-ID derived in step 2, run:
+For each `Done` / `Completed` REQ-ID derived in step 2, run:
 
 ```bash
 aida comment add <REQ-ID> "$(cat <<'EOF'

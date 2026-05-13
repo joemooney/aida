@@ -403,7 +403,11 @@ pub fn build_improve_prompt(req: &Requirement, store: &RequirementsStore) -> Str
     let config = &store.ai_prompts;
     let req_type = req.req_type.to_string();
 
-    // Find examples of well-written requirements (completed ones with descriptions)
+    // Find examples of well-written requirements (mature ones with
+    // descriptions). STORY-86: `Done` is the new "work finished on a
+    // branch" state and qualifies as mature for example-extraction
+    // purposes — no reason to wait for the merge before using a
+    // spec as a few-shot prompt.
     let examples: Vec<String> = store
         .requirements
         .iter()
@@ -411,7 +415,7 @@ pub fn build_improve_prompt(req: &Requirement, store: &RequirementsStore) -> Str
             r.id != req.id
                 && !r.archived
                 && r.description.len() > 100
-                && r.status.to_string() == "Completed"
+                && matches!(r.status.to_string().as_str(), "Done" | "Completed")
         })
         .take(2)
         .map(|r| {

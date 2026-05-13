@@ -186,7 +186,8 @@ Always verify CLI arguments with `aida <command> --help`. Common parameters:
 
 - `--type` (lowercase): `functional`, `non-functional`, `system`, `user`, `bug`, `epic`, `story`, `task`, `spike`, `sprint`, `folder`, `meta`, `doc`
 - `--feature`: feature category name (NOT a type)
-- `--status`: `draft`, `approved`, `in-progress`, `completed`, `rejected`
+- `--status`: `draft`, `approved`, `planned`, `in-progress`, `done`, `completed`, `rejected`
+  - **`done` vs `completed` (STORY-86)**: `done` means "work finished on a branch" (set by `aida queue done`). `completed` means "merged to the default branch." `aida pull` and `aida db sync --pull` auto-bump `done → completed` when a commit referencing the spec lands on main, so you typically don't set `--status completed` manually — let the merge promote it.
 - `--priority`: `high`, `medium`, `low`
 
 ### Requirement types

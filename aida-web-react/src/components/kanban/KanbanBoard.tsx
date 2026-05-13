@@ -38,6 +38,7 @@ function emptyColumns(): Record<RequirementStatus, string[]> {
     Approved: [],
     Planned: [],
     InProgress: [],
+    Done: [],
     Completed: [],
     Rejected: [],
   };
@@ -74,6 +75,7 @@ export function KanbanBoard() {
     Approved: false,
     Planned: false,
     InProgress: false,
+    Done: false,
     Completed: false,
     Rejected: false,
   });
