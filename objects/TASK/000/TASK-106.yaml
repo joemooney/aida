@@ -1,0 +1,46 @@
+id: 019e1ff2-8a6d-7092-98ea-b16379932537
+spec_id: TASK-106
+agreed_id: TASK-106
+title: 'aida push / pull: --code-only and --store-only flags + discoverability improvements'
+description: |-
+  Closes the immediate cadence-mismatch friction: store updates happen continuously during work, code pushes are discrete milestones. Today aida push bundles both. The bundle is fine when both legs have something to push (common case); friction when you want to push store updates without pushing unready code commits.
+
+  ## Flags to add
+
+  aida push --store-only — pushes orphan aida-store branch, skips code leg
+  aida push --code-only — pushes code branch, skips store leg
+  aida push — current bundle behavior (default unchanged for backwards compat)
+
+  aida pull --store-only — pulls orphan aida-store branch only
+  aida pull --code-only — pulls code branch only
+  aida pull — current bundle behavior (default unchanged)
+
+  ## Discoverability improvements (folded in)
+
+  The conversation that prompted this TASK started with the user saying 'I misunderstood that aida push does today.' Help text should make the two-leg behavior unmissable:
+
+  1. aida push --help opening line should explicitly say: 'Push code branch AND orphan aida-store branch to origin. Use --code-only or --store-only to scope.'
+  2. Pre-push summary (the existing 'Pushing code main → origin' / 'Pushing store aida-store → origin' output) should appear BEFORE the actual push when run interactively, with a confirmation prompt only when both legs have commits to push. Skip the prompt when one leg is empty (no surprise).
+  3. aida pull mirrored.
+
+  ## Acceptance
+
+  - [ ] aida push --store-only / --code-only implemented; mutual-exclusion check between them
+  - [ ] aida pull --store-only / --code-only mirrored
+  - [ ] aida push --help and aida pull --help opening lines name the two-leg behavior
+  - [ ] Pre-action summary shows what each leg will do; only prompts when ambiguous
+  - [ ] Tests cover all 4 flag combinations + default
+  - [ ] AIDA_PUSH_DEFAULT env var optional for users who want to flip the default scope
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T06:07:29.389071454Z
+modified_at: 2026-05-13T06:07:29.389071454Z
+req_type: Task
+tags:
+- discoverability
+- flags
+- granularity
+- pull
+- push
