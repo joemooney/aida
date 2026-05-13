@@ -1,0 +1,35 @@
+id: 019e1f98-8e83-7ad0-aea0-3a9217e72cf6
+spec_id: TASK-96
+agreed_id: TASK-96
+title: 'aida queue done: extract Followups section from plan file, offer to file each as TASK'
+description: |-
+  /ultraplan plans end with a 'Followups' section enumerating out-of-scope items to file as TASKs at completion time (e.g., for STORY-86: 'revert handling', 'statusline color for Done', 'manual reconcile-status subcommand'). Today these would be forgotten — the implementer marks done, the followup list lives only in the docs/plans/ file, and nobody reads it again.
+
+  Wire aida queue done <spec> (or the auto-bump on merge — see STORY-86) to:
+
+  1. Locate any matching docs/plans/ file
+  2. Parse its Followups section (delimited markdown header, e.g. '## Followups')
+  3. For each bullet, present interactive prompt: 'File this as a TASK? [y/N/skip] <bullet text>'
+  4. On y: aida add --type task --status approved --parent <original-spec> --title "<bullet text>"
+
+  Could batch via --yes for autonomous flow (file all without prompting). Hooks into the auto-bump path (STORY-86's auto_bump_done_to_completed): when status flips Done → Completed, also fire the followup extraction.
+
+  ## Acceptance
+
+  - [ ] aida queue done parses Followups section if plan file exists
+  - [ ] Interactive y/N/skip prompt per bullet (with --yes for batch)
+  - [ ] Each accepted followup filed as TASK with --parent = original spec
+  - [ ] Skipped/declined items logged so the user can rerun later if needed
+  - [ ] STORY-86's auto-bump path also triggers extraction (post-merge)
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T04:29:12.195301922Z
+modified_at: 2026-05-13T04:29:12.195301922Z
+req_type: Task
+tags:
+- automation
+- followup
+- plan
+- queue
