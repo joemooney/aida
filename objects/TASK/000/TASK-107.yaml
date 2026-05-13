@@ -1,0 +1,53 @@
+id: 019e1ff2-afeb-71b2-9fc0-db7cd04d8d0e
+spec_id: TASK-107
+agreed_id: TASK-107
+title: 'aida fetch: cheap two-leg refresh of remote refs (no merge, no worktree change)'
+description: |-
+  Missing read-only counterpart to aida pull. git fetch updates remote refs without touching the worktree or merging; aida fetch does the same across BOTH legs (code + orphan store) in one command, with cache-invalidation hooks.
+
+  Today: code that needs to refresh remote refs (statusline behind-count, queue precheck, rebase dry-run probe) has to call git fetch twice (code branch + aida-store branch). Each call shells out to git separately, no cache update happens between them, and the AIDA worktree state stays unsynchronized with what's now visible on remote.
+
+  ## Behavior
+
+  aida fetch (no args) — fetches both legs from origin
+  aida fetch --code-only — fetches code branch refs only
+  aida fetch --store-only — fetches orphan store refs only
+  aida fetch --quiet — suppress progress, useful for background calls
+
+  ## Side effects
+
+  1. No worktree change. No merge. No rebase.
+  2. Cache: bump the 'remote-refs-last-fetched' timestamp in .aida/cache.db so other commands know if they're using stale data.
+  3. Optional: surface 'N new commits visible on origin' summary at end. Skip when --quiet.
+
+  ## Callers (existing + planned)
+
+  - TASK-101 (statusline behind-count): call aida fetch --quiet --store-only periodically (TTL-controlled)
+  - TASK-103 (aida rebase --dry-run): aida fetch before classification
+  - TASK-98 (/aida-commit precheck): aida fetch --code-only before behind-check
+  - TASK-99 (aida queue work): replace its existing fetch logic with aida fetch
+  - TASK-100 (aida queue done stale-base): aida fetch before behind-check
+  - User-facing: 'is anyone else pushing?' before starting work
+
+  Centralizes the fetch logic — same reasoning as STORY-114's centralized rebase verb.
+
+  ## Acceptance
+
+  - [ ] aida fetch subcommand implemented
+  - [ ] --code-only / --store-only flags
+  - [ ] --quiet flag for background callers
+  - [ ] Cache invalidation hook fires after successful fetch
+  - [ ] At least one existing caller (e.g. TASK-99's logic) refactored to use aida fetch
+  - [ ] Help text + AIDA.md daily-commands section mention it
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T06:07:38.987173919Z
+modified_at: 2026-05-13T06:07:38.987173919Z
+req_type: Task
+tags:
+- cache
+- fetch
+- git
+- read-only
