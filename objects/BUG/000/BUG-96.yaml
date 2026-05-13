@@ -1,0 +1,64 @@
+id: 019e21ea-e521-76e2-9b34-52626ea25a4b
+spec_id: BUG-96
+agreed_id: BUG-96
+title: aida persist-path deletes YAML files that fail to parse (silent data loss)
+description: |-
+  Critical data-loss bug. When aida writes to the orphan store (any add / edit / comment-add), the persist-path scans the working tree for previously-known specs. Any YAML file that fails to deserialize is silently deleted in the same commit as the new add.
+
+  ## Repro
+
+  1. Build aida from source A (e.g. main, missing enum variant V)
+  2. The orphan store has YAML files written by aida built from source B with variant V (e.g. RequirementStatus::Done)
+  3. Run any aida write command — aida add, aida edit, aida comment add
+  4. The new add commits; in the same commit, every parse-failing YAML is deleted
+  5. The commit message reads 'chore: update N requirements, delete M' — the M are the silently-lost specs
+
+  ## Real incident — 2026-05-13
+
+  - Orphan store had STORY-86 + 5 living-doc specs (VIS-1, CON-1, ADR-1, PRIN-1, TERM-1) written by epic-21-2's binary (had Done variant)
+  - User switched to main repo (binary lacked Done after cargo clean and rebuild)
+  - User ran aida add ... to file TASK-0396
+  - Commit ab1580ee resulted: 'chore: update 1 requirements, delete 6' — TASK-0396 added, 6 specs deleted
+
+  Recovery required manually restoring YAML files from git history (ab1580ee^) and rebuilding the cache with a binary that could parse them.
+
+  ## Expected behavior
+
+  Parse failures should skip-and-warn ONLY. The warning machinery already exists ('Warning: failed to load STORY-86: Failed to parse ...') — but the persist-path goes further and DELETES the files. That delete step is the bug.
+
+  Skip-and-warn means: parse fails, log warning, continue. The req stays in the cache and on disk untouched. Next time a binary that CAN parse the file runs, the req loads normally.
+
+  ## Severity rationale
+
+  This is the EXACT scenario AIDA's multi-worktree / multi-machine / multi-version design encourages:
+  - Implementer in worktree A builds + writes new format
+  - Reviewer in worktree B has older binary
+  - Both share the orphan store via the aida-store branch
+  - Reviewer's binary deletes implementer's work silently on next write
+
+  Without this fix, AIDA's distributed model is unsafe for any in-progress work that adds new fields/variants — exactly the work most likely to be in flight.
+
+  ## Fix sketch
+
+  Locate the persist-path code in aida-core (likely db/git_backend.rs or object_store.rs) and find where files are removed during a write commit. Replace 'delete unparseable' with 'leave unparseable alone, log warning'. Tests should cover: parse-fails-do-not-delete; parse-fails-with-add-do-not-delete; subsequent-parseable-binary-can-read-the-untouched-file.
+
+  ## Acceptance
+
+  - [ ] Parse failures NEVER trigger file deletion
+  - [ ] Skip-and-warn remains the only behavior on parse failure
+  - [ ] Test: write to store with a binary that can't parse existing yaml — assert unparseable files survive the commit
+  - [ ] Test: write a new spec adjacent to unparseable files — assert only the new file is added, none deleted
+  - [ ] docs/git-workflow.md or session-lifecycle.md updated with the safety guarantee (parse failures are recoverable; never auto-cleaned)
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T15:18:22.753480821Z
+modified_at: 2026-05-13T15:18:22.753480821Z
+req_type: Bug
+tags:
+- critical
+- data-loss
+- parse-failure
+- persist
+- serde
