@@ -152,6 +152,44 @@ impl Scaffolder {
              role you expect isn't there, you forgot to `aida role enter <name>` before\n\
              starting the session.\n\
              \n\
+             ## When `aida pull` refuses (divergent branches)\n\
+             \n\
+             `aida pull` is two operations in one: a `git pull` of your code branch\n\
+             and a `git pull --rebase` of the orphan `aida-store` branch. The two\n\
+             legs are deliberately asymmetric:\n\
+             \n\
+             - **Code leg**: `git pull --ff-only` — refuses if the branch has\n\
+             \x20  diverged from origin. Won't surprise your working tree with an\n\
+             \x20  auto-rebase.\n\
+             - **Store leg**: `git pull --rebase` — store conflicts are rare and\n\
+             \x20  the worktree is AIDA-managed.\n\
+             \n\
+             When the code leg refuses (or raw `git pull` complains about divergent\n\
+             branches), the recovery recipe:\n\
+             \n\
+             ```bash\n\
+             git fetch origin \"$(git rev-parse --abbrev-ref HEAD)\"\n\
+             git log --oneline @{u}..HEAD     # what you have that origin doesn't\n\
+             git log --oneline HEAD..@{u}     # what origin has that you don't\n\
+             git log --name-only @{u}..HEAD --pretty= | sort -u   # files you touched\n\
+             git log --name-only HEAD..@{u} --pretty= | sort -u   # files they touched\n\
+             # No overlap → safe: git pull --rebase\n\
+             # Overlap   → inspect; rebase + resolve, or git rebase --abort\n\
+             ```\n\
+             \n\
+             To make raw `git pull` Just Work without per-incident decisions (one-time,\n\
+             machine-global):\n\
+             \n\
+             ```bash\n\
+             git config --global pull.rebase true\n\
+             git config --global rebase.autoStash true\n\
+             git config --global advice.diverging false\n\
+             ```\n\
+             \n\
+             Trade-off: silent auto-rebase for fewer manual decisions. `autoStash`\n\
+             preserves uncommitted changes across the rebase. If you'd rather see the\n\
+             prompt each time, leave these unset and the recipe above is your fallback.\n\
+             \n\
              ## Review workflow\n\
              \n\
              `aida review prompt --pr N` (or `--specs FR-1,STORY-2,…`) generates a\n\

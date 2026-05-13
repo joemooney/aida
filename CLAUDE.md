@@ -97,6 +97,32 @@ aida-off                               # alias for: eval "$(aida dev deactivate)
 
 For releases, `scripts/release.sh {major|minor|patch|<explicit>}` bumps the workspace version, generates tag notes from `git log <prev>..HEAD`, commits, tags, and pushes (which triggers `.github/workflows/release.yml` to build and publish binary tarballs).
 
+### Divergent-branch recovery
+
+`aida pull` for the **code** leg uses `git pull --ff-only` by design (see `aida-cli/src/main.rs:20120` — refuses to surprise the working tree with auto-rebase). On divergence it prints `git pull --rebase origin main` as a hint. The **store** leg uses `--rebase` (line 19678) because store conflicts are rare and the worktree is AIDA-managed.
+
+When the code leg refuses (or raw `git pull` hits "Need to specify how to reconcile"):
+
+```bash
+git fetch origin "$(git rev-parse --abbrev-ref HEAD)"
+git log --oneline @{u}..HEAD     # what we have that origin doesn't
+git log --oneline HEAD..@{u}     # what origin has that we don't
+git log --name-only @{u}..HEAD --pretty= | sort -u   # files we touched
+git log --name-only HEAD..@{u} --pretty= | sort -u   # files they touched
+# No overlap → safe: git pull --rebase
+# Overlap   → inspect; rebase + resolve, or git rebase --abort
+```
+
+Global config that makes raw `git pull` Just Work without per-incident decisions:
+
+```bash
+git config --global pull.rebase true
+git config --global rebase.autoStash true
+git config --global advice.diverging false
+```
+
+Tooling gaps tracked: TASK-97 (`aida pull --autorebase` opt-in safe-rebase), TASK-98 (`/aida-commit` pre-commit fetch + behind-check).
+
 ## Code traceability
 
 ### Inline trace comments
