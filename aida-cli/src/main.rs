@@ -7579,9 +7579,11 @@ fn emit_role_enter_eval(
                 map
             })
             .unwrap_or_default();
-        let user_id = std::env::var("AIDA_USER")
-            .or_else(|_| std::env::var("USER"))
-            .unwrap_or_else(|_| "default".to_string());
+        // BUG-89: route through the canonical helper so the role-show
+        // queue head matches what `aida queue list` would show in the
+        // same shell (previously this path skipped the USERNAME
+        // fallback). trace:BUG-89 | ai:claude
+        let user_id = current_user_id(None);
         let queue_for_role = storage
             .queue_list(&user_id, /* include_completed */ false)
             .map(|entries| {
@@ -9943,18 +9945,23 @@ fn entry_scope_session_match(
     if bypass {
         return true;
     }
+    // BUG-89: When the viewer has no active lease, do NOT apply the implicit
+    // scope/session filter. The implicit "match my scope/session" filter
+    // only makes sense WHEN you're in a session — without one, the user is
+    // asking from the global vantage point (e.g., the project root), so all
+    // routed items should be visible. STORY-57's filter is opt-in by being
+    // inside a scoped session, not opt-out by sitting outside one. Users
+    // who want strict scope filtering from outside can pass `--scope X`
+    // explicitly. trace:BUG-89 | ai:claude
+    let Some(lease) = self_lease else {
+        return true;
+    };
     if let Some(want_scope) = entry.for_scope.as_deref() {
-        let Some(lease) = self_lease else {
-            return false;
-        };
         if !lease.scope.eq_ignore_ascii_case(want_scope) {
             return false;
         }
     }
     if let Some(want_sess) = entry.for_session.as_deref() {
-        let Some(lease) = self_lease else {
-            return false;
-        };
         let n = want_sess.len().min(lease.id.len());
         if n < 4 {
             // Too short to be safely matched — bail out as no-match
@@ -16108,9 +16115,12 @@ mod statusline_tests {
             Some(&lease),
             false
         ));
-        // Scope-tagged entry without a lease → filtered (entry was for
-        // a session, this shell isn't in one).
-        assert!(!entry_scope_session_match(
+        // BUG-89: Scope-tagged entry without a lease → VISIBLE. The viewer
+        // is asking from outside any session (no lease), so the implicit
+        // scope filter does not apply — all routed items are shown. Inside
+        // a session, scope filtering still kicks in (covered above).
+        // trace:BUG-89 | ai:claude
+        assert!(entry_scope_session_match(
             &mk(Some("EPIC-20"), None),
             None,
             false
@@ -16127,10 +16137,18 @@ mod statusline_tests {
             Some(&lease),
             false
         ));
-        // Wrong session prefix is filtered.
+        // Wrong session prefix is filtered (only when there IS a lease to
+        // compare against). Without a lease, see the BUG-89 case below.
         assert!(!entry_scope_session_match(
             &mk(None, Some("99999999")),
             Some(&lease),
+            false
+        ));
+        // BUG-89: Session-tagged entry without a lease → VISIBLE. Same
+        // rationale as the scope case above. trace:BUG-89 | ai:claude
+        assert!(entry_scope_session_match(
+            &mk(None, Some("abcdef12")),
+            None,
             false
         ));
 
@@ -18046,10 +18064,10 @@ fn apply_color_mode(mode: &str) {
 /// Returns `None` if the file is missing or unreadable.
 /// trace:FR-1-041 | ai:claude
 fn read_queue_depth(project_root: &std::path::Path, role: Option<&str>) -> Option<usize> {
-    let user = std::env::var("AIDA_USER")
-        .or_else(|_| std::env::var("USER"))
-        .or_else(|_| std::env::var("USERNAME"))
-        .unwrap_or_else(|_| "default".to_string());
+    // BUG-89: route through the canonical helper so the statusline depth
+    // counts the same queue file `aida queue list` reads from in this
+    // shell. trace:BUG-89 | ai:claude
+    let user = current_user_id(None);
 
     let queue_path = project_root
         .join(".aida-store/registry/queues")
@@ -27024,17 +27042,37 @@ fn html_escape(s: &str) -> String {
         .replace('"', "&quot;")
 }
 
+/// Resolve the queue's "current user" identifier. Used by EVERY queue path
+/// (add, list, next, done, remove, move, work, role-show queue head, …) so
+/// items added in one shell are immediately visible in the same shell's
+/// `aida queue list` without flags.
+///
+/// Resolution order:
+///   1. Explicit `--user <id>` flag (override)
+///   2. `AIDA_USER` env var (set by sessions / agent harnesses)
+///   3. `USER` env var (POSIX shell convention)
+///   4. `USERNAME` env var (Windows fallback)
+///   5. The literal string "default" (last-ditch)
+///
+/// IMPORTANT: this is the SHELL's user identity, not the node identity from
+/// `~/.aida/node.toml`, the email in `[node]`, or the role's stored user_id.
+/// Those are different identity domains; mixing them caused BUG-89 (items
+/// invisible to their own queuer because list resolved to one identity and
+/// add resolved to another).
+/// trace:BUG-89 | ai:claude
+fn current_user_id(user_override: Option<&str>) -> String {
+    user_override.map(str::to_string).unwrap_or_else(|| {
+        std::env::var("AIDA_USER")
+            .or_else(|_| std::env::var("USER"))
+            .or_else(|_| std::env::var("USERNAME"))
+            .unwrap_or_else(|_| "default".to_string())
+    })
+}
+
 // trace:STORY-0368 | ai:claude
 /// Handle queue commands
 fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
-    let get_user = |user: &Option<String>| -> String {
-        user.clone().unwrap_or_else(|| {
-            std::env::var("AIDA_USER")
-                .or_else(|_| std::env::var("USER"))
-                .or_else(|_| std::env::var("USERNAME"))
-                .unwrap_or_else(|_| "default".to_string())
-        })
-    };
+    let get_user = |user: &Option<String>| -> String { current_user_id(user.as_deref()) };
 
     match cmd {
         QueueCommand::List {
@@ -27902,9 +27940,10 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             before,
             after,
         } => {
-            let user_id = std::env::var("AIDA_USER")
-                .or_else(|_| std::env::var("USER"))
-                .unwrap_or_else(|_| "default".to_string());
+            // BUG-89: route through the canonical helper so move resolves
+            // user_id the same way add/list do (previously this path
+            // skipped the USERNAME fallback). trace:BUG-89 | ai:claude
+            let user_id = current_user_id(None);
             let store = storage.load()?;
 
             let req = if let Ok(uuid) = uuid::Uuid::parse_str(id) {
