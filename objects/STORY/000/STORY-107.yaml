@@ -71,7 +71,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:51:25.341027642Z
-modified_at: 2026-05-13T03:58:41.316386827Z
+modified_at: 2026-05-13T05:48:47.575145883Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -327,6 +327,11 @@ comments:
     *Doc seed per EPIC-24. /ultraplan timeout observed 2026-05-13.*
   created_at: 2026-05-13T03:58:41.316386827Z
   modified_at: 2026-05-13T03:58:41.316386827Z
+- id: 019e1fe1-6c57-74a1-afcd-f7908e913dc4
+  author: joe
+  content: 'Added docs/positioning/vs-ultraplan.md (commit 8e5e4768) — sister to vs-ultrareview.md. Same thesis: /ultraplan drafts the prose, AIDA structures + verifies + executes. Grounded in the STORY-86 case study (docs/plans/2026-05-13-story-86-done-status.md). Index in docs/positioning/README.md updated.'
+  created_at: 2026-05-13T05:48:47.575145883Z
+  modified_at: 2026-05-13T05:48:47.575145883Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-12T16:33:02.328974663Z
