@@ -1,0 +1,73 @@
+id: 019e21d5-b8bb-7291-b093-259a326add49
+spec_id: TASK-220
+agreed_id: TASK-220
+title: 'aida status: unified status command (session + role + branch + CI + queue + cache)'
+description: |-
+  Today the where-am-I information is scattered: aida statusline (one-liner), aida session show, aida queue list, aida cache status, aida session leases. Each answers a sliver. No single 'what's my current state' command.
+
+  Add aida status as the unified-view command, analogous to git status. One screen, no flag-guessing.
+
+  ## Output shape
+
+  aida status (no args) shows:
+
+  Session: ID, scope, role, worktree, age
+  Role: current (from shell), PS1-prefixed indicator
+  Branch: name, working tree state, ahead/behind origin
+  PR: number, status, CI rollup (✓ passed / ⏱ in progress / ✗ failed per check)
+  Queue: items for current role, count, head
+  Cache: freshness, last-rebuilt timestamp
+
+  Each section graceful-degrades when its data isn't available (no session → skip Session block; no PR → skip PR block; gh missing → CI shows 'gh unavailable').
+
+  ## Flags
+
+  aida status              — default, all sections
+  aida status --short      — one-line summary (overlap with statusline; consolidate or differentiate)
+  aida status --json       — machine-readable
+  aida status --ci         — focus on CI section only
+  aida status --queue      — focus on queue only
+  aida status --no-ci      — skip the CI fetch (offline / fast path)
+
+  ## CI integration
+
+  The CI section uses gh under the hood. Reuse BUG-74's gh detection helper. When gh is missing or unauthenticated, surface 'CI: (gh unavailable — install/auth to see status)' rather than failing.
+
+  For the PR association: derive from current branch via gh pr view --json number,state,statusCheckRollup. Cache result with short TTL (~30s) so repeated calls don't spam the API.
+
+  ## Composes with
+
+  - TASK-111 (CI-aware session end): same underlying CI-state primitive — aida status reads it; aida session end reads + acts on it
+  - TASK-101 (statusline behind-count): aida status shows the full picture; statusline is the one-line subset
+  - TASK-218 (aida queue rework): if status detects 'Done waiting for review feedback', could suggest aida queue rework
+  - TUI vision (docs/session-lifecycle.md): aida status is the data layer; TUI is the visual surface
+  - BUG-74 (gh detection): reuse the helper
+
+  ## Why one command, not aida ci status subtree
+
+  Designed to be the spiritual cousin of git status — one verb, one screen. If aida ci ... later proves to need its own subcommand tree (aida ci watch, aida ci runs, aida ci failures), promote then. Don't over-decompose upfront.
+
+  ## Discovered via
+
+  2026-05-13 — user (in role:reviewer about to start PR-21 review) asked 'is there a command to check ci status? should we add that to maybe aida status or somewhere else.' AIDA today has no aida status at all; CI checking is done via gh directly.
+
+  ## Acceptance
+
+  - [ ] aida status implemented with all 6 sections (graceful-degrade per section)
+  - [ ] --short / --json / --ci / --queue / --no-ci flags
+  - [ ] CI section uses gh via BUG-74's detection helper; caches with TTL
+  - [ ] aida status --help text + cross-link from CLAUDE.md / AIDA.md daily-commands
+  - [ ] Tests cover gh-missing, no-PR-on-branch, no-session, and full-state paths
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T14:55:15.131575020Z
+modified_at: 2026-05-13T14:55:15.131575020Z
+req_type: Task
+tags:
+- ci
+- orchestration
+- status
+- tui-precursor
+- unified-view
