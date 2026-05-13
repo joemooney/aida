@@ -1,0 +1,65 @@
+id: 019e201b-7ca3-7160-af2b-e25435da1fc3
+spec_id: TASK-113
+agreed_id: TASK-113
+title: 'aida ultraplan SPEC: assemble rich prompt from SPEC context for /ultraplan invocation'
+description: |-
+  Direction A of AIDA/ultraplan integration (see docs/positioning/vs-ultraplan.md 'Tightening AIDA's integration with /ultraplan'). Today the user pastes a free-form prompt into /ultraplan. AIDA has rich context for any SPEC — description, acceptance criteria, comments, parent/child/sibling reqs, trace graph, plan template — that could be assembled into a structured prompt giving /ultraplan's three explorers something concrete to anchor on. Turns a 100-word user prompt into a 2000-word prompt with the full requirement graph behind it.
+
+  ## Shape
+
+  aida ultraplan SPEC-ID                  — assemble rich prompt, copy to clipboard
+  aida ultraplan SPEC-ID --browser        — open /ultraplan launch URL
+  aida ultraplan SPEC-ID --stdout         — print to stdout for piping
+  aida ultraplan SPEC-ID --json           — structured output for scripting
+
+  ## Assembled prompt structure
+
+  Plan the implementation of SPEC-ID: title.
+
+  Acceptance criteria: extracted from spec description's ## Acceptance section.
+
+  Context from related specs: parent, siblings, children — one-line summary each, focusing on composes/verifies/depends-on relations.
+
+  Plan must follow AIDA convention — inline the 11-section structure from TASK-92's template, or a summarized version to fit token budget.
+
+  Reusable helpers in this codebase: derived from trace-graph via TASK-94's logic.
+
+  Style notes: symbol refs preferred over line refs (refs drift fast). Order matters — sequence edits so each commit builds clean. Include verification script + Followups section per AIDA template.
+
+  Prompt size budget: aim for 2000-4000 tokens. Truncate sibling-spec summaries if too many; prefer parents + direct children + same-feature siblings.
+
+  ## Composes with
+
+  - TASK-92 (plan template) provides the 11-section structure
+  - TASK-94 (auto-derive Reusable helpers from trace graph) feeds the Reusable Helpers section
+  - TASK-95 (queue work pre-populates manifest from plan) closes the loop: prompt becomes plan becomes manifest
+  - /aida-plan skill could call this internally when user wants rich-context planning before deciding cloud vs local
+
+  ## Edge cases
+
+  1. SPEC has no acceptance criteria — emit placeholder + warn that plan will be weaker
+  2. SPEC has 50+ siblings — truncate intelligently, prefer composes/verifies/depends-on relations
+  3. SPEC has 0 trace comments — skip Reusable Helpers section
+  4. Browser open fails (no DISPLAY, headless) — fallback to clipboard + stdout
+  5. Clipboard tools missing — fallback to stdout + instruction to manually copy
+
+  ## Acceptance
+
+  - [ ] aida ultraplan SPEC subcommand implemented with all 4 flag modes
+  - [ ] Prompt assembled from SPEC + acceptance + sibling summaries + plan template + reusable helpers
+  - [ ] Token-budget management with intelligent truncation
+  - [ ] Clipboard / browser / stdout / json output paths working
+  - [ ] Tests cover the 5 edge cases above
+  - [ ] CLI help text + cross-link in docs/positioning/vs-ultraplan.md
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T06:52:12.835941228Z
+modified_at: 2026-05-13T06:52:12.835941228Z
+req_type: Task
+tags:
+- context
+- integration
+- prompt-assembly
+- ultraplan
