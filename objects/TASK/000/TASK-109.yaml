@@ -15,3 +15,7 @@ tags:
 - design
 - docs
 - reference
+relationships:
+- rel_type: Child
+  target_id: 019e1ff2-4f0c-7501-b5fc-098cbcc7edd8
+  created_at: 2026-05-13T06:07:57.475859931Z
