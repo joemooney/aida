@@ -59,12 +59,30 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:41:28.097562148Z
-modified_at: 2026-05-13T02:24:42.591077426Z
+modified_at: 2026-05-13T04:06:28.452685358Z
 req_type: Story
 relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-12T15:41:29.210745891Z
+comments:
+- id: 019e1f83-bf64-7430-979e-46e0b65fe6d2
+  author: joe
+  content: |-
+    Implemented via commits 97abf3b7 + 8804745f (on epic-23-2; PR pending):
+
+    - New aida-cli/src/workflow_hints.rs module: env (AIDA_HINTS) + project-config gating, stderr emit with dimmed ⓘ prefix
+    - Wired into `queue done`, `edit --status completed`, and `session end` success paths
+    - Two hint shapes: after_queue_drained (with branch commits-ahead context), after_session_end_with_pr (concrete PR# + review story id)
+    - New `aida config hints [true|false]` subcommand reads/writes [hints] workflow_hints in .aida/config.toml
+    - AutoQueueOutcome extended with optional pr_number + review_story_id (populated at Filed/AlreadyExists return sites)
+    - Follow-up fix (8804745f): queue-empty filter must mirror `aida queue list` — added scope + terminal-status + existence checks, otherwise stale/cross-scope queue entries suppressed every hint emission
+
+    Test status: 8 new workflow_hints unit tests; total aida-cli test count 263 → 269 → 269 (no regression). Dogfooded on this branch: hint fires correctly on the final `queue done` (cluster drained, 5 commits ahead).
+
+    Hooks deferred: queue add (head-changed one-liner), push (first-push hint). Low impact, can land as follow-ups.
+  created_at: 2026-05-13T04:06:28.452685358Z
+  modified_at: 2026-05-13T04:06:28.452685358Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-13T02:24:42.591077426Z
