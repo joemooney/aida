@@ -14399,7 +14399,12 @@ fn update_manifest_for_status(spec_id: &str, canonical_status: &str) {
     let lower = canonical_status.to_ascii_lowercase();
     let res = if lower == "in-progress" || lower == "in_progress" || lower == "in progress" {
         session_manifest::mark_started(&path, spec_id)
-    } else if lower == "completed" || lower == "rejected" {
+    } else if lower == "done" || lower == "completed" || lower == "rejected" {
+        // STORY-86: `Done` checks the manifest item off the same way
+        // `Completed` does. The cluster only cares "is this item visually
+        // shipped?" — both states qualify (Done = on branch, Completed =
+        // on main; either counts as "the work is no longer in flight").
+        // trace:STORY-86 | ai:claude
         session_manifest::mark_completed(&path, spec_id)
     } else {
         return; // draft/approved transitions don't move the manifest needle
@@ -27775,6 +27780,10 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                             "Approved" => status.blue(),
                             "Planned" => status.cyan(),
                             "In Progress" => status.yellow(),
+                            // trace:STORY-86 | ai:claude — bold bright-green
+                            // distinguishes "done on branch" from
+                            // "merged to main" (plain green).
+                            "Done" => status.bright_green().bold(),
                             "Completed" => status.green(),
                             "Rejected" => status.red(),
                             _ => status.normal(),
@@ -27908,6 +27917,8 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     "Approved" => status.blue(),
                     "Planned" => status.cyan(),
                     "In Progress" => status.yellow(),
+                    // trace:STORY-86 | ai:claude
+                    "Done" => status.bright_green().bold(),
                     "Completed" => status.green(),
                     "Rejected" => status.red(),
                     _ => status.normal(),
@@ -28858,7 +28869,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
 
             if !yes {
                 eprintln!(
-                    "Mark {} ({}) as completed and remove from queue?",
+                    "Mark {} ({}) as done and remove from queue?",
                     display_id.bold(),
                     req.title
                 );
@@ -28874,17 +28885,28 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 }
             }
 
-            // Update status to Completed via update_atomically — works
-            // across SQLite and git-canonical modes. set_status_from_str
-            // also clears any stale custom_status so the canonical enum
-            // value actually takes effect (BUG-1-025).
+            // Update status to Done via update_atomically — works across
+            // SQLite and git-canonical modes. set_status_from_str also
+            // clears any stale custom_status so the canonical enum value
+            // actually takes effect (BUG-1-025).
             // trace:BUG-1-025 | ai:claude
+            //
+            // STORY-86: `queue done` flips to **Done** (work finished on
+            // a branch), not Completed. The auto-bump scan in
+            // `aida pull` / `aida db sync --pull` advances Done →
+            // Completed once a referencing commit lands on the default
+            // branch. Existing call sites that say "completed" in their
+            // UI strings have been retargeted to "done" here; the
+            // `Completed` semantics ("shipped on main") are preserved.
+            // trace:STORY-86 | ai:claude
             //
             // STORY-81 Part 2: also stamp `implementation_info` so the
             // req permanently records who completed it and when, with
             // the AI source-tool when known. This survives the queue
             // entry's deletion (which happens right below) so post-
             // merge `aida show` still surfaces the completion context.
+            // `completed_at` / `completion_sha` are intentionally LEFT
+            // UNSET here — those are stamped by the STORY-86 auto-bump.
             // trace:STORY-81 | ai:claude
             let req_id = req.id;
             let now = chrono::Utc::now();
@@ -28892,7 +28914,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             let source_tool = std::env::var("AIDA_AI_TOOL").ok().filter(|s| !s.is_empty());
             storage.update_atomically(|s| {
                 if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-                    r.set_status_from_str("Completed");
+                    r.set_status_from_str("Done");
                     r.modified_at = now;
                     // Don't clobber prior `summary` / `risk_notes` /
                     // `test_coverage_notes` if the user / `/aida-pr`
@@ -28923,12 +28945,15 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // STORY-98: same reason as the BUG-65 hookup above — `queue
             // done` bypasses Command::Edit, so the manifest-flip path
             // there doesn't fire. Mirror it explicitly so `aida session
-            // show --plan` flips ✓ Done at completion time.
-            // trace:STORY-98 | ai:claude
-            update_manifest_for_status(spec_id, "Completed");
+            // show --plan` flips ✓ Done at completion time. STORY-86:
+            // pass "Done" since that's the canonical status now (manifest
+            // treats Done + Completed equivalently — both check the item
+            // off the planned cluster).
+            // trace:STORY-98 STORY-86 | ai:claude
+            update_manifest_for_status(spec_id, "Done");
 
             println!(
-                "{} {} marked completed and removed from queue.",
+                "{} {} marked done and removed from queue.",
                 "✓".green(),
                 display_id.bold()
             );
