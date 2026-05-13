@@ -147,11 +147,71 @@ This is one atomic step that:
 
 Equivalent to: `aida edit <spec_id> --status completed && aida queue remove <spec_id>`
 
-### Step 6: Loop
+### Step 6: Next steps (state-aware) — trace:TASK-87
 
-After step 5 succeeds, optionally suggest re-running pickup to grab the next
-item. Don't auto-loop without confirmation — the user may want to break,
-review, switch roles, or call it for the day.
+After step 5 succeeds, surface a structured `Next steps (recommended order):`
+block so the workflow self-guides instead of relying on improvised "want me
+to push?" prompts. Don't auto-execute — the user picks.
+
+**Detect state first.** Three signals decide which template to render:
+
+```bash
+aida session show --plan 2>/dev/null   # manifest rows + ✓/◐/○ status
+aida queue next 2>/dev/null            # is there another item routed to this role?
+aida session show 2>/dev/null | awk '/^Session /{print $2; exit}'   # session-id prefix
+```
+
+- **Manifest exists, all rows ✓ Done** → cluster drained
+- **Manifest exists, some ◐ / ○** → cluster partial (mid-drain)
+- **No manifest** (single-item pickup) → simple mode
+
+**Glyph convention** (consistent across `/aida-pickup`, `/aida-pr`,
+`/aida-review`): `▶` = primary recommended action, `⏵` = alternative path,
+`🚪` = stop/exit. Recommendations must be CONCRETE — name the command, name
+the IDs. "You might want to consider…" is not a Next step.
+
+**Templates** (substitute `<session-id>`, `<cluster-id>`, etc. from
+detection above):
+
+*Cluster drained:*
+
+```
+Drained <N> items from <cluster-id>. Next steps (recommended order):
+  1. ▶ Open PR for this batch → `/aida-pr`
+  2. ⏵ Pick up a different cluster → `aida queue work <EPIC-M>`
+  3. 🚪 Stop here → Ctrl+D, then `aida session end <session-id>` from parent shell
+```
+
+*Cluster partial:*
+
+```
+<N>/<total> done on <cluster-id> (<remaining> remaining). Next steps:
+  1. ▶ Keep draining this cluster → `aida queue work` (no-arg = next planned item)
+  2. ⏵ Pause + check on something else → `aida queue list --all`
+  3. 🚪 Stop here → Ctrl+D, then `aida session end <session-id>` from parent shell
+```
+
+*Simple mode, queue has more items routed to this role:*
+
+```
+✓ <SPEC-ID> done. <N> more items queued for <role>. Next steps:
+  1. ▶ Grab next item → `/aida-pickup`
+  2. ⏵ Wrap up what's shipped as a PR → `/aida-pr`
+  3. 🚪 Stop here → Ctrl+D, then `aida session end <session-id>` from parent shell
+```
+
+*Simple mode, queue empty:*
+
+```
+✓ <SPEC-ID> done. Queue empty for <role>. Next steps:
+  1. ▶ Open PR for what shipped → `/aida-pr`
+  2. ⏵ Switch hats and queue more → `eval "$(aida role enter dialog)"` + `aida queue add <id> --for <role>`
+  3. 🚪 Stop here → Ctrl+D, then `aida session end <session-id>` from parent shell
+```
+
+Print exactly one block — don't dump all four templates. Don't auto-loop
+without confirmation: the user may want to break, review, switch roles, or
+call it for the day.
 
 ## Producer side reminder
 

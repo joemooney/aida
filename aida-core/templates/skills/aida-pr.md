@@ -167,7 +167,7 @@ EOF
 
 Use HEREDOC for the body so markdown formatting and code fences survive intact.
 
-### 10. Auto-queue the review for the reviewer role — trace:STORY-90
+### 10. Auto-queue the review for the reviewer role — trace:STORY-90 BUG-86
 
 Right after `gh pr create` returns the URL (and BEFORE step 11's URL output), file the reviewer story:
 
@@ -182,11 +182,99 @@ This invokes the same logic `aida session end` runs as a backup, but at the mome
 - Adds `implements` relationships from the story to each spec referenced in the commit range
 - Is idempotent — re-runs print `ⓘ already exists`, never duplicate-file
 
-Print whatever the command emits verbatim (✓ filed / ⓘ already exists / ⚠ needs attention). The session-end backup still fires later as a fail-safe, so a failure here isn't fatal — but a ⚠ outcome usually means `gh` is unauthenticated or PATH-broken; surface that to the user.
+**Surface the outcome explicitly — never bury a failure under casual "PR opened" prose.** trace:BUG-86
 
-### 11. Output the URL
+The command prints one of four shapes. Each MUST be relayed verbatim, with a clear glyph header so the user can tell at a glance whether the reviewer queue actually got an entry:
 
-Print the URL `gh` returned, and optionally suggest `/aida-code-review` as the next step if the project has a reviewer role configured.
+*Success (✓ filed):*
+
+```
+✓ filed STORY-N (covers SPEC-1, SPEC-2, ...) → reviewer queue (PR #<n>)
+```
+
+Quote the line verbatim. Step 11's "Next steps" template renders the success path.
+
+*Idempotent re-fire (ⓘ already exists):*
+
+```
+ⓘ PR #<n> already has a `Review PR-<n>` story queued — skipping
+```
+
+Quote verbatim. Treat the same as success for downstream steps; the reviewer queue is populated.
+
+*By-design skip (ⓘ dim — typically "no PR yet" or "reviewer session shape"):*
+
+```
+ⓘ auto-queue: no open PR for branch `<branch>` — reviewer queue not filed
+  Re-run manually: `aida pr auto-queue-review --branch <branch>`
+```
+
+This is non-fatal but the reviewer queue is empty. Tell the user explicitly: "the auto-queue stepped aside (reason: <quoted>). Re-run with `aida pr auto-queue-review --branch <branch>` after the PR is open / from outside a review session." Don't let this dilute into a vague "fine, moving on" — the user needs to know the reviewer queue is NOT populated.
+
+*Needs-attention failure (⚠ yellow):*
+
+```
+⚠ auto-queue: `gh pr list` failed for branch `<branch>` (...) — no reviewer story filed
+  Re-run manually: `aida pr auto-queue-review --branch <branch>`
+```
+
+The exit code is non-zero on this path. STOP — do not pretend the hand-off succeeded:
+
+1. Tell the user explicitly that step 10 FAILED and the reviewer queue is empty
+2. Quote the exact error line + the re-run command
+3. The most common causes are `gh` unauthenticated (`gh auth status`), `gh` not on PATH, or a network blip — suggest the user run `gh auth status` first
+4. The session-end backup will retry later as a fail-safe, but the user shouldn't depend on that — fixing it now keeps the implementer→reviewer hand-off tight
+
+Step 11's "Next steps" template branches on whether step 10 succeeded — the *auto-queue skipped/failed* variant is for the by-design and needs-attention paths.
+
+### 11. Output the URL + Next steps — trace:TASK-87
+
+Print the URL `gh` returned. Then surface a structured
+`Next steps (recommended order):` block so the implementer→reviewer hand-off
+is explicit rather than improvised. Don't auto-execute — the user picks.
+
+**Detect state first:**
+
+```bash
+gh run list --branch <pr-branch> --limit 1 --json status,conclusion 2>/dev/null
+aida session show 2>/dev/null | awk '/^Session /{print $2; exit}'   # session-id prefix
+```
+
+Combine with step 10's auto-queue outcome (✓ filed / ⓘ already exists /
+⚠ skipped).
+
+**Glyph convention** (consistent across `/aida-pickup`, `/aida-pr`,
+`/aida-review`): `▶` = primary recommended action, `⏵` = alternative path,
+`🚪` = stop/exit. Recommendations must be CONCRETE — name the PR, the
+review story, the session ID.
+
+**Templates:**
+
+*Auto-queue succeeded (✓ filed or ⓘ already exists):*
+
+```
+PR-<N> opened: <url>
+<STORY-X> filed as review story; reviewer queue has it at head.
+
+Next steps (recommended order):
+  1. ▶ Start review session → `aida queue work <STORY-X>` (or `aida queue work PR-<N>`)
+  2. ⏵ Wait for CI to settle first → `gh run watch` (block until green, then start review)
+  3. 🚪 End implementer session, take a break → Ctrl+D + `aida session end <session-id>` from parent shell
+```
+
+*Auto-queue skipped/failed (⚠ outcome from step 10):*
+
+```
+PR-<N> opened: <url>
+⚠ Auto-queue review didn't fire (gh unauthenticated or PATH-broken).
+
+Next steps:
+  1. ▶ Open a reviewer session manually → `eval "$(aida role enter reviewer --owns PR-<N>)"` then `/aida-review --pr <N>`
+  2. ⏵ Just wait for CI + merge inline → `gh run watch` then `gh pr merge <N> --squash`
+  3. 🚪 End implementer session → Ctrl+D + `aida session end <session-id>` from parent shell
+```
+
+Print exactly one block — don't dump both templates.
 
 ## Composes With
 

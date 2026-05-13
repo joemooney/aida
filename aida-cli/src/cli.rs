@@ -1541,6 +1541,18 @@ pub enum ConfigCommand {
         #[clap(long)]
         toml: bool,
     },
+
+    /// Show or toggle workflow hints printed inline at state-transition
+    /// moments (queue drained → open PR, session end → start review).
+    /// No-arg form prints the current setting; pass `true` / `false` to
+    /// persist into `.aida/config.toml [hints] workflow_hints`. The env
+    /// var `AIDA_HINTS=false` overrides the config for the current shell
+    /// without writing to disk. trace:STORY-106 | ai:claude
+    Hints {
+        /// `true` to enable, `false` to disable. Omit to show the
+        /// current effective value (env-aware).
+        enabled: Option<String>,
+    },
 }
 
 #[derive(Subcommand, Debug)]

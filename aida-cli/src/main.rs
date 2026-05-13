@@ -10,6 +10,7 @@ mod process_probe;
 mod prompts;
 mod session;
 mod session_manifest;
+mod workflow_hints;
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -2134,6 +2135,22 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     }
                     println!("{}: {}", "UUID".bold(), req.id);
                     println!("{}: {}", "Title".bold(), req.title);
+                    // TASK-91: surface PR-N for auto-queued review stories
+                    // so `aida show STORY-108` reads "About: PR-15" right
+                    // next to the title, mirroring what `aida queue list`
+                    // promotes to the prominent id. Dual-id discoverable
+                    // from a single command. trace:TASK-91 | ai:claude
+                    if let Some((primary, _)) =
+                        format_review_story_display(req.display_id().as_str(), req.title.as_str())
+                    {
+                        // primary is "PR-N (STORY-NNN)"; strip the
+                        // parenthetical for a cleaner About: line.
+                        let about = primary
+                            .split_once(' ')
+                            .map(|(pr, _)| pr.to_string())
+                            .unwrap_or(primary);
+                        println!("{}: {}", "About".bold(), about.cyan());
+                    }
                     println!("{}: {:?}", "Type".bold(), req.req_type);
                     println!("{}: {}", "Status".bold(), req.effective_status());
                     println!("{}: {}", "Priority".bold(), req.effective_priority());
@@ -2355,6 +2372,17 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                     if let Some(spec_id) = req.spec_id.as_deref() {
                         update_manifest_for_status(spec_id, status_str);
                     }
+                }
+
+                // STORY-106: workflow hint when a status flip to Completed
+                // emptied the queue for the active role+scope. Mirrors the
+                // queue-done hint so direct `aida edit --status completed`
+                // surfaces the same Next-step. Best-effort.
+                // trace:STORY-106 | ai:claude
+                if new_status_for_manifest.as_deref() == Some("Completed") {
+                    let storage = Storage::new(store_path.to_path_buf());
+                    let user_id = current_user_id(None);
+                    maybe_hint_after_queue_drain(&storage, &user_id);
                 }
             } else {
                 println!("No changes specified. Use --title, --status, --priority, etc.");
@@ -3071,6 +3099,14 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             toml: emit_toml,
         }) => {
             handle_config_user(node_id.as_deref(), email.as_deref(), *emit_toml)?;
+        }
+        // STORY-106: `aida config hints` reads/writes `.aida/config.toml`
+        // — project-level, no store mutation needed. Route through the
+        // git-backend path so it works in modern projects.
+        // trace:STORY-106 | ai:claude
+        Command::Config(ConfigCommand::Hints { enabled }) => {
+            let storage = Storage::new(store_path);
+            handle_config_hints(enabled.as_deref(), &storage)?;
         }
         Command::Scaffold(scaffold_cmd) => {
             // Scaffold apply / status / preview / extract — same pattern.
@@ -5345,8 +5381,67 @@ fn handle_config_command(cmd: &ConfigCommand, storage: &Storage) -> Result<()> {
             // trace:STORY-44 | ai:claude
             handle_config_user(node_id.as_deref(), email.as_deref(), *emit_toml)?;
         }
+        ConfigCommand::Hints { enabled } => {
+            // trace:STORY-106 | ai:claude
+            handle_config_hints(enabled.as_deref(), storage)?;
+        }
     }
 
+    Ok(())
+}
+
+/// Handle `aida config hints [true|false]` — show or persist the
+/// `[hints] workflow_hints` setting. trace:STORY-106 | ai:claude
+fn handle_config_hints(arg: Option<&str>, storage: &Storage) -> Result<()> {
+    let project_root = storage
+        .path()
+        .parent()
+        .map(|p| p.to_path_buf())
+        .ok_or_else(|| anyhow::anyhow!("could not resolve project root from storage path"))?;
+
+    match arg {
+        None => {
+            let effective = workflow_hints::enabled(Some(&project_root));
+            let env = std::env::var("AIDA_HINTS").ok().filter(|s| !s.is_empty());
+            println!(
+                "Workflow hints: {}",
+                if effective {
+                    "enabled".green().to_string()
+                } else {
+                    "disabled".yellow().to_string()
+                }
+            );
+            if let Some(v) = env {
+                println!("  source: AIDA_HINTS={} (env)", v);
+            } else {
+                println!("  source: .aida/config.toml (or default if unset)");
+            }
+        }
+        Some(raw) => {
+            let value = match raw.trim().to_ascii_lowercase().as_str() {
+                "true" | "1" | "yes" | "on" => true,
+                "false" | "0" | "no" | "off" => false,
+                _ => anyhow::bail!("Invalid value `{}` — use `true` or `false`.", raw),
+            };
+            let prior = workflow_hints::persist_setting(&project_root, value)?;
+            println!(
+                "{} workflow_hints {} {}",
+                "✓".green(),
+                if value { "enabled" } else { "disabled" },
+                match prior {
+                    Some(p) if p == value => "(no change)".dimmed().to_string(),
+                    Some(p) => format!("(was {})", p).dimmed().to_string(),
+                    None => "(was unset, using default)".dimmed().to_string(),
+                }
+            );
+            if std::env::var("AIDA_HINTS").is_ok() {
+                eprintln!(
+                    "{} AIDA_HINTS env var is set — it overrides this config until unset.",
+                    "Note:".yellow()
+                );
+            }
+        }
+    }
     Ok(())
 }
 
@@ -9917,6 +10012,32 @@ fn append_session_activity(
 ///   - the target's type isn't Epic.
 /// Pure — no I/O — so the decision rules can be unit-tested without
 /// fixtures. trace:TASK-44 | ai:claude
+/// TASK-91: detect a synthetic review-story title `Review PR-<n>:` filed
+/// by STORY-90's auto-queue and return a display tuple where PR-N is the
+/// prominent id and the canonical STORY-NNN is the parenthetical
+/// secondary. Returns `None` when the title doesn't match the pattern;
+/// callers fall back to the unchanged (display_id, title) pair.
+///
+/// Rendering convention (Option A from TASK-91):
+///   STORY-108  Review PR-15: EPIC-23 wrap-up      →  display_id stays STORY-108
+///                                                    title stays "Review PR-15: EPIC-23 wrap-up"
+///   becomes:
+///   PR-15 (STORY-108)  EPIC-23 wrap-up            →  prominent PR-N, dual id, trimmed title
+///
+/// PR-N is the conceptual handle the user reaches for ("I need to review
+/// PR-15"); STORY-NNN stays visible for direct `aida edit` operations.
+/// trace:TASK-91 | ai:claude
+fn format_review_story_display(display_id: &str, title: &str) -> Option<(String, String)> {
+    let rest = title.strip_prefix("Review PR-")?;
+    let (pr_n, after) = rest.split_once(':')?;
+    if pr_n.is_empty() || !pr_n.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    let combined = format!("PR-{} ({})", pr_n, display_id);
+    let trimmed = after.trim_start().to_string();
+    Some((combined, trimmed))
+}
+
 fn derive_parent_epic_label(
     req: &aida_core::Requirement,
     store: &RequirementsStore,
@@ -11438,6 +11559,120 @@ fn probe_dangling_claudes_at_path(worktree: &std::path::Path) -> Vec<process_pro
 ///     pretending we know the answer).
 /// Prefers `origin/main` when present so users with stale local
 /// `main` still see the right delta. trace:TASK-54 | ai:claude
+/// STORY-106: count commits this branch is ahead of `origin/main` (falls
+/// back to `main` when origin isn't available). Best-effort — returns
+/// `None` on any git failure so callers can degrade silently.
+/// trace:STORY-106 | ai:claude
+fn branch_commits_ahead_main(repo: &std::path::Path, branch: &str) -> Option<u32> {
+    if branch == "main" || branch == "HEAD" {
+        return None;
+    }
+    let rev_parse = |refname: &str| {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(["rev-parse", "--verify", "--quiet", refname])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .filter(|s| !s.is_empty())
+    };
+    let main_ref = rev_parse("origin/main")
+        .map(|_| "origin/main")
+        .or_else(|| rev_parse("main").map(|_| "main"))?;
+    let range = format!("{}..{}", main_ref, branch);
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["rev-list", "--count", &range])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&out.stdout).trim().parse().ok()
+}
+
+/// STORY-106: best-effort emit the "queue empty for this role" workflow
+/// hint after a successful `queue done` (or `edit --status completed` on
+/// a queue-tracked spec). Detects role+scope from the session env / lease,
+/// counts remaining queue entries, and fires the hint only when the
+/// active-role queue is now empty. Silent on any detection failure —
+/// hints are nice-to-have, not load-bearing.
+/// trace:STORY-106 | ai:claude
+fn maybe_hint_after_queue_drain(storage: &Storage, user_id: &str) {
+    let project_root = match storage.path().parent() {
+        Some(p) => p.to_path_buf(),
+        None => return,
+    };
+    let role = std::env::var("AIDA_SESSION_ROLE")
+        .ok()
+        .filter(|s| !s.is_empty());
+
+    // Match the filter `aida queue list` uses for the active session:
+    //   1. role: matches AIDA_SESSION_ROLE
+    //   2. scope: matches the active session lease's scope (unscoped
+    //      entries pass through, same as queue list inside a session)
+    //   3. the entry's requirement still exists in the store — dangling
+    //      entries pointing to deleted/renamed UUIDs are noise and `aida
+    //      queue list` hides them. Without #3 the hint sees stale queue
+    //      cruft and never fires.
+    // trace:STORY-106 | ai:claude
+    let scope = std::env::current_dir()
+        .ok()
+        .and_then(|cwd| active_lease_for_cwd(&project_root, &cwd))
+        .map(|l| l.scope);
+
+    let remaining = storage.queue_list(user_id, false).unwrap_or_default();
+    let store_snapshot = storage.load().ok();
+    // Entry counts as "open work for this user" only when its
+    // requirement (a) still exists in the store and (b) hasn't already
+    // reached terminal status. The second check mirrors `aida queue
+    // list`'s terminal-hide behavior (TASK-46) — without it, queue
+    // entries left behind after `aida edit --status completed` (which
+    // doesn't auto-dequeue) read as "still in flight" and suppress the
+    // hint forever.
+    let entry_open = |e: &aida_core::QueueEntry| -> bool {
+        let Some(snap) = &store_snapshot else {
+            return true;
+        };
+        let Some(req) = snap.requirements.iter().find(|r| r.id == e.requirement_id) else {
+            return false;
+        };
+        !is_terminal_status(&req.status)
+    };
+    let filtered: Vec<&aida_core::QueueEntry> = remaining
+        .iter()
+        .filter(|e| entry_open(e))
+        .filter(|e| match role.as_deref() {
+            Some(r) => e.for_role.as_deref() == Some(r),
+            None => true,
+        })
+        .filter(|e| match scope.as_deref() {
+            Some(s) => match e.for_scope.as_deref() {
+                Some(es) => es == s,
+                None => true,
+            },
+            None => true,
+        })
+        .collect();
+    if !filtered.is_empty() {
+        return;
+    }
+
+    let commits_ahead = current_branch_at(&project_root)
+        .as_deref()
+        .and_then(|b| branch_commits_ahead_main(&project_root, b));
+
+    workflow_hints::after_queue_drained(
+        Some(&project_root),
+        role.as_deref(),
+        scope.as_deref(),
+        commits_ahead,
+    );
+}
+
 fn branch_behind_main(repo: &std::path::Path, branch: &str) -> Option<(u64, Vec<String>)> {
     if branch == "main" || branch == "HEAD" {
         return None;
@@ -12190,6 +12425,24 @@ fn session_end(id_query: Option<&str>, yes: bool, force: bool, purge_cc: bool) -
     );
     render_auto_queue_outcome(&outcome);
 
+    // STORY-106: workflow hint when a review story is now queued for this
+    // session's PR. Fires for both Filed (just minted) and AlreadyExists
+    // (idempotent re-fire) — either way, the reviewer story is in the
+    // queue and the user's next action is `aida queue work`.
+    // trace:STORY-106 | ai:claude
+    if matches!(
+        outcome.status,
+        AutoQueueStatus::Filed | AutoQueueStatus::AlreadyExists
+    ) {
+        if let Some(pr_n) = outcome.pr_number {
+            workflow_hints::after_session_end_with_pr(
+                Some(&project_root),
+                pr_n,
+                outcome.review_story_id.as_deref(),
+            );
+        }
+    }
+
     // STORY-73: emit `unset AIDA_SESSION_ID` to stdout when wrapped via the
     // shell helper's `eval "$(...)"`, so the calling shell's env var
     // doesn't go stale after the lease it pointed at is gone.
@@ -12687,6 +12940,16 @@ enum AutoQueueStatus {
 struct AutoQueueOutcome {
     status: AutoQueueStatus,
     summary: String,
+    /// STORY-106: PR number this outcome relates to (set on Filed and
+    /// AlreadyExists). Drives the post-session "start the review"
+    /// workflow hint. `None` for the skip cases.
+    /// trace:STORY-106 | ai:claude
+    pr_number: Option<u64>,
+    /// STORY-106: review story id when known. Filed knows it (just
+    /// minted the story); AlreadyExists doesn't look it up (the
+    /// `aida queue work PR-N` form handles the unknown case).
+    /// trace:STORY-106 | ai:claude
+    review_story_id: Option<String>,
 }
 
 impl AutoQueueOutcome {
@@ -12694,13 +12957,28 @@ impl AutoQueueOutcome {
         Self {
             status: AutoQueueStatus::Filed,
             summary: s.into(),
+            pr_number: None,
+            review_story_id: None,
         }
     }
     fn already_exists(s: impl Into<String>) -> Self {
         Self {
             status: AutoQueueStatus::AlreadyExists,
             summary: s.into(),
+            pr_number: None,
+            review_story_id: None,
         }
+    }
+    /// STORY-106: attach the PR number that this outcome refers to. Used
+    /// by `session_end` to emit a concrete "start the review" hint.
+    fn with_pr(mut self, pr_number: u64) -> Self {
+        self.pr_number = Some(pr_number);
+        self
+    }
+    /// STORY-106: attach the newly-filed review story id (Filed only).
+    fn with_review_story(mut self, story_id: impl Into<String>) -> Self {
+        self.review_story_id = Some(story_id.into());
+        self
     }
     /// Skip the user shouldn't care about (review session, no PR-producing
     /// branch). Rendered dim. trace:TASK-74 | ai:claude
@@ -12708,6 +12986,8 @@ impl AutoQueueOutcome {
         Self {
             status: AutoQueueStatus::SkippedByDesign,
             summary: s.into(),
+            pr_number: None,
+            review_story_id: None,
         }
     }
     /// Skip the user might want to act on (missing tool, gh failed, queue
@@ -12716,6 +12996,8 @@ impl AutoQueueOutcome {
         Self {
             status: AutoQueueStatus::SkippedNeedsAttention,
             summary: s.into(),
+            pr_number: None,
+            review_story_id: None,
         }
     }
 }
@@ -12807,7 +13089,8 @@ fn try_auto_queue_pr_review(
         return AutoQueueOutcome::already_exists(format!(
             "PR #{} already has a `Review PR-{}` story queued — skipping",
             pr.number, pr.number
-        ));
+        ))
+        .with_pr(pr.number);
     }
 
     // Pull the commit-range spec ids using the existing helpers from STORY-67.
@@ -12889,6 +13172,8 @@ fn try_auto_queue_pr_review(
         "filed {} (covers {}) → reviewer queue (PR #{})",
         new_id, covers, pr.number
     ))
+    .with_pr(pr.number)
+    .with_review_story(new_id)
 }
 
 /// Print an `AutoQueueOutcome` in the convention shared by `aida session
@@ -12946,6 +13231,30 @@ fn pr_auto_queue_review(branch_override: Option<&str>) -> Result<()> {
         AutoQueueOrigin::PrSkill,
     );
     render_auto_queue_outcome(&outcome);
+
+    // BUG-86: on every non-success outcome (needs-attention OR by-design
+    // skip), print the exact command to re-run manually. The skill side
+    // (/aida-pr step 10) consumes this so the agent can quote it back at
+    // the user instead of having them spelunk for the right invocation.
+    // Filed and AlreadyExists are the only "no action needed" cases.
+    // trace:BUG-86 | ai:claude
+    match outcome.status {
+        AutoQueueStatus::Filed | AutoQueueStatus::AlreadyExists => {}
+        AutoQueueStatus::SkippedByDesign => {
+            eprintln!(
+                "  {} `aida pr auto-queue-review --branch {}`",
+                "Re-run manually:".dimmed(),
+                branch
+            );
+        }
+        AutoQueueStatus::SkippedNeedsAttention => {
+            eprintln!(
+                "  {} `aida pr auto-queue-review --branch {}`",
+                "Re-run manually:".yellow().bold(),
+                branch
+            );
+        }
+    }
 
     // Exit non-zero for the "needs attention" bucket so /aida-pr can
     // detect the failure mode and tell the user to install gh / re-auth
@@ -17276,6 +17585,77 @@ mod derive_parent_epic_label_tests {
             derive_parent_epic_label(&task, &store),
             Some("EPIC-20".to_string())
         );
+    }
+}
+
+#[cfg(test)]
+mod format_review_story_display_tests {
+    use super::*;
+
+    /// TASK-91: a synthetic `Review PR-15: ...` title produces a
+    /// PR-prominent display tuple, with the STORY-NNN as parenthetical.
+    #[test]
+    fn rewrites_synthetic_review_story_title() {
+        let result =
+            format_review_story_display("STORY-108", "Review PR-15: EPIC-23 batch wrap-up");
+        assert_eq!(
+            result,
+            Some((
+                "PR-15 (STORY-108)".to_string(),
+                "EPIC-23 batch wrap-up".to_string()
+            ))
+        );
+    }
+
+    /// agreed_id wins over spec_id at the call site; this helper is
+    /// id-agnostic — whatever display id the caller passes ends up in
+    /// the parenthetical.
+    #[test]
+    fn passes_through_agreed_id_when_present() {
+        let result = format_review_story_display("STORY-7", "Review PR-2: tiny fix");
+        assert_eq!(
+            result,
+            Some(("PR-2 (STORY-7)".to_string(), "tiny fix".to_string()))
+        );
+    }
+
+    /// Non-review titles return None so the caller falls back to the
+    /// untransformed (display_id, title) pair.
+    #[test]
+    fn returns_none_for_non_review_title() {
+        assert_eq!(
+            format_review_story_display("STORY-50", "Add OAuth provider"),
+            None
+        );
+    }
+
+    /// Defensive: `Review PR-` followed by non-digits isn't the
+    /// auto-queue pattern; don't claim it.
+    #[test]
+    fn returns_none_when_pr_number_not_digits() {
+        assert_eq!(
+            format_review_story_display("STORY-99", "Review PR-abc: malformed title"),
+            None
+        );
+    }
+
+    /// A title that mentions PR-N but doesn't use the auto-queue
+    /// prefix shouldn't be rewritten.
+    #[test]
+    fn returns_none_for_partial_match() {
+        assert_eq!(
+            format_review_story_display("STORY-99", "Reviewer should look at PR-7 carefully"),
+            None
+        );
+    }
+
+    /// Edge case: empty after-colon (theoretical — auto-queue always
+    /// includes a title). Should still produce a tuple, just with an
+    /// empty trimmed-title.
+    #[test]
+    fn handles_empty_title_after_colon() {
+        let result = format_review_story_display("STORY-1", "Review PR-99:");
+        assert_eq!(result, Some(("PR-99 (STORY-1)".to_string(), String::new())));
     }
 }
 
@@ -27371,6 +27751,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                             .and_then(|r| r.agreed_id.as_deref().or(r.spec_id.as_deref()))
                             .unwrap_or("???");
                         let title = req.map(|r| r.title.as_str()).unwrap_or("(deleted)");
+                        // TASK-91: PR-N (STORY-NNN) for auto-queued review
+                        // stories. trace:TASK-91 | ai:claude
+                        let (display_id_owned, title_owned) =
+                            format_review_story_display(display_id, title)
+                                .unwrap_or_else(|| (display_id.to_string(), title.to_string()));
                         let status = req
                             .map(|r| format!("{}", r.status))
                             .unwrap_or_else(|| "Unknown".to_string());
@@ -27384,13 +27769,13 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                             _ => status.normal(),
                         };
                         let glyph = if is_last { "└─" } else { "├─" };
-                        let pad = " ".repeat(id_col_width.saturating_sub(display_id.len()));
+                        let pad = " ".repeat(id_col_width.saturating_sub(display_id_owned.len()));
                         println!(
                             "  {} {}{}  {}  [{}]",
                             glyph.dimmed(),
-                            display_id.bold(),
+                            display_id_owned.bold(),
                             pad,
-                            title,
+                            title_owned,
                             status_colored,
                         );
                     };
@@ -27408,16 +27793,21 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         group.len(),
                         if group.len() == 1 { "" } else { "s" }
                     );
+                    // TASK-91: width must account for the PR-N (STORY-NNN)
+                    // expansion so the column lines up after the transform.
+                    // trace:TASK-91 | ai:claude
                     let id_col_width = group
                         .iter()
                         .map(|e| {
-                            store
-                                .requirements
-                                .iter()
-                                .find(|r| r.id == e.requirement_id)
+                            let req = store.requirements.iter().find(|r| r.id == e.requirement_id);
+                            let raw_id = req
                                 .and_then(|r| r.agreed_id.as_deref().or(r.spec_id.as_deref()))
-                                .map(|s| s.len())
-                                .unwrap_or(3)
+                                .unwrap_or("???");
+                            let raw_title = req.map(|r| r.title.as_str()).unwrap_or("");
+                            match format_review_story_display(raw_id, raw_title) {
+                                Some((expanded, _)) => expanded.len(),
+                                None => raw_id.len(),
+                            }
                         })
                         .max()
                         .unwrap_or(0);
@@ -27493,6 +27883,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     .and_then(|r| r.agreed_id.as_deref().or(r.spec_id.as_deref()))
                     .unwrap_or("???");
                 let title = req.map(|r| r.title.as_str()).unwrap_or("(deleted)");
+                // TASK-91: PR-N (STORY-NNN) for auto-queued review stories.
+                // trace:TASK-91 | ai:claude
+                let (display_id_owned, title_owned) =
+                    format_review_story_display(display_id, title)
+                        .unwrap_or_else(|| (display_id.to_string(), title.to_string()));
                 let status = req
                     .map(|r| format!("{}", r.status))
                     .unwrap_or_else(|| "Unknown".to_string());
@@ -27510,8 +27905,8 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 print!(
                     "  {}. {} {}",
                     (i + 1).to_string().dimmed(),
-                    display_id.bold(),
-                    title
+                    display_id_owned.bold(),
+                    title_owned
                 );
                 print!("  [{}]", status_colored);
                 if entry.added_by != user_id {
@@ -28320,8 +28715,17 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     .or(entry.spec_id.as_deref())
                     .unwrap_or("???");
                 let title = entry.title.as_deref().unwrap_or("(no cached title)");
+                // TASK-91: PR-N (STORY-NNN) for auto-queued review stories.
+                // trace:TASK-91 | ai:claude
+                let (display_id_owned, title_owned) =
+                    format_review_story_display(display_id, title)
+                        .unwrap_or_else(|| (display_id.to_string(), title.to_string()));
                 println!("{}", "Next up:".bold());
-                println!("  {}: {}", display_id.green().bold(), title.bold());
+                println!(
+                    "  {}: {}",
+                    display_id_owned.green().bold(),
+                    title_owned.bold()
+                );
                 println!(
                     "  {} {}",
                     format!("[role:{}]", entry.for_role).cyan(),
@@ -28332,6 +28736,8 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 }
                 println!();
                 println!("{}", "Suggested:".dimmed());
+                // `aida show` still resolves via the canonical id; show
+                // both forms so the user knows their hand-off targets.
                 println!(
                     "  cd {}  &&  aida show {}",
                     entry.project_root.display().to_string().cyan(),
@@ -28355,6 +28761,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                         .and_then(|r| r.agreed_id.as_deref().or(r.spec_id.as_deref()))
                         .unwrap_or("???");
                     let title = req.map(|r| r.title.as_str()).unwrap_or("(deleted)");
+                    // TASK-91: PR-N (STORY-NNN) for auto-queued review
+                    // stories. trace:TASK-91 | ai:claude
+                    let (display_id_owned, title_owned) =
+                        format_review_story_display(spec_id, title)
+                            .unwrap_or_else(|| (spec_id.to_string(), title.to_string()));
                     let status = req
                         .map(|r| format!("{}", r.status))
                         .unwrap_or_else(|| "Unknown".to_string());
@@ -28365,7 +28776,11 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                     let description = req.map(|r| r.description.as_str()).unwrap_or("");
 
                     println!("{}", "Next up:".bold());
-                    println!("  {}: {}", spec_id.green().bold(), title.bold());
+                    println!(
+                        "  {}: {}",
+                        display_id_owned.green().bold(),
+                        title_owned.bold()
+                    );
                     println!(
                         "  Status: {}  ·  Priority: {}{}",
                         status,
@@ -28510,6 +28925,12 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 "  ({})",
                 "run `aida queue next` to see what's next".dimmed()
             );
+
+            // STORY-106: workflow hint when the queue is now empty for the
+            // active role+scope. Best-effort: any state-detection failure
+            // skips the hint silently rather than failing the command.
+            // trace:STORY-106 | ai:claude
+            maybe_hint_after_queue_drain(storage, &user_id);
         }
         // STORY-42: one-shot queue pickup → session start → claude launch.
         // trace:STORY-42 | ai:claude
