@@ -58,7 +58,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:20:03.365833533Z
-modified_at: 2026-05-13T06:20:03.365833533Z
+modified_at: 2026-05-13T06:21:58.995365981Z
 req_type: Task
 tags:
 - aida-pr
@@ -70,3 +70,9 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-13T06:20:05.656682338Z
+comments:
+- id: 019e1fff-cf53-74b1-ad73-f2becb0e6c7c
+  author: joe
+  content: 'Composes with TASK-111 (aida session end: CI-aware). Once TASK-111 ships, the next-steps block simplifies further: Wait-CI moves into aida session end automatically, leaving just End implementer → Start reviewer. Implementer picking up TASK-110 should check whether TASK-111 has shipped — if yes, simplify accordingly; if no, ship TASK-110''s ordering fix as the interim improvement.'
+  created_at: 2026-05-13T06:21:58.995365981Z
+  modified_at: 2026-05-13T06:21:58.995365981Z
