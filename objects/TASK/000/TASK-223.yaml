@@ -1,0 +1,53 @@
+id: 019e2213-89ee-70c1-a47b-3b47c7114f6f
+spec_id: TASK-223
+agreed_id: TASK-223
+title: Parse-failure warnings should include actionable recovery hint (binary version, cargo clean, aida --version)
+description: |-
+  Today aida emits parse-failure warnings during reads (e.g. aida queue list, aida cache rebuild) like:
+
+    Warning: failed to load STORY-86: Failed to parse /home/joe/ai/aida/.aida-store/objects/STORY/000/STORY-86.yaml
+
+  The warning names the file but not the cause or the recovery. A user seeing this for the first time has no path forward.
+
+  ## Proposed enriched warning
+
+    Warning: failed to load STORY-86 (parse error)
+      File: /home/joe/ai/aida/.aida-store/objects/STORY/000/STORY-86.yaml
+      Likely cause: binary version mismatch — current binary may lack a new enum
+                    variant the file references.
+      Check: aida --version  vs  the worktree that wrote the file
+      Recovery: rebuild aida from a branch with the missing variant, then
+                aida cache rebuild. See docs/git-workflow.md.
+
+  The first time a user encounters this they spend ~30 minutes diagnosing; the warning could compress that to ~30 seconds.
+
+  ## Composes with
+
+  - BUG-96 (parse-fail-equals-delete) — once that fix lands, skip-and-warn is the only behavior; warnings become the primary user signal
+  - BUG ON aida show parse error UX (just filed) — same theme: errors should explain
+  - TASK-221 (aida dev activate binary SHA matching) — once that ships, the binary-mismatch case is mostly prevented; warnings become rare but should still be informative when they fire
+  - docs/git-workflow.md — link target for the recovery instructions
+
+  ## Scope: which warning sites
+
+  Audit aida-core / aida-cli for all 'failed to load' / 'failed to parse' / 'failed to deserialize' surfaces. Update each to use a shared formatter that includes the cause hint + docs link.
+
+  ## Acceptance
+
+  - [ ] All parse-failure warnings include: file path, likely cause, recovery hint, docs link
+  - [ ] Shared formatter in aida-core so every call site stays consistent
+  - [ ] Tests cover: unknown-variant parse failure; malformed-yaml parse failure; missing-required-field parse failure — each surfaces appropriate hint
+  - [ ] AIDA.md / CLAUDE.md mention what the warning means and where to read
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T16:02:46.382166956Z
+modified_at: 2026-05-13T16:02:46.382166956Z
+req_type: Task
+tags:
+- messages
+- parse-failure
+- recovery-hint
+- ux
+- warning
