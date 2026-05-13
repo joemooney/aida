@@ -161,6 +161,72 @@ The pattern: **everything important is recoverable.** Session end isn't destruct
 
 ---
 
+## Why roles don't share Claude sessions
+
+A natural question when working through the implementer → reviewer → fixup loop: why end the Claude session at each role boundary? Couldn't a single Claude session switch roles in place — `/aida-end-implementer` then `/aida-start-reviewer` — preserving the conversation history across transitions?
+
+**No.** Role boundaries are session boundaries by design. The reason is the same insight that makes [/ultraplan's three-explorer plus one-critic architecture](positioning/vs-ultraplan.md) work: a critic agent that shares context with the agents whose work it's reviewing is doing self-review with extra steps. Anchoring bias propagates through shared context.
+
+Apply that to AIDA: if the same Claude session handles both implementer work and reviewer work, the reviewer agent has the implementer's mental model already in its context window. It's reviewing from inside the implementer's reasoning, not from cold. The separate-session boundary is what *enforces* independent review.
+
+### The boundary is the role, not the session
+
+Same Claude session can span everything within one role's natural work. Different roles require different sessions.
+
+| Transition | Same Claude session OK? |
+|---|---|
+| implementer doing code → `/aida-pr` (still implementer, opening the PR) | ✓ same role |
+| `/aida-pr` → `/aida-commit` fixups → `/aida-pr` re-run | ✓ same role |
+| reviewer doing the spec walk → posting verdict comments | ✓ same role |
+| implementer → reviewer | ✗ anchoring bias risk |
+| reviewer → implementer fixup | ✗ different role |
+| original implementer session → resume after review (TASK-112 path) | ✓ same role, just bracketed by a reviewer detour |
+
+So the implementer Claude session naturally spans: pickup → code → commits → PR → (clean review: done; or: end session, resume via TASK-112 → fixup → done). What it cannot do: take a quick reviewer detour mid-session and keep going. The reviewer step must be its own Claude session.
+
+### The TUI orchestration vision
+
+The role-pure session model wants a coordination surface *above* individual sessions. Today that surface is the shell + `aida queue list` + the implementer's intuition. A TUI dashboard is the natural fit:
+
+- **TUI is the home** — shows queued work across all roles, active leases, recent transitions, CI status, plan-file presence
+- **Sessions are role-pure work units** — short-lived, scoped to one role
+- **Transitions go through the TUI** — end session → see dashboard → pick up next role's work → start new session
+
+This shape matches existing tools:
+
+| Tool | "Home" | "Work" |
+|---|---|---|
+| Linear / Jira (humans) | Board view | Individual ticket |
+| Claude Code on the web | claude.ai/code dashboard | Individual cloud session |
+| GitHub | Repo / PR view | Individual checkout |
+| **AIDA + TUI** (future) | TUI dashboard | Role-pure Claude session |
+
+The TUI isn't filed as a STORY yet (as of 2026-05-13). Most of its prerequisites exist or are filed:
+
+| Need | Status |
+|---|---|
+| Queue view across roles | `aida queue list --all` covers it |
+| Session inventory | `aida session list` |
+| Lease awareness | Session manifest |
+| Resume capability for the same-role-after-detour case | TASK-112 (approved) |
+| Role-pure session enforcement | Already enforced by AIDA's lease model |
+| **Visual dashboard / TUI surface** | **Missing — this is the TUI gap** |
+
+A future STORY will name the TUI directly when its prerequisites have shipped.
+
+### Acknowledging the cost
+
+The cold-restart tax is real. Every role transition pays it: the new role's Claude session opens cold, has to re-orient (read files, search the codebase, re-understand decisions). The session-lifecycle defenses minimize the cost but don't eliminate it:
+
+- **TASK-99** (queue work pulls code) ensures the new session opens on a fresh base
+- **TASK-95** (queue work pre-populates manifest from plan) ensures it opens with the plan as context
+- **TASK-112** (resume claude session) eliminates the tax for the same-role-after-detour case
+- **TUI** (future) would surface the cluster context at the moment of pickup
+
+For genuinely different roles, cold-start is part of the cost of independent review. That's the trade: anchoring-bias protection in exchange for a fresh context each time. The /ultraplan parallel: paying for three explorer agents in parallel is worth it because what you get back is genuine diversity, not paraphrased sameness. Same logic; same trade.
+
+---
+
 ## Cross-references
 
 - [`git-workflow.md`](git-workflow.md) — sibling doc on base-freshness and divergence (Pattern A / B)
