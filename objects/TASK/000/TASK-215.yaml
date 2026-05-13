@@ -1,0 +1,52 @@
+id: 019e201f-2885-7481-91b5-e456dfae00df
+spec_id: TASK-215
+agreed_id: TASK-215
+title: 'META-002..006 AI prompts: update to mention Done state in lifecycle vocabulary'
+description: |-
+  Follow-up from PR-20 deep-pass review (STORY-86 implementation).
+
+  STORY-86 introduced the Done state (between InProgress and Completed) but the META-002 through META-006 AI prompts (Evaluate, Find Duplicates, Suggest Relationships, Improve Description, Generate Children) still describe the lifecycle without it. Agents using these prompts will continue to think in the pre-STORY-86 vocabulary (Draft -> Approved -> Planned -> InProgress -> Completed -> Rejected) and may suggest Completed when they should suggest Done.
+
+  The PR-20 description called this out as in-scope but it wasn't shipped.
+
+  ## What to update
+
+  Each META prompt's description field via aida edit META-NNN --description '...'. Specifically anywhere the prompt enumerates lifecycle states or instructs the AI on status transitions:
+
+  - META-002 (Evaluate): update status-state list
+  - META-003 (Find Duplicates): no change needed unless prompt references status filters
+  - META-004 (Suggest Relationships): no change needed unless prompt references status
+  - META-005 (Improve Description): update if it mentions 'Completed' as the terminal state
+  - META-006 (Generate Children): update if it instructs children to start as 'Approved' and transition to 'Completed' — should mention Done as the intermediate.
+
+  Verify each via aida show META-NNN before editing.
+
+  ## Acceptance
+
+  - [ ] META-002 mentions Done state where lifecycle is enumerated
+  - [ ] META-005 (if mentions Completed as terminal) corrected to Done as 'work finished' + Completed as 'merged to main'
+  - [ ] META-006 (if instructs children lifecycle) mentions Done as intermediate
+  - [ ] aida show on each verifies the update
+  - [ ] Spot-check via aida list --type meta that all five still render correctly
+
+  ## Composes with
+
+  - STORY-86 (the lifecycle change that introduced Done)
+  - The scaffolded AIDA.md daily-commands section (already mentions Done implicitly via aida edit --status done; verify it explicitly enumerates the lifecycle when describing status flow)
+
+  ## Discovered via
+
+  PR-20 /aida-review deep-pass 2026-05-13.
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T06:56:13.445056882Z
+modified_at: 2026-05-13T06:56:13.445056882Z
+req_type: Task
+tags:
+- docs
+- done-status
+- lifecycle
+- meta
+- prompts
