@@ -1,0 +1,70 @@
+id: 019e1fe7-7af1-7490-8547-7ef2bb9fe433
+spec_id: TASK-103
+agreed_id: TASK-103
+title: 'aida rebase: implement CLI subcommand (detect → classify → execute → report)'
+description: |-
+  The substrate. Stateless command that can be invoked anywhere; the skill (other child of STORY-114) wraps it; the lifecycle handlers (TASK-97/98/99/100) can delegate to it instead of re-implementing detection.
+
+  ## Phases
+
+  1. **Detect**: git fetch origin <branch> (or use --no-fetch for offline). Compute:
+     - ahead-count: git rev-list --count @{u}..HEAD
+     - behind-count: git rev-list --count HEAD..@{u}
+     - file-path overlap: intersect of git log --name-only @{u}..HEAD vs HEAD..@{u}
+     - working tree state: clean / staged / unstaged / untracked
+
+  2. **Classify**: five states
+     - **clean** (ahead == 0 AND behind == 0) — nothing to do, exit 0
+     - **ahead-only** (ahead > 0, behind == 0) — nothing to do, exit 0
+     - **behind-only** (ahead == 0, behind > 0) — straight rebase (or ff if same effect), safe
+     - **diverged-safe** (ahead > 0, behind > 0, no file-path overlap) — rebase is safe to auto-execute
+     - **diverged-risky** (ahead > 0, behind > 0, file-path overlap exists) — surface overlap, decide
+
+  3. **Execute**: based on classification + flags:
+     - --auto: execute safe rebases without prompt; report only
+     - default: confirm before execute, prompt for risky
+     - --dry-run: report classification without doing anything
+     - --no-stash: refuse if working tree dirty (default: auto-stash + pop around rebase)
+
+  4. **Report**: structured output (machine-readable via --json):
+     - State before/after
+     - Commits rebased (subject + SHA)
+     - Files touched by rebase
+     - Conflicts if any (paths + which side)
+     - Followup commands suggested
+
+  ## Flags
+
+  - --auto: skip confirmation for safe cases
+  - --dry-run: classify only, don't execute
+  - --no-fetch: skip the fetch (use cached @{u})
+  - --no-stash: refuse on dirty worktree instead of stashing
+  - --json: machine-readable output for skill / agent consumption
+  - --branch <name>: specify target branch (default: current branch's upstream)
+
+  ## Implementation notes
+
+  - Reuse git_ops::current_branch, git_ops::head_sha if they exist (see aida-core/src/git_ops.rs)
+  - The detection helpers should be reusable — TASK-97 (aida pull --autorebase) and TASK-98 (/aida-commit precheck) should both call them, not duplicate
+  - Place new code probably as a subcommand handler in aida-cli/src/main.rs + a helper module in aida-core if logic is heavy
+
+  ## Acceptance
+
+  - [ ] aida rebase subcommand implemented with the 4 phases
+  - [ ] All 5 classifications correctly distinguished
+  - [ ] --auto, --dry-run, --no-fetch, --no-stash, --json, --branch flags work
+  - [ ] Detection helpers exposed as a reusable module (so TASK-97/98/99/100 can call them)
+  - [ ] Tests cover all 5 classification paths + dirty-worktree handling
+  - [ ] aida rebase --help text written
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T05:55:24.529881695Z
+modified_at: 2026-05-13T05:55:24.529881695Z
+req_type: Task
+tags:
+- cli
+- git
+- implementation
+- rebase
