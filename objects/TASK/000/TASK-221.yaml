@@ -49,3 +49,7 @@ tags:
 - binary-selection
 - version-skew
 - worktree
+relationships:
+- rel_type: Child
+  target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
+  created_at: 2026-05-13T15:18:34.464420932Z
