@@ -2,8 +2,8 @@ id: 019e1f25-6ed2-7821-ad67-9bb0347a7b90
 spec_id: TASK-92
 agreed_id: TASK-92
 title: 'docs/plans/: add structured plan template (approach, files, tests, risks) so AIDA plans look consistent'
-description: |
-  Today AIDA plans in docs/plans/ are free-form markdown. Inspired by /ultraplan's structured plan output, propose a template:
+description: |-
+  Today AIDA plans in docs/plans/ are free-form markdown. Lessons from /ultraplan's STORY-86 output (captured as doc seed on STORY-112, 2026-05-13) surface the missing sections that distinguish a great plan from a wishlist. Expand the template to enforce them:
 
   ```markdown
   # Plan: <STORY-N or title>
@@ -11,49 +11,100 @@ description: |
   Date: YYYY-MM-DD
   Specs: STORY-N, BUG-M
   Status: Draft | Approved | In Progress | Completed
-
-  ## Context
-  Why this work, what's known, what's unknown.
+  Complexity: ~N prod LOC, ~M test LOC, K commits, risk low|medium|high
 
   ## Approach
-  High-level strategy. Why this approach over alternatives.
 
-  ## Files
-  - aida-cli/src/foo.rs — new module
-  - aida-core/src/models.rs — extend X
+  One paragraph executive summary stating the whole strategy. Reader should be able to stop here and still know what's happening.
 
-  ## Tests
-  - Unit: cover the new helper
-  - Integration: end-to-end via X command
+  ### Diagram (optional but high-value)
 
-  ## Risks
-  - Migration concerns
-  - Backward compat
-  - Performance
+  ASCII state machine or control-flow swimlane. /ultraplan's STORY-86 plan compressed 200 words of prose into ~10 lines of ASCII art for both the lifecycle (Draft → ... → Done → Completed) and the auto-bump call flow.
+
+  ## Decisions
+
+  Each significant choice resolved with rationale. NOT an open-question list — these are the calls being made.
+
+  - **Decision X**: <chosen option>. **Rationale**: <why over alternatives>.
+
+  ## Files (in build-order)
+
+  Symbol-anchored where possible (survives edits better than line numbers — see TASK-93 for verify tooling):
+
+  ### `path/to/file.rs` — purpose
+
+  - `fn foo` (line ~123): <specific edit shape>
+  - `struct Bar`: add field `baz: Option<T>`
+
+  **Order matters** — top-to-bottom so each commit builds clean.
+
+  ## Critical Files
+
+  Flat enumeration of must-touch paths, separate from prose. At-a-glance blast radius. Should match what 'Files' section enumerates.
+
+  ## Reusable helpers (do not reimplement)
+
+  The single best section of /ultraplan's output. Explicit list of existing helpers the implementer should call rather than re-invent. Could be auto-derived from trace graph (TASK-94).
+
+  - `extract_spec_ids_from_commit` (`aida-cli/src/main.rs:NNNN`) — parses (REQ-ID) from commit subjects.
+  - `git_ops::head_sha`, `git_ops::current_branch` — git introspection.
+  - ...
+
+  ## Risks + gotchas
+
+  Numbered, each with mitigation. The adversarial-thinking pass.
+
+  1. **Risk**: <forward compat / migration / perf / race condition>. **Mitigation**: <approach>.
+  2. ...
+
+  ## Tests (named, not 'add tests')
+
+  - `auto_bump_done_to_completed_picks_up_subject_refs` — happy path.
+  - `auto_bump_skips_when_not_on_default_branch` — negative case.
+  - ...
+
+  ## Verification
+
+  Executable bash smoke (positive + negative). End-to-end definition of done. Could be runnable directly via `aida plan verify --execute` (TASK-93).
+
+  ```bash
+  TMP=\$(mktemp -d); cd \"\$TMP\" && git init && aida init
+  aida add --title \"...\" --type story --status approved
+  # ... assert end-state
+  ```
+
+  ## Followups (file as TASKs at completion time)
+
+  Out-of-scope items the implementer should NOT do now but should file at queue done time. Lighter than child reqs (which block) — these are post-merge cleanup. TASK-96 auto-extracts on queue done.
+
+  - Reverted-commit handling.
+  - Statusline color for new state.
+  - ...
 
   ## Related
+
   - Builds on: STORY-X
   - Blocks: BUG-Y
   - See also: docs/positioning/...
-
-  ## Decision log
-  - YYYY-MM-DD: chose X over Y because...
   ```
 
-  Template lives at aida-core/templates/plan-template.md. `aida init` scaffolds it into docs/plans/_TEMPLATE.md for user reference.
+  Template lives at `aida-core/templates/plan-template.md`. `aida init` scaffolds it into `docs/plans/_TEMPLATE.md` for user reference. Update CLAUDE.md plan-archival section to point at it.
+
+  Convention: **prefer symbol refs (`fn handle_pull_command`) over line refs (`main.rs:19713`)** — symbol refs survive edits; line refs drift fast. /ultraplan's STORY-86 plan had 2 of 8 line refs already stale on the day generated. TASK-93 (aida plan verify) re-anchors stale refs.
 
   ## Acceptance
 
-  - [ ] Plan template at aida-core/templates/plan-template.md
-  - [ ] aida init scaffolds it
-  - [ ] docs/plans/_TEMPLATE.md becomes the convention
-  - [ ] CLAUDE.md updated with plan-template usage
+  - [ ] Plan template at aida-core/templates/plan-template.md with all 11 sections (Approach + Diagram, Decisions, Files in build-order, Critical Files, Reusable helpers, Risks + gotchas, Tests named, Verification script, Followups, Related, Complexity header)
+  - [ ] aida init scaffolds it into docs/plans/_TEMPLATE.md
+  - [ ] CLAUDE.md plan-archival section references the template + symbol-ref convention
+  - [ ] /aida-plan skill (existing) updated to mention the template
+  - [ ] At least one existing docs/plans/ file retrofitted as worked example (STORY-86 plan from 2026-05-13 is a natural candidate)
 status: Approved
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T02:23:27.442361366Z
-modified_at: 2026-05-13T02:23:27.442361366Z
+modified_at: 2026-05-13T04:29:52.854658701Z
 req_type: Task
 relationships:
 - rel_type: Child
