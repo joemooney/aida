@@ -1,0 +1,46 @@
+id: 019e1fe7-e0b3-72f3-849d-4b57348cdbe7
+spec_id: TASK-104
+agreed_id: TASK-104
+title: '/aida-rebase skill: Claude Code wrapper around aida rebase CLI'
+description: |-
+  The agent-facing surface. Skill file under aida-core/templates/skills/aida-rebase.md (per the template architecture), scaffolded into .claude/skills/ by aida init. Master copy as always.
+
+  ## Skill responsibilities
+
+  1. **Run aida rebase --json --dry-run first** to get structured classification without side effects.
+  2. **Surface the classification** to the user/agent in natural language:
+     - clean / ahead-only → 'Already in sync (or ahead-only). No rebase needed.'
+     - behind-only → 'Behind by N commits, no local commits to replay. Safe rebase — proceed?'
+     - diverged-safe → 'Both sides advanced (M ahead, N behind), no file overlap. Safe rebase — proceed?'
+     - diverged-risky → 'Both sides advanced (M ahead, N behind), overlap on: [files]. Inspect before proceeding.'
+  3. **Execute or defer** based on user/agent decision.
+  4. **Cross-link** to related skills in the frontmatter:
+     - /aida-commit (calls /aida-rebase when precheck detects stale)
+     - /aida-pickup (verifies fresh base at session pickup time)
+     - /aida-pr (verifies before opening PR)
+
+  ## Skill file shape (mirrors /aida-pickup, /aida-commit conventions)
+
+  aida rebaseaida rebase --json --dry-runaida rebaseaida rebase --autoaida rebase --dry-run
+
+  ## Acceptance
+
+  - [ ] Skill file at aida-core/templates/skills/aida-rebase.md
+  - [ ] Matching command file at aida-core/templates/commands/aida-rebase.md
+  - [ ] make sync-templates relinks correctly
+  - [ ] aida init scaffolds the skill + command
+  - [ ] Skill calls aida rebase --json --dry-run, parses classification, surfaces in agent-readable text
+  - [ ] Cross-links in frontmatter to /aida-commit, /aida-pickup, /aida-pr
+  - [ ] Skill catalog in CLAUDE.md / AIDA.md mentions /aida-rebase as a daily driver
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T05:55:50.579251044Z
+modified_at: 2026-05-13T05:55:50.579251044Z
+req_type: Task
+tags:
+- claude-code
+- rebase
+- skill
+- wrapper
