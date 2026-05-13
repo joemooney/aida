@@ -1,0 +1,71 @@
+id: 019e2213-63f7-7e93-8c66-07c3705bcf91
+spec_id: BUG-98
+agreed_id: BUG-98
+title: aida session list and aida session leases show inconsistent views (user reaches for the wrong one)
+description: |-
+  Two commands answer overlapping but different questions about active sessions, and the default-reach (aida session list) is the less-useful one.
+
+  ## Observed inconsistency 2026-05-13
+
+  User tried to end a session, hit ambiguous-multi-lease error, and ran:
+
+    aida session list
+    ID        AGE     ROLE         SPEC      WORKTREE                      TITLE
+     1bf450af  7h      implementer  FR-1-042  aida @ main                   Clarify CLI command naming convention
+    (1 older session hidden — pass --all to see them)
+
+  That output suggested 1 active session. So the user then tried:
+
+    aida session leases
+    Active session leases
+    id             scope                branch             role           worktree
+    019e1cd3       EPIC-20              epic-20-2          implementer    /home/joe/ai/aida-epic-20
+    019e1f97       PR-19                pr-19              reviewer       /home/joe/ai/aida-pr-19
+    019e2021       EPIC-21              epic-21-2          implementer    /home/joe/ai/aida-epic-21
+
+  3 active leases. The two commands have completely different concepts of 'active session':
+
+  - aida session list: per-user-or-context filtered, possibly current-shell-only
+  - aida session leases: the canonical 'who holds what lease right now'
+
+  For a user trying to clean up active state, leases is what they need. But list is the default-reach because of naming intuition.
+
+  ## Proposed fix
+
+  Two complementary changes:
+
+  1. Align aida session list to show all active leases by default (the same set as aida session leases). The filtered view becomes an explicit --mine or --shell flag.
+
+  2. Or alias aida session leases as aida session list --all-leases for the brave; keep the rest.
+
+  Or third option: deprecate one in favor of the other. aida session leases is more semantically precise but less intuitive; aida session list is intuitive but currently misleading.
+
+  Whichever path: the default reach has to surface real state.
+
+  ## Composes with
+
+  - TASK-220 (aida status) — both are 'what's currently active' surfaces; aida status's Session section should also surface all leases not just shell's
+  - TASK-110 / TASK-111 (session-end ordering + CI awareness) — session-end UX cluster
+
+  ## Acceptance
+
+  - [ ] aida session list and aida session leases either show the same set, or differ by an obvious --flag the user can discover
+  - [ ] aida session list --help and aida session leases --help cross-reference each other explicitly
+  - [ ] Tests cover the 'multiple-leases-no-shell-lease' scenario where today's list returns empty but leases returns N
+
+  ## Discovered via
+
+  2026-05-13 — user with 3 active leases ran session list, saw 1 old result, thought workspace was clean, then was surprised by leases command output.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T16:02:36.663781955Z
+modified_at: 2026-05-13T16:02:36.663781955Z
+req_type: Bug
+tags:
+- consistency
+- leases
+- list
+- session
+- ux
