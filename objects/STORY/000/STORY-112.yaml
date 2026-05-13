@@ -1,0 +1,46 @@
+id: 019e1f25-629b-79b1-ba62-7172b2c4c174
+spec_id: STORY-112
+agreed_id: STORY-112
+title: 'Plan-mode skill: draft implementation plan, review before execute (inspired by /ultraplan)'
+description: |
+  Caught 2026-05-13 — researched Claude Code's /ultraplan. It separates "plan mode" (draft implementation roadmap) from "execute mode" (actually code it). User reviews the plan in browser, iterates, then executes.
+
+  AIDA's docs/plans/*.md convention captures plans but lacks:
+  - Structured plan format (today: free markdown)
+  - Iteration tracking (today: just rewrite the file)
+  - Plan-vs-implementation linkage (today: implicit via Related Requirements section)
+
+  Proposed: /aida-plan skill (sibling to /aida-pickup + /aida-review + /aida-pr) that:
+
+  1. Takes a SPEC-ID or free-form prompt
+  2. Drafts an implementation plan to .aida/plans/STORY-N.md
+  3. Surfaces it for user review (don't auto-commit; don't auto-execute)
+  4. On user confirmation: optional commit to docs/plans/YYYY-MM-DD-slug.md (per AIDA convention)
+  5. Returns to /aida-pickup with the plan as context
+
+  Key differences from /ultraplan:
+  - Local-first (no cloud session)
+  - Integrated with AIDA's req graph (SPEC-IDs, status, trace links)
+  - Free (no subscription cost)
+  - Outputs structured markdown that becomes part of the git history
+
+  ## Composes with
+
+  - /aida-pickup — plan-mode is a pre-pickup step
+  - docs/plans/ convention (already exists in CLAUDE.md)
+  - /aida-pr — the plan becomes part of the PR's context
+
+  ## Acceptance
+
+  - [ ] /aida-plan skill drafts implementation plan for a SPEC-ID
+  - [ ] Reviewable artifact at .aida/plans/SPEC-N.md (or temp file)
+  - [ ] User confirms before any execution
+  - [ ] Integrates with /aida-pickup as upstream context
+  - [ ] Optional: structured plan format (sections: approach, files, tests, risks) so plans across the project look consistent
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T02:23:24.315649570Z
+modified_at: 2026-05-13T02:23:24.315649570Z
+req_type: Story
