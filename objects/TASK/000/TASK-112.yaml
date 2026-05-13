@@ -63,7 +63,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:23:13.837377870Z
-modified_at: 2026-05-13T06:23:13.837377870Z
+modified_at: 2026-05-13T06:24:19.329733551Z
 req_type: Task
 tags:
 - claude
@@ -75,3 +75,9 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-13T06:23:16.256827754Z
+comments:
+- id: 019e2001-f381-7020-acac-86d134bff781
+  author: joe
+  content: 'Documented in docs/session-lifecycle.md (added 2026-05-13). See section ''Transition 4→5→6: Resume preserves Claude context'' — names the two-session-layer split (AIDA vs Claude Code) that makes resume possible.'
+  created_at: 2026-05-13T06:24:19.329733551Z
+  modified_at: 2026-05-13T06:24:19.329733551Z
