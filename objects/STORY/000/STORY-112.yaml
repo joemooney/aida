@@ -42,9 +42,70 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T02:23:24.315649570Z
-modified_at: 2026-05-13T02:23:24.315649570Z
+modified_at: 2026-05-13T04:26:57.772624900Z
 req_type: Story
 relationships:
 - rel_type: Child
   target_id: 019e1cca-9950-78a0-bf56-b1393eacdcc5
   created_at: 2026-05-13T02:23:25.447413001Z
+comments:
+- id: 019e1f96-816c-7b12-a683-72dbc70fa18b
+  author: joe
+  content: |-
+    ## Doc seed: lessons from /ultraplan's STORY-86 output (2026-05-13)
+
+    Field study — we ran /ultraplan on STORY-86 ("add Done status") and saved the result to docs/plans/2026-05-13-story-86-done-status.md. Dissecting that artifact surfaces what /ultraplan delivers, what it can't, and where AIDA should + shouldn't compete.
+
+    ### What /ultraplan does well
+
+    - **State-machine + control-flow ASCII diagrams** before any file-by-file. Compresses prose.
+    - **Single-paragraph "Approach"** before details — executive summary discipline.
+    - **File-by-file changes with line refs** — ~25 files, each with the specific edit shape.
+    - **"Critical Files" section** — must-touch paths surfaced separately from prose.
+    - **"Reusable helpers — do not reimplement"** — explicit list with line refs (e.g. extract_spec_ids_from_commit, record_role_activity, Storage::update_atomically). This is /ultraplan's best section — prevents agent re-invention.
+    - **Risks + gotchas** — 8 numbered items with mitigations (downgrade serde compat, force-push rewrites, first-pull-on-new-clone, etc.).
+    - **Decision callouts** — "Where does X live? Both. Here's why." vs. open-question lists.
+    - **Complexity estimate** — LOC + commits + risk level.
+    - **Verification script** — ~30-line end-to-end bash smoke, positive + negative cases.
+    - **Followups (defer)** — explicit "file these as tasks at completion time" list, lighter than /aida-plan's child-req decomposition.
+    - **Order-matters annotation** — "do edits top-to-bottom so each commit builds."
+    - **Test cases enumerated by name**, not "add tests."
+
+    ### What /ultraplan gets wrong / can't do
+
+    1. **Line numbers drift** — within the same day, /ultraplan's refs already off: validate_status_input:3175 (actual 3166), DbCommand::Sync:2846 (actual inner arm at 22397, ~19k lines off). Static snapshot → stale fast.
+    2. **No `cargo check` ground-truthing** — can read code, can't run it. cache.rs casing got punted to "verify" instead of answered.
+    3. **No tie-in to AIDA primitives** — doesn't reference relationships, doesn't propose doc seeds, doesn't queue-route.
+    4. **Doesn't update the spec itself** — lives in chat until manually saved.
+    5. **No "uncertainty surface" at the top** — the one thing the planner wasn't sure about (cache.rs) buried mid-document.
+    6. **Not interactive** — can't push back "fold commits 2+3" without re-running.
+    7. **No recent-history awareness** — plan generated without knowing PR-15/16/17 just shipped relevant trailer infrastructure.
+
+    ### Recommendation: don't clone /ultraplan, raise the floor
+
+    Split of responsibilities:
+
+    | /ultraplan or plan-mode does | AIDA does |
+    |---|---|
+    | Draft prose from scratch (LLM-heavy) | Enforce plan template (TASK-92) |
+    | File-by-file file analysis | **Verify** plans: re-anchor stale line refs to symbols, check Critical Files exist, lint Followups section |
+    | Cloud cycles | Auto-derive "Reusable helpers" + "Files touched" from req graph + trace comments |
+    | Cost $5-$20/use | Cost $0 — local polish, not generation |
+
+    Concrete followups that fall out of this lesson:
+
+    1. Expand TASK-92's template to include: Approach diagram, Critical Files, Reusable helpers, Risks+gotchas, Decision callouts, Followups, Verification script, Complexity estimate, Test cases by name, Order-matters note.
+    2. New task: `aida plan verify <file>` — re-anchor line refs to symbols, validate paths, check Critical Files appear in body.
+    3. Convention update: symbol refs (`fn handle_pull_command`) preferred over line refs (`main.rs:19713`). Survives edits.
+    4. New child STORY: auto-derive "Reusable helpers" from trace graph for a given target spec.
+    5. New task composing STORY-42 + STORY-112: `aida queue work <spec>` detects matching docs/plans/ file and pre-populates session manifest with Critical Files / Followups.
+    6. /aida-plan skill update: on save, auto-comment a link on the target spec.
+    7. New task: Followups auto-extraction on `aida queue done` — scan plan file Followups section, offer to `aida add` each as a TASK.
+
+    The thesis: **let the LLM draft, let AIDA structure + verify + execute.** AIDA's defensible niche is the agent-collaboration layer (graph, IDs, traces, queue, sessions), not the planning oracle.
+
+    ---
+
+    *This comment is a documentation seed per EPIC-24 (living documentation). Future `aida doc generate` could extract sections into docs/positioning/vs-ultraplan.md and docs/tutorials/planning-workflow.md.*
+  created_at: 2026-05-13T04:26:57.772624900Z
+  modified_at: 2026-05-13T04:26:57.772624900Z
