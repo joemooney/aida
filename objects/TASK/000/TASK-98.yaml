@@ -1,0 +1,45 @@
+id: 019e1fd4-5888-7111-8120-67aa74694d2a
+spec_id: TASK-98
+agreed_id: TASK-98
+title: '/aida-commit precheck: fetch + warn if branch behind origin before staging'
+description: |-
+  Counterpart to TASK-97 on the commit side. When /aida-commit runs (or any aida-wrapped commit flow), do a pre-commit fetch + ahead/behind check before allowing the commit to proceed.
+
+  Today: commit can succeed silently on a branch that's already behind origin/main, creating divergent-branches grief at the next pull/push. The push side caught some of this (TASK-54: aida push detects behind-main) but the commit side has no equivalent guard.
+
+  Wire into the /aida-commit skill (aida-core/templates/skills/aida-commit.md):
+
+  1. Before staging: git fetch origin <current-branch> (background, ~1s)
+  2. Check ahead/behind: git rev-list --left-right --count HEAD...@{u}
+  3. If behind by N commits AND N > 0:
+     - Print: 'Branch is behind origin/<branch> by N commits. Pull first? [Y/n/force]'
+     - Y: git pull --rebase, then proceed
+     - n: prompt-confirm 'commit anyway? this may cause divergence'
+     - force: skip the check (--no-fetch flag equivalent)
+  4. If diverged (both M ahead, N behind):
+     - Stronger warning: 'Diverged: M ahead, N behind. Resolve before committing.'
+     - Show divergence detail (commit subjects)
+
+  Could be an aida-side check (new aida commit subcommand wraps git commit) OR a pre-commit hook scaffolded by aida init. Hook approach is lighter — composes with existing commit-msg hook.
+
+  Triggered by 2026-05-13 incident: agent committed plan file on stale main while PR #19 merged remotely.
+
+  ## Acceptance
+
+  - [ ] /aida-commit skill documents the pre-commit fetch + behind-check workflow
+  - [ ] Pre-commit hook (or aida commit wrapper) implementing the check
+  - [ ] Configurable threshold (e.g. AIDA_COMMIT_PRECHECK=fetch|skip|enforce)
+  - [ ] Bypassable with --no-fetch / --force for offline work
+  - [ ] Push-side TASK-54 and pull-side TASK-97 cross-referenced
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T05:34:30.536264117Z
+modified_at: 2026-05-13T05:34:30.536264117Z
+req_type: Task
+tags:
+- commit
+- git
+- precheck
+- skill
