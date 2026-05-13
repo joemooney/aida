@@ -22,10 +22,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:17:46.354015070Z
-modified_at: 2026-05-13T14:44:45.679457732Z
+modified_at: 2026-05-13T14:44:52.475816067Z
 req_type: Story
 relationships:
 - rel_type: !Custom implements
   target_id: 019e134a-57d3-70e0-a15c-006dea10310d
   created_at: 2026-05-13T06:17:48.455077922Z
   created_by: joe
+comments:
+- id: 019e21cc-387b-7fd3-b3db-5a917050e0c2
+  author: joe
+  content: 'Review verdict: changes requested. PR-20 closed, fixup PR-21 (STORY-117) follows.'
+  created_at: 2026-05-13T14:44:52.475816067Z
+  modified_at: 2026-05-13T14:44:52.475816067Z
