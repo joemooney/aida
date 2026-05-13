@@ -1,0 +1,41 @@
+id: 019e201e-faa3-7770-8533-e31f14919930
+spec_id: BUG-95
+agreed_id: BUG-95
+title: aida pull --code-only skips Done to Completed auto-bump (conditional placement bug)
+description: |-
+  Follow-up from PR-20 deep-pass review (STORY-86 implementation).
+
+  Reviewer found: the aida pull auto-bump call at main.rs:20500 is nested inside the if !code_only block. Consequence: aida pull --code-only pulls the code branch (which is what brings in teammate merges) but skips the Done to Completed auto-bump that should fire on those merges. A user who runs only aida pull --code-only after a teammate's merge won't see their Done specs bumped until their next full aida pull.
+
+  This is backwards from intent: aida pull --code-only is the leg that NEEDS the auto-bump (the code-side merges are what trigger it). The conditional should likely be inverted, or the call hoisted out of the if-block.
+
+  ## Fix sketch
+
+  Move the auto_bump_done_to_completed call out of the if !code_only block. The auto-bump only depends on code-branch state, so it should run whenever the code leg pulled, regardless of whether the store leg also pulled.
+
+  ## Acceptance
+
+  - [ ] aida pull --code-only triggers auto-bump after the code pull
+  - [ ] aida pull (default, both legs) still triggers auto-bump (no regression)
+  - [ ] aida pull --store-only correctly skips auto-bump (store-only pull means no new code-branch commits to scan)
+  - [ ] Test: run aida pull --code-only after a remote merge, assert Done specs bump
+
+  ## Composes with
+
+  - TASK-106 (push/pull --code-only / --store-only granularity) — same flag surface; this is the auto-bump leg of that granularity contract.
+
+  ## Discovered via
+
+  PR-20 /aida-review deep-pass 2026-05-13.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T06:56:01.699959803Z
+modified_at: 2026-05-13T06:56:01.699959803Z
+req_type: Bug
+tags:
+- auto-bump
+- code-only
+- conditional
+- pull
