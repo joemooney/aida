@@ -1,0 +1,51 @@
+id: 019e21eb-09e4-7172-97cc-3f5e9bfdf172
+spec_id: TASK-221
+agreed_id: TASK-221
+title: 'aida dev activate: prefer binary matching current branch HEAD over most-recently-built'
+description: |-
+  Today aida dev activate prepends target/{release,debug}/ to PATH and picks whichever was most recently built. That heuristic fails when:
+
+  - User builds release from branch A
+  - User switches to branch B
+  - User builds debug from B
+  - aida dev activate prefers release (more recent? alphabetical? not entirely clear) but that binary was built from branch A
+  - Running aida from branch B uses a binary that doesn't match B's source
+
+  This caused the 2026-05-13 STORY-86 recovery confusion: user was on epic-21-2 branch with the Done variant, but aida dev activate was running target/debug/aida built from main (no Done), causing STORY-86 yaml to fail to parse and look broken when the file was actually fine.
+
+  ## Proposed selection logic
+
+  Each cargo build embeds the source's git SHA into the binary (already done — aida --version prints 'built TIMESTAMP, sha SHA+dirty'). Use that:
+
+  1. Compute current branch HEAD SHA
+  2. Inspect target/release/aida and target/debug/aida — extract embedded SHA from each
+  3. Prefer the binary whose SHA matches (or is an ancestor of) current branch HEAD
+  4. If neither matches, prefer most-recently-built (today's behavior) but emit a warning: 'active aida binary SHA X does not match current branch HEAD Y; expect parse failures if source diverges'
+  5. Tie-breaker between multiple matching binaries: prefer release (smaller surface for bugs vs debug)
+
+  ## Composes with
+
+  - BUG-0395 (or whichever ID the parse-delete bug gets) — this TASK makes the version-mismatch case detectable instead of silently catastrophic
+  - TASK-0396 (cargo cache cross-worktree leak) — same category of build-state confusion across worktree lifetimes
+  - docs/git-workflow.md or session-lifecycle.md — gain a section on binary version hygiene
+
+  ## Acceptance
+
+  - [ ] aida dev activate selects binary by embedded-SHA matching current branch HEAD
+  - [ ] Falls back to recency only when no match exists, with a warning
+  - [ ] aida dev status shows which binary is selected and why (matched-SHA vs recency-fallback)
+  - [ ] Tests cover: SHA-match wins over recency; recency fallback emits warning; ancestor-SHA also matches (current branch is ahead of build SHA)
+  - [ ] CLAUDE.md AIDA-developer workflow section updated to describe the new heuristic
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T15:18:32.164336313Z
+modified_at: 2026-05-13T15:18:32.164336313Z
+req_type: Task
+tags:
+- activate
+- aida-dev
+- binary-selection
+- version-skew
+- worktree
