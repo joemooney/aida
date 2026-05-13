@@ -184,9 +184,54 @@ This invokes the same logic `aida session end` runs as a backup, but at the mome
 
 Print whatever the command emits verbatim (✓ filed / ⓘ already exists / ⚠ needs attention). The session-end backup still fires later as a fail-safe, so a failure here isn't fatal — but a ⚠ outcome usually means `gh` is unauthenticated or PATH-broken; surface that to the user.
 
-### 11. Output the URL
+### 11. Output the URL + Next steps — trace:TASK-87
 
-Print the URL `gh` returned, and optionally suggest `/aida-code-review` as the next step if the project has a reviewer role configured.
+Print the URL `gh` returned. Then surface a structured
+`Next steps (recommended order):` block so the implementer→reviewer hand-off
+is explicit rather than improvised. Don't auto-execute — the user picks.
+
+**Detect state first:**
+
+```bash
+gh run list --branch <pr-branch> --limit 1 --json status,conclusion 2>/dev/null
+aida session show 2>/dev/null | awk '/^Session /{print $2; exit}'   # session-id prefix
+```
+
+Combine with step 10's auto-queue outcome (✓ filed / ⓘ already exists /
+⚠ skipped).
+
+**Glyph convention** (consistent across `/aida-pickup`, `/aida-pr`,
+`/aida-review`): `▶` = primary recommended action, `⏵` = alternative path,
+`🚪` = stop/exit. Recommendations must be CONCRETE — name the PR, the
+review story, the session ID.
+
+**Templates:**
+
+*Auto-queue succeeded (✓ filed or ⓘ already exists):*
+
+```
+PR-<N> opened: <url>
+<STORY-X> filed as review story; reviewer queue has it at head.
+
+Next steps (recommended order):
+  1. ▶ Start review session → `aida queue work <STORY-X>` (or `aida queue work PR-<N>`)
+  2. ⏵ Wait for CI to settle first → `gh run watch` (block until green, then start review)
+  3. 🚪 End implementer session, take a break → Ctrl+D + `aida session end <session-id>` from parent shell
+```
+
+*Auto-queue skipped/failed (⚠ outcome from step 10):*
+
+```
+PR-<N> opened: <url>
+⚠ Auto-queue review didn't fire (gh unauthenticated or PATH-broken).
+
+Next steps:
+  1. ▶ Open a reviewer session manually → `eval "$(aida role enter reviewer --owns PR-<N>)"` then `/aida-review --pr <N>`
+  2. ⏵ Just wait for CI + merge inline → `gh run watch` then `gh pr merge <N> --squash`
+  3. 🚪 End implementer session → Ctrl+D + `aida session end <session-id>` from parent shell
+```
+
+Print exactly one block — don't dump both templates.
 
 ## Composes With
 

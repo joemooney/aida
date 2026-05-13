@@ -194,15 +194,59 @@ aida queue done <review-story-id> --yes
 
 Never silently leave a review story in In Progress when the PR was closed without merge — the next session would see it as still-active work. (BUG-34)
 
-### 10. Hand off
+### 10. Hand off + Next steps — trace:TASK-87
 
-Print a one-liner the user can act on:
+After the merge lands, surface a structured `Next steps (recommended order):`
+block so the post-merge moment is self-guiding instead of relying on
+improvised "want to cut a release?" prompts. Don't auto-execute — the user
+picks.
+
+**Detect state first:**
+
+```bash
+aida session show 2>/dev/null | awk '/^Session /{print $2; exit}'   # session-id prefix
+git describe --tags --abbrev=0 2>/dev/null                           # last release tag
+git log $(git describe --tags --abbrev=0 2>/dev/null)..main --oneline | wc -l   # commits since
+aida queue list --role implementer 2>/dev/null | head -5             # is there more implementer work?
+```
+
+- **>5 commits since last tag, or a major-feature PR just merged** →
+  release-ready path
+- **Otherwise** → standard "next batch" path
+
+**Glyph convention** (consistent across `/aida-pickup`, `/aida-pr`,
+`/aida-review`): `▶` = primary recommended action, `⏵` = alternative path,
+`🚪` = stop/exit. Recommendations must be CONCRETE — name the next cluster,
+the release script, the session ID.
+
+**Templates:**
+
+*Standard "next batch" path:*
 
 ```
-✓ PR-N merged, M specs marked Completed. Run `aida session end <session-id>` to close out the reviewer session.
+✓ PR-<N> merged, <M> specs marked Completed. Review story <STORY-X> closed.
+
+Next steps (recommended order):
+  1. ▶ Sync + decide next batch → `cd <project-root>` then `aida pull && cargo build --release` then `aida queue work <EPIC-M>`
+  2. ⏵ Cut a patch release first → `make release-patch YES=1`
+  3. 🚪 End reviewer session, stop → Ctrl+D + `aida session end <session-id>` from parent shell
 ```
 
-(Don't call `aida session end` from inside the skill — the user runs it from outside the worktree so their shell's cwd doesn't go stale.)
+*Release-ready path (>5 commits since last tag, or PR carried a major feature):*
+
+```
+✓ PR-<N> merged. ⚠ <K> commits since v<X.Y.Z> — release-ready.
+
+Next steps:
+  1. ▶ Cut release → `make release-patch YES=1` (or `release-minor` for new features)
+  2. ⏵ Keep merging the queue first → `aida queue work <EPIC-M>`
+  3. 🚪 End reviewer session → Ctrl+D + `aida session end <session-id>` from parent shell
+```
+
+Print exactly one block — don't dump both templates.
+
+(Don't call `aida session end` from inside the skill — the user runs it from
+outside the worktree so their shell's cwd doesn't go stale.)
 
 ## Composes With
 
