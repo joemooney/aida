@@ -1,0 +1,26 @@
+id: 019e1eff-6ac2-7553-a527-d979cda99d5e
+spec_id: STORY-111
+agreed_id: STORY-111
+title: 'Review PR-18: fix(queue): default queue list filter respects ''no active scope'' (BUG-89)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `epic-1`.
+
+  - PR: <https://github.com/joemooney/aida/pull/18>
+  - Branch: `epic-1` → `main`
+
+  ## Covers
+
+  - BUG-89
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 18` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T01:41:56.034792133Z
+modified_at: 2026-05-13T01:41:56.034792133Z
+req_type: Story
