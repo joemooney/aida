@@ -1,0 +1,57 @@
+id: 019e21d7-eb48-7da0-bbb1-e419e71e4e88
+spec_id: TASK-0396
+title: cargo incremental cache leaks across worktree lifetimes after aida session end
+description: |-
+  Symptom: after aida session end removes a worktree, building from a sibling worktree (e.g. main) can fail with non-exhaustive match errors referencing source paths in the removed worktree. The cargo target/.fingerprint/ cache holds artifacts that were built from the now-removed worktree's source; cargo links the current build against those stale artifacts, producing compile errors that don't match the actual on-disk source.
+
+  ## Concrete repro
+
+  1. Start an implementer session in a worktree (e.g. via aida queue work) that modifies a workspace crate (e.g. adds an enum variant to aida-core)
+  2. Build there: cargo build
+  3. End the session: aida session end ID — worktree is properly removed
+  4. Switch to a sibling worktree (e.g. main, which does NOT have the modification)
+  5. Build there: cargo build — fails with errors referencing the removed worktree's source paths
+
+  Root cause: cargo's incremental-build fingerprint cache references paths from the previous build context. When the build context disappears (worktree removed) but cargo's target/ remains in the sibling, cargo links against stale cached artifacts.
+
+  This was observed 2026-05-13 after STORY-86's implementer worktree at /home/joe/ai/aida-epic-21 was removed. Subsequent cargo build from main showed errors about RequirementStatus::Done not handled, with note paths pointing at the deleted worktree's aida-core/src/models.rs.
+
+  ## Recovery (manual, until automated)
+
+  cargo clean                         # full clean, safest
+  cargo clean -p aida-core -p aida-cli  # surgical, faster
+
+  ## Two paths for AIDA
+
+  A. Documentation only — note the gotcha in docs/session-lifecycle.md + a troubleshooting recipe. AIDA acknowledges the upstream cargo behavior without trying to mask it.
+
+  B. aida session end runs cargo clean for the worktree's crates — surgical, prevents the pollution entirely. Tradeoff: might invalidate cached artifacts that other workflows want to keep. Could be opt-in via flag (--clean-cache) or opt-out via config.
+
+  Implementer picking this up should decide between A and B (or both — doc the gotcha + ship the auto-clean as opt-in). The cost of B is small if the cleanup is scoped tightly (only crates touched in the worktree being removed); the value of B is removing a build-time mystery that's hard to diagnose from the symptoms.
+
+  ## Composes with
+
+  - TASK-111 (CI-aware session end): same lifecycle hook
+  - TASK-99 (aida queue work pulls code): the start side of the worktree lifecycle that this is the end side of
+  - docs/session-lifecycle.md: 'What survives across the lifecycle' table would gain a footnote about cargo cache invalidation
+
+  ## Acceptance
+
+  - [ ] docs/session-lifecycle.md updated with the gotcha + recovery recipe (cargo clean -p variants)
+  - [ ] EITHER aida session end gains a --clean-cache flag that runs cargo clean -p for the worktree's crates, OR explicitly defer the auto-clean and rely on docs
+  - [ ] If implementing the auto-clean: scope tight (only crates from worktree's manifest), opt-in via flag, tests cover the no-cargo-project / multi-crate / clean-fails paths
+  - [ ] CLAUDE.md AIDA-developer workflow section gains a one-line note about cross-worktree cargo cache (if doc-only path)
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T14:57:39.144983056Z
+modified_at: 2026-05-13T14:57:39.144983056Z
+req_type: Task
+tags:
+- build
+- cache
+- cargo
+- gotcha
+- session-end
+- worktree
