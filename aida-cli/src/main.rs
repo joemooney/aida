@@ -17566,7 +17566,11 @@ mod auto_bump_done_tests {
         // Anything else → on (including the canonical "true" / "1").
         for on in &["true", "1", "", "yes", "anything-else"] {
             std::env::set_var("AIDA_AUTO_BUMP", on);
-            assert!(auto_bump_enabled(), "AIDA_AUTO_BUMP={:?} should stay on", on);
+            assert!(
+                auto_bump_enabled(),
+                "AIDA_AUTO_BUMP={:?} should stay on",
+                on
+            );
         }
 
         // Restore.
@@ -17709,7 +17713,9 @@ mod auto_bump_done_tests {
 
         // Seed an empty store so the first load doesn't have to default.
         let storage = Storage::new(&store_path);
-        storage.save(&aida_core::RequirementsStore::default()).unwrap();
+        storage
+            .save(&aida_core::RequirementsStore::default())
+            .unwrap();
 
         (tmp, project_root, store_path)
     }
@@ -17831,11 +17837,7 @@ mod auto_bump_done_tests {
         run_git(&project_root, &["add", "file.txt"]);
         run_git(
             &project_root,
-            &[
-                "commit",
-                "-m",
-                &format!("feat: land twice ({})", spec_id),
-            ],
+            &["commit", "-m", &format!("feat: land twice ({})", spec_id)],
         );
 
         let storage = Storage::new(store_path.clone());
