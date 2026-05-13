@@ -1,0 +1,26 @@
+id: 019e220a-f10c-7940-a1c0-4db3f41d885a
+spec_id: STORY-118
+agreed_id: STORY-118
+title: 'Review PR-22: EPIC-23 batch 3: persist-path data-loss fix (BUG-96)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e2204`) for branch `epic-23-3`.
+
+  - PR: <https://github.com/joemooney/aida/pull/22>
+  - Branch: `epic-23-3` → `main`
+
+  ## Covers
+
+  - BUG-96
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 22` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T15:53:22.956920205Z
+modified_at: 2026-05-13T15:53:22.956920205Z
+req_type: Story
