@@ -13158,6 +13158,30 @@ fn pr_auto_queue_review(branch_override: Option<&str>) -> Result<()> {
     );
     render_auto_queue_outcome(&outcome);
 
+    // BUG-86: on every non-success outcome (needs-attention OR by-design
+    // skip), print the exact command to re-run manually. The skill side
+    // (/aida-pr step 10) consumes this so the agent can quote it back at
+    // the user instead of having them spelunk for the right invocation.
+    // Filed and AlreadyExists are the only "no action needed" cases.
+    // trace:BUG-86 | ai:claude
+    match outcome.status {
+        AutoQueueStatus::Filed | AutoQueueStatus::AlreadyExists => {}
+        AutoQueueStatus::SkippedByDesign => {
+            eprintln!(
+                "  {} `aida pr auto-queue-review --branch {}`",
+                "Re-run manually:".dimmed(),
+                branch
+            );
+        }
+        AutoQueueStatus::SkippedNeedsAttention => {
+            eprintln!(
+                "  {} `aida pr auto-queue-review --branch {}`",
+                "Re-run manually:".yellow().bold(),
+                branch
+            );
+        }
+    }
+
     // Exit non-zero for the "needs attention" bucket so /aida-pr can
     // detect the failure mode and tell the user to install gh / re-auth
     // / etc. Filed, already-filed, and by-design skips all return 0 —
