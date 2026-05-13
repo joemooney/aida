@@ -1,0 +1,36 @@
+id: 019e1f98-72d0-7d02-9c08-7b3d52001a22
+spec_id: TASK-95
+agreed_id: TASK-95
+title: 'aida queue work <spec>: pre-populate session manifest from matching docs/plans/ file'
+description: |-
+  /ultraplan's plan for STORY-86 had a 'Critical Files' enumeration that would be perfect as session manifest seed content — but today plans are inert markdown. The fresh implementer launches a session, then has to manually open the plan file and re-read it.
+
+  Tighten the loop: aida queue work <spec> already creates a session + worktree + manifest. If a matching docs/plans/YYYY-MM-DD-*<spec>*.md file exists, pre-populate the session manifest with:
+
+  1. Plan file path under manifest 'context' or 'preflight' key
+  2. Critical Files list → manifest 'files-of-interest'
+  3. Followups list → manifest 'post-completion-tasks' (which the queue done handler later reads — see related task on followup auto-extraction)
+  4. Verification script → manifest 'definition-of-done'
+
+  The implementer launching via /aida-pickup sees these surfaced in the first 'here's your assignment' message rather than having to grep for the plan.
+
+  Composes STORY-42 (queue work) + STORY-112 (plan-mode) + TASK-92 (plan template — defines section names this code parses).
+
+  ## Acceptance
+
+  - [ ] aida queue work auto-discovers matching docs/plans/ files (filename or first-line spec-id match)
+  - [ ] Manifest pre-populated with plan content (Critical Files, Followups, Verification)
+  - [ ] /aida-pickup surfaces the plan summary in its first message
+  - [ ] Graceful no-op when no plan file exists (today's behavior)
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T04:29:05.104232414Z
+modified_at: 2026-05-13T04:29:05.104232414Z
+req_type: Task
+tags:
+- manifest
+- plan
+- queue
+- session
