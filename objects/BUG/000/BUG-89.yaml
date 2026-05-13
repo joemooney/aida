@@ -72,12 +72,12 @@ description: |
   ## Severity rationale
 
   Marked High because it broke the basic "queue is my work list" mental model in a single session. The user couldn't find their queued items via the default command — they had to know to pass `--user joe` explicitly. Fundamental queue UX failure.
-status: InProgress
+status: Completed
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T01:11:26.881810830Z
-modified_at: 2026-05-13T01:27:48.313359407Z
+modified_at: 2026-05-13T01:33:14.993949431Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -164,3 +164,7 @@ comments:
     Still High. Users default invocation of `aida queue list` shows zero items in the most common context (main project root, no active session). The implicit-filter behavior fights the user's mental model.
   created_at: 2026-05-13T01:16:39.050712146Z
   modified_at: 2026-05-13T01:16:39.050712146Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-13T01:33:14.993949431Z
+  implemented_by: joe
