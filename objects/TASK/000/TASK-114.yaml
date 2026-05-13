@@ -1,0 +1,73 @@
+id: 019e201b-a3ac-7170-9b0d-ff2700be7acf
+spec_id: TASK-114
+agreed_id: TASK-114
+title: '/aida-import-plan FILE: process saved /ultraplan output into AIDA first-class state'
+description: |-
+  Direction B of AIDA/ultraplan integration. After /ultraplan's teleport-back-to-terminal save-to-file option, the plan is a free-floating local file. This skill processes it into AIDA conventions in one command, closing the workflow loop.
+
+  ## Shape
+
+  /aida-import-plan FILE             — process file, leave queue alone
+  /aida-import-plan FILE --queue     — also aida queue add SPEC --for implementer
+  /aida-import-plan FILE --dry-run   — show what would happen, don't act
+
+  ## Steps
+
+  1. Read the file
+  2. Detect target SPEC-ID — try in order:
+     a. File frontmatter 'spec: SPEC-ID' field
+     b. First-heading '# Plan: SPEC-ID' pattern
+     c. Filename pattern matching SPEC-TYPE-N
+     d. Prompt user if ambiguous
+  3. Rename + move to docs/plans/YYYY-MM-DD-slug.md per AIDA convention. Slug derived from SPEC title (kebab-cased, truncated). Date from today.
+  4. Post aida comment add SPEC with one-liner pinning the plan to its target
+  5. Parse plan sections per the TASK-92 template:
+     - 'Critical Files' writes to session manifest hint (composes TASK-95)
+     - 'Followups' files as draft TASKs under SPEC (composes TASK-96)
+     - 'Verification' stores path for later /aida-review consumption
+  6. Run aida plan verify FILE to re-anchor line refs to symbols (composes TASK-93). Report drift findings. Optionally auto-fix with --auto-anchor flag.
+  7. If --queue flag passed: aida queue add SPEC --for implementer
+
+  ## Edge cases
+
+  1. File doesn't follow AIDA 11-section template — process what's available, warn about missing sections
+  2. Multiple SPECs match — prompt for choice, default to most-recent
+  3. SPEC already has a plan file in docs/plans/ — prompt: replace / append-date-suffix / cancel
+  4. Plan file references symbols that don't exist in current code — surface as warnings, don't fail
+  5. /ultraplan included multi-spec context (e.g., 'STORY-86 composes STORY-81') — process for primary SPEC, comment on others with a 'related plan' note
+
+  ## Composes with
+
+  - TASK-92 plan template — defines section names this code parses
+  - TASK-93 aida plan verify — re-anchors line refs after import
+  - TASK-95 queue work pre-populates manifest — receives our Critical Files output
+  - TASK-96 queue done extracts Followups — pre-files the same Followups we extract
+  - New TASK (aida ultraplan SPEC) — the round-trip partner: that prompt-side feeds /ultraplan; this consumes the saved output
+  - /aida-plan skill — could chain into this when user finishes a cloud /ultraplan session
+
+  ## Acceptance
+
+  - [ ] /aida-import-plan skill at aida-core/templates/skills/aida-import-plan.md
+  - [ ] Matching command at aida-core/templates/commands/aida-import-plan.md
+  - [ ] Detects SPEC-ID via 3 fallback paths (frontmatter, heading, filename)
+  - [ ] Moves file to docs/plans/YYYY-MM-DD-slug.md
+  - [ ] Posts pinning comment on target SPEC
+  - [ ] Parses Critical Files + Followups + Verification sections
+  - [ ] Calls aida plan verify (TASK-93) and surfaces findings
+  - [ ] --queue flag routes to implementer queue
+  - [ ] --dry-run flag works without side effects
+  - [ ] make sync-templates relinks correctly
+  - [ ] aida init scaffolds the skill
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T06:52:22.828568930Z
+modified_at: 2026-05-13T06:52:22.828568930Z
+req_type: Task
+tags:
+- automation
+- import
+- integration
+- plan
+- ultraplan
