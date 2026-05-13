@@ -77,7 +77,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T01:11:26.881810830Z
-modified_at: 2026-05-13T01:14:56.479500921Z
+modified_at: 2026-05-13T01:16:39.050712146Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -89,3 +89,78 @@ comments:
   content: "## Updated diagnosis 2026-05-12 (after further probing)\n\nThe bug is broader than user resolution alone. New evidence:\n\n```\naida queue list --user joe       → 0 items\naida queue list --all --user joe → 10 items\n```\n\nSo even with explicit --user, the default filter excludes items. `--all` is doing MORE than 'all users' — it's bypassing the for_session / for_scope filters too (per STORY-57's design).\n\n## Real root cause (revised)\n\n`aida queue list` (default) applies an implicit filter stack:\n1. for_user = current_user_id() \n2. for_role = AIDA_SESSION_ROLE\n3. for_scope = auto-derived from active lease (per STORY-57)\n4. for_session = ?? (STORY-57 also added this)\n5. status NOT IN (Completed, Rejected) per TASK-64\n\nWhen items were added during agent invocations, STORY-57 auto-filled for_scope (e.g., EPIC-23) and possibly for_session (Claude Code session id). When the user later lists from a shell that's NOT inside any of those scopes/sessions, the implicit filter excludes everything.\n\nThe shell user has no way to know what implicit filters are active OR how to disable just the session/scope ones (--no-scope didn't help in this case).\n\n## Broader fix\n\nIn addition to BUG-89's original user-resolution fix:\n\n1. **`aida queue list` should be more transparent about its implicit filters** — print a footer like:\n   ```\n   (filtering: user=joe, role=implementer, scope=<auto-detected from cwd>, session=<auto>)\n   Pass --all to bypass all implicit filters.\n   ```\n\n2. **Default filter should NOT include for_session** when no Claude Code session id is detectable — silent exclusion is too aggressive.\n\n3. **Add a granular bypass**: --no-scope, --no-session, --no-user, --no-role flags individually. `--all` becomes the combined alias.\n\n## Composes with\n\n- BUG-87 (--all overrides --for) — same root cause: --all does too much\n- TASK-71 (--for filter doesn't compose) — same family\n- STORY-57 (--scope, --for-session auto-fill) — its silent default is what trips users up\n\n## Bigger lesson\n\nImplicit filters need explicit visibility. The user shouldn't have to read code to know WHY their queue looks empty."
   created_at: 2026-05-13T01:14:56.479500921Z
   modified_at: 2026-05-13T01:14:56.479500921Z
+- id: 019e1ee8-450a-7cb0-b26b-e6e1ac6de1e1
+  author: joe
+  content: |-
+    ## Final diagnosis 2026-05-12 — confirmed via queue.yaml inspection
+
+    Inspected /home/joe/ai/aida/.aida-store/registry/queues/joe.yaml. All 13 entries have:
+    - user_id: joe ✓
+    - for_role: implementer ✓
+    - for_scope: EPIC-20 | EPIC-23 | EPIC-1 | EPIC-21 (one of these)
+    - **for_session: not set (no field)**
+
+    So my earlier 'for_session' hypothesis was wrong. It's purely the for_scope filter.
+
+    ## The actual bug
+
+    `aida queue list` (default) interprets 'no active scope' as 'filter to items with for_scope=None.' But all 13 items have for_scope set to some EPIC (because STORY-57's queue-add auto-filled it from the lease scope at add time).
+
+    When you run `aida queue list` from a context with no active session/scope (e.g., main project root, not inside a session worktree), the filter excludes all scoped items — leaving zero visible.
+
+    ## What it should do
+
+    Two semantically valid options:
+
+    ### Option A: 'No active scope' → show everything (no for_scope filter)
+
+    ```
+    if active_scope.is_none() {
+        # don't filter by for_scope — show all items
+    } else {
+        # filter: for_scope IS NULL OR for_scope == active_scope
+    }
+    ```
+
+    This is the most intuitive — outside a scoped session, the queue is global. Inside a scoped session, you see scoped + unscoped items relevant to your focus.
+
+    ### Option B: Always include unscoped + matching scoped
+
+    ```
+    # Always show: for_scope IS NULL OR for_scope == active_scope
+    # When active_scope is None, the second condition is never true,
+    # so only unscoped items show.
+    ```
+
+    This is current behavior. Useful if 'show me unscoped TODOs' is the dominant use case, but punishes users who scope their items aggressively.
+
+    ## Recommendation
+
+    Option A — more permissive default. STORY-57's value is the OPT-IN to scope-filter when inside a session; the default-when-outside should be permissive.
+
+    If the user wants strict scope filtering from outside, they can use `--scope EPIC-X` explicitly.
+
+    ## Verification of the fix
+
+    After fix:
+    ```
+    $ aida queue list             # from ~/ai/aida (no active session)
+    My Queue (13 items)           ← shows all 13, regardless of for_scope
+    ```
+
+    ```
+    $ cd /home/joe/ai/aida-epic-23 && aida queue list   # inside EPIC-23 worktree
+    My Queue (5 items)            ← filters to EPIC-23-scoped + unscoped items
+    ```
+
+    ## Composes with
+
+    - STORY-57 (parent — scope/session filtering design) — this corrects its over-aggressive default
+    - TASK-52 (--scope filter) — user can explicitly scope; this fix changes the IMPLICIT default
+    - BUG-87 (--all/--for filter interaction) — different bug, but same family of 'implicit filters too aggressive'
+
+    ## Severity unchanged
+
+    Still High. Users default invocation of `aida queue list` shows zero items in the most common context (main project root, no active session). The implicit-filter behavior fights the user's mental model.
+  created_at: 2026-05-13T01:16:39.050712146Z
+  modified_at: 2026-05-13T01:16:39.050712146Z
