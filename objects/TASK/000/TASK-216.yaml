@@ -1,0 +1,50 @@
+id: 019e201f-3f63-7153-b24b-7807839d1273
+spec_id: TASK-216
+agreed_id: TASK-216
+title: '/aida-review: detect own-PR case, skip gh pr review --request-changes API call (always fails)'
+description: |-
+  GitHub blocks the addPullRequestReview mutation with REQUEST_CHANGES on your own pull request — the error 'Can not request changes on your own pull request' is guaranteed in solo-developer / author-is-reviewer scenarios. /aida-review currently attempts the call anyway and surfaces the failure as terminal output, which is noise.
+
+  The PR comment itself (posted via gh pr comment) already serves the request-changes role — that's what humans read. The formal GitHub review type only matters when branch protection rules require a non-author approval, which by definition can't be the author anyway.
+
+  ## Fix
+
+  Before calling gh pr review --request-changes, /aida-review should:
+
+  1. Detect own-PR case: gh pr view --json author + gh api user to compare author.login vs current user. If match, skip the API call.
+  2. Surface a note in the run output: 'GitHub blocks request-changes on your own PR; the consolidated review comment above serves the same signal.'
+  3. Continue with comment-only mode.
+
+  ## Composes with
+
+  - TASK-110 (next-steps ordering): /aida-review's next-steps block (if any) also needs the End-session-first ordering fix. Same pattern as /aida-pr.
+  - BUG-74 (gh detection PATH-walk): reuse the shared gh-detection helper.
+
+  ## Files likely affected
+
+  aida-core/templates/skills/aida-review.md — skill instructions for the request-changes step.
+
+  ## Acceptance
+
+  - [ ] /aida-review detects own-PR via gh pr view + gh api user
+  - [ ] Skips gh pr review --request-changes API call when own-PR; surfaces info note
+  - [ ] Still posts the consolidated review comment (the actual signal)
+  - [ ] Handles gh-missing path gracefully (BUG-74 helper)
+  - [ ] Tests cover own-PR and other-author-PR paths
+
+  ## Discovered via
+
+  PR-20 /aida-review run 2026-05-13. Reviewer (Joe) ran /aida-review against PR-20 (also opened by Joe); the request-changes API call failed with 'Can not request changes on your own pull request'.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T06:56:19.299218300Z
+modified_at: 2026-05-13T06:56:19.299218300Z
+req_type: Task
+tags:
+- aida-review
+- gh
+- own-pr
+- skill
+- solo-developer
