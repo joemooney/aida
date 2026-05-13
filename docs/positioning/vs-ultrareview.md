@@ -29,7 +29,9 @@ Captured live during PR-15 review (2026-05-12): `/aida-review` approved + merged
 | **Format-spec edge cases** | TOML inline comments (`key = "v" # cmt`) were not stripped | The acceptance walk verifies spec compliance, not *"does the parser handle everything the FORMAT spec allows?"* |
 | **Multiplicity reasoning** | `--steal` handled N=1 lease but not N>1 | The singular case dominates testing; the multiplicity step is a separate cognitive move that single-framing review can skip past |
 
-`/ultrareview` wins on these because the multi-agent fleet uses **explicitly different framings** — one agent is told "find bugs," another "verify acceptance," etc. The composite findings catch what any single mental model would miss. `/aida-review` can close part of this gap with an explicit adversarial phase (cross-ref consistency, format-spec edge cases, multiplicity reasoning) — that's the territory of [STORY-109](../../).
+`/ultrareview` wins on these because the multi-agent fleet uses **explicitly different framings** — one agent is told "find bugs," another "verify acceptance," etc. The composite findings catch what any single mental model would miss.
+
+**Post-STORY-109 (2026-05-12):** `/aida-review` now includes an explicit adversarial deep-pass between the spec walk and the merge gates. The phase codifies four systematic probes — cross-reference consistency, format-spec edge cases, multiplicity (0/1/N), and "looks safe but isn't" adversarial framing — that historically slip past a single "verify acceptance" walk. The three PR-15 misses (TASK-81, TASK-84, TASK-85) all fall inside the probes' catch radius. `/aida-review (post-augment)` catches edge cases that single-agent reviews historically miss; **`/ultrareview` still wins on multi-perspective depth** — the cloud fleet brings genuinely independent framings that no single agent can fully replicate.
 
 ---
 
@@ -74,6 +76,6 @@ Both fit in most workflows. The point of this doc is that picking *one* in a bin
 
 ## See also
 
-- [STORY-109](../../) — `/aida-review` adversarial phase to close part of the depth gap.
+- STORY-109 — `/aida-review` adversarial phase. Landed 2026-05-12. See step 4 of [aida-review skill](../../.claude/skills/aida-review.md).
 - [/aida-review skill](../../.claude/skills/aida-review.md)
 - [composition.md](composition.md) — generic guidance on layering AIDA with other tools (future page).
