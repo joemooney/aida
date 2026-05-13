@@ -54,7 +54,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T15:18:22.753480821Z
-modified_at: 2026-05-13T15:49:45.927190941Z
+modified_at: 2026-05-13T15:52:40.571599018Z
 req_type: Bug
 tags:
 - critical
@@ -66,6 +66,19 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-13T15:18:25.034808402Z
+comments:
+- id: 019e220a-4b7b-7530-b568-aac103f9e3b1
+  author: joe
+  content: |-
+    Implemented via PR-N (commit 9587cbd2):
+
+    - GitBackend::save() now mirrors the load-side skip-and-warn policy: parses each file before deleting it from the orphan-sweep set. Unparseable files are preserved and listed in a single warning line.
+    - Two regression tests in aida-core/src/db/git_backend.rs: test_save_preserves_unparseable_object_files (bare case) and test_save_preserves_unparseable_alongside_new_add (the 2026-05-13 incident shape: `aida add` adjacent to unparseable files).
+    - docs/git-workflow.md gained a "Safety guarantee (BUG-96 fixed)" subsection inside the STORY-86 recovery story.
+
+    Test status: 25/25 db tests green; `cargo fmt --all -- --check` clean
+  created_at: 2026-05-13T15:52:40.571599018Z
+  modified_at: 2026-05-13T15:52:40.571599018Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-13T15:49:45.927190941Z
