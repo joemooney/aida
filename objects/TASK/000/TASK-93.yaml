@@ -1,0 +1,36 @@
+id: 019e1f98-403a-7ca2-9b6e-423d2c84fd64
+spec_id: TASK-93
+agreed_id: TASK-93
+title: 'aida plan verify <file>: re-anchor stale line refs, validate paths, lint sections'
+description: |-
+  Plans in docs/plans/ go stale fast. /ultraplan's STORY-86 plan had 2 of 8 line refs already drifted on the day it was generated (validate_status_input:3175 → actual 3166; DbCommand::Sync:2846 → actual 22397, ~19k lines off).
+
+  Build aida plan verify <file>:
+
+  1. Parse the plan file's file-by-file section and Critical Files section
+  2. For each path:line ref, check the file exists; warn if missing
+  3. For each fn/symbol name in the ref context, locate the actual line via tree-sitter or rust-analyzer; if found, suggest the corrected line OR (better) rewrite the ref to symbol form (fn handle_pull_command instead of main.rs:19713)
+  4. Lint plan structure: ensure Critical Files section enumerates everything referenced in body; ensure Followups section is present; ensure Verification script section is present
+  5. Exit non-zero if any path is missing or any required section is absent — usable as a pre-commit hook on docs/plans/
+
+  Composes with TASK-92 (template) — verify is what enforces the template.
+
+  ## Acceptance
+
+  - [ ] aida plan verify <file> implemented
+  - [ ] Reports drifted line refs with suggested corrections
+  - [ ] Reports missing files
+  - [ ] Reports missing required sections per the template
+  - [ ] Exits non-zero on any failure
+  - [ ] Docs in CLAUDE.md and /aida-plan skill updated
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T04:28:52.154142173Z
+modified_at: 2026-05-13T04:28:52.154142173Z
+req_type: Task
+tags:
+- plan
+- tooling
+- verify
