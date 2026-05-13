@@ -1,0 +1,55 @@
+id: 019e1fe7-0236-7913-9143-ccbdd4a4a22f
+spec_id: STORY-114
+agreed_id: STORY-114
+title: '/aida-rebase: centralized rebase verb (skill + CLI + proactive invocation)'
+description: |-
+  Stateless, anywhere-callable surface for the detect → classify → execute → report rebase pipeline. Fills a gap in the layered defense filed under EPIC-23: the existing TASKs (TASK-97/98/99/100/54) handle rebase at specific lifecycle moments (pre-commit, pre-pull, queue-work-start, queue-done, push); this STORY adds the anytime-callable verb that those lifecycle handlers can delegate to.
+
+  ## Thesis
+
+  Centralize the logic. Today the recovery recipe lives in five places (docs/git-workflow.md, .claude/AIDA.md, feedback_fetch_before_commit memory, scattered through TASK-97/98/99/100 descriptions). Five copies will drift. /aida-rebase is the verb; the lifecycle TASKs become callers of that verb.
+
+  ## Composition with existing work
+
+  | Existing | Relationship |
+  |---|---|
+  | TASK-97 (aida pull --autorebase) | This STORY's CLI subcommand IS the underlying engine TASK-97 invokes from the pull-time entry point. Shared substrate, two entry points (pull-time vs anytime). |
+  | TASK-98 (/aida-commit precheck) | When precheck detects 'behind by N', recommended action is /aida-rebase. Skill instructions cross-link. |
+  | TASK-99 (queue work pulls code) | When TASK-99 detects code-side staleness, delegate to /aida-rebase rather than duplicating logic. |
+  | TASK-100 (queue done stale-base) | Same. |
+  | TASK-54 (aida push behind-main) — completed | Already detects; can suggest /aida-rebase as the recovery in its hint message. |
+  | feedback_fetch_before_commit memory | The discipline says 'fetch before commit on long sessions'. Once this ships, the discipline becomes 'run /aida-rebase before commit'. |
+
+  ## Three pieces
+
+  This STORY breaks into:
+
+  1. **aida rebase CLI subcommand** — the verb implementation. Detect (fetch + ahead/behind + overlap), classify (5 states), execute or refuse, report.
+  2. **/aida-rebase skill** — Claude Code wrapper. Calls the CLI, surfaces classification results as agent-readable text, decides when to auto-execute vs prompt.
+  3. **Proactive-invocation playbook** — when an agent should fire /aida-rebase unprompted. Heuristics: about-to-commit-on-long-session, user-says-pull-or-rebase-or-push, etc.
+
+  ## Origin
+
+  2026-05-13 incident: agent committed plan file on stale main while PR #19 merged remotely; recovery required manual git pull --rebase. The post-mortem identified Pattern A (divergence) vs Pattern B (stale base) and produced a layered defense across lifecycle moments. This STORY closes the gap that even the layered defense has: no anywhere-callable verb for the situations where the lifecycle hook hasn't fired but the agent (or user) knows a rebase is appropriate.
+
+  ## Acceptance
+
+  - [ ] aida rebase CLI subcommand exists and implements the 4-phase pipeline (detect/classify/execute/report)
+  - [ ] /aida-rebase skill exists under aida-core/templates/skills/ and is scaffolded by aida init
+  - [ ] Skill instructions cross-reference TASK-97/98/99/100 so future implementers see the composition
+  - [ ] Proactive-invocation playbook documented (either in skill frontmatter or as a separate doc under docs/)
+  - [ ] TASK-54's behind-main hint message updated to suggest /aida-rebase (small backfill)
+  - [ ] At least TASK-97 refactored to call the shared CLI substrate rather than re-implementing detection
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T05:54:53.622257823Z
+modified_at: 2026-05-13T05:54:53.622257823Z
+req_type: Story
+tags:
+- cli
+- git
+- proactive
+- rebase
+- skill
