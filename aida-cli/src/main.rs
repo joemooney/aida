@@ -3187,10 +3187,10 @@ fn capitalize(s: &str) -> String {
 /// and the parent-guard share the same notion of "this is closed work".
 /// trace:TASK-64 | ai:claude
 pub fn is_terminal_status_str(s: &str) -> bool {
+    // trace:STORY-86 | ai:claude — "Done" is NOT terminal anymore (work
+    // finished on a branch; auto-bumps to Completed once merged to main).
     let t = s.trim();
-    t.eq_ignore_ascii_case("completed")
-        || t.eq_ignore_ascii_case("rejected")
-        || t.eq_ignore_ascii_case("done")
+    t.eq_ignore_ascii_case("completed") || t.eq_ignore_ascii_case("rejected")
 }
 
 /// Validate a status string against the canonical set. Accepts case-
@@ -3213,10 +3213,12 @@ pub fn validate_status_input(raw: &str) -> Result<&'static str, String> {
         "approved" => Ok("Approved"),
         "planned" => Ok("Planned"),
         "inprogress" => Ok("InProgress"),
-        "completed" | "done" => Ok("Completed"),
+        // trace:STORY-86 | ai:claude — "done" is now its own state, not an alias for Completed.
+        "done" => Ok("Done"),
+        "completed" => Ok("Completed"),
         "rejected" => Ok("Rejected"),
         _ => Err(format!(
-            "invalid status `{}` — expected one of: draft, approved, planned, in-progress, completed, rejected",
+            "invalid status `{}` — expected one of: draft, approved, planned, in-progress, done, completed, rejected",
             raw
         )),
     }
@@ -4444,6 +4446,7 @@ fn list_requirements(
             RequirementStatus::Approved => "Approved".blue(),
             RequirementStatus::Planned => "Planned".cyan(),
             RequirementStatus::InProgress => "In Progress".magenta(),
+            RequirementStatus::Done => "Done".bright_green().bold(),
             RequirementStatus::Completed => "Completed".green(),
             RequirementStatus::Rejected => "Rejected".red(),
         };
@@ -4495,6 +4498,7 @@ fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
         RequirementStatus::Approved => "Approved".blue(),
         RequirementStatus::Planned => "Planned".cyan(),
         RequirementStatus::InProgress => "In Progress".magenta(),
+        RequirementStatus::Done => "Done".bright_green().bold(),
         RequirementStatus::Completed => "Completed".green(),
         RequirementStatus::Rejected => "Rejected".red(),
     };
@@ -4676,9 +4680,10 @@ fn edit_requirement_cli(
             "approved" => RequirementStatus::Approved,
             "planned" => RequirementStatus::Planned,
             "in_progress" | "in-progress" | "inprogress" => RequirementStatus::InProgress,
+            "done" => RequirementStatus::Done,
             "completed" => RequirementStatus::Completed,
             "rejected" => RequirementStatus::Rejected,
-            _ => anyhow::bail!("Invalid status '{}'. Use: draft, approved, planned, in_progress, completed, rejected", status_str),
+            _ => anyhow::bail!("Invalid status '{}'. Use: draft, approved, planned, in_progress, done, completed, rejected", status_str),
         };
         if new_status != req.status {
             changes.push(Requirement::field_change(
@@ -4860,6 +4865,7 @@ fn edit_requirement_interactive(storage: &Storage, id_str: &str) -> Result<()> {
         RequirementStatus::Approved,
         RequirementStatus::Planned,
         RequirementStatus::InProgress,
+        RequirementStatus::Done,
         RequirementStatus::Completed,
         RequirementStatus::Rejected,
     ];
@@ -5021,6 +5027,7 @@ fn parse_status(status_str: &str) -> Result<RequirementStatus> {
         "approved" => Ok(RequirementStatus::Approved),
         "planned" => Ok(RequirementStatus::Planned),
         "in_progress" | "in-progress" | "inprogress" => Ok(RequirementStatus::InProgress),
+        "done" => Ok(RequirementStatus::Done),
         "completed" => Ok(RequirementStatus::Completed),
         "rejected" => Ok(RequirementStatus::Rejected),
         _ => anyhow::bail!("Invalid status: {}", status_str),
@@ -15794,8 +15801,8 @@ mod statusline_tests {
     }
 
     /// BUG-64: terminal-status predicate. Completed and Rejected are
-    /// terminal; everything else is open and accepts new children.
-    /// trace:BUG-64 | ai:claude
+    /// terminal; everything else (including the STORY-86 `Done` state) is
+    /// open and accepts new children. trace:BUG-64 STORY-86 | ai:claude
     #[test]
     fn is_terminal_status_buckets() {
         assert!(is_terminal_status(&RequirementStatus::Completed));
@@ -15804,6 +15811,10 @@ mod statusline_tests {
         assert!(!is_terminal_status(&RequirementStatus::Approved));
         assert!(!is_terminal_status(&RequirementStatus::Planned));
         assert!(!is_terminal_status(&RequirementStatus::InProgress));
+        // STORY-86: `Done` is "finished on a branch", not terminal. It
+        // auto-bumps to Completed when the referencing commit merges to
+        // the default branch. Children are still allowed.
+        assert!(!is_terminal_status(&RequirementStatus::Done));
     }
 
     /// STORY-72: position math for `queue move --after`. Three regimes —

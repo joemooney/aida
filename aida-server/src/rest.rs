@@ -2057,6 +2057,7 @@ fn parse_status(s: &str) -> aida_core::RequirementStatus {
         "approved" => aida_core::RequirementStatus::Approved,
         "planned" => aida_core::RequirementStatus::Planned,
         "inprogress" | "in_progress" | "in-progress" => aida_core::RequirementStatus::InProgress,
+        "done" => aida_core::RequirementStatus::Done,
         "completed" => aida_core::RequirementStatus::Completed,
         "rejected" => aida_core::RequirementStatus::Rejected,
         _ => aida_core::RequirementStatus::Draft,

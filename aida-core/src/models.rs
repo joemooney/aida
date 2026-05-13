@@ -14,6 +14,11 @@ pub enum RequirementStatus {
     Approved,
     Planned,
     InProgress,
+    /// Work finished on a branch; not yet merged to default branch.
+    /// Auto-bumped to `Completed` by `aida pull` / `aida db sync --pull`
+    /// when a commit referencing this spec lands on the default branch.
+    /// trace:STORY-86 | ai:claude
+    Done,
     Completed,
     Rejected,
 }
@@ -25,6 +30,7 @@ impl fmt::Display for RequirementStatus {
             RequirementStatus::Approved => write!(f, "Approved"),
             RequirementStatus::Planned => write!(f, "Planned"),
             RequirementStatus::InProgress => write!(f, "In Progress"),
+            RequirementStatus::Done => write!(f, "Done"),
             RequirementStatus::Completed => write!(f, "Completed"),
             RequirementStatus::Rejected => write!(f, "Rejected"),
         }
@@ -2403,6 +2409,19 @@ pub struct ImplementationInfo {
     /// Who performed the implementation
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub implemented_by: Option<String>,
+
+    /// When the auto-bump from `Done` → `Completed` fired (i.e. when a
+    /// commit referencing this spec landed on the default branch).
+    /// Stamped by the `aida pull` auto-bump path, not by `aida queue done`.
+    /// trace:STORY-86 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completed_at: Option<DateTime<Utc>>,
+
+    /// The default-branch commit SHA that triggered the auto-bump.
+    /// Stamped alongside `completed_at`.
+    /// trace:STORY-86 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completion_sha: Option<String>,
 }
 
 impl Default for ImplementationInfo {
@@ -2417,6 +2436,8 @@ impl Default for ImplementationInfo {
             confidence: None,
             implemented_at: None,
             implemented_by: None,
+            completed_at: None,
+            completion_sha: None,
         }
     }
 }
@@ -3198,6 +3219,10 @@ impl Requirement {
             }
             "inprogress" => {
                 self.status = RequirementStatus::InProgress;
+                self.custom_status = None;
+            }
+            "done" => {
+                self.status = RequirementStatus::Done;
                 self.custom_status = None;
             }
             "completed" => {
