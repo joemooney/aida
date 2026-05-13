@@ -153,7 +153,23 @@ Later the same day, the same multi-worktree workflow surfaced a *much more serio
 
 Filed as **BUG-96** (critical, data-loss; persist-path deletes parse-failing files) and **TASK-221** (`aida dev activate` should match binary's embedded SHA to current branch HEAD). The bigger lesson is that AIDA's multi-worktree / multi-binary-version model is unsafe today: any write operation from an older binary against a store containing newer-format YAML risks silent deletion. The skip-and-warn machinery exists for reads; the persist path must adopt the same posture before AIDA can recommend multi-worktree development unreservedly.
 
-Until BUG-96 ships, the discipline is: **only run aida writes (add / edit / comment / queue mutation / db sync) from a binary whose source has all the enum variants the orphan store has been written with.** `aida --version`'s embedded SHA + a quick check against the writing-worktree's branch is the manual workaround.
+### Safety guarantee (BUG-96 fixed)
+
+`GitBackend::save()` now mirrors the load-side skip-and-warn policy: when the bulk save sweep finds an object file that is *on disk* but absent from the in-memory store, it first tries to parse it. If parsing succeeds, the file is treated as a legitimate orphan and deleted (the existing `test_git_backend_delete_removes_orphan_files` behaviour). **If parsing fails, the file is left untouched** and a warning is printed:
+
+```
+Warning: preserved 6 unparseable object file(s) during save: STORY-86, VIS-1, … (a binary that can parse them will pick them up)
+```
+
+This means:
+
+- Parse failures are recoverable. They never trigger file deletion in any code path.
+- A newer binary's writes survive an older binary's writes on the same store.
+- The next time a binary that *can* parse the file runs, it loads normally — no manual recovery from git history needed.
+
+Regression coverage lives in `aida-core/src/db/git_backend.rs::tests::test_save_preserves_unparseable_object_files` and `test_save_preserves_unparseable_alongside_new_add`.
+
+The pre-fix workaround (only run writes from a binary whose source has every enum variant the store has been written with) is still good defensive hygiene, but no longer required to avoid silent data loss.
 
 Each gap got its own response — see the lifecycle table above.
 
