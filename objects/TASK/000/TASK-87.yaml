@@ -60,14 +60,18 @@ description: |
   - [ ] Recommendations are CONCRETE (named commands, named IDs), not generic ("you might want to...")
   - [ ] Detects current state: cluster drained vs partial, PR opened vs not, CI green vs pending
   - [ ] Templates use consistent glyphs (▶ primary, ⏵ alternate, 🚪 stop)
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T15:41:24.380983051Z
-modified_at: 2026-05-13T02:07:50.471211967Z
+modified_at: 2026-05-13T02:10:37.925629159Z
 req_type: Task
 relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-12T15:41:25.707955714Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-13T02:10:37.925629159Z
+  implemented_by: joe
