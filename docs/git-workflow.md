@@ -142,6 +142,19 @@ The incident itself was trivial to fix. The lessons are layered:
 - **Discipline gap**: agents committing on long-running sessions should fetch first. Captured as feedback memory.
 - **Documentation gap**: the recipe for recovery should ship in scaffolded `.claude/AIDA.md` so every AIDA-using project gets it, not just AIDA-the-dev-repo.
 
+### Followup incident — 2026-05-13 STORY-86 recovery
+
+Later the same day, the same multi-worktree workflow surfaced a *much more serious* problem: the aida binary on `main` (which lacked the `Done` `RequirementStatus` variant that PR-21 introduces) silently **deleted 6 YAML files** when it ran `aida add` because it couldn't parse them. STORY-86 was among the deleted. Recovery required:
+
+1. Restoring the YAML files from the parent of the destructive commit (`git checkout ab1580ee^ -- objects/...`)
+2. Rebuilding aida from a branch that *did* have the `Done` variant
+3. Realizing that `aida dev activate`'s "most-recently-built" heuristic was picking the wrong binary (the older `target/debug/aida` built from main, not the just-built release from epic-21-2)
+4. Rebuilding debug from the correct branch and re-running `aida cache rebuild`
+
+Filed as **BUG-96** (critical, data-loss; persist-path deletes parse-failing files) and **TASK-221** (`aida dev activate` should match binary's embedded SHA to current branch HEAD). The bigger lesson is that AIDA's multi-worktree / multi-binary-version model is unsafe today: any write operation from an older binary against a store containing newer-format YAML risks silent deletion. The skip-and-warn machinery exists for reads; the persist path must adopt the same posture before AIDA can recommend multi-worktree development unreservedly.
+
+Until BUG-96 ships, the discipline is: **only run aida writes (add / edit / comment / queue mutation / db sync) from a binary whose source has all the enum variants the orphan store has been written with.** `aida --version`'s embedded SHA + a quick check against the writing-worktree's branch is the manual workaround.
+
 Each gap got its own response — see the lifecycle table above.
 
 ---
