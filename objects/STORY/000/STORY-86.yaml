@@ -64,7 +64,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T19:08:19.795760812Z
-modified_at: 2026-05-13T05:58:29.240056031Z
+modified_at: 2026-05-13T06:17:00.943137993Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -76,6 +76,11 @@ comments:
   content: 'Implementation plan generated via /ultraplan 2026-05-13, saved to docs/plans/2026-05-13-story-86-done-status.md. Covers: enum variant placement, auto_bump_done_to_completed helper hooked from handle_pull_command + DbCommand::Sync, file-by-file changes (models.rs / main.rs / history.rs / import.rs / sqlite+postgres backends / cache.rs / React UI / templates), 7-step verification script, followups (revert handling, statusline color, manual reconcile-status). Est. ~250 prod LOC + ~150 test LOC across 4 commits, risk medium-low. Ready for implementer pickup.'
   created_at: 2026-05-13T04:09:39.709430171Z
   modified_at: 2026-05-13T04:09:39.709430171Z
+- id: 019e1ffb-430f-7e20-91bd-7310b3ae54d6
+  author: joe
+  content: Commit 103a74d9 references this requirement
+  created_at: 2026-05-13T06:17:00.943137993Z
+  modified_at: 2026-05-13T06:17:00.943137993Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-13T05:58:29.240056031Z
