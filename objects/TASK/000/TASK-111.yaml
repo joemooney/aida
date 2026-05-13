@@ -1,0 +1,70 @@
+id: 019e1fff-9315-74a3-b582-6650689f8e0f
+spec_id: TASK-111
+agreed_id: TASK-111
+title: 'aida session end: CI-aware (detect, prompt, warn) before releasing lease'
+description: |-
+  Move CI-watch responsibility from a user-facing chore step into aida session end, which owns the lease being released. Today the post-PR sequence is three steps (Wait CI / End implementer / Start reviewer); after this lands it becomes two (End implementer auto-handles CI / Start reviewer). Composes with TASK-110 which would simplify its next-steps ordering once this ships.
+
+  ## Behavior
+
+  aida session end (default): detect CI state, prompt or info-only based on state
+  aida session end --wait-ci: block until CI completes, show progress
+  aida session end --skip-ci: today's behavior, no CI awareness
+  aida session end --force: end regardless of CI state (skips both detection and prompts)
+
+  ## Decision tree
+
+  | CI state | Default action |
+  | No PR associated with session | End silently (today's behavior) |
+  | PR exists, CI not started | Info: 'PR opened, CI hasn't started. End anyway?' |
+  | PR exists, CI in-progress | Prompt: Wait / End anyway / Cancel |
+  | PR exists, CI green | Info: 'CI green' + proceed to end |
+  | PR exists, CI red | Warn: 'CI failed — keep session for fixups? Keep / End anyway / Cancel' |
+
+  ## Composition
+
+  - TASK-110 (next-steps reorder): simplifies once this ships — three-step becomes two-step. Cross-link.
+  - STORY-66 / STORY-90 (auto-queue PR for reviewer): the session manifest likely already records the PR number these registered. Verify and reuse.
+  - BUG-74 (gh detection): same gh path-walk + absolute-path fallback should be used here.
+  - /aida-pr: when it opens a PR, ensure PR number is written to session manifest in a known field (probably already happens).
+  - TASK-105 (proactive-invocation playbook): /aida-rebase could be suggested before aida session end if branch is stale, similar pattern.
+
+  ## Trade-offs (must address in implementation)
+
+  1. Slower aida session end — adds gh run list API call. Mitigate: only call when session manifest has a PR; cache result briefly; honor --skip-ci.
+  2. gh dependency creep — session end doesn't strictly require gh today. Mitigate: skip gracefully with info message when gh not on PATH (use existing BUG-74 detection helper).
+  3. Manifest coupling — session manifest must record PR number reliably when /aida-pr opens one. Verify the existing path; add if missing.
+  4. Web-UI / raw-gh PR fallback: if no PR number in manifest, try gh pr view --json number on current branch as discovery; if still nothing, skip the check with info.
+  5. Concurrent runs: if two sessions on the same branch (rare), only check CI for the one being ended; don't change unrelated session state.
+
+  ## Files likely affected
+
+  - aida-cli/src/main.rs: aida session end handler
+  - aida-core/src/session_manifest.rs: PR-number field reading
+  - aida-core/templates/skills/aida-pr.md: ensure PR number lands in manifest
+  - aida-core/templates/skills/aida-pr.md and aida-review.md: simplify next-steps once shipped (composes with TASK-110)
+
+  ## Acceptance
+
+  - [ ] aida session end detects CI state from PR associated with session manifest
+  - [ ] Decision tree above implemented with the 4 default behaviors + 4 flags
+  - [ ] Fallback path when gh missing: skip with info, don't error
+  - [ ] Fallback path when no PR in manifest: try discovery, then skip if none
+  - [ ] --wait-ci shows progress (poll loop, ~5-10s interval, exit on terminal state)
+  - [ ] aida session end takes no noticeable longer for sessions without an associated PR (no-PR path stays fast)
+  - [ ] TASK-110 description updated to note this supersedes Wait-CI as a manual step
+  - [ ] Tests cover the 5 CI states + the 4 flag combinations + the fallback paths
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T06:21:43.573099151Z
+modified_at: 2026-05-13T06:21:43.573099151Z
+req_type: Task
+tags:
+- automation
+- ci
+- end
+- gh
+- lifecycle
+- session
