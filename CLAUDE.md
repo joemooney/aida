@@ -50,7 +50,7 @@ aida list --status draft               # Filter by status
 aida search "<query>"                  # Cache-backed FTS5 search
 aida show <ID>                         # Show requirement details (FR-1-001 or FR-1)
 aida add --title "..." --type story --status draft --tags "tag1,tag2"
-aida edit <ID> --status completed
+aida edit <ID> --status done          # Branch finished (auto-bumps to completed on merge — STORY-86)
 aida comment add <ID> "..."
 aida db merge-gate                     # Assign agreed short IDs (FR-7-001 → FR-1)
 aida db sync --pull --push             # Sync orphan branch with remote
@@ -186,8 +186,22 @@ Always verify CLI arguments with `aida <command> --help`. Common parameters:
 
 - `--type` (lowercase): `functional`, `non-functional`, `system`, `user`, `bug`, `epic`, `story`, `task`, `spike`, `sprint`, `folder`, `meta`, `doc`
 - `--feature`: feature category name (NOT a type)
-- `--status`: `draft`, `approved`, `in-progress`, `completed`, `rejected`
+- `--status`: `draft`, `approved`, `planned`, `in-progress`, `done`, `completed`, `rejected`
 - `--priority`: `high`, `medium`, `low`
+
+### Lifecycle: Done vs Completed (STORY-86)
+
+Two terminal-ish states distinguish "work finished on a branch" from "shipped to main":
+
+- **`in-progress`** — agent is actively working
+- **`done`** — `aida queue done` flips here. The implementation is finished on a branch (PR may be open, may not be merged yet)
+- **`completed`** — referencing commit landed on `main`. Auto-bumped by `aida db sync --pull` and `aida pull` when a commit on the project's default branch references the spec id (`(STORY-86)` etc.)
+
+What this means in practice:
+
+- Don't manually flip to `completed` — that's the merge signal. Use `aida queue done` (or `aida edit --status done`) when your branch is finished; the sync path bumps to completed once the commit hits main.
+- `aida list` hides `done`/`completed`/`rejected` by default (terminal). Pass `--all` or filter explicitly to see them.
+- `aida list --status done` is the actionable "what's awaiting merge" view; `--status completed` is the shipped archive.
 
 ### Requirement types
 

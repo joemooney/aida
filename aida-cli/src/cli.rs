@@ -2261,7 +2261,9 @@ pub enum Command {
         #[clap(long, conflicts_with_all = ["description", "description_from_file"])]
         description_stdin: bool,
 
-        /// Status of the requirement (draft, approved, completed, rejected)
+        /// Status of the requirement (draft, approved, planned, in-progress,
+        /// done, completed, rejected). `done` = work finished on a branch;
+        /// `completed` = merged to main. trace:STORY-86 | ai:claude
         #[clap(long)]
         status: Option<String>,
 
@@ -2414,7 +2416,9 @@ pub enum Command {
         #[clap(long)]
         description: Option<String>,
 
-        /// New status (draft, approved, completed, rejected)
+        /// New status (draft, approved, planned, in-progress, done, completed,
+        /// rejected). `done` = work finished on a branch; `completed` =
+        /// merged to main. trace:STORY-86 | ai:claude
         #[clap(long)]
         status: Option<String>,
 

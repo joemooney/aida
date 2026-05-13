@@ -1,7 +1,7 @@
 import type { RequirementStatus, RequirementPriority, RequirementType } from '@shared/types';
 
 export const STATUS_ORDER: RequirementStatus[] = [
-  'Draft', 'Approved', 'Planned', 'InProgress', 'Completed', 'Rejected',
+  'Draft', 'Approved', 'Planned', 'InProgress', 'Done', 'Completed', 'Rejected',
 ];
 
 export const STATUS_CONFIG: Record<RequirementStatus, { color: string; bg: string; dot: string; label: string }> = {
@@ -9,6 +9,10 @@ export const STATUS_CONFIG: Record<RequirementStatus, { color: string; bg: strin
   Approved:   { color: 'text-blue-400',    bg: 'bg-blue-500/10',    dot: 'bg-blue-400',    label: 'Approved' },
   Planned:    { color: 'text-violet-400',  bg: 'bg-violet-500/10',  dot: 'bg-violet-400',  label: 'Planned' },
   InProgress: { color: 'text-amber-400',   bg: 'bg-amber-500/10',   dot: 'bg-amber-400',   label: 'In Progress' },
+  // STORY-86: Done = work finished on branch, pending merge. Visually
+  // between InProgress (amber) and Completed (emerald) — lime reads as
+  // "almost there".
+  Done:       { color: 'text-lime-400',    bg: 'bg-lime-500/10',    dot: 'bg-lime-400',    label: 'Done' },
   Completed:  { color: 'text-emerald-400', bg: 'bg-emerald-500/10', dot: 'bg-emerald-400', label: 'Completed' },
   Rejected:   { color: 'text-red-400',     bg: 'bg-red-500/10',     dot: 'bg-red-400',     label: 'Rejected' },
 };

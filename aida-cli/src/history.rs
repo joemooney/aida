@@ -635,10 +635,10 @@ fn pick_author_email(email: &str) -> String {
 /// (history.rs is consumed by integration tests without pulling in main).
 /// trace:TASK-64 | ai:claude
 fn is_terminal_status_str(s: &str) -> bool {
+    // STORY-86: `Done` is non-terminal. See main::is_terminal_status_str
+    // for the full rationale. trace:STORY-86 | ai:claude
     let t = s.trim();
-    t.eq_ignore_ascii_case("completed")
-        || t.eq_ignore_ascii_case("rejected")
-        || t.eq_ignore_ascii_case("done")
+    t.eq_ignore_ascii_case("completed") || t.eq_ignore_ascii_case("rejected")
 }
 
 /// HH:MM if today (in the user's local tz), else "MM-DD HH:MM". Always
@@ -689,6 +689,10 @@ fn colorize_status(status: &str) -> String {
         "Approved" => status.blue().to_string(),
         "Planned" => status.cyan().to_string(),
         "InProgress" | "In Progress" => status.magenta().to_string(),
+        // STORY-86: Done = work finished on a branch, not yet merged to
+        // main. Render bright-green so it visually separates from the
+        // dimmer Completed (which means merged). trace:STORY-86 | ai:claude
+        "Done" => status.bright_green().to_string(),
         "Completed" => status.green().to_string(),
         "Rejected" => status.red().to_string(),
         "(deleted)" => status.red().dimmed().to_string(),

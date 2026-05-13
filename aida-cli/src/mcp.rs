@@ -596,12 +596,14 @@ impl<'a> McpServer<'a> {
              - Draft: {}\n\
              - Approved: {}\n\
              - In Progress: {}\n\
+             - Done: {}\n\
              - Completed: {}\n\
              - Rejected: {}\n",
             total,
             by_status(RequirementStatus::Draft),
             by_status(RequirementStatus::Approved),
             by_status(RequirementStatus::InProgress),
+            by_status(RequirementStatus::Done),
             by_status(RequirementStatus::Completed),
             by_status(RequirementStatus::Rejected),
         );
@@ -654,6 +656,7 @@ fn parse_status(s: &str) -> Option<RequirementStatus> {
         "draft" => Some(RequirementStatus::Draft),
         "approved" => Some(RequirementStatus::Approved),
         "in-progress" | "inprogress" | "in_progress" => Some(RequirementStatus::InProgress),
+        "done" => Some(RequirementStatus::Done),
         "completed" => Some(RequirementStatus::Completed),
         "rejected" => Some(RequirementStatus::Rejected),
         _ => None,

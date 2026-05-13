@@ -381,6 +381,7 @@ pub fn parse_requirement_status(s: &str) -> Option<RequirementStatus> {
     match s {
         "Draft" => Some(RequirementStatus::Draft),
         "Approved" => Some(RequirementStatus::Approved),
+        "Done" => Some(RequirementStatus::Done),
         "Completed" => Some(RequirementStatus::Completed),
         "Rejected" => Some(RequirementStatus::Rejected),
         _ => None,

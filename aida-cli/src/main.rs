@@ -2899,6 +2899,54 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                                 "Resolve with: aida edit <ID> --title/--status/... to pick the version you want."
                             );
                         }
+
+                        // STORY-86: auto-bump Done → Completed for any spec
+                        // whose `(REQ-ID)` is now referenced by a new commit
+                        // on the project's default branch. Scan range uses
+                        // the default branch's pre-sync HEAD as the floor —
+                        // for `aida db sync --pull` we don't pull the code
+                        // branch here, so the floor is whatever the default
+                        // ref pointed at when we entered the command (it
+                        // may already be ahead of `Done` work the user just
+                        // committed elsewhere). trace:STORY-86 | ai:claude
+                        if let Ok(project_root) = find_project_root() {
+                            // Default-ref SHA from the user's local repo. None on
+                            // detached / no-default-branch cases — auto-bump
+                            // helper will fall back to its HEAD~50 horizon.
+                            let pre_sha = detect_default_branch_ref(&project_root)
+                                .and_then(|r| {
+                                    std::process::Command::new("git")
+                                        .arg("-C")
+                                        .arg(&project_root)
+                                        .args(["rev-parse", &r])
+                                        .output()
+                                        .ok()
+                                })
+                                .and_then(|o| {
+                                    if o.status.success() {
+                                        Some(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                                    } else {
+                                        None
+                                    }
+                                });
+                            let bumped = auto_bump_done_to_completed(
+                                &backend,
+                                &project_root,
+                                pre_sha.as_deref(),
+                            );
+                            if !bumped.is_empty() {
+                                println!();
+                                println!(
+                                    "{} {} spec(s) bumped Done → Completed:",
+                                    "✓".green(),
+                                    bumped.len()
+                                );
+                                for (id, sha) in &bumped {
+                                    let short = sha.get(..7).unwrap_or(sha.as_str());
+                                    println!("  {}  ({})", id.bold(), short.dimmed());
+                                }
+                            }
+                        }
                     }
                     Err(e) => {
                         // A failed rebase leaves the repo in a partial
@@ -3187,10 +3235,12 @@ fn capitalize(s: &str) -> String {
 /// and the parent-guard share the same notion of "this is closed work".
 /// trace:TASK-64 | ai:claude
 pub fn is_terminal_status_str(s: &str) -> bool {
+    // STORY-86: `Done` is non-terminal — it can advance to `Completed`
+    // once the referencing commit lands on main. The default `aida list`
+    // / `aida history` views surface Done so "what's pending merge" stays
+    // actionable. trace:STORY-86 | ai:claude
     let t = s.trim();
-    t.eq_ignore_ascii_case("completed")
-        || t.eq_ignore_ascii_case("rejected")
-        || t.eq_ignore_ascii_case("done")
+    t.eq_ignore_ascii_case("completed") || t.eq_ignore_ascii_case("rejected")
 }
 
 /// Validate a status string against the canonical set. Accepts case-
@@ -3213,10 +3263,16 @@ pub fn validate_status_input(raw: &str) -> Result<&'static str, String> {
         "approved" => Ok("Approved"),
         "planned" => Ok("Planned"),
         "inprogress" => Ok("InProgress"),
-        "completed" | "done" => Ok("Completed"),
+        // STORY-86: Done and Completed are now distinct lifecycle stages.
+        // Done = work finished on a branch; Completed = merged to main.
+        // Pre-STORY-86 callers said `--status done` expecting Completed
+        // and got it (we folded `done` into Completed); going forward
+        // they need to opt in explicitly. trace:STORY-86 | ai:claude
+        "done" => Ok("Done"),
+        "completed" => Ok("Completed"),
         "rejected" => Ok("Rejected"),
         _ => Err(format!(
-            "invalid status `{}` — expected one of: draft, approved, planned, in-progress, completed, rejected",
+            "invalid status `{}` — expected one of: draft, approved, planned, in-progress, done, completed, rejected",
             raw
         )),
     }
@@ -4444,6 +4500,10 @@ fn list_requirements(
             RequirementStatus::Approved => "Approved".blue(),
             RequirementStatus::Planned => "Planned".cyan(),
             RequirementStatus::InProgress => "In Progress".magenta(),
+            // Done = work landed on a branch but not yet merged to main.
+            // Distinct from Completed (merged): use bright_green to set apart.
+            // trace:STORY-86 | ai:claude
+            RequirementStatus::Done => "Done".bright_green(),
             RequirementStatus::Completed => "Completed".green(),
             RequirementStatus::Rejected => "Rejected".red(),
         };
@@ -4495,6 +4555,7 @@ fn show_requirement(storage: &Storage, id_str: &str) -> Result<()> {
         RequirementStatus::Approved => "Approved".blue(),
         RequirementStatus::Planned => "Planned".cyan(),
         RequirementStatus::InProgress => "In Progress".magenta(),
+        RequirementStatus::Done => "Done".bright_green(),
         RequirementStatus::Completed => "Completed".green(),
         RequirementStatus::Rejected => "Rejected".red(),
     };
@@ -4676,9 +4737,10 @@ fn edit_requirement_cli(
             "approved" => RequirementStatus::Approved,
             "planned" => RequirementStatus::Planned,
             "in_progress" | "in-progress" | "inprogress" => RequirementStatus::InProgress,
+            "done" => RequirementStatus::Done,
             "completed" => RequirementStatus::Completed,
             "rejected" => RequirementStatus::Rejected,
-            _ => anyhow::bail!("Invalid status '{}'. Use: draft, approved, planned, in_progress, completed, rejected", status_str),
+            _ => anyhow::bail!("Invalid status '{}'. Use: draft, approved, planned, in_progress, done, completed, rejected", status_str),
         };
         if new_status != req.status {
             changes.push(Requirement::field_change(
@@ -4860,6 +4922,7 @@ fn edit_requirement_interactive(storage: &Storage, id_str: &str) -> Result<()> {
         RequirementStatus::Approved,
         RequirementStatus::Planned,
         RequirementStatus::InProgress,
+        RequirementStatus::Done,
         RequirementStatus::Completed,
         RequirementStatus::Rejected,
     ];
@@ -4985,6 +5048,9 @@ fn delete_requirement(storage: &Storage, id_str: &str, skip_confirm: bool) -> Re
 /// --tree` / `aida list --parent` views from accumulating mixed-status
 /// trees. trace:BUG-64 | ai:claude
 fn is_terminal_status(status: &RequirementStatus) -> bool {
+    // STORY-86: `Done` is intentionally NOT terminal — it can still
+    // advance to `Completed` when the referencing commit lands on main.
+    // The BUG-64 parenting guard cares only about truly-closed work.
     matches!(
         status,
         RequirementStatus::Completed | RequirementStatus::Rejected
@@ -5021,6 +5087,7 @@ fn parse_status(status_str: &str) -> Result<RequirementStatus> {
         "approved" => Ok(RequirementStatus::Approved),
         "planned" => Ok(RequirementStatus::Planned),
         "in_progress" | "in-progress" | "inprogress" => Ok(RequirementStatus::InProgress),
+        "done" => Ok(RequirementStatus::Done),
         "completed" => Ok(RequirementStatus::Completed),
         "rejected" => Ok(RequirementStatus::Rejected),
         _ => anyhow::bail!("Invalid status: {}", status_str),
@@ -10436,6 +10503,152 @@ fn detect_default_branch_ref(project_root: &std::path::Path) -> Option<String> {
     None
 }
 
+/// STORY-86: env opt-out for the Done → Completed auto-bump. Defaults
+/// on; set `AIDA_AUTO_BUMP=false`/`0`/`no`/`off` to disable. Mirrors
+/// the convention of `AIDA_AUTO_MERGE_GATE` and `AIDA_BG_FETCH`.
+/// trace:STORY-86 | ai:claude
+fn auto_bump_enabled() -> bool {
+    match std::env::var("AIDA_AUTO_BUMP") {
+        Ok(v) => !matches!(
+            v.trim().to_ascii_lowercase().as_str(),
+            "false" | "0" | "no" | "off"
+        ),
+        Err(_) => true,
+    }
+}
+
+/// STORY-86: scan new commits on the project's default branch for ones
+/// that reference any currently-`Done` requirement; bump matched reqs
+/// from `Done` to `Completed` and stamp the auto-bump audit fields.
+///
+/// Range: `pre_sha..default_ref` when `pre_sha` is provided (typical —
+/// the caller snapshots HEAD before the pull, so we only scan what
+/// actually arrived). Falls back to `default_ref~50..default_ref` on
+/// first pull / shallow clone — that horizon is long enough to mop up
+/// recently-merged work without scanning the whole history.
+///
+/// Matching: `extract_spec_ids_from_commit` parses `(REQ-ID)` from each
+/// subject (handles squash `(#N)` suffixes and multi-spec parens like
+/// `(STORY-90 BUG-74)`). Only specs currently in `Done` get flipped —
+/// `Completed` / `Rejected` / `InProgress` are left alone. Returns the
+/// display ids that were bumped paired with the commit SHA that
+/// triggered each, so the caller can render a per-line summary.
+///
+/// Every failure mode (no default ref, git error, store load fail)
+/// degrades to "bumped nothing" without surfacing — the surrounding
+/// pull already succeeded; a flaky bump must not look like a failed
+/// pull. trace:STORY-86 | ai:claude
+fn auto_bump_done_to_completed(
+    backend: &aida_core::CachedGitBackend,
+    project_root: &std::path::Path,
+    pre_sha: Option<&str>,
+) -> Vec<(String, String)> {
+    if !auto_bump_enabled() {
+        return Vec::new();
+    }
+    let Some(default_ref) = detect_default_branch_ref(project_root) else {
+        return Vec::new();
+    };
+    let Ok(store) = backend.load() else {
+        return Vec::new();
+    };
+    let done_reqs: Vec<Requirement> = store
+        .requirements
+        .iter()
+        .filter(|r| matches!(r.status, RequirementStatus::Done))
+        .cloned()
+        .collect();
+    if done_reqs.is_empty() {
+        return Vec::new();
+    }
+
+    // Build the scan range. pre_sha..default_ref when known, else cap
+    // at the last 50 commits on the default branch.
+    let range = match pre_sha {
+        Some(p) if !p.is_empty() => format!("{}..{}", p, default_ref),
+        _ => format!("{}~50..{}", default_ref, default_ref),
+    };
+
+    // Walk new commits: SHA<TAB>subject. Body lines aren't needed —
+    // `extract_spec_ids_from_commit` walks subject-line trailing `()`.
+    let log_out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["log", "--pretty=format:%H%x09%s", &range])
+        .output();
+    let Ok(log_out) = log_out else {
+        return Vec::new();
+    };
+    if !log_out.status.success() {
+        return Vec::new();
+    }
+    let log_text = String::from_utf8_lossy(&log_out.stdout);
+
+    // First commit (in reverse-chrono walk: nearest-to-tip) wins per
+    // spec. spec_id (and agreed_id) → matching commit SHA.
+    let mut spec_to_sha: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+    for line in log_text.lines() {
+        let Some(tab) = line.find('\t') else {
+            continue;
+        };
+        let sha = &line[..tab];
+        let subject = &line[tab + 1..];
+        for id in extract_spec_ids_from_commit(subject) {
+            spec_to_sha.entry(id).or_insert_with(|| sha.to_string());
+        }
+    }
+    if spec_to_sha.is_empty() {
+        return Vec::new();
+    }
+
+    let mut bumped: Vec<(String, String)> = Vec::new();
+    let now = chrono::Utc::now();
+    for req in done_reqs {
+        // Try both id forms. agreed_id is the short post-merge-gate id
+        // (the typical commit form per CLAUDE.md); spec_id is the long
+        // pre-gate form. Either match counts.
+        let sha = req
+            .agreed_id
+            .as_deref()
+            .and_then(|id| spec_to_sha.get(id))
+            .or_else(|| req.spec_id.as_deref().and_then(|id| spec_to_sha.get(id)))
+            .cloned();
+        let Some(sha) = sha else {
+            continue;
+        };
+
+        let display = req
+            .agreed_id
+            .clone()
+            .or(req.spec_id.clone())
+            .unwrap_or_else(|| req.id.to_string());
+
+        let mut updated = req.clone();
+        updated.set_status_from_str("Completed");
+        updated.modified_at = now;
+        // Stamp the auto-bump audit fields without clobbering anything
+        // `queue done` already set (implemented_at / implemented_by).
+        let info = updated
+            .implementation_info
+            .get_or_insert_with(aida_core::ImplementationInfo::default);
+        info.completed_at.get_or_insert(now);
+        if info.completion_sha.is_none() {
+            info.completion_sha = Some(sha.clone());
+        }
+
+        if backend.update_requirement(&updated).is_ok() {
+            // Mirror the BUG-65 activity-log hookup from `queue done`
+            // so the statusline @SPEC reflects the bump.
+            if let Some(spec_id) = req.spec_id.as_deref() {
+                record_role_activity(spec_id, "auto-completed");
+            }
+            bumped.push((display, sha));
+        }
+    }
+    bumped
+}
+
 /// Return the branch name currently checked out at `path` (its HEAD).
 /// `None` if detached or git fails. trace:BUG-76 | ai:claude
 fn current_branch_at(path: &std::path::Path) -> Option<String> {
@@ -14392,7 +14605,13 @@ fn update_manifest_for_status(spec_id: &str, canonical_status: &str) {
     let lower = canonical_status.to_ascii_lowercase();
     let res = if lower == "in-progress" || lower == "in_progress" || lower == "in progress" {
         session_manifest::mark_started(&path, spec_id)
-    } else if lower == "completed" || lower == "rejected" {
+    } else if lower == "done" || lower == "completed" || lower == "rejected" {
+        // STORY-86: `Done` now lands here from `aida queue done`. Treat
+        // it as a terminal-for-this-session signal so the manifest's
+        // ✓ Done glyph flips when the worker finishes — even though the
+        // PR isn't merged yet. The downstream `Completed` bump (from
+        // `aida db sync --pull`) is a no-op against an already-stamped
+        // manifest row. trace:STORY-86 | ai:claude
         session_manifest::mark_completed(&path, spec_id)
     } else {
         return; // draft/approved transitions don't move the manifest needle
@@ -15800,10 +16019,39 @@ mod statusline_tests {
     fn is_terminal_status_buckets() {
         assert!(is_terminal_status(&RequirementStatus::Completed));
         assert!(is_terminal_status(&RequirementStatus::Rejected));
+        // STORY-86: Done is NOT terminal — it can still advance to
+        // Completed when the referencing commit lands on main.
+        assert!(!is_terminal_status(&RequirementStatus::Done));
         assert!(!is_terminal_status(&RequirementStatus::Draft));
         assert!(!is_terminal_status(&RequirementStatus::Approved));
         assert!(!is_terminal_status(&RequirementStatus::Planned));
         assert!(!is_terminal_status(&RequirementStatus::InProgress));
+    }
+
+    /// STORY-86: `--status done` must canonicalize to "Done" (not
+    /// "Completed", which is how pre-STORY-86 callers wrote it). Other
+    /// statuses keep their existing canonical forms. trace:STORY-86 | ai:claude
+    #[test]
+    fn validate_status_input_canonicalizes_done_distinctly() {
+        for raw in &["done", "Done", "DONE", "  done  "] {
+            assert_eq!(
+                validate_status_input(raw),
+                Ok("Done"),
+                "{:?} should canonicalize to Done",
+                raw
+            );
+        }
+        assert_eq!(validate_status_input("completed"), Ok("Completed"));
+        assert_eq!(validate_status_input("rejected"), Ok("Rejected"));
+        assert_eq!(validate_status_input("in-progress"), Ok("InProgress"));
+
+        // Unknown values still error; the message lists the new `done` token.
+        let err = validate_status_input("nope").unwrap_err();
+        assert!(
+            err.contains("done"),
+            "error message should mention `done`: {}",
+            err
+        );
     }
 
     /// STORY-72: position math for `queue move --after`. Three regimes —
@@ -20104,6 +20352,23 @@ fn handle_pull_command(
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
 
+    // STORY-86: snapshot the project's default-branch SHA BEFORE the
+    // code pull, so the post-pull auto-bump scan can walk only the
+    // commits that actually arrived in this pull. `None` when no
+    // default branch is detectable (no origin, detached head); the
+    // auto-bump helper falls back to its HEAD~50 horizon in that case.
+    // trace:STORY-86 | ai:claude
+    let pre_code_sha: Option<String> = detect_default_branch_ref(&project_root).and_then(|r| {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&project_root)
+            .args(["rev-parse", &r])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+    });
+
     // ---- Code pull (current branch on the project repo) ----
     if !store_only {
         if !git_ops::has_remote(&project_root, "origin") {
@@ -20222,6 +20487,41 @@ fn handle_pull_command(
                                 "Warning:".yellow().bold(),
                                 e
                             );
+                        }
+                    }
+                }
+
+                // STORY-86: now that the code pull + store pull have
+                // both landed, scan `pre_code_sha..<default-ref>` for
+                // commits referencing `Done` specs and flip them to
+                // `Completed`. Best-effort — every failure path returns
+                // an empty list, so a flaky scan can't look like a
+                // failed pull. trace:STORY-86 | ai:claude
+                if let Some(dispenser) = load_dispenser(store_path).ok() {
+                    if let Ok(inner) = aida_core::GitBackend::new(store_path) {
+                        let inner = inner.with_dispenser(dispenser);
+                        let cache_path =
+                            aida_core::CachedGitBackend::default_cache_path(store_path);
+                        if let Ok(backend) =
+                            aida_core::CachedGitBackend::with_inner(inner, &cache_path)
+                        {
+                            let bumped = auto_bump_done_to_completed(
+                                &backend,
+                                &project_root,
+                                pre_code_sha.as_deref(),
+                            );
+                            if !bumped.is_empty() {
+                                println!();
+                                println!(
+                                    "  {} {} spec(s) bumped Done → Completed:",
+                                    "✓".green(),
+                                    bumped.len()
+                                );
+                                for (id, sha) in &bumped {
+                                    let short = sha.get(..7).unwrap_or(sha.as_str());
+                                    println!("    {}  ({})", id.bold(), short.dimmed());
+                                }
+                            }
                         }
                     }
                 }
@@ -28847,7 +29147,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
 
             if !yes {
                 eprintln!(
-                    "Mark {} ({}) as completed and remove from queue?",
+                    "Mark {} ({}) as done and remove from queue?",
                     display_id.bold(),
                     req.title
                 );
@@ -28863,11 +29163,17 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
                 }
             }
 
-            // Update status to Completed via update_atomically — works
+            // Update status to Done via update_atomically — works
             // across SQLite and git-canonical modes. set_status_from_str
             // also clears any stale custom_status so the canonical enum
             // value actually takes effect (BUG-1-025).
             // trace:BUG-1-025 | ai:claude
+            //
+            // STORY-86: `aida queue done` flips the spec to `Done`, not
+            // `Completed`. Done = work finished on a branch; the PR may
+            // not be merged yet. `aida db sync --pull` auto-bumps Done →
+            // Completed when a referencing commit lands on main.
+            // trace:STORY-86 | ai:claude
             //
             // STORY-81 Part 2: also stamp `implementation_info` so the
             // req permanently records who completed it and when, with
@@ -28881,7 +29187,7 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             let source_tool = std::env::var("AIDA_AI_TOOL").ok().filter(|s| !s.is_empty());
             storage.update_atomically(|s| {
                 if let Some(r) = s.requirements.iter_mut().find(|r| r.id == req_id) {
-                    r.set_status_from_str("Completed");
+                    r.set_status_from_str("Done");
                     r.modified_at = now;
                     // Don't clobber prior `summary` / `risk_notes` /
                     // `test_coverage_notes` if the user / `/aida-pr`
@@ -28912,14 +29218,21 @@ fn handle_queue_command(cmd: &QueueCommand, storage: &Storage) -> Result<()> {
             // STORY-98: same reason as the BUG-65 hookup above — `queue
             // done` bypasses Command::Edit, so the manifest-flip path
             // there doesn't fire. Mirror it explicitly so `aida session
-            // show --plan` flips ✓ Done at completion time.
+            // show --plan` flips ✓ Done at completion time. (STORY-86
+            // changed the flipped-to status from Completed to Done; the
+            // manifest's ✓ Done glyph predates and is unrelated to the
+            // RequirementStatus::Done variant.)
             // trace:STORY-98 | ai:claude
-            update_manifest_for_status(spec_id, "Completed");
+            update_manifest_for_status(spec_id, "Done");
 
             println!(
-                "{} {} marked completed and removed from queue.",
+                "{} {} marked done and removed from queue.",
                 "✓".green(),
                 display_id.bold()
+            );
+            println!(
+                "  ({})",
+                "auto-bumps to Completed when the referencing commit lands on main".dimmed()
             );
             println!(
                 "  ({})",
@@ -30695,10 +31008,17 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
                             ));
                         }
 
-                        // Compare state
+                        // Compare state. STORY-86: Done (branch finished,
+                        // not yet merged) maps to GitHub's "closed" — once
+                        // the worker considers the PR-bound work shipped
+                        // we want it to read as closed on the issue side,
+                        // not drift back open just because Completed
+                        // hasn't auto-bumped yet. trace:STORY-86 | ai:claude
                         let aida_closed = matches!(
                             req.status,
-                            RequirementStatus::Completed | RequirementStatus::Rejected
+                            RequirementStatus::Done
+                                | RequirementStatus::Completed
+                                | RequirementStatus::Rejected
                         );
                         let gh_closed = issue.state == "closed";
                         if aida_closed != gh_closed {
@@ -30756,7 +31076,9 @@ fn handle_github_command(cmd: &GitHubCommand, storage: &Storage) -> Result<()> {
 
                     let aida_closed = matches!(
                         req.status,
-                        RequirementStatus::Completed | RequirementStatus::Rejected
+                        RequirementStatus::Done
+                            | RequirementStatus::Completed
+                            | RequirementStatus::Rejected
                     );
 
                     let update = aida_core::GitHubUpdateIssueRequest {

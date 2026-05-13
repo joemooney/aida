@@ -21,6 +21,7 @@ pub fn prompt_new_requirement(store: &mut aida_core::RequirementsStore) -> Resul
         RequirementStatus::Approved,
         RequirementStatus::Planned,
         RequirementStatus::InProgress,
+        RequirementStatus::Done,
         RequirementStatus::Completed,
         RequirementStatus::Rejected,
     ];

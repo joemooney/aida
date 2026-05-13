@@ -59,9 +59,13 @@ export function QueuePage() {
   );
 
   const entries = data?.entries ?? [];
+  // STORY-86: hide both `Done` (branch-finished, pending merge) and
+  // `Completed` (merged) when the user hasn't asked for them. Pre-STORY-86
+  // the filter only knew about `Completed`; `Done` items would otherwise
+  // clutter the active-work view between `aida queue done` and merge.
   const filtered = showCompleted
     ? entries
-    : entries.filter((e) => e.status !== 'Completed');
+    : entries.filter((e) => e.status !== 'Completed' && e.status !== 'Done');
 
   const displayItemIds = useMemo(
     () => filtered.map((e) => e.specId ?? e.requirementId),
@@ -185,7 +189,7 @@ export function QueuePage() {
               onChange={(e) => setShowCompleted(e.target.checked)}
               className="rounded border-edge"
             />
-            Show completed
+            Show done/completed
           </label>
         </div>
       </div>

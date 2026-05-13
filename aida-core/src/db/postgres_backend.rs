@@ -241,6 +241,7 @@ impl PostgresBackend {
             RequirementStatus::Approved => "Approved",
             RequirementStatus::Planned => "Planned",
             RequirementStatus::InProgress => "In Progress",
+            RequirementStatus::Done => "Done",
             RequirementStatus::Completed => "Completed",
             RequirementStatus::Rejected => "Rejected",
         }
@@ -253,6 +254,7 @@ impl PostgresBackend {
             "Approved" => RequirementStatus::Approved,
             "Planned" => RequirementStatus::Planned,
             "In Progress" => RequirementStatus::InProgress,
+            "Done" => RequirementStatus::Done,
             "Completed" => RequirementStatus::Completed,
             "Rejected" => RequirementStatus::Rejected,
             _ => RequirementStatus::Draft,

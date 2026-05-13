@@ -14,6 +14,11 @@ pub enum RequirementStatus {
     Approved,
     Planned,
     InProgress,
+    /// Work finished on a branch — `aida queue done` lands here. The PR may
+    /// or may not be merged yet. Auto-bumps to `Completed` when a commit
+    /// referencing the spec lands on the project's main branch (see
+    /// `aida db sync --pull`'s auto-bump path). trace:STORY-86 | ai:claude
+    Done,
     Completed,
     Rejected,
 }
@@ -25,6 +30,7 @@ impl fmt::Display for RequirementStatus {
             RequirementStatus::Approved => write!(f, "Approved"),
             RequirementStatus::Planned => write!(f, "Planned"),
             RequirementStatus::InProgress => write!(f, "In Progress"),
+            RequirementStatus::Done => write!(f, "Done"),
             RequirementStatus::Completed => write!(f, "Completed"),
             RequirementStatus::Rejected => write!(f, "Rejected"),
         }
@@ -2403,6 +2409,20 @@ pub struct ImplementationInfo {
     /// Who performed the implementation
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub implemented_by: Option<String>,
+
+    /// STORY-86: stamped at the moment the spec auto-bumps from `Done`
+    /// to `Completed` — i.e. when a referencing commit landed on the
+    /// project's default branch. Distinct from `implemented_at`, which
+    /// records when `aida queue done` flipped the spec to `Done`.
+    /// trace:STORY-86 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completed_at: Option<DateTime<Utc>>,
+
+    /// STORY-86: the commit SHA on the default branch that triggered
+    /// the Done → Completed auto-bump. Lets `aida show` link back to
+    /// the merge that shipped the spec. trace:STORY-86 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completion_sha: Option<String>,
 }
 
 impl Default for ImplementationInfo {
@@ -2417,6 +2437,8 @@ impl Default for ImplementationInfo {
             confidence: None,
             implemented_at: None,
             implemented_by: None,
+            completed_at: None,
+            completion_sha: None,
         }
     }
 }
@@ -3198,6 +3220,10 @@ impl Requirement {
             }
             "inprogress" => {
                 self.status = RequirementStatus::InProgress;
+                self.custom_status = None;
+            }
+            "done" => {
+                self.status = RequirementStatus::Done;
                 self.custom_status = None;
             }
             "completed" => {
@@ -6102,6 +6128,42 @@ mod tests {
         assert_eq!(req.status, RequirementStatus::Completed);
         assert_eq!(req.custom_status, None);
         assert_eq!(req.effective_status(), "Completed");
+    }
+
+    /// STORY-86: `Done` is a distinct lifecycle stage from `Completed`.
+    /// Pre-STORY-86 the parser folded "done" into Completed; new behavior
+    /// must round-trip "Done" / "done" / "DONE" to RequirementStatus::Done
+    /// with no custom_status leak, and keep "Completed" mapping to
+    /// RequirementStatus::Completed. trace:STORY-86 | ai:claude
+    #[test]
+    fn set_status_from_str_handles_done_separately_from_completed() {
+        let mut req = Requirement::new("t".into(), "d".into());
+
+        for s in &["Done", "done", "DONE", "  done  "] {
+            req.custom_status = Some("stale".into());
+            req.set_status_from_str(s);
+            assert_eq!(
+                req.status,
+                RequirementStatus::Done,
+                "{:?} should map to RequirementStatus::Done",
+                s
+            );
+            assert_eq!(
+                req.custom_status, None,
+                "{:?} should clear custom_status",
+                s
+            );
+            assert_eq!(req.effective_status(), "Done");
+        }
+
+        // Completed must stay Completed (not silently collapse to Done).
+        req.set_status_from_str("Completed");
+        assert_eq!(req.status, RequirementStatus::Completed);
+        assert_eq!(req.effective_status(), "Completed");
+
+        // Round-trip from Completed back to Done.
+        req.set_status_from_str("done");
+        assert_eq!(req.status, RequirementStatus::Done);
     }
 
     #[test]

@@ -403,15 +403,19 @@ pub fn build_improve_prompt(req: &Requirement, store: &RequirementsStore) -> Str
     let config = &store.ai_prompts;
     let req_type = req.req_type.to_string();
 
-    // Find examples of well-written requirements (completed ones with descriptions)
+    // Find examples of well-written requirements (shipped ones with
+    // descriptions). STORY-86: include `Done` too — work that's finished
+    // on a branch is just as good a quality exemplar as work that's
+    // merged, and excluding it shrinks the pool unnecessarily.
     let examples: Vec<String> = store
         .requirements
         .iter()
         .filter(|r| {
+            let status = r.status.to_string();
             r.id != req.id
                 && !r.archived
                 && r.description.len() > 100
-                && r.status.to_string() == "Completed"
+                && (status == "Completed" || status == "Done")
         })
         .take(2)
         .map(|r| {
