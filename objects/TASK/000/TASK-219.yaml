@@ -1,0 +1,69 @@
+id: 019e202a-ced0-7660-8b77-efaa3f0ebf50
+spec_id: TASK-219
+agreed_id: TASK-219
+title: 'Cluster grouping + composes-with relationship: batch-pickup machinery beyond parent/child'
+description: |-
+  Captures a design surface that emerged 2026-05-13 around 'how do related tasks get batch-picked-up by an implementer.' Today AIDA's batch-pickup (STORY-42's aida queue work cluster mode) only works on parent/child edges. Many related TASKs in this session compose without parent/child relationships.
+
+  ## Two complementary mechanisms
+
+  A. **composes-with relationship type** — pairwise edge, mutual. Means: shipping both together has multiplicative value; shipping one alone leaves the other suboptimal. Example: TASK-218 (rework verb) composes-with TASK-217 (status-aware error) — TASK-217's recovery messages literally shorten once TASK-218 ships.
+
+  B. **cluster grouping (tag-based)** — flat membership in a named group. Means: these tasks form a coherent batch; consider working any of them together. Example: cluster:plan-tooling spans TASK-92/93/94/95/96/113/114/217 across multiple parent-child branches.
+
+  Both fill the granularity gap between EPIC (too broad) and parent/child (too rigid).
+
+  ## Sketch — lean v1
+
+  For composes-with: add as custom relationship type. aida rel add A B --type composes-with. aida show enumerates composes-with edges inline (composes with TASK-102 expansion).
+
+  For cluster: structured tag convention. aida add ... --tags 'cluster:plan-tooling, ...'. Then aida cluster list / aida cluster show NAME / aida cluster members NAME enumerate.
+
+  For queue work surfacing: extend STORY-42's cluster-pickup logic. When aida queue work TASK-X runs, check (a) composes-with edges to other queued tasks, (b) cluster:* tags shared with other queued tasks. If either, offer batch pickup.
+
+  ## Pragmatic notes for the future implementer
+
+  - DON'T over-decompose. This TASK is one unit, not pre-split into 4 TASKs, because the design choices interact and shouldn't be locked in upfront. Whoever picks it up should design holistically.
+  - DON'T promote cluster to a new req type unless tag-based proves inadequate. Tags are cheap, types are heavy.
+  - DO consider: should composes-with be directional or mutual? Mutual is simpler; directional (e.g. 'A benefits-from B') is more expressive. Lean mutual for v1.
+  - DO consider: should clusters have status/owner metadata? If yes, they probably want to be a type, not a tag. If no, stay tags. Lean tag-only for v1.
+  - DO backfill: this session's TASK comments contain ~15 'Composes with: TASK-X' references that should become real edges once the type exists.
+
+  ## Composes with (illustrative, real edges to add when this ships)
+
+  - TASK-218 composes-with TASK-217 (rework verb shortens error messages)
+  - TASK-218 composes-with TASK-112 (rework + resume = full fixup loop)
+  - TASK-217 composes-with TASK-112 (Done-case error could offer --resume)
+  - TASK-99 composes-with TASK-107 (queue work pulls code USES aida fetch)
+  - TASK-93 composes-with TASK-94 (verify uses helper derivation)
+  - TASK-95 composes-with TASK-113 + TASK-114 (the ultraplan integration pipeline)
+  - TASK-103 + TASK-104 + TASK-105 (rebase trio under STORY-114)
+  - TASK-106 + TASK-107 + TASK-108 + TASK-109 (verb-surface quartet under STORY-115)
+
+  These are clusters too — cluster:rebase-verb, cluster:verb-surface, etc.
+
+  ## Discovered via
+
+  2026-05-13 session — observed that ~15 'Composes with: TASK-X' comments had accumulated in TASK descriptions, all unsurfaced at pickup time. User asked: 'should there be some linkage/relationship/comment that when you pick up one of the tasks that it should also work the others that are recommended' and then 'maybe we have a cluster concept?'
+
+  ## Acceptance (intentionally high-level — design holistically)
+
+  - [ ] composes-with relationship type works (aida rel add ... --type composes-with)
+  - [ ] Some cluster mechanism exists (tag-based or otherwise) for flat batch grouping
+  - [ ] aida queue work surfaces both composes-with neighbors and cluster siblings at pickup
+  - [ ] Backfill: convert 'Composes with: TASK-X' comments accumulated this session into real edges
+  - [ ] Document in docs/session-lifecycle.md or a sibling doc — name the distinction between composes-with and cluster
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T07:08:56.912838543Z
+modified_at: 2026-05-13T07:08:56.912838543Z
+req_type: Task
+tags:
+- cluster
+- composes-with
+- design-pending
+- grouping
+- relationships
+- workflow
