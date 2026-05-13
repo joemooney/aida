@@ -1,0 +1,47 @@
+id: 019e1ff2-cd92-7891-85f0-8b499710e9c5
+spec_id: TASK-108
+agreed_id: TASK-108
+title: 'aida push --dry-run and aida pull --dry-run: show what would happen without doing it'
+description: |-
+  Mirror the dry-run pattern from aida rebase (TASK-103) on the push and pull verbs. Useful for 'am I about to send what I think I'm sending?' — especially relevant when worktree sessions accumulate fixup commits or when scope of a pull is unclear.
+
+  ## Behavior
+
+  aida push --dry-run — fetch first if needed; show: for each leg, what commits would push (count + first N subjects); for the code leg, show diverged status if any; exit 0 without pushing.
+
+  aida pull --dry-run — fetch first; show: for each leg, what commits would pull, what files would change, whether a rebase / merge / ff would happen; exit 0 without pulling.
+
+  Output should be parseable:
+
+  - Human-readable by default (subject + SHA + leg)
+  - --json for machine consumption (TASK-103 already establishes this convention)
+
+  ## Composes with
+
+  - aida rebase --dry-run (TASK-103) — same classification engine partially reusable
+  - aida fetch (this STORY's other TASK) — pull --dry-run can call it as its refresh step
+
+  ## Why low priority
+
+  Not blocking workflow today; aida push and aida pull both produce summary output that retroactively answers 'what just happened.' --dry-run is the 'what would happen' version. Useful, but not critical until users start scripting around AIDA.
+
+  ## Acceptance
+
+  - [ ] aida push --dry-run shows per-leg commits-to-push + summary; doesn't push
+  - [ ] aida pull --dry-run shows per-leg commits-to-pull + summary; doesn't pull
+  - [ ] --json output mode for both
+  - [ ] Honors --code-only / --store-only from the granularity TASK
+  - [ ] Help text reflects the new flag
+status: Approved
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-13T06:07:46.578737046Z
+modified_at: 2026-05-13T06:07:46.578737046Z
+req_type: Task
+tags:
+- dry-run
+- inspection
+- pull
+- push
+- safety
