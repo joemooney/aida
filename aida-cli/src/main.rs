@@ -2154,8 +2154,22 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
             // hits one more YAML read per visited node, but for typical
             // EPIC trees (~50 nodes max) that's fine, and the user opts
             // in. trace:STORY-62 | ai:claude
+            // BUG-97: attach the parse-failure recovery hint to ANY error
+            // from the lookup. Previously the swallowed-error path returned
+            // None for both "file missing" AND "file failed to parse",
+            // sending the user down a wrong-spec-id chase. git_backend's
+            // get_requirement_by_spec_id now propagates parse errors;
+            // wrap them here with the actionable hint. trace:BUG-97
+            let lookup = backend.get_requirement_by_spec_id(id).map_err(|e| {
+                anyhow::anyhow!(
+                    "Parse failed: {}\n  Detail: {:#}\n{}",
+                    id,
+                    e,
+                    aida_core::object_store::parse_failure_hint(None),
+                )
+            });
             if *tree {
-                match backend.get_requirement_by_spec_id(id)? {
+                match lookup? {
                     Some(root) => {
                         record_role_activity(root.spec_id.as_deref().unwrap_or(id), "show");
                         render_tree(&backend, &root, *depth)?;
@@ -2166,7 +2180,7 @@ fn handle_git_backend_command(store_path: &std::path::Path, command: &Command) -
                 }
                 return Ok(());
             }
-            match backend.get_requirement_by_spec_id(id)? {
+            match lookup? {
                 Some(req) => {
                     record_role_activity(req.spec_id.as_deref().unwrap_or(id), "show");
                     println!("{}: {}", "ID".bold(), req.display_id());
