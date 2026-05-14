@@ -47,12 +47,12 @@ description: |-
   ## Discovered via
 
   2026-05-13 — user shipped BUG-96 in PR-22, ran aida queue list --all expecting to see BUG-96 in flight, found it absent. Was findable via aida show BUG-96 but invisible to the natural workflow view.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T15:55:31.246695225Z
-modified_at: 2026-05-14T07:14:38.040880431Z
+modified_at: 2026-05-14T14:43:34.243677818Z
 req_type: Task
 tags:
 - done
