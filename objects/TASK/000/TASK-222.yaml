@@ -52,7 +52,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T15:55:31.246695225Z
-modified_at: 2026-05-14T06:33:27.242092754Z
+modified_at: 2026-05-14T07:12:02.863634260Z
 req_type: Task
 tags:
 - done
@@ -65,6 +65,21 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-13T15:55:33.288898842Z
+comments:
+- id: 019e2554-012f-7300-824c-23b0a5035ce2
+  author: joe
+  content: |-
+    Implemented via epic-23-5 (commit 250becf1):
+
+    - Appended a "Done — awaiting merge" section to `aida queue list` after the regular queue render. Sorted by `implemented_at` (most recent first) with a relative-time chip ("3m ago", "1h ago", "2d ago").
+    - Flags: default = pending + in-flight; --no-in-flight = pending only; --in-flight-only = in-flight only.
+    - Empty-queue handling: if pending is empty but in-flight has items, prints muted empty hint THEN the in-flight section. Don't suppress one because the other is empty — they answer different questions.
+    - In-flight section is project-wide (not role-filtered): Done specs aren't routed (queue entry is gone), and the user wants "what am I waiting on" not "what's waiting on me."
+    - PR-state lookup via gh deferred — would add latency/flakiness; the timestamp is enough for the common "is this still pending?" glance.
+
+    Test status: smoke-verified against the live store (5 Done specs visible); no unit tests since the in-flight render is inline I/O matching the rest of the queue list paths. 332/332 cargo tests green.
+  created_at: 2026-05-14T07:12:02.863634260Z
+  modified_at: 2026-05-14T07:12:02.863634260Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T06:33:27.242092754Z
