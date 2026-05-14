@@ -1,0 +1,79 @@
+id: 019e2518-6db6-7b42-a150-0422cad1becb
+spec_id: TASK-229
+agreed_id: TASK-229
+title: 'aida queue work --batch NAME: drain queued items matching a batch tag (one session each, in head order)'
+description: |-
+  Adds the operational layer for tag-based batch processing of the queue. When items share a 'batch:NAME' tag (set via aida add --tags or aida edit --tags), this flag drains all of them with minimal ceremony.
+
+  ## Shape
+
+  aida queue work --batch session-lifecycle           — drain all queued items tagged batch:session-lifecycle, one fresh session per item, in queue head order
+  aida queue work --batch session-lifecycle --serial  — explicit: one session at a time, wait for previous to finish before next (default; safest)
+  aida queue work --batch session-lifecycle --parallel — fork sessions for all matching items concurrently (advanced; risk of cross-session conflict)
+  aida queue work --batch session-lifecycle --dry-run — list which items match, in pickup order, without acting
+
+  ## Tag convention
+
+  Items in a batch share a tag of the form 'batch:NAME' where NAME is a kebab-case identifier:
+  - batch:session-lifecycle
+  - batch:bug-96-followup
+  - batch:plan-tooling
+
+  Multiple batches per item are allowed (an item can be 'batch:hygiene, batch:overnight-2026-05-13'). Tag is set via existing aida add/edit --tags machinery — no new schema.
+
+  ## Companion commands
+
+  aida queue list --batch NAME      — view the queued items in this batch (matches existing queue list filter idioms)
+  aida batch list                   — enumerate all distinct batch:* tags currently used across approved+queued reqs
+  aida batch show NAME              — show all members of a batch (queued or not), their statuses, and acceptance status
+
+  The aida batch * subcommand tree is light — backed by tag queries, no new entity types.
+
+  ## Behavior in --serial mode (default)
+
+  For each matched item, in queue head order:
+  1. Pick up via the standard aida queue work flow (creates worktree, lease, manifest, launches claude)
+  2. Wait for the session to end (lease released)
+  3. Optionally pause for user confirmation between items (--gate flag)
+  4. Continue to next matched item
+
+  Failure handling: if a session ends with the item still in non-Done state (implementer didn't queue done), pause the batch and surface the situation. User decides: continue / abort / skip-this-item.
+
+  ## Composes with
+
+  - TASK-219 (cluster grouping + composes-with — broader story): this TASK is the OPERATIONAL piece of TASK-219's vision. TASK-219's other concerns (composes-with relationship type, mutual edges, queue-pickup surfacing of relationships) are out of scope here.
+  - TASK-218 (rework verb): batch processing benefits from cleaner rework if any item needs revisiting
+  - TASK-110 (next-steps ordering): batch sessions need the End → Start ordering to compose correctly
+  - TASK-217 (status-aware error): batch sessions hitting a non-queued spec should suggest queue-rework
+
+  ## Why narrow scope vs TASK-219 full vision
+
+  TASK-219 covers cluster groupings AND composes-with relationships AND queue surfacing. Three intertwined concerns. This TASK extracts the most-immediately-useful piece: tag-based batch drain. Ship this first; TASK-219's remaining concerns can land later.
+
+  ## Why high priority
+
+  This is the missing capability that today's overnight queue exposes — user has 12 items in 2 clear batches but no command to work just one batch's items. Shipping this tonight (alongside the other queued work) means tomorrow's batches drain cleanly.
+
+  ## Acceptance
+
+  - [ ] aida queue work --batch NAME implemented; drains in queue head order
+  - [ ] --serial (default) and --parallel modes; --dry-run flag
+  - [ ] aida queue list --batch NAME filter
+  - [ ] aida batch list enumerates distinct batch:* tags
+  - [ ] aida batch show NAME enumerates members (any status)
+  - [ ] Failure handling: pause batch on non-Done session-end, surface options
+  - [ ] Tag convention 'batch:NAME' documented in CLAUDE.md / AIDA.md
+  - [ ] Tests cover: single-item batch, multi-item batch, mixed-status batch (some already Done), no-match batch (empty), parallel mode race
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-14T06:06:58.486745509Z
+modified_at: 2026-05-14T06:06:58.486745509Z
+req_type: Task
+tags:
+- batch
+- drain
+- queue
+- tag-filter
+- workflow
