@@ -18896,6 +18896,52 @@ mod auto_bump_done_tests {
         );
     }
 
+    /// BUG-94 acceptance check: `aida db sync --pull` calls
+    /// `auto_bump_done_to_completed` with `pre_sha = None`. The helper's
+    /// HEAD~50 fallback range must catch any spec-referencing commit
+    /// that landed on the code branch (typically from a separate
+    /// `git pull` the user ran before this command). Verifies the
+    /// "scan range collapses to empty" claim is fixed/non-reproducible:
+    /// with the fallback range, the bump still fires.
+    /// trace:BUG-94 | ai:claude
+    #[test]
+    fn auto_bump_with_none_pre_sha_uses_head_50_fallback() {
+        let (_tmp, project_root, store_path) = init_test_project();
+        let spec_id = seed_done_spec(&store_path, "STORY-9201");
+
+        // Simulate a teammate's merge landing on the default branch.
+        // The user has separately `git pull`'d, so the merge is in the
+        // local code-branch history. They now run `aida db sync --pull`,
+        // which calls auto_bump with pre_sha = None.
+        std::fs::write(project_root.join("file.txt"), "land\n").unwrap();
+        run_git(&project_root, &["add", "file.txt"]);
+        run_git(
+            &project_root,
+            &[
+                "commit",
+                "-m",
+                &format!("feat: teammate merge ({})", spec_id),
+            ],
+        );
+
+        let storage = Storage::new(store_path.clone());
+        let flips =
+            auto_bump_done_to_completed(&project_root, &store_path, None, &storage).unwrap();
+
+        assert!(
+            flips.iter().any(|(id, _)| id == &spec_id),
+            "BUG-94: HEAD~50 fallback should catch the merge, got: {:?}",
+            flips
+        );
+        let after = storage.load().unwrap();
+        let req = after.get_requirement_by_spec_id(&spec_id).unwrap();
+        assert!(
+            matches!(req.status, RequirementStatus::Completed),
+            "spec should be Completed after fallback-range bump, was {:?}",
+            req.status
+        );
+    }
+
     /// BUG-102: when no `(#N)` suffix is present in any subject, review
     /// stories stay untouched (no false-positives from PR-numbered titles
     /// that happen to match an unrelated number elsewhere in the repo).
@@ -22412,20 +22458,28 @@ fn auto_bump_done_to_completed(
         return Ok(Vec::new());
     }
 
-    // ── Step 2: build the commit range ──
-    let range = match pre_sha {
-        Some(pre) => format!("{}..HEAD", pre),
-        // First-pull / shallow-clone fallback. The `status == Done`
-        // guard on the flip itself keeps this from over-firing —
-        // any spec that's already Completed stays Completed.
-        None => "HEAD~50..HEAD".to_string(),
-    };
+    // ── Step 2: build the git log invocation ──
+    // BUG-94: with `pre_sha = None` we can't form a `X..HEAD` range
+    // because `HEAD~50` fails (`git rev-parse` exit 128) on repos with
+    // fewer than 50 commits — `aida db sync --pull` would then silently
+    // skip the bump on any small/young project. Use `--max-count=50 HEAD`
+    // instead, which degrades gracefully when history is shorter. The
+    // `status == Done` guard inside step 4 keeps over-broad windows from
+    // double-firing.
+    let mut log_args: Vec<String> = vec!["log".to_string(), "--pretty=format:%H%x09%s".to_string()];
+    match pre_sha {
+        Some(pre) => log_args.push(format!("{}..HEAD", pre)),
+        None => {
+            log_args.push("--max-count=50".to_string());
+            log_args.push("HEAD".to_string());
+        }
+    }
 
     // ── Step 3: walk `git log` for (sha, subject) pairs ──
     let log_out = ProcessCommand::new("git")
         .arg("-C")
         .arg(project_root)
-        .args(["log", "--pretty=format:%H%x09%s", &range])
+        .args(&log_args)
         .output();
     let log = match log_out {
         Ok(o) if o.status.success() => o.stdout,
