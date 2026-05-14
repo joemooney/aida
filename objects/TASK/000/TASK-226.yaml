@@ -1,0 +1,72 @@
+id: 019e2425-abb0-7521-bb1d-95a0d6d07115
+spec_id: TASK-226
+agreed_id: TASK-226
+title: 'aida db reconcile-status: manual subcommand to replay missed Done to Completed auto-bumps'
+description: |-
+  STORY-86's auto_bump_done_to_completed has a now-or-never property: it scans commits brought in BY THE CURRENT PULL for (REQ-ID) references and flips matching Done specs to Completed. If a Done spec's yaml is unreadable (parse failure, BUG-96 deletion) at the time the referencing commit is pulled, the bump silently misses. Subsequent pulls won't re-trigger because their scan range is empty (no new commits).
+
+  Observed 2026-05-13: STORY-86 itself ended up in this state. PR-21 merge commit 8ae5d5bd referenced STORY-86; that commit was pulled into local main. But STORY-86.yaml had been deleted by BUG-96 at the time. By the time the file was restored (3rd recovery cycle), 8ae5d5bd was old and aida pull's scan window had moved past it. STORY-86 stays Done indefinitely without manual intervention.
+
+  STORY-86's original plan called this out as a Followup: 'manual reconcile-status subcommand for cold-start replay.' This TASK files that followup formally — filed AFTER STORY-86 completed because the Followups were never auto-extracted (TASK-96 not yet shipped).
+
+  ## Behavior
+
+  aida db reconcile-status                  — scan all commits on default branch + flip matching Done specs to Completed
+  aida db reconcile-status --since SHA      — scan commits since SHA (bounded replay)
+  aida db reconcile-status --since v0.5.1   — scan since a tag
+  aida db reconcile-status --dry-run        — show what would flip without acting
+  aida db reconcile-status --spec STORY-86  — replay scan for a single spec (fastest path for known-stuck cases)
+
+  ## Implementation
+
+  Reuse auto_bump_done_to_completed's helper logic (per STORY-86's implementation plan). The difference is the scan range:
+
+  - aida pull's auto-bump: pre_sha..origin_HEAD (current-pull range)
+  - aida db reconcile-status: HEAD~N..HEAD or full-history scan or --since arg
+
+  For each candidate spec:
+  1. Load current state from orphan store
+  2. If status is Done, search for any commit subject mentioning the spec_id on default branch
+  3. If found, flip Done → Completed with completed_at + completion_sha set per STORY-86's spec
+  4. Record activity log entry per BUG-65
+
+  ## Edge cases
+
+  1. Spec is Done but no commit references it — leave as Done; report 'no eligible commit found'
+  2. Spec was already Completed when scan started — skip
+  3. Multiple commits reference the same spec — first encountered wins (or oldest, depending on what auto_bump does; mirror that behavior)
+  4. Commit reference is in a reverted commit — out of scope for v1 (matches STORY-86's plan's own deferral on revert handling)
+
+  ## Composes with
+
+  - STORY-86 (the lifecycle that created the auto-bump) — parent
+  - BUG-96 (causes the original miss when spec yaml is deleted during pull)
+  - TASK-96 (queue done extracts Followups — when it ships, Followups like this one get filed automatically at completion time; this TASK would have been auto-filed)
+  - TASK-220 (aida status — could show 'N specs in Done state with referencing commits not yet bumped' as a diagnostic line)
+  - TASK-218 (rework verb) — composes for the recovery case: aida queue rework STORY --status completed would do the same flip manually
+
+  ## Acceptance
+
+  - [ ] aida db reconcile-status subcommand implemented with the 5 flag forms
+  - [ ] --dry-run produces parseable output (subject + spec_id + would-flip-to + reason)
+  - [ ] --spec SPEC-ID variant works for targeted replay
+  - [ ] Tests cover: spec with referencing commit (bumps); spec without (skips); spec already Completed (skips); spec on non-default branch (skips); multi-commit-references-same-spec (deterministic pick)
+  - [ ] CLAUDE.md / AIDA.md documentation mentions when to reach for it (after BUG-96 recovery, after cold clone, when auto-bump was missed)
+
+  ## Discovered via
+
+  2026-05-13 — STORY-86 itself ended up needing this after the BUG-96 saga. Manual flip used as immediate workaround: aida edit STORY-86 --status completed. This TASK is the structural fix.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-14T01:41:49.104622752Z
+modified_at: 2026-05-14T01:41:49.104622752Z
+req_type: Task
+tags:
+- auto-bump
+- manual
+- reconcile
+- recovery
+- replay
+- story-86-followup
