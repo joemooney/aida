@@ -46,12 +46,12 @@ description: |
   - [ ] No false positives: only warns when there WAS a PR on this branch + it's now merged
   - [ ] Agent skills (/aida-pr, /aida-review) updated to check this state before claiming a push "extends" a PR
   - [ ] Tested: push to a merged-PR branch → warning. Push to fresh branch → no warning. Push to open-PR branch → no warning.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-12T16:18:41.037832798Z
-modified_at: 2026-05-14T04:33:20.968069548Z
+modified_at: 2026-05-14T04:40:47.602080314Z
 req_type: Bug
 relationships:
 - rel_type: Child
