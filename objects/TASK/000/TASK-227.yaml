@@ -54,7 +54,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T04:46:14.325679969Z
-modified_at: 2026-05-14T06:17:42.576191257Z
+modified_at: 2026-05-14T07:11:44.652378207Z
 req_type: Task
 tags:
 - aida-review
@@ -66,6 +66,19 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-14T04:46:16.216636405Z
+comments:
+- id: 019e2553-ba0c-7602-b2be-d81dd782fbc6
+  author: joe
+  content: |-
+    Implemented via epic-23-5 (commit 3e0f4afe):
+
+    - New Step 0 pre-flight block in /aida-review probes `gh pr view --json state` before any spec resolution; branches on MERGED → silent exit, CLOSED → exit with reject suggestion, DRAFT → warn + proceed, OPEN → silent pass-through.
+    - gh failures don't block: the pre-flight is a fast-path optimization, not a hard gate; falls through to Step 1 which handles bad PR numbers on its own.
+
+    Test status: skill template change; 332/332 cargo tests green at end of batch.
+    Follow-up: composes with TASK-228 (cancellable wakeups, deferred) which would reduce zombie re-fires at the source.
+  created_at: 2026-05-14T07:11:44.652378207Z
+  modified_at: 2026-05-14T07:11:44.652378207Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T06:17:42.576191257Z
