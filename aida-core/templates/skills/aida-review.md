@@ -27,6 +27,57 @@ Use this skill when:
 
 ## Workflow
 
+### 0. Pre-flight — PR state check (early-exit on merged/closed) — trace:TASK-227
+
+Before any spec resolution or `aida review prompt` invocation, probe the PR's
+current state and short-circuit the no-op paths. Zombie fires (scheduled-wakeup
+fallbacks that survive the protected event — see TASK-228) and habit-driven
+re-invocations are the common triggers; the prelude turns "enter, scan all
+specs, recognize merged, no-op" into "enter, recognize merged, exit."
+
+The PR number comes from `--pr N` (explicit) or the session lease (`aida session show` → scope `PR-N`). If neither is available, fall through to Step 1, which refuses to proceed without a concrete PR number.
+
+```bash
+# Probe state — gh detection follows BUG-74's PATH-walk + absolute-path
+# fallback so a stripped child-process PATH doesn't fool us.
+pr_state=$(gh pr view <N> --json state --jq .state 2>/dev/null)
+```
+
+Branch on the result:
+
+- **`MERGED`** → exit 0 immediately with a clear log line:
+
+  ```
+  ✓ PR-<N> already merged — nothing to review. Exiting.
+  ```
+
+  If a `Review PR-<N>: ...` story is still in `Approved` or `In Progress`, mention it and suggest the cleanup: `aida edit STORY-<X> --status completed && aida queue remove STORY-<X> --yes`. Then exit. Don't load the prompt, don't walk specs.
+
+- **`CLOSED`** (closed without merge) → exit 0 with a different message:
+
+  ```
+  ⓘ PR-<N> closed without merge — no review needed.
+    Review story <STORY-X> can be marked completed/rejected as appropriate:
+      aida edit <STORY-X> --status rejected
+      aida queue remove <STORY-X> --yes
+  ```
+
+  Same rationale — there's nothing actionable here. Exit.
+
+- **`DRAFT`** → warn but proceed:
+
+  ```
+  ⚠ PR-<N> is a draft — deep review may be premature. Proceeding anyway since the user explicitly invoked /aida-review.
+  ```
+
+  Continue to Step 1. The reviewer may be doing an early read-through.
+
+- **`OPEN`** → silent pass-through, continue to Step 1.
+
+- **`gh pr view` failed** (gh unauthenticated, network blip, or PR number wrong) → don't block the skill; surface the error inline and continue to Step 1, which will catch a bad PR number on its own. The pre-flight is a fast-path optimization, not a hard gate.
+
+**Why before Step 1?** Step 1 confirms the PR target with the user when auto-detected — a useless prompt if we already know it's merged. The pre-flight runs first so the merged-PR case never gets that far.
+
 ### 1. Identify the PR target
 
 Prefer the active session lease when one exists:
