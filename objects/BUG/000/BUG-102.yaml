@@ -70,12 +70,12 @@ description: |-
   ## Discovered via
 
   2026-05-14 — user observed STORY-124 stuck at Done after PR-26 merge, asked: 'but I already merged?' Pattern recognized as recurring (4× today). Filed at this priority because the manual workaround is trivial but the systemic gap will regenerate the problem on every future PR until fixed.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T14:45:22.472590028Z
-modified_at: 2026-05-14T15:00:05.697669922Z
+modified_at: 2026-05-14T15:06:22.683366817Z
 req_type: Bug
 tags:
 - auto-bump
@@ -90,3 +90,7 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-14T14:45:24.464054243Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-14T15:06:22.683366817Z
+  implemented_by: joe
