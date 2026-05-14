@@ -159,12 +159,77 @@ This is what makes the **fixup loop cheap.** Without resume, every fixup pays th
 | AIDA session manifest | Persists in `.aida-store/` | `aida session show <id>` (historical) |
 | Claude conversation JSONL | Persists indefinitely on local disk | `claude --resume <id>` — wired via TASK-112 |
 | Worktree directory | Configurable; may persist after `aida session end` | Recreated on `aida queue work` (with same branch) |
+| Cargo incremental cache (sibling worktrees) | Survives `aida session end` — cargo's `target/.fingerprint/` references the now-deleted worktree's source paths and can poison sibling worktrees' builds (TASK-0396) | `cargo clean -p <crate>...` in the affected sibling, or `cargo clean` for a full sweep |
 | Plan file (`docs/plans/`) | Committed to git, permanent | `git log docs/plans/` |
 | Trace comments in code | Permanent (committed) | `aida search` / `grep trace:` |
 | Doc seeds (req comments) | Permanent in orphan store | `aida show <SPEC>` |
 | Followup tasks | Per TASK-96, auto-filed from plan's Followups section on queue done | `aida list --parent <SPEC>` |
 
 The pattern: **everything important is recoverable.** Session end isn't destructive — it's a coordination point. The resume capability is what makes that statement load-bearing rather than aspirational.
+
+---
+
+## Gotcha: cargo incremental cache survives `aida session end`
+
+Cargo's incremental-build fingerprint cache (`target/.fingerprint/`) records the absolute source paths of every dependency it last compiled. When `aida session end` removes a worktree but the workspace's `target/` lives in a sibling worktree, those fingerprints continue to reference the now-deleted source. The next `cargo build` from the sibling can fail with errors that point at paths no longer on disk — the source line cargo cites doesn't match the source line the compiler actually sees.
+
+**Concrete symptom** (observed 2026-05-13, TASK-0396): after the EPIC-21 implementer worktree at `/home/joe/ai/aida-epic-21` was removed, `cargo build` from `main` reported `RequirementStatus::Done` as a non-exhaustive match, with notes pointing at `/home/joe/ai/aida-epic-21/aida-core/src/models.rs` — a file that no longer existed. The source on `main` had no `Done` variant; the cached fingerprints did.
+
+**Recovery** (manual, until automated):
+
+```bash
+cargo clean                                    # full clean, safest
+cargo clean -p aida-core -p aida-cli           # surgical, faster; name the crates that were touched
+```
+
+**Why it's not currently automated:** scoping the clean tightly requires reading the dying worktree's `Cargo.toml` to enumerate its workspace members, and an over-broad clean invalidates artifacts other workflows want to keep. Filed as the optional Path B in TASK-0396 (a `--clean-cache` flag on `aida session end`) — deferred until the cost of the manual `cargo clean` actually bites repeatedly.
+
+---
+
+## Workflow patterns: which to pick
+
+Five distinct patterns have emerged for moving a queued item through the implementer → reviewer → CI → fixup loop. They differ along *context preservation*, *failure isolation*, *reviewer parallelism*, *resource consumption*, and *coupling* axes. Pick the one that matches the cycle time and coupling of the work — wrong pattern = wasted context or wasted PRs.
+
+| # | Pattern | When to pick | Backed by | Trade-off | Failure mode |
+|---|---|---|---|---|---|
+| 1 | **Cold-resume** | Long cycle time (days between implementer and reviewer) — accept cold launch + plan re-read | TASK-112 (resume capability) | Cheapest while idle; pays the cold-restart tax at every fixup | If conversation JSONL is GC'd or rotated, resume falls back to a fresh launch with no warning |
+| 2 | **Ping-pong block** | Tight cycle (minutes to hours) — implementer session stays alive, blocks on reviewer verdict, resumes in place | STORY-121 (block-on-verdict) | Best context preservation; uses an implementer slot the whole time | Implementer slot stays held even when reviewer is slow; no graceful timeout |
+| 3 | **Pipelined ping-pong** | Saturated implementer — while blocked on PR-N, pick up next queue item in a secondary worktree | TASK-230 (pipelined sessions) | Doubles throughput on a single implementer | Cross-session conflict risk if secondary item touches the same files; harder to reason about which worktree owns what |
+| 4 | **Batch-drain** | Tightly-coupled item batch — multiple items, one session, one branch, one PR | STORY-42 (one-shot session); TASK-229 (`--batch NAME` tag-driven drain) | Smallest PR-count overhead; reviewer sees the whole story at once | PR scope grows; bisect granularity lost; revert blast radius widens; rework affects the whole batch |
+| 5 | **Head-pickup loop** | Loosely-coupled item batch — one PR per item, one session per item, one branch per item (today's default `aida queue work` with no args) | STORY-42 (default behavior) | Clean isolation per item; reviewer can ship items individually | Maximal PR-count overhead; per-item context re-orientation; no shared planning across siblings |
+
+### Decision tree
+
+Start from the items you're about to work, not the pattern you prefer.
+
+1. **Cycle time** — how long between implementer wrap-up and reviewer pickup?
+   - Minutes → patterns 2 or 3 (keep the session alive)
+   - Hours to a day → patterns 1, 4, or 5 (cold-resume or per-item)
+   - Days+ → pattern 1 (cold-resume is the only honest answer)
+
+2. **Coupling** — would the items share most of the same files/concepts?
+   - Tight (siblings of a single design change) → pattern 4 (batch-drain — one PR tells the story)
+   - Loose (unrelated bug fixes, independent features) → pattern 5 (head-pickup — one PR each)
+   - Tagged as a batch but individually reviewable → pattern 4 with `aida queue work --batch NAME` (TASK-229)
+
+3. **Throughput need** — am I blocked on reviewer or CI more than I'm coding?
+   - Yes, frequently → pattern 3 (pipeline — fill idle implementer time)
+   - No → pattern 2 (block-and-resume — simpler to reason about)
+
+4. **Resume cost** — is the conversation context expensive to rebuild?
+   - Yes (deep design decisions encoded in the chat log) → patterns 1 or 2 preferred over 5
+   - No (small mechanical change) → pattern 5 is fine; cold launch is cheap
+
+### Common smells
+
+- **Picked pattern 5 (head-pickup) for tightly-coupled items** → you're now landing N PRs that all change the same module. Should have batched. Recover with `aida queue work --batch NAME` after tagging the survivors.
+- **Picked pattern 4 (batch-drain) for loosely-coupled items** → one PR mixes unrelated changes; reviewer asks "why are these together?" Split the next batch.
+- **Picked pattern 2 (block) when cycle time is days** → implementer slot held idle; statusline reports `(aida-debug) STORY-86 · waiting` for hours. Should have ended and used cold-resume (TASK-112).
+- **Picked pattern 1 (cold-resume) when cycle time is minutes** → paying the cold-restart tax every time. Should have used ping-pong block.
+
+### Composition
+
+Patterns 1 and 2 are about *one item's lifecycle*; patterns 4 and 5 are about *how to group N items*. They compose: a batch-drain (4) of three tightly-coupled items can itself use ping-pong block (2) within the batch's reviewer hand-off. Pattern 3 layers on top of any of the above when the implementer is throughput-constrained.
 
 ---
 
@@ -249,5 +314,10 @@ For genuinely different roles, cold-start is part of the cost of independent rev
 - EPIC-23 — Session orchestration & autonomy (parent of all above)
 - STORY-42 — `aida queue work` one-shot session + launch (the verb being augmented)
 - STORY-66 / STORY-90 — auto-queue PR for reviewer (the auto-queue hook `/aida-pr` fires)
+- STORY-121 — ping-pong block-on-verdict (pattern 2)
+- TASK-229 — `aida queue work --batch NAME` tag-driven drain (pattern 4)
+- TASK-230 — pipelined ping-pong (pattern 3)
+- TASK-231 — this section's source (5-pattern workflow taxonomy)
+- TASK-0396 — cargo incremental cache gotcha across worktree lifetimes
 - STORY-109 — `/aida-review` adversarial pass (review-side depth)
 - BUG-74 — `gh` detection PATH-walk (shared helper as `gh` use grows across these flows)
