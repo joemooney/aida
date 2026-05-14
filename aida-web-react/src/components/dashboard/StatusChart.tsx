@@ -15,11 +15,15 @@ export function StatusChart({ requirements }: StatusChartProps) {
   }
 
   // Build conic-gradient segments
+  // STORY-86: Done (lime-500) reads as "almost shipped" against
+  // Completed's emerald-500 ("merged to main") — same hue family,
+  // clearly distinct slice in the chart.
   const statusColors: Record<RequirementStatus, string> = {
     Draft: '#6b7280',
     Approved: '#3b82f6',
     Planned: '#8b5cf6',
     InProgress: '#f59e0b',
+    Done: '#84cc16',
     Completed: '#10b981',
     Rejected: '#ef4444',
   };

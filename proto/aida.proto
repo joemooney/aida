@@ -19,6 +19,9 @@ enum RequirementStatus {
     REQUIREMENT_STATUS_IN_PROGRESS = 4;
     REQUIREMENT_STATUS_COMPLETED = 5;
     REQUIREMENT_STATUS_REJECTED = 6;
+    // STORY-86: work finished on a branch; auto-bumps to COMPLETED when
+    // the referencing commit lands on the default branch.
+    REQUIREMENT_STATUS_DONE = 7;
 }
 
 // Requirement priority enum

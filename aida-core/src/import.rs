@@ -381,6 +381,9 @@ pub fn parse_requirement_status(s: &str) -> Option<RequirementStatus> {
     match s {
         "Draft" => Some(RequirementStatus::Draft),
         "Approved" => Some(RequirementStatus::Approved),
+        "Planned" => Some(RequirementStatus::Planned),
+        "InProgress" | "In Progress" => Some(RequirementStatus::InProgress),
+        "Done" => Some(RequirementStatus::Done),
         "Completed" => Some(RequirementStatus::Completed),
         "Rejected" => Some(RequirementStatus::Rejected),
         _ => None,
@@ -817,6 +820,9 @@ mod tests {
 
     #[test]
     fn test_parse_requirement_status() {
+        // trace:STORY-86 | ai:claude — parser table now covers every
+        // canonical variant (including Done + InProgress + Planned which
+        // were previously missing).
         assert_eq!(
             parse_requirement_status("Draft"),
             Some(RequirementStatus::Draft)
@@ -825,7 +831,32 @@ mod tests {
             parse_requirement_status("Approved"),
             Some(RequirementStatus::Approved)
         );
-        assert_eq!(parse_requirement_status("InProgress"), None);
+        assert_eq!(
+            parse_requirement_status("Planned"),
+            Some(RequirementStatus::Planned)
+        );
+        assert_eq!(
+            parse_requirement_status("InProgress"),
+            Some(RequirementStatus::InProgress)
+        );
+        assert_eq!(
+            parse_requirement_status("In Progress"),
+            Some(RequirementStatus::InProgress)
+        );
+        assert_eq!(
+            parse_requirement_status("Done"),
+            Some(RequirementStatus::Done)
+        );
+        assert_eq!(
+            parse_requirement_status("Completed"),
+            Some(RequirementStatus::Completed)
+        );
+        assert_eq!(
+            parse_requirement_status("Rejected"),
+            Some(RequirementStatus::Rejected)
+        );
+        // Unknown values still fall through to None.
+        assert_eq!(parse_requirement_status("FlibbertyGibbet"), None);
     }
 
     #[test]

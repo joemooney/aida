@@ -44,7 +44,9 @@ for the user's current situation rather than reciting the whole dump:
 - **Project**: name, mode (centralized vs distributed), store path
 - **Requirements**: total + breakdown by status. Big numbers in `Draft`
   or `Approved` mean unstarted backlog; big `InProgress` means work
-  in flight; big `Rejected` means historical noise (usually fine).
+  in flight; big `Done` means work finished on branches but not yet
+  merged to main (STORY-86 — `aida pull` auto-bumps Done→Completed
+  on merge); big `Rejected` means historical noise (usually fine).
 - **Cache**: `FRESH` is good. `STALE`/`MISSING` means
   `aida cache rebuild` is overdue; offer to run it.
 - **Sync**: "N ahead of origin" means a `git push origin aida-store`

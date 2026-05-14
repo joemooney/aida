@@ -38,6 +38,7 @@ function emptyColumns(): Record<RequirementStatus, string[]> {
     Approved: [],
     Planned: [],
     InProgress: [],
+    Done: [],
     Completed: [],
     Rejected: [],
   };
@@ -74,6 +75,7 @@ export function KanbanBoard() {
     Approved: false,
     Planned: false,
     InProgress: false,
+    Done: false,
     Completed: false,
     Rejected: false,
   });
@@ -186,7 +188,7 @@ export function KanbanBoard() {
 
   const columnMap = useMemo(() => {
     const map: Record<RequirementStatus, Requirement[]> = {
-      Draft: [], Approved: [], Planned: [], InProgress: [], Completed: [], Rejected: [],
+      Draft: [], Approved: [], Planned: [], InProgress: [], Done: [], Completed: [], Rejected: [],
     };
 
     for (const status of STATUS_ORDER) {
@@ -437,6 +439,7 @@ export function KanbanBoard() {
         Approved: false,
         Planned: false,
         InProgress: false,
+        Done: false,
         Completed: false,
         Rejected: false,
       });

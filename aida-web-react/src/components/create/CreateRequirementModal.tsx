@@ -42,6 +42,9 @@ const STATUS_OPTIONS: { value: RequirementStatus; label: string }[] = [
   { value: 'Approved', label: 'Approved' },
   { value: 'Planned', label: 'Planned' },
   { value: 'InProgress', label: 'In Progress' },
+  // STORY-86: Done = work finished on a branch; auto-bumps to
+  // Completed once the referencing commit lands on the default branch.
+  { value: 'Done', label: 'Done' },
   { value: 'Completed', label: 'Completed' },
   { value: 'Rejected', label: 'Rejected' },
 ];

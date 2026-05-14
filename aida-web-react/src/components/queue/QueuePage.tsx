@@ -59,9 +59,13 @@ export function QueuePage() {
   );
 
   const entries = data?.entries ?? [];
+  // STORY-86: the "Show completed" toggle hides both Done (work
+  // finished on a branch) and Completed (merged to main). Both are
+  // "shipped from this user's seat" — they only differ on what's
+  // visible elsewhere.
   const filtered = showCompleted
     ? entries
-    : entries.filter((e) => e.status !== 'Completed');
+    : entries.filter((e) => e.status !== 'Completed' && e.status !== 'Done');
 
   const displayItemIds = useMemo(
     () => filtered.map((e) => e.specId ?? e.requirementId),

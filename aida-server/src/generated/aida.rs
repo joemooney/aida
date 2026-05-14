@@ -925,6 +925,9 @@ pub enum RequirementStatus {
     InProgress = 4,
     Completed = 5,
     Rejected = 6,
+    /// STORY-86: work finished on a branch; auto-bumps to COMPLETED when
+    /// the referencing commit lands on the default branch.
+    Done = 7,
 }
 impl RequirementStatus {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -940,6 +943,7 @@ impl RequirementStatus {
             Self::InProgress => "REQUIREMENT_STATUS_IN_PROGRESS",
             Self::Completed => "REQUIREMENT_STATUS_COMPLETED",
             Self::Rejected => "REQUIREMENT_STATUS_REJECTED",
+            Self::Done => "REQUIREMENT_STATUS_DONE",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -952,6 +956,7 @@ impl RequirementStatus {
             "REQUIREMENT_STATUS_IN_PROGRESS" => Some(Self::InProgress),
             "REQUIREMENT_STATUS_COMPLETED" => Some(Self::Completed),
             "REQUIREMENT_STATUS_REJECTED" => Some(Self::Rejected),
+            "REQUIREMENT_STATUS_DONE" => Some(Self::Done),
             _ => None,
         }
     }
