@@ -49,7 +49,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T04:46:28.443236212Z
-modified_at: 2026-05-14T04:46:28.443236212Z
+modified_at: 2026-05-14T06:18:47.718181838Z
 req_type: Task
 tags:
 - cancellation
@@ -61,3 +61,23 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-14T04:46:30.522915126Z
+comments:
+- id: 019e2523-4026-7ce1-ae51-6a03ac83ecb6
+  author: joe
+  content: |-
+    Analysis after picking this up 2026-05-13 (drain of EPIC-23 manifest):
+
+    All three proposed mechanisms (handle-returning ScheduleWakeup, tag + CancelWakeup tool, content-match auto-cancellation) require harness-level changes — the ScheduleWakeup tool itself is owned by Claude Code, not AIDA. AIDA can't expose a `CancelWakeup` to the agent unless Claude Code grows the primitive first.
+
+    The symptom (re-entry produces noise + 'Background work is running' prompt) is already mitigated by the companion TASK-227 early-exit just shipped — the re-entered skill recognizes the merged PR state and no-ops cleanly. Quota cost is negligible, log noise is minor.
+
+    An AIDA-side workaround IS technically possible — a marker-file convention where the agent registers a tag at schedule time (`aida session wakeup register <tag>`), cancels on clean completion (`aida session wakeup cancel <tag>`), and the re-entered skill exits if `aida session wakeup active <tag>` returns false. The harness wakeup still fires, but the work-skip becomes deterministic instead of relying on a state-probe like `gh pr view`.
+
+    However, this is speculative until either (a) more skills start scheduling wakeups (today only the agent's own ad-hoc judgment does — no skill teaches the pattern), or (b) Claude Code grows native cancellation. Building the marker convention now for one observed zombie fire is premature.
+
+    Deferring back to Approved. Suggested re-pickup triggers:
+    - Claude Code adds native CancelWakeup → discard this task; harness solves it
+    - Three+ more zombie-fire reports → marker convention earns its keep, ship it
+    - Until then, the early-exit pattern (TASK-227) is the canonical answer
+  created_at: 2026-05-14T06:18:47.718181838Z
+  modified_at: 2026-05-14T06:18:47.718181838Z
