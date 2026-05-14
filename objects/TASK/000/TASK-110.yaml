@@ -53,12 +53,12 @@ description: |-
   - [ ] make sync-templates verifies the change picks up symlinks (this is the master copy)
 
   trace:TASK-87 (the original Next-steps block introduction, per the comment at line 230)
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:20:03.365833533Z
-modified_at: 2026-05-14T07:14:47.960844406Z
+modified_at: 2026-05-14T07:27:24.770668638Z
 req_type: Task
 tags:
 - aida-pr
