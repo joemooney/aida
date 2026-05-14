@@ -56,12 +56,12 @@ description: |-
   ## Discovered via
 
   2026-05-13 — user observed that an overnight batch of 13 queued items had drained to 8 visible items, with no way to see what the missing 5 had become. Wanted a progress view: 'I am alluding to wanting to see progress that has been made.'
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T06:38:32.115424656Z
-modified_at: 2026-05-14T07:30:19.452371367Z
+modified_at: 2026-05-14T08:03:36.434046712Z
 req_type: Task
 tags:
 - batch
@@ -76,3 +76,7 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-14T06:38:34.334818570Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-14T08:03:36.434046712Z
+  implemented_by: joe
