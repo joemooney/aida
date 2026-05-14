@@ -1,0 +1,87 @@
+id: 019e26f3-09a8-7de1-a968-3778285974a0
+spec_id: BUG-102
+agreed_id: BUG-102
+title: Review stories auto-queued by /aida-pr stay stuck at Done after PR merge — auto-bump scan never matches them
+description: |-
+  Every review story auto-queued by STORY-66/STORY-90's auto-queue mechanism gets stuck at Done after its referenced PR merges. The auto-bump scan in aida pull looks for spec IDs in merge commit subjects on the default branch — but review-story spec IDs are NEVER in commit subjects by design (they track the review process, not the code change).
+
+  ## Repro
+
+  1. Implementer opens PR-N with commit subject 'feat(x): foo (SPEC-A SPEC-B SPEC-C)'
+  2. /aida-pr's auto-queue (STORY-66/STORY-90) files STORY-X 'Review PR-N (covers A/B/C)' to reviewer queue
+  3. Reviewer reviews, approves, runs aida queue done STORY-X — STORY-X flips to Done
+  4. PR-N gets merged
+  5. User runs aida pull
+  6. auto-bump scans the merge commit subject — sees SPEC-A, SPEC-B, SPEC-C — bumps those to Completed
+  7. STORY-X has no match (its spec ID isn't in the subject) — stays at Done forever
+
+  ## Empirical evidence — 2026-05-13 / 2026-05-14
+
+  Four separate review stories ended up stuck today:
+  - STORY-119 (Review PR-23: BUG-85/87/88) — manually flipped to Completed
+  - STORY-120 (Review PR-24: TASK-218) — manually flipped to Completed
+  - STORY-123 (Review PR-25: 9 specs) — manually flipped to Completed
+  - STORY-124 (Review PR-26: 6 specs) — observed stuck just now
+
+  Every review story today required manual aida edit ... --status completed. This is not a one-off bug — it's a systemic mismatch between two AIDA design decisions:
+  - STORY-66/STORY-90: auto-queue a review story per PR (review-story spec ID never appears in commit subjects)
+  - STORY-86: auto-bump Done → Completed based on commit subject spec-ID matching
+
+  The two designs don't compose. Review stories fall into the gap.
+
+  ## Fix options
+
+  A. **Extend auto-bump scan to recognize review stories**: auto-queued review stories carry metadata (the PR number they're reviewing). When auto-bump processes a merge commit on the default branch, ALSO query AIDA for any Done-status review story tied to that PR number, and bump those.
+
+  B. **/aida-review's queue-done flips to Completed directly when PR is already merged**: at queue-done time, check PR state — if MERGED, flip review story to Completed (bypass Done). Only flip to Done if PR is still open.
+
+  C. **Defer to TASK-226 (aida db reconcile-status)**: manual recovery is the user's job. Bad UX.
+
+  Recommended: A (auto-bump extension). Catches both 'queue done before PR merge' and 'queue done after PR merge' cases cleanly. B handles only the queue-done-after-merge case.
+
+  ## Implementation sketch
+
+  In auto_bump_done_to_completed (aida-cli/src/main.rs ~line 19987 per STORY-86's plan):
+
+  1. For each merge commit being scanned, ALSO extract PR number (#N suffix in subject from gh's squash merge format)
+  2. For each PR number found: query AIDA for review stories with metadata.pr_number == N and status == Done
+  3. Add those to the candidates list
+  4. Bump them with the same completion_sha + completed_at as the code specs
+
+  The PR-number-to-review-story lookup needs the review story's metadata to carry pr_number explicitly (STORY-66/90's auto-queue already files them with PR info — verify).
+
+  ## Composes with
+
+  - STORY-86 (auto-bump): the gap is in this story's scan logic
+  - STORY-66 / STORY-90 (auto-queue review story): produces the orphan reviews
+  - TASK-226 (aida db reconcile-status): manual recovery; ships independently as the back-stop
+  - BUG-94 (aida db sync --pull auto-bump timing): same auto-bump code path; sibling fix
+  - BUG-95 (aida pull --code-only auto-bump skip): same auto-bump code path; sibling fix
+  - TASK-234 (Done section grouping + next-action): would clearly distinguish review-story-stuck vs PR-26-style awaiting-merge
+
+  ## Acceptance
+
+  - [ ] auto_bump_done_to_completed extended to query for review stories tied to merged PRs
+  - [ ] PR-number extraction from merge commit subjects (#N suffix from gh squash format)
+  - [ ] Test: full lifecycle of a PR — open → review approve → queue done → merge → aida pull — review story flips to Completed automatically
+  - [ ] Test: queue done AFTER merge — review story flips to Completed at queue-done time (covers Fix Option B's case too, for defense in depth)
+  - [ ] Existing 4 stuck review stories on this clone documented as manually-recovered (already done) — no migration code needed since they're already Completed
+
+  ## Discovered via
+
+  2026-05-14 — user observed STORY-124 stuck at Done after PR-26 merge, asked: 'but I already merged?' Pattern recognized as recurring (4× today). Filed at this priority because the manual workaround is trivial but the systemic gap will regenerate the problem on every future PR until fixed.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-14T14:45:22.472590028Z
+modified_at: 2026-05-14T14:45:22.472590028Z
+req_type: Bug
+tags:
+- auto-bump
+- auto-queue
+- review-story
+- story-66
+- story-90
+- stuck-done
+- systemic
