@@ -2247,6 +2247,72 @@ pub enum QueueCommand {
         #[clap(long)]
         user: Option<String>,
     },
+    /// Flip a spec's status, route it to a role's queue, and (optionally)
+    /// launch a session — encapsulates the recurring implementer →
+    /// reviewer → fixup recovery sequence into a single verb. Replaces
+    /// the manual three-step:
+    ///
+    ///   aida edit SPEC --status in-progress
+    ///   aida queue add SPEC --for ROLE
+    ///   aida queue work SPEC
+    ///
+    /// Smart status transitions (overridable with `--status`):
+    ///   Approved   → no flip (just queue)
+    ///   Planned    → InProgress
+    ///   InProgress → no flip, refuse re-queue without --force
+    ///   Done       → InProgress (typical PR-review-found-issues case)
+    ///   Completed  → InProgress, requires --force (TASK-45 guard)
+    ///   Rejected   → Approved, requires --force
+    ///
+    /// trace:TASK-218 | ai:claude
+    Rework {
+        /// Requirement ID (UUID or SPEC-ID)
+        id: String,
+        /// Also launch a session for the spec (chains `aida queue work`).
+        /// Without this, rework is metadata-only: status flip + queue add.
+        #[clap(long)]
+        work: bool,
+        /// Override the routing role. Default: active role
+        /// (`AIDA_SESSION_ROLE`), matching `aida queue add` semantics.
+        #[clap(long)]
+        r#for: Option<String>,
+        /// Override the smart target status. Pass any status string
+        /// (`in-progress`, `approved`, `planned`, …); the smart table
+        /// above is bypassed.
+        #[clap(long, value_name = "STATE")]
+        status: Option<String>,
+        /// Capture a comment on the spec at rework time (added via the
+        /// same path as `aida comment add`). Useful for the audit trail
+        /// of why a Done or Completed spec is being re-opened.
+        #[clap(long)]
+        reason: Option<String>,
+        /// Chain `aida queue work --resume` to resume a prior claude
+        /// session for this spec. Requires TASK-112; errors with a hint
+        /// until that ships. Implies `--work`.
+        #[clap(long)]
+        resume: bool,
+        /// Bypass the TASK-45 terminal-status guard (Completed/Rejected)
+        /// and the "already in progress" guard. Mirrors `queue add
+        /// --force`.
+        #[clap(long)]
+        force: bool,
+        /// When chaining `--work`, end any session holding the target
+        /// scope first (passes through to `aida queue work --steal`).
+        /// trace:TASK-81 | ai:claude
+        #[clap(long)]
+        steal: bool,
+        /// Permission mode (only used with `--work`; passed to
+        /// `aida queue work --permission-mode`).
+        #[clap(long, value_name = "MODE")]
+        permission_mode: Option<String>,
+        /// Skip the pre-pickup `aida db sync --pull` (only used with
+        /// `--work`; passed to `aida queue work --no-pull`).
+        #[clap(long)]
+        no_pull: bool,
+        /// User ID (defaults to AIDA_USER or system user).
+        #[clap(long)]
+        user: Option<String>,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -2886,6 +2952,47 @@ pub enum Command {
     /// Personal work queue commands
     #[clap(subcommand, hide = true)]
     Queue(QueueCommand),
+
+    /// Top-level alias for `aida queue rework SPEC` — single verb for the
+    /// recurring implementer → reviewer → fixup recovery sequence
+    /// (status flip + queue add, with optional `--work` session launch).
+    /// Mirrors `aida relations` → `aida rel list` discoverability pattern.
+    /// See `aida queue rework --help` for the full flag set.
+    /// trace:TASK-218 | ai:claude
+    Rework {
+        /// Requirement ID (UUID or SPEC-ID)
+        id: String,
+        /// Also launch a session for the spec.
+        #[clap(long)]
+        work: bool,
+        /// Override the routing role.
+        #[clap(long)]
+        r#for: Option<String>,
+        /// Override the smart target status.
+        #[clap(long, value_name = "STATE")]
+        status: Option<String>,
+        /// Capture a comment on the spec at rework time.
+        #[clap(long)]
+        reason: Option<String>,
+        /// Chain `aida queue work --resume`.
+        #[clap(long)]
+        resume: bool,
+        /// Bypass terminal-status / already-in-progress guards.
+        #[clap(long)]
+        force: bool,
+        /// Pass `--steal` through to chained `aida queue work`.
+        #[clap(long)]
+        steal: bool,
+        /// Permission mode (only used with `--work`).
+        #[clap(long, value_name = "MODE")]
+        permission_mode: Option<String>,
+        /// Skip pre-pickup pull (only used with `--work`).
+        #[clap(long)]
+        no_pull: bool,
+        /// User ID (defaults to AIDA_USER or system user).
+        #[clap(long)]
+        user: Option<String>,
+    },
 
     /// Simple search for requirements (case-insensitive by default)
     Search {

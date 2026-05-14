@@ -237,7 +237,16 @@ aida queue done <review-story-id> --yes
 
 **Cancel / FAIL handling.** If the user requested changes (step 8 "Request changes" branch) or you concluded with ❌ FAIL and no merge:
 
-- **Iteration expected** (implementer will push fixes) → leave the review story In Progress. A subsequent `/aida-review` run picks up where it left off; no extra bookkeeping needed.
+- **Iteration expected** (implementer will push fixes) → leave the review story In Progress. A subsequent `/aida-review` run picks up where it left off; no extra bookkeeping needed. For each FAIL/PARTIAL spec that needs implementer follow-up, surface the **one-verb recovery** (TASK-218) in the review comment rather than the three-command sequence:
+
+  ```bash
+  aida queue rework <REQ-ID> --work --resume --reason "<one-line summary of what to fix>"
+  # or, equivalent top-level alias:
+  aida rework <REQ-ID> --work --resume --reason "..."
+  ```
+
+  Resolves to: flip Done → InProgress, re-queue for implementer, relaunch the prior claude session with full context, and capture the review's reason as an audit-trail comment on the spec.
+
 - **Review rejected outright** (PR will be closed without merging) → ask the user explicitly: "Mark the Review PR-N story rejected?" If yes:
 
   ```bash
