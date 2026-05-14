@@ -162,8 +162,16 @@ aida rel add --from <TEST-SPEC-ID> --to <SPEC-ID> --type Verifies
 During implementation, requirements should transition through:
 
 1. **Approved** -> **In Progress** (when starting implementation)
-2. **In Progress** -> **Completed** (when implementation is verified)
-3. **In Progress** -> **Draft** (if significant changes needed)
+2. **In Progress** -> **Done** (work finished on a branch — set by
+   `aida queue done` automatically)
+3. **Done** -> **Completed** (auto-bumped by `aida pull` /
+   `aida db sync --pull` when the referencing commit lands on the
+   default branch — no manual step required)
+4. **In Progress** -> **Draft** (if significant changes needed)
+
+STORY-86: Don't set `--status completed` manually from a feature
+branch — that bypasses the "merged to main" gate. Use `--status done`
+or `aida queue done` and let auto-bump promote it once the PR merges.
 
 Update via:
 ```bash

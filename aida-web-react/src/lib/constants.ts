@@ -1,14 +1,18 @@
 import type { RequirementStatus, RequirementPriority, RequirementType } from '@shared/types';
 
 export const STATUS_ORDER: RequirementStatus[] = [
-  'Draft', 'Approved', 'Planned', 'InProgress', 'Completed', 'Rejected',
+  'Draft', 'Approved', 'Planned', 'InProgress', 'Done', 'Completed', 'Rejected',
 ];
 
+// STORY-86: Done sits between InProgress and Completed. Lime-400 reads
+// as "almost there" — visually distinct from Completed's settled
+// emerald without looking like a different lifecycle stage.
 export const STATUS_CONFIG: Record<RequirementStatus, { color: string; bg: string; dot: string; label: string }> = {
   Draft:      { color: 'text-gray-400',    bg: 'bg-gray-500/10',    dot: 'bg-gray-400',    label: 'Draft' },
   Approved:   { color: 'text-blue-400',    bg: 'bg-blue-500/10',    dot: 'bg-blue-400',    label: 'Approved' },
   Planned:    { color: 'text-violet-400',  bg: 'bg-violet-500/10',  dot: 'bg-violet-400',  label: 'Planned' },
   InProgress: { color: 'text-amber-400',   bg: 'bg-amber-500/10',   dot: 'bg-amber-400',   label: 'In Progress' },
+  Done:       { color: 'text-lime-400',    bg: 'bg-lime-500/10',    dot: 'bg-lime-400',    label: 'Done' },
   Completed:  { color: 'text-emerald-400', bg: 'bg-emerald-500/10', dot: 'bg-emerald-400', label: 'Completed' },
   Rejected:   { color: 'text-red-400',     bg: 'bg-red-500/10',     dot: 'bg-red-400',     label: 'Rejected' },
 };
@@ -33,6 +37,12 @@ export const TYPE_CONFIG: Record<RequirementType, { color: string; bg: string; l
   Sprint:        { color: 'text-pink-300',    bg: 'bg-pink-500/10',    label: 'Sprint' },
   Folder:        { color: 'text-gray-300',    bg: 'bg-gray-500/10',    label: 'Folder' },
   Meta:          { color: 'text-fuchsia-300', bg: 'bg-fuchsia-500/10', label: 'Meta' },
+  Principle:     { color: 'text-sky-300',     bg: 'bg-sky-500/10',     label: 'Principle' },
+  Vision:        { color: 'text-violet-300',  bg: 'bg-violet-500/10',  label: 'Vision' },
+  Constraint:    { color: 'text-rose-300',    bg: 'bg-rose-500/10',    label: 'Constraint' },
+  Decision:      { color: 'text-emerald-300', bg: 'bg-emerald-500/10', label: 'Decision' },
+  Term:          { color: 'text-zinc-300',    bg: 'bg-zinc-500/10',    label: 'Term' },
+  Doc:           { color: 'text-stone-300',   bg: 'bg-stone-500/10',   label: 'Doc' },
 };
 
 export const AVATAR_COLORS = [

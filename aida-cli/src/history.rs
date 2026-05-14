@@ -633,12 +633,12 @@ fn pick_author_email(email: &str) -> String {
 /// Whether a stringified status is terminal (Completed/Rejected). Local
 /// twin of `main::is_terminal_status` so this module stays self-contained
 /// (history.rs is consumed by integration tests without pulling in main).
-/// trace:TASK-64 | ai:claude
+/// STORY-86: `Done` is NOT terminal — it's the gate between branch and
+/// main, and auto-bumps to Completed once the referencing commit merges.
+/// trace:TASK-64 STORY-86 | ai:claude
 fn is_terminal_status_str(s: &str) -> bool {
     let t = s.trim();
-    t.eq_ignore_ascii_case("completed")
-        || t.eq_ignore_ascii_case("rejected")
-        || t.eq_ignore_ascii_case("done")
+    t.eq_ignore_ascii_case("completed") || t.eq_ignore_ascii_case("rejected")
 }
 
 /// HH:MM if today (in the user's local tz), else "MM-DD HH:MM". Always
@@ -689,6 +689,11 @@ fn colorize_status(status: &str) -> String {
         "Approved" => status.blue().to_string(),
         "Planned" => status.cyan().to_string(),
         "InProgress" | "In Progress" => status.magenta().to_string(),
+        // STORY-86: Done is bold-bright-green so it visibly pops in
+        // `aida history` against plain-green Completed. Picks "almost
+        // there" without competing with Completed's settled palette.
+        // trace:STORY-86 | ai:claude
+        "Done" => status.bright_green().bold().to_string(),
         "Completed" => status.green().to_string(),
         "Rejected" => status.red().to_string(),
         "(deleted)" => status.red().dimmed().to_string(),

@@ -35,6 +35,7 @@ pub fn status_to_proto(status: &CoreStatus) -> proto::RequirementStatus {
         CoreStatus::Approved => proto::RequirementStatus::Approved,
         CoreStatus::Planned => proto::RequirementStatus::Planned,
         CoreStatus::InProgress => proto::RequirementStatus::InProgress,
+        CoreStatus::Done => proto::RequirementStatus::Done,
         CoreStatus::Completed => proto::RequirementStatus::Completed,
         CoreStatus::Rejected => proto::RequirementStatus::Rejected,
     }
@@ -46,6 +47,7 @@ pub fn proto_to_status(status: proto::RequirementStatus) -> CoreStatus {
         proto::RequirementStatus::Approved => CoreStatus::Approved,
         proto::RequirementStatus::Planned => CoreStatus::Planned,
         proto::RequirementStatus::InProgress => CoreStatus::InProgress,
+        proto::RequirementStatus::Done => CoreStatus::Done,
         proto::RequirementStatus::Completed => CoreStatus::Completed,
         proto::RequirementStatus::Rejected => CoreStatus::Rejected,
         proto::RequirementStatus::Unspecified => CoreStatus::Draft,

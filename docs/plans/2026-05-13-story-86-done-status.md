@@ -2,7 +2,16 @@
 
 ## Status
 
-Draft — generated via /ultraplan 2026-05-13, awaiting implementer pickup.
+Done — implemented across 4 commits on `epic-21-2` (2026-05-13):
+- `de3cc1d5` enum variant + serde wiring
+- `a6f25289` queue done flip + history/manifest
+- `3b0ff9df` auto-bump helper + pull/sync wiring + 8 new tests
+- `224950b8` React UI + skill templates + CLAUDE.md + META prompts
+
+Verification: full workspace test suite (231 + 278) passes; release
+binary built and `--status done` filter works against the live store.
+End-to-end: STORY-86 itself flipped to `Done` via `aida queue done` —
+will auto-bump to `Completed` once `aida pull` runs on main after PR merge.
 
 ## Related Requirements
 
