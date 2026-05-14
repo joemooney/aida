@@ -58,12 +58,12 @@ description: |-
   - [ ] CI section uses gh via BUG-74's detection helper; caches with TTL
   - [ ] aida status --help text + cross-link from CLAUDE.md / AIDA.md daily-commands
   - [ ] Tests cover gh-missing, no-PR-on-branch, no-session, and full-state paths
-status: Approved
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T14:55:15.131575020Z
-modified_at: 2026-05-14T07:30:17.377613337Z
+modified_at: 2026-05-14T08:03:39.178850288Z
 req_type: Task
 tags:
 - batch:observability
@@ -76,3 +76,7 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-13T14:55:17.367700328Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-14T08:03:39.178850288Z
+  implemented_by: joe
