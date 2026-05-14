@@ -1,0 +1,34 @@
+id: 019e24c2-aa77-7673-8b7f-a15f19f1ae18
+spec_id: STORY-119
+agreed_id: STORY-119
+title: 'Review PR-23: EPIC-20 batch 13: spec accounting + queue filter + push safety (BUG-85 BUG-87 BUG-88)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `019e2423`) for branch `epic-20-3`.
+
+  - PR: <https://github.com/joemooney/aida/pull/23>
+  - Branch: `epic-20-3` → `main`
+
+  ## Covers
+
+  - BUG-88
+  - BUG-87
+  - BUG-85
+
+  ## References (not delivered)
+
+  Spec IDs mentioned in commit bodies or trace comments — touched but not delivered by this PR. Spot-check for regressions.
+
+  - BUG-18
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 23` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-14T04:33:17.943104233Z
+modified_at: 2026-05-14T04:33:17.943104233Z
+req_type: Story
