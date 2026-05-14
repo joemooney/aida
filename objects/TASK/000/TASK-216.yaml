@@ -40,10 +40,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:56:19.299218300Z
-modified_at: 2026-05-13T06:56:19.299218300Z
+modified_at: 2026-05-14T14:54:22.275167040Z
 req_type: Task
 tags:
 - aida-review
+- batch:friction-fixes
 - gh
 - own-pr
 - skill
