@@ -41,12 +41,12 @@ description: |-
   - [ ] EITHER aida session end gains a --clean-cache flag that runs cargo clean -p for the worktree's crates, OR explicitly defer the auto-clean and rely on docs
   - [ ] If implementing the auto-clean: scope tight (only crates from worktree's manifest), opt-in via flag, tests cover the no-cargo-project / multi-crate / clean-fails paths
   - [ ] CLAUDE.md AIDA-developer workflow section gains a one-line note about cross-worktree cargo cache (if doc-only path)
-status: Done
+status: Completed
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T14:57:39.144983056Z
-modified_at: 2026-05-14T07:34:40.306818650Z
+modified_at: 2026-05-14T14:39:05.688628067Z
 req_type: Task
 tags:
 - build
