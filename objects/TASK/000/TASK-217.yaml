@@ -66,7 +66,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T07:00:30.455249397Z
-modified_at: 2026-05-14T06:24:45.279814232Z
+modified_at: 2026-05-14T07:11:53.976807092Z
 req_type: Task
 tags:
 - discoverability
@@ -97,6 +97,19 @@ comments:
     Cross-link: TASK-218 (aida queue rework verb) composes here.
   created_at: 2026-05-13T07:03:40.651332824Z
   modified_at: 2026-05-13T07:03:40.651332824Z
+- id: 019e2553-de78-7ff1-a8d3-cbc207ffed00
+  author: joe
+  content: |-
+    Implemented via epic-23-5 (commit e26e6c6a):
+
+    - New helper `format_queue_work_not_queued_error` branches on the resolved spec's current status — Draft/Approved → queue+work; Planned → promote first; InProgress → likely lost-lease; Done → `aida queue rework --work --resume`; Completed/Rejected → force re-open.
+    - Container types (Epic/Folder/Sprint) get a different message ("no queued children") rather than the leaf status-aware recovery, which would be misleading for parents.
+    - Role pulled from AIDA_SESSION_ROLE env when available, with `<role>` placeholder fallback.
+    - `aida queue work --help` long-form mentions the new behavior.
+
+    Test status: 8 new unit tests cover all 6 status branches + container + role-fallback paths. 332/332 cargo tests green.
+  created_at: 2026-05-14T07:11:53.976807092Z
+  modified_at: 2026-05-14T07:11:53.976807092Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T06:24:45.279814232Z
