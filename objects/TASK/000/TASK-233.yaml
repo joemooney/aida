@@ -1,0 +1,68 @@
+id: 019e26df-ca2c-7ec3-9c35-d136d5b4b067
+spec_id: TASK-233
+agreed_id: TASK-233
+title: 'aida session end --watch-ci: live CI progress display (vs silent --wait-ci)'
+description: |-
+  Today aida session end --wait-ci blocks silently while polling CI every 30s. User sees only an initial 'CI in progress on PR-N (--wait-ci will block)' line, then nothing until terminal state.
+
+  Propose a sibling --watch-ci flag that shows live progress while waiting:
+
+    aida session end --watch-ci
+    ◐ CI in progress on PR-26 (--watch-ci will block, showing updates)
+    → 14:32 ubuntu     ⏳ queued
+    → 14:32 macos      ⏳ queued
+    → 14:32 windows    ⏳ queued
+    → 14:33 ubuntu     ▶ running (build-and-test)
+    → 14:35 ubuntu     ✓ passed (2m 18s)
+    → 14:36 macos      ✗ failed (rustup-init cache)  ← visible error path
+    → 14:37 windows    ✓ passed (3m 04s)
+    → 14:37 Terminal: 2 passed, 1 failed
+    → CI red. Aborting session-end. Options: --force, or fix and re-push.
+
+  vs --wait-ci silent block which just hangs until terminal state.
+
+  ## Implementation
+
+  Reuse 'gh run watch' under the hood — that's already the live-update primitive. Difference:
+  - --wait-ci: just check 'gh run list' periodically; print only final result
+  - --watch-ci: pipe 'gh run watch <run-id>' output through, then evaluate terminal state
+
+  ## Naming
+
+  'watch' is more active (you're observing progress); 'wait' is more passive (just blocked). Both have valid use cases:
+  - Tail-an-overnight-build: --wait-ci (silent, low-noise, lets your shell stay quiet)
+  - Interactive-feedback: --watch-ci (active, you want to see each check resolve)
+
+  Don't replace --wait-ci; add --watch-ci as a sibling.
+
+  ## Composes with
+
+  - TASK-111 (aida session end CI-aware) - this is a refinement on TASK-111's --wait-ci flag
+  - BUG-74 (gh detection helper) - reuse for gh run watch invocation
+  - /aida-pr next-steps block (TASK-110 territory) - could mention --watch-ci as an option in the post-PR guidance
+
+  ## Acceptance
+
+  - [ ] aida session end --watch-ci flag implemented; pipes gh run watch output live
+  - [ ] On terminal CI state: same end-session decision tree as --wait-ci (green proceeds, red prompts options)
+  - [ ] --wait-ci preserved as the silent variant
+  - [ ] aida session end --help documents both flags + when to use which
+  - [ ] Tests: live-update integration test (mock gh run watch), terminal-state-detection test
+
+  ## Discovered via
+
+  2026-05-14 — user observed 'aida session end --wait-ci' blocking silently with no feedback during PR-26's CI wait. Asked: 'perhaps we could add an option --watch-ci which is a wait/watch'.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-14T14:24:21.036579876Z
+modified_at: 2026-05-14T14:24:21.036579876Z
+req_type: Task
+tags:
+- ci
+- interactive
+- session-end
+- ux
+- wait
+- watch
