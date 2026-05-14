@@ -59,7 +59,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:21:43.573099151Z
-modified_at: 2026-05-14T06:40:30.170528Z
+modified_at: 2026-05-14T07:12:14.384172592Z
 req_type: Task
 tags:
 - automation
@@ -78,6 +78,24 @@ comments:
   content: 'Documented in docs/session-lifecycle.md (added 2026-05-13). See section ''Transition 4: Session end IS CI-aware'' with full decision tree.'
   created_at: 2026-05-13T06:24:18.154834289Z
   modified_at: 2026-05-13T06:24:18.154834289Z
+- id: 019e2554-2e30-7882-a2bf-d45558358c72
+  author: joe
+  content: |-
+    Implemented via epic-23-5 (commit a1097ec9):
+
+    - `aida session end` now probes the branch's open-PR CI state via gh and routes via `decide_ci_action`:
+        NoPR/NoGh → proceed silently; PrNoChecks → info + proceed;
+        Green → info + proceed; InProgress → prompt (or Wait with --wait-ci, Proceed with --yes);
+        Red → refuse with fixup-loop nudge (or proceed with loud warn under --yes).
+    - New flags: --wait-ci (block on terminal state, 30s poll, 30min cap), --skip-ci (restore pre-TASK-111 behavior), --force/--yes (existing escape hatches).
+    - --steal recovery path passes skip_ci=true — taking a stuck lease shouldn't wait on the stolen session's CI.
+    - /aida-pr templates updated: the Wait-CI step in the Next-steps block collapses into End-implementer (now CI-aware). 3 steps → 2 steps.
+    - TASK-110 cross-linked via comment noting the collapse.
+
+    Test status: 17 new unit tests cover every probe-state × yes × wait_ci combo (decide_ci_action pure decision tree) plus parse_ci_probe for CheckRun + StatusContext JSON shapes, malformed input, and red-summary truncation. 332/332 cargo tests green.
+    Follow-up: scope cuts deferred — gh-fetched PR title/url in End summary, non-blocking background-watch mode, session-manifest stamp of PR number at /aida-pr time.
+  created_at: 2026-05-14T07:12:14.384172592Z
+  modified_at: 2026-05-14T07:12:14.384172592Z
 implementation_info:
   implemented: true
   implemented_at: 2026-05-14T06:40:30.170528Z
