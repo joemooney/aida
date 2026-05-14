@@ -59,12 +59,12 @@ description: |
   - [ ] `aida history` differentiates Done vs Completed visually
   - [ ] Migration tooling for existing Completed reqs (treat as already-bumped; no action needed)
   - [ ] Documented in CLAUDE.md and the META prompts (so agents know to use the new status)
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-10T19:08:19.795760812Z
-modified_at: 2026-05-13T14:36:40.893380004Z
+modified_at: 2026-05-14T01:37:18.141782466Z
 req_type: Story
 relationships:
 - rel_type: Child
