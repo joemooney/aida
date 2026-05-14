@@ -35,12 +35,12 @@ description: |-
   ## Discovered via
 
   PR-20 /aida-review run 2026-05-13. Reviewer (Joe) ran /aida-review against PR-20 (also opened by Joe); the request-changes API call failed with 'Can not request changes on your own pull request'.
-status: InProgress
+status: Done
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-13T06:56:19.299218300Z
-modified_at: 2026-05-14T15:20:54.795213585Z
+modified_at: 2026-05-14T15:21:26.526962270Z
 req_type: Task
 tags:
 - aida-review
@@ -53,3 +53,7 @@ relationships:
 - rel_type: Child
   target_id: 019e14f8-4bda-71f3-9ed4-df8dcdbbcadc
   created_at: 2026-05-13T06:56:21.576163493Z
+implementation_info:
+  implemented: true
+  implemented_at: 2026-05-14T15:21:26.526962270Z
+  implemented_by: joe
