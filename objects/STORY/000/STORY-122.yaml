@@ -75,12 +75,12 @@ description: |-
   ## Discovered via
 
   2026-05-14 (overnight) — user observed: 'there are a lot of /aida-* commands. If we don't use them or the agent doesn't use them we should reconsider. Perhaps we store metrics on aida command usage?' Excellent self-reflective design discipline — prevents bloat by making the 'should this exist' question answerable with data.
-status: Done
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-05-14T07:13:31.256915529Z
-modified_at: 2026-05-14T08:03:44.634176219Z
+modified_at: 2026-05-14T14:39:14.688866694Z
 req_type: Story
 tags:
 - batch:observability
