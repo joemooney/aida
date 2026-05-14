@@ -4203,5 +4203,13 @@ operations:
       ## Discovered via
 
       2026-05-13 — scheduled-wakeup fallback fired against PR-23 four minutes after it was merged. Agent correctly detected the merged state via gh pr view in its own probe, but had to do the probe manually because the skill didn't pre-check. The early-exit would compress 'enter skill, probe state, recognize merged, no-op' into 'enter skill, immediately recognize merged, exit'.
-clock: 502
+- id: 019e24d0-9cef-74b3-b9d3-f4c9692aef07
+  target_id: 019e2025-d7e4-7ad0-8bfb-9f00c9c31017
+  author: aida
+  node_id: '1'
+  lamport: 503
+  timestamp: 2026-05-14T04:48:31.983898396Z
+  kind: !SetStatus
+    status: In Progress
+clock: 503
 node_id: '1'
