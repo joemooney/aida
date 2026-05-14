@@ -2526,9 +2526,10 @@ pub enum Command {
         /// before pushing. Same as `aida db sync --message`.
         #[clap(long, short = 'm')]
         message: Option<String>,
-        /// Skip the "branch behind main" pre-flight check. Useful for
-        /// CI / scripted pushes where the prompt would just hang
-        /// waiting on stdin. trace:TASK-54 | ai:claude
+        /// Skip pre-push interactive checks ("branch behind main" and
+        /// "PR for this branch already merged"). Useful for CI /
+        /// scripted pushes where the prompt would just hang waiting
+        /// on stdin. trace:TASK-54 BUG-88 | ai:claude
         #[clap(long)]
         no_rebase_check: bool,
     },

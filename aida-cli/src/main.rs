@@ -12753,8 +12753,57 @@ fn detect_open_pr_for_branch(project_root: &std::path::Path, branch: &str) -> Pr
             stderr
         });
     }
-    let s = String::from_utf8_lossy(&out.stdout);
-    let Some(line) = s.lines().next().map(str::trim) else {
+    parse_gh_pr_line(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// Detect whether `branch` was the head of a now-MERGED PR. Used by
+/// `aida push` (BUG-88) to warn that new commits will be stranded —
+/// pushing to a merged-PR branch puts the commit on `origin/<branch>`
+/// but it won't reach `main` without a new PR. Mirrors the shape of
+/// [`detect_open_pr_for_branch`] but queries `--state merged` and returns
+/// only the first hit (most recent). trace:BUG-88 | ai:claude
+fn detect_merged_pr_for_branch(project_root: &std::path::Path, branch: &str) -> PrLookup {
+    let gh_bin = match resolve_gh_binary() {
+        Some(p) => p,
+        None => return PrLookup::GhMissing,
+    };
+    let spawned = std::process::Command::new(&gh_bin)
+        .current_dir(project_root)
+        .args([
+            "pr",
+            "list",
+            "--head",
+            branch,
+            "--state",
+            "merged",
+            "--limit",
+            "1",
+            "--json",
+            "number,title,url",
+            "-q",
+            r#".[] | "\(.number)\t\(.title)\t\(.url)""#,
+        ])
+        .output();
+    let out = match spawned {
+        Ok(o) => o,
+        Err(e) => return PrLookup::GhFailed(format!("spawn {:?}: {}", gh_bin.display(), e)),
+    };
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        return PrLookup::GhFailed(if stderr.is_empty() {
+            format!("gh exited {}", out.status)
+        } else {
+            stderr
+        });
+    }
+    parse_gh_pr_line(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// Parse a single tab-separated `gh pr list -q ...` line into a
+/// `PrLookup`. Extracted for unit-testing the empty / well-formed /
+/// malformed shapes without spawning `gh`. trace:BUG-88 | ai:claude
+fn parse_gh_pr_line(stdout: &str) -> PrLookup {
+    let Some(line) = stdout.lines().next().map(str::trim) else {
         return PrLookup::NoOpenPr;
     };
     if line.is_empty() {
@@ -16999,6 +17048,69 @@ hostname = "h"
 }
 
 #[cfg(test)]
+mod bug_88_pr_lookup_parse_tests {
+    use super::*;
+
+    /// BUG-88: a well-formed `gh pr list -q` line parses into a Found PR.
+    /// trace:BUG-88 | ai:claude
+    #[test]
+    fn parses_single_well_formed_line() {
+        let stdout = "42\tFix the thing\thttps://github.com/o/r/pull/42\n";
+        match parse_gh_pr_line(stdout) {
+            PrLookup::Found(p) => {
+                assert_eq!(p.number, 42);
+                assert_eq!(p.title, "Fix the thing");
+                assert_eq!(p.url, "https://github.com/o/r/pull/42");
+            }
+            other => panic!("expected Found, got {:?}", std::mem::discriminant(&other)),
+        }
+    }
+
+    /// BUG-88: empty stdout means no PR matched the query — distinct from
+    /// gh failing. trace:BUG-88 | ai:claude
+    #[test]
+    fn empty_stdout_is_no_open_pr() {
+        assert!(matches!(parse_gh_pr_line(""), PrLookup::NoOpenPr));
+        assert!(matches!(parse_gh_pr_line("\n"), PrLookup::NoOpenPr));
+        assert!(matches!(parse_gh_pr_line("   \n"), PrLookup::NoOpenPr));
+    }
+
+    /// BUG-88: malformed lines (too few fields, non-numeric PR number)
+    /// surface as GhFailed so the caller doesn't silently swallow them.
+    /// trace:BUG-88 | ai:claude
+    #[test]
+    fn malformed_line_is_gh_failed() {
+        // Only one field.
+        assert!(matches!(
+            parse_gh_pr_line("just-one-field\n"),
+            PrLookup::GhFailed(_)
+        ));
+        // Two fields (missing url).
+        assert!(matches!(
+            parse_gh_pr_line("42\ttitle\n"),
+            PrLookup::GhFailed(_)
+        ));
+        // Non-numeric PR number.
+        assert!(matches!(
+            parse_gh_pr_line("abc\ttitle\turl\n"),
+            PrLookup::GhFailed(_)
+        ));
+    }
+
+    /// BUG-88: only the first line is considered (we pass --limit 1 to gh
+    /// but defensively the parser shouldn't blow up if more arrive).
+    /// trace:BUG-88 | ai:claude
+    #[test]
+    fn only_first_line_consumed() {
+        let stdout = "11\tfirst\thttps://x/1\n22\tsecond\thttps://x/2\n";
+        match parse_gh_pr_line(stdout) {
+            PrLookup::Found(p) => assert_eq!(p.number, 11),
+            other => panic!("expected Found, got {:?}", std::mem::discriminant(&other)),
+        }
+    }
+}
+
+#[cfg(test)]
 mod bug_87_queue_filter_tests {
     use super::*;
 
@@ -20654,6 +20766,63 @@ fn handle_push_command(
         } else {
             let branch =
                 git_ops::current_branch(&project_root).unwrap_or_else(|_| "HEAD".to_string());
+
+            // BUG-88: warn when pushing to a branch whose PR has
+            // already merged. New commits land on `origin/<branch>`
+            // but won't reach `main` without a fresh PR. Skipped on
+            // --no-rebase-check (scripts/CI/automation), main itself,
+            // and when gh isn't available (we can't confirm merged
+            // state without it — silent rather than crying wolf).
+            // trace:BUG-88 | ai:claude
+            if !no_rebase_check
+                && branch != "main"
+                && branch != "master"
+                && matches!(
+                    detect_open_pr_for_branch(&project_root, &branch),
+                    PrLookup::NoOpenPr
+                )
+            {
+                if let PrLookup::Found(pr) = detect_merged_pr_for_branch(&project_root, &branch) {
+                    eprintln!(
+                        "{} branch {} was the head of {} which already merged.",
+                        "⚠".yellow().bold(),
+                        branch.cyan(),
+                        format!("PR-{}", pr.number).cyan(),
+                    );
+                    eprintln!("  {}", pr.url.dimmed());
+                    eprintln!(
+                        "  {}",
+                        "New commits will land on origin/<branch> but won't reach main without a fresh PR.".dimmed(),
+                    );
+                    eprintln!("  {}", "Fix paths:".dimmed());
+                    eprintln!(
+                        "    {} open a follow-up PR: {}",
+                        "·".dimmed(),
+                        format!("gh pr create --base main --head {} --title \"...\"", branch)
+                            .cyan()
+                    );
+                    eprintln!(
+                        "    {} cherry-pick onto a fresh branch off main: {}",
+                        "·".dimmed(),
+                        "git checkout -b <new-branch> origin/main && git cherry-pick <sha>".cyan()
+                    );
+                    eprintln!(
+                        "  Push anyway? [y/N] (or pass --no-rebase-check to skip this check)"
+                    );
+                    use std::io::Write;
+                    let _ = std::io::stderr().flush();
+                    let mut answer = String::new();
+                    let _ = std::io::stdin().read_line(&mut answer);
+                    if !matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+                        eprintln!(
+                            "{}",
+                            "Push aborted. Open a follow-up PR or move the commits to a fresh branch."
+                                .dimmed()
+                        );
+                        return Ok(());
+                    }
+                }
+            }
 
             // TASK-54: pre-flight "behind main" check. If the current
             // branch lags `main` by N commits, prompt before pushing
