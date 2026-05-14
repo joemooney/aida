@@ -1,0 +1,32 @@
+id: 019e23fe-4753-79a0-85ea-21919f7fbda2
+spec_id: TASK-225
+agreed_id: TASK-225
+title: 'TYPE_CONFIG: design proper palette for Principle/Vision/Constraint/Decision/Term/Doc'
+description: |-
+  PR-21 surfaced that `aida-web-react/src/lib/constants.ts`'s
+  TYPE_CONFIG was missing six pre-existing RequirementType variants
+  (Principle/Vision/Constraint/Decision/Term/Doc). They were added
+  to the Rust enum prior to STORY-86 but never made it to the React
+  palette; the STORY-86 regen brought `shared/types.ts` into sync
+  and TypeScript started complaining.
+
+  PR-21's reviewer fix-forward added stub colors (sky/violet/rose/
+  emerald/zinc/stone) just to unblock the build. Those are placeholders.
+
+  Acceptance:
+  - Pick palette tokens that visually distinguish doc-layer types
+    (Principle, Vision, Constraint, Decision, Term, Doc) from
+    process types (Epic, Story, Task) and requirement types
+    (Functional, NonFunctional, …).
+  - Review against the existing kanban + status chart layouts to
+    make sure no two adjacent slices look identical.
+  - Update TYPE_CONFIG in `aida-web-react/src/lib/constants.ts`.
+
+  Trace: PR-21 commit 18c89823.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-05-14T00:58:47.507624552Z
+modified_at: 2026-05-14T00:58:47.507624552Z
+req_type: Task
